@@ -1,8 +1,8 @@
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { usePins, useTopics } from '@/frontend/hooks/chat';
-import type { Topic } from '@/shared/data/types/topic';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
@@ -124,8 +124,8 @@ describe('TopicListProvider', () => {
     await renderProvider(topics);
 
     expect(mockPrefetch).toHaveBeenCalledTimes(1);
-    expect(mockPrefetch).toHaveBeenCalledWith('/models/:id', {
-      params: { id: defaultModelId },
+    expect(mockPrefetch).toHaveBeenCalledWith('/models/:uniqueModelId*', {
+      params: { uniqueModelId: defaultModelId },
       staleTime: 1000 * 60 * 5,
     });
     expect(mockPrefetch.mock.invocationCallOrder[0]).toBeLessThan(

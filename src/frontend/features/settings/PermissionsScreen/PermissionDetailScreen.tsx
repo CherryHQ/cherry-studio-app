@@ -1,3 +1,7 @@
+import type {
+  PermissionMode,
+  PermissionPreferenceKey,
+} from '@cherrystudio/universal/data/preference';
 import { useLocalSearchParams } from 'expo-router';
 import { cn } from 'heroui-native/utils';
 import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
@@ -8,7 +12,6 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { BackHeader } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
-import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { SettingsSection } from '../components/SettingsSection';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';

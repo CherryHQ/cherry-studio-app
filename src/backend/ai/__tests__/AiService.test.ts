@@ -6,13 +6,20 @@ import {
   type RuntimeProviderCallEvent,
 } from '@cherrystudio/ai-core';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/universal/data/types/assistant';
+import {
+  createUniqueModelId,
+  type Model,
+  type UniqueModelId,
+} from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { InvalidToolInputError, type ToolSet } from 'ai';
 
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
 import { createWebSearchTool } from '@/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
 const mockStream = jest.fn(
@@ -81,6 +88,30 @@ describe('AiService.generateImage', () => {
     );
   });
 
+  it.each([
+    { expected: undefined, size: 'auto' },
+    { expected: '1024x1024', size: '1024x1024' },
+  ])('sends size $size as $expected', async ({ expected, size }) => {
+    const model = createModel('gpt-image-2', {
+      capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_RESPONSES],
+    });
+    const service = new AiService(createServices({ model }));
+
+    await service.generateImage({
+      mode: 'generate',
+      paramValues: { size },
+      prompt: 'draw a cherry',
+      uniqueModelId: model.id,
+    });
+
+    expect(generateImageMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({ size: expected }),
+    );
+  });
+
   it('maps attachment data URLs to the AI SDK image prompt shape', async () => {
     const model = createModel('gpt-image-2', {
       capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
@@ -136,13 +167,11 @@ describe('AiService.generateImage', () => {
         aspectRatio: '16:9',
         n: 2,
         providerOptions: expect.objectContaining({
-          'openai-compatible': expect.objectContaining({
-            customFlag: true,
-            reasoningEffort: 'low',
-          }),
           'test-provider': expect.objectContaining({
             background: 'transparent',
+            customFlag: true,
             quality: 'high',
+            reasoningEffort: 'low',
             seed: 42,
           }),
         }),
@@ -304,7 +333,7 @@ describe('AiService.checkModel', () => {
       expect.objectContaining({
         maxRetries: 1,
         providerOptions: {
-          'openai-compatible': {
+          'test-provider': {
             customFlag: true,
             reasoningEffort: 'low',
           },
@@ -470,6 +499,37 @@ describe('AiService usage ownership', () => {
     });
   });
 
+  it('applies an assistant-less per-turn reasoning selection at the provider boundary', async () => {
+    const model = createModel('o3', {
+      capabilities: [MODEL_CAPABILITY.REASONING],
+      reasoning: {
+        controls: [{ kind: 'effort', values: ['none', 'low', 'high'] }],
+        selectableEfforts: ['none', 'low', 'high'],
+      },
+    });
+    const services = createServices({ model });
+
+    await new AiService(services).streamText({
+      chatId: 'topic-1',
+      messageId: 'message-1',
+      messages: [],
+      reasoningEffort: 'high',
+      requestOptions: { signal: new AbortController().signal },
+      trigger: 'submit-message',
+      uniqueModelId: model.id,
+    });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          providerOptions: expect.objectContaining({
+            'test-provider': expect.objectContaining({ reasoningEffort: 'high' }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('does not bind non-stream generation usage to a chat message', async () => {
     const model = createModel('gpt-4o-mini');
     const services = createServices({ model });
@@ -585,7 +645,7 @@ describe('AiService web search plugin wiring', () => {
     );
   });
 
-  it('exposes configured external web search as a bounded agent tool', async () => {
+  it('exposes provider-native and configured external search together', async () => {
     const model = createModel('gpt-4o-mini', {
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
     });
@@ -614,14 +674,21 @@ describe('AiService web search plugin wiring', () => {
           chatId: 'topic-1',
           requestId: expect.any(String),
         }),
-        options: expect.objectContaining({ stopWhen: expect.any(Function) }),
-        plugins: expect.not.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+        options: expect.objectContaining({
+          stopWhen: expect.arrayContaining([expect.any(Function), expect.any(Function)]),
+        }),
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
         repairToolCall: expect.any(Function),
         tools: expect.objectContaining({ web_search: expect.any(Object) }),
       }),
     );
-    expect(params.options.stopWhen({ steps: Array.from({ length: 2 }, () => ({})) })).toBe(false);
-    expect(params.options.stopWhen({ steps: Array.from({ length: 3 }, () => ({})) })).toBe(true);
+    const [toolCallLimit] = params.options.stopWhen;
+    await expect(toolCallLimit({ steps: Array.from({ length: 2 }, () => ({})) })).resolves.toBe(
+      false,
+    );
+    await expect(toolCallLimit({ steps: Array.from({ length: 3 }, () => ({})) })).resolves.toBe(
+      true,
+    );
 
     const result = await params.tools.web_search.execute(
       { query: 'Cherry Studio mobile' },
@@ -635,14 +702,15 @@ describe('AiService web search plugin wiring', () => {
     expect(result).toEqual([
       {
         content: 'Mobile result',
-        id: 1,
+        id: expect.stringMatching(/^[0-9a-f]{8}-1$/),
         title: 'Cherry Studio',
         url: 'https://example.com/cherry',
       },
     ]);
+    expect(params.system).toContain('<citations>');
   });
 
-  it('uses provider-native web search alone when no external provider is configured', async () => {
+  it('keeps the agentic search tool available when no external provider is configured', async () => {
     const model = createModel('gpt-4o-mini', {
       capabilities: [MODEL_CAPABILITY.FUNCTION_CALL, MODEL_CAPABILITY.WEB_SEARCH],
     });
@@ -661,7 +729,8 @@ describe('AiService web search plugin wiring', () => {
     expect(mockAgentConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
-        tools: undefined,
+        system: expect.stringContaining('<citations>'),
+        tools: expect.objectContaining({ web_search: expect.any(Object) }),
       }),
     );
   });
@@ -716,10 +785,14 @@ describe('AiService web search plugin wiring', () => {
     );
   });
 
-  it('forces provider-native search for OpenRouter sonar models even when external search is configured', async () => {
+  it('exposes provider-native and agentic search together for OpenRouter Sonar', async () => {
     const provider = createProvider({ id: 'openrouter', presetProviderId: 'openrouter' });
-    const model = createModel('perplexity/sonar-pro', { providerId: 'openrouter' });
+    const model = createModel('perplexity/sonar-pro', {
+      capabilities: [MODEL_CAPABILITY.FUNCTION_CALL],
+      providerId: 'openrouter',
+    });
     const assistant = createAssistant(model.id);
+    assistant.settings.enableWebSearch = true;
     const service = new AiService(
       createServices({ assistant, model, provider, webSearchProviderId: 'tavily' }),
     );
@@ -735,7 +808,36 @@ describe('AiService web search plugin wiring', () => {
     expect(mockAgentConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
-        tools: undefined,
+        tools: expect.objectContaining({ web_search: expect.any(Object) }),
+      }),
+    );
+  });
+
+  it('forces provider-native search for OpenRouter search-preview models', async () => {
+    const provider = createProvider({ id: 'openrouter', presetProviderId: 'openrouter' });
+    const model = createModel('openai/gpt-4o-search-preview', { providerId: 'openrouter' });
+    const assistant = createAssistant(model.id);
+    const service = new AiService(createServices({ assistant, model, provider }));
+
+    await service.checkModel({ assistantId: assistant.id, timeout: 1000 });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
+      }),
+    );
+  });
+
+  it('forces provider-native search for Sonar outside OpenRouter', async () => {
+    const model = createModel('perplexity/sonar-pro');
+    const assistant = createAssistant(model.id);
+    const service = new AiService(createServices({ assistant, model }));
+
+    await service.checkModel({ assistantId: assistant.id, timeout: 1000 });
+
+    expect(mockAgentConstructor).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.arrayContaining([expect.objectContaining({ name: 'webSearch' })]),
       }),
     );
   });
@@ -775,8 +877,13 @@ describe('AiService MCP tool injection', () => {
     expect(params.tools).toEqual(
       expect.objectContaining({ mcp__serverone__search: expect.any(Object) }),
     );
-    expect(params.options.stopWhen({ steps: Array.from({ length: 2 }, () => ({})) })).toBe(false);
-    expect(params.options.stopWhen({ steps: Array.from({ length: 3 }, () => ({})) })).toBe(true);
+    const [toolCallLimit] = params.options.stopWhen;
+    await expect(toolCallLimit({ steps: Array.from({ length: 2 }, () => ({})) })).resolves.toBe(
+      false,
+    );
+    await expect(toolCallLimit({ steps: Array.from({ length: 3 }, () => ({})) })).resolves.toBe(
+      true,
+    );
   });
 
   it('does not even ask for MCP tools when the model cannot call functions', async () => {
@@ -850,6 +957,30 @@ describe('AiService MCP tool injection', () => {
     const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
     expect(params.tools).toBeUndefined();
     expect(params.options.stopWhen).toBeUndefined();
+  });
+
+  it('adds a clean step-boundary yield condition without requiring tools', async () => {
+    const model = createModel('gpt-4o-mini', { capabilities: [] });
+    const assistant = createAssistant(model.id);
+    const services = createServices({ assistant, model });
+    let shouldYield = false;
+
+    await new AiService(services).streamText({
+      assistantId: assistant.id,
+      chatId: 'topic-1',
+      messages: [],
+      requestOptions: { signal: new AbortController().signal },
+      shouldYield: () => shouldYield,
+      trigger: 'submit-message',
+    });
+
+    const params = mockAgentConstructor.mock.calls.at(-1)?.[0];
+    expect(params.tools).toBeUndefined();
+    expect(params.options.stopWhen).toHaveLength(1);
+    const [steerYield] = params.options.stopWhen;
+    await expect(steerYield({ steps: [{}] })).resolves.toBe(false);
+    shouldYield = true;
+    await expect(steerYield({ steps: [{}] })).resolves.toBe(true);
   });
 
   it('appends deferred-tool guidance only when tool_search is exposed', async () => {
@@ -934,11 +1065,11 @@ function createServices({
     })),
   };
   const tools = {
-    resolveForRequest: jest.fn(async ({ externalWebSearchEnabled }) => {
+    resolveForRequest: jest.fn(async ({ assistant: requestAssistant }) => {
       const resolved = {
         ...builtInTools,
         ...mcpTools,
-        ...(externalWebSearchEnabled
+        ...(requestAssistant.settings.enableWebSearch
           ? { web_search: createWebSearchTool(webSearch as never) }
           : {}),
       };
@@ -1033,6 +1164,7 @@ function createAssistant(modelId: Model['id'] | null): Assistant {
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
     emoji: '',
+    groupId: null,
     id: '00000000-0000-4000-8000-000000000001',
     knowledgeBaseIds: [],
     mcpServerIds: [],

@@ -1,8 +1,11 @@
 import { MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
-import { isUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
-import type { Pin } from '@/shared/data/types/pin';
-import type { Provider } from '@/shared/data/types/provider';
+import {
+  isUniqueModelId,
+  type Model,
+  type UniqueModelId,
+} from '@cherrystudio/universal/data/types/model';
+import type { Pin } from '@cherrystudio/universal/data/types/pin';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 export type ModelPickerGroupKind = 'pinned' | 'provider';
 

@@ -1,5 +1,5 @@
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
 import {
   imageUriToDataUrl,
@@ -9,6 +9,7 @@ import {
 } from '../fileStorage';
 
 jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000001'),
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000001'),
 }));
 

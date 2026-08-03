@@ -43,6 +43,13 @@
       "when": 1785393655365,
       "tag": "0005_complete_silver_centurion",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1785517264682,
+      "tag": "0006_chubby_abomination",
+      "breakpoints": true
     }
   ]
 }

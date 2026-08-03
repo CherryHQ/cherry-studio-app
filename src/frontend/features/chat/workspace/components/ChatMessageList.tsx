@@ -1,3 +1,4 @@
+import type { Message } from '@cherrystudio/universal/data/types/message';
 import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { ScrollShadow } from 'heroui-native/scroll-shadow';
@@ -20,7 +21,6 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { LinearGradient } from '@/frontend/components/nativePrimitives';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { Message } from '@/shared/data/types/message';
 
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';
 import { getMessageListScrollSignal } from '../utils/messageListScrollSignals';

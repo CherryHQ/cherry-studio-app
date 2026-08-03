@@ -4,6 +4,7 @@
  * USAGE RULES:
  * - DO NOT manually set id, createdAt, or updatedAt - they are auto-generated
  * - Use .returning() to get inserted/updated rows instead of re-querying
+ * - See db/README.md for detailed field generation rules
  *
  * TIMESTAMP SEMANTICS:
  * - `createUpdateTimestamps.createdAt` / `.updatedAt` are DB-level NOT NULL.
@@ -15,67 +16,32 @@
  */
 
 import { type AnySQLiteColumn, index, integer, text } from 'drizzle-orm/sqlite-core';
-import { v7 as uuidv7 } from 'uuid';
+import { v4 as uuidv4, v7 as uuidv7 } from 'uuid';
 
-const createTimestamp = () => Date.now();
-
-type ExpoCryptoModule = {
-  getRandomValues: (typedArray: Uint8Array) => Uint8Array;
-  randomUUID: () => string;
-};
-
-// Keep Expo Crypto out of the schema module's top-level imports so drizzle-kit
-// can load schemas in a plain Node.js process.
-const loadExpoCrypto = (): ExpoCryptoModule | null => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports -- Keep Expo Crypto lazy for drizzle-kit.
-    return require('expo-crypto') as ExpoCryptoModule;
-  } catch {
-    return null;
-  }
-};
-
-const createRandomUuid = () => {
-  const crypto = loadExpoCrypto();
-  if (crypto?.randomUUID) {
-    return crypto.randomUUID();
-  }
-
-  const randomUuid = globalThis.crypto?.randomUUID?.();
-  if (randomUuid) {
-    return randomUuid;
-  }
-
-  throw new Error('No secure UUID generator is available');
-};
-
-const createUuidBytes = () => {
-  const bytes = new Uint8Array(16);
-  const crypto = loadExpoCrypto();
-  if (crypto?.getRandomValues) {
-    return crypto.getRandomValues(bytes);
-  }
-
-  if (globalThis.crypto?.getRandomValues) {
-    return globalThis.crypto.getRandomValues(bytes);
-  }
-
-  throw new Error('No secure random byte generator is available');
-};
+// Mobile file storage allocates IDs before inserting the corresponding row.
+export const createOrderedUuid = (): string => uuidv7();
 
 /**
- * UUID v4 primary key with auto-generation.
- * Use for general purpose tables.
+ * UUID v4 primary key with auto-generation
+ * Use for general purpose tables
  */
-export const uuidPrimaryKey = () => text().primaryKey().$defaultFn(createRandomUuid);
+export const uuidPrimaryKey = () =>
+  text()
+    .primaryKey()
+    .$defaultFn(() => uuidv4());
 
 /**
- * UUID v7 primary key with auto-generation (time-ordered).
- * Use for tables with large datasets that benefit from sequential inserts.
+ * UUID v7 primary key with auto-generation (time-ordered)
+ * Use for tables with large datasets that benefit from sequential inserts
  */
-export const createOrderedUuid = () => uuidv7({ rng: createUuidBytes });
+export const uuidPrimaryKeyOrdered = () =>
+  text()
+    .primaryKey()
+    .$defaultFn(() => uuidv7());
 
-export const uuidPrimaryKeyOrdered = () => text().primaryKey().$defaultFn(createOrderedUuid);
+const createTimestamp = () => {
+  return Date.now();
+};
 
 export const createUpdateTimestamps = {
   createdAt: integer().notNull().$defaultFn(createTimestamp),
@@ -100,7 +66,7 @@ export const createUpdateDeleteTimestamps = {
  *   sqliteTable('miniapp', {
  *     appId: text('app_id').primaryKey(),
  *     ...orderKeyColumns,
- *   }, (table) => [orderKeyIndex('miniapp')(table)])
+ *   }, (t) => [orderKeyIndex('miniapp')(t)])
  */
 export const orderKeyColumns = {
   orderKey: text('order_key').notNull(),
@@ -111,27 +77,24 @@ export const orderKeyColumns = {
  */
 export const orderKeyIndex =
   <T extends { orderKey: AnySQLiteColumn }>(tableName: string) =>
-  (table: T) =>
-    index(`${tableName}_order_key_idx`).on(table.orderKey);
+  (t: T) =>
+    index(`${tableName}_order_key_idx`).on(t.orderKey);
 
-const toSnakeCase = (value: string) => value.replace(/[A-Z]/g, (char) => `_${char.toLowerCase()}`);
+const toSnakeCase = (value: string) => value.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /**
  * Composite `(scope, order_key)` index for scoped reorderable lists.
- * The scope column is referenced by its camelCase TS property (`table[scopeColumn]`);
+ * The scope column is referenced by its camelCase TS property (`t[scopeColumn]`);
  * only the index NAME is snake_cased for consistency with DB naming.
  *
  * Example:
- *   scopedOrderKeyIndex('topic', 'groupId')(table)
- *   // index topic_group_id_order_key_idx ON topic(group_id, order_key)
+ *   scopedOrderKeyIndex('user_model', 'providerId')(t)
+ *   // index user_model_provider_id_order_key_idx ON user_model(provider_id, order_key)
  */
 export const scopedOrderKeyIndex =
   <T extends { orderKey: AnySQLiteColumn } & Record<string, AnySQLiteColumn>>(
     tableName: string,
     scopeColumn: keyof T & string,
   ) =>
-  (table: T) =>
-    index(`${tableName}_${toSnakeCase(scopeColumn)}_order_key_idx`).on(
-      table[scopeColumn],
-      table.orderKey,
-    );
+  (t: T) =>
+    index(`${tableName}_${toSnakeCase(scopeColumn)}_order_key_idx`).on(t[scopeColumn], t.orderKey);

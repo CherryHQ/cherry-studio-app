@@ -1,3 +1,4 @@
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { Button } from 'heroui-native/button';
 import { Dialog } from 'heroui-native/dialog';
 import { Input } from 'heroui-native/input';
@@ -5,8 +6,6 @@ import { Spinner } from 'heroui-native/spinner';
 import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, StyleSheet, Text, View } from 'react-native';
-
-import type { Topic } from '@/shared/data/types/topic';
 
 import { useTopicListActions } from '../context/TopicListProvider';
 

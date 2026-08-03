@@ -1,16 +1,3 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-
-import type { EndpointType } from '@/shared/data/types/model';
-import type {
-  ApiFeatures,
-  ApiKeyEntry,
-  AuthConfig,
-  EndpointConfig,
-  ProviderSettings,
-} from '@/shared/data/types/provider';
-
-import { createUpdateTimestamps, orderKeyColumns, orderKeyIndex } from './_columnHelpers';
-
 /**
  * User Provider table schema
  *
@@ -22,6 +9,30 @@ import { createUpdateTimestamps, orderKeyColumns, orderKeyIndex } from './_colum
  * - If presetProviderId is null, this is a fully custom provider
  *
  */
+
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type {
+  ApiFeatures,
+  ApiKeyEntry,
+  AuthConfig,
+  EndpointConfigOverride,
+  ProviderSettings,
+} from '@cherrystudio/universal/data/types/provider';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
+import { createUpdateTimestamps, orderKeyColumns, orderKeyIndex } from './_columnHelpers';
+
+/**
+ * Main-only persisted provider endpoint delta.
+ *
+ * `adapterFamily` is legacy migration provenance for custom v1 relay
+ * providers. It is deliberately absent from the shared renderer write DTO so
+ * ordinary settings PATCHes cannot create, replace, or clear the routing hint.
+ */
+export type StoredEndpointConfigOverride = EndpointConfigOverride & {
+  adapterFamily?: string;
+};
+
 export const userProviderTable = sqliteTable(
   'user_provider',
   {
@@ -35,9 +46,23 @@ export const userProviderTable = sqliteTable(
 
     name: text().notNull(),
 
-    /** Per-endpoint-type configuration (baseUrl, reasoningFormatType, modelsApiUrls) */
+    /**
+     * Preset/bundled logo reference (`icon:<providerId>` ref), or null for
+     * preset providers that render a bundled icon by id. Holds an icon key /
+     * ref only — never a remote URL or data URL. A user-uploaded custom logo
+     * has no key here: it lives solely in the `provider_logo_file_ref` table
+     * (the single source of truth), resolved back via `getSingleFileRefId`.
+     */
+    logoKey: text('logo_key'),
+
+    /**
+     * Per-endpoint-type USER overrides only (baseUrl), plus a main-only legacy
+     * adapterFamily hint for migrated custom relay rows. Registry-owned connection facts (adapterFamily,
+     * modelsApiUrls, the endpoint key set) resolve from the registry at read
+     * time — persisting them freezes a snapshot that goes stale (#17096).
+     */
     endpointConfigs: text('endpoint_configs', { mode: 'json' }).$type<
-      Partial<Record<EndpointType, EndpointConfig>>
+      Partial<Record<EndpointType, StoredEndpointConfigOverride>>
     >(),
 
     /** Default text generation endpoint (when supporting multiple) */
@@ -63,13 +88,13 @@ export const userProviderTable = sqliteTable(
 
     ...createUpdateTimestamps,
   },
-  (table) => [
-    index('user_provider_enabled_idx').on(table.isEnabled),
-    index('user_provider_preset_idx').on(table.presetProviderId),
-    orderKeyIndex('user_provider')(table),
+  (t) => [
+    index('user_provider_preset_idx').on(t.presetProviderId),
+    index('user_provider_enabled_idx').on(t.isEnabled),
+    orderKeyIndex('user_provider')(t),
   ],
 );
 
 // Export table type
-export type InsertUserProviderRow = typeof userProviderTable.$inferInsert;
 export type UserProviderRow = typeof userProviderTable.$inferSelect;
+export type InsertUserProviderRow = typeof userProviderTable.$inferInsert;

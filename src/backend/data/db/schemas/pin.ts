@@ -37,9 +37,9 @@ export const pinTable = sqliteTable(
     ...orderKeyColumns,
     ...createUpdateTimestamps,
   },
-  (table) => [
-    uniqueIndex('pin_entity_type_entity_id_unique_idx').on(table.entityType, table.entityId),
-    scopedOrderKeyIndex('pin', 'entityType')(table),
+  (t) => [
+    uniqueIndex('pin_entity_type_entity_id_unique_idx').on(t.entityType, t.entityId),
+    scopedOrderKeyIndex('pin', 'entityType')(t),
   ],
 );
 

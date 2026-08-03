@@ -1,8 +1,8 @@
 import type {
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
-} from '@/shared/data/types/webSearch';
+} from '@cherrystudio/universal/data/types/webSearch';
 
-export interface WebSearchBackend {
+export interface WebSearchModule {
   checkProvider(input: WebSearchCheckProviderRequest): Promise<WebSearchCheckProviderResponse>;
 }

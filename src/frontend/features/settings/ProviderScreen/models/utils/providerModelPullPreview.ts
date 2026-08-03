@@ -1,5 +1,6 @@
+import type { Model } from '@cherrystudio/universal/data/types/model';
+
 import type { ModelPullPreview } from '@/shared/contracts';
-import type { Model } from '@/shared/data/types/model';
 
 export type ProviderModelPullPreview = ModelPullPreview;
 

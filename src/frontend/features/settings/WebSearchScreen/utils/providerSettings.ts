@@ -3,12 +3,12 @@ import type {
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
-} from '@/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
 import {
   MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS,
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
-} from '@/shared/data/presets/webSearchProviders';
+} from '@cherrystudio/universal/data/presets/webSearchProviders';
 
 export type WebSearchProviderCapability = WebSearchProviderPreset['capabilities'][number];
 
@@ -78,9 +78,9 @@ const WEB_SEARCH_PROVIDER_DISPLAY_META: Record<WebSearchProviderId, WebSearchPro
 const WEB_SEARCH_PROVIDER_DETAIL_SECTIONS = {
   bocha: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   exa: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
-  'exa-mcp': [],
+  'exa-mcp': [{ type: 'capabilityApiHosts' }],
   fetch: [{ type: 'description' }],
-  firecrawl: [],
+  firecrawl: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   jina: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   querit: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   searxng: [{ type: 'capabilityApiHosts' }, { type: 'basicAuth' }],

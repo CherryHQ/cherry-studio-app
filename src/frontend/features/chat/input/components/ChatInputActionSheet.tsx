@@ -46,7 +46,11 @@ const logger = loggerService.withContext('ChatInputActionSheet');
  * strip and action list. The previous `ScreenStack` wrapper was removed because
  * nesting it inside the bottom sheet crashes on Android on present.
  */
-export function ChatInputActionSheet() {
+export function ChatInputActionSheet({
+  onActionPress,
+}: {
+  onActionPress?: (actionId: ChatInputActionId) => void;
+}) {
   const { t } = useTranslation();
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -85,10 +89,14 @@ export function ChatInputActionSheet() {
   }, [addAttachments, closeActionSheet]);
   const handleActionPress = useCallback(
     (actionId: ChatInputActionId) => {
-      selectAction(actionId);
+      if (onActionPress) {
+        onActionPress(actionId);
+      } else {
+        selectAction(actionId);
+      }
       closeActionSheet();
     },
-    [closeActionSheet, selectAction],
+    [closeActionSheet, onActionPress, selectAction],
   );
   const handlePhotosPress = useCallback(() => {
     setIsPhotoGridOpen(true);

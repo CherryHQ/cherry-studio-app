@@ -1,3 +1,8 @@
+import {
+  hasMcpServerWildcardRule,
+  matchesMcpSourceToolRule,
+} from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQuery } from '@tanstack/react-query';
 import { Spinner } from 'heroui-native/spinner';
 import { Switch } from 'heroui-native/switch';
@@ -7,11 +12,6 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import {
-  hasMcpServerWildcardRule,
-  matchesMcpSourceToolRule,
-} from '@/shared/ai/tools/mcpSourcePolicy';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 

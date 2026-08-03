@@ -1,14 +1,15 @@
 import type {
+  AiUsagePricingSnapshot,
+  ServingCredentialReceipt,
+} from '@cherrystudio/universal/data/types/aiUsageRecord';
+import { AiUsagePricingSnapshotSchema } from '@cherrystudio/universal/data/types/aiUsageRecord';
+import type { Currency, RuntimeModelPricing } from '@cherrystudio/universal/data/types/model';
+
+import type {
   AiUsageCaptureContext,
   MessageRef,
   SourceSnapshot,
 } from '@/backend/data/services/AiUsageRecordService';
-import type {
-  AiUsagePricingSnapshot,
-  ServingCredentialReceipt,
-} from '@/shared/data/types/aiUsageRecord';
-import { AiUsagePricingSnapshotSchema } from '@/shared/data/types/aiUsageRecord';
-import type { Currency, RuntimeModelPricing } from '@/shared/data/types/model';
 
 export interface CreateAiUsageCaptureContextInput {
   providerId: string;

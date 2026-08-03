@@ -1,3 +1,5 @@
+import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -16,8 +18,6 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import { ENDPOINT_TYPE } from '@/shared/data/types/model';
-import type { ApiKeyEntry, EndpointConfigs } from '@/shared/data/types/provider';
 
 import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';

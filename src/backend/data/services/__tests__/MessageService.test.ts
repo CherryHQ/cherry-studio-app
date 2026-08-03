@@ -1,6 +1,7 @@
+import type { Message, MessageData } from '@cherrystudio/universal/data/types/message';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import { chatMessageFileRefTable, messageTable } from '@/backend/data/db/schemas';
-import type { Message, MessageData } from '@/shared/data/types/message';
 
 import { MessageService } from '../MessageService';
 
@@ -232,7 +233,7 @@ describe('MessageService', () => {
       deletedAt: null,
       id: 'assistant-1',
       modelId: null,
-      modelSnapshot: null,
+      messageSnapshot: null,
       parentId: 'user-1',
       role: 'assistant',
       searchableText: '',
@@ -382,6 +383,57 @@ describe('MessageService', () => {
     expect(topicService.setActiveNodeTx).not.toHaveBeenCalled();
   });
 
+  test('clearTopicMessages removes content while preserving the virtual root', async () => {
+    const deleteWhere = jest.fn(async () => undefined);
+    const tx = {
+      delete: jest.fn(() => ({ where: deleteWhere })),
+      select: jest
+        .fn()
+        .mockImplementationOnce(() => ({
+          from: () => ({ where: () => ({ limit: async () => [{ id: 'root-1' }] }) }),
+        }))
+        .mockImplementationOnce(() => ({
+          from: () => ({ where: async () => [{ id: 'message-1' }, { id: 'message-2' }] }),
+        })),
+    };
+    const dbService = {
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const topicService = { clearActiveNodeTx: jest.fn(async () => undefined) };
+    const service = new MessageService(dbService, topicService as never, {} as never);
+
+    await expect(service.clearTopicMessages('topic-1')).resolves.toEqual({
+      deletedIds: ['message-1', 'message-2'],
+    });
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
+    expect(topicService.clearActiveNodeTx).toHaveBeenCalledWith(tx, 'topic-1');
+  });
+
+  test('clearTopicMessages is read-only when a topic only has its virtual root', async () => {
+    const tx = {
+      delete: jest.fn(),
+      select: jest
+        .fn()
+        .mockImplementationOnce(() => ({
+          from: () => ({ where: () => ({ limit: async () => [{ id: 'root-1' }] }) }),
+        }))
+        .mockImplementationOnce(() => ({ from: () => ({ where: async () => [] }) })),
+    };
+    const dbService = {
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const topicService = { clearActiveNodeTx: jest.fn() };
+    const service = new MessageService(dbService, topicService as never, {} as never);
+
+    await expect(service.clearTopicMessages('topic-1')).resolves.toEqual({ deletedIds: [] });
+    expect(tx.delete).not.toHaveBeenCalled();
+    expect(topicService.clearActiveNodeTx).not.toHaveBeenCalled();
+  });
+
   test('delete without cascade rebases moved sibling groups above both sides', async () => {
     const topicId = '750e8400-e29b-41d4-a716-446655440000';
     const message = { ...createMessage('message-2', 'assistant'), parentId: 'parent-1', topicId };
@@ -453,7 +505,7 @@ describe('MessageService', () => {
       ftsRowid: 1,
       id: 'source-1',
       modelId: null,
-      modelSnapshot: null,
+      messageSnapshot: null,
       parentId: 'parent-1',
       role,
       searchableText: '',
@@ -654,7 +706,7 @@ function createMessageRow(
     ftsRowid: 1,
     id,
     modelId: null,
-    modelSnapshot: null,
+    messageSnapshot: null,
     parentId,
     role,
     searchableText: '',

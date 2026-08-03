@@ -1,17 +1,18 @@
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
-
-import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { Assistant } from '@/shared/data/types/assistant';
-import type { Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
   isAnthropicModel,
-  isForcedNativeWebSearchModel,
   isGeminiModel,
   isGrokModel,
   isOpenAIModel,
-} from '@/shared/utils/model';
+  isOpenRouterBuiltInWebSearchModel,
+  isWebSearchModel,
+} from '@cherrystudio/universal/utils/model';
+
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 
 import type { AppProviderId } from '../../../types';
 import { SystemProviderIds } from '../../../utils/providerIds';
@@ -29,23 +30,31 @@ export interface ResolvedCapabilities {
   webSearchPluginConfig?: WebSearchPluginConfig;
 }
 
+export interface ResolveCapabilitiesOptions {
+  /** Caller-supplied external web search provider id. When set, disables built-in web search. */
+  webSearchProviderId?: string;
+}
+
 export function resolveCapabilities(
   model: Model,
   provider: Provider,
   assistant: Assistant,
   aiSdkProviderId: string,
   preference: Pick<PreferenceService, 'getMultipleRawCached'>,
-  options: { webSearchProviderId?: string } = {},
+  options: ResolveCapabilitiesOptions = {},
 ): ResolvedCapabilities {
-  const enableReasoning = Boolean(
-    model.reasoning && assistant.settings?.reasoning_effort !== undefined,
-  );
-  const enableWebSearch = Boolean(
-    !options.webSearchProviderId &&
-    ((assistant.settings?.enableWebSearch && model.capabilities.includes('web-search')) ||
-      isForcedNativeWebSearchModel(model)),
-  );
-  const enableGenerateImage = model.capabilities.includes('image-generation');
+  // The descriptor says whether the model exposes reasoning. The per-request resolver decides
+  // whether `default`, `none`, or an effort emits anything for this invocation.
+  const enableReasoning = Boolean(model.reasoning);
+  const hasExternalSearch = !!options.webSearchProviderId;
+  const enableWebSearch =
+    !hasExternalSearch &&
+    ((!!assistant.settings?.enableWebSearch && isWebSearchModel(model)) ||
+      isOpenRouterBuiltInWebSearchModel(model) ||
+      model.id.includes('sonar'));
+  // Ordinary chat never requests provider-native image output. Image generation
+  // belongs to the separate tool/job flow, which mobile does not expose yet.
+  const enableGenerateImage = false;
   const streamOutput = assistant.settings.streamOutput !== false;
 
   const webSearchPluginConfig = enableWebSearch

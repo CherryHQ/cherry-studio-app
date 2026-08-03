@@ -1,4 +1,7 @@
-import type { PreferenceDefaultScopeType, PreferenceKeyType } from '@/shared/data/preference';
+import type {
+  PreferenceDefaultScopeType,
+  PreferenceKeyType,
+} from '@cherrystudio/universal/data/preference';
 
 import {
   getProviderForCapability,
@@ -88,9 +91,9 @@ describe('web search config', () => {
 });
 
 function createPreferenceReader(values: PreferenceMap = {}) {
+  // The two default-provider keys are deliberately absent: tests that exercise
+  // the unconfigured path rely on `get` resolving them to undefined.
   const defaults: PreferenceMap = {
-    'chat.web_search.default_fetch_urls_provider': null,
-    'chat.web_search.default_search_keywords_provider': null,
     'chat.web_search.exclude_domains': [],
     'chat.web_search.max_results': 5,
     'chat.web_search.compression.method': 'none',

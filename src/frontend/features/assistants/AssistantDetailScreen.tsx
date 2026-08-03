@@ -1,3 +1,4 @@
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Button } from 'heroui-native/button';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -10,7 +11,6 @@ import { ModelPickerIcon, useModelPickerData } from '@/frontend/components/model
 import { useSetBottomTabBarHidden } from '@/frontend/components/navigation';
 import { useAssistantApiById } from '@/frontend/hooks/chat';
 import { screenBottomActionInset } from '@/frontend/utils/constants';
-import type { Assistant } from '@/shared/data/types/assistant';
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation();

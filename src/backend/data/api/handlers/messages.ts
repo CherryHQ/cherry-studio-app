@@ -1,11 +1,13 @@
+import type { MessageSchemas } from '@cherrystudio/universal/data/api/schemas/messages';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
 import type { MessageService } from '@/backend/data/services/MessageService';
-import type { MessageSchemas } from '@/shared/data/api/schemas/messages';
-import type { HandlersFor } from '@/shared/data/api/types';
 
 type MessageData = Pick<
   MessageService,
   | 'create'
   | 'createSibling'
+  | 'clearTopicMessages'
   | 'delete'
   | 'getBranchMessages'
   | 'getById'
@@ -26,6 +28,7 @@ export function createMessageHandlers(service: MessageData): HandlersFor<Message
       POST: ({ body, params }) => service.createSibling(params.id, body),
     },
     '/topics/:topicId/messages': {
+      DELETE: ({ params }) => service.clearTopicMessages(params.topicId),
       GET: ({ params, query }) => service.getBranchMessages(params.topicId, query),
       POST: ({ body, params }) => service.create(params.topicId, body),
     },

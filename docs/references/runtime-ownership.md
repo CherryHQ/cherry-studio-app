@@ -1,6 +1,7 @@
 # Runtime Ownership
 
-This reference defines ownership for long-lived resources, startup work, sessions, and cleanup.
+This reference defines ownership for long-lived resources, startup work, caller-owned sessions, and
+cleanup.
 Terms follow [Domain Language](./domain-language.md).
 
 ## Principles
@@ -9,7 +10,7 @@ Terms follow [Domain Language](./domain-language.md).
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
 - Backgrounding is not a reliable execution window for chat or painting generation.
-- Backend sessions report events/results; frontend owners perform navigation, translation, toast,
+- Backend modules report events/results; frontend owners perform navigation, translation, toast,
   and React Query invalidation.
 
 ## App Bootstrap
@@ -25,12 +26,13 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
 - initializes the backend cache before SQLite seeding, then preferences, boot theme, and i18n;
 - starts best-effort post-ready tasks after the gate opens;
-- disposes MCP, web-search state, the backend cache, and SQLite on unmount.
+- disposes the Chat Runtime first, then MCP and web-search state, the backend cache, and SQLite on
+  unmount.
 
 The provider's own React context exposes only `loading`, `ready`, or `error`. Concrete backend
 services never enter React state or frontend code. Its children receive three stable, narrow
 providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` for preferences, and
-`BackendProvider` for workflow modules and sessions.
+`BackendProvider` for workflow modules, including any caller-owned session factories.
 
 `AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
 initialization error. The root layout retains the native splash, and `AppBootstrapProvider` hides it
@@ -43,25 +45,38 @@ not own SQLite, AI streams, or backend implementation classes. Endpoint hooks ca
 `ApiClient`; query keys and invalidation remain in frontend owners. `useBackendModule` is reserved
 for workflows that are not ordinary resource queries or mutations.
 
-## Chat Session
+## Chat Runtime
 
-`ChatSessionProvider` owns one backend `ChatSession` for the route and disposes it on unmount. The
-session interface supports subscription, snapshots, sending, tool approval, abort, and disposal.
+Bootstrap creates one `ChatRuntime` and exposes its narrow `ChatModule` interface through
+`Backend.chat`. The runtime is app-owned, not route-owned: `ChatProvider` subscribes on mount and
+unsubscribes on unmount, but it never creates or disposes a backend object. Route unmount therefore
+does not terminate an active turn, and a later subscription reads the current snapshot.
 
-The backend session owns active turn state, AbortControllers, assistant placeholder identity,
-stream reading, terminal persistence, and session events. The frontend provider owns session
-subscription, route navigation, and React Query invalidation. Backend code never imports Expo Router
-or TanStack Query.
+The runtime owns active turn state, AbortControllers, assistant placeholder identity, stream
+reading, terminal persistence, and `ChatEvent` fan-out. It tracks turns by Topic: different Topics
+may stream concurrently, while a second turn for the same Topic is rejected. New-topic reservation
+uses `NEW_TOPIC_SNAPSHOT_KEY` until the persisted Topic id is available.
 
-An active stream is not guaranteed to continue, checkpoint, or resume after OS suspension or
-termination. User abort persists the defined paused/partial state; disposal aborts active work.
+The frontend `ChatProvider` owns route navigation and React Query invalidation. `useChatTopic()`
+projects one Topic snapshot and sends or aborts work through the shared module. Backend code never
+imports Expo Router or TanStack Query.
+
+User abort affects only the selected Topic and persists the defined paused/partial state. App
+shutdown marks the runtime disposed, rejects new tasks, aborts all active turns, and waits for every
+tracked task to settle before MCP, web search, cache, or SQLite is closed. An active stream is still
+not guaranteed to continue, checkpoint, or resume after OS suspension or termination.
 
 ## Painting Session
 
-`usePaintingGeneration` owns a backend `PaintingGenerationSession`, an AbortController, and UI-only
-generating/revealing/error state. The backend session owns file preparation, AI generation,
-persistence, incomplete receipt retry state, and failed-output cleanup. The frontend hook owns toast
-and query synchronization and disposes the session on unmount.
+`usePaintingGeneration` owns one backend `PaintingGenerationSession` and UI-only
+generating/revealing/error state. The session owns its AbortController, file preparation, AI
+generation, persistence, incomplete receipt retry state, and failed-output cleanup. The frontend
+hook owns toast and query synchronization and disposes the session on unmount.
+
+`cancel()` aborts only the active generation and retains an incomplete receipt so the same input can
+retry without creating another gallery item. `dispose()` aborts active work, clears the receipt,
+permanently closes that session, and prevents late async receipt creation from reviving it. Separate
+sessions never share receipt state.
 
 ## Other Long-Lived Resources
 
@@ -87,6 +102,8 @@ the bootstrap gate.
 ## Acceptance
 
 - App bootstrap unmount closes SQLite and disposes long-lived backend resources.
-- Chat and painting owners abort active work and dispose their backend sessions.
+- Route unmount only unsubscribes from Chat; app disposal aborts and awaits all Chat turns before
+  closing infrastructure.
+- Painting owners cancel or dispose their own isolated generation session.
 - Cold start does not wait for non-current history, provider/model refresh, or diagnostics.
 - Every new long-lived resource can identify its owner, release point, and background behavior.

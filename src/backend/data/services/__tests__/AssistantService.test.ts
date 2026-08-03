@@ -1,15 +1,21 @@
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import type { AssistantRow } from '@/backend/data/db/schemas';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { AssistantService } from '../AssistantService';
+import type { GroupService } from '../GroupService';
 import type { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
 import type { TagService } from '../TagService';
+import type { TopicService } from '../TopicService';
 import { applyMoves, insertWithOrderKey } from '../utils/orderKey';
 
-jest.mock('uuid', () => ({ v7: jest.fn(() => '00000000-0000-7000-8000-000000000000') }));
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
+  v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
+}));
 jest.mock('../utils/orderKey', () => ({
   applyMoves: jest.fn(),
   insertWithOrderKey: jest.fn(),
@@ -34,6 +40,8 @@ describe('AssistantService', () => {
     } as unknown as TagService;
     const service = new AssistantService(
       { getDb: () => db } as unknown as DbService,
+      {} as GroupService,
+      {} as TopicService,
       {} as ModelService,
       {} as PreferenceService,
       tagService,
@@ -71,6 +79,8 @@ describe('AssistantService', () => {
         getDb: () => db,
         withWriteTx: async (callback: (tx: unknown) => Promise<unknown>) => callback(transaction),
       } as unknown as DbService,
+      {} as GroupService,
+      {} as TopicService,
       {} as ModelService,
       {} as PreferenceService,
       tagService,
@@ -116,6 +126,8 @@ describe('AssistantService', () => {
       {
         withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
       } as unknown as DbService,
+      {} as GroupService,
+      {} as TopicService,
       {} as ModelService,
       { get: jest.fn(async () => null) } as unknown as PreferenceService,
       tagService,
@@ -206,6 +218,7 @@ function createAssistantRow(overrides: Partial<AssistantRow> = {}): AssistantRow
     deletedAt: null,
     description: '',
     emoji: '😀',
+    groupId: null,
     id: '00000000-0000-4000-8000-000000000001',
     modelId: null,
     name: 'Assistant',

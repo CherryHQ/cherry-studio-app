@@ -1,3 +1,38 @@
+import type {
+  AiUsageRecordGroupBy,
+  AiUsageRecordListQuery,
+  AiUsageRecordListQueryParams,
+  AiUsageRecordListResponse,
+  AiUsageRecordMetric,
+  AiUsageRecordStatsBucket,
+  AiUsageRecordStatsGroupIdentity,
+  AiUsageRecordStatsMetrics,
+  AiUsageRecordStatsQuery,
+  AiUsageRecordStatsQueryParams,
+  AiUsageRecordStatsResponse,
+  AiUsageRecordTimelineBucket,
+  AiUsageRecordTimelineQuery,
+  AiUsageRecordTimelineQueryParams,
+  AiUsageRecordTimelineResponse,
+} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+import {
+  AiUsageRecordListQuerySchema,
+  AiUsageRecordStatsQuerySchema,
+  AiUsageRecordTimelineQuerySchema,
+} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+import type {
+  AiUsageCostBreakdown,
+  AiUsagePricingSnapshot,
+  AiUsageRecordAttribution,
+  AiUsageRecordEntry,
+  AiUsageRecordMessageKind,
+  AiUsageRecordModality,
+  AiUsageRecordSourceType,
+  ServingCredentialReceipt,
+} from '@cherrystudio/universal/data/types/aiUsageRecord';
+import { getAiUsageRecordTotalTokens } from '@cherrystudio/universal/data/types/aiUsageRecord';
+import type { MessageStats } from '@cherrystudio/universal/data/types/message';
+import type { Currency } from '@cherrystudio/universal/data/types/model';
 import { loggerService } from '@logger';
 import {
   and,
@@ -24,41 +59,6 @@ import {
   type InsertAiUsageRecordRow,
 } from '@/backend/data/db/schemas/aiUsageRecord';
 import { messageTable } from '@/backend/data/db/schemas/message';
-import type {
-  AiUsageRecordGroupBy,
-  AiUsageRecordListQuery,
-  AiUsageRecordListQueryParams,
-  AiUsageRecordListResponse,
-  AiUsageRecordMetric,
-  AiUsageRecordStatsBucket,
-  AiUsageRecordStatsGroupIdentity,
-  AiUsageRecordStatsMetrics,
-  AiUsageRecordStatsQuery,
-  AiUsageRecordStatsQueryParams,
-  AiUsageRecordStatsResponse,
-  AiUsageRecordTimelineBucket,
-  AiUsageRecordTimelineQuery,
-  AiUsageRecordTimelineQueryParams,
-  AiUsageRecordTimelineResponse,
-} from '@/shared/data/api/schemas/aiUsageRecords';
-import {
-  AiUsageRecordListQuerySchema,
-  AiUsageRecordStatsQuerySchema,
-  AiUsageRecordTimelineQuerySchema,
-} from '@/shared/data/api/schemas/aiUsageRecords';
-import type {
-  AiUsageCostBreakdown,
-  AiUsagePricingSnapshot,
-  AiUsageRecordAttribution,
-  AiUsageRecordEntry,
-  AiUsageRecordMessageKind,
-  AiUsageRecordModality,
-  AiUsageRecordSourceType,
-  ServingCredentialReceipt,
-} from '@/shared/data/types/aiUsageRecord';
-import { getAiUsageRecordTotalTokens } from '@/shared/data/types/aiUsageRecord';
-import type { MessageStats } from '@/shared/data/types/message';
-import type { Currency } from '@/shared/data/types/model';
 
 import { timestampToISO } from './utils/rowMappers';
 
@@ -1057,6 +1057,14 @@ async function getAiUsageRecordTimeline(
 
 export class AiUsageRecordService {
   constructor(private readonly dbService: DbService) {}
+
+  async getMessageUsageProjection(ref: MessageRef): Promise<MessageUsageProjection> {
+    return await getMessageUsageProjectionTx(this.dbService.getDb(), ref);
+  }
+
+  async refreshMessageProjection(ref: MessageRef): Promise<void> {
+    await this.dbService.withWriteTx((tx) => rebuildMessageUsageProjectionTx(tx, ref));
+  }
 
   async recordInvocation(input: RecordAiInvocationInput): Promise<void> {
     await this.recordInvocations([input]);

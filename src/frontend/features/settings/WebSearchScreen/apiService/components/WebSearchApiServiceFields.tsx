@@ -1,12 +1,11 @@
-import { useToast } from 'heroui-native/toast';
-import { useCallback, useMemo, useState } from 'react';
-import { Keyboard, Pressable, Text, View } from 'react-native';
-
 import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverride,
-} from '@/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
+import { useToast } from 'heroui-native/toast';
+import { useCallback, useMemo, useState } from 'react';
+import { Keyboard, Pressable, Text, View } from 'react-native';
 
 import { useWebSearchApiManagementContext } from '../../context/WebSearchApiManagementContext';
 import {

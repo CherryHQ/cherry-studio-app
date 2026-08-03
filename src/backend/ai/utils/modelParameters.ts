@@ -5,11 +5,12 @@
  * Capability gating ported from desktop's `src/main/ai/utils/modelParameters.ts`.
  */
 
-import { loggerService } from '@logger';
-
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import type { Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/universal/data/types/assistant';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
   isClaude46SeriesModel,
   isClaude47SeriesModel,
@@ -20,15 +21,20 @@ import {
   isSupportTemperatureModel,
   isSupportTopPModel,
   isTemperatureTopPMutuallyExclusiveModel,
-} from '@/shared/utils/model';
+} from '@cherrystudio/universal/utils/model';
+import { loggerService } from '@logger';
 
 import { isAwsBedrockProvider } from './provider';
-import { getThinkingBudget } from './reasoning';
+import type { ResolvedReasoningInvocation } from './reasoningSerializers';
 
 const logger = loggerService.withContext('utils:modelParameters');
 
 /** `undefined` falls back to the provider default. */
-export function getTemperature(assistant: Assistant, model: Model): number | undefined {
+export function getTemperature(
+  assistant: Assistant,
+  model: Model,
+  reasoning: Pick<ResolvedReasoningInvocation, 'kind'>,
+): number | undefined {
   if (isGemini3Model(model)) {
     logger.info(
       `Gemini 3.x model ${model.id} uses default sampling settings, disabling temperature`,
@@ -45,13 +51,7 @@ export function getTemperature(assistant: Assistant, model: Model): number | und
     return undefined;
   }
 
-  const reasoningEffort = assistant.settings?.reasoning_effort;
-  if (
-    isClaudeReasoningModel(model) &&
-    reasoningEffort &&
-    reasoningEffort !== 'default' &&
-    reasoningEffort !== 'none'
-  ) {
+  if (isClaudeReasoningModel(model) && reasoning.kind !== 'omit' && reasoning.kind !== 'off') {
     logger.info(
       `Model ${model.id} does not support reasoning with temperature, disabling temperature`,
     );
@@ -85,7 +85,11 @@ export function getTemperature(assistant: Assistant, model: Model): number | und
 }
 
 /** Temperature wins when both are enabled on mutually-exclusive models. */
-export function getTopP(assistant: Assistant, model: Model): number | undefined {
+export function getTopP(
+  assistant: Assistant,
+  model: Model,
+  reasoning: Pick<ResolvedReasoningInvocation, 'kind'>,
+): number | undefined {
   if (isGemini3Model(model)) {
     logger.info(`Gemini 3.x model ${model.id} uses default sampling settings, disabling topP`);
     return undefined;
@@ -111,13 +115,7 @@ export function getTopP(assistant: Assistant, model: Model): number | undefined 
 
   let topP = assistant.settings?.topP ?? DEFAULT_ASSISTANT_SETTINGS.topP;
 
-  const reasoningEffort = assistant.settings?.reasoning_effort;
-  if (
-    isClaudeReasoningModel(model) &&
-    reasoningEffort &&
-    reasoningEffort !== 'default' &&
-    reasoningEffort !== 'none'
-  ) {
+  if (isClaudeReasoningModel(model) && reasoning.kind !== 'omit' && reasoning.kind !== 'off') {
     const clampedTopP = Math.max(0.95, Math.min(topP, 1));
     if (clampedTopP !== topP) {
       logger.info(
@@ -159,6 +157,7 @@ export function getMaxTokens(
   assistant: Assistant,
   model: Model,
   provider: Provider,
+  reasoning: Pick<ResolvedReasoningInvocation, 'budgetTokens'>,
 ): number | undefined {
   const enableMaxTokens =
     assistant.settings?.enableMaxTokens ?? DEFAULT_ASSISTANT_SETTINGS.enableMaxTokens;
@@ -177,8 +176,7 @@ export function getMaxTokens(
     !isClaude47SeriesModel(model) &&
     isAnthropicLike
   ) {
-    const reasoningEffort = assistant.settings?.reasoning_effort;
-    const budget = getThinkingBudget(maxTokens, reasoningEffort, model.id);
+    const budget = reasoning.budgetTokens;
     if (budget) maxTokens -= budget;
   }
 

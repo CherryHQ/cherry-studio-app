@@ -8,6 +8,3 @@ export const appStateTable = sqliteTable('app_state', {
   description: text(), // Optional description field
   ...createUpdateTimestamps,
 });
-
-export type InsertAppStateRow = typeof appStateTable.$inferInsert;
-export type AppStateRow = typeof appStateTable.$inferSelect;
