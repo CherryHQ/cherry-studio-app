@@ -1,4 +1,4 @@
-import type { AiUsageRecordTimelineBucket } from '@/shared/data/api/schemas/aiUsageRecords';
+import type { AiUsageRecordTimelineBucket } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 
 import type { AiUsageLevel, AiUsageOverview, AiUsageTimeRange, AiUsageWindowKey } from '../types';
 import {
