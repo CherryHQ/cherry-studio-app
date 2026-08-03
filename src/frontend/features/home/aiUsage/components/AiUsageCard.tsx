@@ -66,16 +66,15 @@ export function AiUsageCard() {
       : undefined;
   const activeDays = isInitialLoading ? placeholder : numberFormatter.format(overview.activeDays);
   const longestStreak = isInitialLoading
-    ? placeholder
+    ? undefined
     : t('home.aiUsage.longestStreak', { count: overview.longestStreak });
   const peakTokens = isInitialLoading
     ? placeholder
     : numberFormatter.format(peakDay?.totalTokens ?? 0);
-  const peakDate = isInitialLoading
-    ? placeholder
-    : peakDay
+  const peakDate =
+    !isInitialLoading && peakDay
       ? dateFormatter.format(parseLocalDateKey(peakDay.dateKey))
-      : placeholder;
+      : undefined;
 
   return (
     <View className="w-full rounded-2xl bg-surface p-4" style={styles.card}>
@@ -218,26 +217,30 @@ function MetricCell({ className, detail, label, testID, value }: MetricCellProps
       <Text className="text-muted-foreground text-xs" maxFontSizeMultiplier={1.2} numberOfLines={1}>
         {label}
       </Text>
-      <Text
-        adjustsFontSizeToFit
-        className="font-semibold text-default-foreground text-xl"
-        minimumFontScale={0.72}
-        numberOfLines={1}
-        style={styles.metricValue}
-        testID={testID}
-      >
-        {value}
-      </Text>
-      {detail ? (
+      <View className="min-w-0 flex-row items-baseline gap-1">
         <Text
-          className="text-muted-foreground text-xs"
-          maxFontSizeMultiplier={1.1}
+          adjustsFontSizeToFit
+          className="shrink-0 font-semibold text-default-foreground text-xl"
+          minimumFontScale={0.72}
           numberOfLines={1}
           style={styles.metricValue}
+          testID={testID}
         >
-          {detail}
+          {value}
         </Text>
-      ) : null}
+        {detail ? (
+          <Text
+            adjustsFontSizeToFit
+            className="min-w-0 flex-1 text-muted-foreground text-xs"
+            maxFontSizeMultiplier={1.1}
+            minimumFontScale={0.7}
+            numberOfLines={1}
+            style={styles.metricValue}
+          >
+            {`(${detail})`}
+          </Text>
+        ) : null}
+      </View>
     </View>
   );
 }

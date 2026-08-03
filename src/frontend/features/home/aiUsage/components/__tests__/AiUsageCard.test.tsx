@@ -140,7 +140,7 @@ describe('AiUsageCard', () => {
     expect(metricValue('ai-usage-active-days-value')).toBe('4');
     expect(metricValue('ai-usage-peak-day-value')).toBe('900');
     expect(textValues()).toEqual(
-      expect.arrayContaining(['Observable input: 3.6M', '3-day streak', 'Jan 4, 2026']),
+      expect.arrayContaining(['(Observable input: 3.6M)', '(3-day streak)', '(Jan 4, 2026)']),
     );
     const calendar = renderer?.root.findByProps({ testID: 'ai-usage-calendar' });
     expect(calendar?.props.data).toBe(calendarData);
