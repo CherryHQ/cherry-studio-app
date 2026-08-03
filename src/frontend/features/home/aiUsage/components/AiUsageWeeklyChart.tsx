@@ -13,7 +13,7 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import type { AiUsageWeeklyData } from '../types';
 import { parseLocalDateKey } from '../utils/aiUsageCalendar';
-import { displayAiUsageModelId } from '../utils/aiUsageDetail';
+import { displayAiUsageModelId, getAiUsageChartScale } from '../utils/aiUsageDetail';
 import { createAiUsageTokenFormatter } from '../utils/formatAiUsageTokens';
 
 const CHART_HEIGHT = 196;
@@ -73,7 +73,8 @@ export function AiUsageWeeklyChart({
   );
   const chartWidth = Math.max(0, containerWidth - AXIS_WIDTH);
   const maxDayTokens = Math.max(0, ...data.days.map((day) => day.totalTokens));
-  const chartMaximum = getChartMaximum(maxDayTokens);
+  const chartScale = getAiUsageChartScale(maxDayTokens, data.averageTokens);
+  const chartMaximum = chartScale.maximum;
   const averageY = valueToY(data.averageTokens, chartMaximum);
   const chartData = useMemo<ChartDatum[]>(
     () =>
@@ -152,11 +153,10 @@ export function AiUsageWeeklyChart({
     },
     [data.days, data.series, selectedDateKey],
   );
-  const axisTicks = [
-    { value: chartMaximum, y: PLOT_TOP },
-    { value: chartMaximum / 2, y: PLOT_TOP + PLOT_HEIGHT / 2 },
-    { value: 0, y: PLOT_TOP + PLOT_HEIGHT },
-  ];
+  const axisTicks = chartScale.tickValues.map((value) => ({
+    value,
+    y: valueToY(value, chartMaximum),
+  }));
   const averageLabelTop = getAverageLabelTop(averageY, axisTicks);
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -388,15 +388,6 @@ function getSeriesColor(
 
 function seriesValueKey(index: number): string {
   return `series${index}`;
-}
-
-function getChartMaximum(value: number): number {
-  if (value <= 0) return 1;
-  const target = value * 1.1;
-  const magnitude = 10 ** Math.floor(Math.log10(target));
-  const normalized = target / magnitude;
-  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-  return step * magnitude;
 }
 
 function valueToY(value: number, maximum: number): number {

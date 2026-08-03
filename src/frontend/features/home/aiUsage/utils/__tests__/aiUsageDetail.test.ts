@@ -11,12 +11,32 @@ import {
   getAiUsageDayStatsQuery,
   getAiUsageDayRange,
   getAiUsageRecentWeekPages,
+  getAiUsageChartScale,
   getAiUsageWeekDefaultDateKey,
   getAiUsageWeekRange,
   getAiUsageWeekTimelineQuery,
 } from '../aiUsageDetail';
 
 describe('AI usage detail', () => {
+  test('places the average between neighboring readable axis ticks', () => {
+    expect(getAiUsageChartScale(18_000, 14_000)).toEqual({
+      maximum: 20_000,
+      tickValues: [20_000, 10_000, 0],
+    });
+    expect(getAiUsageChartScale(22_000, 18_000)).toEqual({
+      maximum: 25_000,
+      tickValues: [25_000, 15_000, 0],
+    });
+  });
+
+  test('keeps an outlying maximum visible while bracketing the average', () => {
+    expect(getAiUsageChartScale(100_000, 14_000)).toEqual({
+      maximum: 120_000,
+      tickValues: [120_000, 40_000, 0],
+    });
+    expect(getAiUsageChartScale(0, 0)).toEqual({ maximum: 1, tickValues: [1, 0] });
+  });
+
   test('builds a Monday-first local week and local day range', () => {
     const range = getAiUsageWeekRange(new Date(2026, 7, 2, 12));
     const dayRange = getAiUsageDayRange('2026-07-29');

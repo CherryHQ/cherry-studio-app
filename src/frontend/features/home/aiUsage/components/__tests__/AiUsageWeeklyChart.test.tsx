@@ -97,10 +97,14 @@ describe('AiUsageWeeklyChart', () => {
     expect(chart?.props.tooltip).toBe(false);
     expect(chart?.props.data).toHaveLength(7);
     expect(chart?.props.series).toHaveLength(2);
+    expect(chart?.props.yDomain).toEqual([0, 250]);
     expect(renderer?.root.findByProps({ testID: 'ai-usage-average-line' })).toBeDefined();
     expect(textValues()).toEqual(
       expect.arrayContaining([
         '0',
+        '50',
+        '150',
+        '250',
         'model-a',
         'Other models',
         'Average',

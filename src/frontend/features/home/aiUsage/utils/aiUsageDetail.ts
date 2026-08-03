@@ -22,6 +22,7 @@ import {
 
 const WEEK_DAY_COUNT = 7;
 const TOP_MODEL_COUNT = 3;
+const CHART_INTERVAL_COUNT = 5;
 
 export const AI_USAGE_WEEK_PAGE_COUNT = 8;
 export const AI_USAGE_CURRENT_WEEK_PAGE_INDEX = AI_USAGE_WEEK_PAGE_COUNT - 1;
@@ -99,6 +100,34 @@ export function displayAiUsageModelId(modelId: string | null | undefined): strin
   if (!modelId) return '';
   const separatorIndex = modelId.indexOf('::');
   return separatorIndex >= 0 ? modelId.slice(separatorIndex + 2) : modelId;
+}
+
+export function getAiUsageChartScale(maximumTokens: number, averageTokens: number) {
+  if (maximumTokens <= 0) {
+    return { maximum: 1, tickValues: [1, 0] };
+  }
+
+  const targetMaximum = maximumTokens * 1.1;
+  const step = getNiceChartStep(targetMaximum / CHART_INTERVAL_COUNT);
+  let maximum = Math.ceil(targetMaximum / step) * step;
+  const normalizedAverage = Math.max(0, Math.min(averageTokens, maximumTokens));
+
+  if (normalizedAverage <= 0) {
+    return { maximum, tickValues: [maximum, 0] };
+  }
+
+  // The average replaces its nearest regular tick. Keeping the neighboring
+  // ticks leaves a stable label gap on both sides of the average line.
+  const nearestTick = Math.round(normalizedAverage / step) * step;
+  const lowerTick = Math.max(0, nearestTick - step);
+  const upperTick = nearestTick + step;
+  maximum = Math.max(maximum, upperTick);
+
+  const tickValues = [...new Set([maximum, upperTick, lowerTick, 0])].sort(
+    (left, right) => right - left,
+  );
+
+  return { maximum, tickValues };
 }
 
 export function buildAiUsageWeeklyData(
@@ -191,6 +220,14 @@ function getDateKeys(range: AiUsageTimeRange): string[] {
   }
 
   return dateKeys;
+}
+
+function getNiceChartStep(value: number): number {
+  const safeValue = Math.max(1, value);
+  const magnitude = 10 ** Math.floor(Math.log10(safeValue));
+  const normalized = safeValue / magnitude;
+  const multiplier = normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10;
+  return multiplier * magnitude;
 }
 
 function modelIdentity(identity: {
