@@ -1,6 +1,6 @@
-# Job Manager Mobile Portability Assessment
+# Mobile Job Manager Background Execution Design
 
-> Assessment date: 2026-08-02
+> Updated: 2026-08-03
 > Desktop source: `CherryHQ/cherry-studio@d498753ecfd0f2572612456281ec222563ce7bf3`
 > Mobile baseline: `CherryHQ/cherry-studio-app@c5896682d900298bde11d944bcb4aef4183ae9c1`
 > Background-reply experiment: draft PR [#473](https://github.com/CherryHQ/cherry-studio-app/pull/473),
@@ -9,543 +9,650 @@
 
 ## Decision
 
-**Conditional go: port the durable job semantics, not the desktop runtime implementation.**
+**Conditional go: build a durable mobile job coordinator. Do not port the desktop runtime as a
+source copy, and do not make any operating-system background API responsible for job correctness.**
 
-Mobile can support a persistent job ledger, typed handlers, queue concurrency, cancellation, retry,
-restart recovery, run-now, job history, and catch-up when the app next gets an execution window. It
-cannot provide cross-platform desktop-equivalent guarantees that a cron callback fires on time, that
-JavaScript keeps running after suspension, or that work continues after a person force-quits the
-app. Android can add permission-gated, user-facing exact alarm wakeups, but that is a platform adapter
-with a narrower reliability contract, not a reason to treat desktop timers as portable.
+Mobile can provide durable enqueue, atomic claim, cancellation, retry, restart recovery, history,
+run-now, and best-effort catch-up. The operating systems can sometimes wake the app or let an
+already-started operation continue, but neither iOS nor Android promises desktop-style arbitrary
+code execution at an exact future time.
 
-PR #473 improves one important case: an iOS job that a person starts while the app is active may
-continue after the app moves to the background. It does not wake a suspended app for a future job,
-does not survive force-quit, and has no Android implementation. Treat it as an optional execution
-lease below a mobile-owned job runner, not as the scheduler or Job Manager itself.
+The product contract should be:
 
-The recommended product contract is therefore:
+| Product capability | Contract |
+| --- | --- |
+| Work survives navigation and is observable from another screen | Supported after ownership moves from route sessions to an app-owned job module |
+| Job intent and terminal result survive process death | Supported through SQLite and handler-specific recovery |
+| Short maintenance eventually runs in an OS window | Best effort; no exact start or finish time |
+| A user-started long operation continues after backgrounding | iOS 26+ through Continued Processing; Android through a policy-valid foreground lease; older iOS has only finite grace |
+| Large uploads/downloads survive ordinary process death | Use the platform transfer engine, not a JavaScript handler loop |
+| A local task runs exactly at 08:00 | Android-only and conditional through exact-alarm special access; unavailable as a cross-platform contract |
+| An unattended Agent runs while the app is unopened for days | Server-owned scheduling and execution |
+| Any local job runs after the person force-quits the app | Not supported |
 
-- **Supported locally:** durable jobs while the app is active, plus recovery on the next app start
-  or resume.
-- **Supported opportunistically:** short, idempotent background-eligible jobs when the operating
-  system grants a background window.
-- **Supported as an optional Android-only tier:** user-created wall-clock schedules through an exact
-  alarm adapter when special access is granted, with an explicitly disclosed inexact fallback.
-- **Supported for already-running iOS work, after platform validation:** continuation through a
-  user-visible background execution lease derived from PR #473.
-- **Not promised locally:** cross-platform exact cron timing, sub-15-minute periodic cadence,
-  execution after force-quit, or reliable unattended long-running AI work. These require a
-  server-side scheduler/executor.
+PR #473 is useful as an experiment and as evidence that a user-started iOS stream can be kept alive
+under a silent-audio session. It cannot wake a suspended app, survive force-quit, schedule future
+work, or provide Android behavior. Silent audio also does not satisfy Apple's production background
+audio contract. It must not become the Job Manager's execution foundation.
 
-If the only near-term requirement is to let painting generation survive navigation, a dedicated
-app-owned painting operation is smaller than porting the whole Job Manager. The generic runtime
-becomes worthwhile when at least two durable workflows need shared retry, cancellation, recovery,
-history, or scheduling.
+OpenMinis proves the Android native flow from an exact alarm to a visible foreground service. It
+does not prove durable Job Manager semantics: its scheduled Agent still depends on in-memory
+coroutines and has no transactional job claim, idempotent recovery, or process-death resume.
 
-## Evidence Baseline
+## The Four-Layer Model
 
-### Desktop Job Manager
+The implementation must keep four concepts independent:
 
-The desktop subsystem is mature and larger than one class. The assessed production surface is
-4,459 lines across `JobManager`, `SchedulerService`, persistence services, schemas, contracts, and
-runtime helpers. Its core and scheduler tests add another 4,435 lines. The main responsibilities are
-documented in the desktop [job quick reference](https://github.com/CherryHQ/cherry-studio/blob/d498753ecfd0f2572612456281ec222563ce7bf3/src/main/core/job/README.md#L1-L31)
-and [architecture overview](https://github.com/CherryHQ/cherry-studio/blob/d498753ecfd0f2572612456281ec222563ce7bf3/docs/references/job-and-scheduler/overview.md#L1-L52):
+| Layer | Question | Owner |
+| --- | --- | --- |
+| Durable state | What work exists, what attempt is current, and what result was committed? | Cherry SQLite ledger |
+| Wake trigger | What gives the process an opportunity to run now? | App launch/resume, BGTaskScheduler, WorkManager, AlarmManager, or server push |
+| Execution lease | How long may this already-dispatched work keep using CPU/network in the background? | iOS background task/Continued Processing, Android worker/foreground service; system transfer engines own transfer execution |
+| Recovery | What happens after suspension, expiration, process death, cancellation, or duplicate delivery? | Job module plus each handler's policy |
 
-- a six-state SQLite job ledger;
-- typed handler registration and payload binding;
-- per-queue and global concurrency;
-- cancellation, timeouts, retry backoff, progress, and terminal events;
-- persistent cron, interval, and one-shot schedule definitions;
-- startup recovery and missed-schedule catch-up;
-- garbage collection and backup-restore pause/drain behavior.
+One platform primitive may fill two roles. For example, `BGProcessingTask` both wakes iOS and grants
+a bounded processing window, while WorkManager both persists its own system work request and runs a
+bounded worker. The roles still remain separate in Cherry's design: the OS record is a hint or
+delivery vehicle, never the business source of truth.
 
-The current business consumers include scheduled agent prompts, asynchronous image generation,
-file processing, knowledge indexing, and file metadata backfill. Most of those domains do not yet
-exist on mobile.
+```text
+business intent
+      |
+      v
+SQLite job ledger <-------------------------------+
+      |                                            |
+      | any wake trigger                           | checkpoint/recovery
+      v                                            |
+bounded job pump -> atomic claim -> execution lease -> handler -> durable result
+```
 
-### Mobile Baseline
+The resulting invariants are:
 
-Mobile deliberately uses one React Native/Hermes runtime and an in-process frontend/backend
-boundary, not Electron processes, IPC, the desktop lifecycle graph, or a service locator
-([architecture overview](./architecture-overview.md#scope)). Its runtime rules explicitly state that
-the desktop lifecycle framework is not ported and that backgrounding is not a reliable execution
-window for chat or painting generation ([runtime ownership](./runtime-ownership.md#principles)).
+1. A wake is not proof that a job ran.
+2. A notification or Live Activity is not an execution lease.
+3. An execution lease is not durable state and may expire early.
+4. A JavaScript promise is not a durable result.
+5. Every wake path calls the same bounded pump.
+6. Every handler remains correct if wake or lease acquisition is delayed, duplicated, refused, or
+   interrupted.
+7. Force-quit is a supported interruption boundary, not a scenario to work around.
 
-The data layer is a viable foundation:
+## iOS And iPadOS
 
-- `DbService` already owns Expo SQLite, WAL, and serialized `BEGIN IMMEDIATE` write transactions.
-- Mobile timestamp and UUID helpers align with desktop schema conventions.
-- Typed Data API handlers and React Query provide the correct read boundary for job history.
-- The bootstrap composition root already owns app-lifetime backend services.
+Cherry currently supports iOS 17 and later. iOS 26 Continued Processing can therefore enhance the
+newest systems, but it cannot be the only implementation.
 
-However, jobs are explicitly listed among the desktop data domains that have not been migrated
-([shared data scope](../../src/shared/data/README.md#scope)), and the current dependency/configuration
-set contains no `expo-background-task`, `expo-task-manager`, `croner`, or Android foreground-service
-adapter.
+### Mechanism Matrix
 
-### PR #473
+| Mechanism | Actual role | Timing/runtime contract | Job Manager use |
+| --- | --- | --- | --- |
+| Foreground runtime | Normal execution | Runs while the app is active; navigation ownership can still abort work | Primary execution path; app-owned runtime rather than route-owned sessions |
+| `UIApplication.beginBackgroundTask` | Finite execution lease for work already in progress | No future wake; expiration handler required; time is system-controlled | Finish a small save/checkpoint or stop cleanly, not a long Agent run |
+| `BGAppRefreshTask` | Opportunistic wake plus short window | System-selected, based partly on usage; `earliestBeginDate` means not-before, not run-at; roughly 30 seconds | Reconcile state, fetch a small delta, or drain a very small number of jobs |
+| `BGProcessingTask` | Deferred wake plus longer bounded window | Can run for minutes while the device is idle; system may interrupt it when conditions change or the person uses the device | Idempotent maintenance, indexing, cleanup, or a bounded job pump |
+| `BGContinuedProcessingTask`, iOS 26+ | User-visible execution lease for explicit foreground actions | Begins immediately or shortly after foreground submission; may queue or fail under load; reports system Live Activity progress; user/system may cancel | Best production lease for Send, Generate, Export, or similar user-started work |
+| Background `URLSession` | System-owned HTTP upload/download engine | Transfer runs in another process; app can be resumed/relaunched for events; user force-quit cancels it | File-based upload/download only, followed by a short reconciliation job |
+| Background APNs notification | Server-originated opportunistic wake | Low priority, throttled/coalesced/dropped, approximately 30 seconds if delivered | Fetch server state or enqueue local reconciliation; never exact scheduling |
+| Local notification / Live Activity | User-visible status surface | Presents UI but grants no arbitrary code time | Show progress, completion, or a prompt to reopen; never mark a job complete |
+| Background audio | Capability-specific execution for audible media | Intended for apps actually playing audible content | Not a generic lease; a silent keep-alive is an App Review risk |
 
-PR #473 adds an iOS `BackgroundReplyService` that:
+Apple's current BackgroundTasks headers make the scheduling limits explicit:
 
-- starts looping a bundled silent audio asset with `shouldPlayInBackground: true` while a chat turn
-  is generating;
-- creates and updates a Live Activity after the app backgrounds;
-- stops audio and settles the activity when the turn becomes terminal or awaits approval;
-- is created per `ChatSession` and disposed with that session.
+- `earliestBeginDate` only prevents an early launch; the system does not guarantee launch on that
+  date.
+- `BGProcessingTask` can run for minutes, only while the device is idle, and is terminated when the
+  person starts using the device.
+- A processing request is deferrable. The system attempts it when conditions are favorable rather
+  than treating it as a wall-clock timer.
+- Every `BGTask` needs an expiration handler and can expire before consuming the expected time.
 
-The PR comments record a 190-second controlled stream and continuous one-second JavaScript timers
-while an iOS simulator remained backgrounded. A later simulator run remained backgrounded for about
-7 minutes 47 seconds. This is useful integration evidence, but the PR itself still lists a signed
-physical-device run, lock-screen behavior, audio interruption, low-power mode, and Live Activity UI
-as open gates.
+### iOS 26 Continued Processing
 
-Two implementation facts matter before reusing it:
+`BGContinuedProcessingTask` is the closest iOS equivalent to Android's user-visible foreground
+execution, but its scope is deliberately narrow:
 
-1. The current code has no `__DEV__` guard. It enables the service on iOS whenever the preference is
-   not false, despite the PR description calling runtime playback Debug-only.
-2. `ChatSession.dispose()` aborts every active turn and disposes the background-reply service, while
-   `ChatSessionProvider` disposes the session on unmount. The current ownership therefore preserves
-   an in-flight stream across app backgrounding, but not necessarily across navigation that unmounts
-   the provider.
+- The request is created on behalf of the currently foregrounded app after a person's action.
+- `earliestBeginDate` is ignored in favor of now. It is not a future scheduler.
+- The submission strategy may queue or fail when resources are unavailable.
+- CPU and network are supported by default; background GPU requires an entitlement and supported
+  hardware.
+- The task must report progress. iOS owns the Live Activity presentation and can expire stalled work.
+- Removing the app from the app switcher cancels queued/continued work. That cancellation may not
+  deliver an expiration callback, so correctness cannot depend on cleanup running.
 
-### OpenMinis Android Reference
+For iOS 17-25, Cherry should run the same `user-continued` job while foregrounded and use
+`beginBackgroundTask` only to persist a checkpoint and stop. The product should not promise long
+continuation on those versions.
 
-OpenMinis is a useful native proof of the Android half of this design, but it is not an Android Job
-Manager. The inspected revision is a Kotlin/Compose app targeting Android 15 (API 35), distributed as
-an APK from GitHub rather than through Google Play
-([build configuration](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/build.gradle.kts#L25-L40),
-[distribution](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/README.md#L106-L115)).
+### Why PR #473 Is Not The Job Manager
 
-Its scheduled-agent path is:
+PR #473 adds a per-`ChatSession` `BackgroundReplyService` that loops a bundled silent AAC asset,
+updates a Live Activity, and records background timer/stream evidence. Simulator tests showed a
+controlled stream continuing for more than three minutes and a later run lasting about seven minutes
+and forty-seven seconds.
+
+That evidence answers one narrow question: the React Native runtime can remain active while iOS
+treats the app as an audio app. It does not establish a production contract:
+
+1. Silent audio exists only to retain execution, while Apple's audio mode is for audible content.
+   App Review Guideline 2.5.4 requires background modes to serve their intended purpose.
+2. The service cannot wake the app for a later schedule and does not survive force-quit.
+3. Live Activity reports state but grants no runtime.
+4. `ChatSessionProvider` disposes its session on unmount, and `ChatSession.dispose()` aborts active
+   turns. The experiment improves app-background behavior but still has route ownership.
+5. The PR description says runtime playback is Debug-only, while the inspected implementation does
+   not contain the stated `__DEV__` guard. That mismatch must be resolved even for further testing.
+6. Physical-device lock screen, low-power, interruption, thermal, memory-pressure, and App Review
+   gates remain unproven.
+
+Reusable parts are limited to progress-content derivation, Live Activity presentation, cancellation
+plumbing, and the concept of a lease adapter. Production iOS 26 code should acquire a native
+Continued Processing lease instead of silent audio.
+
+## Android
+
+Cherry targets and compiles Android API 36. Android offers more explicit local wake and continuation
+mechanisms than iOS, but every mechanism has user visibility, quota, permission, or policy limits.
+
+### Mechanism Matrix
+
+| Mechanism | Actual role | Timing/runtime contract | Job Manager use |
+| --- | --- | --- | --- |
+| WorkManager one-time work | Persistent, deferred wake and bounded worker | Runs sometime after constraints are met; retries/backoff and reboot persistence are built in | Default adapter for short, deferrable reconciliation |
+| WorkManager periodic work | Inexact recurring wake | Minimum interval is 15 minutes; actual execution depends on constraints and system optimization | Periodic ledger scan only, never cron semantics |
+| Expedited WorkManager | Higher-priority deferred work | Quota-limited with an out-of-quota policy | Small time-sensitive work, not an unlimited Agent lease |
+| Long-running WorkManager worker | Worker promoted through a foreground service | Requires ongoing notification; Android 16 workers can exhaust JobScheduler quota | Restartable, user-visible work when the quota model and service type fit |
+| Foreground service | User-visible execution lease | Persistent notification and valid service type required; Android 12+ restricts background starts; system/user can stop it | User-started work after a durable claim, only with a truthful service type |
+| User-initiated data-transfer job, Android 14+ | Long system-scheduled transfer lease | Starts from a visible/user-permitted state, shows progress notification, and can run for an extended transfer | Large user-requested upload/download, not generic AI/tool computation |
+| AlarmManager inexact alarm | Approximate clock wake | May be delayed/coalesced, especially under idle/battery restrictions | Best-effort reminder to run the common pump |
+| AlarmManager exact alarm | Precise Android-only wake | Reserved for genuinely time-critical user-facing features; special access often required; idle delivery is rate-limited | Optional schedule tier; receiver hands off a durable job and returns |
+| BroadcastReceiver | Brief dispatch callback | `onReceive`/`goAsync` must finish quickly, generally under ten seconds | Validate wake, start a worker/eligible service, then finish |
+| Partial wake lock | Keeps CPU awake while work already runs | Does not start a process, preserve memory, or recover state; battery-expensive | Usually unnecessary with WorkManager/JobScheduler; never a correctness mechanism |
+| High-priority FCM | Server-originated wake opportunity | Delivery priority may be downgraded; short processing window and narrow FGS exemption | Notify/reconcile server-owned work, not local exact scheduling |
+
+### Foreground-Service Limits
+
+An Android foreground service is not an unrestricted equivalent of a desktop process:
+
+- Android 14+ requires a declared service type, the corresponding permission, and any runtime
+  prerequisites.
+- Android 12+ normally forbids starting a foreground service while the app is in the background.
+  Narrow exemptions include a genuinely user-requested exact alarm and a valid high-priority FCM
+  delivery.
+- Android 15+ limits `dataSync` and `mediaProcessing` to six hours per service type in a rolling
+  24-hour period while backgrounded. `shortService` is approximately three minutes.
+- Android 16 long-running WorkManager workers can consume JobScheduler quota even though WorkManager
+  promotes them to foreground execution.
+- The person can stop foreground-service work from system UI. The process can also die under
+  pressure; `START_STICKY` does not recreate a coroutine, JavaScript promise, network request, or
+  tool state.
+- There is no obvious universal foreground-service type for an arbitrary Agent loop.
+  `mediaPlayback` is valid only when playing media. `dataSync` or `specialUse` must truthfully match
+  the concrete workflow and pass Play policy review.
+
+The notification permission is separate. On Android 13+, an app can start an otherwise valid
+foreground service without notification permission, but it must still create the notification; the
+system may show it in Task Manager rather than the notification drawer.
+
+### Exact Alarms
+
+AlarmManager can provide an Android-only precision tier, not a completion guarantee:
+
+- `SCHEDULE_EXACT_ALARM` is special access and is not automatically granted to fresh installs
+  targeting API 33+. `USE_EXACT_ALARM` is auto-granted only for narrow core use cases and is subject
+  to Play policy.
+- Cherry must call `canScheduleExactAlarms()`, explain the capability only when a person requests
+  precise scheduling, handle grant/revocation, and expose an inexact fallback honestly.
+- Alarms are cleared on reboot. Re-arm after boot, app replacement, clock changes, time-zone changes,
+  and permission changes.
+- Arm only the earliest occurrence from SQLite. On delivery, transactionally evaluate every due
+  schedule and then arm the next earliest occurrence.
+- A wakeup alarm wakes the CPU and grants only a brief dispatch opportunity. The receiver must not
+  run JavaScript networking or wait for an Agent.
+- A qualifying exact alarm may allow a background foreground-service start, but the subsequent
+  service still needs a valid type, notification, cancellation, and timeout behavior.
+- An inexact fallback does not keep the exact-alarm foreground-service start exemption. If special
+  access is unavailable, hand off through WorkManager or notify the person instead of blindly
+  starting the same service from the receiver.
+
+### What OpenMinis Demonstrates
+
+The inspected OpenMinis flow is:
 
 ```text
 ScheduledTask JSON in SharedPreferences
-  -> one AlarmManager RTC_WAKEUP PendingIntent per task
+  -> AlarmManager setExactAndAllowWhileIdle
   -> ScheduledTaskAlarmReceiver
-  -> re-arm the next occurrence before execution
+  -> re-arm next occurrence
   -> AgentForegroundService + PARTIAL_WAKE_LOCK
   -> process-scoped HeadlessChatRunner / ChatViewModel
-  -> run-history row + completion notification + session deep link
+  -> history row + completion notification
 ```
 
-The pieces are concrete:
+Useful ideas:
 
-- `ScheduledTaskStore` persists a small JSON array in `SharedPreferences`; each row contains schedule,
-  prompt/target/model information and at most 50 result summaries
-  ([store](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskStore.kt#L10-L55),
-  [model](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTask.kt#L102-L148)).
-- `ScheduledTaskManager` calls `setExactAndAllowWhileIdle(RTC_WAKEUP)` and catches a denied exact-alarm
-  permission by falling back to `setAndAllowWhileIdle`. Recurrence is implemented as a new exact
-  one-shot alarm after each fire, not `setRepeating`
-  ([manager](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskManager.kt#L12-L21),
-  [registration](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskManager.kt#L115-L136)).
-- The alarm receiver looks up the persisted definition, skips disabled/deleted rows, re-arms the next
-  occurrence first, then invokes the agent runner
-  ([receiver](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskAlarmReceiver.kt#L21-L50)).
-  A `BOOT_COMPLETED` receiver re-registers enabled schedules because Android clears alarms on reboot
-  ([boot receiver](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/offload/AlarmReceiver.kt#L21-L38)).
-- `ScheduledAgentRunner` starts the foreground service before resolving a chat, reuses the normal
-  `ChatViewModel` agent loop through a process-scoped headless wrapper, waits up to ten minutes, then
-  records a preview and posts a deep-link notification
-  ([runner](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledAgentRunner.kt#L31-L108),
-  [headless wrapper](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/debug/HeadlessChatRunner.kt#L16-L69)).
-- `SessionActivityTracker` keeps the same service alive while any chat is streaming, wires its Stop
-  action to every active stream, and stops the service when no active or visible chat remains
-  ([tracking](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/SessionActivityTracker.kt#L248-L329),
-  [service updates](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/SessionActivityTracker.kt#L494-L569)).
-- The foreground service posts an ongoing notification, returns `START_STICKY`, survives removal of the
-  activity task while a stream is active, and holds a non-reference-counted `PARTIAL_WAKE_LOCK` with
-  no timeout until service destruction
-  ([lifecycle](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt#L124-L278),
-  [wake lock](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt#L556-L587)).
-- A settings screen helps the user request a battery-optimization exemption and find OEM autostart
-  controls, acknowledging that foreground-service behavior alone is not uniform across devices
-  ([settings](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/ui/settings/BackgroundSettingsScreen.kt#L62-L72),
-  [power adapter](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/power/PowerOptimizationManager.kt#L14-L37)).
+- Re-arm a recurring schedule as the next one-shot occurrence.
+- Start a visible execution owner before a long Agent loop.
+- Provide Stop and deep-link actions from the notification.
+- Re-register alarms after reboot and expose OEM battery-control guidance.
+- Reuse the normal Agent implementation through a headless entry rather than fork business logic.
 
-This proves that Android can wake a native receiver at a user-selected time and continue an already
-dispatched agent loop under a visible foreground execution lease. It does not provide the desktop
-Job Manager's durable execution semantics. In particular, the inspected implementation has no
-persisted `pending/running/retry/terminal` state machine, transactional claim, retry/backoff,
-idempotency key, missed-run catch-up, or process-death resume. `START_STICKY` can recreate the service,
-but it cannot recreate the coroutine, `ViewModel`, or network/tool call that was in memory.
+Do not copy these details:
 
-Six implementation details must not be copied into Cherry unchanged:
+1. `SharedPreferences` task JSON is the source of truth. Cherry should keep all job and schedule
+   state in SQLite.
+2. The receiver holds `goAsync()` until an Agent run that can last ten minutes. Cherry must hand off
+   and call `finish()` immediately.
+3. The service declares `mediaPlayback` to avoid the Android 15 `dataSync` timeout even though Agent
+   work is not media playback. That is not a valid Play-distributed design.
+4. `START_STICKY` and a no-timeout wake lock improve process survival but do not recover the in-memory
+   coroutine.
+5. The ten-minute waiter can time out without canceling the underlying stream, so history may report
+   timeout while work continues.
+6. There is no persisted `pending/running/retry/terminal` state machine, atomic claim, fencing token,
+   idempotency key, missed-run catch-up, or process-death recovery.
 
-1. The receiver holds its `goAsync()` pending result until the whole agent run returns, potentially
-   ten minutes. Android still applies the broadcast execution limit after `goAsync()` and expects
-   completion in under ten seconds. Cherry's receiver must hand a durable job ID to a service or
-   worker and call `finish()` immediately
-   ([Android broadcast guidance](https://developer.android.com/develop/background-work/background-tasks/broadcasts#security-considerations)).
-2. OpenMinis declares `mediaPlayback` specifically to avoid the Android 15 `dataSync` six-hour cap,
-   while its own manifest notes that actual playback is a Play policy rather than its sideload
-   runtime requirement
-   ([manifest](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/AndroidManifest.xml#L11-L26)).
-   Android defines that type for continuing audio/video playback, and Google Play requires the
-   declared use case to match. Cherry must select a legitimate type per handler and implement its
-   timeout/policy contract; it cannot use a fake media session as a generic keep-alive.
-3. The app declares `SCHEDULE_EXACT_ALARM`, but the inspected scheduled-task surface does not call
-   `canScheduleExactAlarms()`, open `ACTION_REQUEST_SCHEDULE_EXACT_ALARM`, or reschedule when the grant
-   changes. Fresh installs targeting API 33+ do not receive this special access automatically.
-   Silently falling back to an inexact alarm is acceptable only if the product labels that behavior;
-   that fallback also loses the exact-alarm exemption from Android's background foreground-service
-   start restriction, so the subsequent `startForegroundService()` can be refused.
-4. The runner starts the sticky foreground service before it resolves the target session/provider.
-   Early failure has no corresponding stop, and a normal sticky restart receives a null intent but
-   has no empty-session stop condition. Either path can leave an idle notification and the no-timeout
-   wake lock alive without an agent run
-   ([runner startup](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledAgentRunner.kt#L62-L78),
-   [sticky service](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt#L148-L210)).
-5. The ten-minute runner timeout only stops waiting for `isStreaming`; it does not cancel the
-   underlying stream. History and completion notifications can report a timeout while the agent keeps
-   executing. A Job Manager timeout must instead have an explicit cancel-or-checkpoint policy
-   ([timeout wait](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/debug/HeadlessChatRunner.kt#L219-L246)).
-6. The no-timeout wake lock and in-memory app scope improve survival, not correctness. Cherry should
-   acquire a bounded lease only after a durable claim, checkpoint before expiration, and treat every
-   process restart as recovery from SQLite. A force-stopped package cannot self-start; on Android 15+
-   force-stop also cancels its pending intents. This differs from Android 13's foreground-service Task
-   Manager Stop action, after which alarms and scheduled jobs remain eligible to fire.
+OpenMinis is architecture evidence for Android wake-to-lease handoff, not reliability evidence for a
+Job Manager.
 
-No focused unit or instrumentation tests for these scheduled-task, alarm-receiver, foreground-service,
-or power-management classes were present in the inspected OpenMinis revision. Its code is therefore
-architecture evidence, not device-level reliability evidence.
+## Termination Boundaries
 
-## Capability Matrix
-
-| Capability | Direct source reuse | Mobile result | Decision |
+| Event | iOS/iPadOS | Android | Required behavior |
 | --- | --- | --- | --- |
-| Job/trigger/retry DTOs and Zod schemas | High | Platform-neutral and mobile already uses Zod 4 | Port and keep vocabulary aligned |
-| `job` / `job_schedule` tables and indexes | High | Expo SQLite supports the same data model | Port with a bundled mobile migration |
-| `JobRegistry`, handler contract, backoff and catch-up rules | High | Mostly TypeScript-only | Port with mobile logger/import changes |
-| `JobService` and `JobScheduleService` | Low code, high semantics | Desktop queries are synchronous; Expo Drizzle queries are asynchronous | Rewrite against injected `DbService` |
-| `JobManager` dispatch and recovery | Low code, high semantics | Tied to desktop lifecycle, service locator, cache, power, and synchronous transaction ordering | Reimplement as a mobile runtime owner |
-| `SchedulerService` timers and Croner | Foreground only | JavaScript timers stop being authoritative when iOS/Android suspends the runtime | Use only to optimize active-app execution |
-| Job state/progress observation | Medium | Desktop shared-window cache has no mobile/headless equivalent | Keep state in SQLite; use queries plus live events while active |
-| PR #473 audio keep-alive | Low as-is, useful pattern | Can extend an already-started iOS execution window | Extract behind a lease interface after gates pass |
-| PR #473 Live Activity | Medium | Good user-visible progress surface; does not grant execution time itself | Keep as an optional observer |
-| Android exact schedule wake | None from desktop; OpenMinis is a reference | `AlarmManager` can wake a receiver for a user-requested exact alarm when special access is granted | Optional native adapter; disclose fallback and keep SQLite authoritative |
-| Cross-platform exact unattended schedules | None | iOS has no equivalent exact local wake, and force-quit stops local work | Use a server scheduler |
-| Android long-running continuation | None in PR #473; pattern proven by OpenMinis | Requires valid WorkManager/foreground-service behavior and a persistent notification | Build a policy-compliant Android lease adapter |
-| Backup pause/drain | Low current value | No matching mobile restore orchestrator exists today | Defer until a real consumer appears |
+| Ordinary background/suspension | JavaScript receives no CPU by default; a matching task/transfer/push may grant a window | Cached process may receive little or no CPU; workers, alarms, jobs, or FGS provide explicit windows | Persist before suspension; never infer state from an in-memory promise |
+| OS process death | Background URLSession can continue separately; other execution is discretionary | WorkManager recreates a worker; FGS can still die; sticky restart does not restore memory | Recover `running` rows and retry only idempotent/checkpointed work |
+| App-switcher/recents removal | Continued work, transfers, and pushes are canceled or suppressed until relaunch | Usually not force-stop, but OEM behavior varies | Promise no iOS continuation; treat Android OEM behavior as degraded reliability |
+| Android Task Manager Stop | Not applicable | Stops the process/back stack without callback; scheduled jobs and alarms can remain eligible | Reconcile on the next start and record user-requested stop where available |
+| Settings force-stop | No separate Settings action; app-switcher termination is the relevant user stop | Package is stopped until user action; Android 15+ also cancels pending intents | Promise no local execution until the person launches/interacts again |
+| Device reboot | No exact or exactly-once launch guarantee | WorkManager reschedules; alarms are lost; FGS is gone | Recreate registrations from SQLite, then run recovery |
+| App update | Treat as cold process launch | Persisted worker class names can break if renamed/removed | Version payloads, retain aliases/migrations, and reconcile before dispatch |
 
-## Why A File Copy Is Unsafe
+## Cross-Platform Execution Classes
 
-### Database execution is asynchronous
-
-Desktop `JobService` relies on synchronous `better-sqlite3` calls and synchronous transaction
-callbacks. Mobile `DbService.withWriteTx()` serializes an asynchronous callback on a long-lived Expo
-SQLite connection. The count, capacity check, candidate read, and `pending -> running` claim must
-remain in one awaited `BEGIN IMMEDIATE` transaction.
-
-This cannot be converted safely by adding `await` mechanically. Post-commit effects such as state
-publication, delayed-job arming, and queue kicks must run only after `withWriteTx()` resolves. A
-headless worker and the foreground runtime may also create separate `DbService` instances, so the
-spike must prove cross-connection locking and decide whether a SQLite busy timeout or a process-wide
-runtime singleton is required.
-
-### Runtime ownership differs
-
-Desktop handler registration is coordinated by lifecycle phases and a global `application.get()`
-container. Mobile must construct the handler registry explicitly in bootstrap and reuse the same
-registry factory from a headless background entry point. Job execution must not import React,
-navigation, translations, or frontend cache objects.
-
-The mobile runtime also cannot depend on graceful disposal. The OS may suspend or terminate it
-without running cleanup. A persisted `running` row and restart recovery must remain the correctness
-path; disposal only clears timers and requests cooperative abort.
-
-### Desktop timers are not mobile wakeups
-
-Desktop `SchedulerService` uses Croner and chained `setTimeout` calls. These work while Hermes is
-active and remain useful for immediate foreground behavior, but they do not wake a suspended app.
-Persisted schedules must instead be evaluated whenever any wake source runs:
-
-- app cold start;
-- transition back to `AppState.active`;
-- an operating-system background task;
-- a user pressing Run Now;
-- an optional server push or server-owned schedule.
-
-### In-process promises are not durable results
-
-Desktop `JobHandle.finished` is convenient for a caller in the same long-lived main process. That
-promise disappears when mobile is suspended or terminated. A durable mobile workflow should return
-a job ID and persist its result into a business destination. UI observes the job and destination via
-Data API queries. `finished` may remain a foreground convenience, but it cannot be the only result
-path.
-
-The current painting flow already creates a painting receipt before calling the provider. That
-painting ID is a suitable durable destination for a future `painting.generate` handler. Retrying a
-provider submission is safe only if a provider task ID or idempotency token is durably checkpointed;
-otherwise recovery should abandon the attempt to avoid duplicate charges.
-
-The desktop observation contract also needs an explicit correction before reuse. Its
-[`useJob`](https://github.com/CherryHQ/cherry-studio/blob/d498753ecfd0f2572612456281ec222563ce7bf3/src/renderer/hooks/useJob.ts#L5-L14)
-comment says every state transition, including `running`, is published through the shared cache, but
-the inspected `publishState` call sites cover initial enqueue and terminal finalization; the
-transactional
-[`claimNextPendingTx`](https://github.com/CherryHQ/cherry-studio/blob/d498753ecfd0f2572612456281ec222563ce7bf3/src/main/data/services/JobService.ts#L243-L268)
-changes a row to `running` without a corresponding publication. Mobile must define and test its own
-authoritative transition-observation contract rather than inherit this source/documentation drift.
-
-## Role Of PR #473
-
-PR #473 should become a narrow `BackgroundExecutionLease` adapter:
+Classify each enqueued job by the guarantee it actually requires:
 
 ```ts
-type BackgroundExecutionLease = {
-  dispose(): void;
-  update(progress: { detail?: string; percent?: number }): void;
-};
+type JobExecutionClass =
+  | 'foreground-only'
+  | 'bounded-background'
+  | 'user-continued'
+  | 'system-transfer'
+  | 'server-required';
+```
 
-type BackgroundExecutionService = {
-  acquire(input: { jobId: string; title: string }): Promise<BackgroundExecutionLease>;
+| Class | Requirements | iOS adapter | Android adapter | Fallback |
+| --- | --- | --- | --- | --- |
+| `foreground-only` | Needs UI, tool approval, uncheckpointed stream, or foreground-only SDK | Active app | Active app | Pause and notify |
+| `bounded-background` | Short, idempotent, checkpointable, no UI dependency | App Refresh or Processing task | WorkManager | Run on next foreground |
+| `user-continued` | Explicit user action, visible progress/cancel, bounded or checkpointable | Continued Processing on iOS 26+; finite grace on older iOS | Valid FGS or long worker | Continue only while foreground; checkpoint on background |
+| `system-transfer` | File-based upload/download that the OS can own | Background URLSession | UIDT, DownloadManager, or suitable worker | Resume/retry transfer from durable metadata |
+| `server-required` | Exact cross-platform time, unopened-for-days, long autonomous Agent, or strong completion guarantee | Server | Server | Notify/sync result on next client wake |
+
+Execution class and recovery policy are separate. A `user-continued` operation may still be
+`abandon` on restart if repeating the provider call could double-charge, while a
+`bounded-background` repair can be safely retried.
+
+### Workflow Mapping
+
+| Workflow | Recommended ownership | Important condition |
+| --- | --- | --- |
+| Chat/Agent turn started with Send | App-owned chat-turn module, optionally coordinated by a `user-continued` job | Persist messages incrementally. Tool approval is chat-domain state and must not continue headlessly |
+| Painting generation | Job module with painting receipt as durable destination | Persist provider task ID/idempotency token before polling; otherwise abandon an ambiguous attempt instead of resubmitting |
+| Large file/model upload or download | `system-transfer` adapter plus reconciliation job | Use file URLs and a stable transfer/session ID; arbitrary LLM streaming does not qualify |
+| Knowledge indexing, cleanup, metadata backfill | `bounded-background` | Chunk work and checkpoint cursor so expiration loses little work |
+| Local reminder | Notification, optionally a pending foreground job | A notification is not proof the underlying action ran |
+| User-selected Android 08:00 run | Exact alarm wake plus durable pump, only as Android tier | Special access and a valid execution owner are both required |
+| Recurring unattended Agent | Server scheduler/executor | Push only synchronizes or announces the result |
+
+Chat deserves special caution. The current `ChatSession` is route-owned and disposal aborts every
+active turn. Moving it to app lifetime solves navigation ownership, but an LLM stream still cannot
+be reconstructed after process death unless the provider exposes a durable request/task ID. An
+Agent turn is also a workflow with messages, tool calls, and approvals, not just one replayable job.
+Keep that business state in the chat module and let the Job Manager coordinate execution attempts.
+Chat should not be the first MVP handler until its provider-recovery contract is explicit.
+
+## Recommended Module Design
+
+### External Interface
+
+Implement one deep app-owned module. Its small command interface hides database transitions,
+handler lookup, retry, cancellation, scheduling evaluation, platform eligibility, and recovery:
+
+```ts
+type JobRuntime = {
+  enqueue<TType extends JobType>(
+    type: TType,
+    input: JobInput<TType>,
+    options?: EnqueueOptions,
+  ): Promise<{ id: string }>;
+
+  cancel(id: string, reason?: string): Promise<JobCancelResult>;
+
+  pump(request: PumpRequest): Promise<PumpResult>;
 };
 ```
 
-The runner acquires a lease only for a user-initiated, platform-eligible job and releases it in a
-`finally` block. The job core must remain correct when lease acquisition fails.
+`enqueue` returns a durable ID, not a promise whose lifetime defines success. Job/history reads
+remain Data API endpoints so UI can reattach after navigation or restart. A foreground-only
+`finished` convenience may exist, but it must be implemented by observing the ledger and must not be
+the only result path.
 
-This changes PR #473 in three ways:
+The module belongs in the app-lifetime bootstrap composition. `AppBootstrapRuntime` is the natural
+owner because it already owns the database and backend composition. React routes, hooks, and
+`ChatSessionProvider` must not own the job dispatcher.
 
-- move ownership from a route-owned `ChatSession` to the app-owned job runtime;
-- make Live Activity/audio behavior a platform adapter rather than chat business logic;
-- model interruption and expiration as `AbortSignal` cancellation with a persisted recovery outcome.
+### Internal Platform Seams
 
-The adapter still cannot start a future schedule. Keeping silent audio active continuously just to
-make cron timers fire would create battery, user-experience, and App Review problems. Apple's App
-Review Guideline [2.5.4](https://developer.apple.com/app-store/review/guidelines/#multitasking)
-requires background services to be used for their intended purposes. Silent audio whose purpose is
-only process keep-alive is therefore a material review risk and must not be the sole production
-foundation.
+Only behavior that genuinely differs by platform should sit behind adapters:
 
-For iOS 26 and later, prefer a small native adapter around
-[`BGContinuedProcessingTask`](https://developer.apple.com/documentation/backgroundtasks/bgcontinuedprocessingtask).
-Apple defines it for a task that begins in the foreground after a person's action and continues for
-minutes or longer in the background, with system-owned Live Activity progress, cancellation, and an
-expiration handler. It is a closer match for user-started chat, painting, and file-processing jobs
-than silent audio. It still does not solve scheduled unattended work, is available only on iOS 26+,
-and can be terminated under resource pressure.
+```ts
+type JobWakeScheduler = {
+  reconcile(input: {
+    earliestAt: number | null;
+    requiresNetwork: boolean;
+  }): Promise<WakeRegistrationResult>;
+};
 
-## Recommended Architecture
+type JobExecutionLeaseProvider = {
+  acquire(input: {
+    jobId: string;
+    executionClass: JobExecutionClass;
+    title: string;
+  }): Promise<JobExecutionLease | null>;
+};
+
+type JobExecutionLease = {
+  signal: AbortSignal;
+  update(progress: JobProgress): void;
+  release(outcome: JobLeaseOutcome): Promise<void>;
+};
+```
+
+These are internal seams, not part of the business interface:
+
+- iOS wake adapter: BackgroundTasks/Expo BackgroundTask.
+- Android wake adapter: WorkManager, with an optional exact-alarm native adapter.
+- iOS lease adapter: Continued Processing on iOS 26+, limited
+  `beginBackgroundTask` checkpoint grace on older versions.
+- Android lease adapter: a correctly typed FGS or long-running worker.
+- Transfer adapters are separate because the OS, rather than the handler, owns the bytes.
+- Test adapters provide deterministic wake refusal, lease expiration, cancellation, and deadlines.
+
+The job module must remain correct when `acquire` returns `null` or its signal aborts immediately.
+Lease acquisition can improve continuation; it cannot authorize a background-ineligible handler.
+
+### Runtime Entry Points
+
+Use one global headless task entry, not one native registration per business job or schedule:
 
 ```text
-                         +-------------------------+
-UI / business workflow ->| MobileJobCoordinator    |-> return job id
-                         +------------+------------+
-                                      |
-                                      v
-                         +-------------------------+
-                         | SQLite job ledger       |
-                         | job + job_schedule      |
-                         +------------+------------+
-                                      ^
-                                      |
-       +------------------------------+------------------------------+
-       |                              |                              |
- cold start / AppState.active       OS wake adapter            explicit Run Now
-                              Expo task / Android alarm
-       |                              |                              |
-       +------------------------------+------------------------------+
-                                      |
-                                      v
-                         +-------------------------+
-                         | MobileJobRunner         |
-                         | recover -> claim -> run |
-                         +------------+------------+
-                                      |
-                     +----------------+----------------+
-                     |                                 |
-          background-eligible handler       foreground-only handler
-                     |                                 |
-          bounded OS execution window       optional execution lease
-                                                       |
-                                      iOS 26 continued task / PR #473
-                                      Android foreground lease
+foreground initialize / AppState.active ----+
+Expo background callback ------------------+
+iOS Continued Processing callback ---------+--> create headless-safe dependencies
+Android worker callback -------------------+    --> JobRuntime.pump(...)
+Android alarm receiver -> worker/FGS ------+
+explicit Run Now --------------------------+
 ```
 
-Recommended module ownership:
+The headless composition may open the same `cherry.db`, but it must not import React, navigation,
+translations, frontend cache state, or route sessions. Cherry uses Expo CNG and has no committed
+application-level `ios/` or `android/` directories, so Continued Processing, exact alarms, and FGS
+support should be implemented as local Expo modules plus config plugins following the existing
+native-module pattern.
 
-- `src/shared/data/api/schemas/jobs.ts`: snapshots, trigger/retry/catch-up schemas, read endpoints.
-- `src/backend/data/db/schemas/job.ts`: mobile table definitions and indexes.
-- `src/backend/data/services/JobService.ts` and `JobScheduleService.ts`: async persistence only.
-- `src/backend/services/jobs/`: handler registry, runner, recovery, scheduling evaluation, and
-  execution-policy rules.
-- `src/bootstrap/composition`: explicit construction and handler registration.
-- `src/bootstrap/runtime`: foreground start/resume/disposal ownership.
-- a global TaskManager entry module: minimal headless initialization and a bounded due-job pump.
-- an Android local Expo module plus config plugin: exact-alarm permission flow, receiver/service
-  declarations, reboot/time-change re-arming, and a foreground execution lease.
+Expo `BackgroundTask` is only the opportunistic dispatcher. It maps to BGTaskScheduler and
+WorkManager, has a 15-minute Android minimum, is system-delayed, and multiplexes registered
+JavaScript tasks through one worker. Register one Cherry pump and keep SQLite authoritative.
 
-Do not create a second lifecycle framework or expose the concrete runner through React context.
-Business workflows enqueue through narrow backend interfaces; job reads use Data API endpoints.
+### Responsibility Split
 
-## Mobile-Specific Handler Policy
+| Owner | Responsibilities | Must not own |
+| --- | --- | --- |
+| Job module | Durable intent, claim/fencing, eligibility, concurrency, retry, cancellation, recovery, schedule occurrence creation | Chat approvals, painting outputs, transfer bytes, platform policy UI |
+| Domain handler/module | Business destination, idempotency, provider checkpoint, domain-specific resume/abandon behavior | Native wake registration or global dispatch |
+| Platform adapter | Register a wake, expose deadline/cancel signal, show required system progress, report capability/refusal | Job state machine or duplicated business payload storage |
+| Server | Strong wall-clock schedule and unattended execution where product supports server credentials | Pretending a push delivery is exactly-once local completion |
+| UI | Enqueue, observe durable destination/job state, request cancel, explain reliability tier | Keeping a promise/timer alive as the source of truth |
 
-Add an execution policy that desktop does not need:
+## Durable Execution Protocol
 
-```ts
-type JobExecutionPolicy = 'foreground-only' | 'background-eligible' | 'server-required';
+### Ledger
+
+Reuse the desktop six-state vocabulary unless an actual workflow proves another state is required:
+
+```text
+pending -> running -> completed
+                   -> failed
+                   -> cancelled
+running/pending -> delayed -> pending
 ```
 
-A background-eligible handler must be short or checkpointable, idempotent, independent of mounted
-UI, cooperative with `AbortSignal`, and able to persist progress before expiration. CPU-heavy work
-must use a native implementation or server because mobile runs the backend on the same Hermes thread
-as UI when foregrounded. Mobile should also choose a much lower global concurrency limit than the
-desktop default of 50 and tune it from real memory/network measurements.
+Port the core `job` and `job_schedule` semantics, but add mobile fencing data. At minimum, a durable
+job needs:
 
-## Operating-System Wake Contract
-
-Expo's [`BackgroundTask`](https://docs.expo.dev/versions/latest/sdk/background-task/) API is useful as
-one wake source, not as the job database:
-
-- Android's minimum interval is 15 minutes and execution remains inexact.
-- iOS chooses when to run the task and may delay it substantially.
-- battery and network conditions gate execution.
-- tasks stop after a person kills the app and resume only after the app is started again.
-- Expo multiplexes all registered JavaScript tasks through one native worker; the last registration
-  determines the minimum interval.
-- iOS background-task validation requires a physical device.
-
-Register one `cherry.jobs.pump` task. On each wake, initialize only the headless-safe dependencies,
-recover stale work, enqueue due schedule occurrences, run a bounded number of eligible jobs, persist
-checkpoints, and return before expiration. Do not register one native task per job or schedule.
-
-### Optional Android exact-alarm tier
-
-OpenMinis demonstrates why `AlarmManager` belongs beside, rather than inside, the job runtime. If
-product requirements justify precise Android wall-clock schedules, add a native adapter with these
-rules:
-
-- SQLite remains the source of truth. Arm only the earliest next due occurrence, then recompute and
-  replace that alarm whenever schedules change or an alarm fires. Do not mirror full job state into
-  `SharedPreferences` or treat `PendingIntent` existence as job state.
-- Check `canScheduleExactAlarms()` before registering, explain the special access in product UI, open
-  `ACTION_REQUEST_SCHEDULE_EXACT_ALARM` only after a user asks for precise scheduling, and re-arm when
-  the permission-state broadcast arrives. Fall back to an inexact wake with visible reliability
-  wording when access is absent.
-- The `BroadcastReceiver` validates the wake, starts or hands off to the execution owner, and finishes
-  within the broadcast budget. It never waits for JavaScript, networking, or an agent loop.
-- Re-arm after boot, app replacement, clock changes, and time-zone changes. On each wake, evaluate all
-  due schedules transactionally so delayed or coalesced delivery cannot duplicate occurrences.
-- Starting a foreground service from an exact alarm is exempt from Android 12's background-start ban
-  only when completing a user-requested action. Each handler still needs an eligible foreground
-  service type, notification, cancellation, timeout, and Play declaration. A generic agent task must
-  not claim `mediaPlayback` unless it is actually playing media.
-
-Cherry uses Expo CNG with no committed application-level `android/` directory and targets API 36.
-Implement this as a local Expo module plus config plugin, following the repository's existing native
-module/plugin pattern. The capability spike must prove that an alarm-launched native owner can bring
-up the headless JavaScript runtime, open the same Expo SQLite database, and atomically claim work
-without racing the foreground runtime. If that bootstrap is not reliable, the alarm should notify the
-user or wake a server-owned workflow rather than pretending a local agent ran.
-
-For Android long-running user-visible work, use the platform's documented long-running WorkManager
-or foreground-service path with a persistent notification. This is separate from PR #473 and needs
-Android-specific product and permission design. Android's
-[`PeriodicWorkRequest`](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work#schedule_periodic_work)
-also has a 15-minute minimum and does not promise an exact execution time.
-
-## Product Reliability Contract
-
-| User expectation | Local mobile support |
+| Data | Purpose |
 | --- | --- |
-| Work continues after leaving a screen while the app runtime remains active | Yes, after moving ownership to the app job runtime |
-| Work survives app/process restart and resumes or abandons by policy | Yes, from the SQLite ledger |
-| A user-started iOS task continues after backgrounding | Conditional: PR #473 pattern, preferably iOS 26 continued processing |
-| A short task eventually runs in an OS-granted background window | Best effort only |
-| A user-created Android task wakes near 08:00 | Conditional: exact-alarm access plus native adapter; execution can still fail or be delayed |
-| A cross-platform task runs exactly at 08:00 or every 5 minutes | No; use a server |
-| A task runs after the person force-quits the app | No |
-| A 30-minute paid AI request always finishes in the background | No; use a server or provider-side durable task |
-| Scheduled agent automation runs while the app is unopened for days | Server required |
+| ID, type, payload version, input | Stable work intent and handler migration |
+| Status, priority, queue, scheduled time | Dispatch ordering |
+| Attempt, retry policy, error | Recovery and backoff |
+| Execution class and recovery-policy version | Eligibility in the current wake window and stable restart semantics |
+| Idempotency key | Prevent duplicate active intent and duplicate schedule occurrences |
+| Run token, runtime owner, claim/deadline timestamps | Fence overlapping foreground/headless attempts |
+| Checkpoint/provider task ID | Resume/poll without repeating an ambiguous external request |
+| Destination ID | Put results in chat, painting, file, or another business record |
+| Cancel request and timestamps | Cooperative cancellation and audit |
+
+The existing desktop `metadata` field can carry early checkpoints, but provider task IDs and fencing
+fields should become typed columns once correctness depends on them. Do not add a separate attempt
+history table until product diagnostics need per-attempt rows.
+
+### Atomic Claim And Fencing
+
+Mobile `DbService` already uses WAL and serializes asynchronous `BEGIN IMMEDIATE` write
+transactions. Claiming must keep capacity check, candidate selection, and
+`pending -> running` transition in one awaited transaction.
+
+Every claim generates a unique `runToken`. Checkpoint, progress persistence, retry scheduling, and
+terminal finalization update with both `jobId` and `runToken`. If recovery has issued a new token,
+late callbacks from an expired worker become no-ops instead of completing the newer attempt.
+
+Do not reclaim solely because a JavaScript heartbeat stopped: normal iOS suspension can pause it.
+Treat a claim as stale after a new runtime instance cold-starts, an explicit OS expiration/stop is
+recorded, or its bounded deadline passes without a live owner. The run token remains the final fence
+when an old callback outlives that decision.
+
+This is stronger than relying on an in-memory mutex. Foreground activation can overlap a headless
+callback, and an expiration handler does not prove old JavaScript stopped immediately.
+
+Never hold a database transaction across provider, file, network, or tool work.
+
+### Bounded Pump
+
+Each wake invokes the same algorithm with an explicit deadline, permitted execution classes, and a
+maximum job count:
+
+1. Initialize only headless-safe dependencies and the handler registry.
+2. Reconcile stale `running` claims according to each handler's recovery policy.
+3. Transactionally evaluate due schedules and create occurrence jobs with deterministic
+   idempotency keys.
+4. Select only jobs eligible for the current foreground/background window.
+5. Atomically claim one row and persist its `runToken` before acquiring or binding a platform lease.
+6. If a required lease is unavailable, conditionally return the claim to delayed/pending using the
+   same token; never run a background-ineligible handler without it.
+7. Execute with one combined `AbortSignal` for user cancellation, OS expiration, runtime disposal,
+   and pump deadline.
+8. Checkpoint before the deadline and finalize conditionally on the same `runToken`.
+9. Stop before the OS budget is exhausted, then reconcile the next wake hint from durable state.
+
+Use a low global concurrency cap. Mobile runs backend JavaScript on the same Hermes runtime as the
+UI while foregrounded, and parallel model/file work can amplify memory pressure. Tune from device
+measurements rather than porting the desktop default.
+
+### Recovery Policies
+
+Keep recovery explicit per handler:
+
+| Policy | Use when | Restart behavior |
+| --- | --- | --- |
+| Abandon | External outcome is ambiguous and replay could duplicate cost/effect | Mark interrupted attempt terminal and require explicit retry |
+| Retry | Handler is idempotent or an idempotency key makes replay safe | Move stale running work through backoff to pending |
+| Resume from checkpoint | Provider/system owns durable task ID or handler has a committed cursor | Poll/continue from checkpoint without resubmission |
+| Singleton | Only the newest outstanding intent is meaningful | Cancel older non-terminal rows, then apply retry/resume to newest |
+
+No cleanup callback is guaranteed. Recovery must work solely from committed rows.
+
+### Scheduling
+
+Schedules are durable definitions, while OS registrations are replaceable hints:
+
+- Persist `trigger`, time zone, next occurrence, last occurrence, enabled state, and catch-up policy.
+- Derive a deterministic occurrence key from the `(scheduleId, occurrenceAt)` tuple and enforce
+  uniqueness.
+- Evaluate all due occurrences on every wake; delivery may be late, coalesced, or duplicated.
+- Use foreground timers/Croner only as an active-app latency optimization.
+- Reconcile one platform wake from the earliest relevant schedule instead of mirroring all state into
+  native storage.
+- Keep local-best-effort, Android-exact, and server-reliable schedules distinct in UI and data.
+- A wake marks an occurrence dispatched only after the occurrence job is committed. It never marks
+  the business job completed.
+
+### Results, Progress, And Cancellation
+
+Terminal business results belong in their domain destination:
+
+- a chat turn persists messages and approval state;
+- a painting job writes the painting receipt/output rows;
+- a transfer writes its file entry and system transfer ID;
+- an indexing job commits its cursor/index changes.
+
+The job row holds orchestration status and a reference to that destination. UI reads both through
+Data API and may subscribe to in-process events for low-latency foreground updates. Persisted state
+remains authoritative after restart.
+
+Progress should be throttled and persisted only at meaningful checkpoints. Live Activity and Android
+notification adapters observe that progress; they do not own it.
+
+Cancellation first persists `cancelRequested`, then aborts an active matching `runToken`. Platform
+Stop/Cancel actions call the same path. A handler that ignores the signal may lose its claim after
+the deadline, but its stale callback cannot finalize because of fencing.
+
+## Desktop Port Scope
+
+The desktop subsystem is mature: its main responsibilities include a six-state SQLite ledger, typed
+handlers, concurrency, cancellation, retries, schedules, startup recovery, catch-up, garbage
+collection, and backup pause/drain. Port semantics selectively:
+
+| Desktop area | Mobile decision |
+| --- | --- |
+| DTO/Zod status, trigger, retry, and catch-up schemas | Reuse and extend with execution class/payload version |
+| `job` / `job_schedule` tables and indexes | Port through a mobile migration; add run fencing |
+| Handler registry, backoff, idempotency, recovery vocabulary | Reuse semantics with mobile dependencies |
+| Synchronous `better-sqlite3` repositories | Rewrite for async `DbService.withWriteTx()` |
+| `JobManager` lifecycle/service-locator wiring | Reimplement in explicit bootstrap composition |
+| `SchedulerService` timers/Croner | Foreground optimization only |
+| Shared-window cache progress | Replace with SQLite/Data API plus optional active-runtime events |
+| `JobHandle.finished` | Foreground convenience only; durable ID/destination is authoritative |
+| Desktop concurrency default and broad handler set | Start low with one proven mobile handler |
+| Backup pause/drain, GC, parent jobs, fine progress | Defer until a real mobile consumer requires them |
+
+The mobile module becomes worthwhile when at least two workflows need shared persistence,
+cancellation, retry, recovery, or history. If the only requirement is painting surviving navigation,
+an app-owned painting operation is smaller and should come first.
 
 ## Delivery Plan
 
-### Phase 0: capability spike
+### Phase 0: Capability And Correctness Spike
 
-Use a physical iPhone and a representative Android device. Add a disposable proof job that writes
-`pending -> running -> completed` through the real Expo SQLite connection and exercise it from:
+Create a disposable proof handler that writes `pending -> running -> completed` through real Expo
+SQLite. Validate on a physical iPhone and representative API-36 Android device:
 
-1. active app execution;
-2. app background/resume;
-3. Expo's test-triggered background worker;
-4. PR #473-style iOS continuation;
-5. iOS 26 `BGContinuedProcessingTask`, if a native adapter is acceptable;
-6. an Android exact-alarm receiver handing off to a valid foreground-service or WorkManager owner;
-7. denied/granted/revoked exact-alarm access, receiver timeout, target-SDK-36 foreground-service
-   restrictions, Android Task Manager Stop, force-stop, reboot, clock/time-zone changes, and OEM
-   battery controls;
-8. expiration/cancellation, network loss, lock screen, low-power mode, and audio interruption.
+1. Active app, navigation, background/resume, and cold start.
+2. Foreground and headless callbacks racing to claim the same row.
+3. OS expiration during provider work and a late callback after a new run token is issued.
+4. Expo background task delivery and denied/disabled background refresh.
+5. iOS 26 Continued Processing submission, queue/fail, progress, cancellation, app-switcher removal,
+   lock screen, Low Power Mode, thermal pressure, and network loss.
+6. Older-iOS `beginBackgroundTask` expiration without silent audio.
+7. Android FGS start while visible, valid type/notification behavior, Task Manager Stop, process
+   kill, quota timeout, Doze, and OEM battery controls.
+8. Exact-alarm denied/granted/revoked states, reboot, force-stop, clock/time-zone changes, receiver
+   timeout, and handoff to the same database pump.
+9. Provider duplicate-request/idempotency behavior for the proposed first real handler.
 
-This phase is a go/no-go gate, not production code. In particular, verify that a foreground runtime
-and headless runtime cannot double-claim one row.
+This is a go/no-go spike. In particular, it must prove that two runtime entry points cannot both
+commit the same attempt.
 
-### Phase 1: foreground durable MVP
+### Phase 1: Foreground Durable MVP
 
-Port the schema, DTOs, registry, async repository, transactional claim, cancellation, `abandon` and
-`retry` recovery, a low concurrency cap, and read-only job endpoints. Trigger recovery on cold start
-and `AppState.active`. Omit cron, catch-up, pause/drain, GC, parent jobs, and fine-grained progress
-until a real consumer requires them.
+- Add schema/migration, async repository, registry, atomic claim/fencing, cancellation, retry, and
+  cold-start/AppState recovery.
+- Add `enqueue`/`cancel` commands and read-only Data API job/history endpoints.
+- Own the module from `AppBootstrapRuntime`.
+- Use one handler with an explicit destination and proven recovery policy.
+- Omit schedules and native background adapters.
 
-Use one real handler. A painting handler is viable only after its receipt ID becomes the durable
-destination and provider resubmission semantics are explicit. Otherwise choose a short internal
-repair task for the first proof.
+Painting is a candidate only if provider resubmission is idempotent or a durable provider task ID is
+available. A short internal repair/indexing handler is safer for the first proof.
 
-### Phase 2: continuation and opportunistic wake
+### Phase 2: Opportunistic Background Pump
 
-Add the execution-lease abstraction, physical-device behavior, one global OS job pump, expiration
-handling, throttled persisted progress, and Live Activity/Android notification adapters. Keep every
-path correct when the platform refuses or expires background execution.
+- Register one Expo background task.
+- Add bounded pump budgets, execution-class filtering, checkpoint deadlines, and physical-device
+  tests.
+- Support short `bounded-background` handlers only.
+- Keep foreground resume as the guaranteed catch-up path.
 
-### Phase 3: schedules
+### Phase 3: User-Continued And Transfer Adapters
 
-Add schedule CRUD, foreground Croner optimization, due-schedule evaluation on every wake, and an
-explicit product distinction between local best-effort schedules and server-backed reliable
-schedules. Add the exact-alarm adapter only for an explicitly Android-only precision tier and do not
-present it as a guarantee that the underlying agent work completed.
+- Add native iOS 26 Continued Processing and Android policy-valid foreground leases.
+- Add Live Activity/notification progress and system Stop/Cancel plumbing.
+- Use supported system-transfer adapters for large files.
+- On older iOS, retain foreground execution plus finite checkpoint grace; do not ship silent audio as
+  the fallback.
+
+### Phase 4: Schedules
+
+- Add schedule CRUD, due-occurrence evaluation, catch-up policy, and foreground timer optimization.
+- Make server-backed scheduling the reliable cross-platform tier.
+- Add Android exact alarms only if product accepts special-access UX, Play policy review, device
+  validation, and explicitly Android-only semantics.
 
 Rough one-engineer sizing, excluding server work and full product UI:
 
-- capability spike: 3-5 engineering days;
+- capability/correctness spike: 4-7 engineering days;
 - foreground durable MVP plus one handler: 2-3 weeks;
-- continuation/background adapters and physical-device hardening: another 1-2 weeks;
-- local schedule UX and catch-up semantics: another 1-2 weeks.
-
-A source-for-source desktop parity port would take longer and still fail to deliver parity at the
-operating-system boundary.
+- opportunistic pump and device hardening: 1-2 weeks;
+- user-visible native leases/transfers: 1-2 weeks;
+- local schedule UX/catch-up and optional Android exact alarms: 1-2 weeks.
 
 ## Go/No-Go Gates
 
-Proceed with the generic runtime only when all of these are true:
+Proceed with a generic mobile Job Manager only when:
 
-- at least two concrete mobile workflows need the shared job semantics, or job history/scheduling is
-  itself a committed product requirement;
-- the product accepts best-effort local scheduling and labels it accurately;
-- every first-wave handler has an explicit destination, idempotency/recovery policy, and execution
-  policy;
-- a physical iPhone and Android device prove no double claims, correct expiration recovery, and
-  acceptable power behavior;
-- every Android handler has a valid foreground-service type or uses WorkManager, and its exact-alarm
-  request/background-start behavior passes target-SDK-36 and Play policy review;
-- PR #473's Debug-vs-production mismatch is resolved;
-- silent-audio use receives an App Review/policy decision, or production uses a sanctioned continued
-  processing mechanism instead;
-- reliable unattended agent automation has a server-side owner.
+- at least two concrete workflows need its shared durable semantics, or job history/scheduling is a
+  committed product requirement;
+- every first-wave handler has a destination, payload version, execution class, idempotency rule,
+  checkpoint format, cancellation behavior, and recovery policy;
+- product wording accepts that local background schedules are best effort;
+- physical devices prove fencing, expiration recovery, force-quit boundaries, and acceptable power
+  behavior;
+- the Android workflow has a truthful FGS type or uses WorkManager/UIDT without policy abuse;
+- iOS 17-25 behavior is acceptable without silent-audio continuation;
+- iOS 26 Continued Processing is treated as a capability enhancement, not the baseline;
+- reliable unattended Agent automation has a server-side owner.
 
-## Source Notes
+## Evidence Notes
 
-This assessment uses repository source code and first-party platform documentation. It does not
-claim physical-device validation. The desktop and PR line counts were measured from the revisions
-listed at the top of this document; generated lockfiles and business handler implementations were
-excluded from the desktop core count.
+This assessment uses repository source and first-party Apple, Android, Google Play, and Expo
+documentation. It does not claim physical-device validation.
 
-A targeted desktop verification run executed 12 core/scheduler/repository/hook test files. Five
-files and 40 tests passed. Seven database-backed files failed during setup and 131 tests did not run
-because the installed `better-sqlite3` binary targeted a different Node ABI than the available Node
-25.9 runtime; the desktop repository requires Node `>=24.11.1 <24.16.0`. No native rebuild was
-attempted, so this assessment does not claim a fresh green run for the DB-backed desktop suites.
+The desktop production surface previously measured 4,459 lines across the manager, scheduler,
+persistence, schemas, contracts, and runtime helpers, plus 4,435 lines of focused tests. A targeted
+desktop verification attempted 12 core/scheduler/repository/hook test files: five files and 40 tests
+passed; seven database-backed files could not run because the installed `better-sqlite3` binary
+targeted a different Node ABI than the available Node runtime. No native rebuild was attempted.
+
+### Repository And Experiment Sources
 
 - [Desktop Job Manager overview](https://github.com/CherryHQ/cherry-studio/blob/d498753ecfd0f2572612456281ec222563ce7bf3/docs/references/job-and-scheduler/overview.md)
 - [Desktop Job Manager implementation](https://github.com/CherryHQ/cherry-studio/blob/d498753ecfd0f2572612456281ec222563ce7bf3/src/main/core/job/JobManager.ts)
@@ -554,22 +661,39 @@ attempted, so this assessment does not claim a fresh green run for the DB-backed
 - [Mobile runtime ownership](./runtime-ownership.md)
 - [Mobile `DbService`](../../src/backend/data/db/DbService.ts)
 - [PR #473](https://github.com/CherryHQ/cherry-studio-app/pull/473)
-- [OpenMinis Android scheduled-task manager](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskManager.kt)
-- [OpenMinis Android scheduled-agent runner](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledAgentRunner.kt)
-- [OpenMinis Android foreground service](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt)
+- [OpenMinis scheduled-task manager](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledTaskManager.kt)
+- [OpenMinis scheduled-agent runner](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/scheduled/ScheduledAgentRunner.kt)
+- [OpenMinis foreground service](https://github.com/OpenMinis/OpenMinis/blob/9cf3a855fecd27bb5735b84cacbd56852a3ab8dd/src/android/app/src/main/java/com/openminis/app/service/AgentForegroundService.kt)
+
+### Apple Primary Sources
+
+- [Choosing background strategies](https://developer.apple.com/documentation/backgroundtasks/choosing-background-strategies-for-your-app)
+- [Extending background execution time](https://developer.apple.com/documentation/uikit/extending-your-app-s-background-execution-time)
+- [`BGTaskRequest.earliestBeginDate`](https://developer.apple.com/documentation/backgroundtasks/bgtaskrequest/earliestbegindate)
+- [`BGProcessingTaskRequest`](https://developer.apple.com/documentation/backgroundtasks/bgprocessingtaskrequest)
+- [Performing long-running tasks](https://developer.apple.com/documentation/backgroundtasks/performing-long-running-tasks-on-ios-and-ipados)
+- [`BGContinuedProcessingTaskRequest`](https://developer.apple.com/documentation/backgroundtasks/bgcontinuedprocessingtaskrequest)
+- [Background URLSession downloads](https://developer.apple.com/documentation/foundation/downloading-files-in-the-background)
+- [Background push updates](https://developer.apple.com/documentation/usernotifications/pushing-background-updates-to-your-app)
+- [Configuring background execution modes](https://developer.apple.com/documentation/xcode/configuring-background-execution-modes)
+- [App Review Guidelines 2.5.4](https://developer.apple.com/app-store/review/guidelines/#multitasking)
+- [WWDC25: Finish tasks in the background](https://developer.apple.com/videos/play/wwdc2025/227/)
+
+### Android And Expo Primary Sources
+
+- [Android persistent work](https://developer.android.com/develop/background-work/background-tasks/persistent)
+- [Defining WorkManager requests](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work)
+- [Long-running WorkManager workers](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/long-running)
+- [AlarmManager guidance](https://developer.android.com/develop/background-work/services/alarms)
+- [Foreground services](https://developer.android.com/develop/background-work/services/fgs)
+- [Foreground-service background-start restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)
+- [Foreground-service timeouts](https://developer.android.com/develop/background-work/services/fgs/timeout)
+- [Foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types)
+- [User-initiated data-transfer jobs](https://developer.android.com/develop/background-work/background-tasks/uidt)
+- [Wake locks](https://developer.android.com/develop/background-work/background-tasks/awake/wakelock/set)
+- [Broadcast receiver guidance](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
+- [Handling user-stopped foreground services](https://developer.android.com/develop/background-work/services/fgs/handle-user-stopping)
+- [Android 15 stopped-state behavior](https://developer.android.com/about/versions/15/behavior-changes-all#enhanced-stop-states)
+- [Google Play foreground-service requirements](https://support.google.com/googleplay/android-developer/answer/13392821)
 - [Expo BackgroundTask](https://docs.expo.dev/versions/latest/sdk/background-task/)
 - [Expo TaskManager](https://docs.expo.dev/versions/latest/sdk/task-manager/)
-- [Apple BGContinuedProcessingTask](https://developer.apple.com/documentation/backgroundtasks/bgcontinuedprocessingtask)
-- [Apple long-running task guidance](https://developer.apple.com/documentation/backgroundtasks/performing-long-running-tasks-on-ios-and-ipados)
-- [Apple Live Activities](https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities)
-- [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/#multitasking)
-- [Android WorkManager periodic work](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work#schedule_periodic_work)
-- [Android long-running workers](https://developer.android.com/develop/background-work/background-tasks/persistent/how-to/long-running)
-- [Android exact alarms](https://developer.android.com/develop/background-work/services/alarms/schedule)
-- [Android foreground-service background-start restrictions](https://developer.android.com/develop/background-work/services/fgs/restrictions-bg-start)
-- [Android foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types)
-- [Android foreground-service timeouts](https://developer.android.com/develop/background-work/services/fgs/timeout)
-- [Android broadcast receiver guidance](https://developer.android.com/develop/background-work/background-tasks/broadcasts)
-- [Android foreground-service Task Manager Stop](https://developer.android.com/develop/background-work/services/fgs/handle-user-stopping)
-- [Android 15 force-stop behavior](https://developer.android.com/about/versions/15/behavior-changes-all#enhanced-stop-states)
-- [Google Play foreground-service requirements](https://support.google.com/googleplay/android-developer/answer/13392821)
