@@ -1,66 +1,13 @@
-import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { AiUsageScreen } from '../AiUsageScreen';
-import type { AiUsageDetailWindowKey, AiUsageOverview } from '../types';
+import type { AiUsageModelUsage, AiUsageWeeklyData } from '../types';
 
-const mockRefetch = jest.fn();
-const mockUseAiUsageOverview = jest.fn();
-
-jest.mock('heroui-native', () => {
-  const React = jest.requireActual('react');
-  const {
-    Pressable: MockPressable,
-    Text: MockText,
-    View: MockView,
-  } = jest.requireActual('react-native');
-  const TabsContext = React.createContext({
-    onValueChange: (_value: string) => undefined,
-    value: '',
-  });
-  const TabsRoot = ({
-    children,
-    onValueChange,
-    value,
-    ...props
-  }: {
-    children?: ReactNode;
-    onValueChange: (value: string) => void;
-    value: string;
-  }) => {
-    const contextValue = React.useMemo(() => ({ onValueChange, value }), [onValueChange, value]);
-
-    return (
-      <TabsContext.Provider value={contextValue}>
-        <MockView {...props}>{children}</MockView>
-      </TabsContext.Provider>
-    );
-  };
-  const TabsTrigger = ({ children, testID, value, ...props }: Record<string, unknown>) => {
-    const context = React.use(TabsContext);
-
-    return (
-      <MockPressable
-        {...props}
-        accessibilityRole="tab"
-        accessibilityState={{ selected: context.value === value }}
-        testID={testID}
-        onPress={() => context.onValueChange(value as string)}
-      >
-        {children as ReactNode}
-      </MockPressable>
-    );
-  };
-  const Tabs = Object.assign(TabsRoot, {
-    Indicator: () => null,
-    Label: MockText,
-    List: MockView,
-    Trigger: TabsTrigger,
-  });
-
-  return { Tabs };
-});
+const mockModelRefetch = jest.fn();
+const mockSelectDate = jest.fn();
+const mockTimelineRefetch = jest.fn();
+const mockUseAiUsageDetail = jest.fn();
 
 jest.mock('lucide-uniwind/png', () => ({ RefreshCwIcon: () => null }));
 
@@ -74,67 +21,79 @@ jest.mock('@/frontend/components/headers', () => {
   };
 });
 
-jest.mock('../hooks/useAiUsageOverview', () => ({
-  useAiUsageOverview: (windowKey: AiUsageDetailWindowKey) => mockUseAiUsageOverview(windowKey),
+jest.mock('../hooks/useAiUsageDetail', () => ({
+  useAiUsageDetail: () => mockUseAiUsageDetail(),
 }));
 
-jest.mock('../components/AiUsageCalendar', () => {
+jest.mock('../components/AiUsageWeeklyChart', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
-    AiUsageCalendar: (props: Record<string, unknown>) => (
-      <MockView {...props} testID="ai-usage-calendar" />
+    AiUsageWeeklyChart: (props: Record<string, unknown>) => (
+      <MockView {...props} testID="ai-usage-weekly-chart" />
     ),
+  };
+});
+
+jest.mock('../components/AiUsageModelList', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return {
+    AiUsageModelList: (props: Record<string, unknown>) => (
+      <MockView {...props} testID="ai-usage-model-list" />
+    ),
+    AiUsageModelListSkeleton: () => <MockView testID="ai-usage-model-list-loading" />,
   };
 });
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
-    t: (key: string, options?: { count?: number; tokens?: string }) =>
+    t: (key: string) =>
       ({
-        'aiUsage.activeDays': 'Active days',
-        'aiUsage.cacheHitRate': 'Cache hit rate',
-        'aiUsage.cacheObservedTokens': `Observable input: ${options?.tokens}`,
-        'aiUsage.dailyActivity': 'Daily activity',
         'aiUsage.loadError': 'Usage statistics could not be loaded.',
         'aiUsage.loading': 'Loading usage statistics',
-        'aiUsage.longestStreak': `${options?.count}-day streak`,
-        'aiUsage.peakDay': 'Peak day',
-        'aiUsage.range.30d': '30D',
-        'aiUsage.range.365d': '1Y',
-        'aiUsage.range.90d': '90D',
+        'aiUsage.modelLoadError': 'Model usage could not be loaded.',
+        'aiUsage.modelUsage': 'Model Usage',
+        'aiUsage.noUsageForDay': 'No usage on this day',
         'aiUsage.retry': 'Retry',
+        'aiUsage.thisWeek': 'This Week',
         'aiUsage.title': 'Usage Statistics',
-        'aiUsage.totalTokens': 'Total tokens',
       })[key] ?? key,
   }),
 }));
 
-const overview: AiUsageOverview = {
-  activeDays: 4,
-  cacheHitRate: 0.767,
-  cacheObservedTokens: 3_599_000,
-  data: { '2026-01-04': 4 },
-  longestStreak: 3,
-  peakDay: { dateKey: '2026-01-04', totalTokens: 900 },
-  totalTokens: 1_200,
+const weeklyData: AiUsageWeeklyData = {
+  averageTokens: 50,
+  days: [
+    { dateKey: '2026-07-27', isFuture: false, totalTokens: 100 },
+    { dateKey: '2026-07-28', isFuture: false, totalTokens: 0 },
+    { dateKey: '2026-07-29', isFuture: false, totalTokens: 0 },
+    { dateKey: '2026-07-30', isFuture: false, totalTokens: 0 },
+    { dateKey: '2026-07-31', isFuture: false, totalTokens: 0 },
+    { dateKey: '2026-08-01', isFuture: false, totalTokens: 0 },
+    { dateKey: '2026-08-02', isFuture: false, totalTokens: 0 },
+  ],
+  series: [],
+  totalTokens: 100,
 };
-const calendarData = { '2025-01-05': 2, '2026-01-04': 4 } as const;
-const ranges: Record<AiUsageDetailWindowKey, { from: number; to: number }> = {
-  '30d': rangeForDates(new Date(2026, 0, 4), new Date(2026, 1, 2)),
-  '90d': rangeForDates(new Date(2025, 10, 5), new Date(2026, 1, 2)),
-  '365d': rangeForDates(new Date(2025, 1, 3), new Date(2026, 1, 2)),
-};
+const modelUsage: AiUsageModelUsage[] = [
+  {
+    isOther: false,
+    key: 'model-a',
+    modelId: 'model-a',
+    providerId: 'provider-a',
+    providerName: 'Provider A',
+    totalTokens: 100,
+  },
+];
 
 describe('AiUsageScreen', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseAiUsageOverview.mockImplementation((windowKey: AiUsageDetailWindowKey) =>
-      queryResult({ range: ranges[windowKey] }),
-    );
+    mockUseAiUsageDetail.mockReturnValue(queryResult());
   });
 
   afterEach(async () => {
@@ -142,91 +101,81 @@ describe('AiUsageScreen', () => {
     renderer = undefined;
   });
 
-  it('renders timeline metrics and defaults to the last 30 days', async () => {
+  it('renders independent weekly and selected-day sections', async () => {
     await renderScreen();
 
-    expect(mockUseAiUsageOverview).toHaveBeenLastCalledWith('30d');
     expect(renderer?.root.findByProps({ testID: 'ai-usage-header' }).props.children).toBe(
       'Usage Statistics',
     );
-    expect(metricValue('ai-usage-total-tokens-value')).toBe('1.2K');
-    expect(metricValue('ai-usage-cache-hit-rate-value')).toBe('76.7%');
-    expect(metricValue('ai-usage-active-days-value')).toBe('4');
-    expect(metricValue('ai-usage-peak-day-value')).toBe('900');
     expect(textValues()).toEqual(
-      expect.arrayContaining(['(Observable input: 3.6M)', '(3-day streak)', '(Jan 4, 2026)']),
+      expect.arrayContaining(['This Week', 'Model Usage', 'Sun, Aug 2']),
     );
-    const calendar = renderer?.root.findByProps({ testID: 'ai-usage-calendar' });
-    expect(calendar?.props.data).toBe(calendarData);
-    expect(calendar?.props.highlightedFromDateKey).toBe('2026-01-04');
-    expect(calendar?.props.layout).toBe('scroll');
-  });
-
-  it('changes the timeline window from the segmented control', async () => {
-    await renderScreen();
-    const rangeButton = renderer?.root
-      .findAllByProps({ testID: 'ai-usage-range-365d' })
-      .find((node) => typeof node.props.onPress === 'function');
-
-    if (!rangeButton) {
-      throw new Error('365-day range button was not found.');
-    }
-
-    await act(async () => rangeButton.props.onPress());
-
-    expect(mockUseAiUsageOverview).toHaveBeenLastCalledWith('365d');
-    expect(
-      renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.highlightedFromDateKey,
-    ).toBe('2025-02-03');
-  });
-
-  it('keeps the card structure and shows placeholders during its first load', async () => {
-    mockUseAiUsageOverview.mockReturnValue(
-      queryResult({ hasData: false, isLoading: true, overview: emptyOverview() }),
+    const chart = renderer?.root.findByProps({ testID: 'ai-usage-weekly-chart' });
+    expect(chart?.props.data).toBe(weeklyData);
+    expect(chart?.props.selectedDateKey).toBe('2026-08-02');
+    expect(chart?.props.onSelectDate).toBe(mockSelectDate);
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-model-list' }).props.items).toBe(
+      modelUsage,
     );
-
-    await renderScreen();
-
-    expect(metricValue('ai-usage-total-tokens-value')).toBe('--');
-    expect(metricValue('ai-usage-cache-hit-rate-value')).toBe('--');
-    expect(metricValue('ai-usage-active-days-value')).toBe('--');
-    expect(metricValue('ai-usage-peak-day-value')).toBe('--');
-    expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.isLoading).toBe(true);
   });
 
-  it('shows a localized no-cache error and retries', async () => {
-    mockUseAiUsageOverview.mockReturnValue(
+  it('keeps model usage visible when the weekly query fails without cache', async () => {
+    mockUseAiUsageDetail.mockReturnValue(
       queryResult({
-        error: new Error('database unavailable'),
-        hasData: false,
-        isError: true,
-        overview: emptyOverview(),
+        timeline: queryState({ hasData: false, isError: true, refetch: mockTimelineRefetch }),
       }),
     );
 
     await renderScreen();
 
     expect(textValues()).toContain('Usage statistics could not be loaded.');
-    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-calendar' })).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-weekly-chart' })).toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-model-list' })).toBeDefined();
 
-    await act(async () => renderer?.root.findByProps({ testID: 'ai-usage-retry' }).props.onPress());
-    expect(mockRefetch).toHaveBeenCalledTimes(1);
+    await act(async () => retryButton('ai-usage-week-retry')?.props.onPress());
+    expect(mockTimelineRefetch).toHaveBeenCalledTimes(1);
   });
 
-  it('retains cached data and exposes retry after a refresh failure', async () => {
-    mockUseAiUsageOverview.mockReturnValue(
-      queryResult({ error: new Error('refresh failed'), isError: true }),
+  it('keeps the weekly chart visible when selected-day models fail without cache', async () => {
+    mockUseAiUsageDetail.mockReturnValue(
+      queryResult({
+        models: queryState({ hasData: false, isError: true, refetch: mockModelRefetch }),
+      }),
     );
 
     await renderScreen();
 
-    expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' })).toBeDefined();
-    expect(metricValue('ai-usage-total-tokens-value')).toBe('1.2K');
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-weekly-chart' })).toBeDefined();
+    expect(textValues()).toContain('Model usage could not be loaded.');
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-model-list' })).toHaveLength(0);
 
-    await act(async () =>
-      renderer?.root.findByProps({ testID: 'ai-usage-refresh-retry' }).props.onPress(),
+    await act(async () => retryButton('ai-usage-models-retry')?.props.onPress());
+    expect(mockModelRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('preserves both section heights during initial loading', async () => {
+    mockUseAiUsageDetail.mockReturnValue(
+      queryResult({
+        models: queryState({ hasData: false, isLoading: true, refetch: mockModelRefetch }),
+        timeline: queryState({ hasData: false, isLoading: true, refetch: mockTimelineRefetch }),
+      }),
     );
-    expect(mockRefetch).toHaveBeenCalledTimes(1);
+
+    await renderScreen();
+
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-weekly-chart' }).props.isLoading).toBe(
+      true,
+    );
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-model-list-loading' })).toBeDefined();
+  });
+
+  it('shows a selected-day empty state without hiding the weekly chart', async () => {
+    mockUseAiUsageDetail.mockReturnValue(queryResult({ modelUsage: [] }));
+
+    await renderScreen();
+
+    expect(textValues()).toContain('No usage on this day');
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-weekly-chart' })).toBeDefined();
   });
 
   async function renderScreen() {
@@ -235,43 +184,40 @@ describe('AiUsageScreen', () => {
     });
   }
 
-  function metricValue(testID: string) {
-    return renderer?.root
-      .findAllByProps({ testID })
-      .map((node) => node.props.children)
-      .find((children) => typeof children === 'string');
-  }
-
   function textValues() {
     return renderer?.root.findAllByType(Text).map((node) => node.props.children);
+  }
+
+  function retryButton(testID: string) {
+    return renderer?.root
+      .findAllByProps({ testID })
+      .find((node) => typeof node.props.onPress === 'function');
   }
 });
 
 function queryResult(overrides: Record<string, unknown> = {}) {
   return {
-    calendarData,
+    modelUsage,
+    models: queryState({ refetch: mockModelRefetch }),
+    selectDate: mockSelectDate,
+    selectedDateKey: '2026-08-02',
+    timeline: queryState({ refetch: mockTimelineRefetch }),
+    todayDateKey: '2026-08-02',
+    weeklyData,
+    weekRange: { from: new Date(2026, 6, 27).getTime(), to: new Date(2026, 7, 2).getTime() },
+    ...overrides,
+  };
+}
+
+function queryState(overrides: Record<string, unknown> = {}) {
+  return {
+    data: {},
     error: undefined,
     hasData: true,
     isError: false,
     isLoading: false,
     isRefreshing: false,
-    overview,
-    range: ranges['30d'],
-    refetch: mockRefetch,
+    refetch: jest.fn(),
     ...overrides,
-  };
-}
-
-function rangeForDates(from: Date, to: Date) {
-  return { from: from.getTime(), to: to.getTime() };
-}
-
-function emptyOverview(): AiUsageOverview {
-  return {
-    activeDays: 0,
-    cacheObservedTokens: 0,
-    data: { '2026-01-04': 0 },
-    longestStreak: 0,
-    totalTokens: 0,
   };
 }

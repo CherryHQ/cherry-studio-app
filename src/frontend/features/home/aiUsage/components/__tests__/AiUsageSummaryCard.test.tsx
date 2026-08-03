@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { AiUsageOverview, AiUsageWindowKey } from '../../types';
 import { AiUsageSummaryCard } from '../AiUsageSummaryCard';
 
 const mockRefetch = jest.fn();
@@ -23,8 +22,7 @@ jest.mock('lucide-uniwind/png', () => ({
 }));
 
 jest.mock('../../hooks/useAiUsageOverview', () => ({
-  useAiUsageOverview: (windowKey: AiUsageWindowKey, timelineWindowKey: AiUsageWindowKey) =>
-    mockUseAiUsageOverview(windowKey, timelineWindowKey),
+  useAiUsageOverview: () => mockUseAiUsageOverview(),
 }));
 
 jest.mock('../AiUsageCalendar', () => {
@@ -72,7 +70,7 @@ describe('AiUsageSummaryCard', () => {
   it('renders a fitted six-month summary with a detail link', async () => {
     await renderCard();
 
-    expect(mockUseAiUsageOverview).toHaveBeenLastCalledWith('183d', '183d');
+    expect(mockUseAiUsageOverview).toHaveBeenLastCalledWith();
     expect(renderer?.root.findByType('MockLink').props.href).toBe('/home/ai-usage');
 
     const calendar = renderer?.root.findByProps({ testID: 'ai-usage-calendar' });
@@ -86,9 +84,7 @@ describe('AiUsageSummaryCard', () => {
   });
 
   it('keeps the summary calendar mounted during its first load', async () => {
-    mockUseAiUsageOverview.mockReturnValue(
-      queryResult({ hasData: false, isLoading: true, overview: emptyOverview() }),
-    );
+    mockUseAiUsageOverview.mockReturnValue(queryResult({ hasData: false, isLoading: true }));
 
     await renderCard();
 
@@ -101,7 +97,6 @@ describe('AiUsageSummaryCard', () => {
         error: new Error('database unavailable'),
         hasData: false,
         isError: true,
-        overview: emptyOverview(),
       }),
     );
 
@@ -135,19 +130,8 @@ function queryResult(overrides: Record<string, unknown> = {}) {
     isError: false,
     isLoading: false,
     isRefreshing: false,
-    overview: emptyOverview(),
     range,
     refetch: mockRefetch,
     ...overrides,
-  };
-}
-
-function emptyOverview(): AiUsageOverview {
-  return {
-    activeDays: 0,
-    cacheObservedTokens: 0,
-    data: calendarData,
-    longestStreak: 0,
-    totalTokens: 0,
   };
 }

@@ -12,7 +12,7 @@ import { AiUsageCalendar } from './AiUsageCalendar';
 export function AiUsageSummaryCard() {
   const { t } = useTranslation();
   const { calendarData, hasData, isError, isLoading, isRefreshing, range, refetch } =
-    useAiUsageOverview('183d', '183d');
+    useAiUsageOverview();
   const isInitialLoading = isLoading && !hasData;
   const showInitialError = isError && !hasData;
 

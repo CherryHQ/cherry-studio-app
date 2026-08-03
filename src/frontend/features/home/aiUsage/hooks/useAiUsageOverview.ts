@@ -3,23 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useQuery } from '@/frontend/data';
 
-import type { AiUsageWindowKey } from '../types';
 import { toLocalDateKey } from '../utils/aiUsageCalendar';
-import { buildAiUsageOverview, getAiUsageWindowRange } from '../utils/aiUsageOverview';
+import { buildAiUsageCalendarData, getAiUsageSummaryRange } from '../utils/aiUsageOverview';
 
-export function useAiUsageOverview(
-  windowKey: AiUsageWindowKey,
-  timelineWindowKey: AiUsageWindowKey = '365d',
-) {
+export function useAiUsageOverview() {
   const [endDate, setEndDate] = useState(() => new Date());
-  const range = useMemo(() => getAiUsageWindowRange(windowKey, endDate), [endDate, windowKey]);
-  const timelineRange = useMemo(
-    () => getAiUsageWindowRange(timelineWindowKey, endDate),
-    [endDate, timelineWindowKey],
-  );
+  const range = useMemo(() => getAiUsageSummaryRange(endDate), [endDate]);
   const query = useMemo(
-    () => ({ from: timelineRange.from, limit: 1, metric: 'tokens' as const, to: timelineRange.to }),
-    [timelineRange],
+    () => ({ from: range.from, limit: 1, metric: 'tokens' as const, to: range.to }),
+    [range],
   );
   const timelineQuery = useQuery('/ai-usage-records/timeline', { query });
   const hasFocusedOnceRef = useRef(false);
@@ -49,23 +41,15 @@ export function useAiUsageOverview(
   );
 
   const buckets = timelineQuery.data?.buckets;
-  const timelineOverview = useMemo(
-    () => buildAiUsageOverview(buckets ?? [], timelineRange),
-    [buckets, timelineRange],
-  );
-  const overview = useMemo(
-    () =>
-      windowKey === timelineWindowKey
-        ? timelineOverview
-        : buildAiUsageOverview(buckets ?? [], range),
-    [buckets, range, timelineOverview, timelineWindowKey, windowKey],
+  const calendarData = useMemo(
+    () => buildAiUsageCalendarData(buckets ?? [], range),
+    [buckets, range],
   );
 
   return {
     ...timelineQuery,
-    calendarData: timelineOverview.data,
+    calendarData,
     hasData: timelineQuery.data !== undefined,
-    overview,
     range,
   };
 }

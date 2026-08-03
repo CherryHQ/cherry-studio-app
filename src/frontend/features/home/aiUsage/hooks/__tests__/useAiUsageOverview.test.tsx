@@ -6,8 +6,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 
-import type { AiUsageWindowKey } from '../../types';
-import { getAiUsageWindowRange } from '../../utils/aiUsageOverview';
+import { getAiUsageSummaryRange } from '../../utils/aiUsageOverview';
 import { useAiUsageOverview } from '../useAiUsageOverview';
 
 let focusEffect: EffectCallback | undefined;
@@ -70,14 +69,8 @@ function Providers({ children }: { children: ReactNode }) {
   );
 }
 
-function Probe({
-  timelineWindowKey,
-  windowKey,
-}: {
-  timelineWindowKey?: AiUsageWindowKey;
-  windowKey: AiUsageWindowKey;
-}) {
-  const result = useAiUsageOverview(windowKey, timelineWindowKey);
+function Probe() {
+  const result = useAiUsageOverview();
 
   useEffect(() => {
     latestResult = result;
@@ -109,25 +102,19 @@ describe('useAiUsageOverview', () => {
     await act(async () => {
       renderer = create(
         <Providers>
-          <Probe windowKey="30d" />
+          <Probe />
         </Providers>,
       );
     });
     await flushQueryNotifications();
 
-    const range = getAiUsageWindowRange('365d', new Date());
+    const range = getAiUsageSummaryRange(new Date());
     expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
       query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
     });
-    expect(latestResult?.overview).toMatchObject({
-      cacheHitRate: 1 / 3,
-      cacheObservedTokens: 120,
-      totalTokens: 120,
-    });
-    expect(latestResult?.calendarData).toMatchObject({
-      '2026-01-01': 4,
-      '2026-08-02': 1,
-    });
+    expect(Object.keys(latestResult?.calendarData ?? {})).toHaveLength(183);
+    expect(latestResult?.calendarData).not.toHaveProperty('2026-01-01');
+    expect(latestResult?.calendarData).toHaveProperty('2026-08-02', 1);
 
     await act(async () => focusEffect?.());
     expect(dataApi.get).toHaveBeenCalledTimes(1);
@@ -136,61 +123,11 @@ describe('useAiUsageOverview', () => {
     expect(dataApi.get).toHaveBeenCalledTimes(2);
   });
 
-  test('derives selected metrics without refetching the year timeline', async () => {
-    await act(async () => {
-      renderer = create(
-        <Providers>
-          <Probe windowKey="30d" />
-        </Providers>,
-      );
-    });
-    await flushQueryNotifications();
-
-    await act(async () => {
-      renderer?.update(
-        <Providers>
-          <Probe windowKey="365d" />
-        </Providers>,
-      );
-    });
-    await flushQueryNotifications();
-
-    const range = getAiUsageWindowRange('365d', new Date());
-    expect(dataApi.get).toHaveBeenCalledTimes(1);
-    expect(dataApi.get).toHaveBeenLastCalledWith('/ai-usage-records/timeline', {
-      query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
-    });
-    expect(latestResult?.overview).toMatchObject({
-      cacheHitRate: 340 / 620,
-      cacheObservedTokens: 620,
-      totalTokens: 620,
-    });
-  });
-
-  test('queries only the 183-day timeline for the Home summary', async () => {
-    await act(async () => {
-      renderer = create(
-        <Providers>
-          <Probe timelineWindowKey="183d" windowKey="183d" />
-        </Providers>,
-      );
-    });
-    await flushQueryNotifications();
-
-    const range = getAiUsageWindowRange('183d', new Date());
-    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
-      query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
-    });
-    expect(Object.keys(latestResult?.calendarData ?? {})).toHaveLength(183);
-    expect(latestResult?.calendarData).not.toHaveProperty('2026-01-01');
-    expect(latestResult?.calendarData).toHaveProperty('2026-08-02');
-  });
-
   test('moves the local-date range forward when Home regains focus after midnight', async () => {
     await act(async () => {
       renderer = create(
         <Providers>
-          <Probe windowKey="30d" />
+          <Probe />
         </Providers>,
       );
     });
@@ -201,7 +138,7 @@ describe('useAiUsageOverview', () => {
     await act(async () => focusEffect?.());
     await flushQueryNotifications();
 
-    const range = getAiUsageWindowRange('365d', new Date());
+    const range = getAiUsageSummaryRange(new Date());
     expect(dataApi.get).toHaveBeenCalledTimes(2);
     expect(dataApi.get).toHaveBeenLastCalledWith('/ai-usage-records/timeline', {
       query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },

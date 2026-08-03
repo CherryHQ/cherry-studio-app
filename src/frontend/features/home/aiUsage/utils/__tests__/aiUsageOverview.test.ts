@@ -1,21 +1,16 @@
 import type { AiUsageRecordTimelineBucket } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 
 import { addCalendarDays, normalizeLocalDate } from '../aiUsageCalendar';
-import { buildAiUsageOverview, getAiUsageWindowRange } from '../aiUsageOverview';
+import { buildAiUsageCalendarData, getAiUsageSummaryRange } from '../aiUsageOverview';
 
 describe('AI usage overview', () => {
-  test.each([
-    ['30d', 30],
-    ['90d', 90],
-    ['183d', 183],
-    ['365d', 365],
-  ] as const)('builds an inclusive %s local-date range', (windowKey, expectedDays) => {
+  test('builds an inclusive 183-day local-date range', () => {
     const endDate = new Date(2026, 7, 2, 12);
-    const range = getAiUsageWindowRange(windowKey, endDate);
-    const overview = buildAiUsageOverview([], range);
+    const range = getAiUsageSummaryRange(endDate);
+    const data = buildAiUsageCalendarData([], range);
 
-    expect(Object.keys(overview.data)).toHaveLength(expectedDays);
-    expect(Object.keys(overview.data).at(-1)).toBe('2026-08-02');
+    expect(Object.keys(data)).toHaveLength(183);
+    expect(Object.keys(data).at(-1)).toBe('2026-08-02');
     expect(new Date(range.from).getHours()).toBe(0);
     expect(new Date(range.to).getHours()).toBe(23);
     expect(new Date(range.to).getMilliseconds()).toBe(999);
@@ -26,11 +21,11 @@ describe('AI usage overview', () => {
     process.env.TZ = 'America/New_York';
 
     try {
-      const range = getAiUsageWindowRange('30d', new Date(2026, 2, 15, 12));
-      const dateKeys = Object.keys(buildAiUsageOverview([], range).data);
+      const range = getAiUsageSummaryRange(new Date(2026, 2, 15, 12));
+      const dateKeys = Object.keys(buildAiUsageCalendarData([], range));
 
-      expect(dateKeys).toHaveLength(30);
-      expect(dateKeys[0]).toBe('2026-02-14');
+      expect(dateKeys).toHaveLength(183);
+      expect(dateKeys[0]).toBe('2025-09-14');
       expect(dateKeys.at(-1)).toBe('2026-03-15');
     } finally {
       if (originalTimeZone === undefined) {
@@ -43,7 +38,7 @@ describe('AI usage overview', () => {
 
   test('fills missing dates and uses desktop token quantiles for intensity', () => {
     const range = rangeForDays(new Date(2026, 0, 1), 6);
-    const overview = buildAiUsageOverview(
+    const data = buildAiUsageCalendarData(
       [
         bucket('2026-01-01', 10),
         bucket('2026-01-02', 20),
@@ -54,7 +49,7 @@ describe('AI usage overview', () => {
       range,
     );
 
-    expect(overview.data).toEqual({
+    expect(data).toEqual({
       '2026-01-01': 1,
       '2026-01-02': 1,
       '2026-01-03': 0,
@@ -66,13 +61,13 @@ describe('AI usage overview', () => {
 
   test('keeps small samples and tied values deterministic', () => {
     const singleDay = rangeForDays(new Date(2026, 0, 1), 1);
-    expect(buildAiUsageOverview([bucket('2026-01-01', 10)], singleDay).data).toEqual({
+    expect(buildAiUsageCalendarData([bucket('2026-01-01', 10)], singleDay)).toEqual({
       '2026-01-01': 1,
     });
 
     const tiedRange = rangeForDays(new Date(2026, 0, 1), 4);
     expect(
-      buildAiUsageOverview(
+      buildAiUsageCalendarData(
         [
           bucket('2026-01-01', 10),
           bucket('2026-01-02', 10),
@@ -80,7 +75,7 @@ describe('AI usage overview', () => {
           bucket('2026-01-04', 20),
         ],
         tiedRange,
-      ).data,
+      ),
     ).toEqual({
       '2026-01-01': 1,
       '2026-01-02': 1,
@@ -89,40 +84,11 @@ describe('AI usage overview', () => {
     });
   });
 
-  test('derives totals, cache usage, active days, streak and peak day from the same timeline', () => {
-    const range = rangeForDays(new Date(2026, 0, 1), 5);
-    const overview = buildAiUsageOverview(
-      [
-        bucket('2026-01-01', 100, 2, { noCache: 40, read: 50, write: 10 }),
-        bucket('2026-01-02', 0, 1),
-        bucket('2026-01-04', 300, 3, { noCache: 80, read: 160, write: 20 }),
-        bucket('2026-01-05', 200, 2),
-      ],
-      range,
-    );
-
-    expect(overview).toMatchObject({
-      activeDays: 4,
-      cacheHitRate: 0.375,
-      cacheObservedTokens: 560,
-      longestStreak: 2,
-      peakDay: { dateKey: '2026-01-04', totalTokens: 300 },
-      totalTokens: 600,
+  test('fills the summary with zero levels without usage records', () => {
+    expect(buildAiUsageCalendarData([], rangeForDays(new Date(2026, 0, 1), 2))).toEqual({
+      '2026-01-01': 0,
+      '2026-01-02': 0,
     });
-  });
-
-  test('returns zero metrics and no peak day without usage records', () => {
-    const overview = buildAiUsageOverview([], rangeForDays(new Date(2026, 0, 1), 2));
-
-    expect(overview).toMatchObject({
-      activeDays: 0,
-      cacheObservedTokens: 0,
-      data: { '2026-01-01': 0, '2026-01-02': 0 },
-      longestStreak: 0,
-      totalTokens: 0,
-    });
-    expect(overview.cacheHitRate).toBeUndefined();
-    expect(overview.peakDay).toBeUndefined();
   });
 });
 
@@ -135,26 +101,17 @@ function rangeForDays(firstDate: Date, days: number) {
   };
 }
 
-function bucket(
-  date: string,
-  totalTokens: number,
-  requestCount = 1,
-  cacheTokens: { noCache: number; read: number; write: number } = {
-    noCache: totalTokens,
-    read: 0,
-    write: 0,
-  },
-): AiUsageRecordTimelineBucket {
+function bucket(date: string, totalTokens: number): AiUsageRecordTimelineBucket {
   return {
     costCurrency: null,
     date,
     estimatedRequestCount: 0,
-    recordCount: requestCount,
-    requestCount,
-    totalCacheReadTokens: cacheTokens.read,
-    totalCacheWriteTokens: cacheTokens.write,
+    recordCount: 1,
+    requestCount: 1,
+    totalCacheReadTokens: 0,
+    totalCacheWriteTokens: 0,
     totalCost: 0,
-    totalNoCacheTokens: cacheTokens.noCache,
+    totalNoCacheTokens: totalTokens,
     totalTokens,
     unpricedRequestCount: 0,
   };
