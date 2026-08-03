@@ -7,6 +7,7 @@ trustPolicy: no-downgrade
 # 既有 lockfile 版本，早年发布缺 provenance 触发误报；升级后可移除对应条目
 trustPolicyExclude:
   - eslint-import-resolver-typescript@3.10.1
+  - react-native-chart-kit@7.0.2
   - semver@6.3.1
   - tinyexec@1.2.2
   - ua-parser-js@0.7.41||1.0.41
