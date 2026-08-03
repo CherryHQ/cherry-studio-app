@@ -14,10 +14,7 @@ export default function HomeStackLayout() {
         headerTintColor: foregroundColor,
       }}
     >
-      <Stack.Screen
-        name="ai-usage"
-        options={{ fullScreenGestureEnabled: false, gestureEnabled: true }}
-      />
+      <Stack.Screen name="ai-usage" options={{ gestureEnabled: false }} />
     </Stack>
   );
 }
