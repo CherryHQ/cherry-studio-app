@@ -81,9 +81,11 @@ jest.mock('../AiUsageCalendar', () => {
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
-    t: (key: string, options?: { count?: number }) =>
+    t: (key: string, options?: { count?: number; tokens?: string }) =>
       ({
         'home.aiUsage.activeDays': 'Active days',
+        'home.aiUsage.cacheHitRate': 'Cache hit rate',
+        'home.aiUsage.cacheObservedTokens': `Observable input: ${options?.tokens}`,
         'home.aiUsage.loadError': 'AI usage could not be loaded.',
         'home.aiUsage.loading': 'Loading AI usage',
         'home.aiUsage.longestStreak': `${options?.count}-day streak`,
@@ -91,7 +93,6 @@ jest.mock('react-i18next', () => ({
         'home.aiUsage.range.30d': '30D',
         'home.aiUsage.range.365d': '1Y',
         'home.aiUsage.range.90d': '90D',
-        'home.aiUsage.requests': 'Requests',
         'home.aiUsage.retry': 'Retry',
         'home.aiUsage.title': 'AI Usage',
         'home.aiUsage.totalTokens': 'Total tokens',
@@ -101,11 +102,18 @@ jest.mock('react-i18next', () => ({
 
 const overview: AiUsageOverview = {
   activeDays: 4,
+  cacheHitRate: 0.767,
+  cacheObservedTokens: 3_599_000,
   data: { '2026-01-04': 4 },
   longestStreak: 3,
   peakDay: { dateKey: '2026-01-04', totalTokens: 900 },
-  totalRequests: 23,
   totalTokens: 1_200,
+};
+const calendarData = { '2025-01-05': 2, '2026-01-04': 4 } as const;
+const ranges: Record<AiUsageWindowKey, { from: number; to: number }> = {
+  '30d': rangeForDates(new Date(2026, 0, 4), new Date(2026, 1, 2)),
+  '90d': rangeForDates(new Date(2025, 10, 5), new Date(2026, 1, 2)),
+  '365d': rangeForDates(new Date(2025, 1, 3), new Date(2026, 1, 2)),
 };
 
 describe('AiUsageCard', () => {
@@ -113,7 +121,9 @@ describe('AiUsageCard', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseAiUsageOverview.mockReturnValue(queryResult());
+    mockUseAiUsageOverview.mockImplementation((windowKey: AiUsageWindowKey) =>
+      queryResult({ range: ranges[windowKey] }),
+    );
   });
 
   afterEach(async () => {
@@ -126,11 +136,15 @@ describe('AiUsageCard', () => {
 
     expect(mockUseAiUsageOverview).toHaveBeenLastCalledWith('30d');
     expect(metricValue('ai-usage-total-tokens-value')).toBe('1.2K');
-    expect(metricValue('ai-usage-requests-value')).toBe('23');
+    expect(metricValue('ai-usage-cache-hit-rate-value')).toBe('76.7%');
     expect(metricValue('ai-usage-active-days-value')).toBe('4');
     expect(metricValue('ai-usage-peak-day-value')).toBe('900');
-    expect(textValues()).toEqual(expect.arrayContaining(['3-day streak', 'Jan 4, 2026']));
-    expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.windowKey).toBe('30d');
+    expect(textValues()).toEqual(
+      expect.arrayContaining(['Observable input: 3.6M', '3-day streak', 'Jan 4, 2026']),
+    );
+    const calendar = renderer?.root.findByProps({ testID: 'ai-usage-calendar' });
+    expect(calendar?.props.data).toBe(calendarData);
+    expect(calendar?.props.highlightedFromDateKey).toBe('2026-01-04');
   });
 
   it('changes the timeline window from the segmented control', async () => {
@@ -146,9 +160,9 @@ describe('AiUsageCard', () => {
     await act(async () => rangeButton.props.onPress());
 
     expect(mockUseAiUsageOverview).toHaveBeenLastCalledWith('365d');
-    expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.windowKey).toBe(
-      '365d',
-    );
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.highlightedFromDateKey,
+    ).toBe('2025-02-03');
   });
 
   it('keeps the card structure and shows placeholders during its first load', async () => {
@@ -159,7 +173,7 @@ describe('AiUsageCard', () => {
     await renderCard();
 
     expect(metricValue('ai-usage-total-tokens-value')).toBe('--');
-    expect(metricValue('ai-usage-requests-value')).toBe('--');
+    expect(metricValue('ai-usage-cache-hit-rate-value')).toBe('--');
     expect(metricValue('ai-usage-active-days-value')).toBe('--');
     expect(metricValue('ai-usage-peak-day-value')).toBe('--');
     expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.isLoading).toBe(true);
@@ -220,23 +234,29 @@ describe('AiUsageCard', () => {
 
 function queryResult(overrides: Record<string, unknown> = {}) {
   return {
+    calendarData,
     error: undefined,
     hasData: true,
     isError: false,
     isLoading: false,
     isRefreshing: false,
     overview,
+    range: ranges['30d'],
     refetch: mockRefetch,
     ...overrides,
   };
 }
 
+function rangeForDates(from: Date, to: Date) {
+  return { from: from.getTime(), to: to.getTime() };
+}
+
 function emptyOverview(): AiUsageOverview {
   return {
     activeDays: 0,
+    cacheObservedTokens: 0,
     data: { '2026-01-04': 0 },
     longestStreak: 0,
-    totalRequests: 0,
     totalTokens: 0,
   };
 }

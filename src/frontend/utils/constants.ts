@@ -56,6 +56,7 @@ export const homeAiUsageCalendar = {
     light: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'],
     dark: ['#2c2c2c', '#0e4429', '#006d32', '#26a641', '#39d353'],
   },
+  dimmedOpacity: 0.35,
   sweepStepMs: 45, // per-diagonal delay of the bottom-left → top-right entrance wave
   enterSpring: { mass: 1.1, damping: 13, stiffness: 150, overshootClamping: false },
 } as const;

@@ -67,11 +67,14 @@ export function buildAiUsageOverview(
 
   const activeDateKeys = new Set<string>();
   let peakDay: AiUsageOverview['peakDay'];
-  let totalRequests = 0;
+  let cacheReadTokens = 0;
+  let cacheObservedTokens = 0;
   let totalTokens = 0;
 
   for (const bucket of selectedBuckets) {
-    totalRequests += bucket.requestCount;
+    cacheReadTokens += bucket.totalCacheReadTokens;
+    cacheObservedTokens +=
+      bucket.totalNoCacheTokens + bucket.totalCacheReadTokens + bucket.totalCacheWriteTokens;
     totalTokens += bucket.totalTokens;
     if (bucket.requestCount > 0) {
       activeDateKeys.add(bucket.date);
@@ -83,10 +86,11 @@ export function buildAiUsageOverview(
 
   return {
     activeDays: activeDateKeys.size,
+    cacheHitRate: cacheObservedTokens > 0 ? cacheReadTokens / cacheObservedTokens : undefined,
+    cacheObservedTokens,
     data,
     longestStreak: getLongestStreak(activeDateKeys),
     peakDay,
-    totalRequests,
     totalTokens,
   };
 }

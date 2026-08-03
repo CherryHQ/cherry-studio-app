@@ -88,13 +88,13 @@ describe('AI usage overview', () => {
     });
   });
 
-  test('derives totals, active days, streak and peak day from the same timeline', () => {
+  test('derives totals, cache usage, active days, streak and peak day from the same timeline', () => {
     const range = rangeForDays(new Date(2026, 0, 1), 5);
     const overview = buildAiUsageOverview(
       [
-        bucket('2026-01-01', 100, 2),
+        bucket('2026-01-01', 100, 2, { noCache: 40, read: 50, write: 10 }),
         bucket('2026-01-02', 0, 1),
-        bucket('2026-01-04', 300, 3),
+        bucket('2026-01-04', 300, 3, { noCache: 80, read: 160, write: 20 }),
         bucket('2026-01-05', 200, 2),
       ],
       range,
@@ -102,9 +102,10 @@ describe('AI usage overview', () => {
 
     expect(overview).toMatchObject({
       activeDays: 4,
+      cacheHitRate: 0.375,
+      cacheObservedTokens: 560,
       longestStreak: 2,
       peakDay: { dateKey: '2026-01-04', totalTokens: 300 },
-      totalRequests: 8,
       totalTokens: 600,
     });
   });
@@ -114,11 +115,12 @@ describe('AI usage overview', () => {
 
     expect(overview).toMatchObject({
       activeDays: 0,
+      cacheObservedTokens: 0,
       data: { '2026-01-01': 0, '2026-01-02': 0 },
       longestStreak: 0,
-      totalRequests: 0,
       totalTokens: 0,
     });
+    expect(overview.cacheHitRate).toBeUndefined();
     expect(overview.peakDay).toBeUndefined();
   });
 });
@@ -132,17 +134,26 @@ function rangeForDays(firstDate: Date, days: number) {
   };
 }
 
-function bucket(date: string, totalTokens: number, requestCount = 1): AiUsageRecordTimelineBucket {
+function bucket(
+  date: string,
+  totalTokens: number,
+  requestCount = 1,
+  cacheTokens: { noCache: number; read: number; write: number } = {
+    noCache: totalTokens,
+    read: 0,
+    write: 0,
+  },
+): AiUsageRecordTimelineBucket {
   return {
     costCurrency: null,
     date,
     estimatedRequestCount: 0,
     recordCount: requestCount,
     requestCount,
-    totalCacheReadTokens: 0,
-    totalCacheWriteTokens: 0,
+    totalCacheReadTokens: cacheTokens.read,
+    totalCacheWriteTokens: cacheTokens.write,
     totalCost: 0,
-    totalNoCacheTokens: totalTokens,
+    totalNoCacheTokens: cacheTokens.noCache,
     totalTokens,
     unpricedRequestCount: 0,
   };

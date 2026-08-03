@@ -8,7 +8,7 @@ import { homeAiUsageCalendar } from '@/frontend/utils/constants';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { aiUsageWindowKeys, type AiUsageWindowKey } from '../types';
-import { parseLocalDateKey } from '../utils/aiUsageCalendar';
+import { parseLocalDateKey, toLocalDateKey } from '../utils/aiUsageCalendar';
 import { AiUsageCalendar } from './AiUsageCalendar';
 
 const windowLabelKeys: Record<AiUsageWindowKey, string> = {
@@ -20,7 +20,7 @@ const windowLabelKeys: Record<AiUsageWindowKey, string> = {
 export function AiUsageCard() {
   const { i18n, t } = useTranslation();
   const [windowKey, setWindowKey] = useState<AiUsageWindowKey>('30d');
-  const { hasData, isError, isLoading, isRefreshing, overview, refetch } =
+  const { calendarData, hasData, isError, isLoading, isRefreshing, overview, range, refetch } =
     useAiUsageOverview(windowKey);
   const locale = i18n.resolvedLanguage ?? i18n.language;
   const numberFormatter = useMemo(
@@ -28,6 +28,14 @@ export function AiUsageCard() {
       new Intl.NumberFormat(locale, {
         maximumFractionDigits: 1,
         notation: 'compact',
+      }),
+    [locale],
+  );
+  const percentFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat(locale, {
+        maximumFractionDigits: 1,
+        style: 'percent',
       }),
     [locale],
   );
@@ -45,9 +53,17 @@ export function AiUsageCard() {
   const placeholder = '--';
   const peakDay = overview.peakDay;
   const totalTokens = isInitialLoading ? placeholder : numberFormatter.format(overview.totalTokens);
-  const totalRequests = isInitialLoading
+  const cacheHitRate = isInitialLoading
     ? placeholder
-    : numberFormatter.format(overview.totalRequests);
+    : overview.cacheHitRate === undefined
+      ? placeholder
+      : percentFormatter.format(overview.cacheHitRate);
+  const cacheHitDetail =
+    !isInitialLoading && overview.cacheHitRate !== undefined
+      ? t('home.aiUsage.cacheObservedTokens', {
+          tokens: numberFormatter.format(overview.cacheObservedTokens),
+        })
+      : undefined;
   const activeDays = isInitialLoading ? placeholder : numberFormatter.format(overview.activeDays);
   const longestStreak = isInitialLoading
     ? placeholder
@@ -154,9 +170,10 @@ export function AiUsageCard() {
                 value={totalTokens}
               />
               <MetricCell
-                label={t('home.aiUsage.requests')}
-                testID="ai-usage-requests-value"
-                value={totalRequests}
+                detail={cacheHitDetail}
+                label={t('home.aiUsage.cacheHitRate')}
+                testID="ai-usage-cache-hit-rate-value"
+                value={cacheHitRate}
               />
             </View>
             <View className="flex-row">
@@ -177,9 +194,9 @@ export function AiUsageCard() {
           </View>
 
           <AiUsageCalendar
-            data={overview.data}
+            data={calendarData}
+            highlightedFromDateKey={toLocalDateKey(new Date(range.from))}
             isLoading={isInitialLoading}
-            windowKey={windowKey}
           />
         </View>
       )}

@@ -10,9 +10,10 @@ import { buildAiUsageOverview, getAiUsageWindowRange } from '../utils/aiUsageOve
 export function useAiUsageOverview(windowKey: AiUsageWindowKey) {
   const [endDate, setEndDate] = useState(() => new Date());
   const range = useMemo(() => getAiUsageWindowRange(windowKey, endDate), [endDate, windowKey]);
+  const timelineRange = useMemo(() => getAiUsageWindowRange('365d', endDate), [endDate]);
   const query = useMemo(
-    () => ({ from: range.from, limit: 1, metric: 'tokens' as const, to: range.to }),
-    [range],
+    () => ({ from: timelineRange.from, limit: 1, metric: 'tokens' as const, to: timelineRange.to }),
+    [timelineRange],
   );
   const timelineQuery = useQuery('/ai-usage-records/timeline', { query });
   const hasFocusedOnceRef = useRef(false);
@@ -42,10 +43,18 @@ export function useAiUsageOverview(windowKey: AiUsageWindowKey) {
   );
 
   const buckets = timelineQuery.data?.buckets;
-  const overview = useMemo(() => buildAiUsageOverview(buckets ?? [], range), [buckets, range]);
+  const timelineOverview = useMemo(
+    () => buildAiUsageOverview(buckets ?? [], timelineRange),
+    [buckets, timelineRange],
+  );
+  const overview = useMemo(
+    () => (windowKey === '365d' ? timelineOverview : buildAiUsageOverview(buckets ?? [], range)),
+    [buckets, range, timelineOverview, windowKey],
+  );
 
   return {
     ...timelineQuery,
+    calendarData: timelineOverview.data,
     hasData: timelineQuery.data !== undefined,
     overview,
     range,

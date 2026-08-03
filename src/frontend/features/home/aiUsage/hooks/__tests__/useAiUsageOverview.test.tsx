@@ -22,14 +22,27 @@ const response: AiUsageRecordTimelineResponse = {
   buckets: [
     {
       costCurrency: null,
+      date: '2026-01-01',
+      estimatedRequestCount: 0,
+      recordCount: 5,
+      requestCount: 5,
+      totalCacheReadTokens: 300,
+      totalCacheWriteTokens: 100,
+      totalCost: 0,
+      totalNoCacheTokens: 100,
+      totalTokens: 500,
+      unpricedRequestCount: 0,
+    },
+    {
+      costCurrency: null,
       date: '2026-08-02',
       estimatedRequestCount: 0,
       recordCount: 2,
       requestCount: 2,
-      totalCacheReadTokens: 0,
-      totalCacheWriteTokens: 0,
+      totalCacheReadTokens: 40,
+      totalCacheWriteTokens: 20,
       totalCost: 0,
-      totalNoCacheTokens: 120,
+      totalNoCacheTokens: 60,
       totalTokens: 120,
       unpricedRequestCount: 0,
     },
@@ -96,11 +109,19 @@ describe('useAiUsageOverview', () => {
     });
     await flushQueryNotifications();
 
-    const range = getAiUsageWindowRange('30d', new Date());
+    const range = getAiUsageWindowRange('365d', new Date());
     expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
       query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
     });
-    expect(latestResult?.overview).toMatchObject({ totalRequests: 2, totalTokens: 120 });
+    expect(latestResult?.overview).toMatchObject({
+      cacheHitRate: 1 / 3,
+      cacheObservedTokens: 120,
+      totalTokens: 120,
+    });
+    expect(latestResult?.calendarData).toMatchObject({
+      '2026-01-01': 4,
+      '2026-08-02': 1,
+    });
 
     await act(async () => focusEffect?.());
     expect(dataApi.get).toHaveBeenCalledTimes(1);
@@ -109,7 +130,7 @@ describe('useAiUsageOverview', () => {
     expect(dataApi.get).toHaveBeenCalledTimes(2);
   });
 
-  test('changes the query range with the selected window', async () => {
+  test('derives selected metrics without refetching the year timeline', async () => {
     await act(async () => {
       renderer = create(
         <Providers>
@@ -129,8 +150,14 @@ describe('useAiUsageOverview', () => {
     await flushQueryNotifications();
 
     const range = getAiUsageWindowRange('365d', new Date());
+    expect(dataApi.get).toHaveBeenCalledTimes(1);
     expect(dataApi.get).toHaveBeenLastCalledWith('/ai-usage-records/timeline', {
       query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
+    });
+    expect(latestResult?.overview).toMatchObject({
+      cacheHitRate: 340 / 620,
+      cacheObservedTokens: 620,
+      totalTokens: 620,
     });
   });
 
@@ -149,7 +176,7 @@ describe('useAiUsageOverview', () => {
     await act(async () => focusEffect?.());
     await flushQueryNotifications();
 
-    const range = getAiUsageWindowRange('30d', new Date());
+    const range = getAiUsageWindowRange('365d', new Date());
     expect(dataApi.get).toHaveBeenCalledTimes(2);
     expect(dataApi.get).toHaveBeenLastCalledWith('/ai-usage-records/timeline', {
       query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },

@@ -12,13 +12,14 @@ export type AiUsageTimeRange = {
 
 export type AiUsageOverview = {
   activeDays: number;
+  cacheHitRate?: number;
+  cacheObservedTokens: number;
   data: AiUsageData;
   longestStreak: number;
   peakDay?: {
     dateKey: string;
     totalTokens: number;
   };
-  totalRequests: number;
   totalTokens: number;
 };
 

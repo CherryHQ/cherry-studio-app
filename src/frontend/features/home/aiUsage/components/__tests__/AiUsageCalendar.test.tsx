@@ -1,3 +1,4 @@
+import type { ComponentType } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { AiUsageCalendar } from '../AiUsageCalendar';
@@ -48,7 +49,7 @@ jest.mock('../AiUsageSquare', () => {
 
   return {
     __mockReplayAnimation: mockReplayAnimation,
-    AiUsageSquare: ({ ref, ...props }: { ref: React.Ref<unknown> }) => {
+    AiUsageSquare: ({ ref, ...props }: { ref: React.Ref<unknown> } & Record<string, unknown>) => {
       React.useImperativeHandle(ref, () => ({ replayAnimation: mockReplayAnimation }));
       return <MockView {...props} />;
     },
@@ -58,9 +59,11 @@ jest.mock('../AiUsageSquare', () => {
 const { __mockScrollToEnd: mockScrollToEnd } = jest.requireMock('react-native') as {
   __mockScrollToEnd: jest.Mock;
 };
-const { __mockReplayAnimation: mockReplayAnimation } = jest.requireMock('../AiUsageSquare') as {
-  __mockReplayAnimation: jest.Mock;
-};
+const { __mockReplayAnimation: mockReplayAnimation, AiUsageSquare: MockAiUsageSquare } =
+  jest.requireMock('../AiUsageSquare') as {
+    __mockReplayAnimation: jest.Mock;
+    AiUsageSquare: ComponentType<Record<string, unknown>>;
+  };
 
 describe('AiUsageCalendar', () => {
   let renderer: ReactTestRenderer | undefined;
@@ -74,32 +77,68 @@ describe('AiUsageCalendar', () => {
     renderer = undefined;
   });
 
-  it('centers short windows and enables scrolling only for the 365-day window', async () => {
+  it('keeps the year scrollable and returns to the latest dates when the highlight changes', async () => {
     await act(async () => {
       renderer = create(
-        <AiUsageCalendar data={{ '2026-01-01': 1 }} isLoading={false} windowKey="30d" />,
-      );
-    });
-
-    expect(scrollProps().scrollEnabled).toBe(false);
-    scrollProps().onContentSizeChange();
-    expect(mockScrollToEnd).not.toHaveBeenCalled();
-
-    await act(async () => {
-      renderer?.update(
-        <AiUsageCalendar data={{ '2026-01-01': 1 }} isLoading={false} windowKey="365d" />,
+        <AiUsageCalendar
+          data={{ '2025-08-03': 1, '2026-08-02': 4 }}
+          highlightedFromDateKey="2026-07-04"
+          isLoading={false}
+        />,
       );
     });
 
     expect(scrollProps().scrollEnabled).toBe(true);
+    expect(mockScrollToEnd).toHaveBeenCalledWith({ animated: false });
+    mockScrollToEnd.mockClear();
+
+    await act(async () => {
+      renderer?.update(
+        <AiUsageCalendar
+          data={{ '2025-08-03': 1, '2026-08-02': 4 }}
+          highlightedFromDateKey="2026-05-05"
+          isLoading={false}
+        />,
+      );
+    });
+
+    expect(mockScrollToEnd).toHaveBeenCalledWith({ animated: false });
+    mockScrollToEnd.mockClear();
     scrollProps().onContentSizeChange();
     expect(mockScrollToEnd).toHaveBeenCalledWith({ animated: false });
+  });
+
+  it('dims older dates and rebases the highlighted wave to its first week', async () => {
+    await act(async () => {
+      renderer = create(
+        <AiUsageCalendar
+          data={{ '2026-01-01': 1, '2026-02-01': 4 }}
+          highlightedFromDateKey="2026-01-20"
+          isLoading={false}
+        />,
+      );
+    });
+
+    const squareProps = renderer?.root.findAllByType(MockAiUsageSquare).map((node) => node.props);
+    expect(squareProps?.some((props) => props.isHighlighted === false)).toBe(true);
+    expect(squareProps?.some((props) => props.isHighlighted === true)).toBe(true);
+    expect(
+      Math.min(
+        ...(squareProps ?? [])
+          .filter((props) => props.isHighlighted === true)
+          .map((props) => props.weekIndex as number),
+      ),
+    ).toBe(0);
   });
 
   it('replays the square wave from the activity control', async () => {
     await act(async () => {
       renderer = create(
-        <AiUsageCalendar data={{ '2026-01-01': 4 }} isLoading={false} windowKey="30d" />,
+        <AiUsageCalendar
+          data={{ '2026-01-01': 4 }}
+          highlightedFromDateKey="2026-01-01"
+          isLoading={false}
+        />,
       );
     });
     mockReplayAnimation.mockClear();

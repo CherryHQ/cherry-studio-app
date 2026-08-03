@@ -6,7 +6,7 @@ import { useUniwind } from 'uniwind';
 
 import { homeAiUsageCalendar } from '@/frontend/utils/constants';
 
-import type { AiUsageAnimationControls, AiUsageData, AiUsageWindowKey } from '../types';
+import type { AiUsageAnimationControls, AiUsageData } from '../types';
 import {
   buildAiUsageCalendarWeeks,
   getAiUsageMonthLabelKeys,
@@ -16,11 +16,11 @@ import { AiUsageSquare } from './AiUsageSquare';
 
 type AiUsageCalendarProps = {
   data: AiUsageData;
+  highlightedFromDateKey: string;
   isLoading: boolean;
-  windowKey: AiUsageWindowKey;
 };
 
-export function AiUsageCalendar({ data, isLoading, windowKey }: AiUsageCalendarProps) {
+export function AiUsageCalendar({ data, highlightedFromDateKey, isLoading }: AiUsageCalendarProps) {
   const { i18n, t } = useTranslation();
   const squareRefs = useRef(new Map<string, AiUsageAnimationControls>());
   const scrollRef = useRef<ScrollView>(null);
@@ -32,7 +32,14 @@ export function AiUsageCalendar({ data, isLoading, windowKey }: AiUsageCalendarP
     () => new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { month: 'short' }),
     [i18n.language, i18n.resolvedLanguage],
   );
-  const isScrollable = windowKey === '365d';
+  const highlightedWeekIndex = useMemo(
+    () =>
+      Math.max(
+        0,
+        weeks.findIndex((week) => week.some((day) => day.dateKey === highlightedFromDateKey)),
+      ),
+    [highlightedFromDateKey, weeks],
+  );
 
   const replayAnimation = useCallback(() => {
     squareRefs.current.forEach((square) => {
@@ -40,17 +47,16 @@ export function AiUsageCalendar({ data, isLoading, windowKey }: AiUsageCalendarP
     });
   }, []);
 
+  const scrollToLatest = useCallback(() => {
+    scrollRef.current?.scrollToEnd({ animated: false });
+  }, []);
+
   useEffect(() => {
     if (!isLoading && weeks.length > 0) {
+      scrollToLatest();
       replayAnimation();
     }
-  }, [isLoading, replayAnimation, weeks]);
-
-  const handleContentSizeChange = useCallback(() => {
-    if (isScrollable) {
-      scrollRef.current?.scrollToEnd({ animated: false });
-    }
-  }, [isScrollable]);
+  }, [highlightedFromDateKey, isLoading, replayAnimation, scrollToLatest, weeks]);
 
   return (
     <View className="gap-3">
@@ -74,11 +80,11 @@ export function AiUsageCalendar({ data, isLoading, windowKey }: AiUsageCalendarP
       <ScrollView
         ref={scrollRef}
         horizontal
-        contentContainerStyle={isScrollable ? styles.scrollContent : styles.centeredContent}
-        scrollEnabled={isScrollable}
+        contentContainerStyle={styles.scrollContent}
+        scrollEnabled
         showsHorizontalScrollIndicator={false}
         testID="ai-usage-calendar-scroll"
-        onContentSizeChange={handleContentSizeChange}
+        onContentSizeChange={scrollToLatest}
       >
         <View style={styles.grid} testID="ai-usage-calendar-grid">
           {weeks.map((week, weekIndex) => {
@@ -99,6 +105,7 @@ export function AiUsageCalendar({ data, isLoading, windowKey }: AiUsageCalendarP
                     day.inRange ? (
                       <AiUsageSquare
                         dayIndex={dayIndex}
+                        isHighlighted={day.dateKey >= highlightedFromDateKey}
                         key={day.dateKey}
                         level={data[day.dateKey] ?? 0}
                         levelColors={levelColors}
@@ -109,7 +116,7 @@ export function AiUsageCalendar({ data, isLoading, windowKey }: AiUsageCalendarP
                             squareRefs.current.delete(day.dateKey);
                           }
                         }}
-                        weekIndex={weekIndex}
+                        weekIndex={Math.max(0, weekIndex - highlightedWeekIndex)}
                       />
                     ) : (
                       <View key={day.dateKey} style={styles.emptySquare} />
@@ -126,10 +133,6 @@ export function AiUsageCalendar({ data, isLoading, windowKey }: AiUsageCalendarP
 }
 
 const styles = StyleSheet.create({
-  centeredContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-  },
   emptySquare: {
     height: homeAiUsageCalendar.cellSize,
     width: homeAiUsageCalendar.cellSize,

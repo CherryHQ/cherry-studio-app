@@ -1,5 +1,7 @@
 {
   "home.aiUsage.activeDays": "活跃天数",
+  "home.aiUsage.cacheHitRate": "缓存命中率",
+  "home.aiUsage.cacheObservedTokens": "可观测输入：{{tokens}}",
   "home.aiUsage.dailyActivity": "每日活动",
   "home.aiUsage.loadError": "无法加载 AI 用量。",
   "home.aiUsage.loading": "正在加载 AI 用量",
@@ -9,7 +11,6 @@
   "home.aiUsage.range.365d": "1 年",
   "home.aiUsage.range.90d": "90 天",
   "home.aiUsage.replay": "重新播放活动动画",
-  "home.aiUsage.requests": "请求数",
   "home.aiUsage.retry": "重试",
   "home.aiUsage.title": "AI 用量",
   "home.aiUsage.totalTokens": "总 Token 数",

@@ -17,6 +17,7 @@ import { getAiUsageSweepDelayMs } from '../utils/aiUsageCalendar';
 
 type AiUsageSquareProps = {
   dayIndex: number;
+  isHighlighted: boolean;
   level: AiUsageLevel;
   levelColors: readonly string[];
   ref: Ref<AiUsageAnimationControls>;
@@ -25,6 +26,7 @@ type AiUsageSquareProps = {
 
 export function AiUsageSquare({
   dayIndex,
+  isHighlighted,
   level,
   levelColors,
   ref,
@@ -36,6 +38,11 @@ export function AiUsageSquare({
 
   const replayAnimation = useCallback(() => {
     cancelAnimation(progress);
+    if (!isHighlighted) {
+      progress.set(1);
+      return;
+    }
+
     progress.set(0);
     progress.set(
       withDelay(
@@ -43,7 +50,7 @@ export function AiUsageSquare({
         withSpring(1, homeAiUsageCalendar.enterSpring),
       ),
     );
-  }, [dayIndex, progress, weekIndex]);
+  }, [dayIndex, isHighlighted, progress, weekIndex]);
 
   useImperativeHandle(ref, () => ({ replayAnimation }), [replayAnimation]);
 
@@ -56,10 +63,13 @@ export function AiUsageSquare({
     };
   }, [activeColor, restingColor]);
 
-  return <Animated.View style={[styles.square, animatedStyle]} />;
+  return <Animated.View style={[styles.square, !isHighlighted && styles.dimmed, animatedStyle]} />;
 }
 
 const styles = StyleSheet.create({
+  dimmed: {
+    opacity: homeAiUsageCalendar.dimmedOpacity,
+  },
   square: {
     borderCurve: 'continuous',
     borderRadius: homeAiUsageCalendar.cellRadius,
