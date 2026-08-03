@@ -1,9 +1,24 @@
 import type { AiUsageRecordTimelineBucket } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 
 import { addCalendarDays, normalizeLocalDate } from '../aiUsageCalendar';
-import { buildAiUsageCalendarData, getAiUsageSummaryRange } from '../aiUsageOverview';
+import {
+  buildAiUsageCalendarData,
+  getAiUsageSummaryRange,
+  getFirstAiUsageDateKey,
+} from '../aiUsageOverview';
 
 describe('AI usage overview', () => {
+  test('finds the earliest day with usage for the animation origin', () => {
+    expect(
+      getFirstAiUsageDateKey({
+        '2026-02-01': 0,
+        '2026-04-15': 2,
+        '2026-03-20': 1,
+      }),
+    ).toBe('2026-03-20');
+    expect(getFirstAiUsageDateKey({ '2026-02-01': 0, '2026-02-02': 0 })).toBeUndefined();
+  });
+
   test('builds an inclusive 183-day local-date range', () => {
     const endDate = new Date(2026, 7, 2, 12);
     const range = getAiUsageSummaryRange(endDate);

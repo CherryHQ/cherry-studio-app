@@ -77,8 +77,8 @@ describe('AiUsageCalendar', () => {
     await act(async () => {
       renderer = create(
         <AiUsageCalendar
+          animationStartDateKey="2026-07-04"
           data={{ '2025-08-03': 1, '2026-08-02': 4 }}
-          highlightedFromDateKey="2026-07-04"
           isLoading={false}
           layout="scroll"
         />,
@@ -91,8 +91,8 @@ describe('AiUsageCalendar', () => {
     await act(async () => {
       renderer?.update(
         <AiUsageCalendar
+          animationStartDateKey="2026-05-05"
           data={{ '2025-08-03': 1, '2026-08-02': 4 }}
-          highlightedFromDateKey="2026-05-05"
           isLoading={false}
           layout="scroll"
         />,
@@ -109,8 +109,8 @@ describe('AiUsageCalendar', () => {
     await act(async () => {
       renderer = create(
         <AiUsageCalendar
+          animationStartDateKey="2026-02-01"
           data={{ '2026-02-01': 1, '2026-08-02': 4 }}
-          highlightedFromDateKey="2026-02-01"
           isLoading={false}
           layout="fit"
         />,
@@ -127,12 +127,12 @@ describe('AiUsageCalendar', () => {
     expect(squareProps?.every((props) => props.cellSize === expectedCellSize)).toBe(true);
   });
 
-  it('dims older dates and rebases the highlighted wave to its first week', async () => {
+  it('dims dates before usage begins and rebases the wave to its first active week', async () => {
     await act(async () => {
       renderer = create(
         <AiUsageCalendar
+          animationStartDateKey="2026-01-20"
           data={{ '2026-01-01': 1, '2026-02-01': 4 }}
-          highlightedFromDateKey="2026-01-20"
           isLoading={false}
           layout="scroll"
         />,
@@ -155,8 +155,8 @@ describe('AiUsageCalendar', () => {
     await act(async () => {
       renderer = create(
         <AiUsageCalendar
+          animationStartDateKey="2026-01-01"
           data={{ '2026-01-01': 4 }}
-          highlightedFromDateKey="2026-01-01"
           isLoading={false}
           layout="fit"
         />,

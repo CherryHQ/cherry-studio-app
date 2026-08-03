@@ -48,7 +48,11 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-const calendarData = { '2026-02-01': 2, '2026-08-02': 4 } as const;
+const calendarData = {
+  '2026-02-01': 0,
+  '2026-04-15': 2,
+  '2026-08-02': 4,
+} as const;
 const range = {
   from: new Date(2026, 1, 1).getTime(),
   to: new Date(2026, 7, 2, 23, 59, 59, 999).getTime(),
@@ -75,7 +79,7 @@ describe('AiUsageSummaryCard', () => {
 
     const calendar = renderer?.root.findByProps({ testID: 'ai-usage-calendar' });
     expect(calendar?.props.data).toBe(calendarData);
-    expect(calendar?.props.highlightedFromDateKey).toBe('2026-02-01');
+    expect(calendar?.props.animationStartDateKey).toBe('2026-04-15');
     expect(calendar?.props.layout).toBe('fit');
     expect(textValues()).toEqual(expect.arrayContaining(['Usage Statistics', 'View details']));
     expect(textValues()).not.toEqual(

@@ -56,6 +56,12 @@ export function buildAiUsageCalendarData(
   return data;
 }
 
+export function getFirstAiUsageDateKey(data: AiUsageData): string | undefined {
+  return Object.keys(data)
+    .sort()
+    .find((dateKey) => data[dateKey] > 0);
+}
+
 function quantile(sorted: readonly number[], ratio: number): number {
   if (sorted.length === 0) {
     return 0;

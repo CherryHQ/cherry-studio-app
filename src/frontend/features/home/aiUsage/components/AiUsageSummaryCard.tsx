@@ -6,15 +6,15 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
-import { toLocalDateKey } from '../utils/aiUsageCalendar';
+import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
 import { AiUsageCalendar } from './AiUsageCalendar';
 
 export function AiUsageSummaryCard() {
   const { t } = useTranslation();
-  const { calendarData, hasData, isError, isLoading, isRefreshing, range, refetch } =
-    useAiUsageOverview();
+  const { calendarData, hasData, isError, isLoading, isRefreshing, refetch } = useAiUsageOverview();
   const isInitialLoading = isLoading && !hasData;
   const showInitialError = isError && !hasData;
+  const animationStartDateKey = getFirstAiUsageDateKey(calendarData);
 
   return (
     <View className="w-full rounded-2xl bg-surface p-4" style={styles.card}>
@@ -84,8 +84,8 @@ export function AiUsageSummaryCard() {
       ) : (
         <View className="mt-4">
           <AiUsageCalendar
+            animationStartDateKey={animationStartDateKey}
             data={calendarData}
-            highlightedFromDateKey={toLocalDateKey(new Date(range.from))}
             isLoading={isInitialLoading}
             layout="fit"
           />

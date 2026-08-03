@@ -21,15 +21,15 @@ import {
 import { AiUsageSquare } from './AiUsageSquare';
 
 type AiUsageCalendarProps = {
+  animationStartDateKey?: string;
   data: AiUsageData;
-  highlightedFromDateKey: string;
   isLoading: boolean;
   layout: 'fit' | 'scroll';
 };
 
 export function AiUsageCalendar({
+  animationStartDateKey,
   data,
-  highlightedFromDateKey,
   isLoading,
   layout,
 }: AiUsageCalendarProps) {
@@ -45,13 +45,12 @@ export function AiUsageCalendar({
     () => new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { month: 'short' }),
     [i18n.language, i18n.resolvedLanguage],
   );
-  const highlightedWeekIndex = useMemo(
+  const animationStartWeekIndex = useMemo(
     () =>
-      Math.max(
-        0,
-        weeks.findIndex((week) => week.some((day) => day.dateKey === highlightedFromDateKey)),
-      ),
-    [highlightedFromDateKey, weeks],
+      animationStartDateKey
+        ? weeks.findIndex((week) => week.some((day) => day.dateKey === animationStartDateKey))
+        : -1,
+    [animationStartDateKey, weeks],
   );
   const isScrollable = layout === 'scroll';
   const cellGap = isScrollable ? aiUsageCalendar.cellGap : aiUsageCalendar.summaryCellGap;
@@ -84,7 +83,7 @@ export function AiUsageCalendar({
       scrollToLatest();
       replayAnimation();
     }
-  }, [highlightedFromDateKey, isLoading, replayAnimation, scrollToLatest, weeks]);
+  }, [animationStartDateKey, isLoading, replayAnimation, scrollToLatest, weeks]);
 
   const calendarGrid = (
     <Pressable
@@ -117,7 +116,9 @@ export function AiUsageCalendar({
                     <AiUsageSquare
                       cellSize={cellSize}
                       dayIndex={dayIndex}
-                      isHighlighted={day.dateKey >= highlightedFromDateKey}
+                      isHighlighted={
+                        animationStartDateKey !== undefined && day.dateKey >= animationStartDateKey
+                      }
                       key={day.dateKey}
                       level={data[day.dateKey] ?? 0}
                       levelColors={levelColors}
@@ -128,7 +129,7 @@ export function AiUsageCalendar({
                           squareRefs.current.delete(day.dateKey);
                         }
                       }}
-                      weekIndex={Math.max(0, weekIndex - highlightedWeekIndex)}
+                      weekIndex={Math.max(0, weekIndex - animationStartWeekIndex)}
                     />
                   ) : (
                     <View key={day.dateKey} style={{ height: cellSize, width: cellSize }} />
