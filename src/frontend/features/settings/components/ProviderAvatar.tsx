@@ -6,6 +6,21 @@ import { useUniwind } from 'uniwind';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule } from '@/frontend/data';
 
+import {
+  DEFAULT_PROVIDER_ICON_SCALE,
+  getProviderAvatarFallback,
+  getProviderListIconDisplayConfig,
+} from '../utils/providerAvatarStyles';
+
+const PROVIDER_LIST_AVATAR_SIZE = 26;
+const PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME =
+  'items-center justify-center overflow-hidden border border-border-subtle border-continuous';
+const PROVIDER_LIST_AVATAR_FRAME_STYLE = {
+  borderRadius: 6,
+  height: PROVIDER_LIST_AVATAR_SIZE,
+  width: PROVIDER_LIST_AVATAR_SIZE,
+};
+
 /**
  * Reads a provider's stored custom avatar uri (see `providerAvatarStorage`).
  * The lookup is a synchronous file-system stat, memoized per `providerId`, so
@@ -20,7 +35,6 @@ type ProviderAvatarProps = {
   presetProviderId?: string;
   providerId: string;
   providerName: string;
-  size?: number;
 };
 
 /**
@@ -32,55 +46,65 @@ export function ProviderAvatar({
   presetProviderId,
   providerId,
   providerName,
-  size = 20,
 }: ProviderAvatarProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const avatarUri = useProviderAvatar(providerId);
-  const iconSource = resolveProviderIcon(presetProviderId ?? providerId);
-  const initial = providerName.trim().charAt(0).toUpperCase() || 'P';
-  const frameStyle = { borderRadius: size / 2, height: size, width: size };
 
   if (avatarUri) {
     return (
-      <View className="overflow-hidden border-continuous" style={frameStyle}>
+      <View
+        className={PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME}
+        style={PROVIDER_LIST_AVATAR_FRAME_STYLE}
+      >
         <Image
           cachePolicy="memory-disk"
           contentFit="cover"
           recyclingKey={avatarUri}
           source={{ uri: avatarUri }}
-          style={{ height: size, width: size }}
+          style={{ height: PROVIDER_LIST_AVATAR_SIZE, width: PROVIDER_LIST_AVATAR_SIZE }}
         />
       </View>
     );
   }
 
+  const displayIconId = presetProviderId ?? providerId;
+  const iconSource = resolveProviderIcon(displayIconId);
+
   if (iconSource) {
-    const imageSize = Math.round(size * 0.8125);
+    const displayConfig = getProviderListIconDisplayConfig(displayIconId);
+    const imageSize =
+      PROVIDER_LIST_AVATAR_SIZE * (displayConfig?.scale ?? DEFAULT_PROVIDER_ICON_SCALE);
 
     return (
       <View
-        className="items-center justify-center overflow-hidden border-continuous"
-        style={frameStyle}
+        className={PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME}
+        style={PROVIDER_LIST_AVATAR_FRAME_STYLE}
       >
         <Image
           cachePolicy="memory-disk"
           contentFit="contain"
           recyclingKey={providerId}
           source={iconSource[iconTheme]}
-          style={{ height: imageSize, width: imageSize }}
+          style={{
+            borderRadius: displayConfig?.borderRadius,
+            height: imageSize,
+            width: imageSize,
+          }}
         />
       </View>
     );
   }
 
+  const fallback = getProviderAvatarFallback(providerName);
+
   return (
-    <View className="items-center justify-center bg-surface-secondary" style={frameStyle}>
-      <Text
-        className="font-medium text-default-foreground"
-        style={{ fontSize: Math.round(size * 0.5) }}
-      >
-        {initial}
+    <View
+      className={PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME}
+      style={{ ...PROVIDER_LIST_AVATAR_FRAME_STYLE, backgroundColor: fallback.backgroundColor }}
+    >
+      <Text className="font-medium" style={{ color: fallback.color, fontSize: 14 }}>
+        {fallback.initial}
       </Text>
     </View>
   );
