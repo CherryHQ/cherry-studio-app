@@ -32,3 +32,32 @@ export type AiUsageCalendarDay = {
 export type AiUsageAnimationControls = {
   replayAnimation: () => void;
 };
+
+export type AiUsageModelIdentity = {
+  isOther: boolean;
+  key: string;
+  modelId: string | null;
+  providerId: string | null;
+  providerName: string | null;
+};
+
+export type AiUsageModelUsage = AiUsageModelIdentity & {
+  totalTokens: number;
+};
+
+export type AiUsageWeekDay = {
+  dateKey: string;
+  isFuture: boolean;
+  totalTokens: number;
+};
+
+export type AiUsageWeekSeries = AiUsageModelUsage & {
+  values: number[];
+};
+
+export type AiUsageWeeklyData = {
+  averageTokens: number;
+  days: AiUsageWeekDay[];
+  series: AiUsageWeekSeries[];
+  totalTokens: number;
+};
