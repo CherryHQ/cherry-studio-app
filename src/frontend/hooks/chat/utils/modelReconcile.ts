@@ -1,77 +1,24 @@
-import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
-
-import type { AssistantSettings } from '@/shared/data/types/assistant';
-import type { Model } from '@/shared/data/types/model';
+import { resolveReasoningEffortForModel } from '@cherrystudio/universal/ai/reasoning';
+import type { AssistantSettings } from '@cherrystudio/universal/data/types/assistant';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+import {
+  isFunctionCallingModel,
+  isOpenRouterBuiltInWebSearchModel,
+  isWebSearchModel,
+} from '@cherrystudio/universal/utils/model';
 
 export type ReasoningEffortPatch = {
-  reasoning_effort?: string;
+  reasoning_effort?: ReasoningEffortOption;
 };
-
-const DEFAULT_REASONING_OPTION = 'default';
-const reasoningEffortCache = new Map<string, string | undefined>();
-
-function getSupportedReasoningOptions(model: Model): string[] {
-  const supportedEfforts = model.reasoning?.supportedEfforts ?? [];
-
-  if (supportedEfforts.length === 0 && !model.reasoning?.thinkingTokenLimits) {
-    return [];
-  }
-
-  return [DEFAULT_REASONING_OPTION, ...supportedEfforts];
-}
-
-function getFallbackReasoningEffort(
-  model: Model,
-  currentEffort: string | undefined,
-  cacheKey: string,
-): string {
-  const supportedOptions = getSupportedReasoningOptions(model);
-  const cached = reasoningEffortCache.get(cacheKey);
-
-  if (cached && supportedOptions.includes(cached)) {
-    return cached;
-  }
-
-  if (currentEffort !== undefined) {
-    return (
-      model.reasoning?.supportedEfforts?.find((effort) => effort !== REASONING_EFFORT.NONE) ??
-      supportedOptions[0] ??
-      DEFAULT_REASONING_OPTION
-    );
-  }
-
-  return supportedOptions[0] ?? DEFAULT_REASONING_OPTION;
-}
 
 export function reconcileReasoningEffortForModel(
   nextModel: Model,
-  currentEffort: string | undefined,
-  assistantId: string,
+  currentEffort: ReasoningEffortOption | undefined,
 ): ReasoningEffortPatch | null {
-  const cacheKey = `assistant.reasoning_effort_cache.${assistantId}`;
-  const supportedOptions = getSupportedReasoningOptions(nextModel);
-
-  if (supportedOptions.length > 0) {
-    if (currentEffort !== undefined && supportedOptions.includes(currentEffort)) {
-      return null;
-    }
-
-    const fallback = getFallbackReasoningEffort(nextModel, currentEffort, cacheKey);
-    reasoningEffortCache.set(cacheKey, fallback === REASONING_EFFORT.NONE ? undefined : fallback);
-
-    return {
-      reasoning_effort: fallback === REASONING_EFFORT.NONE ? undefined : fallback,
-    };
-  }
-
-  if (currentEffort === undefined) {
-    return null;
-  }
-
-  reasoningEffortCache.set(cacheKey, currentEffort);
-  return {
-    reasoning_effort: undefined,
-  };
+  const nextEffort = resolveReasoningEffortForModel(nextModel, currentEffort);
+  if (nextEffort === currentEffort) return null;
+  return { reasoning_effort: nextEffort };
 }
 
 export function reconcileWebSearchForModel(
@@ -82,9 +29,17 @@ export function reconcileWebSearchForModel(
     return null;
   }
 
-  if (nextModel.capabilities.includes(MODEL_CAPABILITY.WEB_SEARCH)) {
+  if (canModelUseAssistantWebSearch(nextModel)) {
     return null;
   }
 
   return { enableWebSearch: false };
+}
+
+export function canModelUseAssistantWebSearch(model: Model): boolean {
+  return (
+    isWebSearchModel(model) ||
+    isOpenRouterBuiltInWebSearchModel(model) ||
+    isFunctionCallingModel(model)
+  );
 }

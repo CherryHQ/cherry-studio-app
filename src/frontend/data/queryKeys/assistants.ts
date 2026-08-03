@@ -1,7 +1,7 @@
+import type { ListAssistantsQueryParams } from '@cherrystudio/universal/data/api/schemas/assistants';
+
 export const assistantQueryKeys = {
   all: () => ['/assistants'] as const,
   detail: (assistantId: string) => [`/assistants/${assistantId}`] as const,
-  list: (
-    params: { id?: string; limit?: number; page?: number; search?: string; tagIds?: string[] } = {},
-  ) => ['/assistants', params] as const,
+  list: (params: ListAssistantsQueryParams = {}) => ['/assistants', params] as const,
 };

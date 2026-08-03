@@ -35,5 +35,8 @@ separate startup decision proves otherwise.
 - Runtime may coordinate frontend and backend startup, but it must not implement feature behavior.
 - Navigation, toast, translation decisions, and React Query invalidation remain frontend-owned.
 - Every app-lifetime resource added here must identify its initialization order and disposal point.
+- Disposal is idempotent and asynchronous. It first waits for `ChatRuntime` to abort and settle all
+  tracked work, then closes `McpRuntimeService`, `WebSearchService`, backend `CacheService`, and
+  `DbService` in that order.
 - Runtime must not import app route modules or trigger preboot side effects.
 - Mobile uses one startup gate, not Desktop lifecycle phases.

@@ -1,6 +1,5 @@
+import { type FontSizeStep, ThemeMode } from '@cherrystudio/universal/data/preference';
 import { Uniwind } from 'uniwind';
-
-import { type FontSizeStep, ThemeMode } from '@/shared/data/preference';
 
 import { createTypographyCSSVariables, normalizeFontSizeStep } from './typographyScale';
 

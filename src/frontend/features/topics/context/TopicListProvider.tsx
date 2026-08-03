@@ -1,3 +1,5 @@
+import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
@@ -17,8 +19,6 @@ import {
 } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isUniqueModelId } from '@/shared/data/types/model';
-import type { Topic } from '@/shared/data/types/topic';
 
 const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 
@@ -184,8 +184,8 @@ function prefetchDefaultModelDetail(prefetch: ReturnType<typeof usePrefetch>, mo
     return;
   }
 
-  return prefetch('/models/:id', {
-    params: { id: modelId },
+  return prefetch('/models/:uniqueModelId*', {
+    params: { uniqueModelId: modelId },
     staleTime: MODEL_DETAIL_PREFETCH_STALE_TIME_MS,
   });
 }

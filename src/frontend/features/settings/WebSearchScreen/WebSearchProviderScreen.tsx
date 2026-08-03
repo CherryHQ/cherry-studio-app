@@ -1,3 +1,8 @@
+import {
+  WEB_SEARCH_PROVIDER_IDS,
+  type WebSearchProviderId,
+} from '@cherrystudio/universal/data/preference';
+import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
@@ -6,8 +11,6 @@ import { ScrollView, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/data/preference';
-import { isMobileSupportedWebSearchProviderId } from '@/shared/data/presets/webSearchProviders';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';

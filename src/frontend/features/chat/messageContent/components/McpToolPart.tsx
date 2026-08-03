@@ -1,15 +1,17 @@
-import { Image } from 'expo-image';
-import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
-
-import { type NormalizedMcpContent, normalizeMcpResult } from '@/shared/ai/tools/mcpResult';
-import { parseFunctionCallToolName } from '@/shared/ai/tools/mcpToolName';
-import type { CherryMessagePart } from '@/shared/data/types/message';
+import {
+  type NormalizedMcpContent,
+  normalizeMcpResult,
+} from '@cherrystudio/universal/ai/tools/mcpResult';
+import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import {
   type CherryToolMeta,
   readCherryMeta,
   readCherryToolMetadata,
-} from '@/shared/data/types/uiParts';
+} from '@cherrystudio/universal/data/types/uiParts';
+import { Image } from 'expo-image';
+import { useTranslation } from 'react-i18next';
+import { Text, View } from 'react-native';
 
 import { ToolPartSectionTitle, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';

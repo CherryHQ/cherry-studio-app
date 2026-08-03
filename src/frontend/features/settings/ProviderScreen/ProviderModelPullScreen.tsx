@@ -1,3 +1,5 @@
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Accordion } from 'heroui-native/accordion';
@@ -9,8 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelRow, providerModelRowHeight } from './models/components/ProviderModelRow';

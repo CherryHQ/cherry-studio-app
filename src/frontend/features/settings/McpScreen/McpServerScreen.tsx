@@ -1,3 +1,9 @@
+import {
+  withMcpToolRuleAdded,
+  withMcpToolRuleCleared,
+} from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
+import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
@@ -11,10 +17,7 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/shared/ai/tools/mcpSourcePolicy';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { DataApiError, ErrorCode } from '@/shared/data/api/types';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpHeadersEditor } from './components/McpHeadersEditor';

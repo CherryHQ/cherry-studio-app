@@ -1,10 +1,10 @@
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { Switch } from 'heroui-native/switch';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 
 import { McpToolsSection } from '../McpToolsSection';
 

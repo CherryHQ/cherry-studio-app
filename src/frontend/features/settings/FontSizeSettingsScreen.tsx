@@ -1,3 +1,4 @@
+import { FONT_SIZE_STEPS, type FontSizeStep } from '@cherrystudio/universal/data/preference';
 import { Slider } from 'heroui-native/slider';
 import { useToast } from 'heroui-native/toast';
 import { useState } from 'react';
@@ -9,7 +10,6 @@ import { MarkdownText } from '@/frontend/components/markdown';
 import { usePreference } from '@/frontend/data/hooks';
 import { applyFontSizeStepPreference } from '@/frontend/utils/theme';
 import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
-import { FONT_SIZE_STEPS, type FontSizeStep } from '@/shared/data/preference';
 
 import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 

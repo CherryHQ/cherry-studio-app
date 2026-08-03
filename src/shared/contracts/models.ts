@@ -1,4 +1,4 @@
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 export type ModelPullPreview = {
   added: Model[];
@@ -49,7 +49,7 @@ export type CheckModelsHealthInput = {
   timeoutMs?: number;
 };
 
-export interface ModelsBackend {
+export interface ModelsModule {
   checkHealth(input: CheckModelsHealthInput): Promise<ModelHealthResult[]>;
   pull(providerId: string, signal?: AbortSignal): Promise<ModelPullResult>;
   reconcile(providerId: string, input: ReconcileModelsInput): Promise<ReconcileModelsResult>;

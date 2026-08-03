@@ -1,11 +1,11 @@
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
-import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 import {
   createProviderModelHealthPendingStatuses,

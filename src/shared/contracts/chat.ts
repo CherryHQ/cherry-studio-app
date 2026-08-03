@@ -1,32 +1,82 @@
-import type { CherryMessagePart, Message } from '@/shared/data/types/message';
-import type { UniqueModelId } from '@/shared/data/types/model';
+import type {
+  AiStreamAttachRequest,
+  AiStreamAttachResponse,
+  AiStreamDetachRequest,
+  ComposerQueuedMessagePayload,
+  StreamChunkPayload,
+  StreamDonePayload,
+  StreamErrorPayload,
+  TopicStatusSnapshotEntry,
+} from '@cherrystudio/universal/ai/transport';
+import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
-export const NEW_CHAT_SESSION_TOPIC_ID = '__new_topic__';
+export const NEW_TOPIC_SNAPSHOT_KEY = '__new_topic__';
 
-export type ChatSessionTopicStatus =
-  | 'aborting'
-  | 'awaiting-approval'
-  | 'idle'
-  | 'reserving'
-  | 'streaming';
+export type ChatTopicStatus = 'aborting' | 'awaiting-approval' | 'idle' | 'reserving' | 'streaming';
 
-export type ChatSessionTopicSnapshot = {
+export type ChatTopicSnapshot = {
   error?: Error;
   hasHistoryBeforePendingTurn?: boolean;
   overlayMessage?: Message;
+  overlayMessages?: readonly Message[];
   pendingUserMessage?: Message;
-  status: ChatSessionTopicStatus;
+  queuedMessages?: readonly ComposerQueuedMessagePayload[];
+  status: ChatTopicStatus;
+  stream?: TopicStatusSnapshotEntry;
 };
 
 export type ChatSendTextInput = {
   assistantId?: string | null;
+  fastMode?: boolean;
   parts?: readonly CherryMessagePart[];
+  reasoningEffort?: ReasoningEffortOption;
   selectedModelId?: UniqueModelId | null;
   text: string;
   topicId: string;
 };
 
 export type ChatSendNewTopicTextInput = Omit<ChatSendTextInput, 'topicId'>;
+
+export type ChatSendMultiModelTextInput = Omit<ChatSendTextInput, 'selectedModelId'> & {
+  selectedModelIds: readonly UniqueModelId[];
+};
+
+export type ChatSendNewTopicMultiModelTextInput = Omit<ChatSendMultiModelTextInput, 'topicId'>;
+
+export type ChatRegenerateInput = {
+  fastMode?: boolean;
+  messageId: string;
+  reasoningEffort?: ReasoningEffortOption;
+  selectedModelIds?: readonly UniqueModelId[];
+  topicId: string;
+};
+
+export type ChatEditAndResendInput = {
+  fastMode?: boolean;
+  messageId: string;
+  parts?: readonly CherryMessagePart[];
+  reasoningEffort?: ReasoningEffortOption;
+  selectedModelIds?: readonly UniqueModelId[];
+  text: string;
+  topicId: string;
+};
+
+export type ChatSetActiveBranchInput = {
+  throughNodeId: string;
+  topicId: string;
+};
+
+export type ChatCancelExecutionInput = {
+  executionId: UniqueModelId;
+  topicId: string;
+};
+
+export type ChatFollowUpInput = {
+  payload: ComposerQueuedMessagePayload;
+  topicId: string;
+};
 
 export type ChatToolApprovalInput = {
   approvalId: string;
@@ -37,24 +87,36 @@ export type ChatToolApprovalInput = {
   updatedInput?: Record<string, unknown>;
 };
 
-export type ChatSessionEvent =
+export type ChatEvent =
   | { topicId: string; type: 'invalidate-topic-messages' }
   | { type: 'invalidate-topics' }
   | { topicId: string; type: 'open-topic' }
   | { topicId: string; type: 'snapshot-changed' };
 
-export type ChatSessionListener = (event: ChatSessionEvent) => Promise<void> | void;
+export type ChatListener = (event: ChatEvent) => Promise<void> | void;
 
-export interface ChatSession {
+export type ChatStreamEvent =
+  | { payload: StreamChunkPayload; type: 'chunk' }
+  | { payload: StreamDonePayload; type: 'done' }
+  | { payload: StreamErrorPayload; type: 'error' };
+
+export type ChatStreamListener = (event: ChatStreamEvent) => void;
+
+export interface ChatModule {
   abort(topicId: string): void;
-  dispose(): void;
-  getTopicSnapshot(topicId: string): ChatSessionTopicSnapshot;
+  attachStream(input: AiStreamAttachRequest, listener: ChatStreamListener): AiStreamAttachResponse;
+  cancelExecution(input: ChatCancelExecutionInput): void;
+  detachStream(input: AiStreamDetachRequest, listener: ChatStreamListener): void;
+  editAndResend(input: ChatEditAndResendInput): Promise<void>;
+  getTopicSnapshot(topicId: string): ChatTopicSnapshot;
+  queueFollowUp(input: ChatFollowUpInput): Promise<void>;
+  regenerate(input: ChatRegenerateInput): Promise<void>;
   respondToolApproval(input: ChatToolApprovalInput): Promise<void>;
+  sendMultiModelText(input: ChatSendMultiModelTextInput): Promise<void>;
+  sendNewTopicMultiModelText(input: ChatSendNewTopicMultiModelTextInput): Promise<void>;
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void>;
   sendText(input: ChatSendTextInput): Promise<void>;
-  subscribe(listener: ChatSessionListener): () => void;
-}
-
-export interface ChatBackend {
-  createSession(): ChatSession;
+  setActiveBranch(input: ChatSetActiveBranchInput): Promise<void>;
+  steer(input: ChatFollowUpInput): Promise<void>;
+  subscribe(listener: ChatListener): () => void;
 }

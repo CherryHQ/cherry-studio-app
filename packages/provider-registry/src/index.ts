@@ -3,14 +3,28 @@
  * Main entry point for the model and provider registry system
  */
 
+// Reasoning-control heuristics — INGEST-time only (generation enrichment,
+// custom-model creation); never a runtime capability source.
+export {
+  inferReasoningControls,
+  inferReasoningMembership,
+  inferReasoningOwnedBy,
+} from './patterns/reasoning-heuristics';
 // Shared vendor identity regex — consumed by @shared capability inference
 // and @cherrystudio/ui icon routing. Single source of truth for "which
 // vendor does this raw model ID belong to".
 export type { VendorKey } from './patterns/vendor-patterns';
 export { isVendor, matchVendor, VENDOR_PATTERNS } from './patterns/vendor-patterns';
+// Schema-inferred types (replaces proto types)
+export { REASONING_FORMAT_PROFILES } from './reasoningProfiles';
 // Pure lookup and transformation utilities (no fs dependency)
-export type { ModelLookupResult, RuntimeEndpointConfig } from './registry-utils';
+export type {
+  ModelLookupResult,
+  PersistedEndpointConfig,
+  RuntimeEndpointConfig,
+} from './registry-utils';
 export {
+  buildPersistedEndpointConfigs,
   buildRuntimeEndpointConfigs,
   endpointImpliedCapability,
   inferAdapterFamily,
@@ -19,32 +33,26 @@ export {
 } from './registry-utils';
 // Enum types (PascalCase, derived from const objects)
 export type {
-  AnthropicReasoningEffort,
   CanonicalParamKey,
   Currency,
   EndpointType,
-  GeminiThinkingLevel,
   Modality,
   ModelCapability,
-  OpenAIReasoningEffort,
   ReasoningEffort,
 } from './schemas/enums';
 // Enums — const objects (SCREAMING_CASE)
 export {
-  ANTHROPIC_REASONING_EFFORT,
   CANONICAL_PARAM_KEY,
   CURRENCY,
   ENDPOINT_TYPE,
-  GEMINI_THINKING_LEVEL,
   MODALITY,
   MODEL_CAPABILITY,
-  OPENAI_REASONING_EFFORT,
   objectValues,
   REASONING_EFFORT,
+  REASONING_EFFORT_ORDER,
 } from './schemas/enums';
-// Image generation param catalog — schema, wire names, and param types
-// export type { ImageParamCatalogEntry, ParamValue, ParamValues } from './schemas/imageParamCatalog';
-export type { ParamValue, ParamValues } from './schemas/imageParamCatalog';
+// Runtime schemas (zod) — needed by shared types that compose them
+export type { ImageParamCatalogEntry, ParamValue, ParamValues } from './schemas/imageParamCatalog';
 export {
   IMAGE_PARAM_CATALOG,
   IMAGE_PARAM_CATALOG_KEYS,
@@ -52,7 +60,6 @@ export {
   paramCatalogEntry,
   wireName,
 } from './schemas/imageParamCatalog';
-// Schema-inferred types (replaces proto types)
 export type {
   ImageGenerationMode,
   ImageGenerationSupport,
@@ -61,24 +68,46 @@ export type {
   ModelConfig as ProtoModelConfig,
   ModelPricing,
   ModelPricing as ProtoModelPricing,
+  ReasoningControl,
   ReasoningSupport as ProtoReasoningSupport,
   ReasoningSupport,
   SupportSpec,
 } from './schemas/model';
-// Runtime schemas (zod) — needed by shared types that compose them
-export { ImageGenerationSupportSchema } from './schemas/model';
+export {
+  ImageGenerationModeSchema,
+  ImageGenerationSupportSchema,
+  ReasoningControlSchema,
+} from './schemas/model';
 export type {
   ProviderConfig as ProtoProviderConfig,
   ProviderConfig,
   ProviderReasoningFormat as ProtoProviderReasoningFormat,
   ProviderReasoningFormat,
+  ReasoningFormatType,
   RegistryEndpointConfig,
 } from './schemas/provider';
+export { FastModeTransportSchema, REASONING_FORMAT_TYPES } from './schemas/provider';
 export type {
   ProviderModelOverride as ProtoProviderModelOverride,
   ProviderModelOverride,
+  ProviderModelReasoningContract,
 } from './schemas/provider-models';
-// Image generation param schema builder
+export { ProviderModelReasoningContractSchema } from './schemas/provider-models';
+export type {
+  ReasoningFormatWireProfile,
+  ReasoningWireMode,
+  ReasoningWireOperation,
+  ReasoningWireProfile,
+  ReasoningWireTarget,
+  ReasoningWireValue,
+} from './schemas/reasoningWire';
+export {
+  REASONING_WIRE_TARGETS,
+  ReasoningFormatWireProfileSchema,
+  ReasoningWireProfileSchema,
+} from './schemas/reasoningWire';
 export { buildParamsSchema } from './utils/buildParamsSchema';
 // Model ID normalization utilities
 export { normalizeModelId } from './utils/normalize';
+export type { DerivedReasoningFields } from './utils/reasoningControls';
+export { deriveLegacyReasoningFields } from './utils/reasoningControls';

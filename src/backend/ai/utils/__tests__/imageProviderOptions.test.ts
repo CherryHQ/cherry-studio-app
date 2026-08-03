@@ -1,4 +1,4 @@
-import type { Provider } from '@/shared/data/types/provider';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { splitImageParamValues } from '../imageOptions';
 import { buildImageProviderOptions, mergeImageProviderOptions } from '../imageProviderOptions';

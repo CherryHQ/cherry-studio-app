@@ -1,4 +1,4 @@
-import type { FontSizeStep } from '@/shared/data/preference';
+import type { FontSizeStep } from '@cherrystudio/universal/data/preference';
 
 export const TYPOGRAPHY_SIZE_NAMES = [
   'xs',

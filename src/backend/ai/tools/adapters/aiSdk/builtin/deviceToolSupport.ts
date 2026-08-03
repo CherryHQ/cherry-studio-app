@@ -1,12 +1,12 @@
 import type { ToolResultOutput } from '@ai-sdk/provider-utils';
+import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 import type { JSONValue, Tool, ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type { DevicePermissionService } from '@/backend/services/permissions';
+import type { DevicePermissions } from '@/backend/services/permissions';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { getRequestContext } from '../context';
 import type { ToolEntry } from '../types';
@@ -14,7 +14,7 @@ import type { ToolEntry } from '../types';
 const logger = loggerService.withContext('DeviceTool');
 
 export type DeviceToolDependencies = {
-  devicePermission: Pick<DevicePermissionService, 'getStatusForPreference'>;
+  devicePermissions: Pick<DevicePermissions, 'getStatusForPreference'>;
   preference: Pick<PreferenceService, 'get'>;
 };
 
@@ -111,7 +111,7 @@ function guardDeviceTool(input: {
         throw new Error(`Device tool is disabled: ${input.name}`);
       }
       const statuses = await Promise.all(
-        input.preferenceKeys.map((key) => input.deps.devicePermission.getStatusForPreference(key)),
+        input.preferenceKeys.map((key) => input.deps.devicePermissions.getStatusForPreference(key)),
       );
       if (statuses.some((status) => status !== 'granted')) {
         throw new Error(`Device tool requires system permission: ${input.name}`);

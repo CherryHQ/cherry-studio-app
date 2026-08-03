@@ -59,8 +59,8 @@ Before enabling it, verify:
 - The root Stack hosts the `(tabs)` group (header hidden) plus root-level `onboarding`, `topics` (chat), and `paintings` screens.
 - `src/app/(tabs)/_layout.tsx` owns the native bottom tab bar through `react-native-bottom-tabs` (`createNativeBottomTabNavigator`) with five tabs: home, assistants, `(messages)`, settings, and `(search)`.
 - Settings is a normal nested Stack inside its tab (`src/app/(tabs)/settings/`).
-- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in
-  `ChatSessionProvider`.
+- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in `ChatProvider`.
+  The provider subscribes to the app-owned Chat Runtime; route unmount does not dispose it.
 - Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
 ## Picker Sheets

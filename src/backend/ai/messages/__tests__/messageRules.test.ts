@@ -108,6 +108,70 @@ describe('toModelMessages', () => {
       },
     ]);
   });
+
+  it('keeps PDF as an inline data file only when native PDF is supported', async () => {
+    const messages = [
+      ui('user', [
+        {
+          type: 'file',
+          filename: 'brief.pdf',
+          mediaType: 'application/pdf',
+          url: 'data:application/pdf;base64,AA',
+        },
+      ]),
+    ];
+
+    await expect(
+      toModelMessages(messages, { image: true, video: true, audio: true, pdf: true }),
+    ).resolves.toEqual([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'file',
+            data: 'data:application/pdf;base64,AA',
+            filename: 'brief.pdf',
+            mediaType: 'application/pdf',
+          },
+        ],
+      },
+    ]);
+    await expect(
+      toModelMessages(messages, { image: true, video: true, audio: true, pdf: false }),
+    ).resolves.toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: expect.stringContaining('pdf attachment omitted') }],
+      },
+    ]);
+  });
+
+  it('leaves Office and other serialized files unchanged', async () => {
+    const messages = [
+      ui('user', [
+        {
+          type: 'file',
+          filename: 'brief.docx',
+          mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          url: 'data:application/octet-stream;base64,AA',
+        },
+      ]),
+    ];
+
+    const result = await toModelMessages(messages, {
+      image: false,
+      video: false,
+      audio: false,
+      pdf: false,
+    });
+
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        role: 'user',
+        content: [expect.objectContaining({ type: 'file', filename: 'brief.docx' })],
+      }),
+    );
+  });
 });
 
 describe('ensureNonEmptyAssistantContent', () => {

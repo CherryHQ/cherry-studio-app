@@ -1,10 +1,10 @@
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 import {
   getEffectiveAuthConfig,

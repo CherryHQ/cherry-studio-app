@@ -1,7 +1,6 @@
+import type { Message, MessageStatus } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { Message, MessageStatus } from '@/shared/data/types/message';
 
 import { MessageParts } from '../MessageParts';
 
@@ -23,6 +22,7 @@ describe('MessageParts', () => {
     const renderer = render(<MessageParts message={makeMessage(status)} />);
 
     expect(renderer.root.findByType('MessagePart').props.isStreaming).toBe(isStreaming);
+    expect(renderer.root.findByType('MessagePart').props.resolvedText).toBeUndefined();
   });
 });
 

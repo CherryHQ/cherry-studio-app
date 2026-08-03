@@ -1,6 +1,5 @@
+import type { EndpointConfigs, Provider } from '@cherrystudio/universal/data/types/provider';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { EndpointConfigs, Provider } from '@/shared/data/types/provider';
 
 import { getProviderApiServiceEndpointDirtyState } from '../../utils/providerApiServiceDirtyState';
 import { useProviderApiServiceEndpointDraft } from '../useProviderApiServiceEndpointDraft';
@@ -145,5 +144,19 @@ describe('useProviderApiServiceEndpointDraft', () => {
 
     act(() => current().removeEndpoint('openai-chat-completions'));
     expect(current().draft.visibleEndpointTypes).toEqual(['openai-chat-completions']);
+  });
+
+  it('changes the primary endpoint only after that endpoint has a Base URL', () => {
+    mount(persistedProvider);
+
+    act(() => current().addEndpoint('anthropic-messages'));
+    act(() => current().updatePrimaryEndpoint('anthropic-messages'));
+    expect(current().draft.primaryEndpoint).toBe('openai-chat-completions');
+
+    act(() => current().updateBaseUrl('anthropic-messages', 'https://anthropic.example.com'));
+    act(() => current().updatePrimaryEndpoint('anthropic-messages'));
+
+    expect(current().draft.primaryEndpoint).toBe('anthropic-messages');
+    expect(isDirty(persistedProvider)).toBe(true);
   });
 });

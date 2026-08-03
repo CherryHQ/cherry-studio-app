@@ -206,7 +206,7 @@ describe('calendar and reminder adapters', () => {
 
 function deps() {
   return {
-    devicePermission: { getStatusForPreference: jest.fn(async () => 'granted') },
+    devicePermissions: { getStatusForPreference: jest.fn(async () => 'granted') },
     preference: { get: jest.fn(async () => 'always') },
   } as never;
 }

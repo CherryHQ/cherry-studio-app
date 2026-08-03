@@ -121,7 +121,6 @@ export class MockChatSeeder implements DatabaseSeeder {
             activeNodeId: topic.activeNodeId ?? null,
             assistantId: topic.assistantId ?? null,
             createdAt: parseTimestamp(topic.createdAt),
-            groupId: null,
             id: topic.id,
             isNameManuallyEdited: topic.isNameManuallyEdited,
             name: topic.name,

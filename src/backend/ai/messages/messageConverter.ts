@@ -1,8 +1,11 @@
 /** `Message` -> AI SDK `UIMessage`. */
 
+import type {
+  CherryMessagePart,
+  CherryUIMessage,
+  Message,
+} from '@cherrystudio/universal/data/types/message';
 import type { UIMessage } from 'ai';
-
-import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
 
 import { type ResolveFileEntryUri, resolveFileUIPart } from './fileProcessor';
 

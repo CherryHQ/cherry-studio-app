@@ -1,4 +1,4 @@
-/* biome-ignore-all lint/suspicious/noDuplicateCustomProperties: Light and dark theme variants intentionally redefine the same design tokens. */
+/* Light and dark theme variants intentionally redefine the same design tokens. */
 
 @import 'tailwindcss';
 @import 'uniwind';

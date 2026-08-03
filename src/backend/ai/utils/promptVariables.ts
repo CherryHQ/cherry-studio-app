@@ -14,11 +14,12 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 
 const logger = loggerService.withContext('utils:promptVariables');
 
+export const VOLATILE_PROMPT_VARIABLES = ['{{time}}', '{{datetime}}'] as const;
+
 const supportedVariables = [
   '{{username}}',
   '{{date}}',
-  '{{time}}',
-  '{{datetime}}',
+  ...VOLATILE_PROMPT_VARIABLES,
   '{{system}}',
   '{{language}}',
   '{{arch}}',

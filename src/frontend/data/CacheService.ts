@@ -38,24 +38,23 @@
  * by a full JS reload, equivalent to a desktop window refresh).
  */
 
-import { loggerService } from '@logger';
-import { createMMKV } from 'react-native-mmkv';
-
 import type {
   InferUseCacheValue,
   PersistCacheKey,
   PersistCacheSchema,
   UseCacheKey,
-} from '@/shared/data/cache/cacheSchemas';
-import { DefaultPersistCache } from '@/shared/data/cache/cacheSchemas';
+} from '@cherrystudio/universal/data/cache/cacheSchemas';
+import { DefaultPersistCache } from '@cherrystudio/universal/data/cache/cacheSchemas';
 import type {
   CacheEntry,
   CacheEntryDetail,
   CacheStats,
   CacheSubscriber,
   CacheTierSummary,
-} from '@/shared/data/cache/cacheTypes';
-import { deepEqual } from '@/shared/data/cache/cacheUtils';
+} from '@cherrystudio/universal/data/cache/cacheTypes';
+import { deepEqual } from '@cherrystudio/universal/data/cache/cacheUtils';
+import { loggerService } from '@logger';
+import { createMMKV } from 'react-native-mmkv';
 
 const logger = loggerService.withContext('CacheService');
 

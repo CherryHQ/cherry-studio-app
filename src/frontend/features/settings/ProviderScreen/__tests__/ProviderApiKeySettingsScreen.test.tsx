@@ -1,6 +1,9 @@
+import type {
+  ApiKeyEntry,
+  AuthConfig,
+  Provider,
+} from '@cherrystudio/universal/data/types/provider';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 
 import ProviderApiKeySettingsScreen from '../ProviderApiKeySettingsScreen';
 

@@ -1,3 +1,5 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useMemo, useState } from 'react';
@@ -6,8 +8,6 @@ import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
-import type { CherryMessagePart } from '@/shared/data/types/message';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { PrismSweep } from '../../prismSweep';
 import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';

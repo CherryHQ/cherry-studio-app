@@ -243,4 +243,5 @@ export default defineCreator({
       contextWindow: 131072,
     },
   ],
+  reasoningFamilies: [{ pattern: '^command-a-plus' }, { pattern: '^north-mini-code' }],
 });

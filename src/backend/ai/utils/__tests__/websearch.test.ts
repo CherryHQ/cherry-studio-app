@@ -1,6 +1,5 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-
-import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 
 import {
   buildProviderBuiltinWebSearchConfig,
@@ -53,6 +52,54 @@ describe('mapRegexToPatterns', () => {
 });
 
 describe('buildProviderBuiltinWebSearchConfig', () => {
+  it('emits a bare openai config for Doubao Responses', () => {
+    expect(
+      buildProviderBuiltinWebSearchConfig(
+        'openai',
+        webSearchConfig(),
+        createModel({
+          apiModelId: 'doubao-seed-2-1-pro',
+          modelId: 'doubao-seed-2-1-pro',
+          providerId: 'doubao',
+        }),
+      ),
+    ).toEqual({ openai: {} });
+  });
+
+  it.each([
+    'qwen3.7-max',
+    'qwen3.6-plus',
+    'qwen3.6-flash',
+    'qwen3.5-plus',
+    'qwen3.5-flash',
+    'qwen3-max',
+  ])('emits a bare openai config for DashScope Responses model %s', (apiModelId) => {
+    expect(
+      buildProviderBuiltinWebSearchConfig(
+        'openai',
+        webSearchConfig(),
+        createDashscopeModel(apiModelId),
+      ),
+    ).toEqual({ openai: {} });
+  });
+
+  it.each([
+    'qwen-plus',
+    'qwen-flash',
+    'qwen-plus-character',
+    'qwq-plus',
+    'deepseek-v3.2',
+    'MiniMax-M2.1',
+  ])('suppresses the Responses tool for DashScope Chat-only model %s', (apiModelId) => {
+    expect(
+      buildProviderBuiltinWebSearchConfig(
+        'openai',
+        webSearchConfig(),
+        createDashscopeModel(apiModelId),
+      ),
+    ).toBeUndefined();
+  });
+
   it('maps low/medium/high search-context size for openai from maxResults', () => {
     expect(
       buildProviderBuiltinWebSearchConfig(
@@ -155,12 +202,48 @@ describe('buildProviderBuiltinWebSearchConfig', () => {
   });
 });
 
-describe('getWebSearchParams (unchanged existing behavior)', () => {
-  it('still returns provider-specific extra params', () => {
+describe('getWebSearchParams', () => {
+  it('returns Hunyuan search params', () => {
     expect(getWebSearchParams(createModel({ providerId: 'hunyuan' }))).toEqual({
       enable_enhancement: true,
       citation: true,
       search_info: true,
     });
   });
+
+  it('enables DashScope Chat search without a strategy for standard models', () => {
+    expect(getWebSearchParams(createDashscopeModel('qwen-plus'))).toEqual({
+      enable_search: true,
+      search_options: { forced_search: true },
+    });
+  });
+
+  it.each(['qwen3-max', 'qwen-omni-turbo', 'qwen3-vl-plus'])(
+    'uses the agent strategy for DashScope model %s',
+    (apiModelId) => {
+      expect(getWebSearchParams(createDashscopeModel(apiModelId))).toEqual({
+        enable_search: true,
+        search_options: { forced_search: true, search_strategy: 'agent' },
+      });
+    },
+  );
+
+  it('uses web_search_options only for OpenAI search-preview models', () => {
+    expect(getWebSearchParams(createModel({ modelId: 'gpt-4o-search-preview' }))).toEqual({
+      web_search_options: {},
+    });
+    expect(
+      getWebSearchParams(
+        createModel({
+          capabilities: [MODEL_CAPABILITY.WEB_SEARCH],
+          endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+          modelId: 'gpt-4o',
+        }),
+      ),
+    ).toEqual({});
+  });
 });
+
+function createDashscopeModel(apiModelId: string): Model {
+  return createModel({ apiModelId, modelId: apiModelId, providerId: 'dashscope' });
+}

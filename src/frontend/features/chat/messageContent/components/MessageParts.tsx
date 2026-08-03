@@ -1,5 +1,6 @@
-import type { Message } from '@/shared/data/types/message';
+import type { Message } from '@cherrystudio/universal/data/types/message';
 
+import { resolveMessageCitationText } from '../citations';
 import { MessagePart } from './MessagePart';
 
 type MessagePartsProps = {
@@ -24,12 +25,18 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
     return null;
   }
 
-  return parts.map((part, index) => (
-    <MessagePart
-      isStreaming={message.status === 'pending'}
-      key={getMessagePartKey(message, part, index)}
-      part={part}
-      renderMode={renderMode}
-    />
-  ));
+  const citationText = resolveMessageCitationText(parts);
+
+  return parts.map((part, index) => {
+    const resolvedText = citationText.get(index);
+    return (
+      <MessagePart
+        isStreaming={message.status === 'pending'}
+        key={getMessagePartKey(message, part, index)}
+        part={part}
+        renderMode={renderMode}
+        resolvedText={resolvedText}
+      />
+    );
+  });
 }

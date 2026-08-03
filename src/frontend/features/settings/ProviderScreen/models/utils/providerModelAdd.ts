@@ -1,13 +1,12 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-
-import type { AddModelInput } from '@/shared/data/api/schemas/models';
+import type { CreateModelDto } from '@cherrystudio/universal/data/api/schemas/models';
 import {
   createUniqueModelId,
   type EndpointType,
   type Model,
   type UniqueModelId,
-} from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 export type ProviderModelAddFormState = {
   contextWindow: string;
@@ -21,7 +20,7 @@ export type ProviderModelAddFormState = {
 
 export type ProviderModelAddBuildResult = {
   duplicateIds: string[];
-  inputs: AddModelInput[];
+  inputs: CreateModelDto[];
 };
 
 export const providerModelAddDefaultEndpointType = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
@@ -114,7 +113,7 @@ export function buildProviderModelAddInputs({
   const existingIds = new Set(existingModels.map((model) => model.id));
   const seenIds = new Set<UniqueModelId>();
   const duplicateIds: string[] = [];
-  const inputs: AddModelInput[] = [];
+  const inputs: CreateModelDto[] = [];
   const isBatch = modelIds.length > 1;
   const shouldIncludeEndpointTypes =
     isNewApiLikeProvider(provider) && formState.endpointTypes.length > 0;
@@ -156,7 +155,7 @@ function buildSingleProviderModelAddInput({
   formState: ProviderModelAddFormState;
   modelId: string;
   providerId: string;
-}): AddModelInput {
+}): CreateModelDto {
   return removeUndefinedCreateModelFields({
     contextWindow: parseOptionalNumber(formState.contextWindow),
     endpointTypes: endpointTypes ? [...endpointTypes] : undefined,
@@ -177,7 +176,7 @@ function buildBatchProviderModelAddInput({
   endpointTypes: EndpointType[] | undefined;
   modelId: string;
   providerId: string;
-}): AddModelInput {
+}): CreateModelDto {
   return removeUndefinedCreateModelFields({
     endpointTypes: endpointTypes ? [...endpointTypes] : undefined,
     group: getDefaultProviderModelGroupName(modelId),
@@ -197,8 +196,8 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-function removeUndefinedCreateModelFields(input: AddModelInput): AddModelInput {
+function removeUndefinedCreateModelFields(input: CreateModelDto): CreateModelDto {
   return Object.fromEntries(
     Object.entries(input).filter((entry) => entry[1] !== undefined),
-  ) as AddModelInput;
+  ) as CreateModelDto;
 }

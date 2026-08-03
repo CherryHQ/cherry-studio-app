@@ -1,21 +1,18 @@
-import { isToolUIPart } from 'ai';
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
-
 import {
   type ApprovalDecision,
   applyToolApprovalDecisionsToParts,
   countPendingToolApprovals,
   finalizeDanglingToolApprovals,
-} from '@/shared/ai/transport/toolApprovals';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+} from '@cherrystudio/universal/ai/transport/toolApprovals';
 import type {
   ActiveNodeStrategy,
+  ClearTopicMessagesResponse,
   CreateMessageDto,
   DeleteMessageResponse,
   UpdateMessageDto,
-} from '@/shared/data/api/schemas/messages';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { PreparedInternalFile } from '@/shared/data/types/file';
+} from '@cherrystudio/universal/data/api/schemas/messages';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   BranchMessage,
   BranchMessagesResponse,
@@ -27,9 +24,13 @@ import type {
   SiblingsGroup,
   TreeNode,
   TreeResponse,
-} from '@/shared/data/types/message';
-import type { UniqueModelId } from '@/shared/data/types/model';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
+} from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+import { isToolUIPart } from 'ai';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { Database, DbService } from '../db/DbService';
 import {
@@ -513,13 +514,6 @@ export class MessageService {
   }
 
   async create(topicId: string, dto: CreateMessageDto): Promise<Message> {
-    if (dto.role === 'root') {
-      throw DataApiErrorFactory.invalidOperation(
-        'create message',
-        'the virtual root is created automatically and cannot be created via this endpoint',
-      );
-    }
-
     return await this.dbService.withWriteTx(async (tx) => {
       const [topic] = await tx
         .select()
@@ -537,7 +531,7 @@ export class MessageService {
         .values({
           data: dto.data,
           modelId: dto.modelId ?? null,
-          modelSnapshot: dto.modelSnapshot ?? null,
+          messageSnapshot: dto.messageSnapshot ?? null,
           parentId: resolvedParentId,
           role: dto.role,
           siblingsGroupId: dto.siblingsGroupId ?? 0,
@@ -589,7 +583,7 @@ export class MessageService {
           .values({
             data: dto.data,
             modelId: dto.modelId ?? null,
-            modelSnapshot: dto.modelSnapshot ?? null,
+            messageSnapshot: dto.messageSnapshot ?? null,
             parentId: resolvedParentId,
             role: dto.role,
             siblingsGroupId: dto.siblingsGroupId ?? 0,
@@ -635,7 +629,7 @@ export class MessageService {
             ...(placeholder.id ? { id: placeholder.id } : {}),
             data: placeholder.data,
             modelId: placeholder.modelId ?? null,
-            modelSnapshot: placeholder.modelSnapshot ?? null,
+            messageSnapshot: placeholder.messageSnapshot ?? null,
             parentId: userMessage.id,
             role: placeholder.role,
             siblingsGroupId: input.siblingsGroupId ?? 0,
@@ -884,6 +878,35 @@ export class MessageService {
         ...(newActiveNodeId !== undefined ? { newActiveNodeId } : {}),
         ...(reparentedIds?.length ? { reparentedIds } : {}),
       };
+    });
+  }
+
+  async clearTopicMessages(topicId: string): Promise<ClearTopicMessagesResponse> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const rootId = await getRootMessageIdTx(tx, topicId);
+      const rows = await tx
+        .select({ id: messageTable.id })
+        .from(messageTable)
+        .where(
+          and(
+            eq(messageTable.topicId, topicId),
+            ne(messageTable.id, rootId),
+            isNull(messageTable.deletedAt),
+          ),
+        );
+      const deletedIds = rows.map((row) => row.id);
+
+      if (deletedIds.length === 0) {
+        return { deletedIds };
+      }
+
+      await tx
+        .delete(messageTable)
+        .where(and(eq(messageTable.topicId, topicId), ne(messageTable.id, rootId)));
+      await this.topicService.clearActiveNodeTx(tx, topicId);
+
+      logger.info('Cleared topic messages', { count: deletedIds.length, topicId });
+      return { deletedIds };
     });
   }
 
@@ -1172,7 +1195,7 @@ export function rowToMessage(row: MessageRow): Message {
     data: row.data,
     id: row.id,
     modelId: (row.modelId ?? null) as UniqueModelId | null,
-    modelSnapshot: row.modelSnapshot ?? null,
+    messageSnapshot: row.messageSnapshot ?? null,
     parentId: row.parentId,
     role: row.role as Message['role'],
     searchableText: row.searchableText,

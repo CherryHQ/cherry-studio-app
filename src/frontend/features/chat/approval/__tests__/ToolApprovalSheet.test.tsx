@@ -5,7 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '@/frontend/components/bottomSheet';
 
-import type { PendingToolApproval } from '../../session/chatSessionProjection';
+import type { PendingToolApproval } from '../../runtime/chatRuntimeProjection';
 import { ToolApprovalSheet } from '../ToolApprovalSheet';
 
 jest.mock('react-i18next', () => ({

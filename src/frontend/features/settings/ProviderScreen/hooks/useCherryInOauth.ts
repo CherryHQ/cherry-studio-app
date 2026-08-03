@@ -5,11 +5,15 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
-import { CHERRYIN_CONFIG } from '@/shared/utils/cherryInOauth';
+import type { CompleteOAuthAuthorizationInput } from '@/shared/contracts';
+import { resolveAuthorizeConfig } from '@/shared/oauth';
+import { CHERRYIN_PROVIDER_ID } from '@/shared/oauth/providers/cherryin';
 
 const { makeRedirectUri, useAuthRequest, ResponseType } = AuthSession;
 
-const CHERRYIN_OAUTH_SERVER = 'https://open.cherryin.ai';
+// Endpoints, client id and scopes all come from the shared OAuth registry, so
+// this screen holds no CherryIN host of its own.
+const authorizeConfig = resolveAuthorizeConfig(CHERRYIN_PROVIDER_ID);
 
 export class UserCancelledError extends Error {
   constructor() {
@@ -28,7 +32,8 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
   const { providerId, requestConfirm, onOAuthComplete } = options;
   const { t } = useTranslation();
   const { toast } = useToast();
-  const providers = useBackendModule('providers');
+  const oauth = useBackendModule('oauth');
+  const cherryin = useBackendModule('cherryin');
   const queryClient = useQueryClient();
 
   // Provider & auth config queries
@@ -51,31 +56,30 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
   // Mutations
 
   const logoutMutation = useMutation({
-    mutationFn: () => providers.logoutCherryIn(CHERRYIN_OAUTH_SERVER),
+    mutationFn: () => oauth.logout(CHERRYIN_PROVIDER_ID),
     onSuccess: () => invalidateOAuthQueries(queryClient, providerId),
   });
 
   const completeOAuthMutation = useMutation({
-    mutationFn: providers.completeCherryInOAuth.bind(providers),
+    mutationFn: (input: Omit<CompleteOAuthAuthorizationInput, 'providerId'>) =>
+      oauth.completeAuthorization({ ...input, providerId: CHERRYIN_PROVIDER_ID }),
     onSuccess: () => invalidateOAuthQueries(queryClient, providerId),
   });
 
-  // Sign-in (expo-auth-session)
+  // Sign-in (expo-auth-session owns PKCE, the browser round-trip and the
+  // `state` check; the backend owns the token exchange).
 
-  const redirectUri = makeRedirectUri({ scheme: 'cherrystudio', path: 'oauth/callback' });
+  const redirectUri = makeRedirectUri(authorizeConfig.redirect);
 
   const [request, , promptAsync] = useAuthRequest(
     {
-      clientId: CHERRYIN_CONFIG.CLIENT_ID,
+      clientId: authorizeConfig.clientId,
       redirectUri,
       responseType: ResponseType.Code,
-      scopes: CHERRYIN_CONFIG.SCOPES.split(' '),
+      scopes: authorizeConfig.scopes.split(' '),
       usePKCE: true,
     },
-    {
-      authorizationEndpoint: `${CHERRYIN_OAUTH_SERVER}/oauth2/auth`,
-      tokenEndpoint: `${CHERRYIN_OAUTH_SERVER}/oauth2/token`,
-    },
+    { authorizationEndpoint: authorizeConfig.authorizeUrl },
   );
 
   const isReady = !!request;
@@ -94,7 +98,7 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
   const fetchData = useCallback(async () => {
     setIsLoadingData(true);
     try {
-      const result = await providers.getCherryInAccount(CHERRYIN_OAUTH_SERVER);
+      const result = await cherryin.getBalance();
       setBalance(result?.balance ?? null);
     } catch (error) {
       console.error('[CherryIN] fetchData failed:', error);
@@ -102,7 +106,7 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
     }
 
     setIsLoadingData(false);
-  }, [providers]);
+  }, [cherryin]);
 
   const handleLogout = useCallback(() => {
     requestConfirm({
@@ -147,8 +151,6 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
 
       // Token exchange and credential persistence are one backend workflow.
       await completeOAuthMutation.mutateAsync({
-        oauthServer: CHERRYIN_OAUTH_SERVER,
-        apiHost: CHERRYIN_OAUTH_SERVER,
         code: result.params.code,
         codeVerifier: request.codeVerifier,
         redirectUri,

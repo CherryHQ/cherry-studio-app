@@ -64,6 +64,7 @@ type ChatInputSurfaceProps = {
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
+  onToolClear?: () => void;
   /** Reasoning stops of the selected model; empty hides the effort label in the model pill. */
   reasoningEfforts?: readonly ChatInputReasoningEffort[];
 };
@@ -89,6 +90,7 @@ export function ChatInputSurface({
   onModelPickerPress,
   onSendPress,
   onStopPress,
+  onToolClear,
   reasoningEfforts = emptyReasoningEfforts,
 }: ChatInputSurfaceProps) {
   const { t } = useTranslation();
@@ -242,7 +244,10 @@ export function ChatInputSurface({
               style={{ width: contentWidth ?? '100%' }}
               onLayout={handleContentLayout}
             >
-              <ChatInputToolbar selectedTool={selectedTool} onToolClear={clearSelectedTool} />
+              <ChatInputToolbar
+                selectedTool={selectedTool}
+                onToolClear={onToolClear ?? clearSelectedTool}
+              />
               <ChatInputAttachmentPreviewStrip
                 attachments={attachments}
                 onAttachmentPreview={handleAttachmentPreview}

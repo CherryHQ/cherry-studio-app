@@ -1,5 +1,6 @@
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
 import { useQuery } from '@/frontend/data';
-import type { Provider } from '@/shared/data/types/provider';
 
 const EMPTY_PROVIDERS: readonly Provider[] = Object.freeze([]);
 

@@ -1,10 +1,11 @@
-import type { EndpointType } from '@/shared/data/types/model';
-import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { apiKeyEntriesSignature, normalizeApiKeyEntries } from './providerApiServiceApiKeys';
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';
 import {
   canEditProviderEndpoint,
+  getPrimaryEndpoint,
   mergeEndpointConfigs,
   resolveVisibleEndpointTypes,
 } from './providerApiServiceEndpointRules';
@@ -21,6 +22,7 @@ export function getProviderApiServiceEndpointDirtyState({
   }
 
   return (
+    draft.primaryEndpoint !== getPrimaryEndpoint(provider) ||
     endpointVisibilitySignature(getPersistableEndpointTypes(draft, provider)) !==
       endpointVisibilitySignature(resolveVisibleEndpointTypes(provider)) ||
     endpointConfigsSignature(

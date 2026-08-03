@@ -1,8 +1,8 @@
+import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Tool } from 'ai';
 
 import type { SystemPermissionState } from '@/backend/services/permissions';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
-import type { Assistant } from '@/shared/data/types/assistant';
 
 export type ToolDefer = 'never' | 'always' | 'auto';
 
@@ -19,7 +19,6 @@ export type DeviceToolAccess = Readonly<
 export interface ToolApplyScope {
   readonly assistant?: Assistant;
   readonly deviceAccess: DeviceToolAccess;
-  readonly externalWebSearchEnabled: boolean;
   readonly platform: string;
 }
 

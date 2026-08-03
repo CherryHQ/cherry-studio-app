@@ -1,28 +1,62 @@
+import {
+  OrderBatchRequestSchema,
+  OrderRequestSchema,
+} from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
+import {
+  type AssistantSchemas,
+  CreateAssistantSchema,
+  DeleteAssistantQuerySchema,
+  ImportAssistantSchema,
+  ListAssistantsQuerySchema,
+  type UpdateAssistantDto,
+  UpdateAssistantSchema,
+} from '@cherrystudio/universal/data/api/schemas/assistants';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
 import type { AssistantService } from '@/backend/data/services/AssistantService';
-import type { AssistantSchemas } from '@/shared/data/api/schemas/assistants';
-import type { HandlersFor } from '@/shared/data/api/types';
 
 type AssistantData = Pick<
   AssistantService,
-  'create' | 'get' | 'list' | 'remove' | 'reorder' | 'reorderBatch' | 'update'
+  | 'create'
+  | 'createFromImport'
+  | 'delete'
+  | 'getById'
+  | 'list'
+  | 'reorder'
+  | 'reorderBatch'
+  | 'update'
 >;
 
 export function createAssistantHandlers(service: AssistantData): HandlersFor<AssistantSchemas> {
   return {
     '/assistants': {
-      GET: ({ query }) => service.list(query),
-      POST: ({ body }) => service.create(body),
+      GET: async ({ query }) => service.list(ListAssistantsQuerySchema.parse(query ?? {})),
+      POST: async ({ body }) => service.create(CreateAssistantSchema.parse(body)),
+    },
+    '/assistants:import': {
+      POST: async ({ body }) => service.createFromImport(ImportAssistantSchema.parse(body)),
     },
     '/assistants/:id': {
-      DELETE: ({ params }) => service.remove(params.id),
-      GET: ({ params }) => service.get(params.id),
-      PATCH: ({ body, params }) => service.update(params.id, body),
+      DELETE: async ({ params, query }) => {
+        const parsed = DeleteAssistantQuerySchema.parse(query ?? {});
+        return service.delete(params.id, { deleteTopics: parsed.deleteTopics === true });
+      },
+      GET: async ({ params }) => service.getById(params.id),
+      PATCH: async ({ body, params }) => {
+        const parsed = UpdateAssistantSchema.parse(body);
+        const bodyKeys =
+          body && typeof body === 'object' ? new Set(Object.keys(body)) : new Set<string>();
+        const patch = Object.fromEntries(
+          Object.entries(parsed).filter(([key]) => bodyKeys.has(key)),
+        ) as UpdateAssistantDto;
+        return service.update(params.id, patch);
+      },
     },
     '/assistants/:id/order': {
-      PATCH: ({ body, params }) => service.reorder(params.id, body),
+      PATCH: async ({ body, params }) => service.reorder(params.id, OrderRequestSchema.parse(body)),
     },
     '/assistants/order:batch': {
-      PATCH: ({ body }) => service.reorderBatch(body.moves),
+      PATCH: async ({ body }) => service.reorderBatch(OrderBatchRequestSchema.parse(body).moves),
     },
   };
 }

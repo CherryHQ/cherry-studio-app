@@ -81,15 +81,88 @@ describe('SeedRunner', () => {
     expect(runCount).toBe(2);
     expect(dbService.journals.get('seed:test-seed')?.value).toEqual({ version: 'v2' });
   });
+
+  test('runs bootstrap-only seeders once and skips later versions', async () => {
+    const dbService = createFakeDbService();
+    let runCount = 0;
+    const runner = new SeedRunner(dbService);
+
+    await runner.runAll([
+      createSeeder(
+        'bootstrap-seed',
+        'v1',
+        async () => {
+          runCount += 1;
+        },
+        'bootstrap-only',
+      ),
+    ]);
+    await runner.runAll([
+      createSeeder(
+        'bootstrap-seed',
+        'v2',
+        async () => {
+          runCount += 1;
+        },
+        'bootstrap-only',
+      ),
+    ]);
+
+    expect(runCount).toBe(1);
+    expect(dbService.journals.get('seedRunner:bootstrapCompleted')).toBeDefined();
+    expect(dbService.journals.get('seed:bootstrap-seed')?.value).toEqual({ version: 'v1' });
+  });
+
+  test('recognizes the legacy default-assistant journal and backfills the bootstrap marker', async () => {
+    const dbService = createFakeDbService();
+    dbService.journals.set('seed:default-assistant', {
+      key: 'seed:default-assistant',
+      value: { version: 'legacy' },
+    });
+    let runCount = 0;
+
+    await new SeedRunner(dbService).runAll([
+      createSeeder(
+        'defaultAssistant',
+        'v2',
+        async () => {
+          runCount += 1;
+        },
+        'bootstrap-only',
+      ),
+    ]);
+
+    expect(runCount).toBe(0);
+    expect(dbService.journals.get('seed:defaultAssistant')).toBeUndefined();
+    expect(dbService.journals.get('seedRunner:bootstrapCompleted')).toBeDefined();
+  });
+
+  test('keeps the bootstrap window open when a seeding pass fails', async () => {
+    const dbService = createFakeDbService();
+    const runner = new SeedRunner(dbService);
+
+    await expect(
+      runner.runAll([
+        createSeeder('failing-seed', 'v1', async () => {
+          throw new Error('seed failed');
+        }),
+      ]),
+    ).rejects.toThrow('seed failed');
+
+    expect(dbService.journals.get('seed:failing-seed')).toBeUndefined();
+    expect(dbService.journals.get('seedRunner:bootstrapCompleted')).toBeUndefined();
+  });
 });
 
 function createSeeder(
   name: string,
   version: string,
   run: (dbService: FakeDbService) => Promise<void>,
+  executionPolicy?: DatabaseSeeder['executionPolicy'],
 ): DatabaseSeeder {
   return {
     description: 'Test seed description',
+    executionPolicy,
     name,
     run: async (dbService) => run(dbService as FakeDbService),
     version,
@@ -108,6 +181,13 @@ function createFakeDbService() {
     }),
     insert: () => ({
       values: (row: JournalRow) => ({
+        onConflictDoNothing: () => {
+          if (!journals.has(row.key)) {
+            journals.set(row.key, row);
+          }
+
+          return Promise.resolve();
+        },
         onConflictDoUpdate: ({ set }: { set: Partial<JournalRow> }) => {
           journals.set(row.key, {
             ...row,

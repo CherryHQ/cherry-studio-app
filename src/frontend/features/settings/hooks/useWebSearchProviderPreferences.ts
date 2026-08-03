@@ -1,17 +1,17 @@
-import { useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-
-import { useMultiplePreferences } from '@/frontend/data/hooks';
 import type {
   WebSearchCapability,
   WebSearchCompressionMethod,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
 import {
   getMobileSupportedWebSearchProvidersByCapability,
   type WebSearchProviderPreset,
-} from '@/shared/data/presets/webSearchProviders';
+} from '@cherrystudio/universal/data/presets/webSearchProviders';
+import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useMultiplePreferences } from '@/frontend/data/hooks';
 
 import type { SettingSelectOption } from '../components/SettingSelect';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
@@ -25,9 +25,7 @@ const preferenceMapping = {
 } as const;
 
 const searchKeywordsProviderOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('searchKeywords').filter(
-    (provider) => provider.type === 'api',
-  ),
+  getMobileSupportedWebSearchProvidersByCapability('searchKeywords'),
 );
 
 function createWebSearchProviderOptions(
@@ -52,7 +50,7 @@ export function useWebSearchProviderPreferences() {
   );
 
   const handleSearchKeywordsProviderChange = useCallback(
-    (providerId: WebSearchProviderId | null) => {
+    (providerId: WebSearchProviderId) => {
       void setPreferences({ defaultSearchKeywordsProvider: providerId });
     },
     [setPreferences],

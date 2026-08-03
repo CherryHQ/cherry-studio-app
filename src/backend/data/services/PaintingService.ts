@@ -1,3 +1,12 @@
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
+import { createUniqueModelId, isUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type {
+  Painting,
+  PaintingFileRole,
+  PaintingFiles,
+} from '@cherrystudio/universal/data/types/painting';
 import { and, asc, eq, exists, gt, inArray, or } from 'drizzle-orm';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
@@ -7,11 +16,6 @@ import {
   paintingFileRefTable,
   paintingTable,
 } from '@/backend/data/db/schemas';
-import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { FileEntryId, PreparedInternalFile } from '@/shared/data/types/file';
-import { createUniqueModelId, isUniqueModelId } from '@/shared/data/types/model';
-import type { Painting, PaintingFileRole, PaintingFiles } from '@/shared/data/types/painting';
 
 import type { FileEntryService } from './FileEntryService';
 import { discardPreparedFiles } from './fileStorage';

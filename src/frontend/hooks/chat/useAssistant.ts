@@ -1,8 +1,12 @@
+import type {
+  CreateAssistantDto,
+  DeleteAssistantResult,
+  UpdateAssistantDto,
+} from '@cherrystudio/universal/data/api/schemas/assistants';
+import { type Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useCallback } from 'react';
 
 import { useMutation, useQuery } from '@/frontend/data';
-import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/data/api/schemas/assistants';
-import { type Assistant } from '@/shared/data/types/assistant';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);
@@ -46,7 +50,12 @@ export function useAssistantMutations() {
     refresh: ({ args }) => ['/assistants', ...(args ? [`/assistants/${args.params.id}`] : [])],
   });
   const deleteMutation = useMutation('DELETE', '/assistants/:id', {
-    refresh: ({ args }) => ['/assistants', ...(args ? [`/assistants/${args.params.id}`] : [])],
+    refresh: ({ args }) => [
+      '/assistants',
+      ...(args ? [`/assistants/${args.params.id}`] : []),
+      '/pins',
+      ...(args?.query?.deleteTopics === true ? ['/topics'] : []),
+    ],
   });
   const createAssistantRequest = createMutation.trigger;
   const updateAssistantRequest = updateMutation.trigger;
@@ -68,7 +77,12 @@ export function useAssistantMutations() {
   );
 
   const deleteAssistant = useCallback(
-    (id: string) => deleteAssistantRequest({ params: { id } }),
+    (id: string, options: { deleteTopics?: boolean } = {}): Promise<DeleteAssistantResult> =>
+      deleteAssistantRequest(
+        options.deleteTopics === true
+          ? { params: { id }, query: { deleteTopics: true } }
+          : { params: { id } },
+      ),
     [deleteAssistantRequest],
   );
 

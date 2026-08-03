@@ -5,7 +5,6 @@ import type { ToolApplyScope, ToolEntry } from '../types';
 
 const scope = {
   deviceAccess: {},
-  externalWebSearchEnabled: false,
   platform: 'ios',
 } as ToolApplyScope;
 

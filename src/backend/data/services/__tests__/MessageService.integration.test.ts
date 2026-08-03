@@ -2,11 +2,11 @@ import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
+import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
-import type { CherryMessagePart, Message } from '@/shared/data/types/message';
 
 import { AiUsageRecordService } from '../AiUsageRecordService';
 import { FileEntryService } from '../FileEntryService';
@@ -17,7 +17,7 @@ import { TopicService } from '../TopicService';
 
 // Rows are inserted in bulk here, so unlike the fixed-id mocks elsewhere these
 // have to be distinct. `expo-crypto` is already mocked the same way globally.
-jest.mock('uuid', () => ({ v7: mockRandomUUID }));
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 // `fractional-indexing` is ESM-only and outside jest's transform allowlist, so
 // importing the real TopicService fails to parse without this. Appending to the

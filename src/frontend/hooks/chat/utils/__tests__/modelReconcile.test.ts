@@ -1,7 +1,6 @@
 import { MODEL_CAPABILITY, REASONING_EFFORT } from '@cherrystudio/provider-registry';
-
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 import { reconcileReasoningEffortForModel, reconcileWebSearchForModel } from '../modelReconcile';
 
@@ -24,35 +23,29 @@ describe('reconcileReasoningEffortForModel', () => {
   test('keeps the current effort when the next model supports it', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
       },
     });
 
-    expect(
-      reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH, 'assistant-1'),
-    ).toBeNull();
+    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH)).toBeNull();
   });
 
   test('falls back to a supported effort when the current effort is unavailable', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.NONE, REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.NONE, REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
       },
     });
 
-    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.MEDIUM, 'assistant-1')).toEqual(
-      {
-        reasoning_effort: REASONING_EFFORT.LOW,
-      },
-    );
+    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.MEDIUM)).toEqual({
+      reasoning_effort: REASONING_EFFORT.HIGH,
+    });
   });
 
   test('clears reasoning effort when the next model has no configurable reasoning', () => {
     const model = createModel();
 
-    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH, 'assistant-1')).toEqual({
+    expect(reconcileReasoningEffortForModel(model, REASONING_EFFORT.HIGH)).toEqual({
       reasoning_effort: undefined,
     });
   });
@@ -74,6 +67,27 @@ describe('reconcileWebSearchForModel', () => {
         ...DEFAULT_ASSISTANT_SETTINGS,
         enableWebSearch: true,
       }),
+    ).toBeNull();
+  });
+
+  test('keeps web search for a function-calling model', () => {
+    expect(
+      reconcileWebSearchForModel(createModel({ capabilities: [MODEL_CAPABILITY.FUNCTION_CALL] }), {
+        enableWebSearch: true,
+      }),
+    ).toBeNull();
+  });
+
+  test('keeps web search for OpenRouter built-in search models', () => {
+    expect(
+      reconcileWebSearchForModel(
+        createModel({
+          id: 'openrouter::openai/gpt-4o-search-preview' as UniqueModelId,
+          modelId: 'openai/gpt-4o-search-preview',
+          providerId: 'openrouter',
+        }),
+        { enableWebSearch: true },
+      ),
     ).toBeNull();
   });
 });

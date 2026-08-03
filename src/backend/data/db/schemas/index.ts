@@ -1,85 +1,134 @@
+import { agentTable } from './agent';
+import { agentChannelTable, agentChannelTaskTable } from './agentChannel';
+import { agentGlobalSkillTable } from './agentGlobalSkill';
+import { agentSessionTable } from './agentSession';
+import { agentSessionMessageTable } from './agentSessionMessage';
+import { agentSkillTable } from './agentSkill';
+import { agentWorkspaceTable } from './agentWorkspace';
 import { aiUsageRecordTable } from './aiUsageRecord';
 import { appStateTable } from './appState';
 import { assistantTable } from './assistant';
-import { assistantKnowledgeBaseTable, assistantMcpServerTable } from './assistantRelations';
+import {
+  agentKnowledgeBaseTable,
+  agentMcpServerTable,
+  assistantKnowledgeBaseTable,
+  assistantMcpServerTable,
+} from './assistantRelations';
 import { fileEntryTable } from './file';
-import { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
+import {
+  chatMessageFileRefTable,
+  miniAppLogoFileRefTable,
+  paintingFileRefTable,
+  providerLogoFileRefTable,
+} from './fileRelations';
 import { groupTable } from './group';
+import { jobScheduleTable, jobTable } from './job';
+import { knowledgeBaseTable, knowledgeItemTable } from './knowledge';
 import { mcpServerTable } from './mcpServer';
 import { messageTable } from './message';
+import { miniAppTable } from './miniApp';
+import { noteTable } from './note';
 import { paintingTable } from './painting';
 import { pinTable } from './pin';
 import { preferenceTable } from './preference';
 import { promptTable } from './prompt';
 import { entityTagTable, tagTable } from './tagging';
 import { topicTable } from './topic';
+import { translateHistoryTable } from './translateHistory';
+import { translateLanguageTable } from './translateLanguage';
 import { userModelTable } from './userModel';
 import { userProviderTable } from './userProvider';
 
-export type { AiUsageRecordRow, InsertAiUsageRecordRow } from './aiUsageRecord';
-export { aiUsageRecordTable } from './aiUsageRecord';
-export type { AppStateRow, InsertAppStateRow } from './appState';
+export * from './agent';
+export * from './agentChannel';
+export * from './agentGlobalSkill';
+export * from './agentSession';
+export * from './agentSessionMessage';
+export * from './agentSkill';
+export * from './agentWorkspace';
+export * from './aiUsageRecord';
+export * from './assistant';
+export * from './assistantRelations';
+export * from './fileRelations';
+export * from './group';
+export * from './job';
+export * from './mcpServer';
+export * from './message';
+export * from './miniApp';
+export * from './note';
+export * from './painting';
+export * from './pin';
+export * from './tagging';
+export * from './userModel';
+export * from './userProvider';
+
 export { appStateTable } from './appState';
-export type { AssistantRow, InsertAssistantRow } from './assistant';
-export { assistantTable } from './assistant';
-export type {
-  AssistantKnowledgeBaseRow,
-  AssistantMcpServerRow,
-  InsertAssistantKnowledgeBaseRow,
-  InsertAssistantMcpServerRow,
-} from './assistantRelations';
-export { assistantKnowledgeBaseTable, assistantMcpServerTable } from './assistantRelations';
-export type { FileEntryRow, InsertFileEntryRow } from './file';
 export { fileEntryTable } from './file';
-export type {
-  ChatMessageFileRefRow,
-  InsertChatMessageFileRefRow,
-  InsertPaintingFileRefRow,
-  PaintingFileRefRow,
-} from './fileRelations';
-export { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
-export type { GroupRow, InsertGroupRow } from './group';
-export { groupTable } from './group';
-export type { InsertMcpServerRow, McpServerRow } from './mcpServer';
-export { mcpServerTable } from './mcpServer';
-export type { InsertMessageRow, MessageRow } from './message';
-export { MESSAGE_FTS_STATEMENTS, messageTable } from './message';
-export type { InsertPaintingRow, PaintingRow } from './painting';
-export { paintingTable } from './painting';
-export type { InsertPinRow, PinRow } from './pin';
-export { pinTable } from './pin';
-export type { InsertPreferenceRow, PreferenceRow } from './preference';
+export { knowledgeBaseTable, knowledgeItemTable } from './knowledge';
 export { preferenceTable } from './preference';
-export type { InsertPromptRow, PromptRow } from './prompt';
 export { promptTable } from './prompt';
-export type { EntityTagRow, InsertEntityTagRow, InsertTagRow, TagRow } from './tagging';
-export { entityTagTable, tagTable } from './tagging';
-export type { InsertTopicRow, TopicRow } from './topic';
 export { topicTable } from './topic';
-export type { InsertUserModelRow, UserModelRow } from './userModel';
-export { userModelTable } from './userModel';
-export type { InsertUserProviderRow, UserProviderRow } from './userProvider';
-export { userProviderTable } from './userProvider';
+export { translateHistoryTable } from './translateHistory';
+export { translateLanguageTable } from './translateLanguage';
+
+export type AppStateRow = typeof appStateTable.$inferSelect;
+export type InsertAppStateRow = typeof appStateTable.$inferInsert;
+export type FileEntryRow = typeof fileEntryTable.$inferSelect;
+export type InsertFileEntryRow = typeof fileEntryTable.$inferInsert;
+export type KnowledgeBaseRow = typeof knowledgeBaseTable.$inferSelect;
+export type InsertKnowledgeBaseRow = typeof knowledgeBaseTable.$inferInsert;
+export type KnowledgeItemRow = typeof knowledgeItemTable.$inferSelect;
+export type InsertKnowledgeItemRow = typeof knowledgeItemTable.$inferInsert;
+export type PreferenceRow = typeof preferenceTable.$inferSelect;
+export type InsertPreferenceRow = typeof preferenceTable.$inferInsert;
+export type PromptRow = typeof promptTable.$inferSelect;
+export type InsertPromptRow = typeof promptTable.$inferInsert;
+export type TopicRow = typeof topicTable.$inferSelect;
+export type InsertTopicRow = typeof topicTable.$inferInsert;
+export type TranslateHistoryRow = typeof translateHistoryTable.$inferSelect;
+export type InsertTranslateHistoryRow = typeof translateHistoryTable.$inferInsert;
+export type TranslateLanguageRow = typeof translateLanguageTable.$inferSelect;
+export type InsertTranslateLanguageRow = typeof translateLanguageTable.$inferInsert;
 
 export const schema = {
+  agentChannelTable,
+  agentChannelTaskTable,
+  agentGlobalSkillTable,
+  agentKnowledgeBaseTable,
+  agentMcpServerTable,
+  agentSessionMessageTable,
+  agentSessionTable,
+  agentSkillTable,
+  agentTable,
+  agentWorkspaceTable,
   aiUsageRecordTable,
+  appStateTable,
   assistantKnowledgeBaseTable,
   assistantMcpServerTable,
   assistantTable,
-  appStateTable,
   chatMessageFileRefTable,
+  entityTagTable,
   fileEntryTable,
   groupTable,
+  jobScheduleTable,
+  jobTable,
+  knowledgeBaseTable,
+  knowledgeItemTable,
   mcpServerTable,
   messageTable,
+  miniAppLogoFileRefTable,
+  miniAppTable,
+  noteTable,
   paintingFileRefTable,
   paintingTable,
   pinTable,
   preferenceTable,
   promptTable,
+  providerLogoFileRefTable,
   tagTable,
-  entityTagTable,
   topicTable,
+  translateHistoryTable,
+  translateLanguageTable,
   userModelTable,
   userProviderTable,
 };

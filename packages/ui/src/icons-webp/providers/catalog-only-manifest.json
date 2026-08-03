@@ -1,0 +1,11 @@
+[
+  {
+    "id": "radeon-cloud",
+    "outputPath": "light/radeon-cloud.webp",
+    "outputSha256": "6d96fc29758866f22dfc44b0cd3142db80341e188313c4fdcdc7d31e5c536fde",
+    "decodedRasterSha256": "535ddfbb99c5d3f8c47daf2d13344527c83b6dc61de510af82c31f99c1041364",
+    "desktopCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+    "desktopSourcePath": "packages/ui/src/components/icons/providers/radeon-cloud/light.tsx",
+    "desktopSourceSha256": "26951c96bec97816b89d9175274b2438f4524925c690f88103f2602ea6d27249"
+  }
+]

@@ -1,3 +1,5 @@
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Input } from 'heroui-native/input';
 import { cn } from 'heroui-native/utils';
@@ -11,8 +13,6 @@ import {
 } from 'react-native-keyboard-controller';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';

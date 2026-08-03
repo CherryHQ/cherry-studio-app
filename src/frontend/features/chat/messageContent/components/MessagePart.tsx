@@ -1,5 +1,6 @@
-import type { CherryMessagePart } from '@/shared/data/types/message';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
+import type { ResolvedCitationText } from '../citations';
 import { CodePart } from './CodePart';
 import { CompactPart } from './CompactPart';
 import { ErrorPart } from './ErrorPart';
@@ -25,9 +26,15 @@ type MessagePartProps = {
   isStreaming: boolean;
   part: CherryMessagePart;
   renderMode?: MessagePartRenderMode;
+  resolvedText?: ResolvedCitationText;
 };
 
-export function MessagePart({ isStreaming, part, renderMode = 'markdown' }: MessagePartProps) {
+export function MessagePart({
+  isStreaming,
+  part,
+  renderMode = 'markdown',
+  resolvedText,
+}: MessagePartProps) {
   const partType = part.type;
 
   if (isToolMessagePart(part)) {
@@ -52,7 +59,14 @@ export function MessagePart({ isStreaming, part, renderMode = 'markdown' }: Mess
 
   switch (part.type) {
     case 'text':
-      return <TextPart isStreaming={isStreaming} part={part} renderMode={renderMode} />;
+      return (
+        <TextPart
+          isStreaming={isStreaming}
+          part={part}
+          renderMode={renderMode}
+          resolvedText={resolvedText}
+        />
+      );
     case 'reasoning':
       return <ReasoningPart isStreaming={isStreaming} part={part} />;
     case 'data-code':

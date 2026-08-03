@@ -6,6 +6,8 @@ export const OpenAIModelsResponseSchema = z.object({
       id: z.string(),
       object: z.string().optional().default('model'),
       created: z.number().optional(),
+      // Not in the OpenAI spec, but OpenRouter's /models endpoints return it.
+      name: z.string().optional(),
       owned_by: z.string().optional(),
     }),
   ),

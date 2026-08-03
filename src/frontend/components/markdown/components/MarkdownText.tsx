@@ -1,3 +1,4 @@
+import type { FontSizeStep } from '@cherrystudio/universal/data/preference';
 import { useCallback, useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 import {
@@ -11,7 +12,6 @@ import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
-import type { FontSizeStep } from '@/shared/data/preference';
 
 import { createMarkdownTypographyStyle } from '../utils/markdownTypography';
 

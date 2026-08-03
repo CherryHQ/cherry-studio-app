@@ -1,4 +1,4 @@
-import { ThemeMode } from '@/shared/data/preference';
+import { ThemeMode } from '@cherrystudio/universal/data/preference';
 
 import {
   applyFontSizeStepPreference,

@@ -1,19 +1,26 @@
-import { isNull } from 'drizzle-orm';
+import {
+  DEFAULT_ASSISTANT_SEED,
+  getDefaultAssistantNameForLocale,
+} from '@cherrystudio/universal/data/presets/defaultAssistant';
+import { and, eq, isNull } from 'drizzle-orm';
+import { getLocales } from 'expo-localization';
 
+import type { InsertAssistantRow } from '@/backend/data/db/schemas';
 import { assistantTable, messageTable, topicTable } from '@/backend/data/db/schemas';
 import { createRootMessageTx } from '@/backend/data/services/MessageService';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
-import { DEFAULT_ASSISTANT_SEED } from '@/shared/data/presets/defaultAssistant';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';
 
 export class DefaultAssistantSeeder implements DatabaseSeeder {
-  readonly name = 'default-assistant';
-  readonly description = 'Insert the default assistant and an empty topic for fresh databases';
+  readonly name = 'defaultAssistant';
+  readonly description = 'Insert the default assistant and an empty topic for new users';
+  readonly executionPolicy = 'bootstrap-only' as const;
   readonly version = hashObject({
     assistant: DEFAULT_ASSISTANT_SEED,
-    freshGuard: 'no live assistant, topic, or message',
+    freshGuard: 'bootstrap-only; no active assistant/topic/message',
+    localizedName: 'locales[0].languageTag; zh=>Cherry 助手; other=>Cherry Assistant',
     topic: { empty: true, name: '' },
   });
 
@@ -23,7 +30,12 @@ export class DefaultAssistantSeeder implements DatabaseSeeder {
         return;
       }
 
-      const assistant = await insertWithOrderKey(tx, assistantTable, DEFAULT_ASSISTANT_SEED, {
+      const insertValues = {
+        ...DEFAULT_ASSISTANT_SEED,
+        name: getDefaultAssistantNameForLocale(getPreferredSystemLanguage()),
+        settings: { ...DEFAULT_ASSISTANT_SEED.settings },
+      } satisfies Omit<InsertAssistantRow, 'orderKey'>;
+      const assistant = await insertWithOrderKey(tx, assistantTable, insertValues, {
         pkColumn: assistantTable.id,
         scope: isNull(assistantTable.deletedAt),
       });
@@ -33,12 +45,11 @@ export class DefaultAssistantSeeder implements DatabaseSeeder {
         {
           activeNodeId: null,
           assistantId: assistant.id as string,
-          groupId: null,
           name: '',
         },
         {
           pkColumn: topicTable.id,
-          scope: isNull(topicTable.groupId),
+          scope: isNull(topicTable.deletedAt),
         },
       );
 
@@ -58,9 +69,18 @@ async function isFreshDatabase(tx: any): Promise<boolean> {
     tx
       .select({ id: messageTable.id })
       .from(messageTable)
-      .where(isNull(messageTable.deletedAt))
+      .leftJoin(topicTable, eq(messageTable.topicId, topicTable.id))
+      .where(and(isNull(messageTable.deletedAt), isNull(topicTable.deletedAt)))
       .limit(1),
   ]);
 
   return !assistant && !topic && !message;
+}
+
+function getPreferredSystemLanguage(): string | undefined {
+  try {
+    return getLocales()[0]?.languageTag;
+  } catch {
+    return undefined;
+  }
 }
