@@ -38,16 +38,19 @@ type AssistantFormState = {
   description: string;
   emoji: string;
   enableMaxTokens: boolean;
+  enableMaxToolCalls: boolean;
   enableTemperature: boolean;
   enableTopP: boolean;
   enableWebSearch: boolean;
   maxTokens: string;
+  maxToolCalls: string;
   mcpMode: McpMode;
   mcpServerIds: string[];
   modelId: UniqueModelId | null;
   name: string;
   prompt: string;
   reasoningEffort: ReasoningEffortOption;
+  streamOutput: boolean;
   temperature: string;
   topP: string;
 };
@@ -339,6 +342,11 @@ function AssistantEditForm({
               onChangeText={(value) => updateForm('maxTokens', value)}
             />
           ) : null}
+          <SwitchRow
+            label={t('assistant.form.streamOutput')}
+            value={form.streamOutput}
+            onValueChange={(value) => updateForm('streamOutput', value)}
+          />
           <FormField
             label={t('assistant.form.customParameters')}
             description={t('assistant.form.customParametersDescription')}
@@ -360,6 +368,19 @@ function AssistantEditForm({
           </FormField>
         </FormSection>
         <FormSection title={t('assistant.form.mcpSection')}>
+          <SwitchRow
+            label={t('assistant.form.enableMaxToolCalls')}
+            value={form.enableMaxToolCalls}
+            onValueChange={(value) => updateForm('enableMaxToolCalls', value)}
+          />
+          {form.enableMaxToolCalls ? (
+            <NumberField
+              accessibilityLabel={t('assistant.form.maxToolCalls')}
+              inputMode="numeric"
+              value={form.maxToolCalls}
+              onChangeText={(value) => updateForm('maxToolCalls', value)}
+            />
+          ) : null}
           <View className="min-h-10 flex-row items-center justify-between gap-4">
             <Text className="min-w-0 flex-1 font-medium text-base text-foreground">
               {t('assistant.form.mcpMode.label')}
@@ -448,10 +469,10 @@ function SwitchRow({
 }) {
   return (
     <View className="min-h-10 flex-row items-center justify-between gap-4">
-      <Text className="min-w-0 flex-1 font-medium text-base text-foreground" numberOfLines={1}>
+      <Text className="min-w-0 flex-1 font-medium text-base text-foreground" numberOfLines={2}>
         {label}
       </Text>
-      <Switch isSelected={value} onSelectedChange={onValueChange} />
+      <Switch accessibilityLabel={label} isSelected={value} onSelectedChange={onValueChange} />
     </View>
   );
 }
@@ -491,16 +512,19 @@ function createFormState(assistant?: Assistant): AssistantFormState {
     description: assistant?.description ?? '',
     emoji: assistant?.emoji ?? defaultEmoji,
     enableMaxTokens: settings.enableMaxTokens,
+    enableMaxToolCalls: settings.enableMaxToolCalls,
     enableTemperature: settings.enableTemperature,
     enableTopP: settings.enableTopP,
     enableWebSearch: settings.enableWebSearch,
     maxTokens: String(settings.maxTokens),
+    maxToolCalls: String(settings.maxToolCalls),
     mcpMode: settings.mcpMode,
     mcpServerIds: assistant?.mcpServerIds ?? [],
     modelId: assistant?.modelId ?? null,
     name: assistant?.name ?? '',
     prompt: assistant?.prompt ?? '',
     reasoningEffort: settings.reasoning_effort,
+    streamOutput: settings.streamOutput,
     temperature: String(settings.temperature),
     topP: String(settings.topP),
   };
@@ -531,6 +555,11 @@ function buildAssistantDto(
     return { ok: false, errorKey: 'assistant.form.maxTokensInvalid' };
   }
 
+  const maxToolCalls = Number(form.maxToolCalls);
+  if (!Number.isSafeInteger(maxToolCalls) || maxToolCalls <= 0) {
+    return { ok: false, errorKey: 'assistant.form.maxToolCallsInvalid' };
+  }
+
   const customParameters = parseCustomParameters(form.customParametersJson);
   if (!customParameters.ok) {
     return { ok: false, errorKey: 'assistant.form.customParametersInvalid' };
@@ -549,12 +578,15 @@ function buildAssistantDto(
         ...(currentSettings ?? DEFAULT_ASSISTANT_SETTINGS),
         customParameters: customParameters.value,
         enableMaxTokens: form.enableMaxTokens,
+        enableMaxToolCalls: form.enableMaxToolCalls,
         enableTemperature: form.enableTemperature,
         enableTopP: form.enableTopP,
         enableWebSearch: form.enableWebSearch,
         maxTokens,
+        maxToolCalls,
         mcpMode: form.mcpMode,
         reasoning_effort: form.reasoningEffort,
+        streamOutput: form.streamOutput,
         temperature,
         topP,
       },
