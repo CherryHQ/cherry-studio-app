@@ -94,10 +94,11 @@ describe('useAiUsageDetail', () => {
     expect(latestResult?.pages[6]?.selectedDateKey).toBe('2026-07-21');
   });
 
-  test('skips first focus and refreshes only the active week and day afterwards', async () => {
+  test('returns to today and refreshes the current week when focused again', async () => {
     const invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
     await renderHook();
     const previousPage = latestResult!.pages[6]!;
+    const currentPage = latestResult!.pages[7]!;
 
     await act(async () => focusEffect?.());
     expect(invalidateQueries).not.toHaveBeenCalled();
@@ -108,14 +109,17 @@ describe('useAiUsageDetail', () => {
     });
     await act(async () => focusEffect?.());
 
+    expect(latestResult?.activePageIndex).toBe(7);
+    expect(latestResult?.pages[6]?.selectedDateKey).toBe('2026-07-21');
+    expect(latestResult?.pages[7]?.selectedDateKey).toBe('2026-08-02');
     expect(invalidateQueries).toHaveBeenCalledTimes(2);
     expect(invalidateQueries).toHaveBeenCalledWith({
       exact: true,
-      queryKey: queryKeys.aiUsageRecords.timeline(getAiUsageWeekTimelineQuery(previousPage.range)),
+      queryKey: queryKeys.aiUsageRecords.timeline(getAiUsageWeekTimelineQuery(currentPage.range)),
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       exact: true,
-      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery('2026-07-21')),
+      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery('2026-08-02')),
     });
   });
 
@@ -132,7 +136,7 @@ describe('useAiUsageDetail', () => {
     jest.setSystemTime(new Date(2026, 7, 2, 8));
     await act(async () => focusEffect?.());
 
-    expect(latestResult?.activePageIndex).toBe(6);
+    expect(latestResult?.activePageIndex).toBe(7);
     expect(latestResult?.pagerKey).toBe('2026-07-27');
     expect(latestResult?.pages[6]?.selectedDateKey).toBe('2026-07-23');
     expect(latestResult?.pages[7]?.selectedDateKey).toBe('2026-08-02');

@@ -78,35 +78,25 @@ export function useAiUsageDetail() {
         return;
       }
 
-      if (nextTodayDateKey !== state.todayDateKey && nextCurrentWeekKey) {
-        const nextSelectedDateKeys = {
-          ...state.selectedDateKeys,
-          [nextCurrentWeekKey]: nextTodayDateKey,
-        };
-        const activePage = state.pages[state.activePageIndex];
-        const activeSelectedDateKey = activePage
-          ? getSelectedDateKey(activePage, nextSelectedDateKeys, nextReferenceDate)
-          : undefined;
+      const currentPage = state.pages[AI_USAGE_CURRENT_WEEK_PAGE_INDEX];
+      if (currentPage && nextCurrentWeekKey) {
+        const nextSelectedDateKeys =
+          state.selectedDateKeys[nextCurrentWeekKey] === nextTodayDateKey
+            ? state.selectedDateKeys
+            : { ...state.selectedDateKeys, [nextCurrentWeekKey]: nextTodayDateKey };
 
         stateRef.current = {
           ...state,
+          activePageIndex: AI_USAGE_CURRENT_WEEK_PAGE_INDEX,
           selectedDateKeys: nextSelectedDateKeys,
           todayDateKey: nextTodayDateKey,
         };
-        setReferenceDate(nextReferenceDate);
-        setSelectedDateKeys(nextSelectedDateKeys);
-        if (activePage && activeSelectedDateKey) {
-          void refreshPage(queryClient, activePage, activeSelectedDateKey);
+        if (nextTodayDateKey !== state.todayDateKey) {
+          setReferenceDate(nextReferenceDate);
         }
-        return;
-      }
-
-      const activePage = state.pages[state.activePageIndex];
-      const activeSelectedDateKey = activePage
-        ? getSelectedDateKey(activePage, state.selectedDateKeys, nextReferenceDate)
-        : undefined;
-      if (activePage && activeSelectedDateKey) {
-        void refreshPage(queryClient, activePage, activeSelectedDateKey);
+        setActivePageIndex(AI_USAGE_CURRENT_WEEK_PAGE_INDEX);
+        setSelectedDateKeys(nextSelectedDateKeys);
+        void refreshPage(queryClient, currentPage, nextTodayDateKey);
       }
     }, [queryClient]),
   );

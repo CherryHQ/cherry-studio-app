@@ -1,5 +1,6 @@
-import PagerView from '@expo/ui/community/pager-view';
+import PagerView, { type PagerViewRef } from '@expo/ui/community/pager-view';
 import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -18,6 +19,11 @@ export function AiUsageScreen() {
     useAiUsageDetail();
   const headerHeight = useHeaderHeight();
   const locale = i18n.resolvedLanguage ?? i18n.language;
+  const pagerRef = useRef<PagerViewRef>(null);
+
+  useEffect(() => {
+    pagerRef.current?.setPageWithoutAnimation(activePageIndex);
+  }, [activePageIndex]);
 
   return (
     <>
@@ -28,6 +34,7 @@ export function AiUsageScreen() {
       >
         <PagerView
           key={pagerKey}
+          ref={pagerRef}
           initialPage={AI_USAGE_CURRENT_WEEK_PAGE_INDEX}
           offscreenPageLimit={1}
           style={{ flex: 1 }}

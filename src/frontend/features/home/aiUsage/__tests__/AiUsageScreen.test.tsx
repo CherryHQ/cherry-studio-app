@@ -5,6 +5,7 @@ import type { AiUsageDetailPage } from '../types';
 
 const mockSelectDate = jest.fn();
 const mockSelectPage = jest.fn();
+const mockSetPageWithoutAnimation = jest.fn();
 const mockUseAiUsageDetail = jest.fn();
 
 jest.mock('expo-router/react-navigation', () => ({
@@ -12,10 +13,19 @@ jest.mock('expo-router/react-navigation', () => ({
 }));
 
 jest.mock('@expo/ui/community/pager-view', () => {
+  const React = jest.requireActual('react');
   const { View: MockView } = jest.requireActual('react-native');
   return {
     __esModule: true,
-    default: (props: Record<string, unknown>) => <MockView {...props} />,
+    default: React.forwardRef(function MockPagerView(
+      props: Record<string, unknown>,
+      ref: React.Ref<unknown>,
+    ) {
+      React.useImperativeHandle(ref, () => ({
+        setPageWithoutAnimation: mockSetPageWithoutAnimation,
+      }));
+      return <MockView {...props} />;
+    }),
   };
 });
 
@@ -81,6 +91,7 @@ describe('AiUsageScreen', () => {
     const pager = renderer?.root.findByProps({ testID: 'ai-usage-pager' });
     expect(pager?.props.initialPage).toBe(7);
     expect(pager?.props.offscreenPageLimit).toBe(1);
+    expect(mockSetPageWithoutAnimation).toHaveBeenCalledWith(7);
     expect(weekContentNodes()).toHaveLength(8);
     expect(
       pages.every((page) =>
@@ -104,12 +115,14 @@ describe('AiUsageScreen', () => {
   it('updates the active page and preloads both adjacent weeks', async () => {
     await renderScreen();
     const pager = renderer?.root.findByProps({ testID: 'ai-usage-pager' });
+    mockSetPageWithoutAnimation.mockClear();
 
     await act(async () => pager?.props.onPageSelected({ nativeEvent: { position: 6 } }));
     expect(mockSelectPage).toHaveBeenCalledWith(6);
 
     mockUseAiUsageDetail.mockReturnValue(detailResult({ activePageIndex: 6 }));
     await act(async () => renderer?.update(<AiUsageScreen />));
+    expect(mockSetPageWithoutAnimation).toHaveBeenCalledWith(6);
     expect(weekContentNodes().map((node) => node.props.enabled)).toEqual([
       false,
       false,
