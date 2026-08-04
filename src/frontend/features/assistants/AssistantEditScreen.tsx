@@ -223,7 +223,7 @@ function AssistantEditForm({
               className="size-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
               onPress={openEmojiPicker}
             >
-              <Text className="text-2xl" style={styles.emojiGlyph}>
+              <Text allowFontScaling={false} style={styles.emojiGlyph}>
                 {form.emoji.trim() || defaultEmoji}
               </Text>
             </Pressable>
@@ -622,7 +622,9 @@ function getSingleParamValue(value: string | string[] | undefined) {
 
 const styles = StyleSheet.create({
   emojiGlyph: {
+    fontSize: 24,
     includeFontPadding: false,
+    lineHeight: 32,
   },
   scroll: {
     flex: 1,

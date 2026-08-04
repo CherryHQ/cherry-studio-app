@@ -114,10 +114,11 @@ function AssistantSummary({ assistant }: { assistant: Assistant }) {
     <View className="items-center gap-6">
       <View className="items-center gap-4">
         <View className="size-24 items-center justify-center">
-          {/* Apple Color Emoji draws taller than its point size, so a line height
-              equal to the font size (Tailwind's `text-6xl` default) clips the top
-              of the glyph — give it the same ~1.3 slack the list rows use. */}
-          <Text className="text-6xl leading-20">{assistant.emoji}</Text>
+          {/* Emoji is decorative and lives in a fixed avatar frame, so it must not
+              inherit the user-adjustable text scale. */}
+          <Text allowFontScaling={false} style={styles.summaryEmoji}>
+            {assistant.emoji}
+          </Text>
         </View>
         <View className="items-center gap-1.5">
           <Text className="text-center font-semibold text-2xl text-foreground" numberOfLines={2}>
@@ -167,6 +168,10 @@ function AssistantModelLine({ modelId, modelName }: Pick<Assistant, 'modelId' | 
 }
 
 const styles = StyleSheet.create({
+  summaryEmoji: {
+    fontSize: 60,
+    lineHeight: 80,
+  },
   scrollContent: {
     paddingBottom: 32,
     paddingHorizontal: 24,

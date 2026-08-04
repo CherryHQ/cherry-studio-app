@@ -2,7 +2,7 @@ import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import AssistantDetailScreen from '../AssistantDetailScreen';
@@ -156,6 +156,17 @@ describe('AssistantDetailScreen', () => {
     expect(texts).toContain('Peanut');
     // The live catalog entry wins over the denormalized `modelName` snapshot.
     expect(texts).toContain('GPT-5 Pro');
+  });
+
+  it('keeps the decorative emoji independent from the global typography scale', async () => {
+    mockAssistant = makeAssistant();
+
+    const tree = await render();
+    const emoji = tree.root.findAllByType(Text).find((node) => node.props.children === '🌟');
+
+    expect(StyleSheet.flatten(emoji?.props.style)).toMatchObject({ fontSize: 60, lineHeight: 80 });
+    expect(emoji?.props.allowFontScaling).toBe(false);
+    expect(emoji?.props.className).toBeUndefined();
   });
 
   it('hides the bottom tabs while the detail screen is mounted', async () => {

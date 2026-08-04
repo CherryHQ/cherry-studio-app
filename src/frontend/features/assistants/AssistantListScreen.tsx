@@ -4,7 +4,7 @@ import { useToast } from 'heroui-native/toast';
 import { BotIcon, CheckIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -361,7 +361,13 @@ function AssistantListRow({
                 </View>
               </Animated.View>
             ) : null}
-            <Text className="min-w-12 h-12 text-center text-3xl leading-12">{assistant.emoji}</Text>
+            <Text
+              allowFontScaling={false}
+              className="min-w-12 h-12 text-center"
+              style={styles.rowEmoji}
+            >
+              {assistant.emoji}
+            </Text>
             <View className="min-w-0 flex-1 pr-4">
               <View className="gap-0.5">
                 <Text className="font-semibold text-foreground text-md" numberOfLines={1}>
@@ -446,3 +452,10 @@ function AssistantEmptyState({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  rowEmoji: {
+    fontSize: 30,
+    lineHeight: 48,
+  },
+});
