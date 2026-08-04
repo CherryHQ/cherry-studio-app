@@ -1,3 +1,51 @@
-// Default export for type resolution and non-iOS platforms. Metro resolves
-// search-field.ios.tsx on iOS and search-field.android.tsx on Android.
-export { SearchField } from './search-field.android';
+import { SearchField as HeroSearchField } from 'heroui-native/search-field';
+
+import type { SearchFieldProps } from './search-field.types';
+
+export function SearchField({
+  accessibilityLabel,
+  autoFocus = false,
+  clearAccessibilityLabel,
+  disabled = false,
+  onBlur,
+  onChangeText,
+  onClear,
+  onFocus,
+  onSubmitEditing,
+  placeholder,
+  style,
+  testID,
+  value,
+}: SearchFieldProps) {
+  return (
+    <HeroSearchField
+      isDisabled={disabled}
+      onChange={onChangeText}
+      style={style}
+      testID={testID ? `${testID}-root` : undefined}
+      value={value}
+    >
+      <HeroSearchField.Group>
+        <HeroSearchField.SearchIcon />
+        <HeroSearchField.Input
+          accessibilityLabel={accessibilityLabel}
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoFocus={autoFocus}
+          className="min-h-8 rounded-md border border-border shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border"
+          onBlur={onBlur}
+          onFocus={onFocus}
+          onSubmitEditing={onSubmitEditing}
+          placeholder={placeholder}
+          returnKeyType="search"
+          testID={testID}
+        />
+        <HeroSearchField.ClearButton
+          accessibilityLabel={clearAccessibilityLabel}
+          onPress={onClear}
+          testID={testID ? `${testID}-clear` : undefined}
+        />
+      </HeroSearchField.Group>
+    </HeroSearchField>
+  );
+}

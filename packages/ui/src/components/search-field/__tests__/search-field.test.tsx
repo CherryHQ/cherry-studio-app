@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { SearchField } from '../search-field.android';
+import { SearchField } from '../search-field';
 
 jest.mock('heroui-native/search-field', () => {
   const React = require('react');
@@ -20,7 +20,7 @@ jest.mock('heroui-native/search-field', () => {
   return { SearchField: Root };
 });
 
-describe('SearchField (Android)', () => {
+describe('SearchField', () => {
   let renderer: ReactTestRenderer | undefined;
 
   afterEach(() => {
@@ -28,7 +28,7 @@ describe('SearchField (Android)', () => {
     renderer = undefined;
   });
 
-  test('renders the HeroUI search anatomy with search defaults', () => {
+  test('renders HeroUI search anatomy with search defaults', () => {
     const onChangeText = jest.fn();
 
     act(() => {
@@ -54,6 +54,8 @@ describe('SearchField (Android)', () => {
         autoCapitalize: 'none',
         autoCorrect: false,
         autoFocus: false,
+        className:
+          'min-h-8 rounded-md border border-border shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
         placeholder: 'Search',
         returnKeyType: 'search',
       }),
@@ -64,7 +66,7 @@ describe('SearchField (Android)', () => {
     expect(onChangeText).toHaveBeenCalledWith('Studio');
   });
 
-  test('forwards disabled, callbacks, layout, and test IDs', () => {
+  test('forwards state, callbacks, layout, and test IDs', () => {
     const onBlur = jest.fn();
     const onClear = jest.fn();
     const onFocus = jest.fn();
@@ -101,8 +103,15 @@ describe('SearchField (Android)', () => {
         testID: 'provider-search-root',
       }),
     );
-    expect(input.props.autoFocus).toBe(true);
-    expect(input.props.testID).toBe('provider-search');
+    expect(input.props).toEqual(
+      expect.objectContaining({
+        autoFocus: true,
+        onBlur,
+        onFocus,
+        onSubmitEditing,
+        testID: 'provider-search',
+      }),
+    );
     expect(clearButton.props.accessibilityLabel).toBe('Clear');
     expect(clearButton.props.testID).toBe('provider-search-clear');
 
