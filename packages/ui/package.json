@@ -50,10 +50,8 @@
       "default": "./src/icons-webp/providers/index.ts"
     }
   },
-  "dependencies": {
-    "tailwind-merge": "^3.6.0"
-  },
   "peerDependencies": {
+    "@expo/ui": "*",
     "heroui-native": "*",
     "react": "*",
     "react-native": "*",

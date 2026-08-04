@@ -1,4 +1,5 @@
 import { Spinner } from 'heroui-native';
+import { cn } from 'heroui-native/utils';
 import {
   cloneElement,
   createContext,
@@ -8,16 +9,17 @@ import {
   useContext,
 } from 'react';
 import { Pressable, Text, type PressableProps, type TextProps, type View } from 'react-native';
-import { twMerge } from 'tailwind-merge';
 import { useResolveClassNames } from 'uniwind';
 
 export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
+export type ButtonSize = 'default' | 'lg' | 'sm';
 
 export type ButtonProps = Omit<PressableProps, 'children'> & {
   children?: ReactNode;
   className?: string;
   icon?: ReactElement<{ className?: string }>;
   loading?: boolean;
+  size?: ButtonSize;
   variant?: ButtonVariant;
 };
 
@@ -26,7 +28,34 @@ export type ButtonLabelProps = TextProps & {
 };
 
 const rootBaseStyles =
-  'flex-row items-center justify-center gap-2 overflow-hidden rounded-xl px-4 py-2.5 active:opacity-80 disabled:opacity-40';
+  'flex-row items-center justify-center overflow-hidden rounded-xl active:opacity-80 disabled:opacity-40';
+
+const sizeStyles: Record<
+  ButtonSize,
+  { icon: string; iconOnly: string; label: string; root: string; spinner: 'md' | 'sm' }
+> = {
+  default: {
+    icon: 'size-5',
+    iconOnly: 'p-2.5',
+    label: 'text-base',
+    root: 'gap-2 px-4 py-2.5',
+    spinner: 'sm',
+  },
+  lg: {
+    icon: 'size-6',
+    iconOnly: 'p-3',
+    label: 'text-lg',
+    root: 'gap-2.5 px-5 py-3',
+    spinner: 'md',
+  },
+  sm: {
+    icon: 'size-4',
+    iconOnly: 'p-2',
+    label: 'text-sm',
+    root: 'gap-1.5 px-3 py-2',
+    spinner: 'sm',
+  },
+};
 
 const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
   default: {
@@ -52,18 +81,21 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
 };
 
 const ButtonVariantContext = createContext<ButtonVariant>('default');
+const ButtonSizeContext = createContext<ButtonSize>('default');
 
 const ButtonLabel = forwardRef<Text, ButtonLabelProps>(function ButtonLabel(
   { className, ...props },
   ref,
 ) {
   const variant = useContext(ButtonVariantContext);
+  const size = useContext(ButtonSizeContext);
 
   return (
     <Text
       {...props}
-      className={twMerge(
-        'min-w-0 shrink text-center text-base font-medium',
+      className={cn(
+        'min-w-0 shrink text-center font-medium',
+        sizeStyles[size].label,
         variantStyles[variant].label,
         className,
       )}
@@ -83,6 +115,7 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
     disabled = false,
     icon,
     loading = false,
+    size = 'default',
     variant = 'default',
     ...props
   },
@@ -94,7 +127,7 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
   const spinnerColor = typeof labelStyle.color === 'string' ? labelStyle.color : undefined;
   const iconElement = icon
     ? cloneElement(icon, {
-        className: twMerge('size-5', variantStyles[variant].label, icon.props.className),
+        className: cn(sizeStyles[size].icon, variantStyles[variant].label, icon.props.className),
       })
     : null;
   const mergedAccessibilityState = {
@@ -105,34 +138,37 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
 
   return (
     <ButtonVariantContext.Provider value={variant}>
-      <Pressable
-        {...props}
-        accessibilityRole={accessibilityRole}
-        accessibilityState={mergedAccessibilityState}
-        className={twMerge(
-          rootBaseStyles,
-          variantStyles[variant].root,
-          isIconOnly ? 'p-2.5' : undefined,
-          className,
-        )}
-        disabled={isDisabled}
-        ref={ref}
-      >
-        {loading ? (
-          <Spinner
-            accessibilityElementsHidden
-            color={spinnerColor}
-            importantForAccessibility="no"
-            size="sm"
-          />
-        ) : null}
-        {!loading ? iconElement : null}
-        {typeof children === 'string' || typeof children === 'number' ? (
-          <ButtonLabel>{children}</ButtonLabel>
-        ) : (
-          children
-        )}
-      </Pressable>
+      <ButtonSizeContext.Provider value={size}>
+        <Pressable
+          {...props}
+          accessibilityRole={accessibilityRole}
+          accessibilityState={mergedAccessibilityState}
+          className={cn(
+            rootBaseStyles,
+            variantStyles[variant].root,
+            sizeStyles[size].root,
+            isIconOnly ? sizeStyles[size].iconOnly : undefined,
+            className,
+          )}
+          disabled={isDisabled}
+          ref={ref}
+        >
+          {loading ? (
+            <Spinner
+              accessibilityElementsHidden
+              color={spinnerColor}
+              importantForAccessibility="no"
+              size={sizeStyles[size].spinner}
+            />
+          ) : null}
+          {!loading ? iconElement : null}
+          {typeof children === 'string' || typeof children === 'number' ? (
+            <ButtonLabel>{children}</ButtonLabel>
+          ) : (
+            children
+          )}
+        </Pressable>
+      </ButtonSizeContext.Provider>
     </ButtonVariantContext.Provider>
   );
 });

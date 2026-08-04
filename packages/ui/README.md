@@ -11,7 +11,7 @@ Runtime imports use the component-only entry point so Metro does not traverse th
 import { Button } from '@cherrystudio/ui/components';
 import { PlusIcon } from 'lucide-uniwind/png';
 
-<Button icon={<PlusIcon />} loading={isSaving} onPress={save} variant="default">
+<Button icon={<PlusIcon />} loading={isSaving} onPress={save} size="lg" variant="default">
   Save
 </Button>;
 
@@ -20,8 +20,9 @@ import { PlusIcon } from 'lucide-uniwind/png';
 
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
 `destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
-behavior. The `icon` prop renders an icon before the label and automatically switches to
-content-driven icon-only padding when no label is provided. Icon-only buttons must provide an
+behavior. The `sm`, `default`, and `lg` sizes use content-driven typography and padding without
+fixed dimensions. The `icon` prop renders an icon before the label and automatically switches to
+the matching icon-only padding when no label is provided. Icon-only buttons must provide an
 `accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
 need an Expo UI `Host`.
 

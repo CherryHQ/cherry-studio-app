@@ -1,4 +1,9 @@
-import { Button, type ButtonProps, type ButtonVariant } from '@cherrystudio/ui/components';
+import {
+  Button,
+  type ButtonProps,
+  type ButtonSize,
+  type ButtonVariant,
+} from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { PlusIcon } from 'lucide-uniwind/png';
 import { ScrollView, Text, View } from 'react-native';
@@ -11,6 +16,7 @@ const themes = [
 ] as const;
 
 const variants: ButtonVariant[] = ['default', 'destructive', 'outline', 'secondary', 'ghost'];
+const sizes: ButtonSize[] = ['sm', 'default', 'lg'];
 
 type ThemePreviewProps = {
   args: ButtonProps;
@@ -53,6 +59,25 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
             </Button>
           </View>
         ))}
+        <Text className="text-lg font-semibold text-foreground">Sizes</Text>
+        {sizes.map((size) => (
+          <View className="items-start gap-3" key={size}>
+            <Text className="text-sm font-medium text-muted-foreground">{size}</Text>
+            <Button {...args} icon={<PlusIcon />} loading={false} size={size} variant="default">
+              Label
+            </Button>
+            <Button
+              {...args}
+              accessibilityLabel={`Add (${size})`}
+              icon={<PlusIcon />}
+              loading={false}
+              size={size}
+              variant="default"
+            >
+              {null}
+            </Button>
+          </View>
+        ))}
       </View>
     </ScopedTheme>
   );
@@ -66,12 +91,14 @@ const meta = {
     disabled: false,
     loading: false,
     onPress: fn(),
+    size: 'default',
     variant: 'default',
   },
   argTypes: {
     children: { control: 'text' },
     disabled: { control: 'boolean' },
     loading: { control: 'boolean' },
+    size: { control: 'select', options: sizes },
     variant: { control: 'select', options: variants },
   },
   decorators: [

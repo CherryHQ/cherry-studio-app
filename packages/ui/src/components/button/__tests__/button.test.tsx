@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { useResolveClassNames } from 'uniwind';
 
-import { Button, type ButtonProps, type ButtonVariant } from '../button';
+import { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '../button';
 
 jest.mock('heroui-native', () => {
   const React = require('react');
@@ -13,6 +13,14 @@ jest.mock('heroui-native', () => {
   }
 
   return { Spinner };
+});
+
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = require('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
 });
 
 jest.mock('uniwind', () => ({
@@ -75,13 +83,48 @@ describe('Button', () => {
         <View testID="icon" />
         <Button.Label>Insert</Button.Label>
       </>,
-      { variant: 'outline' },
+      { size: 'lg', variant: 'outline' },
     );
     const label = tree.root.findByType(Text);
 
     expect(tree.root.findByProps({ testID: 'icon' })).toBeDefined();
     expect(label.props.className).toEqual(expect.stringContaining('text-foreground'));
-    expect(label.props.className).toEqual(expect.stringContaining('text-base'));
+    expect(label.props.className).toEqual(expect.stringContaining('text-lg'));
+  });
+
+  test.each<{
+    iconClassName: string;
+    labelClassName: string;
+    rootClassNames: string[];
+    size: ButtonSize;
+  }>([
+    {
+      iconClassName: 'size-4',
+      labelClassName: 'text-sm',
+      rootClassNames: ['gap-1.5', 'px-3', 'py-2'],
+      size: 'sm',
+    },
+    {
+      iconClassName: 'size-5',
+      labelClassName: 'text-base',
+      rootClassNames: ['gap-2', 'px-4', 'py-2.5'],
+      size: 'default',
+    },
+    {
+      iconClassName: 'size-6',
+      labelClassName: 'text-lg',
+      rootClassNames: ['gap-2.5', 'px-5', 'py-3'],
+      size: 'lg',
+    },
+  ])('renders the $size size', ({ iconClassName, labelClassName, rootClassNames, size }) => {
+    const tree = render('Add', { icon: <View testID="icon" />, size });
+    const rootClassName = findPressable(tree).props.className as string;
+    const labelClassNameValue = tree.root.findByType(Text).props.className as string;
+    const iconClassNameValue = tree.root.findByProps({ testID: 'icon' }).props.className as string;
+
+    expect(rootClassName.split(' ')).toEqual(expect.arrayContaining(rootClassNames));
+    expect(labelClassNameValue.split(' ')).toContain(labelClassName);
+    expect(iconClassNameValue.split(' ')).toContain(iconClassName);
   });
 
   test('renders an icon with the label using the variant color', () => {
@@ -116,6 +159,21 @@ describe('Button', () => {
     expect(rootClassNames).not.toContain('h-10');
     expect(rootClassNames).not.toContain('w-10');
     expect(iconClassNames).toEqual(expect.arrayContaining(['size-5', 'text-background']));
+  });
+
+  test('applies large icon-only padding without fixed dimensions', () => {
+    const tree = render(null, {
+      accessibilityLabel: 'Add',
+      icon: <View testID="icon" />,
+      size: 'lg',
+    });
+    const rootClassNames = findPressable(tree).props.className.split(' ');
+
+    expect(rootClassNames).toContain('p-3');
+    expect(rootClassNames).not.toContain('px-5');
+    expect(rootClassNames).not.toContain('py-3');
+    expect(rootClassNames).not.toContain('h-12');
+    expect(rootClassNames).not.toContain('w-12');
   });
 
   test.each<{
@@ -191,6 +249,12 @@ describe('Button', () => {
     expect(spinner.props.size).toBe('sm');
     expect(spinner.props.importantForAccessibility).toBe('no');
     expect(tree.root.findAllByProps({ testID: 'icon' })).toHaveLength(0);
+  });
+
+  test('uses a medium spinner for a large button', () => {
+    const tree = render('Save', { loading: true, size: 'lg' });
+
+    expect(tree.root.findByProps({ testID: 'spinner' }).props.size).toBe('md');
   });
 
   test('merges disabled state with caller accessibility state', () => {
