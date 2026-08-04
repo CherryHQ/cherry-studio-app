@@ -153,6 +153,24 @@ describe('AiUsageWeeklyChart', () => {
     ).toBe('200 Tokens');
   });
 
+  it('hides a colliding intermediate axis label but keeps its grid line', async () => {
+    await renderChart({ ...data, averageTokens: 140 });
+
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-axis-label-100' })).toHaveLength(0);
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-grid-line-100' })).toBeDefined();
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-axis-label-200' })).toBeDefined();
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-axis-label-250' })).toBeDefined();
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-axis-label-0' })).toBeDefined();
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-average-label' })).toBeDefined();
+  });
+
+  it('omits the average line and label when the average is zero', async () => {
+    await renderChart({ ...data, averageTokens: 0 });
+
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-average-line' })).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-average-label' })).toHaveLength(0);
+  });
+
   it('keeps a fixed skeleton while loading', async () => {
     await act(async () => {
       renderer = create(
@@ -170,9 +188,9 @@ describe('AiUsageWeeklyChart', () => {
     expect(renderer?.root.findAllByProps({ testID: 'ai-usage-bar-chart' })).toHaveLength(0);
   });
 
-  async function renderChart() {
+  async function renderChart(chartData = data) {
     await act(async () => {
-      renderer = create(chartElement('2026-08-04'));
+      renderer = create(chartElement('2026-08-04', chartData));
     });
     const layoutNode = renderer?.root
       .findAll((node) => typeof node.props.onLayout === 'function')
@@ -184,10 +202,10 @@ describe('AiUsageWeeklyChart', () => {
     );
   }
 
-  function chartElement(selectedDateKey: string) {
+  function chartElement(selectedDateKey: string, chartData = data) {
     return (
       <AiUsageWeeklyChart
-        data={data}
+        data={chartData}
         isLoading={false}
         locale="en-US"
         selectedDateKey={selectedDateKey}

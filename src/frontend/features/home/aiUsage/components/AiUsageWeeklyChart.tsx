@@ -24,6 +24,8 @@ const PLOT_BOTTOM = 34;
 const PLOT_LEFT = 10;
 const PLOT_HEIGHT = CHART_HEIGHT - PLOT_TOP - PLOT_BOTTOM;
 const MIN_CHART_WIDTH = 220;
+const AXIS_LABEL_HEIGHT = 16;
+const AXIS_LABEL_MIN_GAP = 18;
 const EMPTY_LABEL = () => '';
 const WEEKLY_CHART_SKELETON_HEIGHTS = [32, 54, 41, 70, 51, 29, 60] as const;
 const WEEKLY_LEGEND_SKELETON_KEYS = ['primary', 'info', 'warning', 'other'] as const;
@@ -89,6 +91,7 @@ export function AiUsageWeeklyChart({
   const chartScale = getAiUsageChartScale(maxDayTokens, data.averageTokens);
   const chartMaximum = chartScale.maximum;
   const averageY = valueToY(data.averageTokens, chartMaximum);
+  const hasAverage = data.averageTokens > 0;
   const chartData = useMemo<ChartDatum[]>(
     () =>
       data.days.map((day, dayIndex) => {
@@ -170,7 +173,13 @@ export function AiUsageWeeklyChart({
     value,
     y: valueToY(value, chartMaximum),
   }));
-  const averageLabelTop = getAverageLabelTop(averageY, axisTicks);
+  const axisLabelTicks = axisTicks.filter(
+    (tick) =>
+      !hasAverage ||
+      tick.value === chartMaximum ||
+      tick.value === 0 ||
+      Math.abs(tick.y - averageY) >= AXIS_LABEL_MIN_GAP,
+  );
 
   const handleLayout = (event: LayoutChangeEvent) => {
     const nextWidth = Math.round(event.nativeEvent.layout.width);
@@ -243,22 +252,25 @@ export function AiUsageWeeklyChart({
                       opacity={0.45}
                       stroke={separator}
                       strokeWidth={1}
+                      testID={`ai-usage-grid-line-${tick.value}`}
                       x1={PLOT_LEFT}
                       x2={chartWidth - PLOT_RIGHT}
                       y1={tick.y}
                       y2={tick.y}
                     />
                   ))}
-                  <Line
-                    stroke={success}
-                    strokeDasharray="5 5"
-                    strokeWidth={1.5}
-                    testID="ai-usage-average-line"
-                    x1={PLOT_LEFT}
-                    x2={chartWidth - PLOT_RIGHT}
-                    y1={averageY}
-                    y2={averageY}
-                  />
+                  {hasAverage ? (
+                    <Line
+                      stroke={success}
+                      strokeDasharray="5 5"
+                      strokeWidth={1.5}
+                      testID="ai-usage-average-line"
+                      x1={PLOT_LEFT}
+                      x2={chartWidth - PLOT_RIGHT}
+                      y1={averageY}
+                      y2={averageY}
+                    />
+                  ) : null}
                 </Svg>
 
                 <View
@@ -308,26 +320,29 @@ export function AiUsageWeeklyChart({
 
             {chartWidth >= MIN_CHART_WIDTH ? (
               <View className="relative" style={{ height: CHART_HEIGHT, width: AXIS_WIDTH }}>
-                {axisTicks.map((tick) => (
+                {axisLabelTicks.map((tick) => (
                   <Text
                     key={tick.value}
                     adjustsFontSizeToFit
                     className="absolute left-1 text-muted-foreground text-xs"
                     minimumFontScale={0.8}
                     numberOfLines={1}
-                    style={[styles.axisLabel, { top: tick.y - 7 }]}
+                    style={[styles.axisLabel, { top: getAxisLabelTop(tick.y) }]}
+                    testID={`ai-usage-axis-label-${tick.value}`}
                   >
                     {formatTokens(tick.value)}
                   </Text>
                 ))}
-                <Text
-                  className="absolute left-1 font-medium text-success text-xs"
-                  numberOfLines={1}
-                  style={[styles.axisLabel, { top: averageLabelTop }]}
-                  testID="ai-usage-average-label"
-                >
-                  {t('aiUsage.average')}
-                </Text>
+                {hasAverage ? (
+                  <Text
+                    className="absolute left-1 font-medium text-success text-xs"
+                    numberOfLines={1}
+                    style={[styles.axisLabel, { top: getAxisLabelTop(averageY) }]}
+                    testID="ai-usage-average-label"
+                  >
+                    {t('aiUsage.average')}
+                  </Text>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -438,13 +453,8 @@ function valueToY(value: number, maximum: number): number {
   return PLOT_TOP + (1 - ratio) * PLOT_HEIGHT;
 }
 
-function getAverageLabelTop(
-  averageY: number,
-  axisTicks: readonly { value: number; y: number }[],
-): number {
-  const collidesWithTick = axisTicks.some((tick) => Math.abs(tick.y - averageY) < 13);
-  const offset = collidesWithTick ? (averageY > CHART_HEIGHT / 2 ? -25 : 8) : -7;
-  return Math.max(0, Math.min(CHART_HEIGHT - 16, averageY + offset));
+function getAxisLabelTop(y: number): number {
+  return Math.max(0, Math.min(CHART_HEIGHT - AXIS_LABEL_HEIGHT, y - AXIS_LABEL_HEIGHT / 2));
 }
 
 function getTopRoundedBarPath(
