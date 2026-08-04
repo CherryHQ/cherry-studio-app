@@ -94,20 +94,20 @@ function ToolSearchBody({
     <>
       <ToolPartValueSection title={t('chat.tool.arguments')} value={input} />
       {part.state === 'output-available' && namespaces.length === 0 ? (
-        <Text className="text-default-foreground text-md italic" selectable>
+        <Text className="text-default-foreground text-base italic" selectable>
           {t('chat.metaToolSearch.noResults')}
         </Text>
       ) : null}
       {namespaces.map((group) => (
         <View className="gap-1.5" key={group.namespace}>
-          <Text className="text-default-foreground text-md" selectable>
+          <Text className="text-default-foreground text-base" selectable>
             {group.namespace} ({group.tools.length})
           </Text>
           <View className="flex-row flex-wrap gap-1">
             {group.tools.map((tool) => (
               <View className="max-w-full" key={`${group.namespace}-${tool.name}`}>
                 <Text
-                  className="font-mono text-default-foreground text-md"
+                  className="font-mono text-default-foreground text-base"
                   numberOfLines={1}
                   selectable
                 >

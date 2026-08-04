@@ -27,11 +27,11 @@ jest.mock('../hooks/usePermissionPolicies', () => ({
 jest.mock('../hooks/usePermissionSystemStatuses', () => ({
   usePermissionSystemStatuses: () => ({ statuses: mockStatuses }),
 }));
-jest.mock('../../components/SettingsSection', () => ({
-  SettingsSection: ({
+jest.mock('@/frontend/components/Section', () => ({
+  Section: ({
     items,
   }: {
-    items: { accessory?: ReactNode; id: string; imageSource?: unknown; title: string }[];
+    items: { accessory?: ReactNode; id: string; leading?: ReactNode; title: string }[];
   }) => {
     const { Fragment } = jest.requireActual('react');
     const { Text: MockText } = jest.requireActual('react-native');
@@ -41,12 +41,21 @@ jest.mock('../../components/SettingsSection', () => ({
           <Fragment key={item.id}>
             <MockText>{item.title}</MockText>
             <MockText>{item.accessory ? 'custom-accessory' : 'default-accessory'}</MockText>
-            <MockText>{item.imageSource ? 'image-source' : 'component-icon'}</MockText>
+            {item.leading}
             {item.accessory}
           </Fragment>
         ))}
       </Fragment>
     );
+  },
+  // Stand-ins that report which leading variant the screen picked per platform.
+  SectionIcon: ({ icon }: { icon?: unknown }) => {
+    const { Text: MockText } = jest.requireActual('react-native');
+    return <MockText>{icon ? 'component-icon' : 'no-icon'}</MockText>;
+  },
+  SectionImage: ({ source }: { source?: unknown }) => {
+    const { Text: MockText } = jest.requireActual('react-native');
+    return <MockText>{source ? 'image-source' : 'no-image'}</MockText>;
   },
 }));
 

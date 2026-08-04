@@ -446,7 +446,7 @@ const TopicRow = memo(function TopicRow({
               <View className="gap-0.5">
                 <View className="min-w-0 flex-row items-center gap-2">
                   <Text
-                    className="min-w-0 flex-1 font-semibold text-foreground text-md"
+                    className="min-w-0 flex-1 font-semibold text-foreground text-base"
                     numberOfLines={1}
                   >
                     {topic.name || t('navigation.newChat')}

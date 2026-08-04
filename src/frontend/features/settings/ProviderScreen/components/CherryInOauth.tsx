@@ -117,7 +117,7 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
             ) : (
               <>
                 <LogInIcon size={15} color="white" />
-                <Button.Label className="text-md text-white">
+                <Button.Label className="text-base text-white">
                   {t('settings.provider.oauth.cherryIn.login_button')}
                 </Button.Label>
               </>

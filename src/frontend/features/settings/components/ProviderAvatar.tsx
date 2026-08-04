@@ -1,25 +1,9 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useMemo } from 'react';
-import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { Image } from '@/frontend/components/nativePrimitives';
+import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '@/frontend/components/BrandAvatar';
 import { useBackendModule } from '@/frontend/data';
-
-import {
-  DEFAULT_PROVIDER_ICON_SCALE,
-  getProviderAvatarFallback,
-  getProviderListIconDisplayConfig,
-} from '../utils/providerAvatarStyles';
-
-const PROVIDER_LIST_AVATAR_SIZE = 26;
-const PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME =
-  'items-center justify-center overflow-hidden border border-border-subtle border-continuous';
-const PROVIDER_LIST_AVATAR_FRAME_STYLE = {
-  borderRadius: 6,
-  height: PROVIDER_LIST_AVATAR_SIZE,
-  width: PROVIDER_LIST_AVATAR_SIZE,
-};
 
 /**
  * Reads a provider's stored custom avatar uri (see `providerAvatarStorage`).
@@ -53,18 +37,9 @@ export function ProviderAvatar({
 
   if (avatarUri) {
     return (
-      <View
-        className={PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME}
-        style={PROVIDER_LIST_AVATAR_FRAME_STYLE}
-      >
-        <Image
-          cachePolicy="memory-disk"
-          contentFit="cover"
-          recyclingKey={avatarUri}
-          source={{ uri: avatarUri }}
-          style={{ height: PROVIDER_LIST_AVATAR_SIZE, width: PROVIDER_LIST_AVATAR_SIZE }}
-        />
-      </View>
+      <BrandAvatar label={providerName}>
+        <BrandAvatarPhoto uri={avatarUri} />
+      </BrandAvatar>
     );
   }
 
@@ -72,40 +47,16 @@ export function ProviderAvatar({
   const iconSource = resolveProviderIcon(displayIconId);
 
   if (iconSource) {
-    const displayConfig = getProviderListIconDisplayConfig(displayIconId);
-    const imageSize =
-      PROVIDER_LIST_AVATAR_SIZE * (displayConfig?.scale ?? DEFAULT_PROVIDER_ICON_SCALE);
-
     return (
-      <View
-        className={PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME}
-        style={PROVIDER_LIST_AVATAR_FRAME_STYLE}
-      >
-        <Image
-          cachePolicy="memory-disk"
-          contentFit="contain"
+      <BrandAvatar label={providerName}>
+        <BrandAvatarIcon
+          iconId={displayIconId}
           recyclingKey={providerId}
           source={iconSource[iconTheme]}
-          style={{
-            borderRadius: displayConfig?.borderRadius,
-            height: imageSize,
-            width: imageSize,
-          }}
         />
-      </View>
+      </BrandAvatar>
     );
   }
 
-  const fallback = getProviderAvatarFallback(providerName);
-
-  return (
-    <View
-      className={PROVIDER_LIST_AVATAR_FRAME_CLASS_NAME}
-      style={{ ...PROVIDER_LIST_AVATAR_FRAME_STYLE, backgroundColor: fallback.backgroundColor }}
-    >
-      <Text className="font-medium" style={{ color: fallback.color, fontSize: 14 }}>
-        {fallback.initial}
-      </Text>
-    </View>
-  );
+  return <BrandAvatar label={providerName} />;
 }

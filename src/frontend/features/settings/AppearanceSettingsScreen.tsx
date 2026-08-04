@@ -4,11 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Section, SectionIcon } from '@/frontend/components/Section';
 import { usePreference } from '@/frontend/data/hooks';
 import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
 
 import { SettingSelect } from './components/SettingSelect';
-import { SettingsSection } from './components/SettingsSection';
 import { useSettingPreferences } from './hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 
@@ -29,7 +29,7 @@ export default function AppearanceSettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <SettingsSection
+        <Section
           items={[
             {
               accessory: (
@@ -40,7 +40,7 @@ export default function AppearanceSettingsScreen() {
                   onValueChange={settingPreferences.theme.onValueChange}
                 />
               ),
-              icon: SunIcon,
+              leading: <SectionIcon icon={SunIcon} />,
               title: t('settings.items.theme'),
             },
             {
@@ -52,7 +52,7 @@ export default function AppearanceSettingsScreen() {
                   onValueChange={settingPreferences.language.onValueChange}
                 />
               ),
-              icon: GlobeIcon,
+              leading: <SectionIcon icon={GlobeIcon} />,
               title: t('settings.items.appLanguage'),
             },
             {
@@ -64,7 +64,7 @@ export default function AppearanceSettingsScreen() {
                   <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
                 </View>
               ),
-              icon: ALargeSmallIcon,
+              leading: <SectionIcon icon={ALargeSmallIcon} />,
               onPress: () => router.push('/settings/font-size'),
               title: t('settings.items.fontSize'),
             },
