@@ -75,6 +75,13 @@ export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInp
   };
 }
 
+export function createPastedImageAttachmentDraft(uri: string): ChatInputAttachmentDraft {
+  const pathname = new URL(uri).pathname;
+  const fileName = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
+
+  return createPhotoAttachmentDraft({ fileName, id: uri, uri });
+}
+
 type CameraPhotoInput = {
   uri: string;
 };

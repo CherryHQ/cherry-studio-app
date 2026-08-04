@@ -6,6 +6,7 @@ import {
   createCameraAttachmentDraft,
   createChatInputMessageParts,
   createDocumentAttachmentDraft,
+  createPastedImageAttachmentDraft,
   createPhotoAttachmentDraft,
   hasChatInputSendableContent,
   isChatInputImageFileName,
@@ -66,6 +67,16 @@ describe('chat input attachments', () => {
       mediaType: 'image/heic',
       name: 'camera-shot.HEIC',
       uri: 'file://photo-a.heic',
+    });
+  });
+
+  test('creates pasted image attachments from local file URIs', () => {
+    expect(createPastedImageAttachmentDraft('file:///tmp/Pasted%20Sticker.GIF')).toMatchObject({
+      id: 'photo:file:///tmp/Pasted%20Sticker.GIF',
+      kind: 'image',
+      mediaType: 'image/gif',
+      name: 'Pasted Sticker.GIF',
+      uri: 'file:///tmp/Pasted%20Sticker.GIF',
     });
   });
 
