@@ -46,24 +46,13 @@ describe('initializeAppRuntime', () => {
     await initializeAppRuntime(createServices());
 
     expect(mockSetTheme).toHaveBeenCalledWith('system');
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', {
+    const variables = expect.objectContaining({
       '--cs-theme-primary': '#00b96b',
       '--cs-theme-primary-foreground': '#000000',
+      '--ui-text-base': 18,
     });
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'light', {
-      '--cs-theme-primary': '#00b96b',
-      '--cs-theme-primary-foreground': '#000000',
-    });
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(
-      3,
-      'dark',
-      expect.objectContaining({ '--ui-text-base': 18 }),
-    );
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(
-      4,
-      'light',
-      expect.objectContaining({ '--ui-text-base': 18 }),
-    );
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', variables);
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'light', variables);
     expect(mockInitI18n).toHaveBeenCalledWith('en-US');
   });
 

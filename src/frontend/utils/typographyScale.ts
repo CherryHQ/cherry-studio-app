@@ -1,6 +1,6 @@
 import type { FontSizeStep } from '@cherrystudio/universal/data/preference';
 
-export const TYPOGRAPHY_SIZE_NAMES = [
+const TYPOGRAPHY_SIZE_NAMES = [
   'xs',
   'sm',
   'base',
@@ -16,9 +16,9 @@ export const TYPOGRAPHY_SIZE_NAMES = [
   '9xl',
 ] as const;
 
-export type TypographySizeName = (typeof TYPOGRAPHY_SIZE_NAMES)[number];
-export type TypographySize = { fontSize: number; lineHeight: number };
-export type TypographyScale = Record<TypographySizeName, TypographySize>;
+type TypographySizeName = (typeof TYPOGRAPHY_SIZE_NAMES)[number];
+type TypographySize = { fontSize: number; lineHeight: number };
+type TypographyScale = Record<TypographySizeName, TypographySize>;
 
 const emojiTypographySizeNames = ['xl', '2xl', '3xl', '6xl'] as const;
 

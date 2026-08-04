@@ -25,52 +25,51 @@ export default function AppearanceSettingsScreen() {
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
+        contentContainerClassName="px-4 py-5"
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <View className="px-4 py-5">
-          <SettingsSection
-            items={[
-              {
-                accessory: (
-                  <SettingSelect
-                    label={t('settings.items.theme')}
-                    options={settingPreferences.theme.options}
-                    value={settingPreferences.theme.value}
-                    onValueChange={settingPreferences.theme.onValueChange}
-                  />
-                ),
-                icon: SunIcon,
-                title: t('settings.items.theme'),
-              },
-              {
-                accessory: (
-                  <SettingSelect
-                    label={t('settings.items.appLanguage')}
-                    options={settingPreferences.language.options}
-                    value={settingPreferences.language.value}
-                    onValueChange={settingPreferences.language.onValueChange}
-                  />
-                ),
-                icon: GlobeIcon,
-                title: t('settings.items.appLanguage'),
-              },
-              {
-                accessory: (
-                  <View className="flex-row items-center gap-1">
-                    <Text className="text-right text-base text-default-foreground">
-                      {t(FONT_SIZE_STEP_LABEL_KEYS[normalizedFontSizeStep])}
-                    </Text>
-                    <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
-                  </View>
-                ),
-                icon: ALargeSmallIcon,
-                onPress: () => router.push('/settings/font-size'),
-                title: t('settings.items.fontSize'),
-              },
-            ]}
-          />
-        </View>
+        <SettingsSection
+          items={[
+            {
+              accessory: (
+                <SettingSelect
+                  label={t('settings.items.theme')}
+                  options={settingPreferences.theme.options}
+                  value={settingPreferences.theme.value}
+                  onValueChange={settingPreferences.theme.onValueChange}
+                />
+              ),
+              icon: SunIcon,
+              title: t('settings.items.theme'),
+            },
+            {
+              accessory: (
+                <SettingSelect
+                  label={t('settings.items.appLanguage')}
+                  options={settingPreferences.language.options}
+                  value={settingPreferences.language.value}
+                  onValueChange={settingPreferences.language.onValueChange}
+                />
+              ),
+              icon: GlobeIcon,
+              title: t('settings.items.appLanguage'),
+            },
+            {
+              accessory: (
+                <View className="flex-row items-center gap-1">
+                  <Text className="text-right text-base text-default-foreground">
+                    {t(FONT_SIZE_STEP_LABEL_KEYS[normalizedFontSizeStep])}
+                  </Text>
+                  <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
+                </View>
+              ),
+              icon: ALargeSmallIcon,
+              onPress: () => router.push('/settings/font-size'),
+              title: t('settings.items.fontSize'),
+            },
+          ]}
+        />
       </ScrollView>
     </>
   );

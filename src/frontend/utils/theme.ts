@@ -1,7 +1,7 @@
 import { type FontSizeStep, ThemeMode } from '@cherrystudio/universal/data/preference';
 import { Uniwind } from 'uniwind';
 
-import { createTypographyCSSVariables, normalizeFontSizeStep } from './typographyScale';
+import { createTypographyCSSVariables } from './typographyScale';
 
 export const DEFAULT_PRIMARY_COLOR = '#00b96b';
 
@@ -11,6 +11,15 @@ function updateBothThemes(variables: Record<string, string | number>) {
 
   Uniwind.updateCSSVariables(inactiveTheme, variables);
   Uniwind.updateCSSVariables(activeTheme, variables);
+}
+
+function createPrimaryColorVariables(primaryColor: string) {
+  const normalized = normalizeHexColor(primaryColor);
+
+  return {
+    '--cs-theme-primary': normalized,
+    '--cs-theme-primary-foreground': getPrimaryForeground(normalized),
+  };
 }
 
 export function applyThemeModePreference(themeMode: ThemeMode) {
@@ -57,17 +66,11 @@ export function getPrimaryForeground(primaryColor: string): '#000000' | '#ffffff
 }
 
 export function applyPrimaryColorPreference(primaryColor: string) {
-  const normalized = normalizeHexColor(primaryColor);
-  const variables = {
-    '--cs-theme-primary': normalized,
-    '--cs-theme-primary-foreground': getPrimaryForeground(normalized),
-  };
-
-  updateBothThemes(variables);
+  updateBothThemes(createPrimaryColorVariables(primaryColor));
 }
 
 export function applyFontSizeStepPreference(fontSizeStep: FontSizeStep) {
-  updateBothThemes(createTypographyCSSVariables(normalizeFontSizeStep(fontSizeStep)));
+  updateBothThemes(createTypographyCSSVariables(fontSizeStep));
 }
 
 export function applyThemePreferences(
@@ -76,6 +79,8 @@ export function applyThemePreferences(
   fontSizeStep: FontSizeStep,
 ) {
   applyThemeModePreference(themeMode);
-  applyPrimaryColorPreference(primaryColor);
-  applyFontSizeStepPreference(fontSizeStep);
+  updateBothThemes({
+    ...createPrimaryColorVariables(primaryColor),
+    ...createTypographyCSSVariables(fontSizeStep),
+  });
 }

@@ -1,5 +1,5 @@
 import type { FontSizeStep } from '@cherrystudio/universal/data/preference';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useColorScheme } from 'react-native';
 import {
   EnrichedMarkdownText,
@@ -11,9 +11,7 @@ import { StreamdownText } from 'react-native-streamdown';
 import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
-
-import { createMarkdownTypographyStyle } from '../utils/markdownTypography';
+import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 
 type MarkdownTextProps = {
   fontSizeStep?: FontSizeStep;
@@ -21,13 +19,36 @@ type MarkdownTextProps = {
   markdown: string;
 };
 
+function handleLinkPress({ url }: LinkPressEvent) {
+  void openExternalUrl(url);
+}
+
+function createMarkdownTypographyStyle(fontSizeStep: FontSizeStep): MarkdownStyle {
+  const scale = resolveTypographyScale(fontSizeStep);
+
+  return {
+    paragraph: scale.base,
+    h1: scale['3xl'],
+    h2: scale['2xl'],
+    h3: scale.xl,
+    h4: scale.lg,
+    h5: scale.base,
+    h6: scale.sm,
+    blockquote: scale.base,
+    list: scale.base,
+    codeBlock: scale.sm,
+    table: scale.sm,
+    math: { fontSize: scale.xl.fontSize },
+  };
+}
+
 export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: MarkdownTextProps) {
   const [storedFontSizeStep] = usePreference('ui.font_size_step');
   const colorScheme = useColorScheme();
   const [foreground, background, mutedForeground, link, primary, border, secondary] = useThemeColor(
     ['foreground', 'background', 'muted-foreground', 'link', 'primary', 'border', 'secondary'],
   );
-  const resolvedStep = normalizeFontSizeStep(fontSizeStep ?? storedFontSizeStep);
+  const resolvedStep = fontSizeStep ?? storedFontSizeStep;
   const MarkdownRenderer = isStreaming ? StreamdownText : EnrichedMarkdownText;
 
   const markdownStyle = useMemo<MarkdownStyle>(() => {
@@ -105,10 +126,6 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
     resolvedStep,
     secondary,
   ]);
-
-  const handleLinkPress = useCallback(({ url }: LinkPressEvent) => {
-    void openExternalUrl(url);
-  }, []);
 
   return (
     <MarkdownRenderer

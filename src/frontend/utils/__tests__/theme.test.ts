@@ -17,7 +17,12 @@ jest.mock('uniwind', () => ({
     get currentTheme() {
       return mockCurrentTheme;
     },
-    setTheme: (...args: unknown[]) => mockSetTheme(...args),
+    setTheme: (theme: string) => {
+      mockSetTheme(theme);
+      if (theme === 'dark' || theme === 'light') {
+        mockCurrentTheme = theme;
+      }
+    },
     updateCSSVariables: (...args: unknown[]) => mockUpdateCSSVariables(...args),
   },
 }));
@@ -63,7 +68,14 @@ describe('theme runtime', () => {
     applyThemePreferences(ThemeMode.dark, '#000000', 0);
 
     expect(mockSetTheme).toHaveBeenCalledWith('dark');
-    expect(mockUpdateCSSVariables).toHaveBeenCalledTimes(4);
+    expect(mockUpdateCSSVariables).toHaveBeenCalledTimes(2);
+    expect(mockUpdateCSSVariables).toHaveBeenLastCalledWith(
+      'dark',
+      expect.objectContaining({
+        '--cs-theme-primary': '#000000',
+        '--ui-text-base': 16,
+      }),
+    );
   });
 
   test('updates typography variables for both themes with the active theme last', () => {

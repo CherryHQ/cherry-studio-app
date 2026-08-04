@@ -56,7 +56,15 @@ describe('MarkdownText', () => {
           selectable: true,
         }),
       );
-      expect(props.markdownStyle.paragraph).toEqual({ fontSize: 20, lineHeight: 28 });
+      expect(props.markdownStyle).toEqual(
+        expect.objectContaining({
+          paragraph: { fontSize: 20, lineHeight: 28 },
+          h1: { fontSize: 48, lineHeight: 48 },
+          h2: { fontSize: 36, lineHeight: 40 },
+          codeBlock: { fontSize: 18, lineHeight: 28 },
+          table: { fontSize: 18, lineHeight: 28 },
+        }),
+      );
       expect(renderer.root.findAllByType(excluded)).toHaveLength(0);
     },
   );
