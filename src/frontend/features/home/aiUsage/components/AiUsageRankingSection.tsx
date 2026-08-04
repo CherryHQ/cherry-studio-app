@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -6,7 +6,6 @@ import { Section } from '@/frontend/components/Section';
 
 import { useAiUsageRanking } from '../hooks/useAiUsageRanking';
 import type { AiUsageDetailPage, AiUsageRankingGroup } from '../types';
-import { parseLocalDateKey } from '../utils/aiUsageCalendar';
 import { AiUsageRankingList, AiUsageRankingListSkeleton } from './AiUsageRankingList';
 import {
   AiUsageSectionAction,
@@ -28,15 +27,6 @@ export function AiUsageRankingSection({ enabled, locale, page }: AiUsageRankingS
     groupBy,
     selectedDateKey: page.selectedDateKey,
   });
-  const selectedDateFormatter = useMemo(
-    () =>
-      new Intl.DateTimeFormat(locale, {
-        day: 'numeric',
-        month: 'short',
-        weekday: 'short',
-      }),
-    [locale],
-  );
   const isInitialLoading = (query.isLoading || !enabled) && !query.hasData;
   const isInitialError = query.isError && !query.hasData;
   const toggleGroupBy = useCallback(() => {
@@ -52,7 +42,6 @@ export function AiUsageRankingSection({ enabled, locale, page }: AiUsageRankingS
           onPress={toggleGroupBy}
         />
       }
-      subtitle={selectedDateFormatter.format(parseLocalDateKey(page.selectedDateKey))}
       testID="ai-usage-ranking-section"
       title={t('aiUsage.mostUsed')}
       titleAccessory={

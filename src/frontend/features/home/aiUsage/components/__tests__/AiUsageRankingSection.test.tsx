@@ -69,9 +69,8 @@ describe('AiUsageRankingSection', () => {
       groupBy: 'model',
       selectedDateKey: '2026-08-02',
     });
-    expect(textValues()).toEqual(
-      expect.arrayContaining(['Most Used', 'Sun, Aug 2', 'Show Providers']),
-    );
+    expect(textValues()).toEqual(expect.arrayContaining(['Most Used', 'Show Providers']));
+    expect(textValues()).not.toContain('Sun, Aug 2');
     expect(renderer?.root.findByProps({ testID: 'ai-usage-ranking-list' }).props.items).toBe(
       ranking,
     );
