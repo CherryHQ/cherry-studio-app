@@ -19,6 +19,12 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./components": {
+      "types": "./src/components/index.ts",
+      "react-native": "./src/components/index.ts",
+      "import": "./src/components/index.ts",
+      "default": "./src/components/index.ts"
+    },
     "./icons": {
       "types": "./src/icons/index.ts",
       "react-native": "./src/icons/index.ts",
@@ -44,8 +50,13 @@
       "default": "./src/icons-webp/providers/index.ts"
     }
   },
+  "dependencies": {
+    "tailwind-merge": "^3.6.0"
+  },
   "peerDependencies": {
+    "heroui-native": "*",
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "uniwind": "*"
   }
 }
