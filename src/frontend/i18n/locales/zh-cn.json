@@ -5,6 +5,7 @@
   "aiUsage.loading": "正在加载用量统计",
   "aiUsage.mostUsed": "最常使用",
   "aiUsage.noUsageForDay": "当天暂无用量",
+  "aiUsage.other": "其他",
   "aiUsage.otherModels": "其他模型",
   "aiUsage.otherProviders": "其他服务商",
   "aiUsage.rankingLoadError": "无法加载用量排行。",

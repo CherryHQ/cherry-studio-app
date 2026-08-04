@@ -36,6 +36,7 @@ jest.mock('react-i18next', () => ({
       ({
         'aiUsage.average': 'Average',
         'aiUsage.dayAccessibility': `${options?.date}, ${options?.tokens} Tokens`,
+        'aiUsage.other': 'Other',
         'aiUsage.otherModels': 'Other models',
         'aiUsage.tokensValue': `${options?.tokens} Tokens`,
         'aiUsage.unknownModel': 'Unknown model',
@@ -106,12 +107,16 @@ describe('AiUsageWeeklyChart', () => {
         '150',
         '250',
         'model-a',
-        'Other models',
+        'Other',
         'Average',
         'Week total',
         '300 Tokens',
+        '200',
+        '100',
       ]),
     );
+    expect(textValues()).not.toContain('200 Tokens');
+    expect(textValues()).not.toContain('100 Tokens');
 
     const renderBar = chart?.props.renderBar;
     const bottomSegment = renderBar(barRenderProps(0));

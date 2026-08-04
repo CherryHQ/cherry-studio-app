@@ -106,7 +106,7 @@ export function AiUsageWeeklyChart({
       color: getSeriesColor(series.isOther, index, primary, info, warning, muted),
       key: series.key,
       label: series.isOther
-        ? t('aiUsage.otherModels')
+        ? t('aiUsage.other')
         : displayAiUsageModelId(series.modelId) || t('aiUsage.unknownModel'),
       yKey: seriesValueKey(index),
     }));
@@ -318,7 +318,7 @@ export function AiUsageWeeklyChart({
               {data.series.map((series, index) => {
                 const color = getSeriesColor(series.isOther, index, primary, info, warning, muted);
                 const label = series.isOther
-                  ? t('aiUsage.otherModels')
+                  ? t('aiUsage.other')
                   : displayAiUsageModelId(series.modelId) || t('aiUsage.unknownModel');
 
                 return (
@@ -339,7 +339,7 @@ export function AiUsageWeeklyChart({
                       numberOfLines={1}
                       style={styles.tabularNumbers}
                     >
-                      {t('aiUsage.tokensValue', { tokens: formatTokens(series.totalTokens) })}
+                      {formatTokens(series.totalTokens)}
                     </Text>
                   </View>
                 );

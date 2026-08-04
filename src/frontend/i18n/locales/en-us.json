@@ -5,6 +5,7 @@
   "aiUsage.loading": "Loading usage statistics",
   "aiUsage.mostUsed": "Most Used",
   "aiUsage.noUsageForDay": "No usage on this day",
+  "aiUsage.other": "Other",
   "aiUsage.otherModels": "Other models",
   "aiUsage.otherProviders": "Other providers",
   "aiUsage.rankingLoadError": "Usage ranking could not be loaded.",
