@@ -111,6 +111,7 @@ export function AiUsageWeeklySection({
       action={
         activePageIndex === AI_USAGE_CURRENT_WEEK_PAGE_INDEX ? undefined : (
           <AiUsageSectionAction
+            compact
             label={t('aiUsage.showThisWeek')}
             testID="ai-usage-show-current-week"
             onPress={handleShowCurrentWeek}

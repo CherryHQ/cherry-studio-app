@@ -120,9 +120,15 @@ describe('AiUsageWeeklySection', () => {
       true,
     ]);
 
-    await act(async () =>
-      renderer?.root.findByProps({ testID: 'ai-usage-show-current-week' }).props.onPress(),
-    );
+    const showCurrentWeek = renderer?.root
+      .findAllByProps({ testID: 'ai-usage-show-current-week' })
+      .find(
+        (node) =>
+          typeof node.props.onPress === 'function' && typeof node.props.className === 'string',
+      );
+    expect(showCurrentWeek?.props.className).not.toContain('py-1.5');
+    expect(showCurrentWeek?.props.hitSlop).toBe(10);
+    await act(async () => showCurrentWeek?.props.onPress());
     expect(mockScrollToIndex).toHaveBeenCalledWith({ animated: true, index: 7 });
     expect(mockSelectPage).toHaveBeenLastCalledWith(7);
   });

@@ -37,10 +37,12 @@ export function AiUsageSectionStatus({
 }
 
 export function AiUsageSectionAction({
+  compact = false,
   label,
   onPress,
   testID,
 }: {
+  compact?: boolean;
   label: string;
   onPress: () => void;
   testID: string;
@@ -48,8 +50,12 @@ export function AiUsageSectionAction({
   return (
     <Pressable
       accessibilityRole="button"
-      className="shrink-0 rounded-lg px-2 py-1.5 active:bg-surface-secondary active:opacity-70"
-      hitSlop={4}
+      className={
+        compact
+          ? 'shrink-0 rounded-lg px-2 active:bg-surface-secondary active:opacity-70'
+          : 'shrink-0 rounded-lg px-2 py-1.5 active:bg-surface-secondary active:opacity-70'
+      }
+      hitSlop={compact ? 10 : 4}
       testID={testID}
       onPress={onPress}
     >
