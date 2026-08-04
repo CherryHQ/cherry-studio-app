@@ -5,10 +5,17 @@ import type { AiUsageRankingItem } from '../../types';
 import { AiUsageRankingList } from '../AiUsageRankingList';
 
 const mockResolveProviderIcon = jest.fn((_providerId: string) => undefined);
+const mockResolveIcon = jest.fn(
+  (_modelId: string, _providerId: string): { dark: string; light: string } | undefined => undefined,
+);
+const mockImage = jest.fn((_props: unknown) => null);
 
 jest.mock('@cherrystudio/ui/icons', () => ({
-  resolveIcon: () => undefined,
+  resolveIcon: (modelId: string, providerId: string) => mockResolveIcon(modelId, providerId),
   resolveProviderIcon: (providerId: string) => mockResolveProviderIcon(providerId),
+}));
+jest.mock('@/frontend/components/nativePrimitives', () => ({
+  Image: (props: unknown) => mockImage(props),
 }));
 jest.mock('lucide-uniwind/png', () => ({ ChevronDownIcon: () => null, EllipsisIcon: () => null }));
 jest.mock('uniwind', () => ({
@@ -45,6 +52,8 @@ describe('AiUsageRankingList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResolveIcon.mockReturnValue(undefined);
+    mockResolveProviderIcon.mockReturnValue(undefined);
   });
 
   afterEach(async () => {
@@ -59,7 +68,9 @@ describe('AiUsageRankingList', () => {
     expect(textValues()).toEqual(expect.arrayContaining(['model-0 | Provider', '1K Tokens']));
     expect(
       renderer?.root.findByProps({ testID: 'ai-usage-ranking-progress-0' }).props.className,
-    ).toBe('h-1 min-w-1 rounded-full bg-primary');
+    ).toBe('h-1 min-w-1 rounded-full bg-muted-foreground');
+    // Separators sit above each row and clear the icon column, so the first row has none.
+    expect(separators()).toHaveLength(6);
 
     await act(async () =>
       renderer?.root.findByProps({ testID: 'ai-usage-show-more' }).props.onPress(),
@@ -104,9 +115,61 @@ describe('AiUsageRankingList', () => {
     expect(mockResolveProviderIcon).toHaveBeenCalledWith('openai');
   });
 
-  async function renderList(items: readonly AiUsageRankingItem[]) {
+  it('uses model service avatar styling at the larger ranking size', async () => {
+    mockResolveIcon.mockReturnValue({ dark: 'claude-dark', light: 'claude-light' });
+    const claudeItem: AiUsageRankingItem = {
+      groupBy: 'model',
+      isOther: false,
+      key: 'model:claude',
+      modelId: 'claude-sonnet-4',
+      providerId: 'anthropic',
+      providerName: 'Anthropic',
+      totalTokens: 175_800,
+    };
+
+    await renderList([claudeItem]);
+
+    const frame = renderer?.root
+      .findAll(
+        (node) => node.type === View && node.props.testID === 'ai-usage-ranking-icon-model:claude',
+      )
+      .at(0);
+    expect(frame?.props.className).toBe(
+      'items-center justify-center overflow-hidden border border-border-subtle border-continuous',
+    );
+    expect(frame?.props.style).toEqual({ borderRadius: 6, height: 32, width: 32 });
+    expect(mockImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'claude-light',
+        style: {
+          borderRadius: 5,
+          height: 32 * (5 / 7),
+          width: 32 * (5 / 7),
+        },
+      }),
+    );
+  });
+
+  it('collapses back to the first page only when the reset key changes', async () => {
+    await renderList(modelItems);
+    await act(async () =>
+      renderer?.root.findByProps({ testID: 'ai-usage-show-more' }).props.onPress(),
+    );
+    expect(rankingRows()).toHaveLength(14);
+
+    // A background refresh under the same key must not throw away the expanded page.
+    await renderList(modelItems.slice(0, 20));
+    expect(rankingRows()).toHaveLength(14);
+
+    await renderList(modelItems, '2026-08-03:model');
+    expect(rankingRows()).toHaveLength(7);
+  });
+
+  async function renderList(items: readonly AiUsageRankingItem[], resetKey = '2026-08-02:model') {
     await act(async () => {
-      renderer = create(<AiUsageRankingList items={items} locale="en-US" />);
+      const element = <AiUsageRankingList items={items} locale="en-US" resetKey={resetKey} />;
+      if (renderer) renderer.update(element);
+      else renderer = create(element);
     });
   }
 
@@ -117,6 +180,16 @@ describe('AiUsageRankingList', () => {
           node.type === View &&
           typeof node.props.testID === 'string' &&
           node.props.testID.startsWith('ai-usage-ranking-row-'),
+      ) ?? []
+    );
+  }
+
+  function separators() {
+    return (
+      renderer?.root.findAll(
+        (node) =>
+          node.type === View &&
+          node.props.className === 'absolute top-0 right-0 left-11 border-border border-t',
       ) ?? []
     );
   }

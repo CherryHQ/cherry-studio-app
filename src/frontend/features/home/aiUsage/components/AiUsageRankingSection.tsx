@@ -64,9 +64,9 @@ export function AiUsageRankingSection({ enabled, locale, page }: AiUsageRankingS
           <AiUsageRankingListSkeleton />
         ) : ranking.length > 0 ? (
           <AiUsageRankingList
-            key={`${page.selectedDateKey}:${groupBy}`}
             items={ranking}
             locale={locale}
+            resetKey={`${page.selectedDateKey}:${groupBy}`}
           />
         ) : (
           <View className="min-h-32 items-center justify-center px-6">
