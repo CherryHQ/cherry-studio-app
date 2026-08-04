@@ -11,6 +11,7 @@ jest.mock('@expo/ui/swift-ui', () => {
       React.createElement(View, { ...props, mockComponent: 'host', testID: 'host' }),
     Slider: (props: object) =>
       React.createElement(View, { ...props, mockComponent: 'expo-slider' }),
+    Text: (props: object) => React.createElement(View, { ...props, mockComponent: 'expo-text' }),
   };
 });
 
@@ -64,7 +65,9 @@ describe('Slider (iOS)', () => {
           accessibilityLabel="Opacity"
           disabled
           max={1}
+          maximumValueLabel="Maximum"
           min={0.1}
+          minimumValueLabel="Minimum"
           onValueChange={jest.fn()}
           step={0.1}
           style={style}
@@ -80,7 +83,9 @@ describe('Slider (iOS)', () => {
     expect(host.props.style).toEqual([{ alignSelf: 'stretch' }, style]);
     expect(slider.props.min).toBe(0.1);
     expect(slider.props.max).toBe(1);
+    expect(slider.props.maximumValueLabel.props.children).toBe('Maximum');
     expect(slider.props.step).toBe(0.1);
+    expect(slider.props.minimumValueLabel.props.children).toBe('Minimum');
     expect(slider.props.modifiers).toContainEqual({ disabled: true });
   });
 });

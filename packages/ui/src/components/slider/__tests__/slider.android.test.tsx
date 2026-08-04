@@ -1,3 +1,4 @@
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Slider } from '../slider.android';
@@ -74,5 +75,30 @@ describe('Slider (Android)', () => {
     expect(root.props.maxValue).toBe(1);
     expect(root.props.step).toBe(0.1);
     expect(root.props.style).toBe(style);
+  });
+
+  test('renders endpoint labels around a flexible slider', () => {
+    const style = { marginTop: 8 };
+
+    act(() => {
+      renderer = create(
+        <Slider
+          accessibilityLabel="Text size"
+          maximumValueLabel="Extra large"
+          minimumValueLabel="Standard"
+          onValueChange={jest.fn()}
+          style={style}
+          value={1}
+        />,
+      );
+    });
+
+    const root = renderer!.root.findByProps({ mockComponent: 'hero-slider' });
+    const labels = renderer!.root.findAllByType(Text);
+
+    expect(root.props.className).toBe('min-w-0 flex-1');
+    expect(root.props.style).toBeUndefined();
+    expect(labels.map((label) => label.props.children)).toEqual(['Standard', 'Extra large']);
+    expect(labels.every((label) => label.props.allowFontScaling !== false)).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { Host, Slider as ExpoSlider } from '@expo/ui/swift-ui';
+import { Host, Slider as ExpoSlider, Text } from '@expo/ui/swift-ui';
 import {
   accessibilityLabel as accessibilityLabelModifier,
   disabled as disabledModifier,
@@ -11,7 +11,9 @@ export function Slider({
   accessibilityLabel,
   disabled = false,
   max = 100,
+  maximumValueLabel,
   min = 0,
+  minimumValueLabel,
   onValueChange,
   step = 1,
   style,
@@ -28,7 +30,9 @@ export function Slider({
     >
       <ExpoSlider
         max={max}
+        maximumValueLabel={maximumValueLabel ? <Text>{maximumValueLabel}</Text> : undefined}
         min={min}
+        minimumValueLabel={minimumValueLabel ? <Text>{minimumValueLabel}</Text> : undefined}
         modifiers={[accessibilityLabelModifier(accessibilityLabel), disabledModifier(disabled)]}
         onValueChange={onValueChange}
         step={step}
