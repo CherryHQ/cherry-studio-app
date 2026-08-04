@@ -34,4 +34,18 @@ describe('typography scale', () => {
       '--ui-text-xs--line-height': 20,
     });
   });
+
+  test.each([
+    [0, 30, 40],
+    [1, 36, 48],
+    [2, 48, 64],
+  ] as const)(
+    'creates scalable emoji typography with safe line height for step %i',
+    (step, fontSize, lineHeight) => {
+      expect(createTypographyCSSVariables(step)).toMatchObject({
+        '--ui-emoji-3xl--line-height': lineHeight,
+        '--ui-text-3xl': fontSize,
+      });
+    },
+  );
 });

@@ -24,16 +24,20 @@
   --ui-text-lg--line-height: 28px;
   --ui-text-xl: 20px;
   --ui-text-xl--line-height: 28px;
+  --ui-emoji-xl--line-height: 28px;
   --ui-text-2xl: 24px;
   --ui-text-2xl--line-height: 32px;
+  --ui-emoji-2xl--line-height: 32px;
   --ui-text-3xl: 30px;
   --ui-text-3xl--line-height: 36px;
+  --ui-emoji-3xl--line-height: 40px;
   --ui-text-4xl: 36px;
   --ui-text-4xl--line-height: 40px;
   --ui-text-5xl: 48px;
   --ui-text-5xl--line-height: 48px;
   --ui-text-6xl: 60px;
   --ui-text-6xl--line-height: 60px;
+  --ui-emoji-6xl--line-height: 80px;
   --ui-text-7xl: 72px;
   --ui-text-7xl--line-height: 72px;
   --ui-text-8xl: 96px;
@@ -49,6 +53,26 @@
   --color-accent-soft-foreground: color-mix(in oklab, var(--primary) 80%, var(--foreground) 20%);
   --color-accent-soft-hover: color-mix(in oklab, var(--primary) 20%, transparent);
   --color-muted: var(--muted-foreground);
+}
+
+@utility text-emoji-xl {
+  font-size: var(--ui-text-xl);
+  line-height: var(--ui-emoji-xl--line-height);
+}
+
+@utility text-emoji-2xl {
+  font-size: var(--ui-text-2xl);
+  line-height: var(--ui-emoji-2xl--line-height);
+}
+
+@utility text-emoji-3xl {
+  font-size: var(--ui-text-3xl);
+  line-height: var(--ui-emoji-3xl--line-height);
+}
+
+@utility text-emoji-6xl {
+  font-size: var(--ui-text-6xl);
+  line-height: var(--ui-emoji-6xl--line-height);
 }
 
 @theme inline static {

@@ -2,7 +2,7 @@ import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import AssistantDetailScreen from '../AssistantDetailScreen';
@@ -158,15 +158,15 @@ describe('AssistantDetailScreen', () => {
     expect(texts).toContain('GPT-5 Pro');
   });
 
-  it('keeps the decorative emoji independent from the global typography scale', async () => {
+  it('scales the emoji with the global typography scale without a fixed line height', async () => {
     mockAssistant = makeAssistant();
 
     const tree = await render();
     const emoji = tree.root.findAllByType(Text).find((node) => node.props.children === '🌟');
 
-    expect(StyleSheet.flatten(emoji?.props.style)).toMatchObject({ fontSize: 60, lineHeight: 80 });
-    expect(emoji?.props.allowFontScaling).toBe(false);
-    expect(emoji?.props.className).toBeUndefined();
+    expect(emoji?.props.className).toContain('text-emoji-6xl');
+    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.allowFontScaling).not.toBe(false);
   });
 
   it('hides the bottom tabs while the detail screen is mounted', async () => {

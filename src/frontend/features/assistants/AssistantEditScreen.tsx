@@ -220,10 +220,10 @@ function AssistantEditForm({
             <Pressable
               accessibilityLabel={t('assistant.form.emoji')}
               accessibilityRole="button"
-              className="size-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
+              className="min-h-12 min-w-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
               onPress={openEmojiPicker}
             >
-              <Text allowFontScaling={false} style={styles.emojiGlyph}>
+              <Text className="text-emoji-2xl" style={styles.emojiGlyph}>
                 {form.emoji.trim() || defaultEmoji}
               </Text>
             </Pressable>
@@ -622,9 +622,7 @@ function getSingleParamValue(value: string | string[] | undefined) {
 
 const styles = StyleSheet.create({
   emojiGlyph: {
-    fontSize: 24,
     includeFontPadding: false,
-    lineHeight: 32,
   },
   scroll: {
     flex: 1,

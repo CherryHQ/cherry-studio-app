@@ -1,7 +1,7 @@
 import type { ImageSource } from 'expo-image';
 import { ChevronRightIcon, type PngIconProps } from 'lucide-uniwind/png';
 import type { ComponentType, ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { Image } from '@/frontend/components/nativePrimitives';
 
@@ -40,9 +40,7 @@ export function SettingsItem({
     >
       <View className="flex-1 flex-row items-center gap-3">
         {iconEmoji ? (
-          <Text allowFontScaling={false} className="w-6 text-center" style={styles.iconEmoji}>
-            {iconEmoji}
-          </Text>
+          <Text className="min-w-6 text-center text-emoji-xl">{iconEmoji}</Text>
         ) : imageSource ? (
           <Image
             cachePolicy="memory-disk"
@@ -65,10 +63,3 @@ export function SettingsItem({
     </Pressable>
   );
 }
-
-const styles = StyleSheet.create({
-  iconEmoji: {
-    fontSize: 20,
-    lineHeight: 24,
-  },
-});

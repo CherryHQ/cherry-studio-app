@@ -1,7 +1,7 @@
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReactNode } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { TopicList } from '../TopicList';
@@ -188,16 +188,16 @@ describe('TopicList pin action', () => {
     expect(highlightedRows.length).toBeGreaterThan(0);
   });
 
-  it('keeps the decorative emoji independent from the global typography scale', async () => {
+  it('scales the emoji with the global typography scale without a fixed frame height', async () => {
     await act(async () => {
       renderer = create(<TopicList />);
     });
 
     const emoji = renderer?.root.findAllByType(Text).find((node) => node.props.children === '🍒');
 
-    expect(StyleSheet.flatten(emoji?.props.style)).toMatchObject({ fontSize: 30, lineHeight: 48 });
-    expect(emoji?.props.allowFontScaling).toBe(false);
-    expect(emoji?.props.className).not.toContain('text-3xl');
-    expect(emoji?.props.className).not.toContain('leading-12');
+    expect(emoji?.props.className).toContain('text-emoji-3xl');
+    expect(emoji?.props.className).not.toContain('h-12');
+    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.allowFontScaling).not.toBe(false);
   });
 });

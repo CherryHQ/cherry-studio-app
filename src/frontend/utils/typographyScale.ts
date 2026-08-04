@@ -20,6 +20,8 @@ export type TypographySizeName = (typeof TYPOGRAPHY_SIZE_NAMES)[number];
 export type TypographySize = { fontSize: number; lineHeight: number };
 export type TypographyScale = Record<TypographySizeName, TypographySize>;
 
+const emojiTypographySizeNames = ['xl', '2xl', '3xl', '6xl'] as const;
+
 const sizeSequence: readonly TypographySize[] = [
   { fontSize: 12, lineHeight: 16 },
   { fontSize: 14, lineHeight: 20 },
@@ -52,13 +54,21 @@ export function resolveTypographyScale(value: unknown): TypographyScale {
   ) as TypographyScale;
 }
 
+function resolveEmojiLineHeight(fontSize: number): number {
+  return Math.ceil(fontSize / 3) * 4;
+}
+
 export function createTypographyCSSVariables(value: unknown): Record<string, number> {
   const scale = resolveTypographyScale(value);
 
-  return Object.fromEntries(
-    TYPOGRAPHY_SIZE_NAMES.flatMap((name) => [
+  return Object.fromEntries([
+    ...TYPOGRAPHY_SIZE_NAMES.flatMap((name) => [
       [`--ui-text-${name}`, scale[name].fontSize],
       [`--ui-text-${name}--line-height`, scale[name].lineHeight],
     ]),
-  );
+    ...emojiTypographySizeNames.map((name) => [
+      `--ui-emoji-${name}--line-height`,
+      resolveEmojiLineHeight(scale[name].fontSize),
+    ]),
+  ]);
 }
