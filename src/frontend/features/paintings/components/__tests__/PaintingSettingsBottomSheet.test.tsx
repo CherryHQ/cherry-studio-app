@@ -40,19 +40,10 @@ jest.mock('heroui-native/switch', () => {
   return { Switch: (props: Record<string, unknown>) => <MockPressable {...props} /> };
 });
 
-jest.mock('heroui-native/slider', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
-  function MockSlider({ children, ...props }: { children?: ReactNode }) {
-    return <MockView {...props}>{children}</MockView>;
-  }
-  MockSlider.Track = function MockSliderTrack({ children }: { children?: ReactNode }) {
-    return <MockView>{children}</MockView>;
-  };
-  MockSlider.Fill = MockView;
-  MockSlider.Thumb = MockView;
-
-  return { Slider: MockSlider };
+  return { Slider: (props: Record<string, unknown>) => <MockView {...props} /> };
 });
 
 jest.mock('heroui-native/select', () => {
@@ -183,7 +174,7 @@ describe('PaintingSettingsBottomSheet', () => {
     act(() =>
       renderer?.root
         .findByProps({ accessibilityLabel: 'painting.settings.param.numImages' })
-        .props.onChange([3]),
+        .props.onValueChange(3),
     );
     act(() =>
       renderer?.root

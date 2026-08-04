@@ -1,7 +1,7 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
+import { Slider } from '@cherrystudio/ui/components';
 import { Input } from 'heroui-native/input';
 import { Select } from 'heroui-native/select';
-import { Slider } from 'heroui-native/slider';
 import { Switch } from 'heroui-native/switch';
 import type { TFunction } from 'i18next';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
@@ -154,19 +154,12 @@ function PaintingSettingField({
           </View>
           <Slider
             accessibilityLabel={label}
-            maxValue={field.spec.max}
-            minValue={field.spec.min}
-            onChange={(nextValue) =>
-              onValueChange(field.key, Array.isArray(nextValue) ? nextValue[0] : nextValue)
-            }
+            max={field.spec.max}
+            min={field.spec.min}
+            onValueChange={(nextValue) => onValueChange(field.key, nextValue)}
             step={field.spec.step ?? 1}
             value={numericValue}
-          >
-            <Slider.Track>
-              <Slider.Fill />
-              <Slider.Thumb />
-            </Slider.Track>
-          </Slider>
+          />
         </View>
       );
     }
