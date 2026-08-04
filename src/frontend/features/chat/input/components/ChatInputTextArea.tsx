@@ -1,5 +1,7 @@
+import { type PasteEventPayload, TextInputWrapper } from 'expo-paste-input';
 import { TextArea } from 'heroui-native/text-area';
 import { cn } from 'heroui-native/utils';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
 
@@ -9,6 +11,7 @@ import {
   useChatInputMeta,
   useChatInputState,
 } from '../context/ChatInputProvider';
+import { createPastedImageAttachmentDraft } from '../utils/chatInputAttachments';
 
 // heroui-native's Input paints the border/outline `accent`-colored on focus
 // (`ios:focus:outline-ring` / `android:focus:border-primary`). `border-0` only
@@ -19,37 +22,50 @@ const transparentInputSurfaceClassName =
 
 export function ChatInputTextArea() {
   const { t } = useTranslation();
-  const { setDraft, setInputFocused } = useChatInputActions();
+  const { addAttachments, setDraft, setInputFocused } = useChatInputActions();
   const { inputRef } = useChatInputMeta();
   const { draft } = useChatInputState();
+  const handlePaste = useCallback(
+    (payload: PasteEventPayload) => {
+      if (payload.type === 'images' && payload.uris.length > 0) {
+        addAttachments(payload.uris.map(createPastedImageAttachmentDraft));
+      }
+    },
+    [addAttachments],
+  );
 
   return (
-    <TextArea
-      ref={inputRef}
-      multiline
-      className={cn(
-        'h-auto min-h-11 flex-1 rounded-3xl pt-3! pr-12! pb-3! pl-3! text-base leading-5',
-        transparentInputSurfaceClassName,
-      )}
-      numberOfLines={6}
-      placeholder={t('chat.inputPlaceholder')}
-      style={[
-        styles.transparentInputSurface,
-        {
-          maxHeight: chatInputMaxTextAreaHeight,
-          minHeight: chatInputMinTextAreaHeight,
-        },
-      ]}
-      textAlignVertical="center"
-      value={draft}
-      onBlur={() => setInputFocused(false)}
-      onChangeText={setDraft}
-      onFocus={() => setInputFocused(true)}
-    />
+    <TextInputWrapper style={styles.pasteInputWrapper} onPaste={handlePaste}>
+      <TextArea
+        ref={inputRef}
+        multiline
+        className={cn(
+          'h-auto min-h-11 flex-1 rounded-3xl pt-3! pr-12! pb-3! pl-3! text-base',
+          transparentInputSurfaceClassName,
+        )}
+        numberOfLines={6}
+        placeholder={t('chat.inputPlaceholder')}
+        style={[
+          styles.transparentInputSurface,
+          {
+            maxHeight: chatInputMaxTextAreaHeight,
+            minHeight: chatInputMinTextAreaHeight,
+          },
+        ]}
+        textAlignVertical="center"
+        value={draft}
+        onBlur={() => setInputFocused(false)}
+        onChangeText={setDraft}
+        onFocus={() => setInputFocused(true)}
+      />
+    </TextInputWrapper>
   );
 }
 
 const styles = StyleSheet.create({
+  pasteInputWrapper: {
+    alignSelf: 'stretch',
+  },
   transparentInputSurface: {
     backgroundColor: 'transparent',
     borderColor: 'transparent',

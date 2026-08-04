@@ -1,7 +1,26 @@
-import { ThemeMode } from '@cherrystudio/universal/data/preference';
+import { type FontSizeStep, ThemeMode } from '@cherrystudio/universal/data/preference';
 import { Uniwind } from 'uniwind';
 
+import { createTypographyCSSVariables } from './typographyScale';
+
 export const DEFAULT_PRIMARY_COLOR = '#00b96b';
+
+function updateBothThemes(variables: Record<string, string | number>) {
+  const activeTheme = Uniwind.currentTheme === 'dark' ? 'dark' : 'light';
+  const inactiveTheme = activeTheme === 'light' ? 'dark' : 'light';
+
+  Uniwind.updateCSSVariables(inactiveTheme, variables);
+  Uniwind.updateCSSVariables(activeTheme, variables);
+}
+
+function createPrimaryColorVariables(primaryColor: string) {
+  const normalized = normalizeHexColor(primaryColor);
+
+  return {
+    '--cs-theme-primary': normalized,
+    '--cs-theme-primary-foreground': getPrimaryForeground(normalized),
+  };
+}
 
 export function applyThemeModePreference(themeMode: ThemeMode) {
   switch (themeMode) {
@@ -47,19 +66,21 @@ export function getPrimaryForeground(primaryColor: string): '#000000' | '#ffffff
 }
 
 export function applyPrimaryColorPreference(primaryColor: string) {
-  const normalized = normalizeHexColor(primaryColor);
-  const variables = {
-    '--cs-theme-primary': normalized,
-    '--cs-theme-primary-foreground': getPrimaryForeground(normalized),
-  };
-  const activeTheme = Uniwind.currentTheme === 'dark' ? 'dark' : 'light';
-  const inactiveTheme = activeTheme === 'light' ? 'dark' : 'light';
-
-  Uniwind.updateCSSVariables(inactiveTheme, variables);
-  Uniwind.updateCSSVariables(activeTheme, variables);
+  updateBothThemes(createPrimaryColorVariables(primaryColor));
 }
 
-export function applyThemePreferences(themeMode: ThemeMode, primaryColor: string) {
+export function applyFontSizeStepPreference(fontSizeStep: FontSizeStep) {
+  updateBothThemes(createTypographyCSSVariables(fontSizeStep));
+}
+
+export function applyThemePreferences(
+  themeMode: ThemeMode,
+  primaryColor: string,
+  fontSizeStep: FontSizeStep,
+) {
   applyThemeModePreference(themeMode);
-  applyPrimaryColorPreference(primaryColor);
+  updateBothThemes({
+    ...createPrimaryColorVariables(primaryColor),
+    ...createTypographyCSSVariables(fontSizeStep),
+  });
 }

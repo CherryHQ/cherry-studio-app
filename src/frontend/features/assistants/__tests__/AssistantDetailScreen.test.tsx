@@ -158,6 +158,17 @@ describe('AssistantDetailScreen', () => {
     expect(texts).toContain('GPT-5 Pro');
   });
 
+  it('scales the emoji with the global typography scale without a fixed line height', async () => {
+    mockAssistant = makeAssistant();
+
+    const tree = await render();
+    const emoji = tree.root.findAllByType(Text).find((node) => node.props.children === '🌟');
+
+    expect(emoji?.props.className).toContain('text-emoji-6xl');
+    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.allowFontScaling).not.toBe(false);
+  });
+
   it('hides the bottom tabs while the detail screen is mounted', async () => {
     mockAssistant = makeAssistant();
 

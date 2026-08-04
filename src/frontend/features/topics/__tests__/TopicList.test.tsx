@@ -1,5 +1,7 @@
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReactNode } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { TopicList } from '../TopicList';
@@ -7,10 +9,16 @@ import { TopicList } from '../TopicList';
 const mockToggleTopicPin = jest.fn(async () => undefined);
 const mockToastShow = jest.fn();
 const mockTopic = {
+  assistantId: 'assistant-1',
   id: 'topic-1',
   name: 'Pinned topic',
   updatedAt: '2026-07-21T12:00:00.000Z',
 } as Topic;
+const mockAssistant = {
+  emoji: '🍒',
+  id: 'assistant-1',
+  modelName: 'Mock Chat Model',
+} as Assistant;
 let mockPinnedTopicIds: readonly string[] = [];
 
 jest.mock('@legendapp/list/react-native', () => {
@@ -101,7 +109,7 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
-  useAssistantsApi: () => ({ assistants: [] }),
+  useAssistantsApi: () => ({ assistants: [mockAssistant] }),
 }));
 
 jest.mock('@/frontend/hooks/useExclusiveSwipeable', () => ({
@@ -178,5 +186,18 @@ describe('TopicList pin action', () => {
           'relative min-w-0 flex-1 flex-row items-center gap-2 bg-surface-secondary py-2 pl-2',
       }) ?? [];
     expect(highlightedRows.length).toBeGreaterThan(0);
+  });
+
+  it('scales the emoji with the global typography scale without a fixed frame height', async () => {
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    const emoji = renderer?.root.findAllByType(Text).find((node) => node.props.children === '🍒');
+
+    expect(emoji?.props.className).toContain('text-emoji-3xl');
+    expect(emoji?.props.className).not.toContain('h-12');
+    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.allowFontScaling).not.toBe(false);
   });
 });

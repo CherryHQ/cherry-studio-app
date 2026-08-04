@@ -1,4 +1,4 @@
-import { DefaultPreferences } from '@cherrystudio/universal/data/preference';
+import { PreferenceDefaults } from '@cherrystudio/universal/data/preference';
 
 import { preferenceTable } from '@/backend/data/db/schemas';
 
@@ -12,7 +12,7 @@ export class PreferenceSeeder implements DatabaseSeeder {
   readonly version: string;
 
   constructor() {
-    this.version = hashObject(DefaultPreferences);
+    this.version = hashObject(PreferenceDefaults);
   }
 
   async run(dbService: Parameters<DatabaseSeeder['run']>[0]) {
@@ -40,8 +40,8 @@ export class PreferenceSeeder implements DatabaseSeeder {
       existingPreferences.add(`${preference.scope}.${preference.key}`);
     }
 
-    // Process each scope in DefaultPreferences.
-    for (const [scope, scopeData] of Object.entries(DefaultPreferences)) {
+    // Process each scope in the complete mobile preference surface.
+    for (const [scope, scopeData] of Object.entries(PreferenceDefaults)) {
       // Process each key-value pair in the scope.
       for (const [key, value] of Object.entries(scopeData)) {
         const preferenceKey = `${scope}.${key}`;

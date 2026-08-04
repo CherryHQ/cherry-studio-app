@@ -108,7 +108,7 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
     <View className="gap-1">
       <Text className="text-foreground-tertiary text-xs">{t('chat.tool.arguments')}</Text>
       <ScrollView className="max-h-48 rounded-md bg-surface-tertiary" nestedScrollEnabled>
-        <Text className="p-2 font-mono text-default-foreground text-xs leading-5" selectable>
+        <Text className="p-2 font-mono text-default-foreground text-xs" selectable>
           {preview}
         </Text>
       </ScrollView>

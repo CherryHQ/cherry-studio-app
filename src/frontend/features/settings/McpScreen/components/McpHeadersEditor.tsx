@@ -20,7 +20,7 @@ export function McpHeadersEditor({
       accessibilityLabel={t('settings.mcp.headers.title')}
       autoCapitalize="none"
       autoCorrect={false}
-      className="min-h-24 rounded-xl px-3 py-3 font-mono text-foreground text-sm leading-5"
+      className="min-h-24 rounded-xl px-3 py-3 font-mono text-foreground text-sm"
       isDisabled={isDisabled}
       multiline
       onChangeText={onChangeText}

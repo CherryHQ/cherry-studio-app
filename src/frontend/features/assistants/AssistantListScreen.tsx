@@ -361,7 +361,7 @@ function AssistantListRow({
                 </View>
               </Animated.View>
             ) : null}
-            <Text className="min-w-12 h-12 text-center text-3xl leading-12">{assistant.emoji}</Text>
+            <Text className="min-w-12 text-center text-emoji-3xl">{assistant.emoji}</Text>
             <View className="min-w-0 flex-1 pr-4">
               <View className="gap-0.5">
                 <Text className="font-semibold text-foreground text-md" numberOfLines={1}>

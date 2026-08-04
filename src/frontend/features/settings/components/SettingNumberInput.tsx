@@ -43,7 +43,7 @@ export function SettingNumberInput({
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
-      className="h-8 min-h-0 w-24 rounded-xl px-2 py-0 text-right text-base leading-5"
+      className="h-8 min-h-0 w-24 rounded-xl px-2 py-0 text-right text-base"
       inputMode="numeric"
       keyboardType="number-pad"
       onBlur={commitValue}

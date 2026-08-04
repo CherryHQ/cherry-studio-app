@@ -172,7 +172,7 @@ export default function ProfileSettingsScreen() {
             <Input
               accessibilityLabel={t('settings.profile.userName')}
               autoCorrect={false}
-              className="rounded-2xl px-4 text-base text-foreground leading-5"
+              className="rounded-2xl px-4 text-base text-foreground"
               onChangeText={setNameDraft}
               onSubmitEditing={blurInput}
               placeholderColorClassName="accent-muted-foreground"

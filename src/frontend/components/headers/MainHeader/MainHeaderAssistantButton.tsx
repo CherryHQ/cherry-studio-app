@@ -5,8 +5,6 @@ import { Pressable, Text } from 'react-native';
 
 import { useAssistantApiById, useTopic } from '@/frontend/hooks/chat';
 
-const assistantButtonSize = 36;
-
 export function useMainHeaderAssistant() {
   const router = useRouter();
   const { assistantId, topicId } = useLocalSearchParams<{
@@ -45,13 +43,12 @@ export function MainHeaderAssistantButton({
     <Pressable
       accessibilityLabel={assistant.name}
       accessibilityRole="button"
-      className="items-center justify-center overflow-hidden rounded-full bg-settings-grouped-surface active:opacity-60"
+      className="size-10 items-center justify-center overflow-hidden rounded-full bg-settings-grouped-surface active:opacity-60"
       hitSlop={8}
       onPress={onPress}
-      style={{ height: assistantButtonSize, width: assistantButtonSize }}
       testID="current-assistant-button"
     >
-      <Text className="text-xl leading-7">{assistant.emoji}</Text>
+      <Text className="text-emoji-xl">{assistant.emoji}</Text>
     </Pressable>
   );
 }

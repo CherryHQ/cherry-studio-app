@@ -32,7 +32,7 @@ export function ProviderApiServiceEndpointField({
       <View className="flex-row items-center gap-2">
         <Input
           accessibilityLabel={t('settings.provider.apiService.baseUrl')}
-          className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+          className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base"
           isDisabled
           placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
           style={providerApiServiceStyles.input}
@@ -225,7 +225,7 @@ function EndpointBaseUrlInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className={cn('h-10 min-h-0 rounded-xl px-3 py-0 text-base leading-5', className)}
+      className={cn('h-10 min-h-0 rounded-xl px-3 py-0 text-base', className)}
       isDisabled={isDisabled}
       onBlur={handleCommitEvent}
       onChangeText={onChangeText}

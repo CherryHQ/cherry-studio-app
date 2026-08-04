@@ -1,4 +1,4 @@
-import { DefaultPreferences } from './preferenceSchemas';
+import { PreferenceDefaults } from './preferenceDefaults';
 import type { PreferenceDefaultScopeType, PreferenceKeyType } from './preferenceTypes';
 
 /**
@@ -6,16 +6,16 @@ import type { PreferenceDefaultScopeType, PreferenceKeyType } from './preference
  * Use in generic methods (get/set) where the true branch needs PreferenceKeyType narrowing.
  */
 export function isPreferenceKey(key: string): key is PreferenceKeyType {
-  return key in DefaultPreferences.default;
+  return key in PreferenceDefaults.default;
 }
 
 /** Default value lookup for mobile DB-backed preferences. */
 export function getDefaultValue<K extends PreferenceKeyType>(
   key: K,
 ): PreferenceDefaultScopeType[K] {
-  return DefaultPreferences.default[key];
+  return PreferenceDefaults.default[key];
 }
 
 export function getPreferenceKeys(): PreferenceKeyType[] {
-  return Object.keys(DefaultPreferences.default) as PreferenceKeyType[];
+  return Object.keys(PreferenceDefaults.default) as PreferenceKeyType[];
 }

@@ -75,7 +75,7 @@ export function SettingTextInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 rounded-xl px-3 py-0 text-base leading-5"
+      className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}

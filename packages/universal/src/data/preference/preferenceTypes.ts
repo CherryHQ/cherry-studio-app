@@ -1,10 +1,11 @@
 import type { ShortcutBinding } from '@shared/utils/shortcut';
 import * as z from 'zod';
 
+import type { MobilePreferenceSchema } from './mobilePreferenceSchemas';
 import type { PreferenceSchemas } from './preferenceSchemas';
 
 /** DB-backed preferences only (stored in SQLite) */
-export type PreferenceDefaultScopeType = PreferenceSchemas['default'];
+export type PreferenceDefaultScopeType = PreferenceSchemas['default'] & MobilePreferenceSchema;
 export type PreferenceKeyType = keyof PreferenceDefaultScopeType;
 export type PermissionPreferenceKey = Extract<PreferenceKeyType, `permissions.${string}`>;
 

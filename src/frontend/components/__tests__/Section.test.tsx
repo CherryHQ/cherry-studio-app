@@ -58,6 +58,16 @@ describe('Section', () => {
     ).toContain('p-4');
   });
 
+  test('keeps emoji icons on the fixed decorative type scale', async () => {
+    await act(async () => {
+      renderer = create(<Section items={[{ iconEmoji: '\u{1F3A8}', title: 'Appearance' }]} />);
+    });
+
+    expect(renderer?.root.findByProps({ children: '\u{1F3A8}' }).props.className).toBe(
+      'min-w-6 text-center text-emoji-xl',
+    );
+  });
+
   function textValues() {
     return renderer?.root.findAllByType(Text).map((node) => node.props.children) ?? [];
   }

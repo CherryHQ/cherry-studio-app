@@ -19,7 +19,7 @@ export function SelectionSheetSearchField({ onChange, value }: SelectionSheetSea
           autoCapitalize="none"
           autoComplete="off"
           autoCorrect={false}
-          className="h-10 min-h-10 rounded-xl border-0 bg-transparent py-0 pl-9 pr-10 text-base leading-5"
+          className="h-10 min-h-10 rounded-xl border-0 bg-transparent py-0 pl-9 pr-10 text-base"
           placeholder={t('navigation.search')}
           returnKeyType="search"
           spellCheck={false}

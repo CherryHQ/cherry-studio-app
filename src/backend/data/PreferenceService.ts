@@ -1,8 +1,8 @@
 import {
-  DefaultPreferences,
   getDefaultValue,
   getPreferenceKeys,
   isPreferenceKey,
+  PreferenceDefaults,
   type PreferenceClient,
   type PreferenceDefaultScopeType,
   type PreferenceKeyType,
@@ -42,7 +42,7 @@ const defaultUpdateOptions: PreferenceUpdateOptions = {
  * - Integration with React's useSyncExternalStore
  */
 export class PreferenceService implements PreferenceClient {
-  private cache: PreferenceUpdateMap = { ...DefaultPreferences.default };
+  private cache: PreferenceUpdateMap = { ...PreferenceDefaults.default };
   private listeners = new Map<PreferenceKeyType, Set<PreferenceListener>>();
   private updateTail: Promise<void> = Promise.resolve();
 
@@ -53,7 +53,7 @@ export class PreferenceService implements PreferenceClient {
   }
 
   async init() {
-    this.cache = { ...DefaultPreferences.default };
+    this.cache = { ...PreferenceDefaults.default };
 
     const rows = await this.db
       .select({
@@ -115,7 +115,7 @@ export class PreferenceService implements PreferenceClient {
 
   getAll(): PreferenceDefaultScopeType {
     return {
-      ...DefaultPreferences.default,
+      ...PreferenceDefaults.default,
       ...this.cache,
     } as PreferenceDefaultScopeType;
   }
