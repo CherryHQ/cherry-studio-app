@@ -11,7 +11,7 @@ import type {
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { UIMessageChunk } from 'ai';
 
-import type { PreparedInternalFile } from '@/backend/data/services/fileStorage';
+import type { PreparedInternalFile } from '@/backend/types/file';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 

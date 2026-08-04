@@ -19,7 +19,7 @@ describe('FileEntryService integration', () => {
   beforeEach(() => {
     jest.spyOn(Date, 'now').mockReturnValue(now);
     testDatabase = createServiceTestDatabase();
-    service = new FileEntryService(testDatabase.dbService);
+    service = new FileEntryService(testDatabase.dbService, () => undefined);
   });
 
   afterEach(() => {

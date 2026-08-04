@@ -10,6 +10,7 @@ import type {
   FileEntry,
   FileEntryId,
   FileEntryOrigin,
+  InternalFileEntry,
 } from '@cherrystudio/universal/data/types/file';
 import {
   AbsoluteFilePathSchema,
@@ -38,9 +39,9 @@ import type { Database, DbService } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { persistentRefAbsenceConditions } from '@/backend/data/db/schemas/fileRelations';
+import type { PreparedInternalFile } from '@/backend/types/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { type PreparedInternalFile, resolveInternalFileUri } from './fileStorage';
 import {
   asNumericKey,
   asStringKey,
@@ -95,12 +96,17 @@ export type ListFileEntriesQuery = {
   sortOrder?: 'asc' | 'desc';
 };
 
+type InternalFileUriResolver = (entry: Pick<InternalFileEntry, 'ext' | 'id'>) => string | undefined;
+
 type ListSortBy = NonNullable<ListFileEntriesQuery['sortBy']>;
 const FILE_ENTRY_SIZE_NULL_SORT_VALUE = -1;
 const FILE_ENTRY_EXT_NULL_SORT_VALUE = ' ';
 
 export class FileEntryService {
-  constructor(private readonly dbService: DbService) {}
+  constructor(
+    private readonly dbService: DbService,
+    private readonly resolveInternalFileUri: InternalFileUriResolver,
+  ) {}
 
   private get db() {
     return this.dbService.getDb();
@@ -339,13 +345,13 @@ export class FileEntryService {
 
   async resolveUri(id: FileEntryId): Promise<string | undefined> {
     const entry = await this.findById(id);
-    return entry?.origin === 'internal' ? resolveInternalFileUri(entry) : undefined;
+    return entry?.origin === 'internal' ? this.resolveInternalFileUri(entry) : undefined;
   }
 
   async resolve(id: FileEntryId): Promise<ResolvedFile | null> {
     const entry = await this.findById(id);
     if (!entry || entry.origin !== 'internal') return null;
-    const uri = resolveInternalFileUri(entry);
+    const uri = this.resolveInternalFileUri(entry);
     return uri ? { entry, uri } : null;
   }
 

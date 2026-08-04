@@ -25,7 +25,7 @@ import {
 } from '@cherrystudio/universal/utils/conversationTitle';
 import { isToolUIPart, type UIMessageChunk } from 'ai';
 
-import type { PreparedInternalFile } from '@/backend/data/services/fileStorage';
+import type { PreparedInternalFile } from '@/backend/types/file';
 import type {
   ChatCancelExecutionInput,
   ChatEditAndResendInput,

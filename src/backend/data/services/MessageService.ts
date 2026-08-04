@@ -29,6 +29,7 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
+import type { PreparedInternalFile } from '@/backend/types/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { Database, DbService } from '../db/DbService';
@@ -40,7 +41,6 @@ import {
   topicTable,
 } from '../db/schemas';
 import type { FileEntryService } from './FileEntryService';
-import type { PreparedInternalFile } from './fileStorage';
 import type { TopicService } from './TopicService';
 import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';

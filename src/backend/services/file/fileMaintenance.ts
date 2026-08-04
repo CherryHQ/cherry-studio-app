@@ -1,9 +1,9 @@
 import type { FileEntry } from '@cherrystudio/universal/data/types/file';
 
+import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import type { FileRefService } from '@/backend/data/services/FileRefService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { FileEntryService } from './FileEntryService';
-import type { FileRefService } from './FileRefService';
 import { deleteInternalFile, deleteInternalFileUri, listInternalFiles } from './fileStorage';
 
 export const FILE_MAINTENANCE_GRACE_MS = 60 * 60 * 1000;

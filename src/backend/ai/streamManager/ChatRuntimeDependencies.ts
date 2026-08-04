@@ -22,7 +22,7 @@ import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import type { UIMessageChunk } from 'ai';
 
-import type { PreparedInternalFile } from '@/backend/data/services/fileStorage';
+import type { PreparedInternalFile } from '@/backend/types/file';
 import type { ChatToolApprovalInput } from '@/shared/contracts';
 
 export type ChatStreamRequest = {

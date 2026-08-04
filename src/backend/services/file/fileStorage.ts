@@ -10,20 +10,13 @@ import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/typ
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import type { PreparedInternalFile } from '@/backend/types/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 const DATA_DIRECTORY_NAME = 'Data';
 const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
-
-export type PreparedInternalFile = {
-  ext: string | null;
-  id: FileEntryId;
-  name: string;
-  size: number;
-  uri: string;
-};
 
 export type InternalFileOnDisk = {
   id: FileEntryId;

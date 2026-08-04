@@ -59,7 +59,11 @@ describe('PaintingService integration', () => {
         }
       },
     } as unknown as DbService;
-    service = new PaintingService(dbService, new FileEntryService(dbService));
+    service = new PaintingService(
+      dbService,
+      new FileEntryService(dbService, () => undefined),
+      jest.fn(),
+    );
   });
 
   afterEach(() => sqlite.close());

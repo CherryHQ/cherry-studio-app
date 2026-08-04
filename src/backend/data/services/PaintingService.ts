@@ -16,9 +16,9 @@ import {
   paintingFileRefTable,
   paintingTable,
 } from '@/backend/data/db/schemas';
+import type { PreparedInternalFile } from '@/backend/types/file';
 
 import type { FileEntryService } from './FileEntryService';
-import { discardPreparedFiles, type PreparedInternalFile } from './fileStorage';
 import { insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
@@ -40,6 +40,7 @@ export class PaintingService {
   constructor(
     private readonly dbService: DbService,
     private readonly fileEntryService: FileEntryService,
+    private readonly discardPreparedFiles: (files: readonly PreparedInternalFile[]) => void,
   ) {}
 
   private get db() {
@@ -142,7 +143,7 @@ export class PaintingService {
         output: [],
       });
     } catch (error) {
-      discardPreparedFiles(preparedFiles);
+      this.discardPreparedFiles(preparedFiles);
       throw error;
     }
   }
@@ -182,7 +183,7 @@ export class PaintingService {
           .where(eq(paintingTable.id, id));
       });
     } catch (error) {
-      discardPreparedFiles(outputs);
+      this.discardPreparedFiles(outputs);
       throw error;
     }
 

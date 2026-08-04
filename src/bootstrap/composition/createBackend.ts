@@ -4,16 +4,16 @@ import { readUIMessageStream } from 'ai';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
+import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
+import { canDeleteProvider } from '@/backend/data/services/ProviderService';
+import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
 import {
   discardPreparedFiles,
   imageUriToDataUrl,
   prepareGeneratedImage,
   prepareInternalFileFromUri,
   prepareMessageParts,
-} from '@/backend/data/services/fileStorage';
-import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
-import { canDeleteProvider } from '@/backend/data/services/ProviderService';
-import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
+} from '@/backend/services/file/fileStorage';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';

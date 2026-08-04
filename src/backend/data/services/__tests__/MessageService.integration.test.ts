@@ -99,7 +99,11 @@ describe('MessageService integration', () => {
       new PinService(dbService),
       new TagService(dbService),
     );
-    service = new MessageService(dbService, topicService, new FileEntryService(dbService));
+    service = new MessageService(
+      dbService,
+      topicService,
+      new FileEntryService(dbService, () => undefined),
+    );
   });
 
   afterEach(() => sqlite.close());

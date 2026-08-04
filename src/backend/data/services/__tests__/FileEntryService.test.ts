@@ -7,9 +7,7 @@ jest.mock('uuid', () => ({
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
 }));
 
-jest.mock('../fileStorage', () => ({
-  resolveInternalFileUri: jest.fn(() => 'file:///documents/Data/Files/entry.txt'),
-}));
+const resolveInternalFileUri = jest.fn(() => 'file:///documents/Data/Files/entry.txt');
 
 describe('FileEntryService', () => {
   test.each([
@@ -73,7 +71,7 @@ describe('FileEntryService', () => {
   test('inserts prepared entries into the caller transaction', async () => {
     const values = jest.fn(async () => undefined);
     const tx = { insert: jest.fn(() => ({ values })) } as unknown as Database;
-    const service = new FileEntryService({} as DbService);
+    const service = new FileEntryService({} as DbService, resolveInternalFileUri);
 
     await service.createPreparedEntriesTx(tx, [
       {
@@ -107,5 +105,5 @@ function createServiceWithRows(rows: unknown[]) {
       })),
     })),
   };
-  return new FileEntryService({ getDb: () => db } as unknown as DbService);
+  return new FileEntryService({ getDb: () => db } as unknown as DbService, resolveInternalFileUri);
 }

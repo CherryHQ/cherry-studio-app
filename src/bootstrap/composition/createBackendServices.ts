@@ -35,6 +35,7 @@ import { TemporaryChatService } from '@/backend/data/services/TemporaryChatServi
 import { TopicService } from '@/backend/data/services/TopicService';
 import { TranslateHistoryService } from '@/backend/data/services/TranslateHistoryService';
 import { TranslateLanguageService } from '@/backend/data/services/TranslateLanguageService';
+import { discardPreparedFiles, resolveInternalFileUri } from '@/backend/services/file/fileStorage';
 import { DevicePermissions } from '@/backend/services/permissions';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -64,9 +65,9 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const prompt = new PromptService(dbService);
   const translateHistory = new TranslateHistoryService(dbService);
   const translateLanguage = new TranslateLanguageService(dbService);
-  const fileEntry = new FileEntryService(dbService);
+  const fileEntry = new FileEntryService(dbService, resolveInternalFileUri);
   const fileRef = new FileRefService(dbService);
-  const painting = new PaintingService(dbService, fileEntry);
+  const painting = new PaintingService(dbService, fileEntry, discardPreparedFiles);
   const mcpServer = new McpServerService(dbService);
   const mcpRuntime = new McpRuntimeService({ mcpServer });
   const topic = new TopicService(dbService, pin, tag);
