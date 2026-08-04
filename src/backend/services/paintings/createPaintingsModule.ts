@@ -1,9 +1,8 @@
 import type { ResolvedFile } from '@cherrystudio/universal/data/api/schemas/files';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
-import type { PreparedInternalFile } from '@/backend/types/file';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
@@ -12,15 +11,16 @@ import type {
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
 
+import type { CreateInternalEntryInput } from '../file/fileStorage';
+
 type PaintingGenerationPersistence = {
   create(input: {
     inputFileIds: readonly FileEntryId[];
     modelId: string;
-    preparedInputFiles: readonly PreparedInternalFile[];
     prompt: string;
     providerId: string;
   }): Promise<Painting>;
-  replaceOutputs(id: string, outputs: readonly PreparedInternalFile[]): Promise<Painting>;
+  replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting>;
 };
 
 type PaintingAi = {
@@ -35,10 +35,10 @@ type PaintingAi = {
 };
 
 type PaintingFileStorage = {
-  discard(files: readonly PreparedInternalFile[]): void;
-  prepareGeneratedImage(base64: string, mediaType: string): PreparedInternalFile;
-  prepareInput(uri: string, name: string): Promise<PreparedInternalFile>;
+  createInternalEntry(input: CreateInternalEntryInput): Promise<InternalFileEntry>;
+  discard(entries: readonly InternalFileEntry[]): Promise<void>;
   readDataUrl(uri: string, mediaType: string): Promise<string>;
+  resolveUri(entry: InternalFileEntry): string | undefined;
 };
 
 type PaintingFileRepository = {
@@ -136,30 +136,45 @@ class PaintingGenerationSession implements PaintingGenerationSessionContract {
         throw new Error('Image provider returned no image');
       }
 
-      const preparedOutputs: PreparedInternalFile[] = [];
+      const createdOutputs: InternalFileEntry[] = [];
+      let outputRefsCommitted = false;
       try {
         for (const image of result.images) {
-          preparedOutputs.push(
-            this.dependencies.storage.prepareGeneratedImage(image.base64, image.mediaType),
+          createdOutputs.push(
+            await this.dependencies.storage.createInternalEntry({
+              cleanupPolicy: 'delete_when_unreferenced',
+              data: image.base64,
+              mediaType: image.mediaType,
+              source: 'base64',
+            }),
           );
         }
+        const painting = await this.dependencies.paintings.replaceOutputs(
+          receiptId,
+          createdOutputs.map((entry) => entry.id),
+        );
+        outputRefsCommitted = true;
+        throwIfAborted(signal);
+        const persistedOutputIds = new Set(painting.files.output);
+        const outputs = createdOutputs.map((entry) => {
+          if (!persistedOutputIds.has(entry.id)) {
+            throw new Error('Generated painting has a missing output file');
+          }
+          const uri = this.dependencies.storage.resolveUri(entry);
+          if (!uri) {
+            throw new Error(`Generated painting file is unavailable: ${entry.id}`);
+          }
+          return { fileEntryId: entry.id, uri };
+        });
+
+        this.incompleteReceipt = undefined;
+        return { outputs, painting };
       } catch (error) {
-        this.dependencies.storage.discard(preparedOutputs);
+        if (!outputRefsCommitted) {
+          await this.dependencies.storage.discard(createdOutputs);
+        }
         throw error;
       }
-
-      const painting = await this.dependencies.paintings.replaceOutputs(receiptId, preparedOutputs);
-      throwIfAborted(signal);
-      const persistedOutputIds = new Set(painting.files.output);
-      const outputs = preparedOutputs.map((output) => {
-        if (!persistedOutputIds.has(output.id)) {
-          throw new Error('Generated painting has a missing output file');
-        }
-        return { fileEntryId: output.id, uri: output.uri };
-      });
-
-      this.incompleteReceipt = undefined;
-      return { outputs, painting };
     } finally {
       if (this.activeController === controller) {
         this.activeController = undefined;
@@ -171,28 +186,39 @@ class PaintingGenerationSession implements PaintingGenerationSessionContract {
     input: PaintingGenerationInput,
     signal: AbortSignal,
   ): Promise<string> {
-    const preparedInputs: PreparedInternalFile[] = [];
+    const createdInputs: InternalFileEntry[] = [];
+    let inputRefsCommitted = false;
     try {
       for (const image of input.images) {
         if (!image.fileEntryId) {
           throwIfAborted(signal);
-          preparedInputs.push(await this.dependencies.storage.prepareInput(image.uri, image.name));
+          createdInputs.push(
+            await this.dependencies.storage.createInternalEntry({
+              cleanupPolicy: 'delete_when_unreferenced',
+              name: image.name,
+              source: 'uri',
+              uri: image.uri,
+            }),
+          );
         }
       }
       throwIfAborted(signal);
       const { providerId } = parseUniqueModelId(input.modelId);
       const receipt = await this.dependencies.paintings.create({
-        inputFileIds: input.images.flatMap((image) =>
-          image.fileEntryId ? [image.fileEntryId] : [],
-        ),
+        inputFileIds: [
+          ...input.images.flatMap((image) => (image.fileEntryId ? [image.fileEntryId] : [])),
+          ...createdInputs.map((entry) => entry.id),
+        ],
         modelId: input.modelId,
-        preparedInputFiles: preparedInputs,
         prompt: input.prompt,
         providerId,
       });
+      inputRefsCommitted = true;
       return receipt.id;
     } catch (error) {
-      this.dependencies.storage.discard(preparedInputs);
+      if (!inputRefsCommitted) {
+        await this.dependencies.storage.discard(createdInputs);
+      }
       throw error;
     }
   }

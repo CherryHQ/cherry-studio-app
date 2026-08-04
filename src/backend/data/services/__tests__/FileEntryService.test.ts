@@ -1,4 +1,4 @@
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import type { DbService } from '@/backend/data/db/DbService';
 
 import { FileEntryService } from '../FileEntryService';
 
@@ -6,8 +6,6 @@ jest.mock('uuid', () => ({
   v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
 }));
-
-const resolveInternalFileUri = jest.fn(() => 'file:///documents/Data/Files/entry.txt');
 
 describe('FileEntryService', () => {
   test.each([
@@ -67,34 +65,6 @@ describe('FileEntryService', () => {
 
     await expect(service.findById(row.id)).resolves.toEqual(expected);
   });
-
-  test('inserts prepared entries into the caller transaction', async () => {
-    const values = jest.fn(async () => undefined);
-    const tx = { insert: jest.fn(() => ({ values })) } as unknown as Database;
-    const service = new FileEntryService({} as DbService, resolveInternalFileUri);
-
-    await service.createPreparedEntriesTx(tx, [
-      {
-        ext: 'txt',
-        id: '00000000-0000-7000-8000-000000000001',
-        name: 'brief',
-        size: 12,
-        uri: 'file:///documents/Data/Files/entry.txt',
-      },
-    ]);
-
-    expect(values).toHaveBeenCalledWith([
-      {
-        cleanupPolicy: 'manual',
-        contentHash: null,
-        ext: 'txt',
-        id: '00000000-0000-7000-8000-000000000001',
-        name: 'brief',
-        origin: 'internal',
-        size: 12,
-      },
-    ]);
-  });
 });
 
 function createServiceWithRows(rows: unknown[]) {
@@ -105,5 +75,5 @@ function createServiceWithRows(rows: unknown[]) {
       })),
     })),
   };
-  return new FileEntryService({ getDb: () => db } as unknown as DbService, resolveInternalFileUri);
+  return new FileEntryService({ getDb: () => db } as unknown as DbService);
 }

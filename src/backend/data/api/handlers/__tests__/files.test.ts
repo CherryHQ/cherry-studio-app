@@ -11,6 +11,8 @@ describe('file Data API handlers', () => {
       getById: jest.fn(async () => ({ id: entryId })),
       getStats: jest.fn(async () => ({ activeTotal: 0, extCounts: [], trashTotal: 0 })),
       listCursor: jest.fn(async () => ({ items: [], total: 0 })),
+    };
+    const content = {
       resolve: jest.fn(async () => null),
       resolveRenderableUri: jest.fn(async () => undefined),
     };
@@ -20,8 +22,9 @@ describe('file Data API handlers', () => {
       findBySource: jest.fn(async () => []),
     };
     return {
+      content,
       entries,
-      handlers: createFileHandlers(entries as never, refs as never),
+      handlers: createFileHandlers(entries as never, refs as never, content),
       refs,
     };
   }
@@ -56,7 +59,7 @@ describe('file Data API handlers', () => {
   });
 
   it('validates source refs and preserves mobile URI compatibility routes', async () => {
-    const { entries, handlers, refs } = createHandlers();
+    const { content, handlers, refs } = createHandlers();
 
     await handlers['/files/refs'].GET({
       query: { sourceId: 'provider', sourceType: 'provider_logo' },
@@ -73,7 +76,7 @@ describe('file Data API handlers', () => {
 
     await handlers['/files/:id/renderable-uri'].GET({ params: { id: entryId } });
     await handlers['/files/:id/resolved'].GET({ params: { id: entryId } });
-    expect(entries.resolveRenderableUri).toHaveBeenCalledWith(entryId);
-    expect(entries.resolve).toHaveBeenCalledWith(entryId);
+    expect(content.resolveRenderableUri).toHaveBeenCalledWith(entryId);
+    expect(content.resolve).toHaveBeenCalledWith(entryId);
   });
 });

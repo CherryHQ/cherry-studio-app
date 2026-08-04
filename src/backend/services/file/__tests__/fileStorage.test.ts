@@ -1,14 +1,20 @@
+import { type FileEntry, FileEntrySchema } from '@cherrystudio/universal/data/types/file';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
+import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+
 import {
+  createInternalEntry,
+  createMessageParts,
   deleteInternalFile,
   deleteInternalFileUri,
+  discardInternalEntries,
   imageUriToDataUrl,
   listInternalFiles,
-  prepareGeneratedImage,
-  prepareMessageParts,
+  resolveFileEntry,
   resolveInternalFileUri,
+  resolveRenderableFileUri,
 } from '../fileStorage';
 
 jest.mock('uuid', () => ({
@@ -158,43 +164,52 @@ describe('fileStorage', () => {
 
   test('copies files with a normalized extension and records their actual size', async () => {
     testState.files.set('file:///picker/brief.PDF', 42);
+    const entries = createEntryStore();
 
-    const prepared = await prepareMessageParts([
+    const managed = await createMessageParts(entries, [
       createFilePart('file:///picker/brief.PDF', 'Quarterly Brief.PDF'),
     ]);
 
-    expect(prepared.files).toEqual([
+    expect(managed.entries).toEqual([
       {
+        cleanupPolicy: 'delete_when_unreferenced',
+        contentHash: null,
+        createdAt: 1,
         ext: 'pdf',
         id: '00000000-0000-7000-8000-000000000001',
         name: 'Quarterly Brief',
+        origin: 'internal',
         size: 42,
-        uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf',
+        updatedAt: 1,
       },
     ]);
-    expect(prepared.parts[0]).toEqual(
+    expect(entries.create).toHaveBeenCalledWith(
+      expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced', origin: 'internal' }),
+    );
+    expect(managed.parts[0]).toEqual(
       expect.objectContaining({
         url: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf',
       }),
     );
-    const preparedPart = prepared.parts[0];
-    expect(preparedPart.type).toBe('file');
-    if (preparedPart.type !== 'file') {
-      throw new Error('Expected a prepared file part');
+    const managedPart = managed.parts[0];
+    expect(managedPart.type).toBe('file');
+    if (managedPart.type !== 'file') {
+      throw new Error('Expected a managed file part');
     }
-    expect(readCherryMeta(preparedPart)?.fileEntryId).toBe('00000000-0000-7000-8000-000000000001');
+    expect(readCherryMeta(managedPart)?.fileEntryId).toBe('00000000-0000-7000-8000-000000000001');
   });
 
   test('stores extensionless files without a trailing dot', async () => {
     testState.files.set('file:///picker/README', 7);
 
-    const prepared = await prepareMessageParts([createFilePart('file:///picker/README', 'README')]);
+    const managed = await createMessageParts(createEntryStore(), [
+      createFilePart('file:///picker/README', 'README'),
+    ]);
 
-    expect(prepared.files[0]).toEqual(
+    expect(managed.entries[0]).toEqual(
       expect.objectContaining({
         ext: null,
         name: 'README',
-        uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001',
       }),
     );
   });
@@ -202,11 +217,11 @@ describe('fileStorage', () => {
   test('uses the source extension when a camera display name has none', async () => {
     testState.files.set('file:///camera/IMG_0001.JPG', 128);
 
-    const prepared = await prepareMessageParts([
+    const managed = await createMessageParts(createEntryStore(), [
       createFilePart('file:///camera/IMG_0001.JPG', 'Photo'),
     ]);
 
-    expect(prepared.files[0]).toEqual(expect.objectContaining({ ext: 'jpg', name: 'Photo' }));
+    expect(managed.entries[0]).toEqual(expect.objectContaining({ ext: 'jpg', name: 'Photo' }));
   });
 
   test('rebuilds managed paths from the current document directory', () => {
@@ -232,13 +247,36 @@ describe('fileStorage', () => {
     );
   });
 
+  test('resolves persisted entries against the current document directory', async () => {
+    const entries = createEntryStore();
+    const entry = FileEntrySchema.parse({
+      cleanupPolicy: 'manual',
+      contentHash: null,
+      createdAt: 1,
+      ext: 'png',
+      id: '00000000-0000-7000-8000-000000000001',
+      name: 'image',
+      origin: 'internal',
+      size: 10,
+      updatedAt: 1,
+    });
+    entries.stored.set(entry.id, entry);
+    testState.paths.document.uri = 'file:///new-sandbox/Documents/';
+    const uri = 'file:///new-sandbox/Documents/Data/Files/00000000-0000-7000-8000-000000000001.png';
+    testState.files.set(uri, 10);
+
+    await expect(resolveFileEntry(entries, entry.id)).resolves.toEqual({ entry, uri });
+    await expect(resolveRenderableFileUri(entries, entry.id)).resolves.toBe(uri);
+  });
+
   test('removes every copied destination when a later copy fails partially', async () => {
     testState.files.set('file:///picker/first.txt', 1);
     testState.files.set('file:///picker/second.txt', 2);
     testState.failures.add('file:///picker/second.txt');
+    const entries = createEntryStore();
 
     await expect(
-      prepareMessageParts([
+      createMessageParts(entries, [
         createFilePart('file:///picker/first.txt', 'first.txt'),
         createFilePart('file:///picker/second.txt', 'second.txt'),
       ]),
@@ -248,16 +286,22 @@ describe('fileStorage', () => {
       'file:///picker/first.txt',
       'file:///picker/second.txt',
     ]);
+    expect(entries.delete).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000001');
   });
 
-  test('writes generated base64 into a managed image file', () => {
-    const prepared = prepareGeneratedImage('data:image/png;base64,AAAA', 'image/png');
+  test('writes generated base64 and persists its internal entry', async () => {
+    const entries = createEntryStore();
+    const entry = await createInternalEntry(entries, {
+      cleanupPolicy: 'delete_when_unreferenced',
+      data: 'data:image/png;base64,AAAA',
+      mediaType: 'image/png',
+      source: 'base64',
+    });
 
-    expect(prepared).toEqual(
+    expect(entry).toEqual(
       expect.objectContaining({
         ext: 'png',
         size: 4,
-        uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
       }),
     );
     expect(testState.writes).toEqual([
@@ -265,12 +309,56 @@ describe('fileStorage', () => {
     ]);
   });
 
-  test('removes a partially written generated image on failure', () => {
+  test('removes a partially written generated image on failure', async () => {
     const uri = 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png';
     testState.writeFailures.add(uri);
 
-    expect(() => prepareGeneratedImage('AAAA', 'image/png')).toThrow('write failed');
+    await expect(
+      createInternalEntry(createEntryStore(), {
+        cleanupPolicy: 'delete_when_unreferenced',
+        data: 'AAAA',
+        mediaType: 'image/png',
+        source: 'base64',
+      }),
+    ).rejects.toThrow('write failed');
     expect(testState.files.has(uri)).toBe(false);
+  });
+
+  test('removes the managed blob when FileEntry persistence fails', async () => {
+    testState.files.set('file:///picker/brief.txt', 42);
+    const entries = createEntryStore();
+    entries.create.mockRejectedValueOnce(new Error('database failed'));
+
+    await expect(
+      createInternalEntry(entries, {
+        cleanupPolicy: 'manual',
+        name: 'brief.txt',
+        source: 'uri',
+        uri: 'file:///picker/brief.txt',
+      }),
+    ).rejects.toThrow('database failed');
+
+    expect(
+      testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.txt'),
+    ).toBe(false);
+  });
+
+  test('keeps the managed blob when discarding its FileEntry fails', async () => {
+    testState.files.set('file:///picker/brief.txt', 42);
+    const entries = createEntryStore();
+    const entry = await createInternalEntry(entries, {
+      cleanupPolicy: 'delete_when_unreferenced',
+      name: 'brief.txt',
+      source: 'uri',
+      uri: 'file:///picker/brief.txt',
+    });
+    entries.delete.mockRejectedValueOnce(new Error('file is referenced'));
+
+    await discardInternalEntries(entries, [entry]);
+
+    expect(
+      testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.txt'),
+    ).toBe(true);
   });
 
   test('resolves a local image as a data URL', async () => {
@@ -318,6 +406,27 @@ describe('fileStorage', () => {
     expect(() => deleteInternalFileUri('file:///tmp/outside.png')).toThrow('outside Data/Files');
   });
 });
+
+function createEntryStore() {
+  const stored = new Map<string, FileEntry>();
+  const create = jest.fn(
+    async (values: Parameters<FileEntryService['create']>[0]): Promise<FileEntry> => {
+      const entry = FileEntrySchema.parse({ ...values, createdAt: 1, updatedAt: 1 });
+      stored.set(entry.id, entry);
+      return entry;
+    },
+  );
+  const deleteEntry = jest.fn(async (id: string) => {
+    stored.delete(id);
+  });
+
+  return {
+    create,
+    delete: deleteEntry,
+    findById: jest.fn(async (id: string) => stored.get(id) ?? null),
+    stored,
+  };
+}
 
 function createFilePart(url: string, filename: string): CherryMessagePart {
   return {

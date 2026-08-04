@@ -4,16 +4,23 @@ import {
   ListFilesQuerySchema,
   RefCountsQuerySchema,
   RefsBySourceQuerySchema,
+  type ResolvedFile,
 } from '@cherrystudio/universal/data/api/schemas/files';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-import { FileEntryIdSchema } from '@cherrystudio/universal/data/types/file';
+import { type FileEntryId, FileEntryIdSchema } from '@cherrystudio/universal/data/types/file';
 
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { FileRefService } from '@/backend/data/services/FileRefService';
 
+export type FileContentQueries = {
+  resolve(id: FileEntryId): Promise<ResolvedFile | null>;
+  resolveRenderableUri(id: FileEntryId): Promise<string | undefined>;
+};
+
 export function createFileHandlers(
   entries: FileEntryService,
   refs: FileRefService,
+  content: FileContentQueries,
 ): HandlersFor<FileSchemas> {
   return {
     '/files/entries': {
@@ -51,10 +58,10 @@ export function createFileHandlers(
       GET: ({ params }) => entries.get(params.id),
     },
     '/files/:id/renderable-uri': {
-      GET: async ({ params }) => (await entries.resolveRenderableUri(params.id)) ?? null,
+      GET: async ({ params }) => (await content.resolveRenderableUri(params.id)) ?? null,
     },
     '/files/:id/resolved': {
-      GET: ({ params }) => entries.resolve(params.id),
+      GET: ({ params }) => content.resolve(params.id),
     },
   };
 }

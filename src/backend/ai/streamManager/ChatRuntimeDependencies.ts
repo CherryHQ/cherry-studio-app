@@ -7,6 +7,7 @@ import type {
   UpdateTopicDto,
 } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   BranchMessagesResponse,
   CherryMessagePart,
@@ -22,7 +23,6 @@ import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import type { UIMessageChunk } from 'ai';
 
-import type { PreparedInternalFile } from '@/backend/types/file';
 import type { ChatToolApprovalInput } from '@/shared/contracts';
 
 export type ChatStreamRequest = {
@@ -43,7 +43,6 @@ type ApprovalDecision = Omit<ChatToolApprovalInput, 'messageId' | 'topicId'>;
 
 type CreateTurnInput = {
   placeholders: Omit<CreateMessageDto, 'parentId' | 'setAsActive' | 'siblingsGroupId'>[];
-  preparedFiles?: readonly PreparedInternalFile[];
   siblingsGroupId?: number;
   topicId: string;
   userMessage: { dto: CreateMessageDto; mode: 'create' } | { id: string; mode: 'existing' };
@@ -120,10 +119,10 @@ export type ChatRuntimeServices = {
 
 export type ChatRuntimeDependencies = {
   files: {
-    discard(files: readonly PreparedInternalFile[]): void;
-    prepareParts(
+    createParts(
       parts: readonly CherryMessagePart[],
-    ): Promise<{ files: PreparedInternalFile[]; parts: CherryMessagePart[] }>;
+    ): Promise<{ entries: InternalFileEntry[]; parts: CherryMessagePart[] }>;
+    discard(entries: readonly InternalFileEntry[]): Promise<void>;
   };
   services: ChatRuntimeServices;
 };

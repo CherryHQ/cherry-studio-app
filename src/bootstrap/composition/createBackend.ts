@@ -3,16 +3,17 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream } from 'ai';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
+import type { FileContentQueries } from '@/backend/data/api/handlers/files';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
 import {
-  discardPreparedFiles,
+  createInternalEntry,
+  createMessageParts,
+  discardInternalEntries,
   imageUriToDataUrl,
-  prepareGeneratedImage,
-  prepareInternalFileFromUri,
-  prepareMessageParts,
+  resolveInternalFileUri,
 } from '@/backend/services/file/fileStorage';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
@@ -36,6 +37,7 @@ import type { Backend } from '@/shared/contracts';
 export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
+    fileContent: FileContentQueries;
     mcpServerMutations: McpServerMutations;
   };
   dispose(): Promise<void>;
@@ -62,8 +64,8 @@ export function createBackend(services: BackendServices): BackendComposition {
   });
   const chat = new ChatRuntime({
     files: {
-      discard: discardPreparedFiles,
-      prepareParts: prepareMessageParts,
+      createParts: (parts) => createMessageParts(services.fileEntry, parts),
+      discard: (entries) => discardInternalEntries(services.fileEntry, entries),
     },
     services: {
       ai: {
@@ -106,13 +108,13 @@ export function createBackend(services: BackendServices): BackendComposition {
   });
   const paintings = createPaintingsModule({
     ai: services.ai,
-    files: services.fileEntry,
+    files: services.fileContent,
     paintings: services.painting,
     storage: {
-      discard: discardPreparedFiles,
-      prepareGeneratedImage,
-      prepareInput: prepareInternalFileFromUri,
+      createInternalEntry: (input) => createInternalEntry(services.fileEntry, input),
+      discard: (entries) => discardInternalEntries(services.fileEntry, entries),
       readDataUrl: imageUriToDataUrl,
+      resolveUri: resolveInternalFileUri,
     },
   });
   const mcp = createMcpModule({
@@ -174,6 +176,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
+      fileContent: services.fileContent,
       mcpServerMutations: mcp,
     },
     dispose: () => chat.dispose(),

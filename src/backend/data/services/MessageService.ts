@@ -29,7 +29,6 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
-import type { PreparedInternalFile } from '@/backend/types/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { Database, DbService } from '../db/DbService';
@@ -40,7 +39,6 @@ import {
   messageTable,
   topicTable,
 } from '../db/schemas';
-import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
 import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';
@@ -67,7 +65,6 @@ export interface AssistantPlaceholder extends Omit<
 
 export interface CreateUserMessageWithPlaceholdersInput {
   placeholders: AssistantPlaceholder[];
-  preparedFiles?: readonly PreparedInternalFile[];
   siblingsGroupId?: number;
   topicId: string;
   userMessage: { dto: CreateMessageDto; mode: 'create' } | { id: string; mode: 'existing' };
@@ -156,7 +153,6 @@ export class MessageService {
   constructor(
     private readonly dbService: DbService,
     private readonly topicService: TopicService,
-    private readonly fileEntryService: FileEntryService,
   ) {}
 
   private get db() {
@@ -563,13 +559,6 @@ export class MessageService {
         throw DataApiErrorFactory.notFound('Topic', input.topicId);
       }
 
-      if (input.preparedFiles?.length && input.userMessage.mode !== 'create') {
-        throw DataApiErrorFactory.invalidOperation(
-          'prepare files for an existing message',
-          'prepared files require a newly created user message',
-        );
-      }
-
       let userMessage: Message;
       if (input.userMessage.mode === 'create') {
         const dto = input.userMessage.dto;
@@ -577,7 +566,6 @@ export class MessageService {
           dto.parentId === undefined || dto.parentId === null
             ? await getRootMessageIdTx(tx, input.topicId)
             : await validateParent(tx, input.topicId, dto.parentId);
-        await this.fileEntryService.createPreparedEntriesTx(tx, input.preparedFiles ?? []);
         const [row] = await tx
           .insert(messageTable)
           .values({

@@ -58,7 +58,7 @@ describe('FileRefService', () => {
   });
 
   it('protects a cleanup candidate until every registered source releases it', async () => {
-    const entries = new FileEntryService(testDatabase.dbService, () => undefined);
+    const entries = new FileEntryService(testDatabase.dbService);
     await expect(
       entries.findCleanupCandidates({ graceMs: 60 * 60 * 1000, limit: 100 }),
     ).resolves.toEqual([]);

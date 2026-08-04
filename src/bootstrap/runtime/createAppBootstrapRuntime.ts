@@ -39,6 +39,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       assistants: services.assistant,
       contentSearch: services.contentSearch,
       entitySearch: services.entitySearch,
+      fileContent: dataApiDependencies.fileContent,
       files: services.fileEntry,
       fileRefs: services.fileRef,
       groups: services.group,

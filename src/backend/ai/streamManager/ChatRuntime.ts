@@ -8,6 +8,7 @@ import type {
   TopicStatusSnapshotEntry,
   TopicStreamStatus,
 } from '@cherrystudio/universal/ai/transport';
+import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -25,7 +26,6 @@ import {
 } from '@cherrystudio/universal/utils/conversationTitle';
 import { isToolUIPart, type UIMessageChunk } from 'ai';
 
-import type { PreparedInternalFile } from '@/backend/types/file';
 import type {
   ChatCancelExecutionInput,
   ChatEditAndResendInput,
@@ -372,22 +372,21 @@ export class ChatRuntime implements ChatModule {
       return;
     }
 
-    let preparedFilesCommitted = false;
-    let preparedFiles: PreparedInternalFile[] = [];
+    let fileRefsCommitted = false;
+    let createdEntries: InternalFileEntry[] = [];
     try {
       const topic = await this.dependencies.services.topic.getById(input.topicId);
       const modelId =
         input.payload.mentionedModels?.[0] ?? (await this.resolveModelId(undefined, topic));
-      const prepared = await this.dependencies.files.prepareParts(parts);
-      preparedFiles = prepared.files;
+      const managed = await this.dependencies.files.createParts(parts);
+      createdEntries = managed.entries;
       const reserved = await this.dependencies.services.message.createUserMessageWithPlaceholders({
-        ...(preparedFiles.length > 0 ? { preparedFiles } : {}),
         placeholders: [],
         topicId: input.topicId,
         userMessage: {
           mode: 'create',
           dto: {
-            data: { parts: prepared.parts },
+            data: { parts: managed.parts },
             modelId,
             parentId: topic.activeNodeId ?? null,
             role: 'user',
@@ -395,7 +394,7 @@ export class ChatRuntime implements ChatModule {
           },
         },
       });
-      preparedFilesCommitted = true;
+      fileRefsCommitted = true;
       this.appendPendingSteer(input.topicId, {
         fastMode: input.payload.fastMode === true,
         reasoningEffort: input.payload.reasoningEffort,
@@ -407,8 +406,8 @@ export class ChatRuntime implements ChatModule {
         await this.startNextPendingTurn(input.topicId);
       }
     } finally {
-      if (!preparedFilesCommitted) {
-        this.dependencies.files.discard(preparedFiles);
+      if (!fileRefsCommitted) {
+        await this.dependencies.files.discard(createdEntries);
       }
     }
   }
@@ -943,22 +942,21 @@ export class ChatRuntime implements ChatModule {
     let userMessage: Message | undefined;
     let assistantPlaceholders: Message[] = [];
     let terminalAssistantMessages: Message[] = [];
-    let preparedFilesCommitted = false;
-    let preparedFiles: PreparedInternalFile[] = [];
+    let fileRefsCommitted = false;
+    let createdEntries: InternalFileEntry[] = [];
     let turnParts = [...parts];
     let handedOffToStream = false;
 
     try {
-      const prepared = await this.dependencies.files.prepareParts(parts);
-      preparedFiles = prepared.files;
-      turnParts = prepared.parts;
+      const managed = await this.dependencies.files.createParts(parts);
+      createdEntries = managed.entries;
+      turnParts = managed.parts;
       const messageSnapshots = await Promise.all(
         models.map((model) => this.buildAssistantMessageSnapshot(model, topic)),
       );
       throwIfAborted(abortController.signal);
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
-          ...(preparedFiles.length > 0 ? { preparedFiles } : {}),
           ...(input.siblingsGroupId !== undefined
             ? { siblingsGroupId: input.siblingsGroupId }
             : {}),
@@ -994,7 +992,7 @@ export class ChatRuntime implements ChatModule {
             };
           }),
         });
-      preparedFilesCommitted = true;
+      fileRefsCommitted = true;
       if (abortController.signal.aborted) {
         await this.cancelReservedTurn({
           topicId,
@@ -1046,8 +1044,8 @@ export class ChatRuntime implements ChatModule {
         throw toError(error);
       }
     } finally {
-      if (!preparedFilesCommitted) {
-        this.dependencies.files.discard(preparedFiles);
+      if (!fileRefsCommitted) {
+        await this.dependencies.files.discard(createdEntries);
       }
 
       if (!handedOffToStream) {

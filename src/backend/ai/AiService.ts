@@ -9,6 +9,7 @@ import {
   MODEL_CAPABILITY,
   type ParamValues,
 } from '@cherrystudio/provider-registry';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -16,7 +17,6 @@ import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 
 import { fetch as expoFetch } from 'expo/fetch';
 
 import type { AiUsageCaptureContext } from '@/backend/data/services/AiUsageRecordService';
-import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
@@ -62,7 +62,9 @@ export interface AiImageResult {
 }
 
 export interface AiServiceDependencies extends BuildAgentParamsDependencies {
-  fileEntry: Pick<FileEntryService, 'resolveUri'>;
+  fileContent: {
+    resolveRenderableUri(id: FileEntryId): Promise<string | undefined>;
+  };
 }
 
 /** `auto` is the picker's "let the model decide" sentinel, not a wire value. */
@@ -139,7 +141,7 @@ export class AiService {
         usageMessageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
       }),
       resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
-        this.services.fileEntry.resolveUri(fileEntryId),
+        this.services.fileContent.resolveRenderableUri(fileEntryId),
       ),
     ]);
 

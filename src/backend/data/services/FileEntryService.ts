@@ -2,7 +2,6 @@ import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
 import type {
   FileEntryListResponse,
   FileEntryStats,
-  ResolvedFile,
 } from '@cherrystudio/universal/data/api/schemas/files';
 import type {
   CleanupPolicy,
@@ -10,7 +9,6 @@ import type {
   FileEntry,
   FileEntryId,
   FileEntryOrigin,
-  InternalFileEntry,
 } from '@cherrystudio/universal/data/types/file';
 import {
   AbsoluteFilePathSchema,
@@ -39,7 +37,6 @@ import type { Database, DbService } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { persistentRefAbsenceConditions } from '@/backend/data/db/schemas/fileRelations';
-import type { PreparedInternalFile } from '@/backend/types/file';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
@@ -96,17 +93,12 @@ export type ListFileEntriesQuery = {
   sortOrder?: 'asc' | 'desc';
 };
 
-type InternalFileUriResolver = (entry: Pick<InternalFileEntry, 'ext' | 'id'>) => string | undefined;
-
 type ListSortBy = NonNullable<ListFileEntriesQuery['sortBy']>;
 const FILE_ENTRY_SIZE_NULL_SORT_VALUE = -1;
 const FILE_ENTRY_EXT_NULL_SORT_VALUE = ' ';
 
 export class FileEntryService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly resolveInternalFileUri: InternalFileUriResolver,
-  ) {}
+  constructor(private readonly dbService: DbService) {}
 
   private get db() {
     return this.dbService.getDb();
@@ -285,24 +277,6 @@ export class FileEntryService {
     return rowToFileEntry(row);
   }
 
-  async createPreparedEntriesTx(
-    tx: Database,
-    files: readonly PreparedInternalFile[],
-  ): Promise<void> {
-    if (files.length === 0) return;
-    await tx.insert(fileEntryTable).values(
-      files.map(({ ext, id, name, size }) => ({
-        cleanupPolicy: 'manual' as const,
-        contentHash: null,
-        ext,
-        id,
-        name,
-        origin: 'internal' as const,
-        size,
-      })),
-    );
-  }
-
   async update(id: FileEntryId, values: UpdateFileEntry): Promise<FileEntry> {
     return this.dbService.withWriteTx((tx) => this.updateTx(tx, id, values));
   }
@@ -341,22 +315,6 @@ export class FileEntryService {
 
   async deleteTx(tx: Database, id: FileEntryId): Promise<void> {
     await tx.delete(fileEntryTable).where(eq(fileEntryTable.id, id));
-  }
-
-  async resolveUri(id: FileEntryId): Promise<string | undefined> {
-    const entry = await this.findById(id);
-    return entry?.origin === 'internal' ? this.resolveInternalFileUri(entry) : undefined;
-  }
-
-  async resolve(id: FileEntryId): Promise<ResolvedFile | null> {
-    const entry = await this.findById(id);
-    if (!entry || entry.origin !== 'internal') return null;
-    const uri = this.resolveInternalFileUri(entry);
-    return uri ? { entry, uri } : null;
-  }
-
-  resolveRenderableUri(id: FileEntryId): Promise<string | undefined> {
-    return this.resolveUri(id);
   }
 }
 

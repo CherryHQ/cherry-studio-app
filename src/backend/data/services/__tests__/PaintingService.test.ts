@@ -6,7 +6,6 @@ import { drizzle } from 'drizzle-orm/sqlite-proxy';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
-import { FileEntryService } from '../FileEntryService';
 import { PaintingService } from '../PaintingService';
 
 jest.mock('uuid', () => ({
@@ -59,11 +58,7 @@ describe('PaintingService integration', () => {
         }
       },
     } as unknown as DbService;
-    service = new PaintingService(
-      dbService,
-      new FileEntryService(dbService, () => undefined),
-      jest.fn(),
-    );
+    service = new PaintingService(dbService);
   });
 
   afterEach(() => sqlite.close());
@@ -90,16 +85,10 @@ describe('PaintingService integration', () => {
     insertPainting(sqlite, 'painting-original', 'a0', 1);
     insertPainting(sqlite, 'painting-regenerated', 'Zz', 2);
     insertFileAndRef(sqlite, 'original-output', 'painting-original', 'output', 1);
+    const regeneratedFileId = '00000000-0000-7000-8000-000000000002';
+    insertFile(sqlite, regeneratedFileId, 2);
 
-    const regenerated = await service.replaceOutputs('painting-regenerated', [
-      {
-        ext: 'png',
-        id: '00000000-0000-7000-8000-000000000002',
-        name: 'regenerated',
-        size: 4,
-        uri: 'file:///documents/files/regenerated.png',
-      },
-    ]);
+    const regenerated = await service.replaceOutputs('painting-regenerated', [regeneratedFileId]);
 
     await expect(service.getById('painting-original')).resolves.toEqual(
       expect.objectContaining({ files: { input: [], output: ['original-output'] } }),
@@ -204,13 +193,7 @@ function insertFileAndRef(
   role: 'input' | 'output',
   timestamp: number,
 ) {
-  database
-    .prepare(
-      `INSERT INTO file_entry
-       (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
-       VALUES (?, 'internal', ?, 'png', 4, NULL, ?, ?, NULL)`,
-    )
-    .run(fileId, fileId, timestamp, timestamp);
+  insertFile(database, fileId, timestamp);
   database
     .prepare(
       `INSERT INTO painting_file_ref
@@ -218,4 +201,14 @@ function insertFileAndRef(
        VALUES (?, ?, ?, ?, ?, ?)`,
     )
     .run(`ref-${fileId}`, fileId, paintingId, role, timestamp, timestamp);
+}
+
+function insertFile(database: DatabaseSync, fileId: string, timestamp: number) {
+  database
+    .prepare(
+      `INSERT INTO file_entry
+       (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
+       VALUES (?, 'internal', ?, 'png', 4, NULL, ?, ?, NULL)`,
+    )
+    .run(fileId, fileId, timestamp, timestamp);
 }
