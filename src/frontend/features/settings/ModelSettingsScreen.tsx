@@ -54,7 +54,10 @@ export default function ModelSettingsScreen() {
             placeholder={t('settings.select.placeholder')}
           />
         ),
-        iconEmoji: MODEL_SETTING_ICONS[kind],
+        // min-w-6 keeps the emoji column aligned with the icon rows elsewhere.
+        leading: (
+          <Text className="min-w-6 text-center text-emoji-xl">{MODEL_SETTING_ICONS[kind]}</Text>
+        ),
         title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
         onPress: () => setOpenKind(kind),
       })),

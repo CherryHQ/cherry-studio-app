@@ -15,7 +15,7 @@ import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { Section } from '@/frontend/components/Section';
+import { Section, SectionIcon } from '@/frontend/components/Section';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
@@ -81,7 +81,7 @@ export default function AboutSettingsScreen() {
                     strokeWidth={2}
                   />
                 ),
-                icon: GitHubIcon,
+                leading: <SectionIcon icon={GitHubIcon} />,
                 title: t('settings.about.repository.title'),
                 onPress: () => openLink(ABOUT_LINKS.repository),
               },
@@ -92,7 +92,7 @@ export default function AboutSettingsScreen() {
                     strokeWidth={2}
                   />
                 ),
-                icon: RssIcon,
+                leading: <SectionIcon icon={RssIcon} />,
                 title: t('settings.about.releases.title'),
                 onPress: () => openLink(ABOUT_LINKS.releases),
               },
@@ -103,7 +103,7 @@ export default function AboutSettingsScreen() {
                     strokeWidth={2}
                   />
                 ),
-                icon: GlobeIcon,
+                leading: <SectionIcon icon={GlobeIcon} />,
                 title: t('settings.about.website.title'),
                 onPress: () => openLink(ABOUT_LINKS.website),
               },
@@ -114,7 +114,7 @@ export default function AboutSettingsScreen() {
                     strokeWidth={2}
                   />
                 ),
-                icon: CodeIcon,
+                leading: <SectionIcon icon={CodeIcon} />,
                 title: t('settings.about.feedback.title'),
                 onPress: () => openLink(ABOUT_LINKS.feedback),
               },
@@ -125,7 +125,7 @@ export default function AboutSettingsScreen() {
                     strokeWidth={2}
                   />
                 ),
-                icon: CopyrightIcon,
+                leading: <SectionIcon icon={CopyrightIcon} />,
                 title: t('settings.about.license.title'),
                 onPress: () => openLink(ABOUT_LINKS.license),
               },
@@ -136,7 +136,7 @@ export default function AboutSettingsScreen() {
                     strokeWidth={2}
                   />
                 ),
-                icon: MailIcon,
+                leading: <SectionIcon icon={MailIcon} />,
                 title: t('settings.about.contact.title'),
                 onPress: () => openLink(ABOUT_LINKS.contact),
               },

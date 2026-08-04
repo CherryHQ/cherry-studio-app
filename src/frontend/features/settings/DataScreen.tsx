@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section } from '@/frontend/components/Section';
+import { Section, SectionIcon } from '@/frontend/components/Section';
 import { isAndroid } from '@/frontend/utils/constants';
 
 const ANDROID_GRANT_READ_URI_PERMISSION_FLAG = 1;
@@ -47,13 +47,13 @@ export default function DataSettingsScreen() {
     ? [
         {
           hideAccessory: true,
-          icon: FolderOpenIcon,
+          leading: <SectionIcon icon={FolderOpenIcon} />,
           title: t('settings.data.appData.title'),
           onPress: handleAppDataPress,
         },
         {
           hideAccessory: true,
-          icon: Trash2Icon,
+          leading: <SectionIcon icon={Trash2Icon} />,
           title: t('settings.data.clearCache.title'),
           onPress: handleActionPress,
         },
@@ -61,7 +61,7 @@ export default function DataSettingsScreen() {
     : [
         {
           hideAccessory: true,
-          icon: Trash2Icon,
+          leading: <SectionIcon icon={Trash2Icon} />,
           title: t('settings.data.clearCache.title'),
           onPress: handleActionPress,
         },
@@ -81,19 +81,19 @@ export default function DataSettingsScreen() {
             items={[
               {
                 hideAccessory: true,
-                icon: UploadIcon,
+                leading: <SectionIcon icon={UploadIcon} />,
                 title: t('settings.data.backup.title'),
                 onPress: handleActionPress,
               },
               {
                 hideAccessory: true,
-                icon: DownloadIcon,
+                leading: <SectionIcon icon={DownloadIcon} />,
                 title: t('settings.data.restore.title'),
                 onPress: handleActionPress,
               },
               {
                 hideAccessory: true,
-                icon: MonitorCloudIcon,
+                leading: <SectionIcon icon={MonitorCloudIcon} />,
                 title: t('settings.data.syncDesktop.title'),
                 onPress: handleActionPress,
               },
@@ -105,7 +105,7 @@ export default function DataSettingsScreen() {
             items={[
               {
                 hideAccessory: true,
-                icon: RefreshCwIcon,
+                leading: <SectionIcon icon={RefreshCwIcon} />,
                 title: t('settings.data.resetData.title'),
                 onPress: handleActionPress,
               },

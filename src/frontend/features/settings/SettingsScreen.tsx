@@ -18,7 +18,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { Section } from '@/frontend/components/Section';
+import { Section, SectionIcon, SectionImage } from '@/frontend/components/Section';
 import { usePreference } from '@/frontend/data/hooks';
 
 import { usePrefetchProviders } from './hooks/usePrefetchProviders';
@@ -70,7 +70,7 @@ export default function SettingsScreen() {
           <Section
             items={[
               {
-                icon: CircleUserRoundIcon,
+                leading: <SectionIcon icon={CircleUserRoundIcon} />,
                 title: t('settings.items.profile'),
                 onPress: openProfileSettings,
               },
@@ -79,13 +79,13 @@ export default function SettingsScreen() {
           <Section
             items={[
               {
-                icon: CloudIcon,
+                leading: <SectionIcon icon={CloudIcon} />,
                 title: t('settings.items.modelService'),
                 onPress: () => router.push('/settings/provider'),
                 onPressIn: prefetchProviders,
               },
               {
-                icon: SparklesIcon,
+                leading: <SectionIcon icon={SparklesIcon} />,
                 title: t('settings.items.defaultModel'),
                 onPress: () => router.push('/settings/model'),
               },
@@ -94,12 +94,12 @@ export default function SettingsScreen() {
           <Section
             items={[
               {
-                icon: EarthIcon,
+                leading: <SectionIcon icon={EarthIcon} />,
                 title: t('settings.items.webSearch'),
                 onPress: () => router.push('/settings/websearch'),
               },
               {
-                imageSource: mcpIcon,
+                leading: <SectionImage source={mcpIcon} />,
                 title: t('settings.items.mcp'),
                 onPress: () => router.push('/settings/mcp'),
               },
@@ -108,12 +108,12 @@ export default function SettingsScreen() {
           <Section
             items={[
               {
-                icon: DatabaseIcon,
+                leading: <SectionIcon icon={DatabaseIcon} />,
                 title: t('settings.items.dataBackup'),
                 onPress: () => router.push('/settings/data'),
               },
               {
-                icon: ShieldCheckIcon,
+                leading: <SectionIcon icon={ShieldCheckIcon} />,
                 title: t('settings.items.permissions'),
                 onPress: () => router.push('/settings/permissions'),
               },
@@ -122,7 +122,7 @@ export default function SettingsScreen() {
           <Section
             items={[
               {
-                icon: SunIcon,
+                leading: <SectionIcon icon={SunIcon} />,
                 onPress: () => router.push('/settings/appearance'),
                 title: t('settings.appearance.title'),
               },
@@ -131,7 +131,7 @@ export default function SettingsScreen() {
           <Section
             items={[
               {
-                icon: InfoIcon,
+                leading: <SectionIcon icon={InfoIcon} />,
                 title: t('settings.items.aboutUs'),
                 onPress: () => router.push('/settings/about'),
               },

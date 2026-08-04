@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section } from '@/frontend/components/Section';
+import { Section, SectionIcon } from '@/frontend/components/Section';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -154,7 +154,7 @@ function OpenSettingsSection({
     <Section
       items={[
         {
-          icon: SettingsIcon,
+          leading: <SectionIcon icon={SettingsIcon} />,
           title: t('settings.permissions.openSystemSettings'),
           onPress: () => void recoverAccess(),
         },

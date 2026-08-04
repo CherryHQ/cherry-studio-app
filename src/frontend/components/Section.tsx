@@ -8,14 +8,25 @@ import { Image } from '@/frontend/components/nativePrimitives';
 export type SectionItemProps = {
   accessory?: ReactNode;
   hideAccessory?: boolean;
-  icon?: ComponentType<PngIconProps>;
-  iconEmoji?: string;
   id?: string;
-  imageSource?: ImageSource | number;
+  /** Leading visual; use {@link SectionIcon} or {@link SectionImage} to inherit row styling. */
+  leading?: ReactNode;
   onPress?: () => void;
   onPressIn?: () => void;
   title: string;
 };
+
+/** Lucide icon at the row's leading size and color. */
+export function SectionIcon({ icon: Icon }: { icon?: ComponentType<PngIconProps> }) {
+  return Icon ? <Icon className="size-6 text-default-foreground" strokeWidth={2} /> : null;
+}
+
+/** Bitmap logo at the row's leading size. Renders nothing when the source is missing. */
+export function SectionImage({ source }: { source?: ImageSource | number }) {
+  return source ? (
+    <Image cachePolicy="memory-disk" className="size-6" contentFit="contain" source={source} />
+  ) : null;
+}
 
 type SectionProps = {
   action?: ReactNode;
@@ -92,9 +103,7 @@ export function Section({
 function SectionItem({
   accessory,
   hideAccessory,
-  icon: Icon,
-  iconEmoji,
-  imageSource,
+  leading,
   onPress,
   onPressIn,
   title,
@@ -111,18 +120,7 @@ function SectionItem({
       onPressIn={onPressIn}
     >
       <View className="flex-1 flex-row items-center gap-3">
-        {iconEmoji ? (
-          <Text className="min-w-6 text-center text-emoji-xl">{iconEmoji}</Text>
-        ) : imageSource ? (
-          <Image
-            cachePolicy="memory-disk"
-            className="size-6"
-            contentFit="contain"
-            source={imageSource}
-          />
-        ) : Icon ? (
-          <Icon className="size-6 text-default-foreground" strokeWidth={2} />
-        ) : null}
+        {leading}
         <Text className="flex-1 text-base text-foreground" numberOfLines={1}>
           {title}
         </Text>

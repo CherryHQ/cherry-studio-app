@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section } from '@/frontend/components/Section';
+import { Section, SectionIcon } from '@/frontend/components/Section';
 import { usePreference } from '@/frontend/data/hooks';
 import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
 
@@ -40,7 +40,7 @@ export default function AppearanceSettingsScreen() {
                   onValueChange={settingPreferences.theme.onValueChange}
                 />
               ),
-              icon: SunIcon,
+              leading: <SectionIcon icon={SunIcon} />,
               title: t('settings.items.theme'),
             },
             {
@@ -52,7 +52,7 @@ export default function AppearanceSettingsScreen() {
                   onValueChange={settingPreferences.language.onValueChange}
                 />
               ),
-              icon: GlobeIcon,
+              leading: <SectionIcon icon={GlobeIcon} />,
               title: t('settings.items.appLanguage'),
             },
             {
@@ -64,7 +64,7 @@ export default function AppearanceSettingsScreen() {
                   <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
                 </View>
               ),
-              icon: ALargeSmallIcon,
+              leading: <SectionIcon icon={ALargeSmallIcon} />,
               onPress: () => router.push('/settings/font-size'),
               title: t('settings.items.fontSize'),
             },
