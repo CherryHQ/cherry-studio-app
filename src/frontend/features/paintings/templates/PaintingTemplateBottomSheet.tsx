@@ -110,7 +110,7 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
         testID="painting-template-prompt-panel"
       >
         <Text
-          className="text-center text-foreground text-base leading-6"
+          className="text-center text-foreground text-base"
           ellipsizeMode="tail"
           numberOfLines={2}
           selectable

@@ -26,6 +26,7 @@ function createServices(message?: {
     message,
     preference: {
       getMultipleCached: () => ({
+        fontSizeStep: 1,
         language: 'en-US',
         primaryColor: '#00b96b',
         themeMode: 'system',
@@ -45,14 +46,13 @@ describe('initializeAppRuntime', () => {
     await initializeAppRuntime(createServices());
 
     expect(mockSetTheme).toHaveBeenCalledWith('system');
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', {
+    const variables = expect.objectContaining({
       '--cs-theme-primary': '#00b96b',
       '--cs-theme-primary-foreground': '#000000',
+      '--ui-text-base': 18,
     });
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'light', {
-      '--cs-theme-primary': '#00b96b',
-      '--cs-theme-primary-foreground': '#000000',
-    });
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', variables);
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'light', variables);
     expect(mockInitI18n).toHaveBeenCalledWith('en-US');
   });
 

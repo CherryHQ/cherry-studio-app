@@ -19,11 +19,7 @@ export function TextPart({
   resolvedText,
 }: TextPartProps) {
   if (renderMode === 'plainText') {
-    return (
-      <Text className="leading-6" type="body">
-        {resolvedText?.plainText ?? part.text}
-      </Text>
-    );
+    return <Text type="body">{resolvedText?.plainText ?? part.text}</Text>;
   }
 
   return <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />;

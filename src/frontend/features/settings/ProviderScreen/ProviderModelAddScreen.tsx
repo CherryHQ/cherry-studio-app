@@ -294,10 +294,7 @@ function ProviderModelAddTextField({
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        className={cn(
-          'min-h-10 rounded-xl px-3 py-0 text-base leading-5',
-          multiline ? 'h-16' : 'h-10',
-        )}
+        className={cn('min-h-10 rounded-xl px-3 py-0 text-base', multiline ? 'h-16' : 'h-10')}
         isDisabled={isDisabled}
         isInvalid={Boolean(errorMessage)}
         multiline={multiline}

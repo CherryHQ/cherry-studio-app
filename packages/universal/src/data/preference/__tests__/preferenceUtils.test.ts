@@ -1,15 +1,15 @@
 import {
-  DefaultPreferences,
   getDefaultValue,
   getPreferenceKeys,
   isPreferenceKey,
+  PreferenceDefaults,
   ThemeMode,
 } from '..';
 
 describe('preference defaults', () => {
   test('keeps the desktop preference surface and mobile permission policies', () => {
-    expect(getPreferenceKeys()).toEqual(Object.keys(DefaultPreferences.default));
-    expect(getPreferenceKeys()).toHaveLength(242);
+    expect(getPreferenceKeys()).toEqual(Object.keys(PreferenceDefaults.default));
+    expect(getPreferenceKeys()).toHaveLength(243);
 
     expect(getPreferenceKeys()).toEqual(
       expect.arrayContaining([
@@ -24,6 +24,7 @@ describe('preference defaults', () => {
         'permissions.reminders_write',
         'shortcut.chat.context.toggle_new',
         'topic.naming.enabled',
+        'ui.font_size_step',
         'ui.theme_mode',
         'ui.window_style',
       ]),
@@ -56,6 +57,7 @@ describe('preference defaults', () => {
       enabled: true,
     });
     expect(getDefaultValue('topic.naming.enabled')).toBe(true);
+    expect(getDefaultValue('ui.font_size_step')).toBe(0);
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
     expect(getDefaultValue('ui.window_style')).toBe('transparent');
   });
@@ -67,7 +69,7 @@ describe('preference defaults', () => {
     expect(isPreferenceKey('feature.translate.model_prompt')).toBe(true);
     expect(isPreferenceKey('permissions.location_read')).toBe(true);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
-    expect(Object.keys(DefaultPreferences.default)).toHaveLength(242);
+    expect(Object.keys(PreferenceDefaults.default)).toHaveLength(243);
   });
 
   test('keeps permission preferences safe by default', () => {

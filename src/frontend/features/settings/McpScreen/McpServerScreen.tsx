@@ -339,7 +339,7 @@ function McpServerEditor({
               <Input
                 accessibilityLabel={t('settings.mcp.fields.name')}
                 autoCorrect={false}
-                className="rounded-2xl px-4 text-base text-foreground leading-5"
+                className="rounded-2xl px-4 text-base text-foreground"
                 isDisabled={!isEditing}
                 onChangeText={(value) => updateField('name', value)}
                 placeholder={t('settings.mcp.fields.name')}
@@ -355,7 +355,7 @@ function McpServerEditor({
               accessibilityLabel={t('settings.mcp.fields.baseUrl')}
               autoCapitalize="none"
               autoCorrect={false}
-              className="rounded-2xl px-4 text-base text-foreground leading-5"
+              className="rounded-2xl px-4 text-base text-foreground"
               isDisabled={!isEditing}
               keyboardType="url"
               onChangeText={(value) => updateField('baseUrl', value)}
@@ -376,7 +376,7 @@ function McpServerEditor({
             <FormField label={t('settings.mcp.fields.description')}>
               <Input
                 accessibilityLabel={t('settings.mcp.fields.description')}
-                className="rounded-2xl px-4 text-base text-foreground leading-5"
+                className="rounded-2xl px-4 text-base text-foreground"
                 isDisabled={!isEditing}
                 onChangeText={(value) => updateField('description', value)}
                 placeholder={t('settings.mcp.fields.description')}
@@ -397,7 +397,7 @@ function McpServerEditor({
           <FormField label={t('settings.mcp.fields.timeout')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.timeout')}
-              className="rounded-2xl px-4 text-base text-foreground leading-5"
+              className="rounded-2xl px-4 text-base text-foreground"
               inputMode="numeric"
               isDisabled={!isEditing}
               keyboardType="number-pad"

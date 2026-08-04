@@ -40,7 +40,7 @@ export function SettingsItem({
     >
       <View className="flex-1 flex-row items-center gap-3">
         {iconEmoji ? (
-          <Text className="w-6 text-center text-xl leading-6">{iconEmoji}</Text>
+          <Text className="min-w-6 text-center text-emoji-xl">{iconEmoji}</Text>
         ) : imageSource ? (
           <Image
             cachePolicy="memory-disk"

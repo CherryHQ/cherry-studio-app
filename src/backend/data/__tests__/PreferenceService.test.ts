@@ -84,7 +84,7 @@ describe('PreferenceService', () => {
       scope: 'default',
       value: 'ask',
     });
-    expect(Object.keys(service.getAll())).toHaveLength(242);
+    expect(Object.keys(service.getAll())).toHaveLength(243);
   });
 
   test('returns mapped and full cached preferences', async () => {

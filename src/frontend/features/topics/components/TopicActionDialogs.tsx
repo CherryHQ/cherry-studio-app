@@ -83,7 +83,7 @@ export function useTopicActionDialogs(): TopicActionDialogs {
             <Input
               accessibilityLabel={t('topic.renameTitle')}
               autoFocus
-              className="min-h-10 rounded-xl px-3 py-0 text-base leading-5"
+              className="min-h-10 rounded-xl px-3 py-0 text-base"
               isDisabled={isSubmitting}
               onChangeText={setNameDraft}
               onSubmitEditing={confirmRename}

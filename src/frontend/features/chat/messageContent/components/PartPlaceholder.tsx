@@ -46,7 +46,7 @@ export function PartPlaceholder({ description, icon, label, onPress }: PartPlace
           {label}
         </Text>
         {description ? (
-          <Text className="text-default-foreground text-sm leading-5" selectable>
+          <Text className="text-default-foreground text-sm" selectable>
             {description}
           </Text>
         ) : null}

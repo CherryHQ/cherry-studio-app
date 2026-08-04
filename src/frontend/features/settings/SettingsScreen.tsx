@@ -5,7 +5,6 @@ import {
   CloudIcon,
   DatabaseIcon,
   EarthIcon,
-  GlobeIcon,
   InfoIcon,
   ShieldCheckIcon,
   SparklesIcon,
@@ -21,10 +20,8 @@ import { useUniwind } from 'uniwind';
 
 import { usePreference } from '@/frontend/data/hooks';
 
-import { SettingSelect } from './components/SettingSelect';
 import { SettingsSection } from './components/SettingsSection';
 import { usePrefetchProviders } from './hooks/usePrefetchProviders';
-import { useSettingPreferences } from './hooks/useSettingPreferences';
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
 
 export default function SettingsScreen() {
@@ -34,7 +31,6 @@ export default function SettingsScreen() {
   const { theme } = useUniwind();
   const tabBarHeight = useBottomTabBarHeight();
   const [userName] = usePreference('app.user.name');
-  const settingPreferences = useSettingPreferences();
   const prefetchProviders = usePrefetchProviders();
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
@@ -126,28 +122,9 @@ export default function SettingsScreen() {
           <SettingsSection
             items={[
               {
-                accessory: (
-                  <SettingSelect
-                    label={t('settings.items.appLanguage')}
-                    options={settingPreferences.language.options}
-                    value={settingPreferences.language.value}
-                    onValueChange={settingPreferences.language.onValueChange}
-                  />
-                ),
-                icon: GlobeIcon,
-                title: t('settings.items.appLanguage'),
-              },
-              {
-                accessory: (
-                  <SettingSelect
-                    label={t('settings.items.appearance')}
-                    options={settingPreferences.theme.options}
-                    value={settingPreferences.theme.value}
-                    onValueChange={settingPreferences.theme.onValueChange}
-                  />
-                ),
                 icon: SunIcon,
-                title: t('settings.items.appearance'),
+                onPress: () => router.push('/settings/appearance'),
+                title: t('settings.appearance.title'),
               },
             ]}
           />
