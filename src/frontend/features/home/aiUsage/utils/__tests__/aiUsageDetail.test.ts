@@ -10,9 +10,11 @@ import {
   displayAiUsageModelId,
   getAiUsageDayStatsQuery,
   getAiUsageDayRange,
+  getAiUsagePreviousWeekRange,
   getAiUsageRecentWeekPages,
   getAiUsageChartScale,
   getAiUsageWeekDefaultDateKey,
+  getAiUsageWeekOverWeekChange,
   getAiUsageWeekRange,
   getAiUsageWeekTimelineQuery,
 } from '../aiUsageDetail';
@@ -177,6 +179,23 @@ describe('AI usage detail', () => {
     expect(data.averageTokens).toBe(0);
   });
 
+  test('resolves the previous week to the adjacent page range', () => {
+    const pages = getAiUsageRecentWeekPages(new Date(2026, 7, 2, 12));
+    const currentWeek = pages[pages.length - 1];
+    const previousWeek = pages[pages.length - 2];
+
+    // Must match verbatim, otherwise the query key differs and the cache is missed.
+    expect(getAiUsagePreviousWeekRange(currentWeek.range)).toEqual(previousWeek.range);
+  });
+
+  test('expresses week-over-week change only when there is a baseline to compare', () => {
+    expect(getAiUsageWeekOverWeekChange(250, 200)).toBeCloseTo(0.25);
+    expect(getAiUsageWeekOverWeekChange(100, 200)).toBeCloseTo(-0.5);
+    expect(getAiUsageWeekOverWeekChange(200, 200)).toBeUndefined();
+    expect(getAiUsageWeekOverWeekChange(250, 0)).toBeUndefined();
+    expect(getAiUsageWeekOverWeekChange(250, undefined)).toBeUndefined();
+  });
+
   test('uses desktop model id display semantics', () => {
     expect(displayAiUsageModelId('provider::model-a')).toBe('model-a');
     expect(displayAiUsageModelId('vendor/model-a')).toBe('vendor/model-a');
@@ -200,11 +219,10 @@ describe('AI usage detail', () => {
     ]);
   });
 
-  test('builds a sorted provider list and ignores buckets from another grouping', () => {
+  test('builds a sorted provider list', () => {
     const response: AiUsageRecordStatsResponse = {
       buckets: [
         providerStatsBucket('provider-a', 'Provider A', 300),
-        statsBucket('provider-b', 'model-b', 500),
         providerStatsBucket('provider-c', null, 100),
       ],
       other: metrics(25),
@@ -221,6 +239,19 @@ describe('AI usage detail', () => {
       }),
       expect.objectContaining({ providerId: 'provider-c', totalTokens: 100 }),
       expect.objectContaining({ groupBy: 'provider', isOther: true, totalTokens: 25 }),
+    ]);
+  });
+
+  test('renders the cached grouping while the requested one is still loading', () => {
+    const response: AiUsageRecordStatsResponse = {
+      buckets: [statsBucket('provider-b', 'model-b', 500)],
+      other: metrics(25),
+      totals: metrics(525),
+    };
+
+    expect(buildAiUsageRanking(response, 'provider')).toEqual([
+      expect.objectContaining({ groupBy: 'model', modelId: 'model-b', totalTokens: 500 }),
+      expect.objectContaining({ groupBy: 'model', isOther: true, totalTokens: 25 }),
     ]);
   });
 });

@@ -85,6 +85,26 @@ export function getAiUsageWeekTimelineQuery(range: AiUsageTimeRange) {
   } satisfies AiUsageRecordTimelineQueryParams;
 }
 
+/**
+ * Rebuilt through {@link getAiUsageWeekRange} rather than by subtracting a fixed
+ * offset, so the result matches the adjacent page's range verbatim and reuses its
+ * cached timeline instead of issuing a second query.
+ */
+export function getAiUsagePreviousWeekRange(range: AiUsageTimeRange): AiUsageTimeRange {
+  return getAiUsageWeekRange(addCalendarDays(new Date(range.from), -WEEK_DAY_COUNT));
+}
+
+/** Signed share of change against the previous week, or undefined when it cannot be expressed. */
+export function getAiUsageWeekOverWeekChange(
+  totalTokens: number,
+  previousTotalTokens: number | undefined,
+): number | undefined {
+  if (previousTotalTokens === undefined || previousTotalTokens <= 0) return undefined;
+
+  const change = (totalTokens - previousTotalTokens) / previousTotalTokens;
+  return change === 0 ? undefined : change;
+}
+
 export function getAiUsageDayStatsQuery(dateKey: string, groupBy: AiUsageRankingGroup) {
   const range = getAiUsageDayRange(dateKey);
 
@@ -198,23 +218,31 @@ export function buildAiUsageRanking(
 ): AiUsageRankingItem[] {
   if (!response) return [];
 
+  // Each bucket carries its own grouping, so a payload cached under the previous
+  // grouping still renders while the new one loads instead of collapsing to empty.
   const items = response.buckets
     .flatMap((bucket): AiUsageRankingItem[] => {
-      if (bucket.groupBy !== groupBy || bucket.totalTokens <= 0) return [];
-
-      const identity =
-        bucket.groupBy === 'model' ? modelIdentity(bucket) : providerIdentity(bucket);
-      return [{ ...identity, groupBy, totalTokens: bucket.totalTokens }];
+      if (bucket.totalTokens <= 0) return [];
+      if (bucket.groupBy === 'model') {
+        return [{ ...modelIdentity(bucket), groupBy: 'model', totalTokens: bucket.totalTokens }];
+      }
+      if (bucket.groupBy === 'provider') {
+        return [
+          { ...providerIdentity(bucket), groupBy: 'provider', totalTokens: bucket.totalTokens },
+        ];
+      }
+      return [];
     })
     .sort((left, right) => right.totalTokens - left.totalTokens);
+  const itemsGroupBy = items[0]?.groupBy ?? groupBy;
 
   return response.other.totalTokens > 0
     ? [
         ...items,
         {
           ...otherIdentity(),
-          groupBy,
-          key: `other:${groupBy}`,
+          groupBy: itemsGroupBy,
+          key: `other:${itemsGroupBy}`,
           totalTokens: response.other.totalTokens,
         },
       ]

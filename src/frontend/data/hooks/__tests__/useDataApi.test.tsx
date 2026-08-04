@@ -66,6 +66,58 @@ describe('Data API hooks', () => {
     });
   });
 
+  it('holds the previous key on screen while the next one loads', async () => {
+    let resolveSecondPage: ((value: unknown) => void) | undefined;
+    dataApi.get.mockResolvedValueOnce({ id: 'assistant-1' } as never);
+    dataApi.get.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSecondPage = resolve;
+      }) as never,
+    );
+    let latest: ReturnType<typeof useQuery> | undefined;
+
+    function Probe({ id }: { id: string }) {
+      const result = useQuery('/assistants/:id', {
+        keepPreviousData: true,
+        params: { id },
+      });
+      useEffect(() => {
+        latest = result;
+      }, [result]);
+      return null;
+    }
+
+    async function renderProbe(id: string) {
+      await act(async () => {
+        const element = (
+          <TestProviders>
+            <Probe id={id} />
+          </TestProviders>
+        );
+        if (renderer) renderer.update(element);
+        else renderer = create(element);
+      });
+      await flushQueryNotifications();
+    }
+
+    async function flushQueryNotifications() {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+
+    await renderProbe('assistant-1');
+    expect(latest?.data).toEqual({ id: 'assistant-1' });
+
+    await renderProbe('assistant-2');
+    expect(latest?.isLoading).toBe(false);
+    expect(latest?.data).toEqual({ id: 'assistant-1' });
+
+    await act(async () => resolveSecondPage?.({ id: 'assistant-2' }));
+    await flushQueryNotifications();
+    expect(latest?.data).toEqual({ id: 'assistant-2' });
+  });
+
   it('dispatches a mutation and invalidates matching endpoint keys', async () => {
     dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
     queryClient.setQueryData(['/assistants'], { items: [] });

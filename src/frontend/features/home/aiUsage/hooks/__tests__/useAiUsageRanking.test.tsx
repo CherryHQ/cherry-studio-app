@@ -10,13 +10,26 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 
 import type { AiUsageRankingGroup } from '../../types';
-import { getAiUsageDayStatsQuery } from '../../utils/aiUsageDetail';
 import { useAiUsageRanking } from '../useAiUsageRanking';
 
 const statsResponse: AiUsageRecordStatsResponse = {
   buckets: [],
   other: emptyMetrics(),
   totals: emptyMetrics(),
+};
+const modelStatsResponse: AiUsageRecordStatsResponse = {
+  buckets: [
+    {
+      ...emptyMetrics(),
+      groupBy: 'model',
+      modelId: 'model-a',
+      providerId: 'provider-a',
+      providerName: 'Provider A',
+      totalTokens: 100,
+    },
+  ],
+  other: emptyMetrics(),
+  totals: { ...emptyMetrics(), totalTokens: 100 },
 };
 const dataApi = {
   delete: jest.fn(),
@@ -38,8 +51,16 @@ function Providers({ children }: { children: ReactNode }) {
   );
 }
 
-function Probe({ enabled, groupBy }: { enabled: boolean; groupBy: AiUsageRankingGroup }) {
-  const result = useAiUsageRanking({ enabled, groupBy, selectedDateKey: '2026-08-02' });
+function Probe({
+  enabled,
+  groupBy,
+  selectedDateKey,
+}: {
+  enabled: boolean;
+  groupBy: AiUsageRankingGroup;
+  selectedDateKey: string;
+}) {
+  const result = useAiUsageRanking({ enabled, groupBy, selectedDateKey });
 
   useEffect(() => {
     latestResult = result;
@@ -51,6 +72,7 @@ function Probe({ enabled, groupBy }: { enabled: boolean; groupBy: AiUsageRanking
 describe('useAiUsageRanking', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    dataApi.get.mockImplementation(async () => statsResponse);
     latestResult = undefined;
     queryClient = new QueryClient({
       defaultOptions: { queries: { gcTime: Infinity, retry: false } },
@@ -63,45 +85,87 @@ describe('useAiUsageRanking', () => {
     queryClient.clear();
   });
 
-  test('queries the selected day with the active ranking group', async () => {
+  test('queries the selected day and warms the grouping the toggle switches to', async () => {
     await renderHook(false, 'model');
     expect(dataApi.get).not.toHaveBeenCalled();
 
     await updateHook(true, 'model');
-    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/stats', {
-      query: getAiUsageDayStatsQuery('2026-08-02', 'model'),
-    });
+    expect(requestedGroupings()).toEqual(['model', 'provider']);
     expect(latestResult?.query.hasData).toBe(true);
     expect(latestResult?.ranking).toEqual([]);
 
+    // The prefetched grouping is already cached, so toggling issues no request and
+    // never drops back to the loading skeleton.
     await updateHook(true, 'provider');
-    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/stats', {
-      query: getAiUsageDayStatsQuery('2026-08-02', 'provider'),
+    expect(requestedGroupings()).toEqual(['model', 'provider']);
+    expect(latestResult?.query.isLoading).toBe(false);
+    expect(latestResult?.query.hasData).toBe(true);
+  });
+
+  test('keeps the previous day on screen while the next one loads', async () => {
+    const pendingRequests: (() => void)[] = [];
+    dataApi.get.mockImplementationOnce(async () => modelStatsResponse);
+    await renderHook(true, 'model');
+    expect(latestResult?.ranking).toEqual([
+      expect.objectContaining({ groupBy: 'model', modelId: 'model-a' }),
+    ]);
+
+    dataApi.get.mockImplementation(
+      async () =>
+        await new Promise<AiUsageRecordStatsResponse>((resolve) => {
+          pendingRequests.push(() => resolve(statsResponse));
+        }),
+    );
+    await updateHook(true, 'model', '2026-08-03');
+    expect(latestResult?.query.isLoading).toBe(false);
+    expect(latestResult?.query.hasData).toBe(true);
+    expect(latestResult?.ranking).toEqual([
+      expect.objectContaining({ groupBy: 'model', modelId: 'model-a' }),
+    ]);
+
+    await act(async () => {
+      for (const resolveRequest of pendingRequests) resolveRequest();
     });
-    expect(dataApi.get).toHaveBeenCalledTimes(2);
+    await flushQueryNotifications();
+    expect(latestResult?.ranking).toEqual([]);
   });
 });
 
-async function renderHook(enabled: boolean, groupBy: AiUsageRankingGroup) {
+async function renderHook(
+  enabled: boolean,
+  groupBy: AiUsageRankingGroup,
+  selectedDateKey = '2026-08-02',
+) {
   await act(async () => {
     renderer = create(
       <Providers>
-        <Probe enabled={enabled} groupBy={groupBy} />
+        <Probe enabled={enabled} groupBy={groupBy} selectedDateKey={selectedDateKey} />
       </Providers>,
     );
   });
   await flushQueryNotifications();
 }
 
-async function updateHook(enabled: boolean, groupBy: AiUsageRankingGroup) {
+async function updateHook(
+  enabled: boolean,
+  groupBy: AiUsageRankingGroup,
+  selectedDateKey = '2026-08-02',
+) {
   await act(async () => {
     renderer?.update(
       <Providers>
-        <Probe enabled={enabled} groupBy={groupBy} />
+        <Probe enabled={enabled} groupBy={groupBy} selectedDateKey={selectedDateKey} />
       </Providers>,
     );
   });
   await flushQueryNotifications();
+}
+
+function requestedGroupings(): string[] {
+  return dataApi.get.mock.calls.map((call) => {
+    const options = call[1] as { query?: { groupBy?: string } } | undefined;
+    return String(options?.query?.groupBy);
+  });
 }
 
 async function flushQueryNotifications() {

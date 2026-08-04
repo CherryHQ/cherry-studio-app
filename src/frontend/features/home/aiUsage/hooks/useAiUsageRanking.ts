@@ -1,7 +1,15 @@
-import { useQuery } from '@/frontend/data';
+import { useEffect } from 'react';
+
+import { usePrefetch, useQuery } from '@/frontend/data';
 
 import type { AiUsageRankingGroup } from '../types';
 import { buildAiUsageRanking, getAiUsageDayStatsQuery } from '../utils/aiUsageDetail';
+
+/**
+ * Day stats only change when new usage is recorded, which cannot happen while this
+ * screen is focused. Refreshing on focus is handled by the detail hook instead.
+ */
+const rankingStaleTime = 1000 * 60;
 
 type UseAiUsageRankingOptions = {
   enabled: boolean;
@@ -10,10 +18,23 @@ type UseAiUsageRankingOptions = {
 };
 
 export function useAiUsageRanking({ enabled, groupBy, selectedDateKey }: UseAiUsageRankingOptions) {
+  const prefetch = usePrefetch();
   const query = useQuery('/ai-usage-records/stats', {
     enabled,
+    keepPreviousData: true,
     query: getAiUsageDayStatsQuery(selectedDateKey, groupBy),
+    staleTime: rankingStaleTime,
   });
+
+  // Warm the grouping the toggle switches to, so toggling never hits a cold cache.
+  useEffect(() => {
+    if (!enabled) return;
+
+    void prefetch('/ai-usage-records/stats', {
+      query: getAiUsageDayStatsQuery(selectedDateKey, groupBy === 'model' ? 'provider' : 'model'),
+      staleTime: rankingStaleTime,
+    });
+  }, [enabled, groupBy, prefetch, selectedDateKey]);
 
   return {
     query: {
