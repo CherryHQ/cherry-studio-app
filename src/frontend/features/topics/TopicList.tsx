@@ -5,7 +5,7 @@ import { useToast } from 'heroui-native/toast';
 import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
+import { type AccessibilityActionEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
@@ -441,7 +441,11 @@ const TopicRow = memo(function TopicRow({
                 </View>
               </Animated.View>
             ) : null}
-            <Text className="min-w-12 h-12 text-center text-3xl leading-12">
+            <Text
+              allowFontScaling={false}
+              className="min-w-12 h-12 text-center"
+              style={styles.rowEmoji}
+            >
               {assistant?.emoji ?? '💬'}
             </Text>
             <View className="min-w-0 flex-1 pr-4">
@@ -535,3 +539,10 @@ function TopicPinAction({ disabled, drag, isPinned, label, onPress }: TopicPinAc
     </Animated.View>
   );
 }
+
+const styles = StyleSheet.create({
+  rowEmoji: {
+    fontSize: 30,
+    lineHeight: 48,
+  },
+});
