@@ -16,7 +16,7 @@ import { parseLocalDateKey } from '../utils/aiUsageCalendar';
 import { displayAiUsageModelId, getAiUsageChartScale } from '../utils/aiUsageDetail';
 import { createAiUsageTokenFormatter } from '../utils/formatAiUsageTokens';
 
-const CHART_HEIGHT = 196;
+const CHART_HEIGHT = 150;
 const AXIS_WIDTH = 48;
 const PLOT_TOP = 18;
 const PLOT_RIGHT = 14;
@@ -25,7 +25,7 @@ const PLOT_LEFT = 10;
 const PLOT_HEIGHT = CHART_HEIGHT - PLOT_TOP - PLOT_BOTTOM;
 const MIN_CHART_WIDTH = 220;
 const EMPTY_LABEL = () => '';
-const WEEKLY_CHART_SKELETON_HEIGHTS = [42, 70, 54, 92, 66, 38, 78] as const;
+const WEEKLY_CHART_SKELETON_HEIGHTS = [32, 54, 41, 70, 51, 29, 60] as const;
 const WEEKLY_LEGEND_SKELETON_KEYS = ['primary', 'info', 'warning', 'other'] as const;
 
 type ChartDatum = Record<string, number | string> & { dateKey: string };

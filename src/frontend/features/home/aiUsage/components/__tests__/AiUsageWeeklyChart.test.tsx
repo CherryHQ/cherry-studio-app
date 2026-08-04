@@ -94,6 +94,7 @@ describe('AiUsageWeeklyChart', () => {
 
     const chart = renderer?.root.findByProps({ testID: 'ai-usage-bar-chart' });
     expect(chart?.props.mode).toBe('stacked');
+    expect(chart?.props.height).toBe(150);
     expect(chart?.props.scrollable).toBe(false);
     expect(chart?.props.tooltip).toBe(false);
     expect(chart?.props.data).toHaveLength(7);
