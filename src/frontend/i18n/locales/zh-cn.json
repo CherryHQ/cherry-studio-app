@@ -22,6 +22,7 @@
   "aiUsage.unknownProvider": "未知服务商",
   "aiUsage.viewDetails": "查看详情",
   "aiUsage.weekChartAccessibility": "按模型展示的每周 Token 用量",
+  "aiUsage.weekOverWeek": "与上周比浮动",
   "aiUsage.weekTotal": "周累计",
   "chat.actions.createImage": "创建图片",
   "chat.actions.webSearch": "网络搜索",

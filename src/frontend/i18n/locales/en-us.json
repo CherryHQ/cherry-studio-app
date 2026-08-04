@@ -22,6 +22,7 @@
   "aiUsage.unknownProvider": "Unknown provider",
   "aiUsage.viewDetails": "View details",
   "aiUsage.weekChartAccessibility": "Weekly Token usage by model",
+  "aiUsage.weekOverWeek": "vs last week",
   "aiUsage.weekTotal": "Week total",
   "chat.actions.createImage": "Create image",
   "chat.actions.webSearch": "Web search",

@@ -21,7 +21,12 @@ import { AiUsageSectionAction } from './AiUsageSectionState';
 import { AiUsageWeekChartPage } from './AiUsageWeekChartPage';
 
 const ADJACENT_PAGE_DISTANCE = 1;
-const WEEK_CHART_PAGE_HEIGHT = 350;
+/**
+ * Every page renders the same box, so pinning the height keeps the section from
+ * resizing mid-swipe: selected-day summary (64) + chart (150) + separator (1) +
+ * week total row (20) + three gap-4 gutters (48).
+ */
+const WEEK_CHART_PAGE_HEIGHT = 283;
 
 type AiUsageWeeklySectionProps = {
   activePageIndex: number;

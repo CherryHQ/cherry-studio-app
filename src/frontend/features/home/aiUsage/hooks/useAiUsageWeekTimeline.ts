@@ -1,7 +1,12 @@
 import { useQuery } from '@/frontend/data';
 
 import type { AiUsageTimeRange } from '../types';
-import { buildAiUsageWeeklyData, getAiUsageWeekTimelineQuery } from '../utils/aiUsageDetail';
+import {
+  buildAiUsageWeeklyData,
+  getAiUsagePreviousWeekRange,
+  getAiUsageWeekOverWeekChange,
+  getAiUsageWeekTimelineQuery,
+} from '../utils/aiUsageDetail';
 
 type UseAiUsageWeekTimelineOptions = {
   enabled: boolean;
@@ -18,12 +23,25 @@ export function useAiUsageWeekTimeline({
     enabled,
     query: getAiUsageWeekTimelineQuery(range),
   });
+  const previousRange = getAiUsagePreviousWeekRange(range);
+  const previousQuery = useQuery('/ai-usage-records/timeline', {
+    enabled,
+    query: getAiUsageWeekTimelineQuery(previousRange),
+  });
+  const weeklyData = buildAiUsageWeeklyData(query.data?.buckets ?? [], range, todayDateKey);
+  const previousWeeklyData = previousQuery.data
+    ? buildAiUsageWeeklyData(previousQuery.data.buckets, previousRange, todayDateKey)
+    : undefined;
 
   return {
     query: {
       ...query,
       hasData: query.data !== undefined,
     },
-    weeklyData: buildAiUsageWeeklyData(query.data?.buckets ?? [], range, todayDateKey),
+    weekOverWeekChange: getAiUsageWeekOverWeekChange(
+      weeklyData.totalTokens,
+      previousWeeklyData?.totalTokens,
+    ),
+    weeklyData,
   };
 }

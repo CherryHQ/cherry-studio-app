@@ -22,7 +22,7 @@ export function AiUsageWeekChartPage({
   onSelectDate,
 }: AiUsageWeekChartPageProps) {
   const { t } = useTranslation();
-  const { query, weeklyData } = useAiUsageWeekTimeline({
+  const { query, weekOverWeekChange, weeklyData } = useAiUsageWeekTimeline({
     enabled,
     range: page.range,
     todayDateKey,
@@ -54,6 +54,7 @@ export function AiUsageWeekChartPage({
               />
             ) : undefined
           }
+          weekOverWeekChange={weekOverWeekChange}
           onSelectDate={onSelectDate}
         />
       )}

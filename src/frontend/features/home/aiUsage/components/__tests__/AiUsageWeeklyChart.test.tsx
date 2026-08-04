@@ -107,17 +107,16 @@ describe('AiUsageWeeklyChart', () => {
         '50',
         '150',
         '250',
-        'model-a',
-        'Other',
         'Average',
         'Tue, Aug 4',
         '100 Tokens',
         'Week total',
         '300 Tokens',
-        '200',
-        '100',
       ]),
     );
+    // The per-series legend was removed; only the week total remains under the chart.
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-week-legend' })).toHaveLength(0);
+    expect(textValues()).not.toContain('model-a');
     expect(textValues()).not.toContain('200 Tokens');
     expect(textValues().filter((value) => value === '100 Tokens')).toHaveLength(1);
 
@@ -188,9 +187,39 @@ describe('AiUsageWeeklyChart', () => {
     expect(renderer?.root.findAllByProps({ testID: 'ai-usage-bar-chart' })).toHaveLength(0);
   });
 
-  async function renderChart(chartData = data) {
+  it('points the week-over-week arrow by sign and shows the magnitude only', async () => {
+    await renderChart(data, 0.25);
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-week-over-week-value' }).props.children,
+    ).toBe('25%');
+    expect(hasTrendIcon('up')).toBe(true);
+    expect(hasTrendIcon('down')).toBe(false);
+
+    await act(async () => renderer?.update(chartElement('2026-08-04', data, -0.32)));
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-week-over-week-value' }).props.children,
+    ).toBe('32%');
+    expect(hasTrendIcon('down')).toBe(true);
+    expect(hasTrendIcon('up')).toBe(false);
+
+    await act(async () => renderer?.update(chartElement('2026-08-04', data)));
+    expect(renderer?.root.findAllByProps({ testID: 'ai-usage-week-over-week-value' })).toHaveLength(
+      0,
+    );
+    expect(hasTrendIcon('up')).toBe(false);
+    expect(hasTrendIcon('down')).toBe(false);
+  });
+
+  function hasTrendIcon(direction: 'down' | 'up') {
+    return (
+      (renderer?.root.findAllByProps({ testID: `ai-usage-week-over-week-${direction}` }).length ??
+        0) > 0
+    );
+  }
+
+  async function renderChart(chartData = data, weekOverWeekChange?: number) {
     await act(async () => {
-      renderer = create(chartElement('2026-08-04', chartData));
+      renderer = create(chartElement('2026-08-04', chartData, weekOverWeekChange));
     });
     const layoutNode = renderer?.root
       .findAll((node) => typeof node.props.onLayout === 'function')
@@ -202,13 +231,14 @@ describe('AiUsageWeeklyChart', () => {
     );
   }
 
-  function chartElement(selectedDateKey: string, chartData = data) {
+  function chartElement(selectedDateKey: string, chartData = data, weekOverWeekChange?: number) {
     return (
       <AiUsageWeeklyChart
         data={chartData}
         isLoading={false}
         locale="en-US"
         selectedDateKey={selectedDateKey}
+        weekOverWeekChange={weekOverWeekChange}
         onSelectDate={mockSelectDate}
       />
     );

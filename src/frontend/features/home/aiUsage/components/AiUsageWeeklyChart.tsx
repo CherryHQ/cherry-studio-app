@@ -1,3 +1,4 @@
+import { CircleArrowDownIcon, CircleArrowUpIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -28,7 +29,6 @@ const AXIS_LABEL_HEIGHT = 16;
 const AXIS_LABEL_MIN_GAP = 18;
 const EMPTY_LABEL = () => '';
 const WEEKLY_CHART_SKELETON_HEIGHTS = [32, 54, 41, 70, 51, 29, 60] as const;
-const WEEKLY_LEGEND_SKELETON_KEYS = ['primary', 'info', 'warning', 'other'] as const;
 
 type ChartDatum = Record<string, number | string> & { dateKey: string };
 
@@ -39,6 +39,8 @@ type AiUsageWeeklyChartProps = {
   onSelectDate: (dateKey: string) => void;
   selectedDateKey: string;
   statusAccessory?: ReactNode;
+  /** Signed share of change against the previous week; omitted when not expressible. */
+  weekOverWeekChange?: number;
 };
 
 export function AiUsageWeeklyChart({
@@ -48,6 +50,7 @@ export function AiUsageWeeklyChart({
   onSelectDate,
   selectedDateKey,
   statusAccessory,
+  weekOverWeekChange,
 }: AiUsageWeeklyChartProps) {
   const { t } = useTranslation();
   const [containerWidth, setContainerWidth] = useState(0);
@@ -192,27 +195,32 @@ export function AiUsageWeeklyChart({
         <WeeklyChartSkeleton />
       ) : (
         <>
-          <View className="h-16 justify-between" testID="ai-usage-selected-day-summary">
-            <Text
-              className="text-muted-foreground text-sm"
-              maxFontSizeMultiplier={1.1}
-              numberOfLines={1}
-              testID="ai-usage-selected-date"
-            >
-              {selectedDateFormatter.format(parseLocalDateKey(selectedDateKey))}
-            </Text>
-            <Text
-              selectable
-              adjustsFontSizeToFit
-              className="font-semibold text-default-foreground text-3xl"
-              maxFontSizeMultiplier={1.1}
-              minimumFontScale={0.75}
-              numberOfLines={1}
-              style={styles.tabularNumbers}
-              testID="ai-usage-selected-day-total"
-            >
-              {t('aiUsage.tokensValue', { tokens: formatTokens(selectedDayTokens) })}
-            </Text>
+          <View className="h-16 flex-row items-start gap-3" testID="ai-usage-selected-day-summary">
+            <View className="h-full min-w-0 flex-1 justify-between">
+              <Text
+                className="text-muted-foreground text-sm"
+                maxFontSizeMultiplier={1.1}
+                numberOfLines={1}
+                testID="ai-usage-selected-date"
+              >
+                {selectedDateFormatter.format(parseLocalDateKey(selectedDateKey))}
+              </Text>
+              <Text
+                selectable
+                adjustsFontSizeToFit
+                className="font-semibold text-default-foreground text-3xl"
+                maxFontSizeMultiplier={1.1}
+                minimumFontScale={0.75}
+                numberOfLines={1}
+                style={styles.tabularNumbers}
+                testID="ai-usage-selected-day-total"
+              >
+                {t('aiUsage.tokensValue', { tokens: formatTokens(selectedDayTokens) })}
+              </Text>
+            </View>
+            {weekOverWeekChange === undefined ? null : (
+              <AiUsageWeekOverWeekBadge change={weekOverWeekChange} locale={locale} />
+            )}
           </View>
 
           <View className="flex-row" style={styles.chartFrame} testID="ai-usage-weekly-chart">
@@ -347,56 +355,55 @@ export function AiUsageWeeklyChart({
             ) : null}
           </View>
 
+          <View className="border-border border-t" />
+
           <View className="flex-row items-center justify-between gap-3">
             <View className="flex-row items-center gap-2">
-              <Text className="text-muted-foreground text-sm">{t('aiUsage.weekTotal')}</Text>
+              <Text className="text-default-foreground text-sm">{t('aiUsage.weekTotal')}</Text>
               {statusAccessory}
             </View>
             <Text
               selectable
-              className="font-semibold text-default-foreground text-sm"
+              className="font-semibold text-muted-foreground text-sm"
               style={styles.tabularNumbers}
               testID="ai-usage-week-total"
             >
               {t('aiUsage.tokensValue', { tokens: formatTokens(data.totalTokens) })}
             </Text>
           </View>
-
-          {data.series.length > 0 ? (
-            <View className="flex-row flex-wrap gap-x-4 gap-y-3" testID="ai-usage-week-legend">
-              {data.series.map((series, index) => {
-                const color = getSeriesColor(series.isOther, index, primary, info, warning, muted);
-                const label = series.isOther
-                  ? t('aiUsage.other')
-                  : displayAiUsageModelId(series.modelId) || t('aiUsage.unknownModel');
-
-                return (
-                  <View key={series.key} className="min-w-[44%] flex-1 flex-row items-center gap-2">
-                    <View
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: color }}
-                    />
-                    <Text
-                      className="min-w-0 flex-1 text-muted-foreground text-xs"
-                      numberOfLines={1}
-                    >
-                      {label}
-                    </Text>
-                    <Text
-                      selectable
-                      className="shrink-0 font-medium text-default-foreground text-xs"
-                      numberOfLines={1}
-                      style={styles.tabularNumbers}
-                    >
-                      {formatTokens(series.totalTokens)}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          ) : null}
         </>
       )}
+    </View>
+  );
+}
+
+function AiUsageWeekOverWeekBadge({ change, locale }: { change: number; locale: string }) {
+  const { t } = useTranslation();
+  const TrendIcon = change > 0 ? CircleArrowUpIcon : CircleArrowDownIcon;
+  const percentFormatter = useMemo(
+    () => new Intl.NumberFormat(locale, { maximumFractionDigits: 0, style: 'percent' }),
+    [locale],
+  );
+
+  return (
+    <View
+      className="shrink-0 flex-row items-center gap-1"
+      testID={change > 0 ? 'ai-usage-week-over-week-up' : 'ai-usage-week-over-week-down'}
+    >
+      <TrendIcon className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+      <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.1} numberOfLines={1}>
+        {t('aiUsage.weekOverWeek')}
+      </Text>
+      <Text
+        selectable
+        className="text-muted-foreground text-sm"
+        maxFontSizeMultiplier={1.1}
+        numberOfLines={1}
+        style={styles.tabularNumbers}
+        testID="ai-usage-week-over-week-value"
+      >
+        {percentFormatter.format(Math.abs(change))}
+      </Text>
     </View>
   );
 }
@@ -416,14 +423,11 @@ function WeeklyChartSkeleton() {
           </View>
         ))}
       </View>
+      <View className="border-border border-t" />
+      {/* h-5 matches the loaded row's text-sm line height, keeping both boxes the same. */}
       <View className="flex-row items-center justify-between gap-3">
-        <View className="h-4 w-20 rounded-sm bg-surface-secondary" />
-        <View className="h-4 w-24 rounded-sm bg-surface-secondary" />
-      </View>
-      <View className="flex-row flex-wrap gap-3">
-        {WEEKLY_LEGEND_SKELETON_KEYS.map((key) => (
-          <View key={key} className="h-4 min-w-[44%] flex-1 rounded-sm bg-surface-secondary" />
-        ))}
+        <View className="h-5 w-20 rounded-sm bg-surface-secondary" />
+        <View className="h-5 w-24 rounded-sm bg-surface-secondary" />
       </View>
     </View>
   );

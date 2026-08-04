@@ -73,14 +73,58 @@ describe('useAiUsageWeekTimeline', () => {
     });
     await flushQueryNotifications();
 
-    expect(dataApi.get).toHaveBeenCalledTimes(1);
+    expect(dataApi.get).toHaveBeenCalledTimes(2);
     expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
       query: getAiUsageWeekTimelineQuery(range),
     });
+    // The previous week reuses the adjacent page's range verbatim, so its cached
+    // timeline is hit instead of a second round trip once that page has loaded.
+    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
+      query: getAiUsageWeekTimelineQuery(getAiUsageWeekRange(new Date(2026, 6, 26, 12))),
+    });
     expect(latestResult?.query.hasData).toBe(true);
     expect(latestResult?.weeklyData.days).toHaveLength(7);
+    // Both weeks are empty here, so there is no ratio to express.
+    expect(latestResult?.weekOverWeekChange).toBeUndefined();
+  });
+
+  test('reports the signed swing against the previous week', async () => {
+    dataApi.get.mockImplementation(async (_path, options) => {
+      const query = options?.query as { from: number } | undefined;
+      const isPreviousWeek = query !== undefined && query.from < range.from;
+      return isPreviousWeek ? timelineWith('2026-07-20', 200) : timelineWith('2026-07-27', 250);
+    });
+
+    await renderHook(true);
+
+    expect(latestResult?.weekOverWeekChange).toBeCloseTo(0.25);
   });
 });
+
+function timelineWith(date: string, totalTokens: number): AiUsageRecordTimelineResponse {
+  return {
+    buckets: [
+      {
+        costCurrency: null,
+        date,
+        estimatedRequestCount: 0,
+        modelId: 'model-a',
+        providerId: 'provider-a',
+        providerName: 'Provider A',
+        recordCount: 1,
+        requestCount: 1,
+        totalCacheReadTokens: 0,
+        totalCacheWriteTokens: 0,
+        totalCost: 0,
+        totalNoCacheTokens: 0,
+        totalTokens,
+        unpricedRequestCount: 0,
+      },
+    ],
+    costTotals: [],
+    dailyCosts: [],
+  };
+}
 
 async function renderHook(enabled: boolean) {
   await act(async () => {
