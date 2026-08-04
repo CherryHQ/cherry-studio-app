@@ -1,3 +1,4 @@
+import { Switch } from '@cherrystudio/ui/components';
 import {
   hasMcpServerWildcardRule,
   matchesMcpSourceToolRule,
@@ -5,7 +6,6 @@ import {
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQuery } from '@tanstack/react-query';
 import { Spinner } from 'heroui-native/spinner';
-import { Switch } from 'heroui-native/switch';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -188,9 +188,9 @@ export function McpToolsSection({
                 accessibilityLabel={t('settings.mcp.tools.enabledAccessibilityLabel', {
                   tool: tool.name,
                 })}
-                isDisabled={controlsAreReadOnly}
-                isSelected={!toolDisabled}
-                onSelectedChange={(enabled) => void handleToggleTool(tool.name, enabled)}
+                disabled={controlsAreReadOnly}
+                onValueChange={(enabled) => void handleToggleTool(tool.name, enabled)}
+                value={!toolDisabled}
               />
             </View>
             <View className="w-14 items-center">
@@ -198,11 +198,11 @@ export function McpToolsSection({
                 accessibilityLabel={t('settings.mcp.tools.autoApproveAccessibilityLabel', {
                   tool: tool.name,
                 })}
-                isDisabled={controlsAreReadOnly || toolDisabled}
-                isSelected={isAutoApproved(tool.name)}
-                onSelectedChange={(autoApprove) =>
+                disabled={controlsAreReadOnly || toolDisabled}
+                onValueChange={(autoApprove) =>
                   void handleToggleAutoApprove(tool.name, autoApprove)
                 }
+                value={isAutoApproved(tool.name)}
               />
             </View>
           </View>

@@ -46,7 +46,7 @@ jest.mock('heroui-native/text-area', () => {
   return { TextArea: TextInput };
 });
 
-jest.mock('heroui-native/switch', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
 
   return {
@@ -252,8 +252,8 @@ describe('AssistantEditScreen', () => {
 
     render();
 
-    expect(switchControl('assistant.form.streamOutput').props.isSelected).toBe(false);
-    expect(switchControl('assistant.form.enableMaxToolCalls').props.isSelected).toBe(true);
+    expect(switchControl('assistant.form.streamOutput').props.value).toBe(false);
+    expect(switchControl('assistant.form.enableMaxToolCalls').props.value).toBe(true);
     expect(field('assistant.form.maxToolCalls')[0]?.props.value).toBe('7');
   });
 
@@ -271,7 +271,7 @@ describe('AssistantEditScreen', () => {
     expect(field('assistant.form.maxToolCalls')).toEqual([]);
 
     act(() => {
-      switchControl('assistant.form.enableMaxToolCalls').props.onSelectedChange(true);
+      switchControl('assistant.form.enableMaxToolCalls').props.onValueChange(true);
     });
 
     expect(field('assistant.form.maxToolCalls')[0]?.props.value).toBe('12');
@@ -283,7 +283,7 @@ describe('AssistantEditScreen', () => {
     render();
 
     act(() => {
-      switchControl('assistant.form.streamOutput').props.onSelectedChange(false);
+      switchControl('assistant.form.streamOutput').props.onValueChange(false);
       field('assistant.form.maxToolCalls')[0]?.props.onChangeText('35');
     });
     await save();

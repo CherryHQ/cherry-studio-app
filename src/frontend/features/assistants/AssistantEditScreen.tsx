@@ -1,3 +1,4 @@
+import { Switch } from '@cherrystudio/ui/components';
 import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -9,7 +10,6 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Input } from 'heroui-native/input';
-import { Switch } from 'heroui-native/switch';
 import { TextArea } from 'heroui-native/text-area';
 import { useToast } from 'heroui-native/toast';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
@@ -472,7 +472,7 @@ function SwitchRow({
       <Text className="min-w-0 flex-1 font-medium text-base text-foreground" numberOfLines={2}>
         {label}
       </Text>
-      <Switch accessibilityLabel={label} isSelected={value} onSelectedChange={onValueChange} />
+      <Switch accessibilityLabel={label} onValueChange={onValueChange} value={value} />
     </View>
   );
 }

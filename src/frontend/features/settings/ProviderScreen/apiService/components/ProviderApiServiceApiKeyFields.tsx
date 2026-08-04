@@ -1,8 +1,8 @@
+import { Switch } from '@cherrystudio/ui/components';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
 import { Button } from 'heroui-native/button';
 import { Input } from 'heroui-native/input';
-import { Switch } from 'heroui-native/switch';
 import {
   CopyIcon,
   EyeIcon,
@@ -230,9 +230,9 @@ function ApiKeyRow({
         </Text>
         <Switch
           accessibilityLabel={t('settings.provider.apiService.apiKeyEnabled')}
-          isDisabled={isPending}
-          isSelected={apiKey.isEnabled}
-          onSelectedChange={(isEnabled) => onEnabledChange(apiKey.id, isEnabled)}
+          disabled={isPending}
+          onValueChange={(isEnabled) => onEnabledChange(apiKey.id, isEnabled)}
+          value={apiKey.isEnabled}
         />
       </View>
       <View className="flex-row items-center gap-2">

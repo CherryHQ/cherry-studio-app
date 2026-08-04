@@ -1,8 +1,7 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
-import { Slider } from '@cherrystudio/ui/components';
+import { Slider, Switch } from '@cherrystudio/ui/components';
 import { Input } from 'heroui-native/input';
 import { Select } from 'heroui-native/select';
-import { Switch } from 'heroui-native/switch';
 import type { TFunction } from 'i18next';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
@@ -105,8 +104,8 @@ function PaintingSettingField({
           <Text className="min-w-0 flex-1 font-medium text-foreground text-sm">{label}</Text>
           <Switch
             accessibilityLabel={label}
-            isSelected={Boolean(value)}
-            onSelectedChange={(selected) => onValueChange(field.key, selected)}
+            onValueChange={(selected) => onValueChange(field.key, selected)}
+            value={Boolean(value)}
           />
         </View>
       );
