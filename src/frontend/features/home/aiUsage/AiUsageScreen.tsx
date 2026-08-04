@@ -1,6 +1,6 @@
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
@@ -24,26 +24,24 @@ export function AiUsageScreen() {
         style={{ paddingTop: isLiquidGlassAvailable ? headerHeight : 0 }}
         testID="ai-usage-content"
       >
-        <ScrollView
-          alwaysBounceVertical={false}
-          className="flex-1"
-          contentContainerClassName="gap-7 px-4 py-5"
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-          testID="ai-usage-detail-scroll"
-        >
-          <AiUsageWeeklySection
-            activePageIndex={activePageIndex}
+        {activePage ? (
+          <AiUsageRankingSection
+            enabled
+            listHeaderComponent={
+              <AiUsageWeeklySection
+                activePageIndex={activePageIndex}
+                locale={locale}
+                pages={pages}
+                todayDateKey={todayDateKey}
+                weekDataKey={weekDataKey}
+                onSelectDate={selectDate}
+                onSelectPage={selectPage}
+              />
+            }
             locale={locale}
-            pages={pages}
-            todayDateKey={todayDateKey}
-            weekDataKey={weekDataKey}
-            onSelectDate={selectDate}
-            onSelectPage={selectPage}
+            page={activePage}
           />
-
-          {activePage ? <AiUsageRankingSection enabled locale={locale} page={activePage} /> : null}
-        </ScrollView>
+        ) : null}
       </View>
       <BackHeader title={t('aiUsage.title')} />
     </>

@@ -1,6 +1,6 @@
 import { RefreshCwIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type AiUsageSectionStatusProps = {
   isError: boolean;
@@ -28,6 +28,7 @@ export function AiUsageSectionStatus({
       accessibilityRole="button"
       className="size-8 items-center justify-center rounded-full active:bg-surface-secondary active:opacity-70"
       hitSlop={6}
+      style={styles.continuousCorners}
       testID={retryTestID}
       onPress={onRetry}
     >
@@ -37,25 +38,28 @@ export function AiUsageSectionStatus({
 }
 
 export function AiUsageSectionAction({
-  compact = false,
   label,
   onPress,
   testID,
+  variant,
 }: {
-  compact?: boolean;
   label: string;
   onPress: () => void;
   testID: string;
+  variant: 'compact' | 'default';
 }) {
+  const isCompact = variant === 'compact';
+
   return (
     <Pressable
       accessibilityRole="button"
       className={
-        compact
+        isCompact
           ? 'shrink-0 rounded-lg px-2 active:bg-surface-secondary active:opacity-70'
           : 'shrink-0 rounded-lg px-2 py-1.5 active:bg-surface-secondary active:opacity-70'
       }
-      hitSlop={compact ? 10 : 4}
+      hitSlop={isCompact ? 10 : 4}
+      style={styles.continuousCorners}
       testID={testID}
       onPress={onPress}
     >
@@ -85,6 +89,7 @@ export function AiUsageSectionError({
       <Pressable
         accessibilityRole="button"
         className="flex-row items-center gap-2 rounded-lg bg-surface-secondary px-4 py-2 active:opacity-70"
+        style={styles.continuousCorners}
         testID={testID}
         onPress={onRetry}
       >
@@ -94,3 +99,9 @@ export function AiUsageSectionError({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  continuousCorners: {
+    borderCurve: 'continuous',
+  },
+});

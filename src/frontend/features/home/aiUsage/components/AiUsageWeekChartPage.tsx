@@ -1,34 +1,41 @@
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { useAiUsageWeekTimeline } from '../hooks/useAiUsageWeekTimeline';
-import type { AiUsageDetailPage } from '../types';
+import type { AiUsageWeekTimelineResult } from '../hooks/useAiUsageWeekTimeline';
+import type { AiUsageDetailPage, AiUsageWeeklyData } from '../types';
 import { AiUsageSectionError, AiUsageSectionStatus } from './AiUsageSectionState';
 import { AiUsageWeeklyChart } from './AiUsageWeeklyChart';
 
 type AiUsageWeekChartPageProps = {
-  enabled: boolean;
   locale: string;
   page: AiUsageDetailPage;
-  todayDateKey: string;
+  timeline?: AiUsageWeekTimelineResult;
   onSelectDate: (dateKey: string) => void;
 };
 
+const EMPTY_WEEKLY_DATA: AiUsageWeeklyData = {
+  averageTokens: 0,
+  days: [],
+  series: [],
+  totalTokens: 0,
+};
+
 export function AiUsageWeekChartPage({
-  enabled,
   locale,
   page,
-  todayDateKey,
+  timeline,
   onSelectDate,
 }: AiUsageWeekChartPageProps) {
   const { t } = useTranslation();
-  const { query, weekOverWeekChange, weeklyData } = useAiUsageWeekTimeline({
-    enabled,
-    range: page.range,
-    todayDateKey,
-  });
-  const isInitialLoading = (query.isLoading || !enabled) && !query.hasData;
-  const isInitialError = query.isError && !query.hasData;
+  const { hasData, isError, isLoading, isRefreshing, refetch } = timeline?.query ?? {
+    hasData: false,
+    isError: false,
+    isLoading: true,
+    isRefreshing: false,
+    refetch: undefined,
+  };
+  const isInitialLoading = isLoading && !hasData;
+  const isInitialError = isError && !hasData;
 
   return (
     <View testID={`ai-usage-week-chart-page-${page.key}`}>
@@ -36,25 +43,25 @@ export function AiUsageWeekChartPage({
         <AiUsageSectionError
           message={t('aiUsage.loadError')}
           testID={`ai-usage-week-retry-${page.key}`}
-          onRetry={() => void query.refetch()}
+          onRetry={() => void refetch?.()}
         />
       ) : (
         <AiUsageWeeklyChart
-          data={weeklyData}
+          data={timeline?.weeklyData ?? EMPTY_WEEKLY_DATA}
           isLoading={isInitialLoading}
           locale={locale}
           selectedDateKey={page.selectedDateKey}
           statusAccessory={
-            query.hasData ? (
+            hasData ? (
               <AiUsageSectionStatus
-                isError={query.isError}
-                isRefreshing={query.isRefreshing}
+                isError={isError}
+                isRefreshing={isRefreshing}
                 retryTestID={`ai-usage-week-refresh-retry-${page.key}`}
-                onRetry={() => void query.refetch()}
+                onRetry={refetch ? () => void refetch() : undefined}
               />
             ) : undefined
           }
-          weekOverWeekChange={weekOverWeekChange}
+          weekOverWeekChange={timeline?.weekOverWeekChange}
           onSelectDate={onSelectDate}
         />
       )}

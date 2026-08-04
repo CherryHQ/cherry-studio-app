@@ -10,6 +10,52 @@ const mockResolveIcon = jest.fn(
 );
 const mockImage = jest.fn((_props: unknown) => null);
 
+jest.mock('@legendapp/list/react-native', () => {
+  const React = jest.requireActual('react');
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return {
+    LegendList: (props: Record<string, unknown>) => {
+      const {
+        data,
+        extraData,
+        keyExtractor,
+        ListEmptyComponent,
+        ListFooterComponent,
+        ListHeaderComponent,
+        renderItem,
+        ...viewProps
+      } = props as {
+        data: AiUsageRankingItem[];
+        extraData: unknown;
+        keyExtractor: (item: AiUsageRankingItem) => string;
+        ListEmptyComponent?: React.ReactNode;
+        ListFooterComponent?: React.ReactNode;
+        ListHeaderComponent?: React.ReactNode;
+        renderItem: (options: Record<string, unknown>) => React.ReactNode;
+      } & Record<string, unknown>;
+
+      return (
+        <MockView
+          {...viewProps}
+          data={data}
+          extraData={extraData}
+          ListHeaderComponent={ListHeaderComponent}
+        >
+          {ListHeaderComponent}
+          {data.length === 0 ? ListEmptyComponent : null}
+          {data.map((item, index) => (
+            <React.Fragment key={keyExtractor(item)}>
+              {renderItem({ data, extraData, index, item, type: undefined })}
+            </React.Fragment>
+          ))}
+          {ListFooterComponent}
+        </MockView>
+      );
+    },
+  };
+});
+
 jest.mock('@cherrystudio/ui/icons', () => ({
   resolveIcon: (modelId: string, providerId: string) => mockResolveIcon(modelId, providerId),
   resolveProviderIcon: (providerId: string) => mockResolveProviderIcon(providerId),
@@ -64,6 +110,10 @@ describe('AiUsageRankingList', () => {
   it('uses desktop model labels and reveals seven more rows per press', async () => {
     await renderList(modelItems);
 
+    const list = renderer?.root.findByProps({ testID: 'ai-usage-ranking-list' });
+    expect(list?.props.recycleItems).toBe(true);
+    expect(list?.props.data).toHaveLength(7);
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-ranking-header' })).toBeDefined();
     expect(rankingRows()).toHaveLength(7);
     expect(textValues()).toEqual(expect.arrayContaining(['model-0 | Provider', '1K Tokens']));
     expect(
@@ -167,7 +217,14 @@ describe('AiUsageRankingList', () => {
 
   async function renderList(items: readonly AiUsageRankingItem[], resetKey = '2026-08-02:model') {
     await act(async () => {
-      const element = <AiUsageRankingList items={items} locale="en-US" resetKey={resetKey} />;
+      const element = (
+        <AiUsageRankingList
+          items={items}
+          listHeaderComponent={<View testID="ai-usage-ranking-header" />}
+          locale="en-US"
+          resetKey={resetKey}
+        />
+      );
       if (renderer) renderer.update(element);
       else renderer = create(element);
     });

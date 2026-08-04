@@ -1,8 +1,6 @@
-import { useCallback, useState } from 'react';
+import { type ReactElement, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-
-import { Section } from '@/frontend/components/Section';
 
 import { useAiUsageRanking } from '../hooks/useAiUsageRanking';
 import type { AiUsageDetailPage, AiUsageRankingGroup } from '../types';
@@ -15,11 +13,17 @@ import {
 
 type AiUsageRankingSectionProps = {
   enabled: boolean;
+  listHeaderComponent: ReactElement;
   locale: string;
   page: AiUsageDetailPage;
 };
 
-export function AiUsageRankingSection({ enabled, locale, page }: AiUsageRankingSectionProps) {
+export function AiUsageRankingSection({
+  enabled,
+  listHeaderComponent,
+  locale,
+  page,
+}: AiUsageRankingSectionProps) {
   const { t } = useTranslation();
   const [groupBy, setGroupBy] = useState<AiUsageRankingGroup>('model');
   const { query, ranking } = useAiUsageRanking({
@@ -27,55 +31,67 @@ export function AiUsageRankingSection({ enabled, locale, page }: AiUsageRankingS
     groupBy,
     selectedDateKey: page.selectedDateKey,
   });
-  const isInitialLoading = (query.isLoading || !enabled) && !query.hasData;
-  const isInitialError = query.isError && !query.hasData;
+  const { hasData, isError, isLoading, isRefreshing, refetch } = query;
+  const isInitialLoading = (isLoading || !enabled) && !hasData;
+  const isInitialError = isError && !hasData;
   const toggleGroupBy = useCallback(() => {
     setGroupBy((currentGroup) => (currentGroup === 'model' ? 'provider' : 'model'));
   }, []);
 
-  return (
-    <Section
-      action={
+  const rankingListHeader = (
+    <View className="gap-7 pb-2">
+      {listHeaderComponent}
+      <View
+        className="flex-row items-center justify-between gap-3 px-1"
+        testID="ai-usage-ranking-section"
+      >
+        <View className="min-w-0 flex-1 flex-row items-center gap-2">
+          <Text
+            selectable
+            className="shrink font-medium text-default-foreground text-sm"
+            numberOfLines={1}
+          >
+            {t('aiUsage.mostUsed')}
+          </Text>
+          <AiUsageSectionStatus
+            isError={isError && hasData}
+            isRefreshing={isRefreshing}
+            retryTestID={`ai-usage-ranking-refresh-retry-${page.key}`}
+            onRetry={() => void refetch()}
+          />
+        </View>
         <AiUsageSectionAction
           label={groupBy === 'model' ? t('aiUsage.showProviders') : t('aiUsage.showModels')}
           testID="ai-usage-toggle-ranking-group"
+          variant="default"
           onPress={toggleGroupBy}
         />
-      }
-      testID="ai-usage-ranking-section"
-      title={t('aiUsage.mostUsed')}
-      titleAccessory={
-        <AiUsageSectionStatus
-          isError={query.isError && query.hasData}
-          isRefreshing={query.isRefreshing}
-          retryTestID={`ai-usage-ranking-refresh-retry-${page.key}`}
-          onRetry={() => void query.refetch()}
-        />
-      }
-    >
-      <View className="p-4">
-        {isInitialError ? (
-          <AiUsageSectionError
-            message={t('aiUsage.rankingLoadError')}
-            testID={`ai-usage-ranking-retry-${page.key}`}
-            onRetry={() => void query.refetch()}
-          />
-        ) : isInitialLoading ? (
-          <AiUsageRankingListSkeleton />
-        ) : ranking.length > 0 ? (
-          <AiUsageRankingList
-            items={ranking}
-            locale={locale}
-            resetKey={`${page.selectedDateKey}:${groupBy}`}
-          />
-        ) : (
-          <View className="min-h-32 items-center justify-center px-6">
-            <Text selectable className="text-center text-muted-foreground text-sm">
-              {t('aiUsage.noUsageForDay')}
-            </Text>
-          </View>
-        )}
       </View>
-    </Section>
+    </View>
+  );
+  const emptyState = isInitialError ? (
+    <AiUsageSectionError
+      message={t('aiUsage.rankingLoadError')}
+      testID={`ai-usage-ranking-retry-${page.key}`}
+      onRetry={() => void refetch()}
+    />
+  ) : isInitialLoading ? (
+    <AiUsageRankingListSkeleton />
+  ) : (
+    <View className="min-h-32 items-center justify-center px-6">
+      <Text selectable className="text-center text-muted-foreground text-sm">
+        {t('aiUsage.noUsageForDay')}
+      </Text>
+    </View>
+  );
+
+  return (
+    <AiUsageRankingList
+      emptyState={emptyState}
+      items={isInitialError || isInitialLoading ? [] : ranking}
+      listHeaderComponent={rankingListHeader}
+      locale={locale}
+      resetKey={`${page.selectedDateKey}:${groupBy}`}
+    />
   );
 }

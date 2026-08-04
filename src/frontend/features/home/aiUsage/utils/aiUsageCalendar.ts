@@ -2,9 +2,9 @@ import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import type { AiUsageCalendarDay, AiUsageData } from '../types';
 
-export const aiUsageCalendarRowCount = 7;
+export const AI_USAGE_CALENDAR_ROW_COUNT = 7;
 
-const weekMs = 7 * 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Lays the dated range out as GitHub does: full Monday-start weeks covering the
@@ -20,10 +20,10 @@ export function buildAiUsageCalendarWeeks(data: AiUsageData): AiUsageCalendarDay
   const lastDataKey = dateKeys[dateKeys.length - 1];
   const calendarStart = startOfMondayWeek(parseLocalDateKey(firstDataKey));
   const lastWeekStart = startOfMondayWeek(parseLocalDateKey(lastDataKey));
-  const weekCount = Math.round((lastWeekStart.getTime() - calendarStart.getTime()) / weekMs) + 1;
+  const weekCount = Math.round((lastWeekStart.getTime() - calendarStart.getTime()) / WEEK_MS) + 1;
 
   return Array.from({ length: weekCount }, (_, weekIndex) =>
-    Array.from({ length: aiUsageCalendarRowCount }, (_, dayIndex) => {
+    Array.from({ length: AI_USAGE_CALENDAR_ROW_COUNT }, (_, dayIndex) => {
       const dateKey = toLocalDateKey(addCalendarDays(calendarStart, weekIndex * 7 + dayIndex));
 
       return {
@@ -36,7 +36,7 @@ export function buildAiUsageCalendarWeeks(data: AiUsageData): AiUsageCalendarDay
 
 // Bottom-left to top-right wave: the first week's Sunday fires first.
 export function getAiUsageSweepDelayMs(weekIndex: number, dayIndex: number): number {
-  return aiUsageCalendar.sweepStepMs * (weekIndex + (aiUsageCalendarRowCount - 1 - dayIndex));
+  return aiUsageCalendar.sweepStepMs * (weekIndex + (AI_USAGE_CALENDAR_ROW_COUNT - 1 - dayIndex));
 }
 
 export function getAiUsageMonthLabelKeys(weeks: AiUsageCalendarDay[][]): (string | undefined)[] {

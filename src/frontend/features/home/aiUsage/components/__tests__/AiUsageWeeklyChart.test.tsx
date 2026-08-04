@@ -221,9 +221,9 @@ describe('AiUsageWeeklyChart', () => {
     await act(async () => {
       renderer = create(chartElement('2026-08-04', chartData, weekOverWeekChange));
     });
-    const layoutNode = renderer?.root
-      .findAll((node) => typeof node.props.onLayout === 'function')
-      .at(0);
+    const layoutNode = renderer?.root.findByProps({
+      testID: 'ai-usage-weekly-chart-container',
+    });
     await act(async () =>
       layoutNode?.props.onLayout({
         nativeEvent: { layout: { height: 0, width: 360, x: 0, y: 0 } },

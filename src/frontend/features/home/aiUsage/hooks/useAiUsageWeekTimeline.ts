@@ -45,3 +45,5 @@ export function useAiUsageWeekTimeline({
     weeklyData,
   };
 }
+
+export type AiUsageWeekTimelineResult = ReturnType<typeof useAiUsageWeekTimeline>;

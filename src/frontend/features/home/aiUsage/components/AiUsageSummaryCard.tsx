@@ -41,6 +41,7 @@ export function AiUsageSummaryCard() {
               accessibilityRole="button"
               className="size-8 items-center justify-center rounded-full active:bg-surface-secondary active:opacity-70"
               hitSlop={6}
+              style={styles.continuousCorners}
               testID="ai-usage-summary-refresh-retry"
               onPress={() => void refetch()}
             >
@@ -72,6 +73,7 @@ export function AiUsageSummaryCard() {
           <Pressable
             accessibilityRole="button"
             className="flex-row items-center gap-2 rounded-lg bg-surface-secondary px-4 py-2 active:opacity-70"
+            style={styles.continuousCorners}
             testID="ai-usage-summary-retry"
             onPress={() => void refetch()}
           >
@@ -99,6 +101,9 @@ const styles = StyleSheet.create({
   card: {
     borderCurve: 'continuous',
     boxShadow: aiUsageCalendar.cardShadow,
+  },
+  continuousCorners: {
+    borderCurve: 'continuous',
   },
   stateContent: {
     minHeight: 104,

@@ -9,7 +9,7 @@ import { buildAiUsageRanking, getAiUsageDayStatsQuery } from '../utils/aiUsageDe
  * Day stats only change when new usage is recorded, which cannot happen while this
  * screen is focused. Refreshing on focus is handled by the detail hook instead.
  */
-const rankingStaleTime = 1000 * 60;
+const RANKING_STALE_TIME = 1000 * 60;
 
 type UseAiUsageRankingOptions = {
   enabled: boolean;
@@ -23,7 +23,7 @@ export function useAiUsageRanking({ enabled, groupBy, selectedDateKey }: UseAiUs
     enabled,
     keepPreviousData: true,
     query: getAiUsageDayStatsQuery(selectedDateKey, groupBy),
-    staleTime: rankingStaleTime,
+    staleTime: RANKING_STALE_TIME,
   });
 
   // Warm the grouping the toggle switches to, so toggling never hits a cold cache.
@@ -32,7 +32,7 @@ export function useAiUsageRanking({ enabled, groupBy, selectedDateKey }: UseAiUs
 
     void prefetch('/ai-usage-records/stats', {
       query: getAiUsageDayStatsQuery(selectedDateKey, groupBy === 'model' ? 'provider' : 'model'),
-      staleTime: rankingStaleTime,
+      staleTime: RANKING_STALE_TIME,
     });
   }, [enabled, groupBy, prefetch, selectedDateKey]);
 

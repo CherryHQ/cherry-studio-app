@@ -34,8 +34,8 @@ jest.mock('../components/AiUsageWeeklySection', () => {
 jest.mock('../components/AiUsageRankingSection', () => {
   const React = jest.requireActual('react');
   return {
-    AiUsageRankingSection: (props: Record<string, unknown>) =>
-      React.createElement('AiUsageRankingSectionMock', props),
+    AiUsageRankingSection: ({ listHeaderComponent, ...props }: Record<string, unknown>) =>
+      React.createElement('AiUsageRankingSectionMock', props, listHeaderComponent),
   };
 });
 jest.mock('react-i18next', () => ({
@@ -60,13 +60,12 @@ describe('AiUsageScreen', () => {
     renderer = undefined;
   });
 
-  test('renders one vertical scroll with separate weekly and ranking sections', async () => {
+  test('gives the weekly section to the ranking list as its scroll header', async () => {
     await renderScreen();
 
     expect(renderer?.root.findByProps({ testID: 'ai-usage-content' }).props.style).toEqual({
       paddingTop: 96,
     });
-    expect(renderer?.root.findByProps({ testID: 'ai-usage-detail-scroll' })).toBeDefined();
     expect(renderer?.root.findByProps({ testID: 'ai-usage-header' }).props.children).toBe(
       'Usage Statistics',
     );
@@ -81,6 +80,7 @@ describe('AiUsageScreen', () => {
     const ranking = rankingSection();
     expect(ranking.props.enabled).toBe(true);
     expect(ranking.props.page).toBe(pages[7]);
+    expect(ranking.props.children.props.activePageIndex).toBe(weekly.props.activePageIndex);
   });
 
   test('moves only the lower ranking section when the active week changes', async () => {

@@ -2,8 +2,8 @@ import { type Ref, useCallback, useImperativeHandle } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
   cancelAnimation,
+  Extrapolation,
   interpolate,
-  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -56,33 +56,48 @@ export function AiUsageSquare({
 
   useImperativeHandle(ref, () => ({ replayAnimation }), [replayAnimation]);
 
-  const animatedStyle = useAnimatedStyle(() => {
+  const animatedContainerStyle = useAnimatedStyle(() => {
     return {
-      backgroundColor: interpolateColor(progress.get(), [0, 1], [restingColor, activeColor], 'RGB'),
       // Deliberately unclamped: the spring overshoots past 1, so the square
       // pops slightly above full size before settling.
       transform: [{ scale: interpolate(progress.get(), [0, 0.5, 1], [1, 0.4, 1]) }],
     };
-  }, [activeColor, restingColor]);
+  });
+  const animatedActiveStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.get(), [0, 1], [0, 1], Extrapolation.CLAMP),
+  }));
 
   return (
     <Animated.View
       style={[
         styles.square,
-        { height: cellSize, width: cellSize },
+        { backgroundColor: restingColor, height: cellSize, width: cellSize },
         !isHighlighted && styles.dimmed,
-        animatedStyle,
+        animatedContainerStyle,
       ]}
-    />
+    >
+      <Animated.View
+        style={[styles.activeSquare, { backgroundColor: activeColor }, animatedActiveStyle]}
+        testID="ai-usage-square-active-layer"
+      />
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
+  activeSquare: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
   dimmed: {
     opacity: aiUsageCalendar.dimmedOpacity,
   },
   square: {
     borderCurve: 'continuous',
     borderRadius: aiUsageCalendar.cellRadius,
+    overflow: 'hidden',
   },
 });

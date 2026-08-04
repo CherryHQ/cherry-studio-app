@@ -6,6 +6,21 @@ import { AiUsageWeeklySection } from '../AiUsageWeeklySection';
 const mockScrollToIndex = jest.fn(async () => undefined);
 const mockSelectDate = jest.fn();
 const mockSelectPage = jest.fn();
+const mockUseAiUsageWeekTimeline = jest.fn((options: Record<string, unknown>) => ({
+  options,
+  query: {
+    hasData: true,
+    isError: false,
+    isLoading: false,
+    isRefreshing: false,
+    refetch: jest.fn(),
+  },
+  weeklyData: { averageTokens: 0, days: [], series: [], totalTokens: 0 },
+}));
+
+jest.mock('../../hooks/useAiUsageWeekTimeline', () => ({
+  useAiUsageWeekTimeline: (options: Record<string, unknown>) => mockUseAiUsageWeekTimeline(options),
+}));
 
 jest.mock('@legendapp/list/react-native', () => {
   const React = jest.requireActual('react');
@@ -68,7 +83,7 @@ describe('AiUsageWeeklySection', () => {
     renderer = undefined;
   });
 
-  test('uses a fixed horizontal LegendList and enables the current adjacent weeks', async () => {
+  test('uses a fixed horizontal LegendList and supplies only current adjacent timelines', async () => {
     await renderSection(7);
     const list = renderer?.root.findByProps({ testID: 'ai-usage-week-list' });
 
@@ -83,7 +98,7 @@ describe('AiUsageWeeklySection', () => {
     expect(list?.props.getFixedItemSize()).toBe(320);
     expect(mockScrollToIndex).toHaveBeenCalledWith({ animated: false, index: 7 });
     expect(renderer?.root.findAllByProps({ testID: 'ai-usage-show-current-week' })).toHaveLength(0);
-    expect(chartNodes().map((node) => node.props.enabled)).toEqual([
+    expect(chartNodes().map((node) => node.props.timeline !== undefined)).toEqual([
       false,
       false,
       false,
@@ -93,6 +108,9 @@ describe('AiUsageWeeklySection', () => {
       true,
       true,
     ]);
+    expect(
+      mockUseAiUsageWeekTimeline.mock.calls.slice(-3).map(([options]) => options.enabled),
+    ).toEqual([true, true, false]);
   });
 
   test('settles to a week, updates adjacent rows, and routes date selection', async () => {
@@ -110,7 +128,7 @@ describe('AiUsageWeeklySection', () => {
     mockScrollToIndex.mockClear();
     await updateSection(6);
     expect(mockScrollToIndex).not.toHaveBeenCalled();
-    expect(chartNodes().map((node) => node.props.enabled)).toEqual([
+    expect(chartNodes().map((node) => node.props.timeline !== undefined)).toEqual([
       false,
       false,
       false,

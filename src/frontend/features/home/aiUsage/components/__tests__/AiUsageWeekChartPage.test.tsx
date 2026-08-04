@@ -1,17 +1,14 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { AiUsageWeekTimelineResult } from '../../hooks/useAiUsageWeekTimeline';
 import type { AiUsageDetailPage, AiUsageWeeklyData } from '../../types';
 import { AiUsageWeekChartPage } from '../AiUsageWeekChartPage';
 
 const mockRefetch = jest.fn();
 const mockSelectDate = jest.fn();
-const mockUseAiUsageWeekTimeline = jest.fn();
 
 jest.mock('lucide-uniwind/png', () => ({ RefreshCwIcon: () => null }));
-jest.mock('../../hooks/useAiUsageWeekTimeline', () => ({
-  useAiUsageWeekTimeline: (options: Record<string, unknown>) => mockUseAiUsageWeekTimeline(options),
-}));
 jest.mock('../AiUsageWeeklyChart', () => {
   const { View: MockView } = jest.requireActual('react-native');
   return {
@@ -46,7 +43,6 @@ describe('AiUsageWeekChartPage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseAiUsageWeekTimeline.mockReturnValue(queryResult());
   });
 
   afterEach(async () => {
@@ -57,11 +53,6 @@ describe('AiUsageWeekChartPage', () => {
   test('passes page-local state to the chart without repeating the section title', async () => {
     await renderPage(currentPage);
     expect(textValues()).toEqual([]);
-    expect(mockUseAiUsageWeekTimeline).toHaveBeenCalledWith({
-      enabled: true,
-      range: currentPage.range,
-      todayDateKey: '2026-08-02',
-    });
     const chart = renderer?.root.findByProps({ testID: 'ai-usage-weekly-chart' });
     expect(chart?.props.data).toBe(weeklyData);
     expect(chart?.props.selectedDateKey).toBe('2026-08-02');
@@ -69,10 +60,7 @@ describe('AiUsageWeekChartPage', () => {
   });
 
   test('keeps an unloaded distant week in a fixed loading state', async () => {
-    mockUseAiUsageWeekTimeline.mockReturnValue(
-      queryResult({ query: queryState({ hasData: false }) }),
-    );
-    await renderPage(currentPage, false);
+    await renderPage(currentPage, null);
 
     expect(renderer?.root.findByProps({ testID: 'ai-usage-weekly-chart' }).props.isLoading).toBe(
       true,
@@ -80,12 +68,12 @@ describe('AiUsageWeekChartPage', () => {
   });
 
   test('shows and retries a no-cache timeline error', async () => {
-    mockUseAiUsageWeekTimeline.mockReturnValue(
+    await renderPage(
+      currentPage,
       queryResult({
         query: queryState({ hasData: false, isError: true, refetch: mockRefetch }),
       }),
     );
-    await renderPage(currentPage);
 
     expect(textValues()).toContain('Usage statistics could not be loaded.');
     expect(renderer?.root.findAllByProps({ testID: 'ai-usage-weekly-chart' })).toHaveLength(0);
@@ -97,12 +85,12 @@ describe('AiUsageWeekChartPage', () => {
   });
 
   test('keeps cached chart data visible and exposes a refresh retry', async () => {
-    mockUseAiUsageWeekTimeline.mockReturnValue(
+    await renderPage(
+      currentPage,
       queryResult({
         query: queryState({ isError: true, refetch: mockRefetch }),
       }),
     );
-    await renderPage(currentPage);
 
     expect(renderer?.root.findByProps({ testID: 'ai-usage-weekly-chart' })).toBeDefined();
     const retry = renderer?.root
@@ -112,14 +100,16 @@ describe('AiUsageWeekChartPage', () => {
     expect(mockRefetch).toHaveBeenCalledTimes(1);
   });
 
-  async function renderPage(page: AiUsageDetailPage, enabled = true) {
+  async function renderPage(
+    page: AiUsageDetailPage,
+    timeline: AiUsageWeekTimelineResult | null = queryResult(),
+  ) {
     await act(async () => {
       const element = (
         <AiUsageWeekChartPage
-          enabled={enabled}
           locale="en-US"
           page={page}
-          todayDateKey="2026-08-02"
+          timeline={timeline ?? undefined}
           onSelectDate={mockSelectDate}
         />
       );
@@ -152,12 +142,12 @@ function localDate(dateKey: string): Date {
   return new Date(year, month - 1, day);
 }
 
-function queryResult(overrides: Record<string, unknown> = {}) {
+function queryResult(overrides: Record<string, unknown> = {}): AiUsageWeekTimelineResult {
   return {
     query: queryState({ refetch: mockRefetch }),
     weeklyData,
     ...overrides,
-  };
+  } as unknown as AiUsageWeekTimelineResult;
 }
 
 function queryState(overrides: Record<string, unknown> = {}) {

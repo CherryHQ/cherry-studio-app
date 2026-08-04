@@ -1,17 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  type LayoutChangeEvent,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { aiUsageCalendar } from '@/frontend/utils/constants';
 
+import { useMeasuredWidth } from '../hooks/useMeasuredWidth';
 import type { AiUsageAnimationControls, AiUsageData } from '../types';
 import {
   buildAiUsageCalendarWeeks,
@@ -36,7 +30,6 @@ export function AiUsageCalendar({
   const { i18n, t } = useTranslation();
   const squareRefs = useRef(new Map<string, AiUsageAnimationControls>());
   const scrollRef = useRef<ScrollView>(null);
-  const [availableWidth, setAvailableWidth] = useState(0);
   const { theme } = useUniwind();
   const levelColors = aiUsageCalendar.levelColors[theme === 'dark' ? 'dark' : 'light'];
   const weeks = useMemo(() => buildAiUsageCalendarWeeks(data), [data]);
@@ -53,6 +46,7 @@ export function AiUsageCalendar({
     [animationStartDateKey, weeks],
   );
   const isScrollable = layout === 'scroll';
+  const { onLayout, ref: calendarRef, width: availableWidth } = useMeasuredWidth(!isScrollable);
   const cellGap = isScrollable ? aiUsageCalendar.cellGap : aiUsageCalendar.summaryCellGap;
   const cellSize =
     !isScrollable && availableWidth > 0 && weeks.length > 0
@@ -72,11 +66,6 @@ export function AiUsageCalendar({
       scrollRef.current?.scrollToEnd({ animated: false });
     }
   }, [isScrollable]);
-
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    const nextWidth = event.nativeEvent.layout.width;
-    setAvailableWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth));
-  }, []);
 
   useEffect(() => {
     if (!isLoading && weeks.length > 0) {
@@ -144,7 +133,11 @@ export function AiUsageCalendar({
   );
 
   return (
-    <View testID="ai-usage-calendar" onLayout={isScrollable ? undefined : handleLayout}>
+    <View
+      ref={isScrollable ? undefined : calendarRef}
+      testID="ai-usage-calendar"
+      onLayout={isScrollable ? undefined : onLayout}
+    >
       {isScrollable ? (
         <ScrollView
           ref={scrollRef}

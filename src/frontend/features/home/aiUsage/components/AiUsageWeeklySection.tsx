@@ -3,24 +3,24 @@ import {
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, View } from 'react-native';
 
 import { Section } from '@/frontend/components/Section';
 
+import {
+  type AiUsageWeekTimelineResult,
+  useAiUsageWeekTimeline,
+} from '../hooks/useAiUsageWeekTimeline';
+import { useMeasuredWidth } from '../hooks/useMeasuredWidth';
 import type { AiUsageDetailPage } from '../types';
 import { AI_USAGE_CURRENT_WEEK_PAGE_INDEX } from '../utils/aiUsageDetail';
 import { AiUsageSectionAction } from './AiUsageSectionState';
 import { AiUsageWeekChartPage } from './AiUsageWeekChartPage';
 
 const ADJACENT_PAGE_DISTANCE = 1;
+const EMPTY_TIME_RANGE = { from: 0, to: 0 } as const;
 /**
  * Every page renders the same box, so pinning the height keeps the section from
  * resizing mid-swipe: selected-day summary (64) + chart (150) + separator (1) +
@@ -38,6 +38,10 @@ type AiUsageWeeklySectionProps = {
   onSelectPage: (pageIndex: number) => void;
 };
 
+type AiUsageWeeklyListExtraData = {
+  timelines: readonly (readonly [string | undefined, AiUsageWeekTimelineResult])[];
+};
+
 export function AiUsageWeeklySection({
   activePageIndex,
   locale,
@@ -51,7 +55,42 @@ export function AiUsageWeeklySection({
   const listRef = useRef<LegendListRef>(null);
   const visiblePageIndexRef = useRef<number | null>(null);
   const visibleWeekDataKeyRef = useRef<string | null>(null);
-  const [pageWidth, setPageWidth] = useState(0);
+  const { onLayout, ref: viewportRef, width: pageWidth } = useMeasuredWidth();
+  const previousPage = pages[activePageIndex - ADJACENT_PAGE_DISTANCE];
+  const activePage = pages[activePageIndex];
+  const nextPage = pages[activePageIndex + ADJACENT_PAGE_DISTANCE];
+  const previousTimeline = useAiUsageWeekTimeline({
+    enabled: previousPage !== undefined,
+    range: previousPage?.range ?? EMPTY_TIME_RANGE,
+    todayDateKey,
+  });
+  const activeTimeline = useAiUsageWeekTimeline({
+    enabled: activePage !== undefined,
+    range: activePage?.range ?? EMPTY_TIME_RANGE,
+    todayDateKey,
+  });
+  const nextTimeline = useAiUsageWeekTimeline({
+    enabled: nextPage !== undefined,
+    range: nextPage?.range ?? EMPTY_TIME_RANGE,
+    todayDateKey,
+  });
+  const listExtraData = useMemo<AiUsageWeeklyListExtraData>(
+    () => ({
+      timelines: [
+        [previousPage?.key, previousTimeline],
+        [activePage?.key, activeTimeline],
+        [nextPage?.key, nextTimeline],
+      ],
+    }),
+    [
+      activePage?.key,
+      activeTimeline,
+      nextPage?.key,
+      nextTimeline,
+      previousPage?.key,
+      previousTimeline,
+    ],
+  );
 
   useEffect(() => {
     const needsSync =
@@ -67,11 +106,6 @@ export function AiUsageWeeklySection({
       });
     }
   }, [activePageIndex, pageWidth, weekDataKey]);
-
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    const nextWidth = Math.round(event.nativeEvent.layout.width);
-    setPageWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth));
-  }, []);
 
   const handleMomentumScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -97,18 +131,16 @@ export function AiUsageWeeklySection({
 
   const getFixedItemSize = useCallback(() => pageWidth, [pageWidth]);
   const renderItem = useCallback(
-    ({ extraData, index, item }: LegendListRenderItemProps<AiUsageDetailPage>) => (
+    ({ extraData, item }: LegendListRenderItemProps<AiUsageDetailPage>) => (
       <AiUsageWeekChartListItem
-        activePageIndex={extraData as number}
-        index={index}
         locale={locale}
         page={item}
         pageWidth={pageWidth}
-        todayDateKey={todayDateKey}
+        timeline={getTimelineForPage(item.key, (extraData as AiUsageWeeklyListExtraData).timelines)}
         onSelectDate={onSelectDate}
       />
     ),
-    [locale, onSelectDate, pageWidth, todayDateKey],
+    [locale, onSelectDate, pageWidth],
   );
 
   return (
@@ -116,9 +148,9 @@ export function AiUsageWeeklySection({
       action={
         activePageIndex === AI_USAGE_CURRENT_WEEK_PAGE_INDEX ? undefined : (
           <AiUsageSectionAction
-            compact
             label={t('aiUsage.showThisWeek')}
             testID="ai-usage-show-current-week"
+            variant="compact"
             onPress={handleShowCurrentWeek}
           />
         )
@@ -127,7 +159,7 @@ export function AiUsageWeeklySection({
       title={t('aiUsage.tokenUsage')}
     >
       <View className="p-4">
-        <View testID="ai-usage-week-viewport" onLayout={handleLayout}>
+        <View ref={viewportRef} testID="ai-usage-week-viewport" onLayout={onLayout}>
           {pageWidth > 0 ? (
             <LegendList
               ref={listRef}
@@ -139,7 +171,7 @@ export function AiUsageWeeklySection({
               directionalLockEnabled
               disableIntervalMomentum
               drawDistance={pageWidth}
-              extraData={activePageIndex}
+              extraData={listExtraData}
               getFixedItemSize={getFixedItemSize}
               horizontal
               initialScrollIndex={AI_USAGE_CURRENT_WEEK_PAGE_INDEX}
@@ -164,22 +196,18 @@ export function AiUsageWeeklySection({
 }
 
 type AiUsageWeekChartListItemProps = {
-  activePageIndex: number;
-  index: number;
   locale: string;
   page: AiUsageDetailPage;
   pageWidth: number;
-  todayDateKey: string;
+  timeline?: AiUsageWeekTimelineResult;
   onSelectDate: (pageKey: string, dateKey: string) => void;
 };
 
 function AiUsageWeekChartListItem({
-  activePageIndex,
-  index,
   locale,
   page,
   pageWidth,
-  todayDateKey,
+  timeline,
   onSelectDate,
 }: AiUsageWeekChartListItemProps) {
   const handleSelectDate = useCallback(
@@ -193,14 +221,20 @@ function AiUsageWeekChartListItem({
       testID={`ai-usage-week-item-${page.key}`}
     >
       <AiUsageWeekChartPage
-        enabled={Math.abs(index - activePageIndex) <= ADJACENT_PAGE_DISTANCE}
         locale={locale}
         page={page}
-        todayDateKey={todayDateKey}
+        timeline={timeline}
         onSelectDate={handleSelectDate}
       />
     </View>
   );
+}
+
+function getTimelineForPage(
+  pageKey: string,
+  timelines: readonly (readonly [string | undefined, AiUsageWeekTimelineResult])[],
+): AiUsageWeekTimelineResult | undefined {
+  return timelines.find(([timelinePageKey]) => timelinePageKey === pageKey)?.[1];
 }
 
 function getWeekPageKey(page: AiUsageDetailPage): string {

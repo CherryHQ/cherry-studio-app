@@ -1,4 +1,4 @@
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { AiUsageDetailPage, AiUsageRankingItem } from '../../types';
@@ -14,8 +14,16 @@ jest.mock('../../hooks/useAiUsageRanking', () => ({
 jest.mock('../AiUsageRankingList', () => {
   const { View: MockView } = jest.requireActual('react-native');
   return {
-    AiUsageRankingList: (props: Record<string, unknown>) => (
-      <MockView {...props} testID="ai-usage-ranking-list" />
+    AiUsageRankingList: ({
+      emptyState,
+      items,
+      listHeaderComponent,
+      ...props
+    }: Record<string, unknown>) => (
+      <MockView {...props} items={items} testID="ai-usage-ranking-list">
+        {listHeaderComponent}
+        {(items as unknown[]).length === 0 ? emptyState : null}
+      </MockView>
     ),
     AiUsageRankingListSkeleton: () => <MockView testID="ai-usage-ranking-list-loading" />,
   };
@@ -114,7 +122,14 @@ describe('AiUsageRankingSection', () => {
 
   async function renderSection() {
     await act(async () => {
-      const element = <AiUsageRankingSection enabled locale="en-US" page={page} />;
+      const element = (
+        <AiUsageRankingSection
+          enabled
+          listHeaderComponent={<View testID="ai-usage-screen-header" />}
+          locale="en-US"
+          page={page}
+        />
+      );
       if (renderer) renderer.update(element);
       else renderer = create(element);
     });

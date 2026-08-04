@@ -1,7 +1,7 @@
 import { CircleArrowDownIcon, CircleArrowUpIcon } from 'lucide-uniwind/png';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BarChart,
   type BarChartRenderBarProps,
@@ -12,6 +12,7 @@ import { Line, Path, Rect, Svg } from 'react-native-svg';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
+import { useMeasuredWidth } from '../hooks/useMeasuredWidth';
 import type { AiUsageWeeklyData } from '../types';
 import { parseLocalDateKey } from '../utils/aiUsageCalendar';
 import { displayAiUsageModelId, getAiUsageChartScale } from '../utils/aiUsageDetail';
@@ -53,7 +54,7 @@ export function AiUsageWeeklyChart({
   weekOverWeekChange,
 }: AiUsageWeeklyChartProps) {
   const { t } = useTranslation();
-  const [containerWidth, setContainerWidth] = useState(0);
+  const { onLayout, ref: containerRef, width: containerWidth } = useMeasuredWidth();
   const [primary, info, warning, muted, separator, success, foreground] = useThemeColor([
     'primary',
     'info',
@@ -184,13 +185,13 @@ export function AiUsageWeeklyChart({
       Math.abs(tick.y - averageY) >= AXIS_LABEL_MIN_GAP,
   );
 
-  const handleLayout = (event: LayoutChangeEvent) => {
-    const nextWidth = Math.round(event.nativeEvent.layout.width);
-    setContainerWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth));
-  };
-
   return (
-    <View className="gap-4" onLayout={handleLayout}>
+    <View
+      ref={containerRef}
+      className="gap-4"
+      testID="ai-usage-weekly-chart-container"
+      onLayout={onLayout}
+    >
       {isLoading ? (
         <WeeklyChartSkeleton />
       ) : (
