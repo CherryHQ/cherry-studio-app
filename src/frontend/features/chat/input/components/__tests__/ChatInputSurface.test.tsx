@@ -32,6 +32,24 @@ jest.mock('heroui-native/text-area', () => {
   };
 });
 
+jest.mock('expo-paste-input', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    TextInputWrapper: ({
+      children,
+      onPaste,
+    }: {
+      children: React.ReactNode;
+      onPaste: (payload: unknown) => void;
+    }) => {
+      const viewProps = { onPaste, testID: 'paste-input-wrapper' };
+
+      return <View {...viewProps}>{children}</View>;
+    },
+  };
+});
+
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
 }));
@@ -292,6 +310,42 @@ describe('ChatInputSurface', () => {
         accessibilityLabel: 'chat.input.action.stopGenerating',
       }),
     ).toHaveLength(0);
+  });
+
+  test('adds pasted images to the attachment strip', async () => {
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={jest.fn()}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ChatInputSurface test renderer was not created.');
+    }
+
+    const pasteInputWrapper = renderer.root.findByProps({ testID: 'paste-input-wrapper' });
+    await act(async () => {
+      pasteInputWrapper.props.onPaste({
+        type: 'images',
+        uris: ['file:///tmp/Pasted%20Sticker.GIF'],
+      });
+    });
+
+    expect(
+      renderer.root.findAllByProps({ accessibilityLabel: 'Pasted Sticker.GIF' }).length,
+    ).toBeGreaterThan(0);
+    expect(getTextInputValue(renderer)).toBe('');
   });
 
   test('can send an empty payload when the caller explicitly allows it', async () => {
