@@ -56,7 +56,7 @@ describe('useAiUsageDetail', () => {
     await renderHook();
 
     expect(latestResult?.activePageIndex).toBe(7);
-    expect(latestResult?.pagerKey).toBe('2026-07-27');
+    expect(latestResult?.weekDataKey).toBe('2026-07-27');
     expect(latestResult?.pages).toHaveLength(8);
     expect(latestResult?.pages.map((page) => page.key)).toEqual([
       '2026-06-08',
@@ -112,14 +112,18 @@ describe('useAiUsageDetail', () => {
     expect(latestResult?.activePageIndex).toBe(7);
     expect(latestResult?.pages[6]?.selectedDateKey).toBe('2026-07-21');
     expect(latestResult?.pages[7]?.selectedDateKey).toBe('2026-08-02');
-    expect(invalidateQueries).toHaveBeenCalledTimes(2);
+    expect(invalidateQueries).toHaveBeenCalledTimes(3);
     expect(invalidateQueries).toHaveBeenCalledWith({
       exact: true,
       queryKey: queryKeys.aiUsageRecords.timeline(getAiUsageWeekTimelineQuery(currentPage.range)),
     });
     expect(invalidateQueries).toHaveBeenCalledWith({
       exact: true,
-      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery('2026-08-02')),
+      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery('2026-08-02', 'model')),
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({
+      exact: true,
+      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery('2026-08-02', 'provider')),
     });
   });
 
@@ -137,7 +141,7 @@ describe('useAiUsageDetail', () => {
     await act(async () => focusEffect?.());
 
     expect(latestResult?.activePageIndex).toBe(7);
-    expect(latestResult?.pagerKey).toBe('2026-07-27');
+    expect(latestResult?.weekDataKey).toBe('2026-07-27');
     expect(latestResult?.pages[6]?.selectedDateKey).toBe('2026-07-23');
     expect(latestResult?.pages[7]?.selectedDateKey).toBe('2026-08-02');
   });
@@ -153,7 +157,7 @@ describe('useAiUsageDetail', () => {
     await act(async () => focusEffect?.());
 
     expect(latestResult?.activePageIndex).toBe(7);
-    expect(latestResult?.pagerKey).toBe('2026-08-03');
+    expect(latestResult?.weekDataKey).toBe('2026-08-03');
     expect(latestResult?.pages[0]?.key).toBe('2026-06-15');
     expect(latestResult?.pages[6]?.selectedDateKey).toBe('2026-07-27');
     expect(latestResult?.pages[7]?.selectedDateKey).toBe('2026-08-03');

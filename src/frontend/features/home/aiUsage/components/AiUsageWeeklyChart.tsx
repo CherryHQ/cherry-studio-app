@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
@@ -36,6 +36,7 @@ type AiUsageWeeklyChartProps = {
   locale: string;
   onSelectDate: (dateKey: string) => void;
   selectedDateKey: string;
+  statusAccessory?: ReactNode;
 };
 
 export function AiUsageWeeklyChart({
@@ -44,6 +45,7 @@ export function AiUsageWeeklyChart({
   locale,
   onSelectDate,
   selectedDateKey,
+  statusAccessory,
 }: AiUsageWeeklyChartProps) {
   const { t } = useTranslation();
   const [containerWidth, setContainerWidth] = useState(0);
@@ -297,7 +299,10 @@ export function AiUsageWeeklyChart({
           </View>
 
           <View className="flex-row items-center justify-between gap-3">
-            <Text className="text-muted-foreground text-sm">{t('aiUsage.weekTotal')}</Text>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-muted-foreground text-sm">{t('aiUsage.weekTotal')}</Text>
+              {statusAccessory}
+            </View>
             <Text
               selectable
               className="font-semibold text-default-foreground text-sm"

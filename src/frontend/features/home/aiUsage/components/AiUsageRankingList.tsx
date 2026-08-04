@@ -1,4 +1,4 @@
-import { resolveIcon } from '@cherrystudio/ui/icons';
+import { resolveIcon, resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { ChevronDownIcon, EllipsisIcon } from 'lucide-uniwind/png';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,19 +7,19 @@ import { useUniwind } from 'uniwind';
 
 import { Image } from '@/frontend/components/nativePrimitives';
 
-import type { AiUsageModelUsage } from '../types';
+import type { AiUsageRankingItem } from '../types';
 import { displayAiUsageModelId } from '../utils/aiUsageDetail';
 import { createAiUsageTokenFormatter } from '../utils/formatAiUsageTokens';
 
 const PAGE_SIZE = 7;
 const MAX_PROGRESS_WIDTH_PERCENT = 68;
 
-type AiUsageModelListProps = {
-  items: readonly AiUsageModelUsage[];
+type AiUsageRankingListProps = {
+  items: readonly AiUsageRankingItem[];
   locale: string;
 };
 
-export function AiUsageModelList({ items, locale }: AiUsageModelListProps) {
+export function AiUsageRankingList({ items, locale }: AiUsageRankingListProps) {
   const { t } = useTranslation();
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const formatTokens = useMemo(() => createAiUsageTokenFormatter(locale), [locale]);
@@ -28,11 +28,9 @@ export function AiUsageModelList({ items, locale }: AiUsageModelListProps) {
 
   return (
     <View>
-      <View testID="ai-usage-model-list">
+      <View testID="ai-usage-ranking-list">
         {visibleItems.map((item, index) => {
-          const modelLabel = item.isOther
-            ? t('aiUsage.otherModels')
-            : displayAiUsageModelId(item.modelId) || t('aiUsage.unknownModel');
+          const primaryLabel = getPrimaryLabel(item, t);
           const providerLabel = item.providerName || item.providerId;
           const progress = Math.max(0, Math.min(1, item.totalTokens / maximumTokens));
 
@@ -40,18 +38,18 @@ export function AiUsageModelList({ items, locale }: AiUsageModelListProps) {
             <View
               key={item.key}
               className={index < visibleItems.length - 1 ? 'border-border border-b' : undefined}
-              testID={`ai-usage-model-row-${index}`}
+              testID={`ai-usage-ranking-row-${index}`}
             >
               <View className="flex-row items-center gap-3 py-3">
-                <AiUsageModelIcon item={item} label={modelLabel} />
+                <AiUsageRankingIcon item={item} label={primaryLabel} />
                 <View className="min-w-0 flex-1 gap-2">
                   <Text
                     selectable
                     className="font-medium text-default-foreground text-sm"
                     numberOfLines={1}
                   >
-                    {modelLabel}
-                    {providerLabel ? (
+                    {primaryLabel}
+                    {item.groupBy === 'model' && providerLabel ? (
                       <Text className="font-normal text-muted-foreground">
                         {` | ${providerLabel}`}
                       </Text>
@@ -61,7 +59,7 @@ export function AiUsageModelList({ items, locale }: AiUsageModelListProps) {
                     <View
                       className="h-1 min-w-1 rounded-full bg-primary"
                       style={{ width: `${progress * MAX_PROGRESS_WIDTH_PERCENT}%` }}
-                      testID={`ai-usage-model-progress-${index}`}
+                      testID={`ai-usage-ranking-progress-${index}`}
                     />
                     <Text
                       selectable
@@ -96,9 +94,9 @@ export function AiUsageModelList({ items, locale }: AiUsageModelListProps) {
   );
 }
 
-export function AiUsageModelListSkeleton() {
+export function AiUsageRankingListSkeleton() {
   return (
-    <View className="gap-1" testID="ai-usage-model-list-loading">
+    <View className="gap-1" testID="ai-usage-ranking-list-loading">
       {Array.from({ length: PAGE_SIZE }, (_, index) => (
         <View key={index} className="flex-row items-center gap-3 py-3">
           <View className="size-8 rounded-full bg-surface-secondary" />
@@ -112,11 +110,24 @@ export function AiUsageModelListSkeleton() {
   );
 }
 
-function AiUsageModelIcon({ item, label }: { item: AiUsageModelUsage; label: string }) {
+function getPrimaryLabel(item: AiUsageRankingItem, t: (key: string) => string): string {
+  if (item.isOther) {
+    return item.groupBy === 'model' ? t('aiUsage.otherModels') : t('aiUsage.otherProviders');
+  }
+  if (item.groupBy === 'provider') {
+    return item.providerName || item.providerId || t('aiUsage.unknownProvider');
+  }
+  return displayAiUsageModelId(item.modelId) || t('aiUsage.unknownModel');
+}
+
+function AiUsageRankingIcon({ item, label }: { item: AiUsageRankingItem; label: string }) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
-  const iconSource =
-    !item.isOther && item.modelId ? resolveIcon(item.modelId, item.providerId ?? '') : undefined;
+  const iconSource = item.isOther
+    ? undefined
+    : item.groupBy === 'provider'
+      ? resolveProviderIcon(item.providerId ?? '')
+      : resolveIcon(item.modelId ?? '', item.providerId ?? '');
 
   if (iconSource) {
     return (
@@ -126,7 +137,7 @@ function AiUsageModelIcon({ item, label }: { item: AiUsageModelUsage; label: str
           contentFit="contain"
           recyclingKey={item.key}
           source={iconSource[iconTheme]}
-          style={styles.modelIcon}
+          style={styles.rankingIcon}
         />
       </View>
     );
@@ -138,7 +149,7 @@ function AiUsageModelIcon({ item, label }: { item: AiUsageModelUsage; label: str
         <EllipsisIcon className="size-4 text-muted-foreground" strokeWidth={2} />
       ) : (
         <Text className="font-medium text-muted-foreground text-xs">
-          {(label || item.providerId || '?').charAt(0).toUpperCase()}
+          {(label || '?').charAt(0).toUpperCase()}
         </Text>
       )}
     </View>
@@ -146,7 +157,7 @@ function AiUsageModelIcon({ item, label }: { item: AiUsageModelUsage; label: str
 }
 
 const styles = StyleSheet.create({
-  modelIcon: {
+  rankingIcon: {
     height: 28,
     width: 28,
   },

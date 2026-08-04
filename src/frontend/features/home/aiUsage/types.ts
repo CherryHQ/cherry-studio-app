@@ -38,6 +38,13 @@ export type AiUsageModelUsage = AiUsageModelIdentity & {
   totalTokens: number;
 };
 
+export type AiUsageRankingGroup = 'model' | 'provider';
+
+export type AiUsageRankingItem = AiUsageModelIdentity & {
+  groupBy: AiUsageRankingGroup;
+  totalTokens: number;
+};
+
 export type AiUsageWeekDay = {
   dateKey: string;
   isFuture: boolean;

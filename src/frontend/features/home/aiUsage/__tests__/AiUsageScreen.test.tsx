@@ -5,34 +5,14 @@ import type { AiUsageDetailPage } from '../types';
 
 const mockSelectDate = jest.fn();
 const mockSelectPage = jest.fn();
-const mockSetPageWithoutAnimation = jest.fn();
 const mockUseAiUsageDetail = jest.fn();
 
 jest.mock('expo-router/react-navigation', () => ({
   useHeaderHeight: () => 96,
 }));
-
-jest.mock('@expo/ui/community/pager-view', () => {
-  const React = jest.requireActual('react');
-  const { View: MockView } = jest.requireActual('react-native');
-  return {
-    __esModule: true,
-    default: React.forwardRef(function MockPagerView(
-      props: Record<string, unknown>,
-      ref: React.Ref<unknown>,
-    ) {
-      React.useImperativeHandle(ref, () => ({
-        setPageWithoutAnimation: mockSetPageWithoutAnimation,
-      }));
-      return <MockView {...props} />;
-    }),
-  };
-});
-
 jest.mock('@/frontend/utils/constants', () => ({
   isLiquidGlassAvailable: true,
 }));
-
 jest.mock('@/frontend/components/headers', () => {
   const { Text: MockText } = jest.requireActual('react-native');
   return {
@@ -41,22 +21,23 @@ jest.mock('@/frontend/components/headers', () => {
     ),
   };
 });
-
 jest.mock('../hooks/useAiUsageDetail', () => ({
   useAiUsageDetail: () => mockUseAiUsageDetail(),
 }));
-
-jest.mock('../components/AiUsageWeekPage', () => {
+jest.mock('../components/AiUsageWeeklySection', () => {
   const React = jest.requireActual('react');
   return {
-    AiUsageWeekPage: (props: { page: AiUsageDetailPage }) =>
-      React.createElement('AiUsageWeekPageMock', {
-        ...props,
-        testID: `week-content-${props.page.key}`,
-      }),
+    AiUsageWeeklySection: (props: Record<string, unknown>) =>
+      React.createElement('AiUsageWeeklySectionMock', props),
   };
 });
-
+jest.mock('../components/AiUsageRankingSection', () => {
+  const React = jest.requireActual('react');
+  return {
+    AiUsageRankingSection: (props: Record<string, unknown>) =>
+      React.createElement('AiUsageRankingSectionMock', props),
+  };
+});
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
@@ -79,68 +60,36 @@ describe('AiUsageScreen', () => {
     renderer = undefined;
   });
 
-  it('renders eight native pager pages and starts on the current week', async () => {
+  test('renders one vertical scroll with separate weekly and ranking sections', async () => {
     await renderScreen();
 
     expect(renderer?.root.findByProps({ testID: 'ai-usage-content' }).props.style).toEqual({
       paddingTop: 96,
     });
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-detail-scroll' })).toBeDefined();
     expect(renderer?.root.findByProps({ testID: 'ai-usage-header' }).props.children).toBe(
       'Usage Statistics',
     );
-    const pager = renderer?.root.findByProps({ testID: 'ai-usage-pager' });
-    expect(pager?.props.initialPage).toBe(7);
-    expect(pager?.props.offscreenPageLimit).toBe(1);
-    expect(mockSetPageWithoutAnimation).toHaveBeenCalledWith(7);
-    expect(weekContentNodes()).toHaveLength(8);
-    expect(
-      pages.every((page) =>
-        renderer?.root
-          .findAllByProps({ testID: `ai-usage-week-page-${page.key}` })
-          .some((node) => node.props.collapsable === false),
-      ),
-    ).toBe(true);
-    expect(weekContentNodes().map((node) => node.props.enabled)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-      false,
-      true,
-      true,
-    ]);
+
+    const weekly = weeklySection();
+    expect(weekly.props.activePageIndex).toBe(7);
+    expect(weekly.props.pages).toBe(pages);
+    expect(weekly.props.weekDataKey).toBe(pages[7]?.key);
+    expect(weekly.props.onSelectDate).toBe(mockSelectDate);
+    expect(weekly.props.onSelectPage).toBe(mockSelectPage);
+
+    const ranking = rankingSection();
+    expect(ranking.props.enabled).toBe(true);
+    expect(ranking.props.page).toBe(pages[7]);
   });
 
-  it('updates the active page and preloads both adjacent weeks', async () => {
+  test('moves only the lower ranking section when the active week changes', async () => {
     await renderScreen();
-    const pager = renderer?.root.findByProps({ testID: 'ai-usage-pager' });
-    mockSetPageWithoutAnimation.mockClear();
-
-    await act(async () => pager?.props.onPageSelected({ nativeEvent: { position: 6 } }));
-    expect(mockSelectPage).toHaveBeenCalledWith(6);
-
     mockUseAiUsageDetail.mockReturnValue(detailResult({ activePageIndex: 6 }));
     await act(async () => renderer?.update(<AiUsageScreen />));
-    expect(mockSetPageWithoutAnimation).toHaveBeenCalledWith(6);
-    expect(weekContentNodes().map((node) => node.props.enabled)).toEqual([
-      false,
-      false,
-      false,
-      false,
-      false,
-      true,
-      true,
-      true,
-    ]);
-  });
 
-  it('routes date selection to the owning week', async () => {
-    await renderScreen();
-    const previousWeek = renderer?.root.findByProps({ testID: `week-content-${pages[6]!.key}` });
-
-    await act(async () => previousWeek?.props.onSelectDate('2026-07-21'));
-    expect(mockSelectDate).toHaveBeenCalledWith(pages[6]!.key, '2026-07-21');
+    expect(weeklySection().props.activePageIndex).toBe(6);
+    expect(rankingSection().props.page).toBe(pages[6]);
   });
 
   async function renderScreen() {
@@ -149,19 +98,23 @@ describe('AiUsageScreen', () => {
     });
   }
 
-  function weekContentNodes() {
-    return renderer?.root.findAll((node) => node.type === 'AiUsageWeekPageMock') ?? [];
+  function weeklySection() {
+    return renderer!.root.find((node) => node.type === 'AiUsageWeeklySectionMock');
+  }
+
+  function rankingSection() {
+    return renderer!.root.find((node) => node.type === 'AiUsageRankingSectionMock');
   }
 });
 
 function detailResult(overrides: Record<string, unknown> = {}) {
   return {
     activePageIndex: 7,
-    pagerKey: pages[7]!.key,
     pages,
     selectDate: mockSelectDate,
     selectPage: mockSelectPage,
     todayDateKey: '2026-08-02',
+    weekDataKey: pages[7]!.key,
     ...overrides,
   };
 }
@@ -174,10 +127,9 @@ function buildPages(): AiUsageDetailPage[] {
     monday.setDate(monday.getDate() + index * 7);
     const sunday = new Date(monday);
     sunday.setDate(sunday.getDate() + 6);
-    const key = localDateKey(monday);
 
     return {
-      key,
+      key: localDateKey(monday),
       range: {
         from: monday.getTime(),
         to: new Date(

@@ -7,7 +7,8 @@ import type {
 
 import type {
   AiUsageModelIdentity,
-  AiUsageModelUsage,
+  AiUsageRankingGroup,
+  AiUsageRankingItem,
   AiUsageTimeRange,
   AiUsageWeekPage,
   AiUsageWeeklyData,
@@ -84,12 +85,12 @@ export function getAiUsageWeekTimelineQuery(range: AiUsageTimeRange) {
   } satisfies AiUsageRecordTimelineQueryParams;
 }
 
-export function getAiUsageDayStatsQuery(dateKey: string) {
+export function getAiUsageDayStatsQuery(dateKey: string, groupBy: AiUsageRankingGroup) {
   const range = getAiUsageDayRange(dateKey);
 
   return {
     from: range.from,
-    groupBy: 'model',
+    groupBy,
     limit: 50,
     metric: 'tokens',
     to: range.to,
@@ -191,21 +192,33 @@ export function buildAiUsageWeeklyData(
   };
 }
 
-export function buildAiUsageModelUsage(
+export function buildAiUsageRanking(
   response: AiUsageRecordStatsResponse | undefined,
-): AiUsageModelUsage[] {
+  groupBy: AiUsageRankingGroup,
+): AiUsageRankingItem[] {
   if (!response) return [];
 
-  const models = response.buckets
-    .flatMap((bucket): AiUsageModelUsage[] => {
-      if (bucket.groupBy !== 'model' || bucket.totalTokens <= 0) return [];
-      return [{ ...modelIdentity(bucket), totalTokens: bucket.totalTokens }];
+  const items = response.buckets
+    .flatMap((bucket): AiUsageRankingItem[] => {
+      if (bucket.groupBy !== groupBy || bucket.totalTokens <= 0) return [];
+
+      const identity =
+        bucket.groupBy === 'model' ? modelIdentity(bucket) : providerIdentity(bucket);
+      return [{ ...identity, groupBy, totalTokens: bucket.totalTokens }];
     })
     .sort((left, right) => right.totalTokens - left.totalTokens);
 
   return response.other.totalTokens > 0
-    ? [...models, { ...otherIdentity(), totalTokens: response.other.totalTokens }]
-    : models;
+    ? [
+        ...items,
+        {
+          ...otherIdentity(),
+          groupBy,
+          key: `other:${groupBy}`,
+          totalTokens: response.other.totalTokens,
+        },
+      ]
+    : items;
 }
 
 function getDateKeys(range: AiUsageTimeRange): string[] {
@@ -242,6 +255,21 @@ function modelIdentity(identity: {
     isOther: false,
     key: `model:${JSON.stringify([providerId, modelId])}`,
     modelId,
+    providerId,
+    providerName: identity.providerName ?? null,
+  };
+}
+
+function providerIdentity(identity: {
+  providerId?: string | null;
+  providerName?: string | null;
+}): AiUsageModelIdentity {
+  const providerId = identity.providerId ?? null;
+
+  return {
+    isOther: false,
+    key: `provider:${JSON.stringify(providerId)}`,
+    modelId: null,
     providerId,
     providerName: identity.providerName ?? null,
   };

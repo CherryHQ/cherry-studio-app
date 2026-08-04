@@ -1,6 +1,6 @@
 import type {
+  AiUsageRecordStatsMetrics,
   AiUsageRecordStatsResponse,
-  AiUsageRecordTimelineResponse,
 } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,14 +9,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 
-import { getAiUsageDayStatsQuery, getAiUsageWeekRange } from '../../utils/aiUsageDetail';
-import { useAiUsageWeekPage } from '../useAiUsageWeekPage';
+import type { AiUsageRankingGroup } from '../../types';
+import { getAiUsageDayStatsQuery } from '../../utils/aiUsageDetail';
+import { useAiUsageRanking } from '../useAiUsageRanking';
 
-const timelineResponse: AiUsageRecordTimelineResponse = {
-  buckets: [],
-  costTotals: [],
-  dailyCosts: [],
-};
 const statsResponse: AiUsageRecordStatsResponse = {
   buckets: [],
   other: emptyMetrics(),
@@ -24,16 +20,13 @@ const statsResponse: AiUsageRecordStatsResponse = {
 };
 const dataApi = {
   delete: jest.fn(),
-  get: jest.fn(async (path: string) =>
-    path === '/ai-usage-records/timeline' ? timelineResponse : statsResponse,
-  ),
+  get: jest.fn(async () => statsResponse),
   patch: jest.fn(),
   post: jest.fn(),
   put: jest.fn(),
 } as unknown as jest.Mocked<ApiClient>;
 
-const range = getAiUsageWeekRange(new Date(2026, 7, 2, 12));
-let latestResult: ReturnType<typeof useAiUsageWeekPage> | undefined;
+let latestResult: ReturnType<typeof useAiUsageRanking> | undefined;
 let queryClient: QueryClient;
 let renderer: ReactTestRenderer | undefined;
 
@@ -45,13 +38,8 @@ function Providers({ children }: { children: ReactNode }) {
   );
 }
 
-function Probe({ enabled }: { enabled: boolean }) {
-  const result = useAiUsageWeekPage({
-    enabled,
-    range,
-    selectedDateKey: '2026-08-02',
-    todayDateKey: '2026-08-02',
-  });
+function Probe({ enabled, groupBy }: { enabled: boolean; groupBy: AiUsageRankingGroup }) {
+  const result = useAiUsageRanking({ enabled, groupBy, selectedDateKey: '2026-08-02' });
 
   useEffect(() => {
     latestResult = result;
@@ -60,7 +48,7 @@ function Probe({ enabled }: { enabled: boolean }) {
   return null;
 }
 
-describe('useAiUsageWeekPage', () => {
+describe('useAiUsageRanking', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     latestResult = undefined;
@@ -75,42 +63,41 @@ describe('useAiUsageWeekPage', () => {
     queryClient.clear();
   });
 
-  test('keeps distant pages idle until enabled, then queries timeline and selected day', async () => {
-    await renderHook(false);
+  test('queries the selected day with the active ranking group', async () => {
+    await renderHook(false, 'model');
     expect(dataApi.get).not.toHaveBeenCalled();
 
-    await act(async () => {
-      renderer?.update(
-        <Providers>
-          <Probe enabled />
-        </Providers>,
-      );
-    });
-    await flushQueryNotifications();
-
-    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
-      query: {
-        from: range.from,
-        groupBy: 'model',
-        limit: 3,
-        metric: 'tokens',
-        to: range.to,
-      },
-    });
+    await updateHook(true, 'model');
     expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/stats', {
-      query: getAiUsageDayStatsQuery('2026-08-02'),
+      query: getAiUsageDayStatsQuery('2026-08-02', 'model'),
     });
-    expect(latestResult?.timeline.hasData).toBe(true);
-    expect(latestResult?.models.hasData).toBe(true);
-    expect(latestResult?.weeklyData.days).toHaveLength(7);
+    expect(latestResult?.query.hasData).toBe(true);
+    expect(latestResult?.ranking).toEqual([]);
+
+    await updateHook(true, 'provider');
+    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/stats', {
+      query: getAiUsageDayStatsQuery('2026-08-02', 'provider'),
+    });
+    expect(dataApi.get).toHaveBeenCalledTimes(2);
   });
 });
 
-async function renderHook(enabled: boolean) {
+async function renderHook(enabled: boolean, groupBy: AiUsageRankingGroup) {
   await act(async () => {
     renderer = create(
       <Providers>
-        <Probe enabled={enabled} />
+        <Probe enabled={enabled} groupBy={groupBy} />
+      </Providers>,
+    );
+  });
+  await flushQueryNotifications();
+}
+
+async function updateHook(enabled: boolean, groupBy: AiUsageRankingGroup) {
+  await act(async () => {
+    renderer?.update(
+      <Providers>
+        <Probe enabled={enabled} groupBy={groupBy} />
       </Providers>,
     );
   });
@@ -123,7 +110,7 @@ async function flushQueryNotifications() {
   });
 }
 
-function emptyMetrics() {
+function emptyMetrics(): AiUsageRecordStatsMetrics {
   return {
     costCurrency: null,
     estimatedRequestCount: 0,

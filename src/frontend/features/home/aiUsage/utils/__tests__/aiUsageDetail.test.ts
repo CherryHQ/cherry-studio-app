@@ -5,7 +5,7 @@ import type {
 } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 
 import {
-  buildAiUsageModelUsage,
+  buildAiUsageRanking,
   buildAiUsageWeeklyData,
   displayAiUsageModelId,
   getAiUsageDayStatsQuery,
@@ -124,9 +124,16 @@ describe('AI usage detail', () => {
       metric: 'tokens',
       to: weekRange.to,
     });
-    expect(getAiUsageDayStatsQuery('2026-07-29')).toEqual({
+    expect(getAiUsageDayStatsQuery('2026-07-29', 'model')).toEqual({
       from: dayRange.from,
       groupBy: 'model',
+      limit: 50,
+      metric: 'tokens',
+      to: dayRange.to,
+    });
+    expect(getAiUsageDayStatsQuery('2026-07-29', 'provider')).toEqual({
+      from: dayRange.from,
+      groupBy: 'provider',
       limit: 50,
       metric: 'tokens',
       to: dayRange.to,
@@ -186,10 +193,34 @@ describe('AI usage detail', () => {
       totals: metrics(350),
     };
 
-    expect(buildAiUsageModelUsage(response)).toEqual([
+    expect(buildAiUsageRanking(response, 'model')).toEqual([
       expect.objectContaining({ modelId: 'model-b', totalTokens: 200 }),
       expect.objectContaining({ modelId: 'provider-a::model-a', totalTokens: 100 }),
-      expect.objectContaining({ isOther: true, totalTokens: 50 }),
+      expect.objectContaining({ groupBy: 'model', isOther: true, totalTokens: 50 }),
+    ]);
+  });
+
+  test('builds a sorted provider list and ignores buckets from another grouping', () => {
+    const response: AiUsageRecordStatsResponse = {
+      buckets: [
+        providerStatsBucket('provider-a', 'Provider A', 300),
+        statsBucket('provider-b', 'model-b', 500),
+        providerStatsBucket('provider-c', null, 100),
+      ],
+      other: metrics(25),
+      totals: metrics(425),
+    };
+
+    expect(buildAiUsageRanking(response, 'provider')).toEqual([
+      expect.objectContaining({
+        groupBy: 'provider',
+        modelId: null,
+        providerId: 'provider-a',
+        providerName: 'Provider A',
+        totalTokens: 300,
+      }),
+      expect.objectContaining({ providerId: 'provider-c', totalTokens: 100 }),
+      expect.objectContaining({ groupBy: 'provider', isOther: true, totalTokens: 25 }),
     ]);
   });
 });
@@ -224,6 +255,15 @@ function statsBucket(providerId: string, modelId: string, totalTokens: number) {
     modelId,
     providerId,
     providerName: providerId,
+  };
+}
+
+function providerStatsBucket(providerId: string, providerName: string | null, totalTokens: number) {
+  return {
+    ...metrics(totalTokens),
+    groupBy: 'provider' as const,
+    providerId,
+    providerName,
   };
 }
 

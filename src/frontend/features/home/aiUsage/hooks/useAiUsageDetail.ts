@@ -1,6 +1,6 @@
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { queryKeys } from '@/frontend/data';
 
@@ -27,12 +27,12 @@ export function useAiUsageDetail() {
   const queryClient = useQueryClient();
   const [referenceDate, setReferenceDate] = useState(() => new Date());
   const [activePageIndex, setActivePageIndex] = useState(AI_USAGE_CURRENT_WEEK_PAGE_INDEX);
-  const pages = getAiUsageRecentWeekPages(referenceDate);
+  const pages = useMemo(() => getAiUsageRecentWeekPages(referenceDate), [referenceDate]);
   const [selectedDateKeys, setSelectedDateKeys] = useState<SelectedDateKeys>(() =>
     createSelectedDateKeys(pages, referenceDate),
   );
   const todayDateKey = toLocalDateKey(referenceDate);
-  const pagerKey = pages[AI_USAGE_CURRENT_WEEK_PAGE_INDEX]?.key ?? todayDateKey;
+  const weekDataKey = pages[AI_USAGE_CURRENT_WEEK_PAGE_INDEX]?.key ?? todayDateKey;
   const hasFocusedOnceRef = useRef(false);
   const stateRef = useRef<DetailStateSnapshot>({
     activePageIndex,
@@ -117,18 +117,22 @@ export function useAiUsageDetail() {
     setSelectedDateKeys(nextSelectedDateKeys);
   }, []);
 
-  const detailPages = pages.map((page) => ({
-    ...page,
-    selectedDateKey: getSelectedDateKey(page, selectedDateKeys, referenceDate),
-  }));
+  const detailPages = useMemo(
+    () =>
+      pages.map((page) => ({
+        ...page,
+        selectedDateKey: getSelectedDateKey(page, selectedDateKeys, referenceDate),
+      })),
+    [pages, referenceDate, selectedDateKeys],
+  );
 
   return {
     activePageIndex,
-    pagerKey,
     pages: detailPages,
     selectDate,
     selectPage,
     todayDateKey,
+    weekDataKey,
   };
 }
 
@@ -163,7 +167,13 @@ function refreshPage(queryClient: QueryClient, page: AiUsageWeekPage, selectedDa
     }),
     queryClient.invalidateQueries({
       exact: true,
-      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery(selectedDateKey)),
+      queryKey: queryKeys.aiUsageRecords.stats(getAiUsageDayStatsQuery(selectedDateKey, 'model')),
+    }),
+    queryClient.invalidateQueries({
+      exact: true,
+      queryKey: queryKeys.aiUsageRecords.stats(
+        getAiUsageDayStatsQuery(selectedDateKey, 'provider'),
+      ),
     }),
   ]);
 }

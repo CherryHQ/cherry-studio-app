@@ -1,29 +1,21 @@
-import PagerView, { type PagerViewRef } from '@expo/ui/community/pager-view';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
-import { AiUsageWeekPage } from './components/AiUsageWeekPage';
+import { AiUsageRankingSection } from './components/AiUsageRankingSection';
+import { AiUsageWeeklySection } from './components/AiUsageWeeklySection';
 import { useAiUsageDetail } from './hooks/useAiUsageDetail';
-import { AI_USAGE_CURRENT_WEEK_PAGE_INDEX } from './utils/aiUsageDetail';
-
-const ADJACENT_PAGE_DISTANCE = 1;
 
 export function AiUsageScreen() {
   const { i18n, t } = useTranslation();
-  const { activePageIndex, pagerKey, pages, selectDate, selectPage, todayDateKey } =
+  const { activePageIndex, pages, selectDate, selectPage, todayDateKey, weekDataKey } =
     useAiUsageDetail();
   const headerHeight = useHeaderHeight();
   const locale = i18n.resolvedLanguage ?? i18n.language;
-  const pagerRef = useRef<PagerViewRef>(null);
-
-  useEffect(() => {
-    pagerRef.current?.setPageWithoutAnimation(activePageIndex);
-  }, [activePageIndex]);
+  const activePage = pages[activePageIndex];
 
   return (
     <>
@@ -32,32 +24,26 @@ export function AiUsageScreen() {
         style={{ paddingTop: isLiquidGlassAvailable ? headerHeight : 0 }}
         testID="ai-usage-content"
       >
-        <PagerView
-          key={pagerKey}
-          ref={pagerRef}
-          initialPage={AI_USAGE_CURRENT_WEEK_PAGE_INDEX}
-          offscreenPageLimit={1}
-          style={{ flex: 1 }}
-          testID="ai-usage-pager"
-          onPageSelected={(event) => selectPage(event.nativeEvent.position)}
+        <ScrollView
+          alwaysBounceVertical={false}
+          className="flex-1"
+          contentContainerClassName="gap-7 px-4 py-5"
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          testID="ai-usage-detail-scroll"
         >
-          {pages.map((page, pageIndex) => (
-            <View
-              key={page.key}
-              className="flex-1"
-              collapsable={false}
-              testID={`ai-usage-week-page-${page.key}`}
-            >
-              <AiUsageWeekPage
-                enabled={Math.abs(pageIndex - activePageIndex) <= ADJACENT_PAGE_DISTANCE}
-                locale={locale}
-                page={page}
-                todayDateKey={todayDateKey}
-                onSelectDate={(dateKey) => selectDate(page.key, dateKey)}
-              />
-            </View>
-          ))}
-        </PagerView>
+          <AiUsageWeeklySection
+            activePageIndex={activePageIndex}
+            locale={locale}
+            pages={pages}
+            todayDateKey={todayDateKey}
+            weekDataKey={weekDataKey}
+            onSelectDate={selectDate}
+            onSelectPage={selectPage}
+          />
+
+          {activePage ? <AiUsageRankingSection enabled locale={locale} page={activePage} /> : null}
+        </ScrollView>
       </View>
       <BackHeader title={t('aiUsage.title')} />
     </>
