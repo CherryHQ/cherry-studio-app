@@ -1,6 +1,6 @@
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
-import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { createUniqueModelId, isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type {
   Painting,
@@ -18,7 +18,7 @@ import {
 } from '@/backend/data/db/schemas';
 
 import type { FileEntryService } from './FileEntryService';
-import { discardPreparedFiles } from './fileStorage';
+import { discardPreparedFiles, type PreparedInternalFile } from './fileStorage';
 import { insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 

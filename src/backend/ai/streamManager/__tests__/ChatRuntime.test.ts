@@ -3,7 +3,6 @@ import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
-import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -12,6 +11,7 @@ import type {
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { UIMessageChunk } from 'ai';
 
+import type { PreparedInternalFile } from '@/backend/data/services/fileStorage';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 

@@ -12,6 +12,7 @@ import type { AssistantService } from '../../services/AssistantService';
 import type { ContentSearchService } from '../../services/ContentSearchService';
 import type { EntitySearchService } from '../../services/EntitySearchService';
 import type { FileEntryService } from '../../services/FileEntryService';
+import type { FileRefService } from '../../services/FileRefService';
 import type { GroupService } from '../../services/GroupService';
 import type { JobService } from '../../services/JobService';
 import type { KnowledgeBaseService } from '../../services/KnowledgeBaseService';
@@ -69,6 +70,7 @@ export type DataApiDependencies = {
   contentSearch: ContentSearchService;
   entitySearch: EntitySearchService;
   files: FileEntryService;
+  fileRefs: FileRefService;
   groups: GroupService;
   jobs: JobService;
   knowledgeBases: KnowledgeBaseService;
@@ -99,7 +101,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createAgentWorkspaceHandlers(dependencies.agentWorkspaces, dependencies.agentSessions),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
     ...createAssistantHandlers(dependencies.assistants),
-    ...createFileHandlers(dependencies.files),
+    ...createFileHandlers(dependencies.files, dependencies.fileRefs),
     ...createGroupHandlers(dependencies.groups),
     ...createJobHandlers(dependencies.jobs),
     ...createKnowledgeHandlers(dependencies.knowledgeBases, dependencies.knowledgeItems),

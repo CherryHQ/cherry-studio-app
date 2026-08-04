@@ -7,7 +7,6 @@ import type {
   UpdateTopicDto,
 } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   BranchMessagesResponse,
   CherryMessagePart,
@@ -23,6 +22,7 @@ import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import type { UIMessageChunk } from 'ai';
 
+import type { PreparedInternalFile } from '@/backend/data/services/fileStorage';
 import type { ChatToolApprovalInput } from '@/shared/contracts';
 
 export type ChatStreamRequest = {

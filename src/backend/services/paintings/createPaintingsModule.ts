@@ -1,11 +1,9 @@
-import type {
-  FileEntryId,
-  PreparedInternalFile,
-  ResolvedFile,
-} from '@cherrystudio/universal/data/types/file';
+import type { ResolvedFile } from '@cherrystudio/universal/data/api/schemas/files';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
+import type { PreparedInternalFile } from '@/backend/data/services/fileStorage';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,

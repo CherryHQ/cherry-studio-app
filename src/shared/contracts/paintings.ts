@@ -1,5 +1,6 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { FileEntryId, ResolvedFile } from '@cherrystudio/universal/data/types/file';
+import type { ResolvedFile } from '@cherrystudio/universal/data/api/schemas/files';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 

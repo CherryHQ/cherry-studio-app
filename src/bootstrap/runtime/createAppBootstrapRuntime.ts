@@ -40,6 +40,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       contentSearch: services.contentSearch,
       entitySearch: services.entitySearch,
       files: services.fileEntry,
+      fileRefs: services.fileRef,
       groups: services.group,
       jobs: services.job,
       knowledgeBases: services.knowledgeBase,

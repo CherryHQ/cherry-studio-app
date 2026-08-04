@@ -8,13 +8,15 @@ jest.mock('uuid', () => ({
 }));
 
 jest.mock('../fileStorage', () => ({
-  resolveInternalFileUri: jest.fn(() => 'file:///documents/files/entry.txt'),
+  resolveInternalFileUri: jest.fn(() => 'file:///documents/Data/Files/entry.txt'),
 }));
 
 describe('FileEntryService', () => {
   test.each([
     [
       {
+        cleanupPolicy: 'manual',
+        contentHash: null,
         createdAt: 1,
         deletedAt: null,
         ext: 'txt',
@@ -26,6 +28,8 @@ describe('FileEntryService', () => {
         updatedAt: 2,
       },
       {
+        cleanupPolicy: 'manual',
+        contentHash: null,
         createdAt: 1,
         ext: 'txt',
         id: '00000000-0000-7000-8000-000000000001',
@@ -37,6 +41,8 @@ describe('FileEntryService', () => {
     ],
     [
       {
+        cleanupPolicy: 'manual',
+        contentHash: null,
         createdAt: 1,
         deletedAt: null,
         ext: null,
@@ -48,6 +54,7 @@ describe('FileEntryService', () => {
         updatedAt: 2,
       },
       {
+        cleanupPolicy: 'manual',
         createdAt: 1,
         ext: null,
         externalPath: '/tmp/brief',
@@ -74,12 +81,14 @@ describe('FileEntryService', () => {
         id: '00000000-0000-7000-8000-000000000001',
         name: 'brief',
         size: 12,
-        uri: 'file:///documents/files/entry.txt',
+        uri: 'file:///documents/Data/Files/entry.txt',
       },
     ]);
 
     expect(values).toHaveBeenCalledWith([
       {
+        cleanupPolicy: 'manual',
+        contentHash: null,
         ext: 'txt',
         id: '00000000-0000-7000-8000-000000000001',
         name: 'brief',

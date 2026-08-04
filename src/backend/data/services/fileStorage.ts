@@ -1,10 +1,9 @@
 import {
   type FileEntryId,
-  generatedImageExtension,
+  FileEntryIdSchema,
   type InternalFileEntry,
-  type PreparedInternalFile,
-  SafeFileExtensionSchema,
-  SafeFileNameSchema,
+  SafeExtSchema,
+  SafeNameSchema,
 } from '@cherrystudio/universal/data/types/file';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
@@ -12,12 +11,29 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
-const FILE_DIRECTORY_NAME = 'files';
+const DATA_DIRECTORY_NAME = 'Data';
+const FILE_DIRECTORY_NAME = 'Files';
 const logger = loggerService.withContext('fileStorage');
 
+export type PreparedInternalFile = {
+  ext: string | null;
+  id: FileEntryId;
+  name: string;
+  size: number;
+  uri: string;
+};
+
+export type InternalFileOnDisk = {
+  id: FileEntryId;
+  modificationTime: number | null;
+  name: string;
+  uri: string;
+};
+
 function fileDirectory(): Directory {
-  return new Directory(Paths.document, FILE_DIRECTORY_NAME);
+  return new Directory(Paths.document, DATA_DIRECTORY_NAME, FILE_DIRECTORY_NAME);
 }
 
 function ensureFileDirectory(): Directory {
@@ -29,7 +45,9 @@ function ensureFileDirectory(): Directory {
 }
 
 function managedFile(id: FileEntryId, ext: string | null): File {
-  return new File(fileDirectory(), `${id}${ext ? `.${ext}` : ''}`);
+  const safeId = FileEntryIdSchema.parse(id);
+  const safeExt = ext === null ? null : SafeExtSchema.parse(ext);
+  return new File(fileDirectory(), `${safeId}${safeExt ? `.${safeExt}` : ''}`);
 }
 
 function projectFileName(displayFilename: string, sourceFilename: string) {
@@ -47,8 +65,8 @@ function projectFileName(displayFilename: string, sourceFilename: string) {
         : null;
 
   return {
-    ext: ext ? SafeFileExtensionSchema.parse(ext) : null,
-    name: SafeFileNameSchema.parse(name),
+    ext: ext ? SafeExtSchema.parse(ext) : null,
+    name: SafeNameSchema.parse(name),
   };
 }
 
@@ -102,8 +120,8 @@ async function prepareFilePart(
 
 export function prepareGeneratedImage(base64: string, mediaType: string): PreparedInternalFile {
   const id = createOrderedUuid();
-  const ext = SafeFileExtensionSchema.parse(generatedImageExtension(mediaType));
-  const name = SafeFileNameSchema.parse(`painting-${id}`);
+  const ext = SafeExtSchema.parse(generatedImageExtension(mediaType));
+  const name = SafeNameSchema.parse(`painting-${id}`);
   const destination = new File(ensureFileDirectory(), `${id}.${ext}`);
   const payload = base64.includes(',') ? (base64.split(',', 2)[1] ?? '') : base64;
 
@@ -159,13 +177,60 @@ export async function prepareMessageParts(
 export function discardPreparedFiles(files: readonly PreparedInternalFile[]): void {
   for (const prepared of files) {
     try {
-      const file = new File(prepared.uri);
+      const file = managedFile(prepared.id, prepared.ext);
       if (file.exists) {
         file.delete();
       }
     } catch (error) {
       logger.warn('Failed to discard prepared file', error as Error, { id: prepared.id });
     }
+  }
+}
+
+export function deleteInternalFile(entry: Pick<InternalFileEntry, 'ext' | 'id'>): boolean {
+  const file = managedFile(entry.id, entry.ext);
+  if (!file.exists) {
+    return false;
+  }
+  file.delete();
+  return true;
+}
+
+export function listInternalFiles(): InternalFileOnDisk[] {
+  const directory = fileDirectory();
+  if (!directory.exists) {
+    return [];
+  }
+
+  return directory
+    .list()
+    .filter((entry): entry is File => entry instanceof File)
+    .flatMap((file) => {
+      const dotIndex = file.name.indexOf('.');
+      const id = dotIndex < 0 ? file.name : file.name.slice(0, dotIndex);
+      const parsedId = FileEntryIdSchema.safeParse(id);
+      const ext = dotIndex < 0 ? null : file.name.slice(dotIndex + 1);
+      if (!parsedId.success || (ext !== null && !SafeExtSchema.safeParse(ext).success)) {
+        return [];
+      }
+      return [
+        {
+          id: parsedId.data,
+          modificationTime: file.modificationTime,
+          name: file.name,
+          uri: file.uri,
+        },
+      ];
+    });
+}
+
+export function deleteInternalFileUri(uri: string): void {
+  const file = new File(uri);
+  if (file.parentDirectory.uri !== fileDirectory().uri) {
+    throw new Error(`Refusing to delete a file outside Data/Files: ${uri}`);
+  }
+  if (file.exists) {
+    file.delete();
   }
 }
 

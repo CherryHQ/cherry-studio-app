@@ -8,7 +8,6 @@ import type {
   TopicStatusSnapshotEntry,
   TopicStreamStatus,
 } from '@cherrystudio/universal/ai/transport';
-import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -26,6 +25,7 @@ import {
 } from '@cherrystudio/universal/utils/conversationTitle';
 import { isToolUIPart, type UIMessageChunk } from 'ai';
 
+import type { PreparedInternalFile } from '@/backend/data/services/fileStorage';
 import type {
   ChatCancelExecutionInput,
   ChatEditAndResendInput,

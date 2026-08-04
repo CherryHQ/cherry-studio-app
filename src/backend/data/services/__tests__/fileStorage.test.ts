@@ -2,7 +2,10 @@ import type { CherryMessagePart } from '@cherrystudio/universal/data/types/messa
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
 import {
+  deleteInternalFile,
+  deleteInternalFileUri,
   imageUriToDataUrl,
+  listInternalFiles,
   prepareGeneratedImage,
   prepareMessageParts,
   resolveInternalFileUri,
@@ -16,6 +19,7 @@ jest.mock('uuid', () => ({
 jest.mock('expo-file-system', () => {
   const directories = new Set<string>();
   const files = new Map<string, number>();
+  const modificationTimes = new Map<string, number | null>();
   const copies: { destination: string; source: string }[] = [];
   const failures = new Set<string>();
   const writeFailures = new Set<string>();
@@ -46,6 +50,12 @@ jest.mock('expo-file-system', () => {
     create() {
       directories.add(this.uri);
     }
+
+    list() {
+      return [...files.keys()]
+        .filter((uri) => uri.startsWith(this.uri) && !uri.slice(this.uri.length).includes('/'))
+        .map((uri) => new MockFile(uri));
+    }
   }
 
   class MockFile {
@@ -65,6 +75,14 @@ jest.mock('expo-file-system', () => {
 
     get size() {
       return files.get(this.uri) ?? 0;
+    }
+
+    get modificationTime() {
+      return modificationTimes.get(this.uri) ?? null;
+    }
+
+    get parentDirectory() {
+      return new MockDirectory(this.uri.slice(0, this.uri.lastIndexOf('/') + 1));
     }
 
     get type() {
@@ -100,7 +118,16 @@ jest.mock('expo-file-system', () => {
     Directory: MockDirectory,
     File: MockFile,
     Paths: paths,
-    testState: { copies, directories, failures, files, paths, writeFailures, writes },
+    testState: {
+      copies,
+      directories,
+      failures,
+      files,
+      modificationTimes,
+      paths,
+      writeFailures,
+      writes,
+    },
   };
 });
 
@@ -109,6 +136,7 @@ type FileSystemTestState = {
   directories: Set<string>;
   failures: Set<string>;
   files: Map<string, number>;
+  modificationTimes: Map<string, number | null>;
   paths: { document: { uri: string } };
   writeFailures: Set<string>;
   writes: { content: string; options?: unknown; uri: string }[];
@@ -122,6 +150,7 @@ describe('fileStorage', () => {
     testState.directories.clear();
     testState.failures.clear();
     testState.files.clear();
+    testState.modificationTimes.clear();
     testState.writeFailures.clear();
     testState.writes.length = 0;
     testState.paths.document.uri = 'file:///documents/';
@@ -140,12 +169,12 @@ describe('fileStorage', () => {
         id: '00000000-0000-7000-8000-000000000001',
         name: 'Quarterly Brief',
         size: 42,
-        uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
+        uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf',
       },
     ]);
     expect(prepared.parts[0]).toEqual(
       expect.objectContaining({
-        url: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
+        url: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf',
       }),
     );
     const preparedPart = prepared.parts[0];
@@ -165,7 +194,7 @@ describe('fileStorage', () => {
       expect.objectContaining({
         ext: null,
         name: 'README',
-        uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001',
+        uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001',
       }),
     );
   });
@@ -185,18 +214,21 @@ describe('fileStorage', () => {
       ext: 'png',
       id: '00000000-0000-7000-8000-000000000001',
     } as const;
-    testState.files.set('file:///documents/files/00000000-0000-7000-8000-000000000001.png', 10);
+    testState.files.set(
+      'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
+      10,
+    );
     expect(resolveInternalFileUri(entry)).toBe(
-      'file:///documents/files/00000000-0000-7000-8000-000000000001.png',
+      'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
     );
 
     testState.paths.document.uri = 'file:///new-sandbox/Documents/';
     testState.files.set(
-      'file:///new-sandbox/Documents/files/00000000-0000-7000-8000-000000000001.png',
+      'file:///new-sandbox/Documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
       10,
     );
     expect(resolveInternalFileUri(entry)).toBe(
-      'file:///new-sandbox/Documents/files/00000000-0000-7000-8000-000000000001.png',
+      'file:///new-sandbox/Documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
     );
   });
 
@@ -225,7 +257,7 @@ describe('fileStorage', () => {
       expect.objectContaining({
         ext: 'png',
         size: 4,
-        uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.png',
+        uri: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
       }),
     );
     expect(testState.writes).toEqual([
@@ -234,7 +266,7 @@ describe('fileStorage', () => {
   });
 
   test('removes a partially written generated image on failure', () => {
-    const uri = 'file:///documents/files/00000000-0000-7000-8000-000000000001.png';
+    const uri = 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png';
     testState.writeFailures.add(uri);
 
     expect(() => prepareGeneratedImage('AAAA', 'image/png')).toThrow('write failed');
@@ -245,6 +277,45 @@ describe('fileStorage', () => {
     await expect(imageUriToDataUrl('file:///picker/photo.jpg', 'image/*')).resolves.toBe(
       'data:image/jpeg;base64,encoded',
     );
+  });
+
+  test('enumerates only UUID files with a safe optional extension', () => {
+    const directory = 'file:///documents/Data/Files/';
+    testState.directories.add(directory);
+    const valid = `${directory}00000000-0000-7000-8000-000000000001.png`;
+    const extensionless = `${directory}00000000-0000-7000-8000-000000000002`;
+    testState.files.set(valid, 1);
+    testState.files.set(extensionless, 2);
+    testState.files.set(`${directory}00000000-0000-7000-8000-000000000003.bad.ext`, 3);
+    testState.files.set(`${directory}not-an-id.png`, 4);
+    testState.modificationTimes.set(valid, 10);
+    testState.modificationTimes.set(extensionless, 20);
+
+    expect(listInternalFiles()).toEqual([
+      {
+        id: '00000000-0000-7000-8000-000000000001',
+        modificationTime: 10,
+        name: '00000000-0000-7000-8000-000000000001.png',
+        uri: valid,
+      },
+      {
+        id: '00000000-0000-7000-8000-000000000002',
+        modificationTime: 20,
+        name: '00000000-0000-7000-8000-000000000002',
+        uri: extensionless,
+      },
+    ]);
+  });
+
+  test('deletes only managed Data/Files paths', () => {
+    const uri = 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png';
+    testState.files.set(uri, 1);
+
+    expect(deleteInternalFile({ ext: 'png', id: '00000000-0000-7000-8000-000000000001' })).toBe(
+      true,
+    );
+    expect(testState.files.has(uri)).toBe(false);
+    expect(() => deleteInternalFileUri('file:///tmp/outside.png')).toThrow('outside Data/Files');
   });
 });
 

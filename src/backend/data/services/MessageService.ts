@@ -12,7 +12,6 @@ import type {
   UpdateMessageDto,
 } from '@cherrystudio/universal/data/api/schemas/messages';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
-import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
 import type {
   BranchMessage,
   BranchMessagesResponse,
@@ -41,6 +40,7 @@ import {
   topicTable,
 } from '../db/schemas';
 import type { FileEntryService } from './FileEntryService';
+import type { PreparedInternalFile } from './fileStorage';
 import type { TopicService } from './TopicService';
 import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';

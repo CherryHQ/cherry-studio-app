@@ -16,6 +16,7 @@ import { AssistantService } from '@/backend/data/services/AssistantService';
 import { ContentSearchService } from '@/backend/data/services/ContentSearchService';
 import { EntitySearchService } from '@/backend/data/services/EntitySearchService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { FileRefService } from '@/backend/data/services/FileRefService';
 import { GroupService } from '@/backend/data/services/GroupService';
 import { JobService } from '@/backend/data/services/JobService';
 import { KnowledgeBaseService } from '@/backend/data/services/KnowledgeBaseService';
@@ -64,6 +65,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const translateHistory = new TranslateHistoryService(dbService);
   const translateLanguage = new TranslateLanguageService(dbService);
   const fileEntry = new FileEntryService(dbService);
+  const fileRef = new FileRefService(dbService);
   const painting = new PaintingService(dbService, fileEntry);
   const mcpServer = new McpServerService(dbService);
   const mcpRuntime = new McpRuntimeService({ mcpServer });
@@ -106,6 +108,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
     devicePermissions,
     entitySearch,
     fileEntry,
+    fileRef,
     group,
     job,
     knowledgeBase,
