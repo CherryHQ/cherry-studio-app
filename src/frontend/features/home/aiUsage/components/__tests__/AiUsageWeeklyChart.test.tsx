@@ -110,6 +110,8 @@ describe('AiUsageWeeklyChart', () => {
         'model-a',
         'Other',
         'Average',
+        'Tue, Aug 4',
+        '100 Tokens',
         'Week total',
         '300 Tokens',
         '200',
@@ -117,7 +119,7 @@ describe('AiUsageWeeklyChart', () => {
       ]),
     );
     expect(textValues()).not.toContain('200 Tokens');
-    expect(textValues()).not.toContain('100 Tokens');
+    expect(textValues().filter((value) => value === '100 Tokens')).toHaveLength(1);
 
     const renderBar = chart?.props.renderBar;
     const bottomSegment = renderBar(barRenderProps(0));
@@ -139,6 +141,16 @@ describe('AiUsageWeeklyChart', () => {
       renderer?.root.findByProps({ testID: 'ai-usage-day-2026-08-03' }).props.onPress(),
     );
     expect(mockSelectDate).toHaveBeenCalledWith('2026-08-03');
+
+    await act(async () => {
+      renderer?.update(chartElement('2026-08-03'));
+    });
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-selected-date' }).props.children).toBe(
+      'Mon, Aug 3',
+    );
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-selected-day-total' }).props.children,
+    ).toBe('200 Tokens');
   });
 
   it('keeps a fixed skeleton while loading', async () => {
@@ -160,15 +172,7 @@ describe('AiUsageWeeklyChart', () => {
 
   async function renderChart() {
     await act(async () => {
-      renderer = create(
-        <AiUsageWeeklyChart
-          data={data}
-          isLoading={false}
-          locale="en-US"
-          selectedDateKey="2026-08-04"
-          onSelectDate={mockSelectDate}
-        />,
-      );
+      renderer = create(chartElement('2026-08-04'));
     });
     const layoutNode = renderer?.root
       .findAll((node) => typeof node.props.onLayout === 'function')
@@ -177,6 +181,18 @@ describe('AiUsageWeeklyChart', () => {
       layoutNode?.props.onLayout({
         nativeEvent: { layout: { height: 0, width: 360, x: 0, y: 0 } },
       }),
+    );
+  }
+
+  function chartElement(selectedDateKey: string) {
+    return (
+      <AiUsageWeeklyChart
+        data={data}
+        isLoading={false}
+        locale="en-US"
+        selectedDateKey={selectedDateKey}
+        onSelectDate={mockSelectDate}
+      />
     );
   }
 

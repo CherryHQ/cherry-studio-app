@@ -73,6 +73,17 @@ export function AiUsageWeeklyChart({
       }),
     [locale],
   );
+  const selectedDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        day: 'numeric',
+        month: 'short',
+        weekday: 'short',
+      }),
+    [locale],
+  );
+  const selectedDayTokens =
+    data.days.find((day) => day.dateKey === selectedDateKey)?.totalTokens ?? 0;
   const chartWidth = Math.max(0, containerWidth - AXIS_WIDTH);
   const maxDayTokens = Math.max(0, ...data.days.map((day) => day.totalTokens));
   const chartScale = getAiUsageChartScale(maxDayTokens, data.averageTokens);
@@ -172,6 +183,29 @@ export function AiUsageWeeklyChart({
         <WeeklyChartSkeleton />
       ) : (
         <>
+          <View className="h-16 justify-between" testID="ai-usage-selected-day-summary">
+            <Text
+              className="text-muted-foreground text-sm"
+              maxFontSizeMultiplier={1.1}
+              numberOfLines={1}
+              testID="ai-usage-selected-date"
+            >
+              {selectedDateFormatter.format(parseLocalDateKey(selectedDateKey))}
+            </Text>
+            <Text
+              selectable
+              adjustsFontSizeToFit
+              className="font-semibold text-default-foreground text-3xl"
+              maxFontSizeMultiplier={1.1}
+              minimumFontScale={0.75}
+              numberOfLines={1}
+              style={styles.tabularNumbers}
+              testID="ai-usage-selected-day-total"
+            >
+              {t('aiUsage.tokensValue', { tokens: formatTokens(selectedDayTokens) })}
+            </Text>
+          </View>
+
           <View className="flex-row" style={styles.chartFrame} testID="ai-usage-weekly-chart">
             {chartWidth >= MIN_CHART_WIDTH ? (
               <View style={{ height: CHART_HEIGHT, width: chartWidth }}>
@@ -355,6 +389,10 @@ export function AiUsageWeeklyChart({
 function WeeklyChartSkeleton() {
   return (
     <View className="gap-4" testID="ai-usage-weekly-chart-loading">
+      <View className="h-16 justify-between">
+        <View className="h-4 w-28 rounded-sm bg-surface-secondary" />
+        <View className="h-8 w-36 rounded-sm bg-surface-secondary" />
+      </View>
       <View className="flex-row items-end gap-3" style={styles.chartFrame}>
         {WEEKLY_CHART_SKELETON_HEIGHTS.map((height) => (
           <View key={height} className="flex-1 items-center justify-end gap-3">

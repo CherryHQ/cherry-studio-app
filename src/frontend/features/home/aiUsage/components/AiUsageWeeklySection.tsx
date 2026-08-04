@@ -21,7 +21,7 @@ import { AiUsageSectionAction } from './AiUsageSectionState';
 import { AiUsageWeekChartPage } from './AiUsageWeekChartPage';
 
 const ADJACENT_PAGE_DISTANCE = 1;
-const WEEK_CHART_PAGE_HEIGHT = 270;
+const WEEK_CHART_PAGE_HEIGHT = 350;
 
 type AiUsageWeeklySectionProps = {
   activePageIndex: number;

@@ -78,7 +78,7 @@ describe('AiUsageWeeklySection', () => {
     expect(list?.props.snapToInterval).toBe(320);
     expect(list?.props.drawDistance).toBe(320);
     expect(list?.props.recycleItems).toBe(true);
-    expect(list?.props.style).toEqual({ height: 270 });
+    expect(list?.props.style).toEqual({ height: 350 });
     expect(list?.props.dataKey).toBe('2026-07-27');
     expect(list?.props.getFixedItemSize()).toBe(320);
     expect(mockScrollToIndex).toHaveBeenCalledWith({ animated: false, index: 7 });
