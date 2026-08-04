@@ -8,10 +8,10 @@ import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Section } from '@/frontend/components/Section';
 
 import { SettingNumberInput } from '../components/SettingNumberInput';
 import { SettingSelect, type SettingSelectOption } from '../components/SettingSelect';
-import { SettingsSection } from '../components/SettingsSection';
 import { SettingsServiceRow, type SettingsServiceRowProps } from '../components/SettingsServiceRow';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 
@@ -51,7 +51,7 @@ export default function WebSearchSettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <SettingsSection
+        <Section
           items={[
             {
               accessory: (

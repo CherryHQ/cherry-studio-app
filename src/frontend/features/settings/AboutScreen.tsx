@@ -15,9 +15,8 @@ import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
+import { Section } from '@/frontend/components/Section';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-
-import { SettingsSection } from './components/SettingsSection';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
 const githubIcon = PROVIDER_ICONS.github;
@@ -73,7 +72,7 @@ export default function AboutSettingsScreen() {
             </View>
           </View>
 
-          <SettingsSection
+          <Section
             items={[
               {
                 accessory: (

@@ -12,8 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Section } from '@/frontend/components/Section';
 
-import { SettingsSection } from '../components/SettingsSection';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { getPermissionSummaryKey, type PermissionKind, permissionConfig } from './permissionConfig';
@@ -83,7 +83,7 @@ export default function PermissionsSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4 py-5">
-          <SettingsSection items={items} />
+          <Section items={items} />
         </View>
       </ScrollView>
     </>

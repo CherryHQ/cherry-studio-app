@@ -27,8 +27,8 @@ jest.mock('../hooks/usePermissionPolicies', () => ({
 jest.mock('../hooks/usePermissionSystemStatuses', () => ({
   usePermissionSystemStatuses: () => ({ statuses: mockStatuses }),
 }));
-jest.mock('../../components/SettingsSection', () => ({
-  SettingsSection: ({
+jest.mock('@/frontend/components/Section', () => ({
+  Section: ({
     items,
   }: {
     items: { accessory?: ReactNode; id: string; imageSource?: unknown; title: string }[];

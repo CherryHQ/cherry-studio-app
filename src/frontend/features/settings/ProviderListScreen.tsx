@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { Section } from '@/frontend/components/Section';
 import { useQuery } from '@/frontend/data';
 import {
   hiddenProviderListIds,
@@ -16,7 +17,6 @@ import {
 } from '@/frontend/utils/constants';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
-import { SettingsSection } from './components/SettingsSection';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
 const providerListStaleTime = 1000 * 60 * 5;
@@ -174,7 +174,7 @@ export default function ProviderSettingsScreen() {
             </View>
           </View>
         ) : (
-          <SettingsSection
+          <Section
             items={[
               {
                 hideAccessory: true,

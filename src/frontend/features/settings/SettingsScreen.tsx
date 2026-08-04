@@ -19,10 +19,10 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
+import { Section } from '@/frontend/components/Section';
 import { usePreference } from '@/frontend/data/hooks';
 
 import { SettingSelect } from './components/SettingSelect';
-import { SettingsSection } from './components/SettingsSection';
 import { usePrefetchProviders } from './hooks/usePrefetchProviders';
 import { useSettingPreferences } from './hooks/useSettingPreferences';
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
@@ -71,7 +71,7 @@ export default function SettingsScreen() {
           userName={userName}
         />
         <View className="gap-6 px-2 pt-6">
-          <SettingsSection
+          <Section
             items={[
               {
                 icon: CircleUserRoundIcon,
@@ -80,7 +80,7 @@ export default function SettingsScreen() {
               },
             ]}
           />
-          <SettingsSection
+          <Section
             items={[
               {
                 icon: CloudIcon,
@@ -95,7 +95,7 @@ export default function SettingsScreen() {
               },
             ]}
           />
-          <SettingsSection
+          <Section
             items={[
               {
                 icon: EarthIcon,
@@ -109,7 +109,7 @@ export default function SettingsScreen() {
               },
             ]}
           />
-          <SettingsSection
+          <Section
             items={[
               {
                 icon: DatabaseIcon,
@@ -123,7 +123,7 @@ export default function SettingsScreen() {
               },
             ]}
           />
-          <SettingsSection
+          <Section
             items={[
               {
                 accessory: (
@@ -151,7 +151,7 @@ export default function SettingsScreen() {
               },
             ]}
           />
-          <SettingsSection
+          <Section
             items={[
               {
                 icon: InfoIcon,

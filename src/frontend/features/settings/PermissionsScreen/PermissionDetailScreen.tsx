@@ -10,10 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Section } from '@/frontend/components/Section';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
-import { SettingsSection } from '../components/SettingsSection';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { isPermissionKind, type PermissionKind, permissionConfig } from './permissionConfig';
@@ -151,7 +151,7 @@ function OpenSettingsSection({
   };
 
   return (
-    <SettingsSection
+    <Section
       items={[
         {
           icon: SettingsIcon,

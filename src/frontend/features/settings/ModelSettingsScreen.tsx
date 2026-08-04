@@ -14,8 +14,7 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
-
-import { SettingsSection } from './components/SettingsSection';
+import { Section } from '@/frontend/components/Section';
 
 const MODEL_SETTING_ICONS = {
   default: '⭐',
@@ -73,7 +72,7 @@ export default function ModelSettingsScreen() {
       >
         <View className="gap-6 px-4 py-5">
           {items.map((item) => (
-            <SettingsSection key={item.title} items={[item]} />
+            <Section key={item.title} items={[item]} />
           ))}
         </View>
       </ScrollView>

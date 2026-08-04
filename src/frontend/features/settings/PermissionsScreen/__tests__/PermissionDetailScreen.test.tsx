@@ -48,8 +48,8 @@ jest.mock('../hooks/usePermissionPolicies', () => ({
 jest.mock('../hooks/usePermissionSystemStatuses', () => ({
   usePermissionSystemStatuses: () => ({ refresh: mockRefresh, statuses: mockStatuses }),
 }));
-jest.mock('../../components/SettingsSection', () => ({
-  SettingsSection: ({
+jest.mock('@/frontend/components/Section', () => ({
+  Section: ({
     items,
     title,
   }: {

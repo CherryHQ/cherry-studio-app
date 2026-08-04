@@ -13,9 +13,8 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Section } from '@/frontend/components/Section';
 import { isAndroid } from '@/frontend/utils/constants';
-
-import { SettingsSection } from './components/SettingsSection';
 
 const ANDROID_GRANT_READ_URI_PERMISSION_FLAG = 1;
 
@@ -78,7 +77,7 @@ export default function DataSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-4 py-5">
-          <SettingsSection
+          <Section
             items={[
               {
                 hideAccessory: true,
@@ -101,8 +100,8 @@ export default function DataSettingsScreen() {
             ]}
             title={t('settings.data.backupRestore.title')}
           />
-          <SettingsSection items={directoryItems} title={t('settings.data.directory.title')} />
-          <SettingsSection
+          <Section items={directoryItems} title={t('settings.data.directory.title')} />
+          <Section
             items={[
               {
                 hideAccessory: true,
