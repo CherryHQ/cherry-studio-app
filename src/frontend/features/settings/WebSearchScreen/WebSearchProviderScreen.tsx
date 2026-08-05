@@ -61,7 +61,7 @@ export default function WebSearchProviderSettingsScreen() {
     [officialWebsite, openOfficialWebsite, t],
   );
 
-  if (!provider || provider.type !== 'api') {
+  if (!provider) {
     return <Redirect href="/settings/websearch" />;
   }
 
