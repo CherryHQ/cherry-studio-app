@@ -33,6 +33,7 @@ export function AiUsageCalendar({
   const { theme } = useUniwind();
   const levelColors = aiUsageCalendar.levelColors[theme === 'dark' ? 'dark' : 'light'];
   const weeks = useMemo(() => buildAiUsageCalendarWeeks(data), [data]);
+  const activeDayCount = Object.values(data).filter((level) => level > 0).length;
   const monthLabelKeys = useMemo(() => getAiUsageMonthLabelKeys(weeks), [weeks]);
   const monthFormatter = useMemo(
     () => new Intl.DateTimeFormat(i18n.resolvedLanguage ?? i18n.language, { month: 'short' }),
@@ -150,7 +151,53 @@ export function AiUsageCalendar({
           {calendarGrid}
         </ScrollView>
       ) : (
-        calendarGrid
+        <>
+          {calendarGrid}
+          <View
+            className="mt-3 flex-row items-center justify-between gap-3"
+            testID="ai-usage-calendar-summary"
+          >
+            <Text
+              selectable
+              className="min-w-0 shrink text-muted-foreground text-xs"
+              maxFontSizeMultiplier={1.2}
+              numberOfLines={1}
+              style={styles.summaryText}
+              testID="ai-usage-active-days"
+            >
+              {t('aiUsage.activeDays', { count: activeDayCount })}
+            </Text>
+            <View
+              className="shrink-0 flex-row items-center gap-1.5"
+              testID="ai-usage-calendar-legend"
+            >
+              <Text
+                className="text-muted-foreground text-xs"
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+              >
+                {t('aiUsage.less')}
+              </Text>
+              <View accessible={false} className="flex-row gap-1">
+                {levelColors.map((color, level) => (
+                  <View
+                    className="size-3"
+                    key={color}
+                    style={{ backgroundColor: color }}
+                    testID={`ai-usage-legend-level-${level}`}
+                  />
+                ))}
+              </View>
+              <Text
+                className="text-muted-foreground text-xs"
+                maxFontSizeMultiplier={1.2}
+                numberOfLines={1}
+              >
+                {t('aiUsage.more')}
+              </Text>
+            </View>
+          </View>
+        </>
       )}
     </View>
   );
@@ -169,6 +216,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     minWidth: '100%',
+  },
+  summaryText: {
+    fontVariant: ['tabular-nums'],
   },
   weekColumn: {
     flexShrink: 0,

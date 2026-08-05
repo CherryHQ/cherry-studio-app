@@ -21,6 +21,29 @@ jest.mock('lucide-uniwind/png', () => ({
   RefreshCwIcon: () => null,
 }));
 
+jest.mock('@cherrystudio/ui/icons', () => ({
+  resolveProviderIcon: (providerId: string) => ({
+    dark: `${providerId}-dark`,
+    light: `${providerId}-light`,
+  }),
+}));
+
+jest.mock('uniwind', () => ({
+  useResolveClassNames: () => ({}),
+  useUniwind: () => ({ theme: 'light' }),
+}));
+
+jest.mock('@/frontend/components/BrandAvatar', () => {
+  const React = jest.requireActual('react');
+
+  return {
+    BrandAvatar: ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement('MockBrandAvatar', props, children),
+    BrandAvatarIcon: (props: Record<string, unknown>) =>
+      React.createElement('MockBrandAvatarIcon', props),
+  };
+});
+
 jest.mock('../../hooks/useAiUsageOverview', () => ({
   useAiUsageOverview: () => mockUseAiUsageOverview(),
 }));
@@ -37,12 +60,16 @@ jest.mock('../AiUsageCalendar', () => {
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
     t: (key: string) =>
       ({
+        'aiUsage.cost': 'Cost',
         'aiUsage.loadError': 'Usage statistics could not be loaded.',
         'aiUsage.loading': 'Loading usage statistics',
         'aiUsage.retry': 'Retry',
+        'aiUsage.tokens': 'Tokens',
         'aiUsage.title': 'Usage Statistics',
+        'aiUsage.unknownProvider': 'Unknown provider',
         'aiUsage.viewDetails': 'View details',
       })[key] ?? key,
   }),
@@ -81,18 +108,61 @@ describe('AiUsageSummaryCard', () => {
     expect(calendar?.props.data).toBe(calendarData);
     expect(calendar?.props.animationStartDateKey).toBe('2026-04-15');
     expect(calendar?.props.layout).toBe('fit');
-    expect(textValues()).toEqual(expect.arrayContaining(['Usage Statistics', 'View details']));
+    expect(textValues()).toEqual(
+      expect.arrayContaining([
+        'Usage Statistics',
+        'View details',
+        '2,235,732',
+        'Tokens',
+        '$1,227.37',
+        'Cost',
+        'Anthropic',
+        'OpenAI',
+        'Google',
+      ]),
+    );
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-summary-metrics' }).props.className).toBe(
+      'mt-4 flex-row gap-6',
+    );
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-summary-providers' }).props.className,
+    ).toBe('mt-4 min-h-6 flex-row items-center gap-2');
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-summary-provider-openai' }).props.className,
+    ).toBe('min-w-0 flex-1 flex-row items-center gap-2');
     expect(textValues()).not.toEqual(
       expect.arrayContaining(['Total tokens', 'Cache hit rate', 'Daily activity']),
     );
   });
 
   it('keeps the summary calendar mounted during its first load', async () => {
-    mockUseAiUsageOverview.mockReturnValue(queryResult({ hasData: false, isLoading: true }));
+    mockUseAiUsageOverview.mockReturnValue(
+      queryResult({ data: undefined, hasData: false, isLoading: true }),
+    );
 
     await renderCard();
 
     expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.isLoading).toBe(true);
+    expect(textValues()).toContain('--');
+  });
+
+  it('keeps cost totals separated by currency', async () => {
+    mockUseAiUsageOverview.mockReturnValue(
+      queryResult({
+        data: {
+          buckets: [],
+          costTotals: [
+            { currency: 'CNY', total: 48 },
+            { currency: 'USD', total: 12.3 },
+          ],
+          dailyCosts: [],
+        },
+      }),
+    );
+
+    await renderCard();
+
+    expect(textValues()).toContain('¥48.00 · $12.30');
   });
 
   it('shows a localized no-cache error and retries', async () => {
@@ -129,6 +199,14 @@ describe('AiUsageSummaryCard', () => {
 function queryResult(overrides: Record<string, unknown> = {}) {
   return {
     calendarData,
+    data: {
+      buckets: [
+        { date: '2026-08-01', totalTokens: 1_500_000 },
+        { date: '2026-08-02', totalTokens: 735_732 },
+      ],
+      costTotals: [{ currency: 'USD', total: 1227.37 }],
+      dailyCosts: [],
+    },
     error: undefined,
     hasData: true,
     isError: false,
@@ -136,6 +214,11 @@ function queryResult(overrides: Record<string, unknown> = {}) {
     isRefreshing: false,
     range,
     refetch: mockRefetch,
+    topProviders: [
+      { groupBy: 'provider', providerId: 'anthropic', providerName: 'Anthropic' },
+      { groupBy: 'provider', providerId: 'openai', providerName: 'OpenAI' },
+      { groupBy: 'provider', providerId: 'google', providerName: 'Google' },
+    ],
     ...overrides,
   };
 }

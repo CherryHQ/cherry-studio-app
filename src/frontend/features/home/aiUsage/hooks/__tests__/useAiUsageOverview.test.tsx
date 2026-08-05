@@ -1,4 +1,8 @@
-import type { AiUsageRecordTimelineResponse } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+import type {
+  AiUsageRecordStatsMetrics,
+  AiUsageRecordStatsResponse,
+  AiUsageRecordTimelineResponse,
+} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type EffectCallback, type ReactNode, useEffect } from 'react';
@@ -49,9 +53,38 @@ const response: AiUsageRecordTimelineResponse = {
   costTotals: [],
   dailyCosts: [],
 };
+const emptyMetrics: AiUsageRecordStatsMetrics = {
+  costCurrency: null,
+  estimatedRequestCount: 0,
+  recordCount: 0,
+  requestCount: 0,
+  totalCacheReadTokens: 0,
+  totalCacheWriteTokens: 0,
+  totalCost: 0,
+  totalInputTokens: 0,
+  totalNoCacheTokens: 0,
+  totalOutputTokens: 0,
+  totalTokens: 0,
+  unpricedRequestCount: 0,
+};
+const statsResponse: AiUsageRecordStatsResponse = {
+  buckets: [
+    {
+      ...emptyMetrics,
+      groupBy: 'provider',
+      providerId: 'anthropic',
+      providerName: 'Anthropic',
+      totalTokens: 500,
+    },
+  ],
+  other: emptyMetrics,
+  totals: { ...emptyMetrics, totalTokens: 500 },
+};
 const dataApi = {
   delete: jest.fn(),
-  get: jest.fn(async () => response),
+  get: jest.fn(async (path: string) =>
+    path === '/ai-usage-records/stats' ? statsResponse : response,
+  ),
   patch: jest.fn(),
   post: jest.fn(),
   put: jest.fn(),
@@ -112,15 +145,27 @@ describe('useAiUsageOverview', () => {
     expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
       query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
     });
+    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/stats', {
+      query: {
+        from: range.from,
+        groupBy: 'provider',
+        limit: 3,
+        metric: 'tokens',
+        to: range.to,
+      },
+    });
     expect(Object.keys(latestResult?.calendarData ?? {})).toHaveLength(183);
     expect(latestResult?.calendarData).not.toHaveProperty('2026-01-01');
     expect(latestResult?.calendarData).toHaveProperty('2026-08-02', 1);
-
-    await act(async () => focusEffect?.());
-    expect(dataApi.get).toHaveBeenCalledTimes(1);
+    expect(latestResult?.topProviders).toEqual([
+      expect.objectContaining({ providerId: 'anthropic', totalTokens: 500 }),
+    ]);
 
     await act(async () => focusEffect?.());
     expect(dataApi.get).toHaveBeenCalledTimes(2);
+
+    await act(async () => focusEffect?.());
+    expect(dataApi.get).toHaveBeenCalledTimes(4);
   });
 
   test('moves the local-date range forward when Home regains focus after midnight', async () => {
@@ -139,9 +184,18 @@ describe('useAiUsageOverview', () => {
     await flushQueryNotifications();
 
     const range = getAiUsageSummaryRange(new Date());
-    expect(dataApi.get).toHaveBeenCalledTimes(2);
-    expect(dataApi.get).toHaveBeenLastCalledWith('/ai-usage-records/timeline', {
+    expect(dataApi.get).toHaveBeenCalledTimes(4);
+    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/timeline', {
       query: { from: range.from, limit: 1, metric: 'tokens', to: range.to },
+    });
+    expect(dataApi.get).toHaveBeenCalledWith('/ai-usage-records/stats', {
+      query: {
+        from: range.from,
+        groupBy: 'provider',
+        limit: 3,
+        metric: 'tokens',
+        to: range.to,
+      },
     });
   });
 });

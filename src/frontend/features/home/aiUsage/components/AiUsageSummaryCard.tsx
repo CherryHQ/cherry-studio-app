@@ -1,20 +1,36 @@
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
+import type {
+  AiUsageRecordCostTotal,
+  AiUsageRecordTimelineBucket,
+} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import { Link } from 'expo-router';
 import { ChevronRightIcon, RefreshCwIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
+import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/BrandAvatar';
 import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
 import { AiUsageCalendar } from './AiUsageCalendar';
 
+const costSymbols = {
+  CNY: '\u00a5',
+  USD: '$',
+} satisfies Record<AiUsageRecordCostTotal['currency'], string>;
+
 export function AiUsageSummaryCard() {
-  const { t } = useTranslation();
-  const { calendarData, hasData, isError, isLoading, isRefreshing, refetch } = useAiUsageOverview();
+  const { i18n, t } = useTranslation();
+  const { calendarData, data, hasData, isError, isLoading, isRefreshing, refetch, topProviders } =
+    useAiUsageOverview();
   const isInitialLoading = isLoading && !hasData;
   const showInitialError = isError && !hasData;
   const animationStartDateKey = getFirstAiUsageDateKey(calendarData);
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const formattedTokens = formatTotalTokens(data?.buckets, locale);
+  const formattedCost = formatCostTotals(data?.costTotals ?? [], locale);
 
   return (
     <View className="w-full rounded-2xl bg-surface p-4" style={styles.card}>
@@ -91,6 +107,52 @@ export function AiUsageSummaryCard() {
             isLoading={isInitialLoading}
             layout="fit"
           />
+          <View className="mt-4 flex-row gap-6" testID="ai-usage-summary-metrics">
+            <View className="min-w-0 flex-1 gap-0.5" testID="ai-usage-summary-tokens">
+              <Text
+                selectable
+                adjustsFontSizeToFit
+                className="min-w-0 font-semibold text-default-foreground text-lg"
+                maxFontSizeMultiplier={1.2}
+                minimumFontScale={0.65}
+                numberOfLines={1}
+                style={styles.metricValue}
+              >
+                {formattedTokens}
+              </Text>
+              <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.2}>
+                {t('aiUsage.tokens')}
+              </Text>
+            </View>
+            <View className="min-w-0 flex-1 gap-0.5" testID="ai-usage-summary-cost">
+              <Text
+                selectable
+                adjustsFontSizeToFit
+                className="min-w-0 font-semibold text-default-foreground text-lg"
+                maxFontSizeMultiplier={1.2}
+                minimumFontScale={0.65}
+                numberOfLines={1}
+                style={styles.metricValue}
+              >
+                {formattedCost}
+              </Text>
+              <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.2}>
+                {t('aiUsage.cost')}
+              </Text>
+            </View>
+          </View>
+          <View
+            className="mt-4 min-h-6 flex-row items-center gap-2"
+            testID="ai-usage-summary-providers"
+          >
+            {topProviders.map((provider) => (
+              <AiUsageProviderPill
+                key={provider.providerId ?? provider.providerName ?? 'unknown'}
+                providerId={provider.providerId}
+                providerName={provider.providerName}
+              />
+            ))}
+          </View>
         </View>
       )}
     </View>
@@ -105,7 +167,68 @@ const styles = StyleSheet.create({
   continuousCorners: {
     borderCurve: 'continuous',
   },
+  metricValue: {
+    fontVariant: ['tabular-nums'],
+  },
   stateContent: {
     minHeight: 104,
   },
 });
+
+function AiUsageProviderPill({
+  providerId,
+  providerName,
+}: {
+  providerId: string | null;
+  providerName: string | null;
+}) {
+  const { t } = useTranslation();
+  const { theme } = useUniwind();
+  const label = providerName || providerId || t('aiUsage.unknownProvider');
+  const iconSource = resolveProviderIcon(providerId ?? '');
+
+  return (
+    <View
+      className="min-w-0 flex-1 flex-row items-center gap-2"
+      testID={`ai-usage-summary-provider-${providerId ?? 'unknown'}`}
+    >
+      {iconSource ? (
+        <BrandAvatar label={label} size={24}>
+          <BrandAvatarIcon
+            iconId={providerId ?? undefined}
+            recyclingKey={providerId ?? undefined}
+            source={iconSource[theme === 'dark' ? 'dark' : 'light']}
+          />
+        </BrandAvatar>
+      ) : (
+        <BrandAvatar label={label} size={24} />
+      )}
+      <Text className="min-w-0 shrink text-default-foreground text-sm" numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function formatTotalTokens(
+  buckets: readonly AiUsageRecordTimelineBucket[] | undefined,
+  locale: string,
+): string {
+  if (!buckets) return '--';
+
+  const totalTokens = buckets.reduce((total, bucket) => total + bucket.totalTokens, 0);
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(totalTokens);
+}
+
+function formatCostTotals(costTotals: readonly AiUsageRecordCostTotal[], locale: string): string {
+  if (costTotals.length === 0) return '--';
+
+  const numberFormatter = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+
+  return costTotals
+    .map(({ currency, total }) => `${costSymbols[currency]}${numberFormatter.format(total)}`)
+    .join(' · ');
+}

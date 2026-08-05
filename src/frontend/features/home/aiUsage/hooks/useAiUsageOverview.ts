@@ -9,18 +9,35 @@ import { buildAiUsageCalendarData, getAiUsageSummaryRange } from '../utils/aiUsa
 export function useAiUsageOverview() {
   const [endDate, setEndDate] = useState(() => new Date());
   const range = useMemo(() => getAiUsageSummaryRange(endDate), [endDate]);
-  const query = useMemo(
+  const timelineQueryParams = useMemo(
     () => ({ from: range.from, limit: 1, metric: 'tokens' as const, to: range.to }),
     [range],
   );
-  const timelineQuery = useQuery('/ai-usage-records/timeline', { query });
+  const topProvidersQueryParams = useMemo(
+    () => ({
+      from: range.from,
+      groupBy: 'provider' as const,
+      limit: 3,
+      metric: 'tokens' as const,
+      to: range.to,
+    }),
+    [range],
+  );
+  const timelineQuery = useQuery('/ai-usage-records/timeline', { query: timelineQueryParams });
+  const topProvidersQuery = useQuery('/ai-usage-records/stats', {
+    query: topProvidersQueryParams,
+  });
   const hasFocusedOnceRef = useRef(false);
   const endDateKeyRef = useRef(toLocalDateKey(endDate));
-  const refetchRef = useRef(timelineQuery.refetch);
+  const refetch = useCallback(
+    () => Promise.all([timelineQuery.refetch(), topProvidersQuery.refetch()]),
+    [timelineQuery.refetch, topProvidersQuery.refetch],
+  );
+  const refetchRef = useRef(refetch);
 
   useEffect(() => {
-    refetchRef.current = timelineQuery.refetch;
-  }, [timelineQuery.refetch]);
+    refetchRef.current = refetch;
+  }, [refetch]);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,11 +62,16 @@ export function useAiUsageOverview() {
     () => buildAiUsageCalendarData(buckets ?? [], range),
     [buckets, range],
   );
+  const topProviders =
+    topProvidersQuery.data?.buckets.filter((bucket) => bucket.groupBy === 'provider') ?? [];
 
   return {
     ...timelineQuery,
     calendarData,
     hasData: timelineQuery.data !== undefined,
+    isRefreshing: timelineQuery.isRefreshing || topProvidersQuery.isRefreshing,
     range,
+    refetch,
+    topProviders,
   };
 }
