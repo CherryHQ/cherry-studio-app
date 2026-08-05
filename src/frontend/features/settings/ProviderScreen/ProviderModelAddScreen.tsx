@@ -1,4 +1,4 @@
-import { Input } from '@cherrystudio/ui/components';
+import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -288,14 +288,12 @@ function ProviderModelAddTextField({
   value: string;
 }) {
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField isDisabled={isDisabled} isInvalid={Boolean(errorMessage)}>
+      <Label>{label}</Label>
       <Input
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        disabled={isDisabled}
-        invalid={Boolean(errorMessage)}
         multiline={multiline}
         onChangeText={onChangeText}
         onFocus={onFocus}
@@ -306,8 +304,8 @@ function ProviderModelAddTextField({
         value={value}
         {...textInputProps}
       />
-      {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
-    </View>
+      <FieldError>{errorMessage}</FieldError>
+    </TextField>
   );
 }
 

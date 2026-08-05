@@ -41,9 +41,17 @@ jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('@cherrystudio/ui/components', () => ({
-  Input: () => null,
-}));
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+  const { Text, View } = jest.requireActual('react-native');
+
+  return {
+    FieldError: (props: Record<string, unknown>) => React.createElement(Text, props),
+    Input: () => null,
+    Label: (props: Record<string, unknown>) => React.createElement(Text, props),
+    TextField: (props: Record<string, unknown>) => React.createElement(View, props),
+  };
+});
 
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
