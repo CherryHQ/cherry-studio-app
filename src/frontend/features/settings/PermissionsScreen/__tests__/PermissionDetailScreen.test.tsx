@@ -59,10 +59,28 @@ jest.mock('@cherrystudio/ui/components', () => {
       </Fragment>
     );
   };
-  Section.Item = ({ label, onPress }: { label: string; onPress?: () => void }) => {
+  Section.Item = ({
+    accessibilityRole,
+    accessibilityState,
+    disabled,
+    label,
+    onPress,
+  }: {
+    accessibilityRole?: string;
+    accessibilityState?: object;
+    disabled?: boolean;
+    label: string;
+    onPress?: () => void;
+  }) => {
     const { Pressable: MockPressable, Text: MockText } = jest.requireActual('react-native');
     return (
-      <MockPressable accessibilityLabel={label} onPress={onPress}>
+      <MockPressable
+        accessibilityLabel={label}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={accessibilityState}
+        disabled={disabled}
+        onPress={onPress}
+      >
         <MockText>{label}</MockText>
       </MockPressable>
     );

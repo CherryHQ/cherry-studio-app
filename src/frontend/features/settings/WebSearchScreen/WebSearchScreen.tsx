@@ -5,14 +5,14 @@ import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/d
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Image } from '@/frontend/components/nativePrimitives';
 
 import { SettingNumberInput } from '../components/SettingNumberInput';
 import { SettingSelect, type SettingSelectOption } from '../components/SettingSelect';
-import { SettingsServiceRow, type SettingsServiceRowProps } from '../components/SettingsServiceRow';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 
 export default function WebSearchSettingsScreen() {
@@ -25,12 +25,11 @@ export default function WebSearchSettingsScreen() {
     webSearchProviders.searchKeywords.options,
     iconTheme,
   );
-  const webSearchProviderItems = useMemo<SettingsServiceRowProps[]>(
+  const webSearchProviderItems = useMemo(
     () =>
       MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.map((provider) => ({
         id: provider.id,
         imageSource: resolveWebSearchProviderIcon(provider.id)?.[iconTheme],
-        isEnabled: true,
         name: provider.name,
         onPress: () =>
           router.push({
@@ -97,16 +96,26 @@ export default function WebSearchSettingsScreen() {
             />
           ) : null}
         </Section>
-        <View className="gap-2">
-          <Text className="px-1 font-medium text-default-foreground text-sm">
-            {t('settings.websearch.apiProviders.title')}
-          </Text>
-          <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
-            {webSearchProviderItems.map((item, index) => (
-              <SettingsServiceRow key={item.id} {...item} showSeparator={index > 0} />
-            ))}
-          </View>
-        </View>
+        <Section title={t('settings.websearch.apiProviders.title')}>
+          {webSearchProviderItems.map((item) => (
+            <Section.Item
+              key={item.id}
+              label={item.name}
+              leading={
+                item.imageSource ? (
+                  <Image
+                    cachePolicy="memory-disk"
+                    className="size-5"
+                    contentFit="contain"
+                    recyclingKey={item.id}
+                    source={item.imageSource}
+                  />
+                ) : null
+              }
+              onPress={item.onPress}
+            />
+          ))}
+        </Section>
       </ScrollView>
     </>
   );

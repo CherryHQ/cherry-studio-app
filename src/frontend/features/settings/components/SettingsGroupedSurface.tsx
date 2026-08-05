@@ -16,24 +16,26 @@ import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 export function SettingsGroupedSurface({
   children,
   className,
+  hideSeparator = false,
   isFirst,
   isLast,
 }: {
   children: ReactNode;
   /** Applied last, so a row can tint its own surface. */
   className?: string;
+  hideSeparator?: boolean;
   isFirst: boolean;
   isLast: boolean;
 }) {
   return (
     <View
       className={cn(
-        'bg-settings-grouped-surface',
+        'overflow-hidden bg-settings-grouped-surface',
         getSurfaceRadiusClassName(isFirst, isLast),
         className,
       )}
     >
-      {isFirst ? null : <SettingsGroupedSeparator />}
+      {isFirst ? null : <SettingsGroupedSeparator hidden={hideSeparator} />}
       {children}
     </View>
   );
@@ -41,12 +43,12 @@ export function SettingsGroupedSurface({
 
 function getSurfaceRadiusClassName(isFirst: boolean, isLast: boolean): string {
   if (isFirst && isLast) {
-    return 'rounded-xl';
+    return 'rounded-2xl';
   }
 
   if (isFirst) {
-    return 'rounded-t-xl';
+    return 'rounded-t-2xl';
   }
 
-  return isLast ? 'rounded-b-xl' : '';
+  return isLast ? 'rounded-b-2xl' : '';
 }

@@ -4,11 +4,10 @@ import type {
   PermissionPreferenceKey,
 } from '@cherrystudio/universal/data/preference';
 import { useLocalSearchParams } from 'expo-router';
-import { cn } from 'heroui-native/utils';
 import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
@@ -101,36 +100,25 @@ function PermissionModeGroup({
   };
 
   return (
-    <View className="gap-2">
-      <Text className="px-1 font-medium text-default-foreground text-sm">{title}</Text>
-      <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
-        {permissionModes.map((option, index) => {
-          const selected = option === mode;
-          return (
-            <Pressable
-              accessibilityLabel={t(`settings.permissions.mode.${option}`)}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: selected, disabled: isUpdating }}
-              className={cn(
-                'min-h-12 flex-row items-center justify-between px-4 py-3 active:opacity-60',
-                isUpdating ? 'opacity-50' : null,
-              )}
-              disabled={isUpdating}
-              key={option}
-              onPress={() => void selectMode(option)}
-            >
-              <Text className="text-base text-foreground">
-                {t(`settings.permissions.mode.${option}`)}
-              </Text>
-              {selected ? <CheckIcon className="size-6 text-primary" strokeWidth={2.5} /> : null}
-              {index < permissionModes.length - 1 ? (
-                <View className="absolute right-4 bottom-0 left-4 h-px bg-border" />
-              ) : null}
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
+    <Section title={title}>
+      {permissionModes.map((option) => {
+        const selected = option === mode;
+        return (
+          <Section.Item
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected, disabled: isUpdating }}
+            disabled={isUpdating}
+            key={option}
+            label={t(`settings.permissions.mode.${option}`)}
+            onPress={() => void selectMode(option)}
+            showChevron={false}
+            trailing={
+              selected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.5} /> : null
+            }
+          />
+        );
+      })}
+    </Section>
   );
 }
 

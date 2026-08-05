@@ -14,7 +14,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BackHeader } from '@/frontend/components/headers';
 
 import { useProviderDetailSettings } from './detail';
-import { ProviderModelRow, providerModelRowHeight } from './models/components/ProviderModelRow';
+import {
+  ProviderModelRow,
+  providerModelRowEstimatedHeight,
+} from './models/components/ProviderModelRow';
 import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
 import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
@@ -227,7 +230,7 @@ function ProviderModelPullPreviewPage({
         contentInsetAdjustmentBehavior="automatic"
         data={listItems}
         drawDistance={320}
-        estimatedItemSize={providerModelRowHeight}
+        estimatedItemSize={providerModelRowEstimatedHeight}
         extraData={listExtraData}
         getItemType={getPullListItemType}
         keyboardDismissMode="on-drag"

@@ -143,12 +143,6 @@ export const profileHero = {
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
 } as const;
 
-// `SettingsServiceRow` geometry, shared with the virtualized lists that render
-// it (`estimatedItemSize`). Keep in sync with the row's `min-h-11` class.
-export const settingsServiceRow = {
-  rowHeight: 44,
-} as const;
-
 // Providers that exist as rows but must never appear in the provider settings
 // list. `cherryai` is Cherry's own built-in service (api.cherry-ai.com): it is
 // seeded as a row only so the AI SDK can build a client for its free models
