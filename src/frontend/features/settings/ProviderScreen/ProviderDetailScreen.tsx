@@ -1,3 +1,5 @@
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import { useQueryClient } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Spinner } from 'heroui-native/spinner';
 import { useToast } from 'heroui-native/toast';
@@ -6,9 +8,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+import { useAppAlert } from '@/frontend/components/AppAlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule, useMutation } from '@/frontend/data';
+import {
+  dataApiCollectionFilters,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import {
@@ -39,14 +46,33 @@ export default function ProviderDetailSettingsScreen() {
   }>();
   const { t } = useTranslation();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const { showConfirmation, showMessage } = useAppAlert();
   const providers = useBackendModule('providers');
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
   const deleteProviderMutation = useMutation('DELETE', '/providers/:id', {
+    onMutate: async (variables) => {
+      const providerIdToDelete = variables?.params.id;
+      const providers = await updateQueriesOptimistically<Provider[]>(
+        queryClient,
+        dataApiCollectionFilters('/providers'),
+        (current) => current?.filter((item) => item.id !== providerIdToDelete),
+      );
+
+      return { providers };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.providers);
+    },
+    onSuccess: (_result, variables) => {
+      if (variables) {
+        queryClient.removeQueries({ queryKey: [`/providers/${variables.params.id}`] });
+      }
+    },
     refresh: ['/providers'],
   });
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery, replaceApiKeysMutation } =
@@ -226,30 +252,34 @@ export default function ProviderDetailSettingsScreen() {
 
     updateProviderEnabledMutation.mutate(!provider.isEnabled);
   }, [provider, updateProviderEnabledMutation]);
-  const handleDeleteProvider = useCallback(async () => {
+  const handleDeleteProvider = useCallback(() => {
     if (!providerId) {
       return;
     }
 
-    try {
-      await deleteProviderMutation.trigger({ params: { id: providerId } });
-      toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
-      router.back();
-    } catch {
-      toast.show({ label: t('settings.provider.toast.deleteFailed'), variant: 'danger' });
-    }
-  }, [deleteProviderMutation, providerId, router, t, toast]);
+    const deletion = deleteProviderMutation.trigger({ params: { id: providerId } });
+    router.back();
+    void deletion
+      .then(() => {
+        toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
+      })
+      .catch(() => {
+        showMessage({ title: t('settings.provider.toast.deleteFailed') });
+      });
+  }, [deleteProviderMutation, providerId, router, showMessage, t, toast]);
   const requestDeleteProvider = useCallback(() => {
     if (!provider || !providers.canRemove(provider)) {
       return;
     }
 
-    requestConfirm({
-      message: t('settings.provider.delete.message', { name: provider.name }),
+    showConfirmation({
+      confirmLabel: t('common.delete'),
+      description: t('settings.provider.delete.message', { name: provider.name }),
       onConfirm: handleDeleteProvider,
+      role: 'destructive',
       title: t('settings.provider.delete.title'),
     });
-  }, [handleDeleteProvider, provider, providers, requestConfirm, t]);
+  }, [handleDeleteProvider, provider, providers, showConfirmation, t]);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -333,7 +363,6 @@ export default function ProviderDetailSettingsScreen() {
         onToggleActive={handleToggleProvider}
         pullAction={modelActionsForTab?.pull}
       />
-      {confirmDialog}
     </>
   );
 }

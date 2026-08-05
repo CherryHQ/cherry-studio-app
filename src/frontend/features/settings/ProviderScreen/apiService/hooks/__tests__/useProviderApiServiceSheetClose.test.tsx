@@ -7,6 +7,7 @@ type HookResult = ReturnType<typeof useProviderApiServiceSheetClose>;
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockAddListener = jest.fn(() => jest.fn());
+const mockShowConfirmation = jest.fn();
 let hookResult: HookResult | undefined;
 
 jest.mock('expo-router', () => ({
@@ -21,14 +22,13 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@cherrystudio/ui/components', () => {
-  const { createElement } = jest.requireActual('react');
-  return { Alert: (props: object) => createElement('Alert', props) };
-});
+jest.mock('@/frontend/components/AppAlertProvider', () => ({
+  useAppAlert: () => ({ showConfirmation: mockShowConfirmation }),
+}));
 
 function HookHarness({ hasUnsavedChanges = true }: { hasUnsavedChanges?: boolean }) {
   hookResult = useProviderApiServiceSheetClose({ hasUnsavedChanges, isSaving: false });
-  return hookResult.discardDialog;
+  return null;
 }
 
 describe('useProviderApiServiceSheetClose', () => {
@@ -50,32 +50,26 @@ describe('useProviderApiServiceSheetClose', () => {
     });
   }
 
-  function alert() {
-    if (!renderer) {
-      throw new Error('Hook was not rendered');
-    }
-    return renderer.root.findByType('Alert');
-  }
-
-  test('uses cancel and destructive Alert actions', () => {
+  test('requests a destructive discard confirmation', () => {
     renderHook();
 
     act(() => hookResult?.requestClose());
 
-    expect(alert().props.isOpen).toBe(true);
-    expect(alert().props.actions).toEqual([
-      expect.objectContaining({ label: 'common.cancel', role: 'cancel' }),
-      expect.objectContaining({ label: 'common.discard', role: 'destructive' }),
-    ]);
+    expect(mockShowConfirmation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confirmLabel: 'common.discard',
+        description: 'settings.provider.apiService.discardMessage',
+        role: 'destructive',
+        title: 'settings.provider.apiService.discardTitle',
+      }),
+    );
   });
 
-  test('keeps the pending close action when Alert closes before invoking discard', () => {
+  test('closes when the user confirms discard', () => {
     renderHook();
     act(() => hookResult?.requestClose());
 
-    const discardAction = alert().props.actions[1];
-    act(() => alert().props.onOpenChange(false));
-    act(() => discardAction.onPress());
+    act(() => mockShowConfirmation.mock.calls[0][0].onConfirm());
 
     expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
@@ -86,6 +80,6 @@ describe('useProviderApiServiceSheetClose', () => {
     act(() => hookResult?.requestClose());
 
     expect(mockGoBack).toHaveBeenCalledTimes(1);
-    expect(alert().props.isOpen).toBe(false);
+    expect(mockShowConfirmation).not.toHaveBeenCalled();
   });
 });

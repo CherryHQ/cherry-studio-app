@@ -15,6 +15,7 @@ const mockCreatePaintingDraftHandoff = jest.fn((_input: unknown) => 'handoff');
 const mockCreatePaintingOutputAttachmentDraft = jest.fn((_output: unknown) => ({
   id: 'painting-output',
 }));
+const mockShowMessage = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockRouterBack, push: mockRouterPush }),
@@ -27,6 +28,10 @@ jest.mock('expo-media-library', () => ({
 
 jest.mock('heroui-native/toast', () => ({
   useToast: () => ({ toast: { show: jest.fn() } }),
+}));
+
+jest.mock('@/frontend/components/AppAlertProvider', () => ({
+  useAppAlert: () => ({ showMessage: mockShowMessage }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -120,12 +125,35 @@ describe('usePaintingViewerActions', () => {
     });
   });
 
-  it('removes the painting through the data endpoint before navigating back', async () => {
+  it('navigates back while deleting the painting through the data endpoint', async () => {
+    actions?.remove();
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+
     await act(async () => {
-      await actions?.remove();
+      await Promise.resolve();
     });
 
     expect(mockDelete).toHaveBeenCalledWith('/paintings', { query: { ids: [painting.id] } });
-    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the painting and shows an Alert when deletion fails', async () => {
+    const queryKey = ['/paintings', { limit: 20 }] as const;
+    queryClient.setQueryData(queryKey, {
+      pageParams: [undefined],
+      pages: [{ items: [painting] }],
+    });
+    mockDelete.mockRejectedValueOnce(new Error('delete failed'));
+
+    actions?.remove();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(queryClient.getQueryData(queryKey)).toEqual({
+      pageParams: [undefined],
+      pages: [{ items: [painting] }],
+    });
+    expect(mockShowMessage).toHaveBeenCalledWith({ title: 'painting.viewer.deleteFailed' });
   });
 });

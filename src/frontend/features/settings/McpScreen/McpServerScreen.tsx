@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+import { useAppAlert } from '@/frontend/components/AppAlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
@@ -122,7 +122,7 @@ function McpServerEditor({
   const router = useRouter();
   const { toast } = useToast();
   const mcp = useBackendModule('mcp');
-  const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const { showConfirmation, showMessage } = useAppAlert();
 
   const isCreating = !serverId;
   const {
@@ -239,31 +239,36 @@ function McpServerEditor({
     }
   }, [server, serverId, t, toast, updateServer]);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!serverId) {
       return;
     }
-    try {
-      await deleteServer(serverId);
-      toast.show({ label: t('settings.mcp.toast.deleted'), variant: 'success' });
-      router.back();
-    } catch (error) {
-      logger.error('Failed to delete MCP server', error as Error);
-      toast.show({ label: t('settings.mcp.toast.deleteFailed'), variant: 'danger' });
-    }
-  }, [deleteServer, router, serverId, t, toast]);
+
+    const deletion = deleteServer(serverId);
+    router.back();
+    void deletion
+      .then(() => {
+        toast.show({ label: t('settings.mcp.toast.deleted'), variant: 'success' });
+      })
+      .catch((error) => {
+        logger.error('Failed to delete MCP server', error as Error);
+        showMessage({ title: t('settings.mcp.toast.deleteFailed') });
+      });
+  }, [deleteServer, router, serverId, showMessage, t, toast]);
 
   const requestDelete = useCallback(() => {
     if (!serverId || !server) {
       return;
     }
 
-    requestConfirm({
-      message: t('settings.mcp.delete.message', { name: server.name }),
+    showConfirmation({
+      confirmLabel: t('common.delete'),
+      description: t('settings.mcp.delete.message', { name: server.name }),
       onConfirm: handleDelete,
+      role: 'destructive',
       title: t('settings.mcp.delete.title'),
     });
-  }, [handleDelete, requestConfirm, server, serverId, t]);
+  }, [handleDelete, server, serverId, showConfirmation, t]);
 
   const isBusy = isSaving || isCreateMutationPending || isUpdating;
   const saveActions = useMemo<HeaderToolbarAction[]>(
@@ -417,7 +422,6 @@ function McpServerEditor({
           }}
         />
       ) : null}
-      {confirmDialog}
     </>
   );
 }

@@ -80,7 +80,7 @@ function ProviderEndpointSettingsForm({
     Object.keys(endpointErrors).length > 0 ||
     getProviderApiServiceEndpointDirtyState({ draft, provider });
   const isSaving = pendingEndpoint !== null;
-  const { discardDialog, requestClose } = useProviderApiServiceSheetClose({
+  const { requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
   });
@@ -157,7 +157,6 @@ function ProviderEndpointSettingsForm({
   return (
     <>
       <BackHeader title={t('settings.provider.apiService.manageEndpoints')} onBack={requestClose} />
-      {discardDialog}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

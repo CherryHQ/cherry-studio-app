@@ -24,12 +24,12 @@ export class UserCancelledError extends Error {
 
 export interface UseCherryInOauthOptions {
   providerId: string;
-  requestConfirm: (options: { title: string; message: string; onConfirm: () => void }) => void;
+  requestConfirmation: (options: { title: string; message: string; onConfirm: () => void }) => void;
   onOAuthComplete?: () => void;
 }
 
 export function useCherryInOauth(options: UseCherryInOauthOptions) {
-  const { providerId, requestConfirm, onOAuthComplete } = options;
+  const { providerId, requestConfirmation, onOAuthComplete } = options;
   const { t } = useTranslation();
   const { toast } = useToast();
   const oauth = useBackendModule('oauth');
@@ -109,7 +109,7 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
   }, [cherryin]);
 
   const handleLogout = useCallback(() => {
-    requestConfirm({
+    requestConfirmation({
       title: t('settings.provider.oauth.cherryIn.logout'),
       message: t('settings.provider.oauth.cherryIn.logout_confirm'),
       onConfirm: async () => {
@@ -130,7 +130,7 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
         setIsLoggingOut(false);
       },
     });
-  }, [authConfigQuery, logoutMutation, requestConfirm, t, toast]);
+  }, [authConfigQuery, logoutMutation, requestConfirmation, t, toast]);
 
   const handleOAuthLogin = useCallback(async () => {
     if (!request) {

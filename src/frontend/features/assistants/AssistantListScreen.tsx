@@ -1,6 +1,5 @@
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Stack, useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { BotIcon, CheckIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +17,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+import { useAppAlert } from '@/frontend/components/AppAlertProvider';
 import { type HeaderToolbarAction, TabRootHeader } from '@/frontend/components/headers';
 import {
   areAllSelected,
@@ -38,10 +37,9 @@ const ASSISTANT_ROW_ACCESSIBILITY_ACTIONS = [{ name: 'activate' as const }];
 export default function AssistantListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { toast } = useToast();
   const { assistants, isLoading } = useAssistantsApi();
-  const { deleteAssistant } = useAssistantMutations();
-  const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const { deleteAssistant, deleteAssistants } = useAssistantMutations();
+  const { showConfirmation, showMessage } = useAppAlert();
   const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const setBottomTabBarHidden = useSetBottomTabBarHidden();
   const bottomInset = useMessageListBottomInset();
@@ -134,20 +132,19 @@ export default function AssistantListScreen() {
   );
   const requestDeleteAssistant = useCallback(
     (assistant: Assistant) => {
-      requestConfirm({
+      showConfirmation({
+        confirmLabel: t('common.delete'),
+        description: t('assistant.delete.message', { name: assistant.name }),
+        role: 'destructive',
         title: t('assistant.delete.title'),
-        message: t('assistant.delete.message', { name: assistant.name }),
         onConfirm: () => {
           void deleteAssistant(assistant.id).catch(() => {
-            toast.show({
-              label: t('assistant.toast.deleteFailed'),
-              variant: 'danger',
-            });
+            showMessage({ title: t('assistant.toast.deleteFailed') });
           });
         },
       });
     },
-    [deleteAssistant, requestConfirm, t, toast],
+    [deleteAssistant, showConfirmation, showMessage, t],
   );
   const deleteSelectedAssistants = useCallback(async () => {
     const ids = [...selectedIds];
@@ -156,29 +153,28 @@ export default function AssistantListScreen() {
     }
 
     setIsBatchDeleting(true);
+    exitEditing();
     try {
-      await Promise.all(ids.map((assistantId) => deleteAssistant(assistantId)));
-      exitEditing();
+      await deleteAssistants(ids);
     } catch {
-      toast.show({
-        label: t('assistant.selection.deleteFailed'),
-        variant: 'danger',
-      });
+      showMessage({ title: t('assistant.selection.deleteFailed') });
     } finally {
       setIsBatchDeleting(false);
     }
-  }, [deleteAssistant, exitEditing, selectedIds, t, toast]);
+  }, [deleteAssistants, exitEditing, selectedIds, showMessage, t]);
   const requestDeleteSelectedAssistants = useCallback(() => {
     if (selectedIds.size === 0) {
       return;
     }
 
-    requestConfirm({
-      message: t('assistant.selection.deleteMessage', { count: selectedIds.size }),
+    showConfirmation({
+      confirmLabel: t('common.delete'),
+      description: t('assistant.selection.deleteMessage', { count: selectedIds.size }),
       onConfirm: deleteSelectedAssistants,
+      role: 'destructive',
       title: t('assistant.selection.deleteTitle'),
     });
-  }, [deleteSelectedAssistants, requestConfirm, selectedIds.size, t]);
+  }, [deleteSelectedAssistants, selectedIds.size, showConfirmation, t]);
   const scrollContentStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
     [bottomInset],
@@ -243,7 +239,6 @@ export default function AssistantListScreen() {
           selectedCount={selectedIds.size}
         />
       ) : null}
-      {confirmDialog}
     </>
   );
 }

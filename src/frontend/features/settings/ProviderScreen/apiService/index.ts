@@ -7,7 +7,6 @@ export {
   ProviderApiServiceEndpointForm,
 } from './components/ProviderApiServiceEndpointFields';
 export { useProviderApiServiceApiKeysDraft } from './hooks/useProviderApiServiceApiKeysDraft';
-export { useProviderApiServiceConfirmDialog } from './hooks/useProviderApiServiceConfirmDialog';
 export { useProviderApiServiceEndpointDraft } from './hooks/useProviderApiServiceEndpointDraft';
 export { useProviderApiServiceQueries } from './hooks/useProviderApiServiceQueries';
 export { useProviderApiServiceSheetClose } from './hooks/useProviderApiServiceSheetClose';

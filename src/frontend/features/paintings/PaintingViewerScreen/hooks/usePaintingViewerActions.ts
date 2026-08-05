@@ -1,13 +1,13 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
-import { useQueryClient } from '@tanstack/react-query';
 import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { queryKeys, useMutation } from '@/frontend/data';
+import { useAppAlert } from '@/frontend/components/AppAlertProvider';
 
+import { useDeletePaintings } from '../../hooks/usePaintings';
 import { createPaintingDraftHandoff } from '../../utils/paintingDraftHandoff';
 import { createPaintingOutputAttachmentDraft } from '../../utils/paintingOutputAttachment';
 
@@ -22,12 +22,9 @@ export function usePaintingViewerActions({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { showMessage } = useAppAlert();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const deletePaintingMutation = useMutation('DELETE', '/paintings', {
-    refresh: ['/paintings'],
-  });
-  const deletePainting = deletePaintingMutation.trigger;
+  const deletePaintings = useDeletePaintings();
 
   const download = useCallback(async () => {
     try {
@@ -45,19 +42,13 @@ export function usePaintingViewerActions({
     }
   }, [currentOutput, t, toast]);
 
-  const remove = useCallback(async () => {
-    try {
-      await deletePainting({ query: { ids: [painting.id] } });
-      router.back();
-      // Drop (not invalidate) the detail entry: a refetch would getById a
-      // deleted row and throw. The masonry's gallery query keys derive from
-      // list data, so invalidating the list refreshes it too.
-      queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(painting.id) });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
-    } catch {
-      toast.show({ label: t('painting.viewer.deleteFailed'), variant: 'danger' });
-    }
-  }, [deletePainting, painting.id, queryClient, router, t, toast]);
+  const remove = useCallback(() => {
+    const deletion = deletePaintings([painting.id]);
+    router.back();
+    void deletion.catch(() => {
+      showMessage({ title: t('painting.viewer.deleteFailed') });
+    });
+  }, [deletePaintings, painting.id, router, showMessage, t]);
 
   // Both edit and resize reopen the composer seeded with the current output as an
   // input attachment; paintingId additionally preselects the painting's model.

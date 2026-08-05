@@ -36,7 +36,8 @@ let mockServerLoading = false;
 const mockCreateServer = jest.fn();
 const mockDeleteServer = jest.fn();
 const mockGetServerInfo = jest.fn();
-const mockRequestConfirm = jest.fn();
+const mockShowConfirmation = jest.fn();
+const mockShowMessage = jest.fn();
 const mockRouterBack = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockServerRefetch = jest.fn();
@@ -84,8 +85,11 @@ jest.mock('@/frontend/components/headers', () => ({
   },
 }));
 
-jest.mock('@/frontend/components/confirmDialog', () => ({
-  useConfirmDialog: () => ({ confirmDialog: null, requestConfirm: mockRequestConfirm }),
+jest.mock('@/frontend/components/AppAlertProvider', () => ({
+  useAppAlert: () => ({
+    showConfirmation: mockShowConfirmation,
+    showMessage: mockShowMessage,
+  }),
 }));
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -593,15 +597,17 @@ describe('McpServerScreen tabs', () => {
 
     chrome.props.onDelete();
 
-    expect(mockRequestConfirm).toHaveBeenCalledWith(
+    expect(mockShowConfirmation).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'settings.mcp.delete.message',
+        confirmLabel: 'common.delete',
+        description: 'settings.mcp.delete.message',
+        role: 'destructive',
         title: 'settings.mcp.delete.title',
       }),
     );
     mockDeleteServer.mockResolvedValue(undefined);
     await act(async () => {
-      await mockRequestConfirm.mock.calls[0][0].onConfirm();
+      await mockShowConfirmation.mock.calls[0][0].onConfirm();
     });
     expect(mockRouterBack).toHaveBeenCalled();
   });

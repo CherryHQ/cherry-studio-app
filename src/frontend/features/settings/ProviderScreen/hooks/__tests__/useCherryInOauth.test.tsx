@@ -49,7 +49,7 @@ function renderSubject() {
   let latest: ReturnType<typeof useCherryInOauth> | undefined;
 
   function Probe() {
-    latest = useCherryInOauth({ providerId: 'cherryin', requestConfirm: jest.fn() });
+    latest = useCherryInOauth({ providerId: 'cherryin', requestConfirmation: jest.fn() });
     return null;
   }
 
@@ -136,13 +136,13 @@ describe('useCherryInOauth', () => {
   });
 
   it('logs out by provider id rather than by host', async () => {
-    const requestConfirm = jest.fn(
+    const requestConfirmation = jest.fn(
       (options: { onConfirm: () => void }) => void options.onConfirm(),
     );
     let latest: ReturnType<typeof useCherryInOauth> | undefined;
 
     function Probe() {
-      latest = useCherryInOauth({ providerId: 'cherryin', requestConfirm });
+      latest = useCherryInOauth({ providerId: 'cherryin', requestConfirmation });
       return null;
     }
 
