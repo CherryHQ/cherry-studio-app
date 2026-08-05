@@ -1,3 +1,4 @@
+import type { AiUsageRecordCostTotal } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import { Link } from 'expo-router';
 import { ChevronRightIcon, RefreshCwIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
@@ -10,11 +11,16 @@ import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
 import { AiUsageCalendar } from './AiUsageCalendar';
 
 export function AiUsageSummaryCard() {
-  const { t } = useTranslation();
-  const { calendarData, hasData, isError, isLoading, isRefreshing, refetch } = useAiUsageOverview();
+  const { i18n, t } = useTranslation();
+  const { calendarData, data, hasData, isError, isLoading, isRefreshing, refetch } =
+    useAiUsageOverview();
   const isInitialLoading = isLoading && !hasData;
   const showInitialError = isError && !hasData;
   const animationStartDateKey = getFirstAiUsageDateKey(calendarData);
+  const formattedCost = formatCostTotals(
+    data?.costTotals ?? [],
+    i18n.resolvedLanguage ?? i18n.language,
+  );
 
   return (
     <View className="w-full rounded-2xl bg-surface p-4" style={styles.card}>
@@ -91,6 +97,22 @@ export function AiUsageSummaryCard() {
             isLoading={isInitialLoading}
             layout="fit"
           />
+          <View className="mt-4 gap-0.5" testID="ai-usage-summary-cost">
+            <Text
+              selectable
+              adjustsFontSizeToFit
+              className="min-w-0 font-semibold text-default-foreground text-lg"
+              maxFontSizeMultiplier={1.2}
+              minimumFontScale={0.75}
+              numberOfLines={1}
+              style={styles.costValue}
+            >
+              {formattedCost}
+            </Text>
+            <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.2}>
+              {t('aiUsage.cost')}
+            </Text>
+          </View>
         </View>
       )}
     </View>
@@ -105,7 +127,26 @@ const styles = StyleSheet.create({
   continuousCorners: {
     borderCurve: 'continuous',
   },
+  costValue: {
+    fontVariant: ['tabular-nums'],
+  },
   stateContent: {
     minHeight: 104,
   },
 });
+
+function formatCostTotals(costTotals: readonly AiUsageRecordCostTotal[], locale: string): string {
+  if (costTotals.length === 0) return '--';
+
+  return costTotals
+    .map(({ currency, total }) =>
+      new Intl.NumberFormat(locale, {
+        currency,
+        currencyDisplay: 'narrowSymbol',
+        maximumFractionDigits: 2,
+        minimumFractionDigits: 2,
+        style: 'currency',
+      }).format(total),
+    )
+    .join(' · ');
+}

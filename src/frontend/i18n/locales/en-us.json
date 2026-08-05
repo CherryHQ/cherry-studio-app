@@ -1,6 +1,7 @@
 {
   "aiUsage.activeDays": "{{count}} active days",
   "aiUsage.average": "Average",
+  "aiUsage.cost": "Cost",
   "aiUsage.dayAccessibility": "{{date}}, {{tokens}} Tokens",
   "aiUsage.loadError": "Usage statistics could not be loaded.",
   "aiUsage.less": "Less",

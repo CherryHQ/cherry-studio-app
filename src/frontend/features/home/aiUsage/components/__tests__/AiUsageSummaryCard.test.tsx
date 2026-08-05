@@ -37,8 +37,10 @@ jest.mock('../AiUsageCalendar', () => {
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
+    i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
     t: (key: string) =>
       ({
+        'aiUsage.cost': 'Cost',
         'aiUsage.loadError': 'Usage statistics could not be loaded.',
         'aiUsage.loading': 'Loading usage statistics',
         'aiUsage.retry': 'Retry',
@@ -81,18 +83,42 @@ describe('AiUsageSummaryCard', () => {
     expect(calendar?.props.data).toBe(calendarData);
     expect(calendar?.props.animationStartDateKey).toBe('2026-04-15');
     expect(calendar?.props.layout).toBe('fit');
-    expect(textValues()).toEqual(expect.arrayContaining(['Usage Statistics', 'View details']));
+    expect(textValues()).toEqual(
+      expect.arrayContaining(['Usage Statistics', 'View details', '$1,227.37', 'Cost']),
+    );
     expect(textValues()).not.toEqual(
       expect.arrayContaining(['Total tokens', 'Cache hit rate', 'Daily activity']),
     );
   });
 
   it('keeps the summary calendar mounted during its first load', async () => {
-    mockUseAiUsageOverview.mockReturnValue(queryResult({ hasData: false, isLoading: true }));
+    mockUseAiUsageOverview.mockReturnValue(
+      queryResult({ data: undefined, hasData: false, isLoading: true }),
+    );
 
     await renderCard();
 
     expect(renderer?.root.findByProps({ testID: 'ai-usage-calendar' }).props.isLoading).toBe(true);
+    expect(textValues()).toContain('--');
+  });
+
+  it('keeps cost totals separated by currency', async () => {
+    mockUseAiUsageOverview.mockReturnValue(
+      queryResult({
+        data: {
+          buckets: [],
+          costTotals: [
+            { currency: 'CNY', total: 48 },
+            { currency: 'USD', total: 12.3 },
+          ],
+          dailyCosts: [],
+        },
+      }),
+    );
+
+    await renderCard();
+
+    expect(textValues()).toContain('¥48.00 · $12.30');
   });
 
   it('shows a localized no-cache error and retries', async () => {
@@ -129,6 +155,11 @@ describe('AiUsageSummaryCard', () => {
 function queryResult(overrides: Record<string, unknown> = {}) {
   return {
     calendarData,
+    data: {
+      buckets: [],
+      costTotals: [{ currency: 'USD', total: 1227.37 }],
+      dailyCosts: [],
+    },
     error: undefined,
     hasData: true,
     isError: false,
