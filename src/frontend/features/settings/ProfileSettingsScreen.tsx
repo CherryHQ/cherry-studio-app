@@ -1,8 +1,8 @@
+import { Input } from '@cherrystudio/ui/components';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
 import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -172,10 +172,8 @@ export default function ProfileSettingsScreen() {
             <Input
               accessibilityLabel={t('settings.profile.userName')}
               autoCorrect={false}
-              className="rounded-2xl px-4 text-base text-foreground"
               onChangeText={setNameDraft}
               onSubmitEditing={blurInput}
-              placeholderColorClassName="accent-muted-foreground"
               ref={inputRef}
               returnKeyLabel="done"
               returnKeyType="done"

@@ -1,7 +1,7 @@
+import { Input } from '@cherrystudio/ui/components';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { Button } from 'heroui-native/button';
 import { Dialog } from 'heroui-native/dialog';
-import { Input } from 'heroui-native/input';
 import { Spinner } from 'heroui-native/spinner';
 import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -83,8 +83,7 @@ export function useTopicActionDialogs(): TopicActionDialogs {
             <Input
               accessibilityLabel={t('topic.renameTitle')}
               autoFocus
-              className="min-h-10 rounded-xl px-3 py-0 text-base"
-              isDisabled={isSubmitting}
+              disabled={isSubmitting}
               onChangeText={setNameDraft}
               onSubmitEditing={confirmRename}
               placeholder={t('topic.renamePlaceholder')}
@@ -92,7 +91,6 @@ export function useTopicActionDialogs(): TopicActionDialogs {
               selectTextOnFocus
               style={styles.input}
               value={nameDraft}
-              variant="secondary"
             />
             <View className="flex-row justify-end gap-3">
               <Button

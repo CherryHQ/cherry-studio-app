@@ -1,39 +1,28 @@
-import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
+import type { StyleProp, TextInputProps, TextStyle } from 'react-native';
 
-export type InputAutoCapitalize = 'characters' | 'none' | 'sentences' | 'words';
+export type InputAutoCapitalize = NonNullable<TextInputProps['autoCapitalize']>;
 
-export type InputKeyboardType =
-  | 'ascii-capable'
-  | 'decimal-pad'
-  | 'default'
-  | 'email-address'
-  | 'name-phone-pad'
-  | 'numbers-and-punctuation'
-  | 'numeric'
-  | 'phone-pad'
-  | 'twitter'
-  | 'url'
-  | 'web-search';
+export type InputKeyboardType = NonNullable<TextInputProps['keyboardType']>;
 
-export type InputReturnKeyType = 'done' | 'go' | 'join' | 'next' | 'route' | 'search' | 'send';
+export type InputReturnKeyType = NonNullable<TextInputProps['returnKeyType']>;
 
-export type InputProps = {
+export type InputProps = Omit<
+  TextInputProps,
+  | 'accessibilityLabel'
+  | 'autoCapitalize'
+  | 'keyboardType'
+  | 'onChangeText'
+  | 'returnKeyType'
+  | 'style'
+  | 'value'
+> & {
   accessibilityLabel: string;
   autoCapitalize?: InputAutoCapitalize;
-  autoCorrect?: boolean;
-  autoFocus?: boolean;
   disabled?: boolean;
+  invalid?: boolean;
   keyboardType?: InputKeyboardType;
-  maxLength?: number;
-  multiline?: boolean;
-  onBlur?: () => void;
-  onChangeText: (value: string) => void;
-  onFocus?: () => void;
-  onSubmitEditing?: () => void;
-  placeholder?: string;
+  onChangeText?: (value: string) => void;
   returnKeyType?: InputReturnKeyType;
-  secureTextEntry?: boolean;
-  style?: StyleProp<TextStyle & ViewStyle>;
-  testID?: string;
+  style?: StyleProp<TextStyle>;
   value: string;
 };

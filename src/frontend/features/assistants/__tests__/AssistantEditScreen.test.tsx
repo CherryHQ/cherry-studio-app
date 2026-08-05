@@ -34,12 +34,6 @@ jest.mock('@/frontend/components/headers', () => ({
   },
 }));
 
-jest.mock('heroui-native/input', () => {
-  const { TextInput } = jest.requireActual('react-native');
-
-  return { Input: TextInput };
-});
-
 jest.mock('heroui-native/text-area', () => {
   const { TextInput } = jest.requireActual('react-native');
 
@@ -48,8 +42,10 @@ jest.mock('heroui-native/text-area', () => {
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
+  const { TextInput } = jest.requireActual('react-native');
 
   return {
+    Input: TextInput,
     Switch: (props: Record<string, unknown>) => React.createElement('MockSwitch', props),
   };
 });

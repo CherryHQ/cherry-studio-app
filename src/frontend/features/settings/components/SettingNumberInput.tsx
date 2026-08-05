@@ -1,4 +1,4 @@
-import { Input } from 'heroui-native';
+import { Input } from '@cherrystudio/ui/components';
 import { useCallback, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
@@ -43,7 +43,6 @@ export function SettingNumberInput({
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
-      className="h-8 min-h-0 w-24 rounded-xl px-2 py-0 text-right text-base"
       inputMode="numeric"
       keyboardType="number-pad"
       onBlur={commitValue}
@@ -52,7 +51,6 @@ export function SettingNumberInput({
       returnKeyType="done"
       style={styles.input}
       value={draftValue}
-      variant="secondary"
     />
   );
 }

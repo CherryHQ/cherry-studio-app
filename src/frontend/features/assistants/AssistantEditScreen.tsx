@@ -1,4 +1,4 @@
-import { Switch } from '@cherrystudio/ui/components';
+import { Input, Switch } from '@cherrystudio/ui/components';
 import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -9,7 +9,6 @@ import {
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
 import { TextArea } from 'heroui-native/text-area';
 import { useToast } from 'heroui-native/toast';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
@@ -231,11 +230,8 @@ function AssistantEditForm({
               <Input
                 accessibilityLabel={t('assistant.form.name')}
                 autoCorrect={false}
-                variant="secondary"
-                className="rounded-2xl px-4 text-base text-foreground"
                 onChangeText={(value) => updateForm('name', value)}
                 placeholder={t('assistant.form.namePlaceholder')}
-                placeholderColorClassName="accent-muted-foreground"
                 returnKeyType="next"
                 style={styles.textInput}
                 value={form.name}
@@ -246,11 +242,8 @@ function AssistantEditForm({
             <Input
               accessibilityLabel={t('assistant.form.description')}
               autoCorrect
-              variant="secondary"
-              className="rounded-2xl px-4 text-base text-foreground"
               onChangeText={(value) => updateForm('description', value)}
               placeholder={t('assistant.form.descriptionPlaceholder')}
-              placeholderColorClassName="accent-muted-foreground"
               style={styles.textInput}
               value={form.description}
             />
@@ -491,13 +484,10 @@ function NumberField({
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
-      className="rounded-2xl px-4 text-base text-foreground"
-      variant="secondary"
       inputMode={inputMode}
       keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
       onChangeText={onChangeText}
       placeholder="0"
-      placeholderColorClassName="accent-muted-foreground"
       style={styles.textInput}
       value={value}
     />

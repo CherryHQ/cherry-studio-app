@@ -1,3 +1,4 @@
+import { Input } from '@cherrystudio/ui/components';
 import {
   withMcpToolRuleAdded,
   withMcpToolRuleCleared,
@@ -5,7 +6,6 @@ import {
 import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -339,14 +339,11 @@ function McpServerEditor({
               <Input
                 accessibilityLabel={t('settings.mcp.fields.name')}
                 autoCorrect={false}
-                className="rounded-2xl px-4 text-base text-foreground"
-                isDisabled={!isEditing}
+                disabled={!isEditing}
                 onChangeText={(value) => updateField('name', value)}
                 placeholder={t('settings.mcp.fields.name')}
-                placeholderColorClassName="accent-muted-foreground"
                 style={styles.textInput}
                 value={displayedForm.name}
-                variant="secondary"
               />
             </FormField>
           ) : null}
@@ -355,16 +352,13 @@ function McpServerEditor({
               accessibilityLabel={t('settings.mcp.fields.baseUrl')}
               autoCapitalize="none"
               autoCorrect={false}
-              className="rounded-2xl px-4 text-base text-foreground"
-              isDisabled={!isEditing}
+              disabled={!isEditing}
               keyboardType="url"
               onChangeText={(value) => updateField('baseUrl', value)}
               placeholder="https://example.com/mcp"
-              placeholderColorClassName="accent-muted-foreground"
               spellCheck={false}
               style={styles.textInput}
               value={displayedForm.baseUrl}
-              variant="secondary"
             />
             {showHttpWarning ? (
               <Text className="text-warning-foreground text-xs">
@@ -376,14 +370,11 @@ function McpServerEditor({
             <FormField label={t('settings.mcp.fields.description')}>
               <Input
                 accessibilityLabel={t('settings.mcp.fields.description')}
-                className="rounded-2xl px-4 text-base text-foreground"
-                isDisabled={!isEditing}
+                disabled={!isEditing}
                 onChangeText={(value) => updateField('description', value)}
                 placeholder={t('settings.mcp.fields.description')}
-                placeholderColorClassName="accent-muted-foreground"
                 style={styles.textInput}
                 value={displayedForm.description}
-                variant="secondary"
               />
             </FormField>
           ) : null}
@@ -397,16 +388,13 @@ function McpServerEditor({
           <FormField label={t('settings.mcp.fields.timeout')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.timeout')}
-              className="rounded-2xl px-4 text-base text-foreground"
               inputMode="numeric"
-              isDisabled={!isEditing}
+              disabled={!isEditing}
               keyboardType="number-pad"
               onChangeText={(value) => updateField('timeout', value)}
               placeholder="60"
-              placeholderColorClassName="accent-muted-foreground"
               style={styles.textInput}
               value={displayedForm.timeout}
-              variant="secondary"
             />
           </FormField>
         </KeyboardAwareScrollView>

@@ -1,12 +1,11 @@
+import { Input } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { Select } from 'heroui-native';
-import { Input } from 'heroui-native/input';
-import { cn } from 'heroui-native/utils';
 import { PlusIcon, SettingsIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import {
@@ -32,12 +31,10 @@ export function ProviderApiServiceEndpointField({
       <View className="flex-row items-center gap-2">
         <Input
           accessibilityLabel={t('settings.provider.apiService.baseUrl')}
-          className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base"
-          isDisabled
+          disabled
           placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-          style={providerApiServiceStyles.input}
+          style={[providerApiServiceStyles.input, styles.endpointInput]}
           value={baseUrl}
-          variant="secondary"
         />
         <SettingsIconButton
           accessibilityLabel={t('settings.provider.apiService.manageEndpoints')}
@@ -105,7 +102,6 @@ export function ProviderApiServiceEndpointForm({
                 <View className="flex-row items-center gap-2">
                   <EndpointBaseUrlInput
                     accessibilityLabel={getEndpointLabel(endpoint)}
-                    className="flex-1"
                     isDisabled={pendingEndpoint === endpoint}
                     placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
                     value={baseUrlByEndpoint[endpoint] ?? ''}
@@ -194,7 +190,6 @@ function EndpointSelect({
 
 function EndpointBaseUrlInput({
   accessibilityLabel,
-  className,
   isDisabled,
   onCommit,
   onChangeText,
@@ -202,7 +197,6 @@ function EndpointBaseUrlInput({
   value,
 }: {
   accessibilityLabel: string;
-  className?: string;
   isDisabled?: boolean;
   onCommit: (value: string) => void;
   onChangeText: (value: string) => void;
@@ -225,20 +219,24 @@ function EndpointBaseUrlInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className={cn('h-10 min-h-0 rounded-xl px-3 py-0 text-base', className)}
-      isDisabled={isDisabled}
+      disabled={isDisabled}
       onBlur={handleCommitEvent}
       onChangeText={onChangeText}
       onEndEditing={handleEndEditing}
       onSubmitEditing={handleCommitEvent}
       placeholder={placeholder}
       returnKeyType="done"
-      style={providerApiServiceStyles.input}
+      style={[providerApiServiceStyles.input, styles.endpointInput]}
       value={value}
-      variant="secondary"
     />
   );
 }
+
+const styles = StyleSheet.create({
+  endpointInput: {
+    flex: 1,
+  },
+});
 
 function AddEndpointSelect({
   label,

@@ -1,3 +1,4 @@
+import { Input } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
@@ -6,7 +7,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Accordion } from 'heroui-native/accordion';
 import { Button } from 'heroui-native/button';
-import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
 import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
@@ -201,28 +201,26 @@ export default function NewProviderScreen() {
 
           <FormField label={t('settings.provider.add.name')} required>
             <Input
+              accessibilityLabel={t('settings.provider.add.name')}
               autoCapitalize="none"
               autoCorrect={false}
-              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
               onChangeText={setName}
               placeholder={t('settings.provider.add.namePlaceholder')}
               style={providerApiServiceStyles.input}
               value={name}
-              variant="secondary"
             />
           </FormField>
 
           <FormField label={t('settings.provider.apiService.baseUrl')} required>
             <Input
+              accessibilityLabel={t('settings.provider.apiService.baseUrl')}
               autoCapitalize="none"
               autoCorrect={false}
-              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
               keyboardType="url"
               onChangeText={setBaseUrl}
               placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
               style={providerApiServiceStyles.input}
               value={baseUrl}
-              variant="secondary"
             />
           </FormField>
 
@@ -230,9 +228,9 @@ export default function NewProviderScreen() {
             <View className="flex-row items-center gap-2">
               <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
                 <Input
+                  accessibilityLabel={t('settings.provider.apiService.apiKey')}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  className="h-10 max-h-10 min-h-0 w-full rounded-xl px-3 py-0 text-base"
                   lineBreakModeIOS="clip"
                   multiline={false}
                   numberOfLines={1}
@@ -243,7 +241,6 @@ export default function NewProviderScreen() {
                   secureTextEntry={!apiKeyVisible}
                   style={providerApiServiceStyles.input}
                   value={apiKey}
-                  variant="secondary"
                 />
               </View>
               <SettingsIconButton
@@ -462,15 +459,14 @@ function EndpointField({
     <View className="gap-2">
       <Text className="font-medium text-default-foreground text-sm">{label}</Text>
       <Input
+        accessibilityLabel={label}
         autoCapitalize="none"
         autoCorrect={false}
-        className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
         keyboardType="url"
         onChangeText={onChangeText}
         placeholder="https://api.example.com"
         style={providerApiServiceStyles.input}
         value={value}
-        variant="secondary"
       />
     </View>
   );

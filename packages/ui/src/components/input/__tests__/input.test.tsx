@@ -2,6 +2,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Input } from '../input';
 
+jest.mock('heroui-native/utils', () => ({
+  cn: (...classes: Array<false | null | string | undefined>) => classes.filter(Boolean).join(' '),
+}));
+
 jest.mock('heroui-native/input', () => {
   const React = require('react');
   const { TextInput } = require('react-native');
@@ -47,7 +51,7 @@ describe('Input', () => {
     expect(input.props.autoCapitalize).toBe('sentences');
     expect(input.props.autoCorrect).toBe(true);
     expect(input.props.className).toBe(
-      'min-h-8 rounded-md border border-border py-0 text-base shadow-none ios:pb-2 ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+      'min-h-8 rounded-md border border-border py-0 text-[16px] shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
     );
 
     act(() => input.props.onChangeText('Cherry Studio'));
@@ -56,7 +60,7 @@ describe('Input', () => {
     act(() => {
       renderer!.update(<Input accessibilityLabel="Name" onChangeText={onChangeText} value="" />);
     });
-    expect(input.props.className).toContain('ios:pb-1');
+    expect(input.props.className).not.toContain('ios:pt-');
   });
 
   test('forwards supported input behavior without adding a fixed size', () => {

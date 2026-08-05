@@ -41,7 +41,7 @@ jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('heroui-native/input', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   Input: () => null,
 }));
 

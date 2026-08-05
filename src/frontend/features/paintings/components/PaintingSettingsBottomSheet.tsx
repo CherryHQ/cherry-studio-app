@@ -1,6 +1,5 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
-import { Slider, Switch } from '@cherrystudio/ui/components';
-import { Input } from 'heroui-native/input';
+import { Input, Slider, Switch } from '@cherrystudio/ui/components';
 import { Select } from 'heroui-native/select';
 import type { TFunction } from 'i18next';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
@@ -170,16 +169,13 @@ function PaintingSettingField({
             accessibilityLabel={label}
             autoCapitalize="none"
             autoCorrect={false}
-            className={
-              field.spec.multiline ? 'min-h-24 rounded-xl px-3 py-2' : 'h-10 rounded-xl px-3 py-0'
-            }
             keyboardType={numericTextKeys.has(field.key) ? 'numbers-and-punctuation' : 'default'}
             multiline={field.spec.multiline}
             onChangeText={(nextValue) => onValueChange(field.key, nextValue)}
             placeholder={t('painting.settings.optional')}
+            style={field.spec.multiline ? styles.multilineInput : undefined}
             textAlignVertical={field.spec.multiline ? 'top' : 'center'}
             value={value === undefined || value === null ? '' : String(value)}
-            variant="secondary"
           />
         </View>
       );
@@ -459,22 +455,20 @@ function CustomSizeField({
       <View className="flex-row items-center gap-2">
         <Input
           accessibilityLabel={t('painting.settings.width')}
-          className="h-10 min-w-0 flex-1 rounded-xl px-3 py-0 text-center"
           keyboardType="number-pad"
           onChangeText={(nextValue) => onValueChange(widthKey, nextValue)}
           placeholder={t('painting.settings.width')}
+          style={styles.sizeInput}
           value={width === undefined || width === null ? '' : String(width)}
-          variant="secondary"
         />
         <Text className="text-default-foreground">×</Text>
         <Input
           accessibilityLabel={t('painting.settings.height')}
-          className="h-10 min-w-0 flex-1 rounded-xl px-3 py-0 text-center"
           keyboardType="number-pad"
           onChangeText={(nextValue) => onValueChange(heightKey, nextValue)}
           placeholder={t('painting.settings.height')}
+          style={styles.sizeInput}
           value={height === undefined || height === null ? '' : String(height)}
-          variant="secondary"
         />
       </View>
       <Text className={isInvalid ? 'text-danger text-xs' : 'text-default-foreground text-xs'}>
@@ -577,6 +571,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 12,
   },
+  multilineInput: {
+    minHeight: 96,
+    textAlignVertical: 'top',
+  },
   ratioDashedShape: { borderStyle: 'dashed' },
+  sizeInput: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
+  },
   tabularText: { fontVariant: ['tabular-nums'] },
 });

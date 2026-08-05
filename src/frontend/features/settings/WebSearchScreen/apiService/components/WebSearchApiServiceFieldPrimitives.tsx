@@ -1,4 +1,4 @@
-import { Input } from 'heroui-native/input';
+import { Input } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { StyleSheet, Text, View } from 'react-native';
@@ -75,7 +75,6 @@ export function SettingTextInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
@@ -85,7 +84,6 @@ export function SettingTextInput({
       secureTextEntry={secureTextEntry}
       style={styles.input}
       value={draftValue}
-      variant="secondary"
     />
   );
 }

@@ -1,8 +1,7 @@
-import { Switch } from '@cherrystudio/ui/components';
+import { Input, Switch } from '@cherrystudio/ui/components';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
 import { Button } from 'heroui-native/button';
-import { Input } from 'heroui-native/input';
 import {
   CopyIcon,
   EyeIcon,
@@ -97,7 +96,6 @@ function ApiKeysVisiblePreview({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base"
       editable={false}
       lineBreakModeIOS="clip"
       multiline={false}
@@ -108,7 +106,6 @@ function ApiKeysVisiblePreview({
       scrollEnabled={false}
       style={providerApiServiceStyles.input}
       value={previewValue}
-      variant="secondary"
     />
   );
 }
@@ -303,8 +300,7 @@ function ApiKeyInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base"
-      isDisabled={isDisabled}
+      disabled={isDisabled}
       lineBreakModeIOS="clip"
       multiline={false}
       numberOfLines={1}
@@ -317,7 +313,6 @@ function ApiKeyInput({
       scrollEnabled={false}
       style={providerApiServiceStyles.input}
       value={normalizedValue}
-      variant="secondary"
     />
   );
 }

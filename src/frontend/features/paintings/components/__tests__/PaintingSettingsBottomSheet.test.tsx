@@ -28,16 +28,15 @@ jest.mock('expo-glass-effect', () => {
   return { GlassView: MockView };
 });
 
-jest.mock('heroui-native/input', () => {
-  const { TextInput: MockTextInput } = jest.requireActual('react-native');
-
-  return { Input: MockTextInput };
-});
-
 jest.mock('@cherrystudio/ui/components', () => {
-  const { Pressable: MockPressable, View: MockView } = jest.requireActual('react-native');
+  const {
+    Pressable: MockPressable,
+    TextInput: MockTextInput,
+    View: MockView,
+  } = jest.requireActual('react-native');
 
   return {
+    Input: MockTextInput,
     Slider: (props: Record<string, unknown>) => <MockView {...props} />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
   };

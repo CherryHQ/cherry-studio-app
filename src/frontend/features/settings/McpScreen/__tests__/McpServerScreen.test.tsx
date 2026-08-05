@@ -51,7 +51,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockRouterBack, replace: mockRouterReplace }),
 }));
 
-jest.mock('heroui-native/input', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return { Input: (props: Record<string, unknown>) => <MockView {...props} /> };
@@ -495,13 +495,13 @@ describe('McpServerScreen tabs', () => {
           node.props.accessibilityLabel === 'settings.mcp.fields.name',
       );
 
-    expect(findNameInput().props.isDisabled).toBe(true);
+    expect(findNameInput().props.disabled).toBe(true);
 
     await act(async () => {
       mockHeaderProps.rightActions?.find((action) => action.key === 'edit')?.onPress?.();
     });
 
-    expect(findNameInput().props.isDisabled).toBe(false);
+    expect(findNameInput().props.disabled).toBe(false);
     expect(mockHeaderProps.rightActions?.map((action) => action.key)).toEqual(['save']);
     expect(mockHeaderProps.rightActions?.[0]?.label).toBe('Save');
     expect(mockHeaderProps.title).toBe('Config');

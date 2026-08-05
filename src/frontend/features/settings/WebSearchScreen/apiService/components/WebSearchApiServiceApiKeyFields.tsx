@@ -1,6 +1,6 @@
+import { Input } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
 import { Button } from 'heroui-native/button';
-import { Input } from 'heroui-native/input';
 import {
   ActivityIcon,
   CopyIcon,
@@ -147,7 +147,6 @@ function ApiKeysCommitInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base"
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
@@ -157,7 +156,6 @@ function ApiKeysCommitInput({
       secureTextEntry={secureTextEntry}
       style={styles.input}
       value={draftValue}
-      variant="secondary"
     />
   );
 }
@@ -301,8 +299,7 @@ function ApiKeyInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base"
-      isDisabled={isDisabled}
+      disabled={isDisabled}
       onBlur={handleCommitEvent}
       onChangeText={onChangeText}
       onEndEditing={handleEndEditing}
@@ -311,7 +308,6 @@ function ApiKeyInput({
       returnKeyType="done"
       style={styles.input}
       value={value}
-      variant="secondary"
     />
   );
 }

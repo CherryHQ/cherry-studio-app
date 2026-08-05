@@ -47,7 +47,7 @@ jest.mock('heroui-native/hooks', () => ({
   useThemeColor: () => '#000000',
 }));
 
-jest.mock('heroui-native/input', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   const { TextInput: MockTextInput } = jest.requireActual('react-native');
 

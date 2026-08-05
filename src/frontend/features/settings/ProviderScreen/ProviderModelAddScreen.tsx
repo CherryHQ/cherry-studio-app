@@ -1,7 +1,7 @@
+import { Input } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
 import { cn } from 'heroui-native/utils';
 import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -294,18 +294,16 @@ function ProviderModelAddTextField({
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        className={cn('min-h-10 rounded-xl px-3 py-0 text-base', multiline ? 'h-16' : 'h-10')}
-        isDisabled={isDisabled}
-        isInvalid={Boolean(errorMessage)}
+        disabled={isDisabled}
+        invalid={Boolean(errorMessage)}
         multiline={multiline}
         onChangeText={onChangeText}
         onFocus={onFocus}
         placeholder={placeholder}
         returnKeyType="done"
-        style={styles.input}
+        style={[styles.input, multiline ? styles.multilineInput : undefined]}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
-        variant="secondary"
         {...textInputProps}
       />
       {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
@@ -392,6 +390,9 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     paddingTop: 0,
     verticalAlign: 'middle',
+  },
+  multilineInput: {
+    minHeight: 64,
   },
   scrollContent: {
     gap: 16,

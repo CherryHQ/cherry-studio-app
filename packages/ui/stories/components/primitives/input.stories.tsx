@@ -35,7 +35,7 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
             disabled={false}
             onChangeText={(nextValue) => {
               setValue(nextValue);
-              args.onChangeText(nextValue);
+              args.onChangeText?.(nextValue);
             }}
             value={value}
           />
