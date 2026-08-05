@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import {
@@ -13,7 +14,6 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section, SectionIcon } from '@/frontend/components/Section';
 import { isAndroid } from '@/frontend/utils/constants';
 
 const ANDROID_GRANT_READ_URI_PERMISSION_FLAG = 1;
@@ -47,13 +47,13 @@ export default function DataSettingsScreen() {
     ? [
         {
           hideAccessory: true,
-          leading: <SectionIcon icon={FolderOpenIcon} />,
+          icon: FolderOpenIcon,
           title: t('settings.data.appData.title'),
           onPress: handleAppDataPress,
         },
         {
           hideAccessory: true,
-          leading: <SectionIcon icon={Trash2Icon} />,
+          icon: Trash2Icon,
           title: t('settings.data.clearCache.title'),
           onPress: handleActionPress,
         },
@@ -61,7 +61,7 @@ export default function DataSettingsScreen() {
     : [
         {
           hideAccessory: true,
-          leading: <SectionIcon icon={Trash2Icon} />,
+          icon: Trash2Icon,
           title: t('settings.data.clearCache.title'),
           onPress: handleActionPress,
         },
@@ -77,40 +77,45 @@ export default function DataSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-4 py-5">
-          <Section
-            items={[
-              {
-                hideAccessory: true,
-                leading: <SectionIcon icon={UploadIcon} />,
-                title: t('settings.data.backup.title'),
-                onPress: handleActionPress,
-              },
-              {
-                hideAccessory: true,
-                leading: <SectionIcon icon={DownloadIcon} />,
-                title: t('settings.data.restore.title'),
-                onPress: handleActionPress,
-              },
-              {
-                hideAccessory: true,
-                leading: <SectionIcon icon={MonitorCloudIcon} />,
-                title: t('settings.data.syncDesktop.title'),
-                onPress: handleActionPress,
-              },
-            ]}
-            title={t('settings.data.backupRestore.title')}
-          />
-          <Section items={directoryItems} title={t('settings.data.directory.title')} />
-          <Section
-            items={[
-              {
-                hideAccessory: true,
-                leading: <SectionIcon icon={RefreshCwIcon} />,
-                title: t('settings.data.resetData.title'),
-                onPress: handleActionPress,
-              },
-            ]}
-          />
+          <Section title={t('settings.data.backupRestore.title')}>
+            <Section.Item
+              label={t('settings.data.backup.title')}
+              leading={<UploadIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+            <Section.Item
+              label={t('settings.data.restore.title')}
+              leading={<DownloadIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+            <Section.Item
+              label={t('settings.data.syncDesktop.title')}
+              leading={<MonitorCloudIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+          </Section>
+          <Section title={t('settings.data.directory.title')}>
+            {directoryItems.map(({ icon: Icon, onPress, title }) => (
+              <Section.Item
+                key={title}
+                label={title}
+                leading={<Icon className="size-5 text-foreground" strokeWidth={2} />}
+                onPress={onPress}
+                showChevron={false}
+              />
+            ))}
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.data.resetData.title')}
+              leading={<RefreshCwIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+          </Section>
         </View>
       </ScrollView>
     </>

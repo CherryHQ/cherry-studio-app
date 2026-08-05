@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import type { AccessibilityProps, StyleProp, ViewProps, ViewStyle } from 'react-native';
+import type {
+  AccessibilityProps,
+  PressableProps,
+  StyleProp,
+  ViewProps,
+  ViewStyle,
+} from 'react-native';
 
 export type SectionProps = Omit<ViewProps, 'children'> & {
   children?: ReactNode;
@@ -17,6 +23,7 @@ export type SectionItemProps = AccessibilityProps & {
   label: ReactNode;
   leading?: ReactNode;
   onPress?: () => void;
+  onPressIn?: PressableProps['onPressIn'];
   showChevron?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;

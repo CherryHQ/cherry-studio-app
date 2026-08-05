@@ -1,4 +1,4 @@
-import { SearchField } from '@cherrystudio/ui';
+import { SearchField, Section } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { Section } from '@/frontend/components/Section';
 import { useQuery } from '@/frontend/data';
 import {
   hiddenProviderListIds,
@@ -192,16 +191,15 @@ export default function ProviderSettingsScreen() {
             </View>
           </View>
         ) : (
-          <Section
-            items={[
-              {
-                hideAccessory: true,
-                title: providersQuery.isPending
+          <Section>
+            <Section.Item
+              label={
+                providersQuery.isPending
                   ? t('settings.provider.loading')
-                  : t('settings.provider.search.empty'),
-              },
-            ]}
-          />
+                  : t('settings.provider.search.empty')
+              }
+            />
+          </Section>
         )}
       </Pressable>
     </>

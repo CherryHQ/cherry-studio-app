@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
 import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/data/presets/webSearchProviders';
@@ -8,7 +9,6 @@ import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section } from '@/frontend/components/Section';
 
 import { SettingNumberInput } from '../components/SettingNumberInput';
 import { SettingSelect, type SettingSelectOption } from '../components/SettingSelect';
@@ -51,57 +51,52 @@ export default function WebSearchSettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <Section
-          items={[
-            {
-              accessory: (
-                <SettingSelect
-                  label={t('settings.websearch.defaultProvider')}
-                  options={searchKeywordProviderOptions}
-                  value={webSearchProviders.searchKeywords.value}
-                  onValueChange={webSearchProviders.searchKeywords.onValueChange}
-                />
-              ),
-              title: t('settings.websearch.defaultProvider'),
-            },
-            {
-              accessory: (
+        <Section title={t('settings.websearch.general.title')}>
+          <Section.Item
+            label={t('settings.websearch.defaultProvider')}
+            trailing={
+              <SettingSelect
+                label={t('settings.websearch.defaultProvider')}
+                options={searchKeywordProviderOptions}
+                value={webSearchProviders.searchKeywords.value}
+                onValueChange={webSearchProviders.searchKeywords.onValueChange}
+              />
+            }
+          />
+          <Section.Item
+            label={t('settings.websearch.maxResults')}
+            trailing={
+              <SettingNumberInput
+                accessibilityLabel={t('settings.websearch.maxResults')}
+                value={webSearchProviders.maxResults.value}
+                onValueChange={webSearchProviders.maxResults.onValueChange}
+              />
+            }
+          />
+          <Section.Item
+            label={t('settings.websearch.compressionMethod')}
+            trailing={
+              <SettingSelect
+                label={t('settings.websearch.compressionMethod')}
+                options={webSearchProviders.compressionMethod.options}
+                value={webSearchProviders.compressionMethod.value}
+                onValueChange={webSearchProviders.compressionMethod.onValueChange}
+              />
+            }
+          />
+          {webSearchProviders.compressionMethod.value === 'cutoff' ? (
+            <Section.Item
+              label={t('settings.websearch.compressionCutoffLimit')}
+              trailing={
                 <SettingNumberInput
-                  accessibilityLabel={t('settings.websearch.maxResults')}
-                  value={webSearchProviders.maxResults.value}
-                  onValueChange={webSearchProviders.maxResults.onValueChange}
+                  accessibilityLabel={t('settings.websearch.compressionCutoffLimit')}
+                  value={webSearchProviders.compressionCutoffLimit.value}
+                  onValueChange={webSearchProviders.compressionCutoffLimit.onValueChange}
                 />
-              ),
-              title: t('settings.websearch.maxResults'),
-            },
-            {
-              accessory: (
-                <SettingSelect
-                  label={t('settings.websearch.compressionMethod')}
-                  options={webSearchProviders.compressionMethod.options}
-                  value={webSearchProviders.compressionMethod.value}
-                  onValueChange={webSearchProviders.compressionMethod.onValueChange}
-                />
-              ),
-              title: t('settings.websearch.compressionMethod'),
-            },
-            ...(webSearchProviders.compressionMethod.value === 'cutoff'
-              ? [
-                  {
-                    accessory: (
-                      <SettingNumberInput
-                        accessibilityLabel={t('settings.websearch.compressionCutoffLimit')}
-                        value={webSearchProviders.compressionCutoffLimit.value}
-                        onValueChange={webSearchProviders.compressionCutoffLimit.onValueChange}
-                      />
-                    ),
-                    title: t('settings.websearch.compressionCutoffLimit'),
-                  },
-                ]
-              : []),
-          ]}
-          title={t('settings.websearch.general.title')}
-        />
+              }
+            />
+          ) : null}
+        </Section>
         <View className="gap-2">
           <Text className="px-1 font-medium text-default-foreground text-sm">
             {t('settings.websearch.apiProviders.title')}

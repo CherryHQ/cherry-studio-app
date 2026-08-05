@@ -1,9 +1,13 @@
 import { cn } from 'heroui-native/utils';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
-import { Children, Fragment, isValidElement, type ReactNode } from 'react';
+import { Children, cloneElement, Fragment, isValidElement, type ReactNode, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import type { SectionItemProps, SectionProps } from './section.types';
+
+type InternalSectionItemProps = SectionItemProps & {
+  onPressedChange?: (isPressed: boolean) => void;
+};
 
 function renderTextSlot(content: ReactNode, className?: string) {
   return typeof content === 'string' || typeof content === 'number' ? (
@@ -23,11 +27,13 @@ function SectionItem({
   label,
   leading,
   onPress,
+  onPressIn,
+  onPressedChange,
   showChevron,
   style,
   testID,
   trailing,
-}: SectionItemProps) {
+}: InternalSectionItemProps) {
   const shouldShowChevron = showChevron ?? (Boolean(onPress) && trailing == null);
   const resolvedAccessibilityLabel =
     accessibilityLabel ?? (typeof label === 'string' ? label : undefined);
@@ -62,6 +68,11 @@ function SectionItem({
         className={cn(rowClassName, 'active:bg-foreground/5')}
         disabled={disabled}
         onPress={onPress}
+        onPressIn={(event) => {
+          onPressedChange?.(true);
+          onPressIn?.(event);
+        }}
+        onPressOut={() => onPressedChange?.(false)}
         style={style}
         testID={testID}
       >
@@ -92,6 +103,7 @@ function SectionRoot({
   ...viewProps
 }: SectionProps) {
   const rows = Children.toArray(children);
+  const [pressedIndex, setPressedIndex] = useState<number | null>(null);
   const hasLeading = rows.some(
     (row) =>
       isValidElement<SectionItemProps>(row) &&
@@ -113,11 +125,22 @@ function SectionRoot({
             <Fragment key={key}>
               {index > 0 ? (
                 <View
-                  className={cn(hasLeading ? 'ml-11 mr-3' : 'mx-3', 'h-px bg-border')}
+                  className={cn(
+                    hasLeading ? 'ml-11 mr-3' : 'mx-3',
+                    'h-px bg-border',
+                    (pressedIndex === index || pressedIndex === index - 1) && 'opacity-0',
+                  )}
                   testID="section-separator"
                 />
               ) : null}
-              {row}
+              {isValidElement<InternalSectionItemProps>(row) && row.type === SectionItem
+                ? cloneElement(row, {
+                    onPressedChange: (isPressed: boolean) =>
+                      setPressedIndex((currentIndex) =>
+                        isPressed ? index : currentIndex === index ? null : currentIndex,
+                      ),
+                  })
+                : row}
             </Fragment>
           );
         })}

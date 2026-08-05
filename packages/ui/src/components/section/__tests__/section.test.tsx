@@ -76,9 +76,15 @@ describe('Section', () => {
 
   test('uses Pressable only for interactive items and shows a default chevron', () => {
     const onPress = jest.fn();
+    const onPressIn = jest.fn();
     const tree = render(
       <Section>
-        <Section.Item label="Models" onPress={onPress} testID="interactive-row" />
+        <Section.Item
+          label="Models"
+          onPress={onPress}
+          onPressIn={onPressIn}
+          testID="interactive-row"
+        />
         <Section.Item label="Version" testID="static-row" trailing={<Text>1.0</Text>} />
       </Section>,
     );
@@ -99,9 +105,20 @@ describe('Section', () => {
     expect(interactiveRow.props.accessibilityLabel).toBe('Models');
     expect(tree.root.findAllByProps({ testID: 'section-chevron' }).length).toBeGreaterThan(0);
     expect(staticRow.props.accessibilityRole).toBeUndefined();
+    const separators = () =>
+      tree.root.findAll((node) => node.type === View && node.props.testID === 'section-separator');
+    expect(separators()).toHaveLength(1);
+    expect(separators()[0].props.className).not.toContain('opacity-0');
 
     act(() => interactiveRow.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
+    act(() => interactiveRow.props.onPressIn());
+    expect(onPressIn).toHaveBeenCalledTimes(1);
+    expect(separators()).toHaveLength(1);
+    expect(separators()[0].props.className).toContain('opacity-0');
+    act(() => interactiveRow.props.onPressOut());
+    expect(separators()).toHaveLength(1);
+    expect(separators()[0].props.className).not.toContain('opacity-0');
   });
 
   test('supports disabled, destructive, description, and custom trailing content', () => {

@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +15,6 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
-import { Section } from '@/frontend/components/Section';
 
 const MODEL_SETTING_ICONS = {
   default: '⭐',
@@ -48,18 +48,17 @@ export default function ModelSettingsScreen() {
   const items = useMemo(
     () =>
       MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
-        accessory: (
+        label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
+        leading: (
+          <Text className="min-w-5 text-center text-emoji-xl">{MODEL_SETTING_ICONS[kind]}</Text>
+        ),
+        onPress: () => setOpenKind(kind),
+        trailing: (
           <SelectedModelAccessory
             item={modelPickerData.getModelItem(modelSettings.selections[kind])}
             placeholder={t('settings.select.placeholder')}
           />
         ),
-        // min-w-6 keeps the emoji column aligned with the icon rows elsewhere.
-        leading: (
-          <Text className="min-w-6 text-center text-emoji-xl">{MODEL_SETTING_ICONS[kind]}</Text>
-        ),
-        title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
-        onPress: () => setOpenKind(kind),
       })),
     [modelPickerData, modelSettings.selections, t],
   );
@@ -75,7 +74,9 @@ export default function ModelSettingsScreen() {
       >
         <View className="gap-6 px-4 py-5">
           {items.map((item) => (
-            <Section key={item.title} items={[item]} />
+            <Section key={item.label}>
+              <Section.Item {...item} />
+            </Section>
           ))}
         </View>
       </ScrollView>

@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import type {
   PermissionMode,
   PermissionPreferenceKey,
@@ -10,7 +11,6 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section, SectionIcon } from '@/frontend/components/Section';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -152,16 +152,15 @@ function OpenSettingsSection({
 
   return (
     <Section
-      items={[
-        {
-          leading: <SectionIcon icon={SettingsIcon} />,
-          title: t('settings.permissions.openSystemSettings'),
-          onPress: () => void recoverAccess(),
-        },
-      ]}
       title={t('settings.permissions.accessRequiredFor', {
         permission: t(`settings.permissions.type.${kind}`),
       })}
-    />
+    >
+      <Section.Item
+        label={t('settings.permissions.openSystemSettings')}
+        leading={<SettingsIcon className="size-5 text-foreground" strokeWidth={2} />}
+        onPress={() => void recoverAccess()}
+      />
+    </Section>
   );
 }

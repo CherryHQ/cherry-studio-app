@@ -1,10 +1,10 @@
+import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { ALargeSmallIcon, ChevronRightIcon, GlobeIcon, SunIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section, SectionIcon } from '@/frontend/components/Section';
 import { usePreference } from '@/frontend/data/hooks';
 import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
 
@@ -29,47 +29,45 @@ export default function AppearanceSettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <Section
-          items={[
-            {
-              accessory: (
-                <SettingSelect
-                  label={t('settings.items.theme')}
-                  options={settingPreferences.theme.options}
-                  value={settingPreferences.theme.value}
-                  onValueChange={settingPreferences.theme.onValueChange}
-                />
-              ),
-              leading: <SectionIcon icon={SunIcon} />,
-              title: t('settings.items.theme'),
-            },
-            {
-              accessory: (
-                <SettingSelect
-                  label={t('settings.items.appLanguage')}
-                  options={settingPreferences.language.options}
-                  value={settingPreferences.language.value}
-                  onValueChange={settingPreferences.language.onValueChange}
-                />
-              ),
-              leading: <SectionIcon icon={GlobeIcon} />,
-              title: t('settings.items.appLanguage'),
-            },
-            {
-              accessory: (
-                <View className="flex-row items-center gap-1">
-                  <Text className="text-right text-base text-default-foreground">
-                    {t(FONT_SIZE_STEP_LABEL_KEYS[normalizedFontSizeStep])}
-                  </Text>
-                  <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
-                </View>
-              ),
-              leading: <SectionIcon icon={ALargeSmallIcon} />,
-              onPress: () => router.push('/settings/font-size'),
-              title: t('settings.items.fontSize'),
-            },
-          ]}
-        />
+        <Section>
+          <Section.Item
+            label={t('settings.items.theme')}
+            leading={<SunIcon className="size-5 text-foreground" strokeWidth={2} />}
+            trailing={
+              <SettingSelect
+                label={t('settings.items.theme')}
+                options={settingPreferences.theme.options}
+                value={settingPreferences.theme.value}
+                onValueChange={settingPreferences.theme.onValueChange}
+              />
+            }
+          />
+          <Section.Item
+            label={t('settings.items.appLanguage')}
+            leading={<GlobeIcon className="size-5 text-foreground" strokeWidth={2} />}
+            trailing={
+              <SettingSelect
+                label={t('settings.items.appLanguage')}
+                options={settingPreferences.language.options}
+                value={settingPreferences.language.value}
+                onValueChange={settingPreferences.language.onValueChange}
+              />
+            }
+          />
+          <Section.Item
+            label={t('settings.items.fontSize')}
+            leading={<ALargeSmallIcon className="size-5 text-foreground" strokeWidth={2} />}
+            onPress={() => router.push('/settings/font-size')}
+            trailing={
+              <View className="flex-row items-center gap-1">
+                <Text className="text-right text-base text-default-foreground">
+                  {t(FONT_SIZE_STEP_LABEL_KEYS[normalizedFontSizeStep])}
+                </Text>
+                <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2} />
+              </View>
+            }
+          />
+        </Section>
       </ScrollView>
     </>
   );
