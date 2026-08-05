@@ -14,8 +14,7 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
-
-import { SettingsSection } from './components/SettingsSection';
+import { Section } from '@/frontend/components/Section';
 
 const MODEL_SETTING_ICONS = {
   default: '⭐',
@@ -55,7 +54,10 @@ export default function ModelSettingsScreen() {
             placeholder={t('settings.select.placeholder')}
           />
         ),
-        iconEmoji: MODEL_SETTING_ICONS[kind],
+        // min-w-6 keeps the emoji column aligned with the icon rows elsewhere.
+        leading: (
+          <Text className="min-w-6 text-center text-emoji-xl">{MODEL_SETTING_ICONS[kind]}</Text>
+        ),
         title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
         onPress: () => setOpenKind(kind),
       })),
@@ -73,7 +75,7 @@ export default function ModelSettingsScreen() {
       >
         <View className="gap-6 px-4 py-5">
           {items.map((item) => (
-            <SettingsSection key={item.title} items={[item]} />
+            <Section key={item.title} items={[item]} />
           ))}
         </View>
       </ScrollView>

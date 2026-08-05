@@ -14,6 +14,7 @@ import type {
 } from '@cherrystudio/universal/data/api/types';
 import {
   type InfiniteData,
+  keepPreviousData,
   type QueryClient,
   useQueryClient,
   useInfiniteQuery as useTanStackInfiniteQuery,
@@ -57,6 +58,8 @@ export function useQuery<TPath extends ApiPath>(
   path: TPath,
   options?: ParamsOption<TPath, 'GET'> & {
     enabled?: boolean;
+    /** Keep the previous key's data on screen while the new key loads. */
+    keepPreviousData?: boolean;
     query?: QueryParamsForPath<TPath, 'GET'>;
     retry?: boolean | number;
     staleTime?: number;
@@ -70,6 +73,7 @@ export function useQuery<TPath extends ApiPath>(
   const query = options?.query;
   const result = useTanStackQuery<ResponseForPath<TPath, 'GET'>, Error>({
     enabled,
+    placeholderData: options?.keepPreviousData ? keepPreviousData : undefined,
     queryFn: () =>
       dataApi.get(resolvedPath as ConcreteApiPaths, {
         query: query as QueryParamsForPath<ConcreteApiPaths, 'GET'>,

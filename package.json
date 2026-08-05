@@ -126,6 +126,7 @@
     "react-i18next": "^17.0.7",
     "react-native": "0.86.0",
     "react-native-bottom-tabs": "1.4.0",
+    "react-native-chart-kit": "7.0.2",
     "react-native-enriched-markdown": "0.7.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-keyboard-controller": "^1.21.13",

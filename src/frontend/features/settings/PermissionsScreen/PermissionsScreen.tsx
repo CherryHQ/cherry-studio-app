@@ -12,8 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Section, SectionIcon, SectionImage } from '@/frontend/components/Section';
 
-import { SettingsSection } from '../components/SettingsSection';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { getPermissionSummaryKey, type PermissionKind, permissionConfig } from './permissionConfig';
@@ -65,9 +65,13 @@ export default function PermissionsSettingsScreen() {
           <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
         </View>
       ),
-      icon: Platform.OS === 'ios' ? undefined : permissionIcons[kind],
       id: kind,
-      imageSource: Platform.OS === 'ios' ? iosPermissionImages[kind] : undefined,
+      leading:
+        Platform.OS === 'ios' ? (
+          <SectionImage source={iosPermissionImages[kind]} />
+        ) : (
+          <SectionIcon icon={permissionIcons[kind]} />
+        ),
       onPress: () => router.push(`/settings/permissions/${kind}`),
       title: t(`settings.permissions.type.${kind}`),
     };
@@ -83,7 +87,7 @@ export default function PermissionsSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4 py-5">
-          <SettingsSection items={items} />
+          <Section items={items} />
         </View>
       </ScrollView>
     </>

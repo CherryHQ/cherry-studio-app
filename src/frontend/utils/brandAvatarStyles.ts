@@ -1,19 +1,19 @@
-export interface ProviderAvatarDisplayConfig {
+export interface BrandAvatarDisplayConfig {
   borderRadius?: number;
   scale: number;
 }
 
-export const DEFAULT_PROVIDER_ICON_SCALE = 0.8125;
+export const DEFAULT_BRAND_ICON_SCALE = 0.8125;
 
-const PROVIDER_LIST_CONTAINED_ICON: Readonly<ProviderAvatarDisplayConfig> = {
+const CONTAINED_BRAND_ICON: Readonly<BrandAvatarDisplayConfig> = {
   borderRadius: 5,
   scale: 5 / 7,
 };
-const PROVIDER_LIST_DEFAULT_ICON: Readonly<ProviderAvatarDisplayConfig> = {
-  // Native provider assets are trimmed during generation, unlike desktop SVGs.
-  scale: DEFAULT_PROVIDER_ICON_SCALE,
+const DEFAULT_BRAND_ICON: Readonly<BrandAvatarDisplayConfig> = {
+  // Native brand assets are trimmed during generation, unlike desktop SVGs.
+  scale: DEFAULT_BRAND_ICON_SCALE,
 };
-const PROVIDER_LIST_CONTAINED_ICON_IDS = new Set([
+const CONTAINED_BRAND_ICON_IDS = new Set([
   'aihubmix',
   'anthropic',
   'aws-bedrock',
@@ -23,21 +23,21 @@ const PROVIDER_LIST_CONTAINED_ICON_IDS = new Set([
   'yi',
 ]);
 
-export function getProviderListIconDisplayConfig(
+export function getBrandAvatarIconDisplayConfig(
   iconId: string | undefined,
-): ProviderAvatarDisplayConfig | undefined {
+): BrandAvatarDisplayConfig | undefined {
   if (!iconId) {
     return undefined;
   }
 
-  return PROVIDER_LIST_CONTAINED_ICON_IDS.has(iconId.toLowerCase())
-    ? PROVIDER_LIST_CONTAINED_ICON
-    : PROVIDER_LIST_DEFAULT_ICON;
+  return CONTAINED_BRAND_ICON_IDS.has(iconId.toLowerCase())
+    ? CONTAINED_BRAND_ICON
+    : DEFAULT_BRAND_ICON;
 }
 
-export function getProviderAvatarFallback(providerName: string) {
-  const initial = getFirstCharacter(providerName) || 'P';
-  const backgroundColor = generateColorFromCharacter(providerName || initial);
+export function getBrandAvatarFallback(label: string) {
+  const initial = getFirstCharacter(label) || 'P';
+  const backgroundColor = generateColorFromCharacter(label || initial);
 
   return {
     backgroundColor,

@@ -22,6 +22,13 @@ jest.mock('@/frontend/components/headers', () => {
   };
 });
 
+jest.mock('@/frontend/components/Section', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    Section: (props: object) => createElement('Section', props),
+  };
+});
+
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [2, jest.fn()],
 }));
@@ -30,13 +37,6 @@ jest.mock('../components/SettingSelect', () => {
   const { createElement } = jest.requireActual('react');
   return {
     SettingSelect: (props: object) => createElement('SettingSelect', props),
-  };
-});
-
-jest.mock('../components/SettingsSection', () => {
-  const { createElement } = jest.requireActual('react');
-  return {
-    SettingsSection: (props: object) => createElement('SettingsSection', props),
   };
 });
 
@@ -63,7 +63,7 @@ describe('AppearanceSettingsScreen', () => {
   test('shows theme, language, and font size settings', () => {
     const renderer = render(<AppearanceSettingsScreen />);
     const header = renderer.root.findByType('BackHeader');
-    const section = renderer.root.findByType('SettingsSection');
+    const section = renderer.root.findByType('Section');
     const items = section.props.items;
 
     expect(header.props.title).toBe('settings.appearance.title');
@@ -90,7 +90,7 @@ describe('AppearanceSettingsScreen', () => {
 
   test('opens the existing font size detail screen', () => {
     const renderer = render(<AppearanceSettingsScreen />);
-    const items = renderer.root.findByType('SettingsSection').props.items;
+    const items = renderer.root.findByType('Section').props.items;
 
     act(() => items[2].onPress());
 
