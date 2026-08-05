@@ -12,6 +12,9 @@ const themes = [
 const noop = () => undefined;
 
 function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light' }) {
+  const [multilineValue, setMultilineValue] = useState(
+    'Cherry Studio supports multiple AI providers.\nAdd configuration notes here.',
+  );
   const [value, setValue] = useState('Cherry Studio');
 
   return (
@@ -45,6 +48,18 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
         <TextField isDisabled>
           <Label>Organization</Label>
           <Input accessibilityLabel="Organization" onChangeText={noop} value="Cherry AI" />
+        </TextField>
+
+        <TextField>
+          <Label>Notes</Label>
+          <Input
+            accessibilityLabel="Notes"
+            multiline
+            onChangeText={setMultilineValue}
+            textAlignVertical="top"
+            value={multilineValue}
+          />
+          <Description>Four visible lines with overflow scrolling.</Description>
         </TextField>
       </View>
     </ScopedTheme>
