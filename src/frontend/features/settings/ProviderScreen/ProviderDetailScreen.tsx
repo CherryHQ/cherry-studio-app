@@ -12,6 +12,7 @@ import { useBackendModule, useMutation } from '@/frontend/data';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import {
+  buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
   canEditProviderEndpoint,
   getEffectiveAuthConfig,
@@ -48,9 +49,8 @@ export default function ProviderDetailSettingsScreen() {
   const deleteProviderMutation = useMutation('DELETE', '/providers/:id', {
     refresh: ['/providers'],
   });
-  const { apiKeys, apiKeysQuery, authConfig, authConfigQuery } = useProviderApiServiceQueries(
-    providerId ?? '',
-  );
+  const { apiKeys, apiKeysQuery, authConfig, authConfigQuery, replaceApiKeysMutation } =
+    useProviderApiServiceQueries(providerId ?? '');
   const {
     apiKeyOptions: checkApiKeyOptions,
     closeSheet: closeCheckSheet,
@@ -122,6 +122,16 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/api-key-settings',
     });
   }, [provider, providerId, router]);
+  const commitApiKeys = useCallback(
+    (input: string) => {
+      const nextApiKeys = buildApiKeyEntriesFromInput(input, apiKeys ?? []);
+
+      void replaceApiKeysMutation.mutateAsync(nextApiKeys).catch(() => {
+        toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' });
+      });
+    },
+    [apiKeys, replaceApiKeysMutation, t, toast],
+  );
   const openModelAddSettings = useCallback(() => {
     if (!providerId) {
       return;
@@ -283,6 +293,7 @@ export default function ProviderDetailSettingsScreen() {
               provider={provider}
               showApiKeys={showApiKeys}
               showBaseUrl={canEditEndpoint}
+              onApiKeysCommit={commitApiKeys}
               onApiKeysManagePress={openApiKeySettings}
               onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
               onBaseUrlManagePress={openEndpointSettings}

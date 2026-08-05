@@ -1,3 +1,4 @@
+import { Button } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -402,6 +403,7 @@ const PullModelRow = memo(function PullModelRow({
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
 }) {
+  const { t } = useTranslation();
   const isMissing = section === 'missing';
   const handleToggle = useCallback(() => {
     onToggleModel(model, section);
@@ -412,7 +414,6 @@ const PullModelRow = memo(function PullModelRow({
 
   return (
     <ProviderModelRow
-      isDisabled={isPending}
       isFirst={isFirst}
       isLast={isLast}
       model={model}
@@ -420,17 +421,25 @@ const PullModelRow = memo(function PullModelRow({
       // Desktop tints the whole row once the model is in the provider.
       surfaceClassName={isApplied && !isMissing ? 'bg-success/10' : undefined}
       tone={isMissing && !isApplied ? 'struck' : 'default'}
-      onPress={handleToggle}
     >
-      {/* Not a button of its own: the row is the target, so this only pictures
-          which way the next tap goes. */}
-      <View className="size-7 shrink-0 items-center justify-center rounded-lg">
-        {showsMinus ? (
-          <MinusIcon className="size-4 text-danger" strokeWidth={2} />
-        ) : (
-          <PlusIcon className="size-4 text-primary" strokeWidth={2} />
+      <Button
+        accessibilityLabel={t(
+          showsMinus ? 'settings.provider.models.remove' : 'settings.provider.models.add',
         )}
-      </View>
+        accessibilityState={{ busy: isPending }}
+        disabled={isPending}
+        hitSlop={6}
+        icon={
+          showsMinus ? (
+            <MinusIcon className="text-danger" strokeWidth={2} />
+          ) : (
+            <PlusIcon className="text-primary" strokeWidth={2} />
+          )
+        }
+        onPress={handleToggle}
+        size="sm"
+        variant="ghost"
+      />
     </ProviderModelRow>
   );
 });

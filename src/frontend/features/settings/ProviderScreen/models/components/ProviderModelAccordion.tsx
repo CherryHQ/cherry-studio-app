@@ -1,3 +1,4 @@
+import { Button } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -257,19 +258,16 @@ const ModelRow = memo(function ModelRow({
       provider={provider}
       surfaceClassName="mx-4"
     >
-      {/* The pull screen's `-`, doing the same thing from the other side: one
-          tap, no dialog, and the pull itself is the way back. */}
-      <Pressable
+      <Button
         accessibilityLabel={t('settings.provider.models.remove')}
-        accessibilityRole="button"
-        accessibilityState={{ busy: isRemoving, disabled: !canRemove || isRemoving }}
-        className="size-7 shrink-0 items-center justify-center rounded-lg active:opacity-60 disabled:opacity-40"
+        accessibilityState={{ busy: isRemoving }}
         disabled={!canRemove || isRemoving}
         hitSlop={6}
+        icon={<MinusIcon className="text-danger" strokeWidth={2} />}
         onPress={handleRemove}
-      >
-        <MinusIcon className="size-4 text-danger" strokeWidth={2} />
-      </Pressable>
+        size="sm"
+        variant="ghost"
+      />
     </ProviderModelRow>
   );
 });

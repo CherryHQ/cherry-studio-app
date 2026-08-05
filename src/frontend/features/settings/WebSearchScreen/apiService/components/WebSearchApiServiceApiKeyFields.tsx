@@ -1,6 +1,5 @@
-import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { Button } from 'heroui-native/button';
 import {
   ActivityIcon,
   CopyIcon,
@@ -13,9 +12,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import type { WebSearchApiKeyEntry } from '../utils/webSearchApiServiceApiKeys';
 
 export function WebSearchApiServiceApiKeysField({
@@ -46,28 +44,31 @@ export function WebSearchApiServiceApiKeysField({
           secureTextEntry={!apiKeysVisible}
           value={apiKeysInput}
         />
-        <SettingsIconButton
+        <Button
           accessibilityLabel={
             apiKeysVisible
               ? t('settings.websearch.provider.hideApiKeys')
               : t('settings.websearch.provider.showApiKeys')
           }
+          hitSlop={6}
+          icon={apiKeysVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
           onPress={onToggleVisible}
-        >
-          <ApiKeysVisibilityIcon visible={apiKeysVisible} />
-        </SettingsIconButton>
-        <SettingsIconButton
+          variant="secondary"
+        />
+        <Button
           accessibilityLabel={t('settings.websearch.provider.manageApiKeys')}
+          hitSlop={6}
+          icon={<KeyRoundIcon strokeWidth={2} />}
           onPress={onManagePress}
-        >
-          <KeyRoundIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
-        <SettingsIconButton
+          variant="secondary"
+        />
+        <Button
           accessibilityLabel={t('settings.websearch.provider.check')}
+          hitSlop={6}
+          icon={<ActivityIcon strokeWidth={2} />}
           onPress={onCheckPress}
-        >
-          <ActivityIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
+          variant="secondary"
+        />
       </View>
     </TextField>
   );
@@ -196,25 +197,10 @@ export function WebSearchApiServiceApiKeyForm({
         </View>
       ) : null}
 
-      <Button
-        className="h-10 min-h-10 flex-row items-center justify-center gap-2 rounded-xl"
-        onPress={onAdd}
-        variant="secondary"
-      >
-        <PlusIcon className="size-4 text-default-foreground" strokeWidth={2} />
-        <Text className="text-base text-foreground">
-          {t('settings.websearch.provider.addApiKey')}
-        </Text>
+      <Button icon={<PlusIcon strokeWidth={2} />} onPress={onAdd} variant="secondary">
+        {t('settings.websearch.provider.addApiKey')}
       </Button>
     </View>
-  );
-}
-
-function ApiKeysVisibilityIcon({ visible }: { visible: boolean }) {
-  return visible ? (
-    <EyeIcon className="size-5 text-default-foreground" strokeWidth={2} />
-  ) : (
-    <EyeOffIcon className="size-5 text-default-foreground" strokeWidth={2} />
   );
 }
 
@@ -245,20 +231,22 @@ function ApiKeyRow({
           onCommit={(key) => onCommitKey(apiKey.id, key)}
           value={apiKey.key}
         />
-        <SettingsIconButton
+        <Button
           accessibilityLabel={t('settings.websearch.provider.copyApiKey')}
-          isDisabled={isPending}
+          disabled={isPending}
+          hitSlop={6}
+          icon={<CopyIcon strokeWidth={2} />}
           onPress={() => void Clipboard.setStringAsync(apiKey.key)}
-        >
-          <CopyIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
-        <SettingsIconButton
+          variant="secondary"
+        />
+        <Button
           accessibilityLabel={t('settings.websearch.provider.removeApiKey')}
-          isDisabled={isPending}
+          disabled={isPending}
+          hitSlop={6}
+          icon={<Trash2Icon strokeWidth={2} />}
           onPress={() => onRemove(apiKey.id)}
-        >
-          <Trash2Icon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
+          variant="secondary"
+        />
       </View>
       <FieldError>{errorMessage}</FieldError>
     </TextField>

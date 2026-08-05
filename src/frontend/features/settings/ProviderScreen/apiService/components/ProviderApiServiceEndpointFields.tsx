@@ -1,4 +1,4 @@
-import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { Select } from 'heroui-native';
 import { PlusIcon, SettingsIcon, Trash2Icon } from 'lucide-uniwind/png';
@@ -7,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import {
   getEndpointLabel,
   isConfigurableEndpointType,
@@ -32,12 +31,13 @@ export function ProviderApiServiceEndpointField({
           style={styles.endpointInput}
           value={baseUrl}
         />
-        <SettingsIconButton
+        <Button
           accessibilityLabel={t('settings.provider.apiService.manageEndpoints')}
+          hitSlop={6}
+          icon={<SettingsIcon strokeWidth={2} />}
           onPress={onManagePress}
-        >
-          <SettingsIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
+          variant="secondary"
+        />
       </View>
     </TextField>
   );
@@ -106,13 +106,14 @@ export function ProviderApiServiceEndpointForm({
                     onCommit={(value) => onBaseUrlCommit(endpoint, value)}
                   />
                   {!isPrimaryEndpoint ? (
-                    <SettingsIconButton
+                    <Button
                       accessibilityLabel={t('settings.provider.apiService.removeEndpoint')}
-                      isDisabled={pendingEndpoint === endpoint}
+                      disabled={pendingEndpoint === endpoint}
+                      hitSlop={6}
+                      icon={<Trash2Icon strokeWidth={2} />}
                       onPress={() => onRemoveEndpoint(endpoint)}
-                    >
-                      <Trash2Icon className="size-5 text-default-foreground" strokeWidth={2} />
-                    </SettingsIconButton>
+                      variant="secondary"
+                    />
                   ) : null}
                 </View>
                 <FieldError>{endpointErrors?.[endpoint]}</FieldError>

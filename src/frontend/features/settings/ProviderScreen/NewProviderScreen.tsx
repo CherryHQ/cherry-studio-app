@@ -1,4 +1,4 @@
-import { Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
@@ -6,7 +6,6 @@ import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { Accordion } from 'heroui-native/accordion';
-import { Button } from 'heroui-native/button';
 import { useToast } from 'heroui-native/toast';
 import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
@@ -19,7 +18,6 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
-import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 
 const avatarPreviewSize = 96;
@@ -239,20 +237,17 @@ export default function NewProviderScreen() {
                   value={apiKey}
                 />
               </View>
-              <SettingsIconButton
+              <Button
                 accessibilityLabel={
                   apiKeyVisible
                     ? t('settings.provider.apiService.hideApiKeys')
                     : t('settings.provider.apiService.showApiKeys')
                 }
+                hitSlop={6}
+                icon={apiKeyVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
                 onPress={() => setApiKeyVisible((visible) => !visible)}
-              >
-                {apiKeyVisible ? (
-                  <EyeIcon className="size-5 text-default-foreground" strokeWidth={2} />
-                ) : (
-                  <EyeOffIcon className="size-5 text-default-foreground" strokeWidth={2} />
-                )}
-              </SettingsIconButton>
+                variant="secondary"
+              />
             </View>
           </FormField>
 
@@ -370,23 +365,17 @@ function NewProviderAvatarSection({
       <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarUri} />
       <View className="flex-row items-center gap-3">
         <MenuView actions={uploadActions} onPressAction={handleUploadAction}>
-          <Button className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4" variant="secondary">
-            <ImageUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
-            <Text className="text-base text-foreground">
-              {t('settings.provider.add.uploadImage')}
-            </Text>
+          <Button icon={<ImageUpIcon strokeWidth={2} />} variant="secondary">
+            {t('settings.provider.add.uploadImage')}
           </Button>
         </MenuView>
         <Button
-          className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4"
-          isDisabled={!avatarUri}
+          disabled={!avatarUri}
+          icon={<RotateCcwIcon strokeWidth={2} />}
           onPress={resetAvatar}
           variant="secondary"
         >
-          <RotateCcwIcon className="size-4 text-default-foreground" strokeWidth={2} />
-          <Text className="text-base text-foreground">
-            {t('settings.provider.add.resetAvatar')}
-          </Text>
+          {t('settings.provider.add.resetAvatar')}
         </Button>
       </View>
     </View>

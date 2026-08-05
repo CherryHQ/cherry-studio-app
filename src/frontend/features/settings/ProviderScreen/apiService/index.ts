@@ -12,6 +12,7 @@ export { useProviderApiServiceEndpointDraft } from './hooks/useProviderApiServic
 export { useProviderApiServiceQueries } from './hooks/useProviderApiServiceQueries';
 export { useProviderApiServiceSheetClose } from './hooks/useProviderApiServiceSheetClose';
 export {
+  buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
   normalizeApiKeyEntries,
 } from './utils/providerApiServiceApiKeys';
