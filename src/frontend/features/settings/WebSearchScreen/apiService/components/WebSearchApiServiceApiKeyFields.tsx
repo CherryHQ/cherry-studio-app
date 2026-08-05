@@ -36,35 +36,37 @@ export function WebSearchApiServiceApiKeysField({
   return (
     <TextField>
       <Label>{t('settings.websearch.provider.apiKeys')}</Label>
-      <View className="flex-row items-start gap-2">
-        <ApiKeysCommitInput
-          accessibilityLabel={t('settings.websearch.provider.apiKeys')}
-          onCommit={onApiKeysInputChange}
-          placeholder={t('settings.websearch.provider.apiKeysPlaceholder')}
-          secureTextEntry={!apiKeysVisible}
-          value={apiKeysInput}
-        />
+      <View className="flex-row items-center gap-2">
+        <View className="min-w-0 flex-1 overflow-hidden">
+          <ApiKeysCommitInput
+            accessibilityLabel={t('settings.websearch.provider.apiKeys')}
+            onCommit={onApiKeysInputChange}
+            placeholder={t('settings.websearch.provider.apiKeysPlaceholder')}
+            secureTextEntry={!apiKeysVisible}
+            value={apiKeysInput}
+          />
+        </View>
         <Button
           accessibilityLabel={
             apiKeysVisible
               ? t('settings.websearch.provider.hideApiKeys')
               : t('settings.websearch.provider.showApiKeys')
           }
-          hitSlop={6}
+          hitSlop={2}
           icon={apiKeysVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
           onPress={onToggleVisible}
           variant="secondary"
         />
         <Button
           accessibilityLabel={t('settings.websearch.provider.manageApiKeys')}
-          hitSlop={6}
+          hitSlop={2}
           icon={<KeyRoundIcon strokeWidth={2} />}
           onPress={onManagePress}
           variant="secondary"
         />
         <Button
           accessibilityLabel={t('settings.websearch.provider.check')}
-          hitSlop={6}
+          hitSlop={2}
           icon={<ActivityIcon strokeWidth={2} />}
           onPress={onCheckPress}
           variant="secondary"
@@ -142,21 +144,23 @@ function ApiKeysCommitInput({
   }, [commitValue]);
 
   return (
-    <View className="min-w-0 flex-1">
-      <Input
-        accessibilityLabel={accessibilityLabel}
-        autoCapitalize="none"
-        autoCorrect={false}
-        onBlur={handleCommitEvent}
-        onChangeText={handleChangeText}
-        onEndEditing={handleEndEditing}
-        onSubmitEditing={handleCommitEvent}
-        placeholder={placeholder}
-        returnKeyType="done"
-        secureTextEntry={secureTextEntry}
-        value={draftValue}
-      />
-    </View>
+    <Input
+      accessibilityLabel={accessibilityLabel}
+      autoCapitalize="none"
+      autoCorrect={false}
+      lineBreakModeIOS="clip"
+      multiline={false}
+      numberOfLines={1}
+      onBlur={handleCommitEvent}
+      onChangeText={handleChangeText}
+      onEndEditing={handleEndEditing}
+      onSubmitEditing={handleCommitEvent}
+      placeholder={placeholder}
+      returnKeyType="done"
+      selectTextOnFocus
+      secureTextEntry={secureTextEntry}
+      value={draftValue}
+    />
   );
 }
 
@@ -234,7 +238,7 @@ function ApiKeyRow({
         <Button
           accessibilityLabel={t('settings.websearch.provider.copyApiKey')}
           disabled={isPending}
-          hitSlop={6}
+          hitSlop={2}
           icon={<CopyIcon strokeWidth={2} />}
           onPress={() => void Clipboard.setStringAsync(apiKey.key)}
           variant="secondary"
@@ -242,7 +246,7 @@ function ApiKeyRow({
         <Button
           accessibilityLabel={t('settings.websearch.provider.removeApiKey')}
           disabled={isPending}
-          hitSlop={6}
+          hitSlop={2}
           icon={<Trash2Icon strokeWidth={2} />}
           onPress={() => onRemove(apiKey.id)}
           variant="secondary"

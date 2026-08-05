@@ -50,14 +50,14 @@ export function ProviderApiServiceApiKeysField({
               ? t('settings.provider.apiService.hideApiKeys')
               : t('settings.provider.apiService.showApiKeys')
           }
-          hitSlop={6}
+          hitSlop={2}
           icon={apiKeysVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
           onPress={onToggleVisible}
           variant="secondary"
         />
         <Button
           accessibilityLabel={t('settings.provider.apiService.manageApiKeys')}
-          hitSlop={6}
+          hitSlop={2}
           icon={<KeyRoundIcon strokeWidth={2} />}
           onPress={onManagePress}
           variant="secondary"
@@ -206,7 +206,7 @@ function ApiKeyRow({
         <Button
           accessibilityLabel={t('settings.provider.apiService.copyApiKey')}
           disabled={isPending}
-          hitSlop={6}
+          hitSlop={2}
           icon={<CopyIcon strokeWidth={2} />}
           onPress={() => void Clipboard.setStringAsync(apiKey.key)}
           variant="secondary"
@@ -214,7 +214,7 @@ function ApiKeyRow({
         <Button
           accessibilityLabel={t('settings.provider.apiService.removeApiKey')}
           disabled={isPending}
-          hitSlop={6}
+          hitSlop={2}
           icon={<Trash2Icon strokeWidth={2} />}
           onPress={() => onRemove(apiKey.id)}
           variant="secondary"
