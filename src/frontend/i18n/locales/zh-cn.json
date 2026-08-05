@@ -1,9 +1,12 @@
 {
+  "aiUsage.activeDays": "活跃{{count}}天",
   "aiUsage.average": "平均",
   "aiUsage.dayAccessibility": "{{date}}，{{tokens}} Tokens",
   "aiUsage.loadError": "无法加载用量统计。",
+  "aiUsage.less": "少",
   "aiUsage.loading": "正在加载用量统计",
   "aiUsage.mostUsed": "最常使用",
+  "aiUsage.more": "多",
   "aiUsage.noUsageForDay": "当天暂无用量",
   "aiUsage.other": "其他",
   "aiUsage.otherModels": "其他模型",

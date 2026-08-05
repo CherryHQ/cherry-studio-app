@@ -34,7 +34,13 @@ jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     i18n: { language: 'en-US', resolvedLanguage: 'en-US' },
-    t: (key: string) => ({ 'aiUsage.replay': 'Replay usage animation' })[key] ?? key,
+    t: (key: string, options?: { count?: number }) =>
+      ({
+        'aiUsage.activeDays': `${options?.count} active days`,
+        'aiUsage.less': 'Less',
+        'aiUsage.more': 'More',
+        'aiUsage.replay': 'Replay usage animation',
+      })[key] ?? key,
   }),
 }));
 
@@ -125,6 +131,24 @@ describe('AiUsageCalendar', () => {
     const expectedCellSize = (324 - aiUsageCalendar.summaryCellGap * 26) / 27;
     expect(squareProps).toHaveLength(183);
     expect(squareProps?.every((props) => props.cellSize === expectedCellSize)).toBe(true);
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-active-days' }).props.children).toBe(
+      '2 active days',
+    );
+    const legendLevelTestIDs = new Set(
+      renderer?.root
+        .findAll((node) => /^ai-usage-legend-level-\d$/.test(node.props.testID))
+        .map((node) => node.props.testID),
+    );
+    expect(legendLevelTestIDs).toEqual(
+      new Set(Array.from({ length: 5 }, (_, level) => `ai-usage-legend-level-${level}`)),
+    );
+    const firstLegendLevel = renderer?.root.findByProps({ testID: 'ai-usage-legend-level-0' });
+    expect(firstLegendLevel?.props.className).toBe('size-3');
+
+    const summary = renderer?.root.findByProps({ testID: 'ai-usage-calendar-summary' });
+    const legend = renderer?.root.findByProps({ testID: 'ai-usage-calendar-legend' });
+    expect(summary?.props.className).not.toContain('bg-');
+    expect(legend?.props.className).not.toContain('bg-');
   });
 
   it('dims dates before usage begins and rebases the wave to its first active week', async () => {

@@ -1,9 +1,12 @@
 {
+  "aiUsage.activeDays": "{{count}} active days",
   "aiUsage.average": "Average",
   "aiUsage.dayAccessibility": "{{date}}, {{tokens}} Tokens",
   "aiUsage.loadError": "Usage statistics could not be loaded.",
+  "aiUsage.less": "Less",
   "aiUsage.loading": "Loading usage statistics",
   "aiUsage.mostUsed": "Most Used",
+  "aiUsage.more": "More",
   "aiUsage.noUsageForDay": "No usage on this day",
   "aiUsage.other": "Other",
   "aiUsage.otherModels": "Other models",
