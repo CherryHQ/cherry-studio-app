@@ -119,16 +119,13 @@ describe('Input', () => {
     );
   });
 
-  test('supports a multiline input with consumer-defined minimum height', () => {
-    const style = { minHeight: 96, textAlignVertical: 'top' as const };
-
+  test('uses symmetric vertical padding for multiline input without fixing its height', () => {
     act(() => {
       renderer = create(
         <Input
           accessibilityLabel="Description"
           multiline
           onChangeText={jest.fn()}
-          style={style}
           value={'First line\nSecond line'}
         />,
       );
@@ -137,7 +134,8 @@ describe('Input', () => {
     const input = renderer!.root.findByProps({ mockComponent: 'hero-input' });
 
     expect(input.props.multiline).toBe(true);
-    expect(input.props.className).not.toContain('ios:pb-');
-    expect(input.props.style).toBe(style);
+    expect(input.props.className).toContain('py-2');
+    expect(input.props.className).toContain('min-h-10');
+    expect(input.props.style).toBeUndefined();
   });
 });
