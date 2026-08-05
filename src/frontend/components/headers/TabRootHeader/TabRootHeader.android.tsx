@@ -1,5 +1,5 @@
+import { cn } from '@cherrystudio/ui/utils';
 import { Stack } from 'expo-router';
-import { cn } from 'heroui-native/utils';
 import { Fragment, type ReactNode, useMemo } from 'react';
 import { Pressable, Text } from 'react-native';
 

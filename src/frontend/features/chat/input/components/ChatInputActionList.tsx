@@ -1,4 +1,4 @@
-import { cn } from 'heroui-native/utils';
+import { cn } from '@cherrystudio/ui/utils';
 import { CheckIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';

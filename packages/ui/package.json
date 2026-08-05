@@ -25,6 +25,12 @@
       "import": "./src/components/index.ts",
       "default": "./src/components/index.ts"
     },
+    "./utils": {
+      "types": "./src/utils/index.ts",
+      "react-native": "./src/utils/index.ts",
+      "import": "./src/utils/index.ts",
+      "default": "./src/utils/index.ts"
+    },
     "./icons": {
       "types": "./src/icons/index.ts",
       "react-native": "./src/icons/index.ts",

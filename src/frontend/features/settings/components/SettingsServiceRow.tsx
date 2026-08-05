@@ -1,6 +1,6 @@
 import { Section } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
-import { cn } from 'heroui-native/utils';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { memo, type ReactNode, useState } from 'react';
 import { Text, View } from 'react-native';

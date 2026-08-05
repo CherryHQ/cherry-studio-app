@@ -1,5 +1,5 @@
+import { cn } from '@cherrystudio/ui/utils';
 import { Stack, useRouter } from 'expo-router';
-import { cn } from 'heroui-native/utils';
 import { ChevronLeftIcon } from 'lucide-uniwind/png';
 import { Fragment, type ReactElement, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

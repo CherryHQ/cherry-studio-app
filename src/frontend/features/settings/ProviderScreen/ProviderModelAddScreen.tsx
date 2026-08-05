@@ -1,8 +1,8 @@
 import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { cn } from 'heroui-native/utils';
 import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

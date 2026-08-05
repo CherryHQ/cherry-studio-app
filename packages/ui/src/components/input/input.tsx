@@ -1,9 +1,9 @@
 import { Input as HeroInput } from 'heroui-native/input';
-import { cn } from 'heroui-native/utils';
 import { forwardRef } from 'react';
 import { type TextInput, useWindowDimensions } from 'react-native';
 import { useCSSVariable } from 'uniwind';
 
+import { cn } from '../../utils';
 import type { InputProps } from './input.types';
 
 const multilineVisibleLines = 4;

@@ -1,8 +1,8 @@
-import { cn } from 'heroui-native/utils';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { Children, cloneElement, Fragment, isValidElement, type ReactNode, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import { cn } from '../../utils';
 import type { SectionItemProps, SectionProps } from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {

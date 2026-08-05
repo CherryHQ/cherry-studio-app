@@ -1,6 +1,6 @@
+import { cn } from '@cherrystudio/ui/utils';
 import { type PasteEventPayload, TextInputWrapper } from 'expo-paste-input';
 import { TextArea } from 'heroui-native/text-area';
-import { cn } from 'heroui-native/utils';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';

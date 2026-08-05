@@ -1,4 +1,4 @@
-import { cn } from 'heroui-native/utils';
+import { cn } from '@cherrystudio/ui/utils';
 import { type PropsWithChildren } from 'react';
 import { type ViewProps } from 'react-native';
 import Animated from 'react-native-reanimated';

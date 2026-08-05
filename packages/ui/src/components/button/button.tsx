@@ -1,5 +1,4 @@
 import { Spinner } from 'heroui-native';
-import { cn } from 'heroui-native/utils';
 import {
   cloneElement,
   createContext,
@@ -10,6 +9,8 @@ import {
 } from 'react';
 import { Pressable, Text, type PressableProps, type TextProps, type View } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
+
+import { cn } from '../../utils';
 
 export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
 export type ButtonSize = 'default' | 'lg' | 'sm';
