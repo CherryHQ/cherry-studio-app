@@ -24,16 +24,6 @@ jest.mock('heroui-native/input', () => {
   };
 });
 
-jest.mock('heroui-native/text-field', () => {
-  const React = require('react');
-  const { View } = require('react-native');
-
-  return {
-    TextField: (props: object) =>
-      React.createElement(View, { ...props, mockComponent: 'hero-text-field' }),
-  };
-});
-
 describe('Input', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -51,10 +41,10 @@ describe('Input', () => {
       );
     });
 
-    const field = renderer!.root.findByProps({ mockComponent: 'hero-text-field' });
     const input = renderer!.root.findByProps({ mockComponent: 'hero-input' });
 
-    expect(field.props.isDisabled).toBe(false);
+    expect(input.props.isDisabled).toBeUndefined();
+    expect(input.props.isInvalid).toBeUndefined();
     expect(input.props.value).toBe('Cherry');
     expect(input.props.autoCapitalize).toBe('sentences');
     expect(input.props.autoCorrect).toBe(true);
@@ -102,20 +92,14 @@ describe('Input', () => {
       );
     });
 
-    const field = renderer!.root.findByProps({ mockComponent: 'hero-text-field' });
     const input = renderer!.root.findByProps({ mockComponent: 'hero-input' });
 
-    expect(field.props).toEqual(
-      expect.objectContaining({
-        isDisabled: true,
-        testID: 'password-input-field',
-      }),
-    );
     expect(input.props).toEqual(
       expect.objectContaining({
         autoCapitalize: 'none',
         autoCorrect: false,
         autoFocus: true,
+        isDisabled: true,
         keyboardType: 'email-address',
         maxLength: 40,
         placeholder: 'Password',

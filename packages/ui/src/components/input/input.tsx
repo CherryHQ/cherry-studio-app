@@ -1,5 +1,4 @@
 import { Input as HeroInput } from 'heroui-native/input';
-import { TextField } from 'heroui-native/text-field';
 import { cn } from 'heroui-native/utils';
 import { forwardRef } from 'react';
 import { type TextInput, useWindowDimensions } from 'react-native';
@@ -27,8 +26,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
     autoCapitalize = 'sentences',
     autoCorrect = true,
     autoFocus = false,
-    disabled = false,
-    invalid = false,
+    disabled,
+    invalid,
     keyboardType,
     multiline = false,
     maxFontSizeMultiplier,
@@ -65,31 +64,27 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
   );
 
   return (
-    <TextField
+    <HeroInput
+      ref={ref}
+      accessibilityLabel={accessibilityLabel}
+      allowFontScaling={allowFontScaling}
+      autoCapitalize={autoCapitalize}
+      autoCorrect={autoCorrect}
+      autoFocus={autoFocus}
+      className={inputClassName}
       isDisabled={disabled}
       isInvalid={invalid}
-      testID={testID ? `${testID}-field` : undefined}
-    >
-      <HeroInput
-        ref={ref}
-        accessibilityLabel={accessibilityLabel}
-        allowFontScaling={allowFontScaling}
-        autoCapitalize={autoCapitalize}
-        autoCorrect={autoCorrect}
-        autoFocus={autoFocus}
-        className={inputClassName}
-        {...inputProps}
-        keyboardType={keyboardType}
-        maxFontSizeMultiplier={maxFontSizeMultiplier}
-        multiline={multiline}
-        onChangeText={onChangeText}
-        returnKeyType={returnKeyType}
-        scrollEnabled={scrollEnabled ?? (multiline ? true : undefined)}
-        secureTextEntry={secureTextEntry}
-        style={multiline ? [{ height: multilineHeight }, style] : style}
-        testID={testID}
-        value={value}
-      />
-    </TextField>
+      {...inputProps}
+      keyboardType={keyboardType}
+      maxFontSizeMultiplier={maxFontSizeMultiplier}
+      multiline={multiline}
+      onChangeText={onChangeText}
+      returnKeyType={returnKeyType}
+      scrollEnabled={scrollEnabled ?? (multiline ? true : undefined)}
+      secureTextEntry={secureTextEntry}
+      style={multiline ? [{ height: multilineHeight }, style] : style}
+      testID={testID}
+      value={value}
+    />
   );
 });
