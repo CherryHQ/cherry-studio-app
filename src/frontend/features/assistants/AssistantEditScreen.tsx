@@ -219,7 +219,7 @@ function AssistantEditForm({
             <Pressable
               accessibilityLabel={t('assistant.form.emoji')}
               accessibilityRole="button"
-              className="min-h-12 min-w-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
+              className="min-h-10 min-w-10 items-center justify-center rounded-lg border border-border active:opacity-70"
               onPress={openEmojiPicker}
             >
               <Text className="text-emoji-2xl" style={styles.emojiGlyph}>
