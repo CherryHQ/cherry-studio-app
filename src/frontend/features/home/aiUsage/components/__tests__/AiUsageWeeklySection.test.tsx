@@ -96,7 +96,7 @@ describe('AiUsageWeeklySection', () => {
     expect(list?.props.style).toEqual({ height: 283 });
     expect(list?.props.dataKey).toBe('2026-07-27');
     expect(list?.props.getFixedItemSize()).toBe(320);
-    expect(mockScrollToIndex).toHaveBeenCalledWith({ animated: false, index: 7 });
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
     expect(renderer?.root.findAllByProps({ testID: 'ai-usage-show-current-week' })).toHaveLength(0);
     expect(chartNodes().map((node) => node.props.timeline !== undefined)).toEqual([
       false,
@@ -152,6 +152,19 @@ describe('AiUsageWeeklySection', () => {
     expect(mockSelectPage).toHaveBeenLastCalledWith(7);
   });
 
+  test('starts at the active page and reanchors when the week data changes', async () => {
+    await renderSection(6);
+
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-week-list' }).props.initialScrollIndex,
+    ).toBe(6);
+    expect(mockScrollToIndex).not.toHaveBeenCalled();
+
+    await updateSection(6, '2026-08-03');
+
+    expect(mockScrollToIndex).toHaveBeenCalledWith({ animated: false, index: 6 });
+  });
+
   async function renderSection(activePageIndex: number) {
     await act(async () => {
       renderer = create(section(activePageIndex));
@@ -162,18 +175,18 @@ describe('AiUsageWeeklySection', () => {
     );
   }
 
-  async function updateSection(activePageIndex: number) {
-    await act(async () => renderer?.update(section(activePageIndex)));
+  async function updateSection(activePageIndex: number, weekDataKey = '2026-07-27') {
+    await act(async () => renderer?.update(section(activePageIndex, weekDataKey)));
   }
 
-  function section(activePageIndex: number) {
+  function section(activePageIndex: number, weekDataKey = '2026-07-27') {
     return (
       <AiUsageWeeklySection
         activePageIndex={activePageIndex}
         locale="en-US"
         pages={pages}
         todayDateKey="2026-08-02"
-        weekDataKey="2026-07-27"
+        weekDataKey={weekDataKey}
         onSelectDate={mockSelectDate}
         onSelectPage={mockSelectPage}
       />
