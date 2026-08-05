@@ -55,11 +55,12 @@ describe('SearchField', () => {
         autoCorrect: false,
         autoFocus: false,
         className:
-          'min-h-10 rounded-full border border-border py-0 text-[16px] shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+          'min-h-10 rounded-full border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
         placeholder: 'Search',
         returnKeyType: 'search',
       }),
     );
+    expect(input.props.className).not.toContain('text-[16px]');
     expect(input.props.style).toEqual({
       includeFontPadding: false,
       textAlignVertical: 'center',
