@@ -18,6 +18,9 @@ type ThemePreviewProps = {
 
 function ThemePreview({ args, label, theme }: ThemePreviewProps) {
   const [value, setValue] = useState(args.value);
+  const [multilineValue, setMultilineValue] = useState(
+    'Cherry Studio is a desktop client that supports multiple AI providers.\nAdd another line here.',
+  );
 
   useEffect(() => setValue(args.value), [args.value]);
 
@@ -52,6 +55,18 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
             value="password"
           />
         </View>
+        <View className="gap-2">
+          <Text className="text-sm font-medium text-muted-foreground">Multiline</Text>
+          <Input
+            {...args}
+            accessibilityLabel="Description"
+            multiline
+            onChangeText={setMultilineValue}
+            placeholder="Enter a description"
+            style={{ minHeight: 96, textAlignVertical: 'top' }}
+            value={multilineValue}
+          />
+        </View>
       </View>
     </ScopedTheme>
   );
@@ -79,6 +94,7 @@ const meta = {
     autoCorrect: { control: 'boolean' },
     autoFocus: { control: 'boolean' },
     disabled: { control: 'boolean' },
+    multiline: { control: 'boolean' },
     secureTextEntry: { control: 'boolean' },
     value: { control: 'text' },
   },

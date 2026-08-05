@@ -25,6 +25,7 @@ export type InputProps = {
   disabled?: boolean;
   keyboardType?: InputKeyboardType;
   maxLength?: number;
+  multiline?: boolean;
   onBlur?: () => void;
   onChangeText: (value: string) => void;
   onFocus?: () => void;
