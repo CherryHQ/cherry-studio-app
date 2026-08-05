@@ -6,6 +6,14 @@ jest.mock('heroui-native/utils', () => ({
   cn: (...classes: Array<false | null | string | undefined>) => classes.filter(Boolean).join(' '),
 }));
 
+jest.mock('uniwind', () => ({
+  useCSSVariable: () => 24,
+}));
+
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  default: () => ({ fontScale: 1, height: 800, scale: 2, width: 400 }),
+}));
+
 jest.mock('heroui-native/input', () => {
   const React = require('react');
   const { TextInput } = require('react-native');
@@ -119,7 +127,7 @@ describe('Input', () => {
     );
   });
 
-  test('uses symmetric vertical padding for multiline input without fixing its height', () => {
+  test('uses a four-line adaptive viewport for multiline input', () => {
     act(() => {
       renderer = create(
         <Input
@@ -134,8 +142,10 @@ describe('Input', () => {
     const input = renderer!.root.findByProps({ mockComponent: 'hero-input' });
 
     expect(input.props.multiline).toBe(true);
+    expect(input.props.scrollEnabled).toBe(true);
     expect(input.props.className).toContain('py-2');
     expect(input.props.className).toContain('min-h-10');
-    expect(input.props.style).toBeUndefined();
+    expect(input.props.className).toContain('text-base');
+    expect(input.props.style).toEqual([{ height: 112 }, undefined]);
   });
 });
