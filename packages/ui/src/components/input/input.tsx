@@ -28,8 +28,8 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
 ) {
   const inputClassName = cn(
     multiline
-      ? 'min-h-10 rounded-md border border-border text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border'
-      : 'min-h-10 rounded-md border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+      ? 'min-h-10 rounded-lg border border-border text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border'
+      : 'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
     invalid &&
       'border-danger ios:outline-danger ios:focus:outline-danger android:border-danger android:focus:border-danger',
   );

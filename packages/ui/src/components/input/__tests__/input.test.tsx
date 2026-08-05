@@ -51,7 +51,7 @@ describe('Input', () => {
     expect(input.props.autoCapitalize).toBe('sentences');
     expect(input.props.autoCorrect).toBe(true);
     expect(input.props.className).toBe(
-      'min-h-10 rounded-md border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+      'min-h-10 rounded-lg border border-border py-0 text-(length:--text-base) shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
     );
     expect(input.props.className).not.toContain('text-[16px]');
 
