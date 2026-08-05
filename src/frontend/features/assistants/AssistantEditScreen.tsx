@@ -9,7 +9,6 @@ import {
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { TextArea } from 'heroui-native/text-area';
 import { useToast } from 'heroui-native/toast';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
@@ -247,16 +246,12 @@ function AssistantEditForm({
             />
           </FormField>
           <FormField label={t('assistant.form.prompt')}>
-            <TextArea
+            <Input
               accessibilityLabel={t('assistant.form.prompt')}
               autoCorrect
-              variant="secondary"
-              className="min-h-32 rounded-2xl px-4 text-base text-foreground"
               multiline
               onChangeText={(value) => updateForm('prompt', value)}
               placeholder={t('assistant.form.promptPlaceholder')}
-              placeholderColorClassName="accent-muted-foreground"
-              style={styles.textArea}
               value={form.prompt}
             />
           </FormField>
@@ -342,18 +337,14 @@ function AssistantEditForm({
             label={t('assistant.form.customParameters')}
             description={t('assistant.form.customParametersDescription')}
           >
-            <TextArea
+            <Input
               accessibilityLabel={t('assistant.form.customParameters')}
               autoCapitalize="none"
-              variant="secondary"
               autoCorrect={false}
-              className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground"
               multiline
               onChangeText={(value) => updateForm('customParametersJson', value)}
               placeholder="[]"
-              placeholderColorClassName="accent-muted-foreground"
               spellCheck={false}
-              style={styles.textArea}
               value={form.customParametersJson}
             />
           </FormField>
@@ -617,11 +608,5 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     paddingHorizontal: 16,
     paddingTop: 20,
-  },
-  textArea: {
-    includeFontPadding: false,
-    paddingBottom: 12,
-    paddingTop: 12,
-    textAlignVertical: 'top',
   },
 });
