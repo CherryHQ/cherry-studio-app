@@ -1,3 +1,16 @@
-import type { DialogPresentationProps } from '../dialog-action.types';
+export type DialogActionRole = 'cancel' | 'default' | 'destructive';
 
-export type AlertProps = DialogPresentationProps;
+export type DialogAction = {
+  label: string;
+  onPress?: () => void;
+  role?: DialogActionRole;
+};
+
+export type AlertProps = {
+  actions: readonly DialogAction[];
+  description?: string;
+  isOpen: boolean;
+  onOpenChange: (isOpen: boolean) => void;
+  testID?: string;
+  title: string;
+};

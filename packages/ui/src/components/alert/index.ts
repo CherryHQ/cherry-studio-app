@@ -1,2 +1,2 @@
 export * from './alert';
-export type { AlertProps } from './alert.types';
+export type { AlertProps, DialogAction, DialogActionRole } from './alert.types';
