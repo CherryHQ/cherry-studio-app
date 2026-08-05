@@ -1,0 +1,138 @@
+import { Text, View } from 'react-native';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { Section } from '../section';
+
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = require('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
+});
+
+jest.mock('lucide-uniwind/png', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  return {
+    ChevronRightIcon: (props: object) =>
+      React.createElement(View, { ...props, testID: 'section-chevron' }),
+  };
+});
+
+describe('Section', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+  });
+
+  function render(node: React.ReactElement) {
+    act(() => {
+      renderer = create(node);
+    });
+
+    return renderer!;
+  }
+
+  test('renders grouped rows with a title, footer, and inset separators', () => {
+    const tree = render(
+      <Section footer="Changes apply immediately." title="General">
+        <Section.Item label="Appearance" />
+        <Section.Item label="Language" />
+        <Section.Item label="Storage" />
+      </Section>,
+    );
+
+    expect(
+      tree.root.findAll((node) => node.type === View && node.props.testID === 'section-separator'),
+    ).toHaveLength(2);
+    expect(tree.root.findAllByType(Text).map((node) => node.props.children)).toEqual(
+      expect.arrayContaining([
+        'General',
+        'Appearance',
+        'Language',
+        'Storage',
+        'Changes apply immediately.',
+      ]),
+    );
+    expect(
+      tree.root.findAll(
+        (node) =>
+          typeof node.props.className === 'string' &&
+          node.props.className.includes('bg-settings-grouped-surface'),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      tree.root.findAll(
+        (node) =>
+          typeof node.props.className === 'string' &&
+          node.props.className.includes('min-h-10 flex-row items-center gap-3 px-3 py-2'),
+      ).length,
+    ).toBeGreaterThan(0);
+  });
+
+  test('uses Pressable only for interactive items and shows a default chevron', () => {
+    const onPress = jest.fn();
+    const tree = render(
+      <Section>
+        <Section.Item label="Models" onPress={onPress} testID="interactive-row" />
+        <Section.Item label="Version" testID="static-row" trailing={<Text>1.0</Text>} />
+      </Section>,
+    );
+
+    const interactiveRow = tree.root.find(
+      (node) =>
+        node.props.accessibilityRole === 'button' &&
+        typeof node.props.className === 'string' &&
+        node.props.testID === 'interactive-row',
+    );
+    const staticRow = tree.root.find(
+      (node) =>
+        node.props.accessibilityRole === undefined &&
+        typeof node.props.className === 'string' &&
+        node.props.testID === 'static-row',
+    );
+
+    expect(interactiveRow.props.accessibilityLabel).toBe('Models');
+    expect(tree.root.findAllByProps({ testID: 'section-chevron' }).length).toBeGreaterThan(0);
+    expect(staticRow.props.accessibilityRole).toBeUndefined();
+
+    act(() => interactiveRow.props.onPress());
+    expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  test('supports disabled, destructive, description, and custom trailing content', () => {
+    const onPress = jest.fn();
+    const tree = render(
+      <Section>
+        <Section.Item
+          description="This cannot be undone."
+          destructive
+          disabled
+          label="Delete account"
+          onPress={onPress}
+          testID="delete-row"
+          trailing={<Text testID="custom-trailing">Locked</Text>}
+        />
+      </Section>,
+    );
+    const row = tree.root.find(
+      (node) =>
+        node.props.accessibilityRole === 'button' &&
+        typeof node.props.className === 'string' &&
+        node.props.testID === 'delete-row',
+    );
+    const label = tree.root.findByProps({ children: 'Delete account' });
+
+    expect(row.props.disabled).toBe(true);
+    expect(row.props.className).toContain('opacity-40');
+    expect(label.props.className).toContain('text-danger');
+    expect(tree.root.findByProps({ testID: 'custom-trailing' })).toBeDefined();
+    expect(
+      tree.root.findAll((node) => node.type === View && node.props.testID === 'section-chevron'),
+    ).toHaveLength(0);
+  });
+});
