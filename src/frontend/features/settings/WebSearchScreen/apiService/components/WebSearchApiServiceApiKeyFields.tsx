@@ -143,20 +143,22 @@ function ApiKeysCommitInput({
   }, [commitValue]);
 
   return (
-    <Input
-      accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
-      onBlur={handleCommitEvent}
-      onChangeText={handleChangeText}
-      onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
-      placeholder={placeholder}
-      returnKeyType="done"
-      secureTextEntry={secureTextEntry}
-      style={styles.input}
-      value={draftValue}
-    />
+    <View className="min-w-0 flex-1">
+      <Input
+        accessibilityLabel={accessibilityLabel}
+        autoCapitalize="none"
+        autoCorrect={false}
+        onBlur={handleCommitEvent}
+        onChangeText={handleChangeText}
+        onEndEditing={handleEndEditing}
+        onSubmitEditing={handleCommitEvent}
+        placeholder={placeholder}
+        returnKeyType="done"
+        secureTextEntry={secureTextEntry}
+        style={styles.input}
+        value={draftValue}
+      />
+    </View>
   );
 }
 
@@ -295,20 +297,22 @@ function ApiKeyInput({
   }, [onCommit, value]);
 
   return (
-    <Input
-      accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
-      disabled={isDisabled}
-      onBlur={handleCommitEvent}
-      onChangeText={onChangeText}
-      onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
-      placeholder={t('settings.websearch.provider.apiKeyPlaceholder')}
-      returnKeyType="done"
-      style={styles.input}
-      value={value}
-    />
+    <View className="min-w-0 flex-1">
+      <Input
+        accessibilityLabel={accessibilityLabel}
+        autoCapitalize="none"
+        autoCorrect={false}
+        disabled={isDisabled}
+        onBlur={handleCommitEvent}
+        onChangeText={onChangeText}
+        onEndEditing={handleEndEditing}
+        onSubmitEditing={handleCommitEvent}
+        placeholder={t('settings.websearch.provider.apiKeyPlaceholder')}
+        returnKeyType="done"
+        style={styles.input}
+        value={value}
+      />
+    </View>
   );
 }
 
