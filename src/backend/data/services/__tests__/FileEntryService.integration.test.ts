@@ -1,7 +1,7 @@
 import { ContentHashSchema } from '@cherrystudio/universal/data/types/file';
 
 import { FileEntryService } from '../FileEntryService';
-import { createServiceTestDatabase } from '../serviceTestDatabase';
+import { createServiceTestDatabase } from './helpers/serviceTestDatabase';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
