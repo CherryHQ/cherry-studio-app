@@ -55,7 +55,7 @@ describe('SearchField', () => {
         autoCorrect: false,
         autoFocus: false,
         className:
-          'min-h-10 rounded-full border border-border py-0 text-base shadow-none ios:pb-2 ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+          'min-h-10 rounded-full border border-border py-0 text-[16px] shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
         placeholder: 'Search',
         returnKeyType: 'search',
       }),
@@ -81,7 +81,7 @@ describe('SearchField', () => {
         />,
       );
     });
-    expect(input.props.className).toContain('ios:pb-1');
+    expect(input.props.className).not.toContain('ios:pt-');
   });
 
   test('forwards state, callbacks, layout, and test IDs', () => {

@@ -18,10 +18,6 @@ export function SearchField({
   testID,
   value,
 }: SearchFieldProps) {
-  const inputClassName = value
-    ? 'min-h-10 rounded-full border border-border py-0 text-base shadow-none ios:pb-2 ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border'
-    : 'min-h-10 rounded-full border border-border py-0 text-base shadow-none ios:pb-1 ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border';
-
   return (
     <HeroSearchField
       isDisabled={disabled}
@@ -37,7 +33,7 @@ export function SearchField({
           autoCapitalize="none"
           autoCorrect={false}
           autoFocus={autoFocus}
-          className={inputClassName}
+          className="min-h-10 rounded-full border border-border py-0 text-[16px] shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border"
           onBlur={onBlur}
           onFocus={onFocus}
           onSubmitEditing={onSubmitEditing}
