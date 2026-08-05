@@ -77,12 +77,14 @@ describe('Section', () => {
   test('uses Pressable only for interactive items and shows a default chevron', () => {
     const onPress = jest.fn();
     const onPressIn = jest.fn();
+    const onPressOut = jest.fn();
     const tree = render(
       <Section>
         <Section.Item
           label="Models"
           onPress={onPress}
           onPressIn={onPressIn}
+          onPressOut={onPressOut}
           testID="interactive-row"
         />
         <Section.Item label="Version" testID="static-row" trailing={<Text>1.0</Text>} />
@@ -117,6 +119,7 @@ describe('Section', () => {
     expect(separators()).toHaveLength(1);
     expect(separators()[0].props.className).toContain('opacity-0');
     act(() => interactiveRow.props.onPressOut());
+    expect(onPressOut).toHaveBeenCalledTimes(1);
     expect(separators()).toHaveLength(1);
     expect(separators()[0].props.className).not.toContain('opacity-0');
   });
@@ -151,5 +154,28 @@ describe('Section', () => {
     expect(
       tree.root.findAll((node) => node.type === View && node.props.testID === 'section-chevron'),
     ).toHaveLength(0);
+  });
+
+  test('supports non-button accessibility roles and states', () => {
+    const tree = render(
+      <Section>
+        <Section.Item
+          accessibilityRole="radio"
+          accessibilityState={{ checked: true }}
+          label="Always"
+          onPress={jest.fn()}
+          showChevron={false}
+          testID="radio-row"
+        />
+      </Section>,
+    );
+    const row = tree.root.find(
+      (node) =>
+        node.props.testID === 'radio-row' &&
+        node.props.accessibilityRole === 'radio' &&
+        typeof node.props.className === 'string',
+    );
+
+    expect(row.props.accessibilityState).toEqual({ checked: true, disabled: undefined });
   });
 });

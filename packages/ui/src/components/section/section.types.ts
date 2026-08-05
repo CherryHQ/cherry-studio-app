@@ -24,6 +24,7 @@ export type SectionItemProps = AccessibilityProps & {
   leading?: ReactNode;
   onPress?: () => void;
   onPressIn?: PressableProps['onPressIn'];
+  onPressOut?: PressableProps['onPressOut'];
   showChevron?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;

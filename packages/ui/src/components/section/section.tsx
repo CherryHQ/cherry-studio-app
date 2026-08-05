@@ -20,6 +20,8 @@ function renderTextSlot(content: ReactNode, className?: string) {
 function SectionItem({
   accessibilityHint,
   accessibilityLabel,
+  accessibilityRole,
+  accessibilityState,
   className,
   description,
   destructive = false,
@@ -28,6 +30,7 @@ function SectionItem({
   leading,
   onPress,
   onPressIn,
+  onPressOut,
   onPressedChange,
   showChevron,
   style,
@@ -37,6 +40,10 @@ function SectionItem({
   const shouldShowChevron = showChevron ?? (Boolean(onPress) && trailing == null);
   const resolvedAccessibilityLabel =
     accessibilityLabel ?? (typeof label === 'string' ? label : undefined);
+  const resolvedAccessibilityState = {
+    ...accessibilityState,
+    disabled: disabled || accessibilityState?.disabled,
+  };
   const rowClassName = cn(
     'min-h-10 flex-row items-center gap-3 px-3 py-2',
     disabled && 'opacity-40',
@@ -63,8 +70,8 @@ function SectionItem({
       <Pressable
         accessibilityHint={accessibilityHint}
         accessibilityLabel={resolvedAccessibilityLabel}
-        accessibilityRole="button"
-        accessibilityState={{ disabled }}
+        accessibilityRole={accessibilityRole ?? 'button'}
+        accessibilityState={resolvedAccessibilityState}
         className={cn(rowClassName, 'active:bg-foreground/5')}
         disabled={disabled}
         onPress={onPress}
@@ -72,7 +79,10 @@ function SectionItem({
           onPressedChange?.(true);
           onPressIn?.(event);
         }}
-        onPressOut={() => onPressedChange?.(false)}
+        onPressOut={(event) => {
+          onPressedChange?.(false);
+          onPressOut?.(event);
+        }}
         style={style}
         testID={testID}
       >
@@ -85,6 +95,8 @@ function SectionItem({
     <View
       accessibilityHint={accessibilityHint}
       accessibilityLabel={resolvedAccessibilityLabel}
+      accessibilityRole={accessibilityRole}
+      accessibilityState={resolvedAccessibilityState}
       className={rowClassName}
       style={style}
       testID={testID}
