@@ -1,6 +1,6 @@
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { ChevronLeftIcon, ImagesIcon, InfoIcon } from 'lucide-uniwind/png';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -81,21 +81,24 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
   const appliedSelectionRef = useRef(isSelected);
   const previousItemIdRef = useRef(item.id);
 
-  useEffect(() => {
-    if (previousItemIdRef.current !== item.id) {
-      previousItemIdRef.current = item.id;
-      appliedSelectionRef.current = isSelected;
-      selectionProgress.set(isSelected ? 1 : 0);
+  useLayoutEffect(() => {
+    if (previousItemIdRef.current === item.id) {
       return;
     }
 
+    previousItemIdRef.current = item.id;
+    appliedSelectionRef.current = isSelected;
+    selectionProgress.set(isSelected ? 1 : 0);
+  }, [isSelected, item.id, selectionProgress]);
+
+  useEffect(() => {
     if (appliedSelectionRef.current === isSelected) {
       return;
     }
 
     appliedSelectionRef.current = isSelected;
     selectionProgress.set(withTiming(isSelected ? 1 : 0, PHOTO_SELECTION_TIMING));
-  }, [isSelected, item.id, selectionProgress]);
+  }, [isSelected, selectionProgress]);
 
   const imageStyle = useAnimatedStyle(() => ({
     borderRadius: interpolate(selectionProgress.value, [0, 1], [0, 12]),
