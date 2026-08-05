@@ -2,8 +2,8 @@ import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import {
+  getConfigurableEndpointTypesForProvider,
   getPrimaryEndpoint,
-  isConfigurableEndpointType,
   resolveVisibleEndpointTypes,
 } from './providerApiServiceEndpointRules';
 
@@ -19,6 +19,12 @@ export function createEndpointDraft(provider: Provider): EndpointDraft {
     Object.entries(endpointConfigs).map(([endpoint, config]) => [endpoint, config.baseUrl ?? '']),
   ) as Partial<Record<EndpointType, string>>;
   const primaryEndpoint = getPrimaryEndpoint(provider);
+  const visibleEndpointTypes = [
+    ...new Set([
+      ...resolveVisibleEndpointTypes(provider),
+      ...getConfigurableEndpointTypesForProvider(provider),
+    ]),
+  ];
 
   return {
     baseUrlByEndpoint: {
@@ -26,21 +32,6 @@ export function createEndpointDraft(provider: Provider): EndpointDraft {
       [primaryEndpoint]: endpointConfigs[primaryEndpoint]?.baseUrl ?? '',
     },
     primaryEndpoint,
-    visibleEndpointTypes: resolveVisibleEndpointTypes(provider),
+    visibleEndpointTypes,
   };
-}
-
-export function canAddEndpointToDraft(draft: EndpointDraft, endpoint: EndpointType): boolean {
-  return (
-    endpoint !== draft.primaryEndpoint &&
-    isConfigurableEndpointType(endpoint) &&
-    !draft.visibleEndpointTypes.includes(endpoint)
-  );
-}
-
-export function canUseEndpointAsPrimary(draft: EndpointDraft, endpoint: EndpointType): boolean {
-  return (
-    draft.visibleEndpointTypes.includes(endpoint) &&
-    Boolean(draft.baseUrlByEndpoint[endpoint]?.trim())
-  );
 }

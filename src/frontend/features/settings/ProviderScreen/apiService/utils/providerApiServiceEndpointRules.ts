@@ -55,16 +55,6 @@ export function resolveVisibleEndpointTypes(provider?: Provider | null): Endpoin
   return [primaryEndpoint, ...secondaryEndpoints];
 }
 
-export function buildAddableEndpointOptions(
-  provider: Provider | null | undefined,
-  visibleEndpointTypes: readonly EndpointType[] = [],
-): EndpointType[] {
-  const visible = new Set(visibleEndpointTypes);
-  return getConfigurableEndpointTypesForProvider(provider).filter(
-    (endpoint) => !visible.has(endpoint),
-  );
-}
-
 export function isValidEndpointBaseUrl(value: string): boolean {
   const trimmed = value.trim();
 

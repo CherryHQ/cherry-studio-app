@@ -23,7 +23,6 @@ export {
 } from './utils/providerApiServiceDirtyState';
 export type { EndpointDraft } from './utils/providerApiServiceEndpointDraft';
 export {
-  buildAddableEndpointOptions,
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
   getEndpointLabel,

@@ -65,7 +65,12 @@ describe('useProviderApiServiceEndpointDraft', () => {
     expect(mount(persistedProvider).draft).toEqual({
       baseUrlByEndpoint: { 'openai-chat-completions': 'https://chat.example.com' },
       primaryEndpoint: 'openai-chat-completions',
-      visibleEndpointTypes: ['openai-chat-completions'],
+      visibleEndpointTypes: [
+        'openai-chat-completions',
+        'openai-responses',
+        'anthropic-messages',
+        'google-generate-content',
+      ],
     });
     expect(isDirty(persistedProvider)).toBe(false);
   });
@@ -108,55 +113,15 @@ describe('useProviderApiServiceEndpointDraft', () => {
     );
   });
 
-  it('keeps a blank added endpoint visible without counting it as unsaved work', () => {
+  it('shows every configurable endpoint without counting empty fields as unsaved work', () => {
     mount(persistedProvider);
-
-    act(() => current().addEndpoint('anthropic-messages'));
 
     expect(current().draft.visibleEndpointTypes).toEqual([
       'openai-chat-completions',
+      'openai-responses',
       'anthropic-messages',
+      'google-generate-content',
     ]);
-    expect(current().draft.baseUrlByEndpoint['anthropic-messages']).toBe('');
     expect(isDirty(persistedProvider)).toBe(false);
-  });
-
-  it('ignores adding an endpoint that is already visible or not configurable', () => {
-    mount(persistedProvider);
-
-    act(() => current().addEndpoint('openai-chat-completions'));
-    act(() => current().addEndpoint('ollama-chat'));
-
-    expect(current().draft.visibleEndpointTypes).toEqual(['openai-chat-completions']);
-  });
-
-  it('removes a secondary endpoint but never the primary one', () => {
-    mount(
-      createProvider({
-        'anthropic-messages': { baseUrl: 'https://anthropic.example.com' },
-        'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
-      }),
-    );
-
-    act(() => current().removeEndpoint('anthropic-messages'));
-    expect(current().draft.visibleEndpointTypes).toEqual(['openai-chat-completions']);
-    expect(current().draft.baseUrlByEndpoint['anthropic-messages']).toBeUndefined();
-
-    act(() => current().removeEndpoint('openai-chat-completions'));
-    expect(current().draft.visibleEndpointTypes).toEqual(['openai-chat-completions']);
-  });
-
-  it('changes the primary endpoint only after that endpoint has a Base URL', () => {
-    mount(persistedProvider);
-
-    act(() => current().addEndpoint('anthropic-messages'));
-    act(() => current().updatePrimaryEndpoint('anthropic-messages'));
-    expect(current().draft.primaryEndpoint).toBe('openai-chat-completions');
-
-    act(() => current().updateBaseUrl('anthropic-messages', 'https://anthropic.example.com'));
-    act(() => current().updatePrimaryEndpoint('anthropic-messages'));
-
-    expect(current().draft.primaryEndpoint).toBe('anthropic-messages');
-    expect(isDirty(persistedProvider)).toBe(true);
   });
 });
