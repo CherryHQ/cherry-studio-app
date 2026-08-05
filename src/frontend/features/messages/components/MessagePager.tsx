@@ -14,6 +14,7 @@ import { TopicList } from '@/frontend/features/topics';
 
 type MessagePagerProps = {
   showRecentsHeading?: boolean;
+  topicSearchText?: string;
 };
 
 // Hand-rolled two-page slider instead of @expo/ui's PagerView: the SwiftUI
@@ -23,7 +24,10 @@ type MessagePagerProps = {
 // can recover it. Swiping between pages was already disabled (it collides
 // with the topic rows' own swipe actions), so scope-driven translation is
 // all the paging this screen needs.
-export function MessagePager({ showRecentsHeading = false }: MessagePagerProps) {
+export function MessagePager({
+  showRecentsHeading = false,
+  topicSearchText = '',
+}: MessagePagerProps) {
   const { t } = useTranslation();
   const { scope } = useMessageScope();
   const { width: windowWidth } = useWindowDimensions();
@@ -49,7 +53,7 @@ export function MessagePager({ showRecentsHeading = false }: MessagePagerProps) 
               {t('navigation.recents')}
             </Text>
           ) : null}
-          <TopicList />
+          <TopicList searchText={topicSearchText} />
         </View>
         <View collapsable={false} style={{ width: windowWidth }}>
           <DrawingList />

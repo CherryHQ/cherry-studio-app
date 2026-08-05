@@ -216,46 +216,52 @@ function ProviderModelPullPreviewPage({
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
 
   return (
-    <LegendList
-      alwaysBounceVertical={false}
-      contentContainerStyle={styles.listContent}
-      contentInsetAdjustmentBehavior="automatic"
-      data={listItems}
-      drawDistance={320}
-      estimatedItemSize={providerModelRowHeight}
-      extraData={listExtraData}
-      getItemType={getPullListItemType}
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
-      keyExtractor={pullListKeyExtractor}
-      ListFooterComponent={
-        isSearchEmpty ? (
-          <View className="items-center justify-center px-4 py-10">
-            <Text className="text-center text-base text-default-foreground">
-              {t('settings.provider.models.search.empty')}
-            </Text>
+    <>
+      {process.env.EXPO_OS === 'ios' ? (
+        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+      ) : null}
+      <LegendList
+        alwaysBounceVertical={false}
+        contentContainerStyle={styles.listContent}
+        contentInsetAdjustmentBehavior="automatic"
+        data={listItems}
+        drawDistance={320}
+        estimatedItemSize={providerModelRowHeight}
+        extraData={listExtraData}
+        getItemType={getPullListItemType}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        keyExtractor={pullListKeyExtractor}
+        ListFooterComponent={
+          isSearchEmpty ? (
+            <View className="items-center justify-center px-4 py-10">
+              <Text className="text-center text-base text-default-foreground">
+                {t('settings.provider.models.search.empty')}
+              </Text>
+            </View>
+          ) : null
+        }
+        ListHeaderComponent={
+          // One gap for the whole screen: the Android search field, the filter
+          // bar and the first section are all 12 apart.
+          <View className="gap-3 pb-3">
+            {process.env.EXPO_OS === 'ios' ? null : (
+              <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+            )}
+            <ProviderModelTypeFilterBar
+              counts={typeCounts}
+              selectedFilter={typeFilter}
+              onSelect={setTypeFilter}
+            />
           </View>
-        ) : null
-      }
-      ListHeaderComponent={
-        // One gap for the whole screen: the search field, the filter bar and
-        // the first section are all 12 apart, the same distance two sections
-        // keep from each other and the same the content keeps from the header.
-        <View className="gap-3 pb-3">
-          <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-          <ProviderModelTypeFilterBar
-            counts={typeCounts}
-            selectedFilter={typeFilter}
-            onSelect={setTypeFilter}
-          />
-        </View>
-      }
-      maintainVisibleContentPosition={false}
-      recycleItems
-      renderItem={renderPullListItem}
-      showsVerticalScrollIndicator={false}
-      style={styles.list}
-    />
+        }
+        maintainVisibleContentPosition={false}
+        recycleItems
+        renderItem={renderPullListItem}
+        showsVerticalScrollIndicator={false}
+        style={styles.list}
+      />
+    </>
   );
 }
 

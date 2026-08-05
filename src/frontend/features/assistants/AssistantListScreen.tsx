@@ -1,5 +1,5 @@
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
 import { BotIcon, CheckIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -47,7 +47,21 @@ export default function AssistantListScreen() {
   const bottomInset = useMessageListBottomInset();
   const [isEditing, setIsEditing] = useState(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+
+  const filteredAssistants = useMemo(() => {
+    const query = searchText.trim().toLocaleLowerCase();
+    if (!query) {
+      return assistants;
+    }
+
+    return assistants.filter((assistant) =>
+      [assistant.name, assistant.modelName].some((value) =>
+        value?.toLocaleLowerCase().includes(query),
+      ),
+    );
+  }, [assistants, searchText]);
 
   useEffect(() => {
     if (process.env.EXPO_OS !== 'android') {
@@ -59,6 +73,7 @@ export default function AssistantListScreen() {
 
   const enterEditing = useCallback(() => {
     closeOpen();
+    setSearchText('');
     setIsEditing(true);
     if (process.env.EXPO_OS === 'android') {
       setBottomTabBarHidden(true);
@@ -176,6 +191,18 @@ export default function AssistantListScreen() {
         rightActions={isEditing ? undefined : rightActions}
         title={t('assistant.list.title')}
       />
+      {process.env.EXPO_OS === 'ios' && !isEditing ? (
+        <Stack.SearchBar
+          autoCapitalize="none"
+          hideNavigationBar={false}
+          hideWhenScrolling={false}
+          obscureBackground={false}
+          placeholder={t('navigation.search')}
+          placement="stacked"
+          onCancelButtonPress={() => setSearchText('')}
+          onChangeText={(event) => setSearchText(event.nativeEvent.text)}
+        />
+      ) : null}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -183,14 +210,14 @@ export default function AssistantListScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        {assistants.length > 0 ? (
+        {filteredAssistants.length > 0 ? (
           <View>
-            {assistants.map((assistant, index) => (
+            {filteredAssistants.map((assistant, index) => (
               <AssistantListRow
                 key={assistant.id}
                 assistant={assistant}
                 isEditing={isEditing}
-                isLast={index === assistants.length - 1}
+                isLast={index === filteredAssistants.length - 1}
                 isSelected={selectedIds.has(assistant.id)}
                 notifyClose={notifyClose}
                 notifyWillOpen={notifyWillOpen}
@@ -200,8 +227,12 @@ export default function AssistantListScreen() {
               />
             ))}
           </View>
-        ) : (
+        ) : assistants.length === 0 ? (
           <AssistantEmptyState isLoading={isLoading} onCreate={openCreateAssistant} />
+        ) : (
+          <View className="items-center px-4 py-12">
+            <Text className="text-sm text-muted-foreground">{t('assistant.list.noResults')}</Text>
+          </View>
         )}
       </ScrollView>
       {isEditing ? (

@@ -223,6 +223,7 @@
   "assistant.list.emptyDescription": "创建一个助手，保存它的提示词、模型和生成设置。",
   "assistant.list.emptyTitle": "还没有助手",
   "assistant.list.loading": "正在加载助手...",
+  "assistant.list.noResults": "没有匹配的助手",
   "assistant.list.title": "助手",
   "assistant.list.webBadge": "联网",
   "assistant.model.none": "未选择模型",

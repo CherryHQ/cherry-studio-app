@@ -223,6 +223,7 @@
   "assistant.list.emptyDescription": "Create an assistant to save its prompt, model, and generation settings.",
   "assistant.list.emptyTitle": "No assistants yet",
   "assistant.list.loading": "Loading assistants...",
+  "assistant.list.noResults": "No matching assistants",
   "assistant.list.title": "Assistants",
   "assistant.list.webBadge": "Web",
   "assistant.model.none": "No model selected",

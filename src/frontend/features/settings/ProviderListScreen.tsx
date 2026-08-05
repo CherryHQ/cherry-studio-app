@@ -1,17 +1,18 @@
+import { SearchField } from '@cherrystudio/ui';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { SearchField } from 'heroui-native/search-field';
 import { PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
+import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { Section } from '@/frontend/components/Section';
 import { useQuery } from '@/frontend/data';
 import {
   hiddenProviderListIds,
+  isIOS,
   isLiquidGlassAvailable,
   settingsServiceRow,
 } from '@/frontend/utils/constants';
@@ -20,6 +21,7 @@ import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
 const providerListStaleTime = 1000 * 60 * 5;
+const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 
 const keyExtractor = (item: SettingsServiceRowProps) => item.id;
 const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
@@ -32,6 +34,7 @@ export default function ProviderSettingsScreen() {
   const router = useRouter();
   const topInset = isLiquidGlassAvailable ? headerHeight : 0;
   const [searchText, setSearchText] = useState('');
+  const [isNativeSearchFocused, setIsNativeSearchFocused] = useState(false);
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
 
@@ -125,29 +128,44 @@ export default function ProviderSettingsScreen() {
   return (
     <>
       <BackHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
+      {usesNativeBottomSearch ? (
+        <>
+          <Stack.SearchBar
+            allowToolbarIntegration
+            autoCapitalize="none"
+            hideWhenScrolling={false}
+            obscureBackground={false}
+            placeholder={t('navigation.search')}
+            placement="integrated"
+            onBlur={() => setIsNativeSearchFocused(false)}
+            onCancelButtonPress={() => {
+              setIsNativeSearchFocused(false);
+              setSearchText('');
+            }}
+            onChangeText={(event) => setSearchText(event.nativeEvent.text)}
+            onFocus={() => setIsNativeSearchFocused(true)}
+          />
+          <Stack.Toolbar placement="bottom">
+            <Stack.Toolbar.SearchBarSlot />
+          </Stack.Toolbar>
+        </>
+      ) : null}
       <Pressable
         accessible={false}
         className="flex-1 gap-3 px-4 pb-5"
         onPress={Keyboard.dismiss}
-        style={{ paddingTop: topInset }}
+        style={{ paddingTop: topInset + (isNativeSearchFocused ? 12 : 0) }}
       >
-        <SearchField className="w-full" onChange={setSearchText} value={searchText}>
-          <SearchField.Group className="h-10 rounded-xl bg-settings-grouped-surface">
-            <SearchField.SearchIcon iconProps={{ size: 18 }} />
-            <SearchField.Input
-              accessibilityLabel={t('navigation.search')}
-              autoCapitalize="none"
-              autoComplete="off"
-              autoCorrect={false}
-              className="h-10 min-h-10 rounded-xl border-0 bg-transparent py-0 pl-9 pr-3 text-base"
-              placeholder={t('navigation.search')}
-              returnKeyType="search"
-              spellCheck={false}
-              style={styles.searchInput}
-              textContentType="none"
-            />
-          </SearchField.Group>
-        </SearchField>
+        {usesNativeBottomSearch ? null : (
+          <SearchField
+            accessibilityLabel={t('navigation.search')}
+            clearAccessibilityLabel={t('common.clear')}
+            onChangeText={setSearchText}
+            onClear={() => setSearchText('')}
+            placeholder={t('navigation.search')}
+            value={searchText}
+          />
+        )}
         {filteredProviderItems.length > 0 ? (
           // The card hugs its rows instead of filling the screen: `height` tracks
           // the list's content, capped at the space left below the search field by
@@ -193,9 +211,5 @@ export default function ProviderSettingsScreen() {
 const styles = StyleSheet.create({
   list: {
     flex: 1,
-  },
-  searchInput: {
-    includeFontPadding: false,
-    textAlignVertical: 'center',
   },
 });

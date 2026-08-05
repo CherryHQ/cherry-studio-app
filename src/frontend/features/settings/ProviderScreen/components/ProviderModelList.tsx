@@ -36,42 +36,47 @@ export function ProviderModelList({
   const hasNoModels = !isLoading && models.length === 0;
 
   return (
-    <ProviderModelAccordion
-      displayedExpandedValues={displayedExpandedValues}
-      groups={groups}
-      isDefaultModel={isDefaultModel}
-      ListEmptyComponent={
-        hasNoModels && pullAction ? (
-          <ProviderModelPullCta action={pullAction} />
-        ) : (
-          <ProviderModelEmptyState
-            title={
-              isLoading
-                ? t('settings.provider.models.loading')
-                : isSearching
-                  ? t('settings.provider.models.search.empty')
-                  : t('settings.provider.models.empty')
-            }
-          />
-        )
-      }
-      // Swapping the header rather than the whole tree keeps the underlying list
-      // mounted, so its automatic content inset survives the transition.
-      ListHeaderComponent={
-        hasNoModels ? undefined : (
-          // 12 all round, the one gap the pull screen uses between every
-          // control and the list below it.
-          <View className="px-4 py-3">
-            <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-          </View>
-        )
-      }
-      provider={provider}
-      removingIds={removingIds}
-      onExpandedValuesChange={setExpandedValues}
-      onRemoveModel={removeModel}
-      onScrollBeginDrag={Keyboard.dismiss}
-    />
+    <>
+      {!hasNoModels && process.env.EXPO_OS === 'ios' ? (
+        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+      ) : null}
+      <ProviderModelAccordion
+        displayedExpandedValues={displayedExpandedValues}
+        groups={groups}
+        isDefaultModel={isDefaultModel}
+        ListEmptyComponent={
+          hasNoModels && pullAction ? (
+            <ProviderModelPullCta action={pullAction} />
+          ) : (
+            <ProviderModelEmptyState
+              title={
+                isLoading
+                  ? t('settings.provider.models.loading')
+                  : isSearching
+                    ? t('settings.provider.models.search.empty')
+                    : t('settings.provider.models.empty')
+              }
+            />
+          )
+        }
+        // Swapping the header rather than the whole tree keeps the underlying list
+        // mounted, so its automatic content inset survives the transition.
+        ListHeaderComponent={
+          hasNoModels || process.env.EXPO_OS === 'ios' ? undefined : (
+            // 12 all round, the one gap the pull screen uses between every
+            // control and the list below it.
+            <View className="px-4 py-3">
+              <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+            </View>
+          )
+        }
+        provider={provider}
+        removingIds={removingIds}
+        onExpandedValuesChange={setExpandedValues}
+        onRemoveModel={removeModel}
+        onScrollBeginDrag={Keyboard.dismiss}
+      />
+    </>
   );
 }
 

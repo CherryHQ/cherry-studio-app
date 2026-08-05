@@ -212,9 +212,13 @@ const TopicListView = memo(function TopicListView() {
 
 // The topics tab owns its data provider so the messages shell can host it as a
 // pluggable tab without knowing anything about topic state.
-export function TopicList() {
+type TopicListProps = {
+  searchText?: string;
+};
+
+export function TopicList({ searchText = '' }: TopicListProps) {
   return (
-    <TopicListProvider>
+    <TopicListProvider searchText={searchText}>
       <TopicListView />
     </TopicListProvider>
   );

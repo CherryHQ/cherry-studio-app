@@ -44,14 +44,18 @@ const perfLog = loggerService.withContext('ChatPerf');
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
 const TopicListActionsContext = createContext<TopicListActionsContextValue | null>(null);
 
-export function TopicListProvider({ children }: PropsWithChildren) {
+type TopicListProviderProps = PropsWithChildren<{
+  searchText?: string;
+}>;
+
+export function TopicListProvider({ children, searchText = '' }: TopicListProviderProps) {
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
   const router = useRouter();
   const [defaultModelId] = usePreference(MODEL_SETTING_PREFERENCE_KEYS.default);
   const prefetch = usePrefetch();
   const prefetchInfiniteQuery = usePrefetchInfiniteQuery();
-  const topicList = useTopics({ q: '' });
+  const topicList = useTopics({ q: searchText });
   const topicPins = usePins('topic');
   const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
 
