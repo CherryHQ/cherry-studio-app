@@ -13,6 +13,11 @@ import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
 import { AiUsageCalendar } from './AiUsageCalendar';
 
+const costSymbols = {
+  CNY: '\u00a5',
+  USD: '$',
+} satisfies Record<AiUsageRecordCostTotal['currency'], string>;
+
 export function AiUsageSummaryCard() {
   const { i18n, t } = useTranslation();
   const { calendarData, data, hasData, isError, isLoading, isRefreshing, refetch } =
@@ -168,15 +173,12 @@ function formatTotalTokens(
 function formatCostTotals(costTotals: readonly AiUsageRecordCostTotal[], locale: string): string {
   if (costTotals.length === 0) return '--';
 
+  const numberFormatter = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+  });
+
   return costTotals
-    .map(({ currency, total }) =>
-      new Intl.NumberFormat(locale, {
-        currency,
-        currencyDisplay: 'narrowSymbol',
-        maximumFractionDigits: 2,
-        minimumFractionDigits: 2,
-        style: 'currency',
-      }).format(total),
-    )
+    .map(({ currency, total }) => `${costSymbols[currency]}${numberFormatter.format(total)}`)
     .join(' · ');
 }
