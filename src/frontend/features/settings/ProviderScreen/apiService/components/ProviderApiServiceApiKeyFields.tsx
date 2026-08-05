@@ -1,4 +1,4 @@
-import { Input, Switch } from '@cherrystudio/ui/components';
+import { FieldError, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
 import { Button } from 'heroui-native/button';
@@ -17,7 +17,6 @@ import { Pressable, Text, View } from 'react-native';
 
 import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from '../utils/providerApiServiceApiKeys';
-import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
 
 const apiKeyPreviewMaxLength = 21;
 
@@ -35,10 +34,8 @@ export function ProviderApiServiceApiKeysField({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.provider.apiService.apiKeys')}
-      </Text>
+    <TextField>
+      <Label>{t('settings.provider.apiService.apiKeys')}</Label>
       <View className="flex-row items-center gap-2">
         {apiKeysVisible ? (
           <View className="min-w-0 flex-1 overflow-hidden">
@@ -74,7 +71,7 @@ export function ProviderApiServiceApiKeysField({
           <KeyRoundIcon className="size-5 text-default-foreground" strokeWidth={2} />
         </SettingsIconButton>
       </View>
-    </View>
+    </TextField>
   );
 }
 
@@ -104,7 +101,6 @@ function ApiKeysVisiblePreview({
       placeholder={placeholder}
       returnKeyType="done"
       scrollEnabled={false}
-      style={providerApiServiceStyles.input}
       value={previewValue}
     />
   );
@@ -220,11 +216,9 @@ function ApiKeyRow({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
+    <TextField isDisabled={!apiKey.isEnabled || isPending} isInvalid={Boolean(errorMessage)}>
       <View className="min-h-8 flex-row items-center justify-between gap-3">
-        <Text className="font-medium text-default-foreground text-sm">
-          {t('settings.provider.apiService.apiKey')}
-        </Text>
+        <Label className="min-w-0 flex-1">{t('settings.provider.apiService.apiKey')}</Label>
         <Switch
           accessibilityLabel={t('settings.provider.apiService.apiKeyEnabled')}
           disabled={isPending}
@@ -236,7 +230,6 @@ function ApiKeyRow({
         <View className="min-w-0 flex-1 overflow-hidden">
           <ApiKeyInput
             accessibilityLabel={t('settings.provider.apiService.apiKey')}
-            isDisabled={!apiKey.isEnabled || isPending}
             value={apiKey.key}
             onChangeText={(key) => onKeyChange(apiKey.id, key)}
             onCommit={(key) => onCommitKey(apiKey.id, key)}
@@ -257,20 +250,18 @@ function ApiKeyRow({
           <Trash2Icon className="size-5 text-default-foreground" strokeWidth={2} />
         </SettingsIconButton>
       </View>
-      {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
-    </View>
+      <FieldError>{errorMessage}</FieldError>
+    </TextField>
   );
 }
 
 function ApiKeyInput({
   accessibilityLabel,
-  isDisabled,
   onCommit,
   onChangeText,
   value,
 }: {
   accessibilityLabel: string;
-  isDisabled?: boolean;
   onCommit: (value: string) => void;
   onChangeText: (value: string) => void;
   value: string;
@@ -300,7 +291,6 @@ function ApiKeyInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      disabled={isDisabled}
       lineBreakModeIOS="clip"
       multiline={false}
       numberOfLines={1}
@@ -311,7 +301,6 @@ function ApiKeyInput({
       placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
       returnKeyType="done"
       scrollEnabled={false}
-      style={providerApiServiceStyles.input}
       value={normalizedValue}
     />
   );

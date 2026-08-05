@@ -1,7 +1,6 @@
-import { Input } from '@cherrystudio/ui/components';
+import { Input, Label, TextField } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { StyleSheet, Text, View } from 'react-native';
 
 type SettingTextInputProps = {
   accessibilityLabel: string;
@@ -82,7 +81,6 @@ export function SettingTextInput({
       placeholder={placeholder}
       returnKeyType="done"
       secureTextEntry={secureTextEntry}
-      style={styles.input}
       value={draftValue}
     />
   );
@@ -95,19 +93,9 @@ type ConfigFieldProps = {
 
 export function ConfigField({ children, label }: ConfigFieldProps) {
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField>
+      <Label>{label}</Label>
       {children}
-    </View>
+    </TextField>
   );
 }
-
-const styles = StyleSheet.create({
-  input: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
-  },
-});

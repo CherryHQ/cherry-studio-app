@@ -1,4 +1,4 @@
-import { Input } from '@cherrystudio/ui/components';
+import { Input, Label, TextField } from '@cherrystudio/ui/components';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
@@ -7,13 +7,12 @@ import { useToast } from 'heroui-native/toast';
 import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 const profileAvatarSize = 104;
 const logger = loggerService.withContext('ProfileSettingsScreen');
@@ -24,7 +23,6 @@ export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { toast } = useToast();
-  const borderColor = useThemeColor('border');
   const inputRef = useRef<TextInput>(null);
   const [userName, setUserName] = usePreference('app.user.name');
   const profile = useBackendModule('profile');
@@ -165,10 +163,8 @@ export default function ProfileSettingsScreen() {
               size={profileAvatarSize}
             />
           </View>
-          <View className="gap-2">
-            <Text className="font-medium text-foreground text-sm">
-              {t('settings.profile.userName')}
-            </Text>
+          <TextField>
+            <Label>{t('settings.profile.userName')}</Label>
             <Input
               accessibilityLabel={t('settings.profile.userName')}
               autoCorrect={false}
@@ -177,10 +173,9 @@ export default function ProfileSettingsScreen() {
               ref={inputRef}
               returnKeyLabel="done"
               returnKeyType="done"
-              style={[styles.input, { borderColor }]}
               value={nameDraft}
             />
-          </View>
+          </TextField>
         </View>
       </ScrollView>
     </>
@@ -231,13 +226,5 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 0,
     top: 0,
-  },
-  input: {
-    borderWidth: 1,
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
   },
 });

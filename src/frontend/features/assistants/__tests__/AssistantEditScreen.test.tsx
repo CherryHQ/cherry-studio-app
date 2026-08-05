@@ -42,11 +42,14 @@ jest.mock('heroui-native/text-area', () => {
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const { TextInput } = jest.requireActual('react-native');
+  const { Text, TextInput, View } = jest.requireActual('react-native');
 
   return {
+    Description: Text,
     Input: TextInput,
+    Label: Text,
     Switch: (props: Record<string, unknown>) => React.createElement('MockSwitch', props),
+    TextField: View,
   };
 });
 

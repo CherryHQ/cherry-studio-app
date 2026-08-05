@@ -1,4 +1,4 @@
-import { Input } from '@cherrystudio/ui/components';
+import { Input, Label, TextField } from '@cherrystudio/ui/components';
 import {
   withMcpToolRuleAdded,
   withMcpToolRuleCleared,
@@ -335,29 +335,25 @@ function McpServerEditor({
           style={styles.scroll}
         >
           {!isCreating ? (
-            <FormField label={t('settings.mcp.fields.name')}>
+            <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.name')}>
               <Input
                 accessibilityLabel={t('settings.mcp.fields.name')}
                 autoCorrect={false}
-                disabled={!isEditing}
                 onChangeText={(value) => updateField('name', value)}
                 placeholder={t('settings.mcp.fields.name')}
-                style={styles.textInput}
                 value={displayedForm.name}
               />
             </FormField>
           ) : null}
-          <FormField label={t('settings.mcp.fields.baseUrl')}>
+          <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.baseUrl')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.baseUrl')}
               autoCapitalize="none"
               autoCorrect={false}
-              disabled={!isEditing}
               keyboardType="url"
               onChangeText={(value) => updateField('baseUrl', value)}
               placeholder="https://example.com/mcp"
               spellCheck={false}
-              style={styles.textInput}
               value={displayedForm.baseUrl}
             />
             {showHttpWarning ? (
@@ -367,33 +363,28 @@ function McpServerEditor({
             ) : null}
           </FormField>
           {!isCreating ? (
-            <FormField label={t('settings.mcp.fields.description')}>
+            <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.description')}>
               <Input
                 accessibilityLabel={t('settings.mcp.fields.description')}
-                disabled={!isEditing}
                 onChangeText={(value) => updateField('description', value)}
                 placeholder={t('settings.mcp.fields.description')}
-                style={styles.textInput}
                 value={displayedForm.description}
               />
             </FormField>
           ) : null}
-          <FormField label={t('settings.mcp.headers.title')}>
+          <FormField isDisabled={!isEditing} label={t('settings.mcp.headers.title')}>
             <McpHeadersEditor
-              isDisabled={!isEditing}
               onChangeText={(value) => updateField('headerText', value)}
               value={displayedForm.headerText}
             />
           </FormField>
-          <FormField label={t('settings.mcp.fields.timeout')}>
+          <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.timeout')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.timeout')}
               inputMode="numeric"
-              disabled={!isEditing}
               keyboardType="number-pad"
               onChangeText={(value) => updateField('timeout', value)}
               placeholder="60"
-              style={styles.textInput}
               value={displayedForm.timeout}
             />
           </FormField>
@@ -431,12 +422,20 @@ function McpServerEditor({
   );
 }
 
-function FormField({ children, label }: { children: React.ReactNode; label: string }) {
+function FormField({
+  children,
+  isDisabled,
+  label,
+}: {
+  children: React.ReactNode;
+  isDisabled: boolean;
+  label: string;
+}) {
   return (
-    <View className="gap-2">
-      <Text className="px-1 font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField isDisabled={isDisabled}>
+      <Label>{label}</Label>
       {children}
-    </View>
+    </TextField>
   );
 }
 
@@ -529,12 +528,5 @@ const styles = StyleSheet.create({
   headerActivityIndicator: {
     height: 32,
     width: 32,
-  },
-  textInput: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
   },
 });

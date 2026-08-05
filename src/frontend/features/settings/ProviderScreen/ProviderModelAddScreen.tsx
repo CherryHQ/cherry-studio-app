@@ -299,7 +299,6 @@ function ProviderModelAddTextField({
         onFocus={onFocus}
         placeholder={placeholder}
         returnKeyType="done"
-        style={styles.input}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
         {...textInputProps}
@@ -383,12 +382,6 @@ function EndpointTypeChip({
 }
 
 const styles = StyleSheet.create({
-  input: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    verticalAlign: 'middle',
-  },
   scrollContent: {
     gap: 16,
     paddingHorizontal: 16,

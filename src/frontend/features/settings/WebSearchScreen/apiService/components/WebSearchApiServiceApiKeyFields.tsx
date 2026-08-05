@@ -1,4 +1,4 @@
-import { Input } from '@cherrystudio/ui/components';
+import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
 import { Button } from 'heroui-native/button';
 import {
@@ -13,7 +13,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import type { WebSearchApiKeyEntry } from '../utils/webSearchApiServiceApiKeys';
@@ -36,10 +36,8 @@ export function WebSearchApiServiceApiKeysField({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.websearch.provider.apiKeys')}
-      </Text>
+    <TextField>
+      <Label>{t('settings.websearch.provider.apiKeys')}</Label>
       <View className="flex-row items-start gap-2">
         <ApiKeysCommitInput
           accessibilityLabel={t('settings.websearch.provider.apiKeys')}
@@ -71,7 +69,7 @@ export function WebSearchApiServiceApiKeysField({
           <ActivityIcon className="size-5 text-default-foreground" strokeWidth={2} />
         </SettingsIconButton>
       </View>
-    </View>
+    </TextField>
   );
 }
 
@@ -155,7 +153,6 @@ function ApiKeysCommitInput({
         placeholder={placeholder}
         returnKeyType="done"
         secureTextEntry={secureTextEntry}
-        style={styles.input}
         value={draftValue}
       />
     </View>
@@ -239,14 +236,11 @@ function ApiKeyRow({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.websearch.provider.apiKey')}
-      </Text>
+    <TextField isDisabled={isPending} isInvalid={Boolean(errorMessage)}>
+      <Label>{t('settings.websearch.provider.apiKey')}</Label>
       <View className="flex-row items-center gap-2">
         <ApiKeyInput
           accessibilityLabel={t('settings.websearch.provider.apiKey')}
-          isDisabled={isPending}
           onChangeText={(key) => onKeyChange(apiKey.id, key)}
           onCommit={(key) => onCommitKey(apiKey.id, key)}
           value={apiKey.key}
@@ -266,20 +260,18 @@ function ApiKeyRow({
           <Trash2Icon className="size-5 text-default-foreground" strokeWidth={2} />
         </SettingsIconButton>
       </View>
-      {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
-    </View>
+      <FieldError>{errorMessage}</FieldError>
+    </TextField>
   );
 }
 
 function ApiKeyInput({
   accessibilityLabel,
-  isDisabled,
   onCommit,
   onChangeText,
   value,
 }: {
   accessibilityLabel: string;
-  isDisabled?: boolean;
   onCommit: (value: string) => void;
   onChangeText: (value: string) => void;
   value: string;
@@ -302,26 +294,14 @@ function ApiKeyInput({
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        disabled={isDisabled}
         onBlur={handleCommitEvent}
         onChangeText={onChangeText}
         onEndEditing={handleEndEditing}
         onSubmitEditing={handleCommitEvent}
         placeholder={t('settings.websearch.provider.apiKeyPlaceholder')}
         returnKeyType="done"
-        style={styles.input}
         value={value}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  input: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
-  },
-});

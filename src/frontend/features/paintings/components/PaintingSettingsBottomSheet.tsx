@@ -1,5 +1,13 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
-import { Input, Slider, Switch } from '@cherrystudio/ui/components';
+import {
+  Description,
+  FieldError,
+  Input,
+  Label,
+  Slider,
+  Switch,
+  TextField,
+} from '@cherrystudio/ui/components';
 import { Select } from 'heroui-native/select';
 import type { TFunction } from 'i18next';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
@@ -163,8 +171,8 @@ function PaintingSettingField({
     }
     case 'text':
       return (
-        <View className="gap-2">
-          <Text className="font-medium text-foreground text-sm">{label}</Text>
+        <TextField>
+          <Label>{label}</Label>
           <Input
             accessibilityLabel={label}
             autoCapitalize="none"
@@ -176,7 +184,7 @@ function PaintingSettingField({
             textAlignVertical={field.spec.multiline ? 'top' : 'center'}
             value={value === undefined || value === null ? '' : String(value)}
           />
-        </View>
+        </TextField>
       );
     case 'size':
       return (
@@ -448,9 +456,13 @@ function CustomSizeField({
   const isInvalid =
     !isSideValid(width, field.spec.minSide, field.spec.maxSide) ||
     !isSideValid(height, field.spec.minSide, field.spec.maxSide);
+  const rangeDescription = t('painting.settings.sizeRange', {
+    max: field.spec.maxSide,
+    min: field.spec.minSide,
+  });
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
+    <TextField isInvalid={isInvalid}>
+      <Label>{imageParamLabel(t, field.key)}</Label>
       <View className="flex-row items-center gap-2">
         <Input
           accessibilityLabel={t('painting.settings.width')}
@@ -470,13 +482,9 @@ function CustomSizeField({
           value={height === undefined || height === null ? '' : String(height)}
         />
       </View>
-      <Text className={isInvalid ? 'text-danger text-xs' : 'text-default-foreground text-xs'}>
-        {t('painting.settings.sizeRange', {
-          max: field.spec.maxSide,
-          min: field.spec.minSide,
-        })}
-      </Text>
-    </View>
+      <Description hideOnInvalid>{rangeDescription}</Description>
+      <FieldError>{rangeDescription}</FieldError>
+    </TextField>
   );
 }
 

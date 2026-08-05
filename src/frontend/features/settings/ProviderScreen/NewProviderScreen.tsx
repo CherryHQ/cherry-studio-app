@@ -1,4 +1,4 @@
-import { Input } from '@cherrystudio/ui/components';
+import { Input, Label, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
@@ -21,7 +21,6 @@ import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
 import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
-import { providerApiServiceStyles } from './apiService/utils/providerApiServiceStyles';
 
 const avatarPreviewSize = 96;
 
@@ -206,7 +205,6 @@ export default function NewProviderScreen() {
               autoCorrect={false}
               onChangeText={setName}
               placeholder={t('settings.provider.add.namePlaceholder')}
-              style={providerApiServiceStyles.input}
               value={name}
             />
           </FormField>
@@ -219,7 +217,6 @@ export default function NewProviderScreen() {
               keyboardType="url"
               onChangeText={setBaseUrl}
               placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-              style={providerApiServiceStyles.input}
               value={baseUrl}
             />
           </FormField>
@@ -239,7 +236,6 @@ export default function NewProviderScreen() {
                   returnKeyType="done"
                   scrollEnabled={false}
                   secureTextEntry={!apiKeyVisible}
-                  style={providerApiServiceStyles.input}
                   value={apiKey}
                 />
               </View>
@@ -436,13 +432,10 @@ function FormField({
   required?: boolean;
 }) {
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-default-foreground text-sm">
-        {label}
-        {required ? <Text className="text-danger"> *</Text> : null}
-      </Text>
+    <TextField isRequired={required}>
+      <Label>{label}</Label>
       {children}
-    </View>
+    </TextField>
   );
 }
 
@@ -456,8 +449,8 @@ function EndpointField({
   value: string;
 }) {
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField>
+      <Label>{label}</Label>
       <Input
         accessibilityLabel={label}
         autoCapitalize="none"
@@ -465,9 +458,8 @@ function EndpointField({
         keyboardType="url"
         onChangeText={onChangeText}
         placeholder="https://api.example.com"
-        style={providerApiServiceStyles.input}
         value={value}
       />
-    </View>
+    </TextField>
   );
 }

@@ -1,11 +1,11 @@
-import { Input } from '@cherrystudio/ui/components';
+import { Input, TextField } from '@cherrystudio/ui/components';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { Button } from 'heroui-native/button';
 import { Dialog } from 'heroui-native/dialog';
 import { Spinner } from 'heroui-native/spinner';
 import { type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 
 import { useTopicListActions } from '../context/TopicListProvider';
 
@@ -80,18 +80,18 @@ export function useTopicActionDialogs(): TopicActionDialogs {
           <Dialog.Overlay isCloseOnPress={false} />
           <Dialog.Content className="gap-5 rounded-3xl bg-overlay p-5" isSwipeable={false}>
             <Dialog.Title>{t('topic.renameTitle')}</Dialog.Title>
-            <Input
-              accessibilityLabel={t('topic.renameTitle')}
-              autoFocus
-              disabled={isSubmitting}
-              onChangeText={setNameDraft}
-              onSubmitEditing={confirmRename}
-              placeholder={t('topic.renamePlaceholder')}
-              returnKeyType="done"
-              selectTextOnFocus
-              style={styles.input}
-              value={nameDraft}
-            />
+            <TextField isDisabled={isSubmitting}>
+              <Input
+                accessibilityLabel={t('topic.renameTitle')}
+                autoFocus
+                onChangeText={setNameDraft}
+                onSubmitEditing={confirmRename}
+                placeholder={t('topic.renamePlaceholder')}
+                returnKeyType="done"
+                selectTextOnFocus
+                value={nameDraft}
+              />
+            </TextField>
             <View className="flex-row justify-end gap-3">
               <Button
                 className="min-w-20 rounded-xl"
@@ -158,12 +158,3 @@ export function useTopicActionDialogs(): TopicActionDialogs {
 
   return { dialogs, requestDelete, requestRename };
 }
-
-const styles = StyleSheet.create({
-  input: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    verticalAlign: 'middle',
-  },
-});

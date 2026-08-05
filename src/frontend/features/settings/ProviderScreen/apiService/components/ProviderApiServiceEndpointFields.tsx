@@ -1,4 +1,4 @@
-import { Input } from '@cherrystudio/ui/components';
+import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { Select } from 'heroui-native';
 import { PlusIcon, SettingsIcon, Trash2Icon } from 'lucide-uniwind/png';
@@ -12,7 +12,6 @@ import {
   getEndpointLabel,
   isConfigurableEndpointType,
 } from '../utils/providerApiServiceEndpointRules';
-import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
 
 export function ProviderApiServiceEndpointField({
   baseUrl,
@@ -24,16 +23,13 @@ export function ProviderApiServiceEndpointField({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.provider.apiService.baseUrl')}
-      </Text>
+    <TextField isDisabled>
+      <Label>{t('settings.provider.apiService.baseUrl')}</Label>
       <View className="flex-row items-center gap-2">
         <Input
           accessibilityLabel={t('settings.provider.apiService.baseUrl')}
-          disabled
           placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-          style={[providerApiServiceStyles.input, styles.endpointInput]}
+          style={styles.endpointInput}
           value={baseUrl}
         />
         <SettingsIconButton
@@ -43,7 +39,7 @@ export function ProviderApiServiceEndpointField({
           <SettingsIcon className="size-5 text-default-foreground" strokeWidth={2} />
         </SettingsIconButton>
       </View>
-    </View>
+    </TextField>
   );
 }
 
@@ -95,14 +91,15 @@ export function ProviderApiServiceEndpointForm({
             const isPrimaryEndpoint = endpoint === primaryEndpoint;
 
             return (
-              <View key={endpoint} className="gap-1">
-                <Text className="font-medium text-default-foreground text-sm" numberOfLines={1}>
-                  {getEndpointLabel(endpoint)}
-                </Text>
+              <TextField
+                key={endpoint}
+                isDisabled={pendingEndpoint === endpoint}
+                isInvalid={Boolean(endpointErrors?.[endpoint])}
+              >
+                <Label>{getEndpointLabel(endpoint)}</Label>
                 <View className="flex-row items-center gap-2">
                   <EndpointBaseUrlInput
                     accessibilityLabel={getEndpointLabel(endpoint)}
-                    isDisabled={pendingEndpoint === endpoint}
                     placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
                     value={baseUrlByEndpoint[endpoint] ?? ''}
                     onChangeText={(value) => onBaseUrlChange(endpoint, value)}
@@ -118,10 +115,8 @@ export function ProviderApiServiceEndpointForm({
                     </SettingsIconButton>
                   ) : null}
                 </View>
-                {endpointErrors?.[endpoint] ? (
-                  <Text className="text-danger text-xs">{endpointErrors[endpoint]}</Text>
-                ) : null}
-              </View>
+                <FieldError>{endpointErrors?.[endpoint]}</FieldError>
+              </TextField>
             );
           })}
         </View>
@@ -190,14 +185,12 @@ function EndpointSelect({
 
 function EndpointBaseUrlInput({
   accessibilityLabel,
-  isDisabled,
   onCommit,
   onChangeText,
   placeholder,
   value,
 }: {
   accessibilityLabel: string;
-  isDisabled?: boolean;
   onCommit: (value: string) => void;
   onChangeText: (value: string) => void;
   placeholder: string;
@@ -219,14 +212,13 @@ function EndpointBaseUrlInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      disabled={isDisabled}
       onBlur={handleCommitEvent}
       onChangeText={onChangeText}
       onEndEditing={handleEndEditing}
       onSubmitEditing={handleCommitEvent}
       placeholder={placeholder}
       returnKeyType="done"
-      style={[providerApiServiceStyles.input, styles.endpointInput]}
+      style={styles.endpointInput}
       value={value}
     />
   );

@@ -49,7 +49,11 @@ jest.mock('heroui-native/hooks', () => ({
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const { TextInput: MockTextInput } = jest.requireActual('react-native');
+  const {
+    Text: MockText,
+    TextInput: MockTextInput,
+    View: MockView,
+  } = jest.requireActual('react-native');
 
   return {
     Input: React.forwardRef(function MockInput(
@@ -58,6 +62,8 @@ jest.mock('@cherrystudio/ui/components', () => {
     ) {
       return <MockTextInput {...props} ref={ref} />;
     }),
+    Label: MockText,
+    TextField: MockView,
   };
 });
 

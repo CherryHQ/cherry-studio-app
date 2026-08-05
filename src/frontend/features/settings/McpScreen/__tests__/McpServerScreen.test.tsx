@@ -52,9 +52,15 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => {
-  const { View: MockView } = jest.requireActual('react-native');
+  const { Text: MockText, View: MockView } = jest.requireActual('react-native');
 
-  return { Input: (props: Record<string, unknown>) => <MockView {...props} /> };
+  return {
+    Input: (props: Record<string, unknown>) => <MockView {...props} />,
+    Label: (props: Record<string, unknown>) => <MockText {...props} />,
+    TextField: (props: Record<string, unknown>) => (
+      <MockView {...props} mockComponent="text-field" />
+    ),
+  };
 });
 
 jest.mock('heroui-native/toast', () => ({
@@ -488,20 +494,21 @@ describe('McpServerScreen tabs', () => {
     mockServerId = 'server-1';
     mockServer = makeServer();
     const tree = await render();
-    const findNameInput = () =>
-      tree.root.find(
-        (node) =>
-          typeof node.type === 'string' &&
-          node.props.accessibilityLabel === 'settings.mcp.fields.name',
-      );
+    const findNameField = () =>
+      tree.root
+        .findAllByProps({ mockComponent: 'text-field' })
+        .find(
+          (field) =>
+            field.findAllByProps({ accessibilityLabel: 'settings.mcp.fields.name' }).length > 0,
+        )!;
 
-    expect(findNameInput().props.disabled).toBe(true);
+    expect(findNameField().props.isDisabled).toBe(true);
 
     await act(async () => {
       mockHeaderProps.rightActions?.find((action) => action.key === 'edit')?.onPress?.();
     });
 
-    expect(findNameInput().props.disabled).toBe(false);
+    expect(findNameField().props.isDisabled).toBe(false);
     expect(mockHeaderProps.rightActions?.map((action) => action.key)).toEqual(['save']);
     expect(mockHeaderProps.rightActions?.[0]?.label).toBe('Save');
     expect(mockHeaderProps.title).toBe('Config');

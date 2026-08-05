@@ -31,14 +31,19 @@ jest.mock('expo-glass-effect', () => {
 jest.mock('@cherrystudio/ui/components', () => {
   const {
     Pressable: MockPressable,
+    Text: MockText,
     TextInput: MockTextInput,
     View: MockView,
   } = jest.requireActual('react-native');
 
   return {
+    Description: MockText,
+    FieldError: MockText,
     Input: MockTextInput,
+    Label: MockText,
     Slider: (props: Record<string, unknown>) => <MockView {...props} />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
+    TextField: MockView,
   };
 });
 

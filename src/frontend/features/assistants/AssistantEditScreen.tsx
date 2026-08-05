@@ -1,4 +1,4 @@
-import { Input, Switch } from '@cherrystudio/ui/components';
+import { Description, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
 import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -226,17 +226,16 @@ function AssistantEditForm({
                 {form.emoji.trim() || defaultEmoji}
               </Text>
             </Pressable>
-            <View className="min-w-0 flex-1">
+            <TextField className="min-w-0 flex-1">
               <Input
                 accessibilityLabel={t('assistant.form.name')}
                 autoCorrect={false}
                 onChangeText={(value) => updateForm('name', value)}
                 placeholder={t('assistant.form.namePlaceholder')}
                 returnKeyType="next"
-                style={styles.textInput}
                 value={form.name}
               />
-            </View>
+            </TextField>
           </View>
           <FormField label={t('assistant.form.description')}>
             <Input
@@ -244,7 +243,6 @@ function AssistantEditForm({
               autoCorrect
               onChangeText={(value) => updateForm('description', value)}
               placeholder={t('assistant.form.descriptionPlaceholder')}
-              style={styles.textInput}
               value={form.description}
             />
           </FormField>
@@ -439,15 +437,11 @@ function FormField({
   label: string;
 }) {
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-foreground text-sm">{label}</Text>
+    <TextField>
+      <Label>{label}</Label>
       {children}
-      {description ? (
-        <Text className="text-default-foreground text-xs" selectable>
-          {description}
-        </Text>
-      ) : null}
-    </View>
+      {description ? <Description selectable>{description}</Description> : null}
+    </TextField>
   );
 }
 
@@ -482,15 +476,16 @@ function NumberField({
   value: string;
 }) {
   return (
-    <Input
-      accessibilityLabel={accessibilityLabel}
-      inputMode={inputMode}
-      keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
-      onChangeText={onChangeText}
-      placeholder="0"
-      style={styles.textInput}
-      value={value}
-    />
+    <TextField>
+      <Input
+        accessibilityLabel={accessibilityLabel}
+        inputMode={inputMode}
+        keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
+        onChangeText={onChangeText}
+        placeholder="0"
+        value={value}
+      />
+    </TextField>
   );
 }
 
@@ -628,12 +623,5 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 12,
     textAlignVertical: 'top',
-  },
-  textInput: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
   },
 });

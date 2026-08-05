@@ -2,16 +2,11 @@ import { Input } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 type McpHeadersEditorProps = {
-  isDisabled?: boolean;
   onChangeText: (value: string) => void;
   value: string;
 };
 
-export function McpHeadersEditor({
-  isDisabled = false,
-  onChangeText,
-  value,
-}: McpHeadersEditorProps) {
+export function McpHeadersEditor({ onChangeText, value }: McpHeadersEditorProps) {
   const { t } = useTranslation();
 
   return (
@@ -19,7 +14,6 @@ export function McpHeadersEditor({
       accessibilityLabel={t('settings.mcp.headers.title')}
       autoCapitalize="none"
       autoCorrect={false}
-      disabled={isDisabled}
       multiline
       onChangeText={onChangeText}
       placeholder={t('settings.mcp.headers.placeholder')}
