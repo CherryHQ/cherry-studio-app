@@ -25,6 +25,18 @@ export function useProviderApiServiceApiKeysDraft(apiKeys: readonly ApiKeyEntry[
     setEntries((current) => current.filter((entry) => entry.id !== id));
   }, []);
 
+  const restoreKey = useCallback((entry: ApiKeyEntry, index: number) => {
+    setEntries((current) => {
+      if (current.some((item) => item.id === entry.id)) {
+        return current;
+      }
+
+      const next = [...current];
+      next.splice(Math.min(Math.max(index, 0), next.length), 0, entry);
+      return next;
+    });
+  }, []);
+
   const updateKey = useCallback((id: string, key: string) => {
     setEntries((current) => current.map((entry) => (entry.id === id ? { ...entry, key } : entry)));
   }, []);
@@ -39,6 +51,7 @@ export function useProviderApiServiceApiKeysDraft(apiKeys: readonly ApiKeyEntry[
     addKey,
     entries,
     removeKey,
+    restoreKey,
     updateKey,
     updateKeyEnabled,
   };

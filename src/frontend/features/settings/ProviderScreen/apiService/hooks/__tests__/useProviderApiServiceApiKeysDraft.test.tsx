@@ -132,4 +132,14 @@ describe('useProviderApiServiceApiKeysDraft', () => {
     act(() => current().removeKey('key-b'));
     expect(current().entries).toEqual([{ id: 'key-a', isEnabled: true, key: 'sk-a' }]);
   });
+
+  it('restores a failed optimistic removal at its original position', () => {
+    mount(persistedApiKeys);
+    const removedEntry = persistedApiKeys[0];
+
+    act(() => current().removeKey(removedEntry.id));
+    act(() => current().restoreKey(removedEntry, 0));
+
+    expect(current().entries).toEqual(persistedApiKeys);
+  });
 });

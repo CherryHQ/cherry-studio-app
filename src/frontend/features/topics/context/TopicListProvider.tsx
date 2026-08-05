@@ -1,6 +1,7 @@
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
-import { useQueryClient } from '@tanstack/react-query';
+import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { useIsFocused, useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
 
@@ -12,6 +13,12 @@ import {
   usePrefetch,
   usePrefetchInfiniteQuery,
 } from '@/frontend/data';
+import {
+  dataApiCollectionFilters,
+  removeItemsFromInfiniteData,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import {
   getMessagesQueryKey,
@@ -21,6 +28,7 @@ import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPo
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
+type TopicListData = InfiniteData<CursorPaginationResponse<Topic>, string | undefined>;
 
 type TopicListTopicsContextValue = {
   isPinActionDisabled: boolean;
@@ -97,6 +105,19 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
   });
 
   const deleteTopicsMutation = useMutation('DELETE', '/topics', {
+    onMutate: async (variables) => {
+      const ids = new Set(normalizeTopicIds(variables?.query?.ids));
+      const topics = await updateQueriesOptimistically<TopicListData>(
+        queryClient,
+        dataApiCollectionFilters('/topics'),
+        (current) => removeItemsFromInfiniteData(current, ids),
+      );
+
+      return { topics };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.topics);
+    },
     refresh: ['/topics'],
   });
   const updateTopic = renameTopicMutation.trigger;
@@ -212,4 +233,17 @@ export function useTopicListActions() {
   }
 
   return context;
+}
+
+function normalizeTopicIds(ids: string | readonly string[] | undefined): string[] {
+  if (Array.isArray(ids)) {
+    return ids;
+  }
+
+  return typeof ids === 'string'
+    ? ids
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    : [];
 }

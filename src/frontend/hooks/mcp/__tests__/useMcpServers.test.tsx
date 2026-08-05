@@ -10,8 +10,7 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { useMcpServerMutations } from '../useMcpServers';
 
 const mockInvalidateQueries = jest.fn<Promise<void>, [unknown]>(async () => undefined);
-const mockSetQueryData = jest.fn();
-const mockDelete = jest.fn(async () => undefined);
+const mockDelete = jest.fn(async (): Promise<void> => undefined);
 const mockPatch = jest.fn();
 const mockPost = jest.fn();
 const dataApi = {
@@ -59,7 +58,7 @@ describe('useMcpServerMutations', () => {
       defaultOptions: { mutations: { retry: false }, queries: { gcTime: Infinity, retry: false } },
     });
     jest.spyOn(queryClient, 'invalidateQueries').mockImplementation(mockInvalidateQueries);
-    jest.spyOn(queryClient, 'setQueryData').mockImplementation(mockSetQueryData);
+    jest.spyOn(queryClient, 'setQueryData');
     await act(async () => {
       renderer = create(
         <QueryClientProvider client={queryClient}>
@@ -84,7 +83,10 @@ describe('useMcpServerMutations', () => {
       await actions?.updateServer(server.id, { disabledTools: ['search'] });
     });
 
-    expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.mcpServers.detail(server.id), server);
+    expect(queryClient.setQueryData).toHaveBeenCalledWith(
+      queryKeys.mcpServers.detail(server.id),
+      server,
+    );
     expect(mockPatch).toHaveBeenCalledWith(`/mcp-servers/${server.id}`, {
       body: { disabledTools: ['search'] },
       query: undefined,
@@ -119,7 +121,10 @@ describe('useMcpServerMutations', () => {
       body: { baseUrl: server.baseUrl, name: server.name },
       query: undefined,
     });
-    expect(mockSetQueryData).toHaveBeenCalledWith(queryKeys.mcpServers.detail(server.id), server);
+    expect(queryClient.setQueryData).toHaveBeenCalledWith(
+      queryKeys.mcpServers.detail(server.id),
+      server,
+    );
   });
 
   it('does not keep delete pending while cache invalidation settles', async () => {
@@ -136,12 +141,38 @@ describe('useMcpServerMutations', () => {
     pendingInvalidation.resolve();
     await pendingInvalidation.promise;
   });
+
+  it('restores the server list when an optimistic delete fails', async () => {
+    const server = makeServer();
+    const pendingDelete = deferred<void>();
+    mockDelete.mockImplementationOnce(() => pendingDelete.promise);
+    queryClient.setQueryData(queryKeys.mcpServers.all(), { items: [server], total: 1 });
+
+    let deletion: Promise<void> | undefined;
+    await act(async () => {
+      deletion = actions?.deleteServer(server.id);
+      await Promise.resolve();
+    });
+    expect(queryClient.getQueryData(queryKeys.mcpServers.all())).toEqual({ items: [], total: 0 });
+
+    pendingDelete.reject(new Error('delete failed'));
+    await act(async () => {
+      await expect(deletion).rejects.toThrow('delete failed');
+    });
+
+    expect(queryClient.getQueryData(queryKeys.mcpServers.all())).toEqual({
+      items: [server],
+      total: 1,
+    });
+  });
 });
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
-  const promise = new Promise<T>((nextResolve) => {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
     resolve = nextResolve;
+    reject = nextReject;
   });
-  return { promise, resolve };
+  return { promise, reject, resolve };
 }
