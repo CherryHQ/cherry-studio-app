@@ -1,10 +1,9 @@
+import { Alert } from '@cherrystudio/ui/components';
 import { useNavigation } from 'expo-router';
 import type { NavigationAction } from 'expo-router/react-navigation';
-import { Button } from 'heroui-native/button';
-import { Dialog } from 'heroui-native/dialog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, View } from 'react-native';
+import { Keyboard } from 'react-native';
 
 /**
  * Confirms before leaving an edit screen that still holds uncommitted input. Discarding
@@ -21,7 +20,7 @@ export function useProviderApiServiceSheetClose({
   const { t } = useTranslation();
   const isConfirmedCloseRef = useRef(false);
   const pendingCloseRef = useRef<(() => void) | null>(null);
-  const [isDiscardDialogOpen, setIsDiscardDialogOpen] = useState(false);
+  const [isDiscardAlertOpen, setIsDiscardAlertOpen] = useState(false);
 
   const closeWithoutPrompt = useCallback(() => {
     isConfirmedCloseRef.current = true;
@@ -31,18 +30,18 @@ export function useProviderApiServiceSheetClose({
   const confirmDiscard = useCallback((onConfirm: () => void) => {
     Keyboard.dismiss();
     pendingCloseRef.current = onConfirm;
-    setIsDiscardDialogOpen(true);
+    setIsDiscardAlertOpen(true);
   }, []);
 
   const cancelDiscard = useCallback(() => {
     pendingCloseRef.current = null;
-    setIsDiscardDialogOpen(false);
+    setIsDiscardAlertOpen(false);
   }, []);
 
   const discardAndClose = useCallback(() => {
     const onConfirm = pendingCloseRef.current;
     pendingCloseRef.current = null;
-    setIsDiscardDialogOpen(false);
+    setIsDiscardAlertOpen(false);
     onConfirm?.();
   }, []);
 
@@ -90,37 +89,16 @@ export function useProviderApiServiceSheetClose({
   return {
     closeWithoutPrompt,
     discardDialog: (
-      <Dialog isOpen={isDiscardDialogOpen} onOpenChange={setIsDiscardDialogOpen}>
-        <Dialog.Portal unstable_accessibilityContainerViewIsModal>
-          <Dialog.Overlay isCloseOnPress={false} />
-          <Dialog.Content className="gap-5 rounded-3xl bg-overlay p-5" isSwipeable={false}>
-            <View className="gap-1.5">
-              <Dialog.Title>{t('settings.provider.apiService.discardTitle')}</Dialog.Title>
-              <Dialog.Description>
-                {t('settings.provider.apiService.discardMessage')}
-              </Dialog.Description>
-            </View>
-            <View className="flex-row justify-end gap-3">
-              <Button
-                className="min-w-20 rounded-xl"
-                size="sm"
-                variant="secondary"
-                onPress={cancelDiscard}
-              >
-                <Text className="text-foreground text-sm">{t('common.cancel')}</Text>
-              </Button>
-              <Button
-                className="min-w-20 rounded-xl"
-                size="sm"
-                variant="danger"
-                onPress={discardAndClose}
-              >
-                <Text className="text-sm text-white">{t('common.discard')}</Text>
-              </Button>
-            </View>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog>
+      <Alert
+        actions={[
+          { label: t('common.cancel'), onPress: cancelDiscard, role: 'cancel' },
+          { label: t('common.discard'), onPress: discardAndClose, role: 'destructive' },
+        ]}
+        description={t('settings.provider.apiService.discardMessage')}
+        isOpen={isDiscardAlertOpen}
+        onOpenChange={setIsDiscardAlertOpen}
+        title={t('settings.provider.apiService.discardTitle')}
+      />
     ),
     requestClose,
   };
