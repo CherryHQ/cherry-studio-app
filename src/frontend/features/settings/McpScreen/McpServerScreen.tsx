@@ -532,7 +532,6 @@ const styles = StyleSheet.create({
   },
   textInput: {
     includeFontPadding: false,
-    minHeight: 48,
     paddingBottom: 0,
     paddingTop: 0,
     textAlignVertical: 'center',

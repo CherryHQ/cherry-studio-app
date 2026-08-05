@@ -41,7 +41,7 @@ export function ProviderApiServiceApiKeysField({
       </Text>
       <View className="flex-row items-center gap-2">
         {apiKeysVisible ? (
-          <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
+          <View className="min-w-0 flex-1 overflow-hidden">
             <ApiKeysVisiblePreview
               accessibilityLabel={t('settings.provider.apiService.apiKeys')}
               onPress={onManagePress}
@@ -233,7 +233,7 @@ function ApiKeyRow({
         />
       </View>
       <View className="flex-row items-center gap-2">
-        <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
+        <View className="min-w-0 flex-1 overflow-hidden">
           <ApiKeyInput
             accessibilityLabel={t('settings.provider.apiService.apiKey')}
             isDisabled={!apiKey.isEnabled || isPending}

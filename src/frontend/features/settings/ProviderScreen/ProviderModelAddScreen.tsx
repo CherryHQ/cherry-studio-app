@@ -301,7 +301,7 @@ function ProviderModelAddTextField({
         onFocus={onFocus}
         placeholder={placeholder}
         returnKeyType="done"
-        style={[styles.input, multiline ? styles.multilineInput : undefined]}
+        style={styles.input}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
         {...textInputProps}
@@ -390,9 +390,6 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     paddingTop: 0,
     verticalAlign: 'middle',
-  },
-  multilineInput: {
-    minHeight: 64,
   },
   scrollContent: {
     gap: 16,

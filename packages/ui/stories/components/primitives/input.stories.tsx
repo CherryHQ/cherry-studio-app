@@ -63,7 +63,7 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
             multiline
             onChangeText={setMultilineValue}
             placeholder="Enter a description"
-            style={{ minHeight: 96, textAlignVertical: 'top' }}
+            textAlignVertical="top"
             value={multilineValue}
           />
         </View>

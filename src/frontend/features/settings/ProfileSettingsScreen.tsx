@@ -234,7 +234,6 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    height: 48,
     includeFontPadding: false,
     paddingBottom: 0,
     paddingTop: 0,

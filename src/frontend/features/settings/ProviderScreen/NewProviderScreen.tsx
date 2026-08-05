@@ -226,7 +226,7 @@ export default function NewProviderScreen() {
 
           <FormField label={t('settings.provider.apiService.apiKey')}>
             <View className="flex-row items-center gap-2">
-              <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
+              <View className="min-w-0 flex-1 overflow-hidden">
                 <Input
                   accessibilityLabel={t('settings.provider.apiService.apiKey')}
                   autoCapitalize="none"

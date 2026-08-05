@@ -173,7 +173,6 @@ function PaintingSettingField({
             multiline={field.spec.multiline}
             onChangeText={(nextValue) => onValueChange(field.key, nextValue)}
             placeholder={t('painting.settings.optional')}
-            style={field.spec.multiline ? styles.multilineInput : undefined}
             textAlignVertical={field.spec.multiline ? 'top' : 'center'}
             value={value === undefined || value === null ? '' : String(value)}
           />
@@ -570,10 +569,6 @@ const styles = StyleSheet.create({
     gap: 22,
     paddingHorizontal: 24,
     paddingTop: 12,
-  },
-  multilineInput: {
-    minHeight: 96,
-    textAlignVertical: 'top',
   },
   ratioDashedShape: { borderStyle: 'dashed' },
   sizeInput: {
