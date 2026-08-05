@@ -1,3 +1,4 @@
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import type {
   AiUsageRecordCostTotal,
   AiUsageRecordTimelineBucket,
@@ -6,7 +7,9 @@ import { Link } from 'expo-router';
 import { ChevronRightIcon, RefreshCwIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
+import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/BrandAvatar';
 import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
@@ -20,7 +23,7 @@ const costSymbols = {
 
 export function AiUsageSummaryCard() {
   const { i18n, t } = useTranslation();
-  const { calendarData, data, hasData, isError, isLoading, isRefreshing, refetch } =
+  const { calendarData, data, hasData, isError, isLoading, isRefreshing, refetch, topProviders } =
     useAiUsageOverview();
   const isInitialLoading = isLoading && !hasData;
   const showInitialError = isError && !hasData;
@@ -138,6 +141,18 @@ export function AiUsageSummaryCard() {
               </Text>
             </View>
           </View>
+          <View
+            className="mt-4 min-h-6 flex-row items-center gap-2"
+            testID="ai-usage-summary-providers"
+          >
+            {topProviders.map((provider) => (
+              <AiUsageProviderPill
+                key={provider.providerId ?? provider.providerName ?? 'unknown'}
+                providerId={provider.providerId}
+                providerName={provider.providerName}
+              />
+            ))}
+          </View>
         </View>
       )}
     </View>
@@ -159,6 +174,41 @@ const styles = StyleSheet.create({
     minHeight: 104,
   },
 });
+
+function AiUsageProviderPill({
+  providerId,
+  providerName,
+}: {
+  providerId: string | null;
+  providerName: string | null;
+}) {
+  const { t } = useTranslation();
+  const { theme } = useUniwind();
+  const label = providerName || providerId || t('aiUsage.unknownProvider');
+  const iconSource = resolveProviderIcon(providerId ?? '');
+
+  return (
+    <View
+      className="min-w-0 flex-1 flex-row items-center gap-2"
+      testID={`ai-usage-summary-provider-${providerId ?? 'unknown'}`}
+    >
+      {iconSource ? (
+        <BrandAvatar label={label} size={24}>
+          <BrandAvatarIcon
+            iconId={providerId ?? undefined}
+            recyclingKey={providerId ?? undefined}
+            source={iconSource[theme === 'dark' ? 'dark' : 'light']}
+          />
+        </BrandAvatar>
+      ) : (
+        <BrandAvatar label={label} size={24} />
+      )}
+      <Text className="min-w-0 shrink text-default-foreground text-sm" numberOfLines={1}>
+        {label}
+      </Text>
+    </View>
+  );
+}
 
 function formatTotalTokens(
   buckets: readonly AiUsageRecordTimelineBucket[] | undefined,

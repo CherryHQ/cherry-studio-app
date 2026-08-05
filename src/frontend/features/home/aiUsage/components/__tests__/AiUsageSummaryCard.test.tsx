@@ -21,6 +21,29 @@ jest.mock('lucide-uniwind/png', () => ({
   RefreshCwIcon: () => null,
 }));
 
+jest.mock('@cherrystudio/ui/icons', () => ({
+  resolveProviderIcon: (providerId: string) => ({
+    dark: `${providerId}-dark`,
+    light: `${providerId}-light`,
+  }),
+}));
+
+jest.mock('uniwind', () => ({
+  useResolveClassNames: () => ({}),
+  useUniwind: () => ({ theme: 'light' }),
+}));
+
+jest.mock('@/frontend/components/BrandAvatar', () => {
+  const React = jest.requireActual('react');
+
+  return {
+    BrandAvatar: ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement('MockBrandAvatar', props, children),
+    BrandAvatarIcon: (props: Record<string, unknown>) =>
+      React.createElement('MockBrandAvatarIcon', props),
+  };
+});
+
 jest.mock('../../hooks/useAiUsageOverview', () => ({
   useAiUsageOverview: () => mockUseAiUsageOverview(),
 }));
@@ -46,6 +69,7 @@ jest.mock('react-i18next', () => ({
         'aiUsage.retry': 'Retry',
         'aiUsage.tokens': 'Tokens',
         'aiUsage.title': 'Usage Statistics',
+        'aiUsage.unknownProvider': 'Unknown provider',
         'aiUsage.viewDetails': 'View details',
       })[key] ?? key,
   }),
@@ -92,11 +116,20 @@ describe('AiUsageSummaryCard', () => {
         'Tokens',
         '$1,227.37',
         'Cost',
+        'Anthropic',
+        'OpenAI',
+        'Google',
       ]),
     );
     expect(renderer?.root.findByProps({ testID: 'ai-usage-summary-metrics' }).props.className).toBe(
       'mt-4 flex-row gap-6',
     );
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-summary-providers' }).props.className,
+    ).toBe('mt-4 min-h-6 flex-row items-center gap-2');
+    expect(
+      renderer?.root.findByProps({ testID: 'ai-usage-summary-provider-openai' }).props.className,
+    ).toBe('min-w-0 flex-1 flex-row items-center gap-2');
     expect(textValues()).not.toEqual(
       expect.arrayContaining(['Total tokens', 'Cache hit rate', 'Daily activity']),
     );
@@ -181,6 +214,11 @@ function queryResult(overrides: Record<string, unknown> = {}) {
     isRefreshing: false,
     range,
     refetch: mockRefetch,
+    topProviders: [
+      { groupBy: 'provider', providerId: 'anthropic', providerName: 'Anthropic' },
+      { groupBy: 'provider', providerId: 'openai', providerName: 'OpenAI' },
+      { groupBy: 'provider', providerId: 'google', providerName: 'Google' },
+    ],
     ...overrides,
   };
 }
