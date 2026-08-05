@@ -1,4 +1,7 @@
-import type { AiUsageRecordCostTotal } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+import type {
+  AiUsageRecordCostTotal,
+  AiUsageRecordTimelineBucket,
+} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import { Link } from 'expo-router';
 import { ChevronRightIcon, RefreshCwIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
@@ -17,10 +20,9 @@ export function AiUsageSummaryCard() {
   const isInitialLoading = isLoading && !hasData;
   const showInitialError = isError && !hasData;
   const animationStartDateKey = getFirstAiUsageDateKey(calendarData);
-  const formattedCost = formatCostTotals(
-    data?.costTotals ?? [],
-    i18n.resolvedLanguage ?? i18n.language,
-  );
+  const locale = i18n.resolvedLanguage ?? i18n.language;
+  const formattedTokens = formatTotalTokens(data?.buckets, locale);
+  const formattedCost = formatCostTotals(data?.costTotals ?? [], locale);
 
   return (
     <View className="w-full rounded-2xl bg-surface p-4" style={styles.card}>
@@ -97,21 +99,39 @@ export function AiUsageSummaryCard() {
             isLoading={isInitialLoading}
             layout="fit"
           />
-          <View className="mt-4 gap-0.5" testID="ai-usage-summary-cost">
-            <Text
-              selectable
-              adjustsFontSizeToFit
-              className="min-w-0 font-semibold text-default-foreground text-lg"
-              maxFontSizeMultiplier={1.2}
-              minimumFontScale={0.75}
-              numberOfLines={1}
-              style={styles.costValue}
-            >
-              {formattedCost}
-            </Text>
-            <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.2}>
-              {t('aiUsage.cost')}
-            </Text>
+          <View className="mt-4 flex-row gap-6" testID="ai-usage-summary-metrics">
+            <View className="min-w-0 flex-1 gap-0.5" testID="ai-usage-summary-tokens">
+              <Text
+                selectable
+                adjustsFontSizeToFit
+                className="min-w-0 font-semibold text-default-foreground text-lg"
+                maxFontSizeMultiplier={1.2}
+                minimumFontScale={0.65}
+                numberOfLines={1}
+                style={styles.metricValue}
+              >
+                {formattedTokens}
+              </Text>
+              <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.2}>
+                {t('aiUsage.tokens')}
+              </Text>
+            </View>
+            <View className="min-w-0 flex-1 gap-0.5" testID="ai-usage-summary-cost">
+              <Text
+                selectable
+                adjustsFontSizeToFit
+                className="min-w-0 font-semibold text-default-foreground text-lg"
+                maxFontSizeMultiplier={1.2}
+                minimumFontScale={0.65}
+                numberOfLines={1}
+                style={styles.metricValue}
+              >
+                {formattedCost}
+              </Text>
+              <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.2}>
+                {t('aiUsage.cost')}
+              </Text>
+            </View>
           </View>
         </View>
       )}
@@ -127,13 +147,23 @@ const styles = StyleSheet.create({
   continuousCorners: {
     borderCurve: 'continuous',
   },
-  costValue: {
+  metricValue: {
     fontVariant: ['tabular-nums'],
   },
   stateContent: {
     minHeight: 104,
   },
 });
+
+function formatTotalTokens(
+  buckets: readonly AiUsageRecordTimelineBucket[] | undefined,
+  locale: string,
+): string {
+  if (!buckets) return '--';
+
+  const totalTokens = buckets.reduce((total, bucket) => total + bucket.totalTokens, 0);
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(totalTokens);
+}
 
 function formatCostTotals(costTotals: readonly AiUsageRecordCostTotal[], locale: string): string {
   if (costTotals.length === 0) return '--';

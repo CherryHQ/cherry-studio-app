@@ -21,6 +21,7 @@
   "aiUsage.showThisWeek": "显示本周",
   "aiUsage.title": "用量统计",
   "aiUsage.tokenUsage": "Token 用量",
+  "aiUsage.tokens": "Tokens",
   "aiUsage.tokensValue": "{{tokens}} Tokens",
   "aiUsage.unknownModel": "未知模型",
   "aiUsage.unknownProvider": "未知服务商",

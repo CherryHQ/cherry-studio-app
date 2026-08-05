@@ -21,6 +21,7 @@
   "aiUsage.showThisWeek": "Show This Week",
   "aiUsage.title": "Usage Statistics",
   "aiUsage.tokenUsage": "Token Usage",
+  "aiUsage.tokens": "Tokens",
   "aiUsage.tokensValue": "{{tokens}} Tokens",
   "aiUsage.unknownModel": "Unknown model",
   "aiUsage.unknownProvider": "Unknown provider",

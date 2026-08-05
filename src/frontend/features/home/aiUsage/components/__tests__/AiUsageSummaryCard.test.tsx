@@ -44,6 +44,7 @@ jest.mock('react-i18next', () => ({
         'aiUsage.loadError': 'Usage statistics could not be loaded.',
         'aiUsage.loading': 'Loading usage statistics',
         'aiUsage.retry': 'Retry',
+        'aiUsage.tokens': 'Tokens',
         'aiUsage.title': 'Usage Statistics',
         'aiUsage.viewDetails': 'View details',
       })[key] ?? key,
@@ -84,7 +85,17 @@ describe('AiUsageSummaryCard', () => {
     expect(calendar?.props.animationStartDateKey).toBe('2026-04-15');
     expect(calendar?.props.layout).toBe('fit');
     expect(textValues()).toEqual(
-      expect.arrayContaining(['Usage Statistics', 'View details', '$1,227.37', 'Cost']),
+      expect.arrayContaining([
+        'Usage Statistics',
+        'View details',
+        '2,235,732',
+        'Tokens',
+        '$1,227.37',
+        'Cost',
+      ]),
+    );
+    expect(renderer?.root.findByProps({ testID: 'ai-usage-summary-metrics' }).props.className).toBe(
+      'mt-4 flex-row gap-6',
     );
     expect(textValues()).not.toEqual(
       expect.arrayContaining(['Total tokens', 'Cache hit rate', 'Daily activity']),
@@ -156,7 +167,10 @@ function queryResult(overrides: Record<string, unknown> = {}) {
   return {
     calendarData,
     data: {
-      buckets: [],
+      buckets: [
+        { date: '2026-08-01', totalTokens: 1_500_000 },
+        { date: '2026-08-02', totalTokens: 735_732 },
+      ],
       costTotals: [{ currency: 'USD', total: 1227.37 }],
       dailyCosts: [],
     },
