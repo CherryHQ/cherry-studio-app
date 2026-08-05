@@ -108,7 +108,12 @@ const TopicListView = memo(function TopicListView() {
   const selectionSource = useTopicSelectionSource();
   useRegisterSelectionSource('conversations', selectionSource);
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
-  const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  useEffect(() => {
+    if (isEditing) {
+      closeOpen();
+    }
+  }, [closeOpen, isEditing]);
   // Bottom inset is stable across the edit⇄done flip (see useMessageListBottomInset),
   // so this style reference stays put and the list never reflows on toggle.
   const contentContainerStyle = useMemo(
@@ -240,12 +245,6 @@ const TopicRow = memo(function TopicRow({
     i18n.resolvedLanguage,
     t('topic.updatedAt.yesterday'),
   );
-
-  useEffect(() => {
-    if (isEditing) {
-      swipeableRef.current?.close();
-    }
-  }, [isEditing]);
 
   const handlePress = useCallback(() => {
     if (isEditing) {
