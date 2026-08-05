@@ -25,8 +25,11 @@ export function Alert({ actions, description, isOpen, onOpenChange, testID, titl
               <Button
                 key={`${action.role ?? 'default'}-${action.label}`}
                 onPress={() => {
-                  onOpenChange(false);
-                  action.onPress?.();
+                  try {
+                    action.onPress?.();
+                  } finally {
+                    onOpenChange(false);
+                  }
                 }}
                 size="sm"
                 variant={buttonVariants[action.role ?? 'default']}

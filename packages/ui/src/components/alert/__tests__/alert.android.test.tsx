@@ -77,7 +77,7 @@ describe('Alert (Android)', () => {
     );
   });
 
-  test('closes before invoking an action and maps its role to the Button variant', () => {
+  test('invokes an action before closing and maps its role to the Button variant', () => {
     const order: string[] = [];
     const onOpenChange = jest.fn(() => order.push('close'));
     const onPress = jest.fn(() => order.push('action'));
@@ -98,7 +98,7 @@ describe('Alert (Android)', () => {
     expect(button.props.size).toBe('sm');
     expect(button.props.variant).toBe('destructive');
     act(() => button.props.onPress());
-    expect(order).toEqual(['close', 'action']);
+    expect(order).toEqual(['action', 'close']);
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 });
