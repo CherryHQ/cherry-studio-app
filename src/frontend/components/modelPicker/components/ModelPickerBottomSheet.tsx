@@ -124,7 +124,7 @@ export function ModelPickerBottomSheet({
       {/* The card's fixed height + this flex column bound the list, so
           LegendList (flex:1) virtualizes without any manual height math. */}
       <View style={styles.body}>
-        <View className="px-4 pt-5">
+        <View className="px-4 pt-2">
           <SelectionSheetSearchField onChange={handleSearchTextChange} value={searchText} />
         </View>
         <View style={styles.modelListViewport}>

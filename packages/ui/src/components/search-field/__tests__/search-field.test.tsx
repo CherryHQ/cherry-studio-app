@@ -55,15 +55,33 @@ describe('SearchField', () => {
         autoCorrect: false,
         autoFocus: false,
         className:
-          'min-h-8 rounded-md border border-border shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
+          'min-h-10 rounded-full border border-border py-0 text-base shadow-none ios:pb-2 ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border',
         placeholder: 'Search',
         returnKeyType: 'search',
       }),
     );
+    expect(input.props.style).toEqual({
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+      verticalAlign: 'middle',
+    });
     expect(renderer!.root.findByProps({ testID: 'icon' })).toBeDefined();
 
     act(() => root.props.onChange('Studio'));
     expect(onChangeText).toHaveBeenCalledWith('Studio');
+
+    act(() => {
+      renderer!.update(
+        <SearchField
+          accessibilityLabel="Search providers"
+          clearAccessibilityLabel="Clear"
+          onChangeText={onChangeText}
+          placeholder="Search"
+          value=""
+        />,
+      );
+    });
+    expect(input.props.className).toContain('ios:pb-1');
   });
 
   test('forwards state, callbacks, layout, and test IDs', () => {

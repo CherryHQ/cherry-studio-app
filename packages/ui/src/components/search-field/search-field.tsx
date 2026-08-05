@@ -1,4 +1,5 @@
 import { SearchField as HeroSearchField } from 'heroui-native/search-field';
+import { StyleSheet } from 'react-native';
 
 import type { SearchFieldProps } from './search-field.types';
 
@@ -17,6 +18,10 @@ export function SearchField({
   testID,
   value,
 }: SearchFieldProps) {
+  const inputClassName = value
+    ? 'min-h-10 rounded-full border border-border py-0 text-base shadow-none ios:pb-2 ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border'
+    : 'min-h-10 rounded-full border border-border py-0 text-base shadow-none ios:pb-1 ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border';
+
   return (
     <HeroSearchField
       isDisabled={disabled}
@@ -32,12 +37,13 @@ export function SearchField({
           autoCapitalize="none"
           autoCorrect={false}
           autoFocus={autoFocus}
-          className="min-h-8 rounded-md border border-border shadow-none ios:shadow-none ios:focus:outline-transparent android:border-border android:shadow-none android:focus:border-border"
+          className={inputClassName}
           onBlur={onBlur}
           onFocus={onFocus}
           onSubmitEditing={onSubmitEditing}
           placeholder={placeholder}
           returnKeyType="search"
+          style={styles.input}
           testID={testID}
         />
         <HeroSearchField.ClearButton
@@ -49,3 +55,11 @@ export function SearchField({
     </HeroSearchField>
   );
 }
+
+const styles = StyleSheet.create({
+  input: {
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+    verticalAlign: 'middle',
+  },
+});
