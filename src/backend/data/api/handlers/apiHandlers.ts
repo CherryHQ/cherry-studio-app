@@ -12,6 +12,7 @@ import type { AssistantService } from '../../services/AssistantService';
 import type { ContentSearchService } from '../../services/ContentSearchService';
 import type { EntitySearchService } from '../../services/EntitySearchService';
 import type { FileEntryService } from '../../services/FileEntryService';
+import type { FileRefService } from '../../services/FileRefService';
 import type { GroupService } from '../../services/GroupService';
 import type { JobService } from '../../services/JobService';
 import type { KnowledgeBaseService } from '../../services/KnowledgeBaseService';
@@ -36,7 +37,7 @@ import { createAgentSessionHandlers } from './agentSessions';
 import { createAgentWorkspaceHandlers } from './agentWorkspaces';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';
-import { createFileHandlers } from './files';
+import { createFileHandlers, type FileContentQueries } from './files';
 import { createGroupHandlers } from './groups';
 import { createJobHandlers } from './jobs';
 import { createKnowledgeHandlers } from './knowledges';
@@ -68,7 +69,9 @@ export type DataApiDependencies = {
   assistants: AssistantService;
   contentSearch: ContentSearchService;
   entitySearch: EntitySearchService;
+  fileContent: FileContentQueries;
   files: FileEntryService;
+  fileRefs: FileRefService;
   groups: GroupService;
   jobs: JobService;
   knowledgeBases: KnowledgeBaseService;
@@ -99,7 +102,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createAgentWorkspaceHandlers(dependencies.agentWorkspaces, dependencies.agentSessions),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
     ...createAssistantHandlers(dependencies.assistants),
-    ...createFileHandlers(dependencies.files),
+    ...createFileHandlers(dependencies.files, dependencies.fileRefs, dependencies.fileContent),
     ...createGroupHandlers(dependencies.groups),
     ...createJobHandlers(dependencies.jobs),
     ...createKnowledgeHandlers(dependencies.knowledgeBases, dependencies.knowledgeItems),

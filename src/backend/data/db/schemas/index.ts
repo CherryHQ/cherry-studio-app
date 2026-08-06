@@ -17,6 +17,7 @@ import {
 import { fileEntryTable } from './file';
 import {
   chatMessageFileRefTable,
+  jobFileRefTable,
   miniAppLogoFileRefTable,
   paintingFileRefTable,
   providerLogoFileRefTable,
@@ -111,6 +112,7 @@ export const schema = {
   fileEntryTable,
   groupTable,
   jobScheduleTable,
+  jobFileRefTable,
   jobTable,
   knowledgeBaseTable,
   knowledgeItemTable,

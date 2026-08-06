@@ -1,4 +1,4 @@
-import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
+import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
@@ -23,8 +23,18 @@ function painting(id: string, outputs: FileEntryId[] = []): Painting {
   };
 }
 
-function prepared(id: FileEntryId, uri: string): PreparedInternalFile {
-  return { ext: 'png', id, name: 'image', size: 1, uri };
+function internalEntry(id: FileEntryId): InternalFileEntry {
+  return {
+    cleanupPolicy: 'delete_when_unreferenced',
+    contentHash: null,
+    createdAt: 1,
+    ext: 'png',
+    id,
+    name: 'image',
+    origin: 'internal',
+    size: 1,
+    updatedAt: 1,
+  };
 }
 
 function createSubject() {
@@ -45,10 +55,14 @@ function createSubject() {
       replaceOutputs: jest.fn(async () => completed),
     },
     storage: {
-      discard: jest.fn(),
-      prepareGeneratedImage: jest.fn(() => prepared(outputFileId, 'file:///output.png')),
-      prepareInput: jest.fn(async () => prepared(inputFileId, 'file:///input.png')),
+      createInternalEntry: jest.fn(async (input) =>
+        input.source === 'uri' ? internalEntry(inputFileId) : internalEntry(outputFileId),
+      ),
+      discard: jest.fn(async () => undefined),
       readDataUrl: jest.fn(async () => 'data:image/png;base64,aW1hZ2U='),
+      resolveUri: jest.fn((entry) =>
+        entry.id === outputFileId ? 'file:///output.png' : 'file:///input.png',
+      ),
     },
   };
   const backend: PaintingsModule = createPaintingsModule(dependencies);
@@ -71,7 +85,7 @@ const generationInput = {
 };
 
 describe('createPaintingsModule', () => {
-  it('persists prepared inputs and generated outputs behind one session call', async () => {
+  it('persists created input and output entries behind one session call', async () => {
     const { backend, dependencies } = createSubject();
     const session = backend.createGenerationSession();
 
@@ -80,14 +94,24 @@ describe('createPaintingsModule', () => {
       painting: painting('painting-1', [outputFileId]),
     });
     expect(dependencies.paintings.create).toHaveBeenCalledWith(
-      expect.objectContaining({ prompt: 'draw', providerId: 'openai' }),
+      expect.objectContaining({
+        inputFileIds: [inputFileId],
+        prompt: 'draw',
+        providerId: 'openai',
+      }),
     );
     expect(dependencies.ai.generateImage).toHaveBeenCalledWith(
       expect.objectContaining({ prompt: 'draw', uniqueModelId: modelId }),
     );
     expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith('painting-1', [
-      expect.objectContaining({ id: outputFileId }),
+      outputFileId,
     ]);
+    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced', source: 'uri' }),
+    );
+    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced', source: 'base64' }),
+    );
   });
 
   it('reuses an incomplete receipt when the same generation is retried', async () => {
@@ -104,7 +128,7 @@ describe('createPaintingsModule', () => {
     expect(dependencies.paintings.create).toHaveBeenCalledTimes(1);
   });
 
-  it('discards prepared inputs when receipt persistence fails', async () => {
+  it('discards created inputs when receipt persistence fails', async () => {
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.paintings.create).mockRejectedValue(new Error('database failed'));
     const session = backend.createGenerationSession();
@@ -113,6 +137,33 @@ describe('createPaintingsModule', () => {
     expect(dependencies.storage.discard).toHaveBeenCalledWith([
       expect.objectContaining({ id: inputFileId }),
     ]);
+  });
+
+  it('discards created outputs when output reference persistence fails', async () => {
+    const { backend, dependencies } = createSubject();
+    jest
+      .mocked(dependencies.paintings.replaceOutputs)
+      .mockRejectedValue(new Error('database failed'));
+    const session = backend.createGenerationSession();
+
+    await expect(session.generate(generationInput)).rejects.toThrow('database failed');
+    expect(dependencies.storage.discard).toHaveBeenCalledWith([
+      expect.objectContaining({ id: outputFileId }),
+    ]);
+  });
+
+  it('keeps referenced outputs when their URI cannot be resolved', async () => {
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.storage.resolveUri).mockReturnValue(undefined);
+    const session = backend.createGenerationSession();
+
+    await expect(session.generate(generationInput)).rejects.toThrow(
+      `Generated painting file is unavailable: ${outputFileId}`,
+    );
+    expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith('painting-1', [
+      outputFileId,
+    ]);
+    expect(dependencies.storage.discard).not.toHaveBeenCalled();
   });
 
   it('cancels the active call and reuses its receipt for the same input', async () => {

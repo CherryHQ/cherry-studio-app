@@ -3,7 +3,7 @@ import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
-import type { PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
+import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -19,25 +19,27 @@ import { ChatRuntime, type ChatRuntimeConfig } from '../ChatRuntime';
 import type { ChatRuntimeServices, ChatStreamRequest } from '../ChatRuntimeDependencies';
 
 const mockReadUIMessageStream = jest.fn();
-const mockPrepareMessageParts = jest.fn(
+const mockCreateMessageParts = jest.fn(
   async (
     parts: readonly CherryMessagePart[],
-  ): Promise<{ files: PreparedInternalFile[]; parts: CherryMessagePart[] }> => ({
-    files: [],
+  ): Promise<{ entries: InternalFileEntry[]; parts: CherryMessagePart[] }> => ({
+    entries: [],
     parts: [...parts],
   }),
 );
-const mockDiscardPreparedFiles = jest.fn();
+const mockDiscardInternalEntries = jest.fn(
+  async (_entries: readonly InternalFileEntry[]) => undefined,
+);
 
 describe('ChatRuntime', () => {
   beforeEach(() => {
     mockReadUIMessageStream.mockReset();
-    mockPrepareMessageParts.mockClear();
-    mockPrepareMessageParts.mockImplementation(async (parts: readonly CherryMessagePart[]) => ({
-      files: [],
+    mockCreateMessageParts.mockClear();
+    mockCreateMessageParts.mockImplementation(async (parts: readonly CherryMessagePart[]) => ({
+      entries: [],
       parts: [...parts],
     }));
-    mockDiscardPreparedFiles.mockReset();
+    mockDiscardInternalEntries.mockClear();
   });
 
   test('reserves user and assistant messages before streaming and persists terminal assistant parts', async () => {
@@ -458,16 +460,11 @@ describe('ChatRuntime', () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const partialChunk = createUiMessage('assistant-1', 'partial');
-    const preparedFile = {
-      ext: 'pdf',
-      id: '00000000-0000-7000-8000-000000000001',
-      name: 'brief',
-      size: 12,
-      uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
-    };
-    mockPrepareMessageParts.mockResolvedValueOnce({
-      files: [preparedFile],
-      parts: [createFilePart(preparedFile.uri)],
+    const createdEntry = createInternalFileEntry();
+    const managedUri = 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf';
+    mockCreateMessageParts.mockResolvedValueOnce({
+      entries: [createdEntry],
+      parts: [createFilePart(managedUri)],
     });
     mockReadUIMessageStream.mockReturnValue(
       asyncIterableWithFailure([partialChunk], new Error('stream failed')),
@@ -495,7 +492,7 @@ describe('ChatRuntime', () => {
         status: 'error',
       }),
     );
-    expect(mockDiscardPreparedFiles).not.toHaveBeenCalled();
+    expect(mockDiscardInternalEntries).not.toHaveBeenCalled();
   });
 
   test('drops content-free parts the accumulator left behind on a successful turn', async () => {
@@ -797,15 +794,9 @@ describe('ChatRuntime', () => {
       },
       url: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
     } as CherryMessagePart;
-    const preparedFile = {
-      ext: 'pdf',
-      id: '00000000-0000-7000-8000-000000000001',
-      name: 'brief',
-      size: 12,
-      uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
-    };
-    mockPrepareMessageParts.mockResolvedValueOnce({
-      files: [preparedFile],
+    const createdEntry = createInternalFileEntry();
+    mockCreateMessageParts.mockResolvedValueOnce({
+      entries: [createdEntry],
       parts: [managedPart],
     });
     mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
@@ -821,7 +812,6 @@ describe('ChatRuntime', () => {
     });
     expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledWith(
       expect.objectContaining({
-        preparedFiles: [preparedFile],
         userMessage: expect.objectContaining({
           dto: expect.objectContaining({
             data: { parts: [managedPart] },
@@ -829,7 +819,7 @@ describe('ChatRuntime', () => {
         }),
       }),
     );
-    expect(mockDiscardPreparedFiles).not.toHaveBeenCalled();
+    expect(mockDiscardInternalEntries).not.toHaveBeenCalled();
   });
 
   test('rejects and does not reserve messages when context resolution fails', async () => {
@@ -851,16 +841,11 @@ describe('ChatRuntime', () => {
 
   test('rejects and restores the topic snapshot when reservation fails', async () => {
     const services = createServices();
-    const preparedFile = {
-      ext: 'pdf',
-      id: '00000000-0000-7000-8000-000000000001',
-      name: 'brief',
-      size: 12,
-      uri: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
-    };
-    mockPrepareMessageParts.mockResolvedValueOnce({
-      files: [preparedFile],
-      parts: [createFilePart(preparedFile.uri)],
+    const createdEntry = createInternalFileEntry();
+    const managedUri = 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf';
+    mockCreateMessageParts.mockResolvedValueOnce({
+      entries: [createdEntry],
+      parts: [createFilePart(managedUri)],
     });
     services.message.createUserMessageWithPlaceholders = jest.fn(async () => {
       throw new Error('reservation failed');
@@ -877,7 +862,7 @@ describe('ChatRuntime', () => {
     ).rejects.toThrow('reservation failed');
 
     expect(services.ai.streamText).not.toHaveBeenCalled();
-    expect(mockDiscardPreparedFiles).toHaveBeenCalledWith([preparedFile]);
+    expect(mockDiscardInternalEntries).toHaveBeenCalledWith([createdEntry]);
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -1492,7 +1477,7 @@ describe('ChatRuntime', () => {
     ).rejects.toThrow('Resolve the pending tool approval before sending another message.');
 
     expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
-    expect(mockPrepareMessageParts).not.toHaveBeenCalled();
+    expect(mockCreateMessageParts).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -2656,8 +2641,8 @@ function createRuntime(input: {
   const runtime = new ChatRuntime(
     {
       files: {
-        discard: (...args) => mockDiscardPreparedFiles(...args),
-        prepareParts: (parts) => mockPrepareMessageParts(parts),
+        createParts: (parts) => mockCreateMessageParts(parts),
+        discard: (...args) => mockDiscardInternalEntries(...args),
       },
       services: input.services,
     },
@@ -2855,6 +2840,20 @@ function createFilePart(url: string): CherryMessagePart {
     type: 'file',
     url,
   } as CherryMessagePart;
+}
+
+function createInternalFileEntry(): InternalFileEntry {
+  return {
+    cleanupPolicy: 'delete_when_unreferenced',
+    contentHash: null,
+    createdAt: 1,
+    ext: 'pdf',
+    id: '00000000-0000-7000-8000-000000000001' as FileEntryId,
+    name: 'brief',
+    origin: 'internal',
+    size: 12,
+    updatedAt: 1,
+  };
 }
 
 function createMessage(id: string, role: Message['role']): Message {

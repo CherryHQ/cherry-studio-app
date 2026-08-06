@@ -1,0 +1,308 @@
+import type { ResolvedFile } from '@cherrystudio/universal/data/api/schemas/files';
+import {
+  type CleanupPolicy,
+  type FileEntryId,
+  FileEntryIdSchema,
+  type InternalFileEntry,
+  SafeExtSchema,
+  SafeNameSchema,
+} from '@cherrystudio/universal/data/types/file';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+import { Directory, File, Paths } from 'expo-file-system';
+
+import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
+
+const DATA_DIRECTORY_NAME = 'Data';
+const FILE_DIRECTORY_NAME = 'Files';
+const logger = loggerService.withContext('fileStorage');
+
+export type CreateInternalEntryInput =
+  | {
+      cleanupPolicy: CleanupPolicy;
+      name?: string;
+      /** Transient import source; its bytes are copied to Data/Files and the URI is not persisted. */
+      source: 'uri';
+      uri: string;
+    }
+  | {
+      cleanupPolicy: CleanupPolicy;
+      data: string;
+      mediaType: string;
+      name?: string;
+      source: 'base64';
+    };
+
+type WrittenInternalFile = {
+  ext: string | null;
+  id: FileEntryId;
+  name: string;
+  size: number;
+};
+
+export type InternalFileOnDisk = {
+  id: FileEntryId;
+  modificationTime: number | null;
+  name: string;
+  uri: string;
+};
+
+function fileDirectory(): Directory {
+  return new Directory(Paths.document, DATA_DIRECTORY_NAME, FILE_DIRECTORY_NAME);
+}
+
+function ensureFileDirectory(): Directory {
+  const directory = fileDirectory();
+  if (!directory.exists) {
+    directory.create({ intermediates: true });
+  }
+  return directory;
+}
+
+function managedFile(id: FileEntryId, ext: string | null): File {
+  const safeId = FileEntryIdSchema.parse(id);
+  const safeExt = ext === null ? null : SafeExtSchema.parse(ext);
+  return new File(fileDirectory(), `${safeId}${safeExt ? `.${safeExt}` : ''}`);
+}
+
+function projectFileName(displayFilename: string, sourceFilename: string) {
+  const displayBase =
+    basenameForProjection(displayFilename) || basenameForProjection(sourceFilename);
+  const displayDot = displayBase.lastIndexOf('.');
+  const sourceBase = basenameForProjection(sourceFilename);
+  const sourceDot = sourceBase.lastIndexOf('.');
+  const name = displayDot > 0 ? displayBase.slice(0, displayDot) : displayBase;
+  const ext =
+    displayDot > 0
+      ? displayBase.slice(displayDot + 1).toLowerCase()
+      : sourceDot > 0
+        ? sourceBase.slice(sourceDot + 1).toLowerCase()
+        : null;
+
+  return {
+    ext: ext ? SafeExtSchema.parse(ext) : null,
+    name: SafeNameSchema.parse(name),
+  };
+}
+
+function basenameForProjection(value: string): string {
+  return (value.split(/[\\/]/).pop() ?? value).replace(/[\s.]+$/, '');
+}
+
+async function writeInternalFile(input: CreateInternalEntryInput): Promise<WrittenInternalFile> {
+  const id = createOrderedUuid();
+  let ext: string | null;
+  let name: string;
+  let write: (destination: File) => Promise<void> | void;
+
+  if (input.source === 'uri') {
+    const source = new File(input.uri);
+    ({ ext, name } = projectFileName(input.name ?? source.name, source.name));
+    write = (destination) => source.copy(destination);
+  } else {
+    ext = SafeExtSchema.parse(generatedImageExtension(input.mediaType));
+    name = SafeNameSchema.parse(input.name ?? `painting-${id}`);
+    const payload = input.data.includes(',') ? (input.data.split(',', 2)[1] ?? '') : input.data;
+    write = (destination) => destination.write(payload, { encoding: 'base64' });
+  }
+
+  const destination = new File(ensureFileDirectory(), `${id}${ext ? `.${ext}` : ''}`);
+
+  try {
+    await write(destination);
+
+    if (!destination.exists) {
+      throw new Error(`Internal file does not exist after write: ${destination.uri}`);
+    }
+
+    const size = destination.size;
+    if (!Number.isSafeInteger(size) || size < 0) {
+      throw new Error(`Internal file has an invalid size: ${destination.uri}`);
+    }
+
+    return { ext, id, name, size };
+  } catch (error) {
+    try {
+      if (destination.exists) {
+        destination.delete();
+      }
+    } catch (cleanupError) {
+      logger.warn('Failed to discard partially written internal file', cleanupError as Error, {
+        id,
+      });
+    }
+    throw error;
+  }
+}
+
+export async function createInternalEntry(
+  entries: Pick<FileEntryService, 'create'>,
+  input: CreateInternalEntryInput,
+): Promise<InternalFileEntry> {
+  const written = await writeInternalFile(input);
+  try {
+    const entry = await entries.create({
+      cleanupPolicy: input.cleanupPolicy,
+      contentHash: null,
+      ext: written.ext,
+      id: written.id,
+      name: written.name,
+      origin: 'internal',
+      size: written.size,
+    });
+    if (entry.origin !== 'internal') {
+      throw new Error(`Created FileEntry is not internal: ${entry.id}`);
+    }
+    return entry;
+  } catch (error) {
+    try {
+      deleteInternalFile(written);
+    } catch (cleanupError) {
+      logger.warn(
+        'Failed to discard an internal file after FileEntry creation failed',
+        cleanupError as Error,
+        { id: written.id },
+      );
+    }
+    throw error;
+  }
+}
+
+export async function createMessageParts(
+  entries: Pick<FileEntryService, 'create' | 'delete'>,
+  parts: readonly CherryMessagePart[],
+): Promise<{ entries: InternalFileEntry[]; parts: CherryMessagePart[] }> {
+  const createdEntries: InternalFileEntry[] = [];
+  const managedParts: CherryMessagePart[] = [];
+
+  try {
+    for (const part of parts) {
+      if (part.type !== 'file' || readCherryMeta(part)?.fileEntryId) {
+        managedParts.push(part);
+        continue;
+      }
+
+      const entry = await createInternalEntry(entries, {
+        cleanupPolicy: 'delete_when_unreferenced',
+        name: part.filename,
+        source: 'uri',
+        uri: part.url,
+      });
+      createdEntries.push(entry);
+      const uri = resolveInternalFileUri(entry);
+      if (!uri) {
+        throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
+      }
+      managedParts.push(withCherryMeta({ ...part, url: uri }, { fileEntryId: entry.id }));
+    }
+  } catch (error) {
+    await discardInternalEntries(entries, createdEntries);
+    throw error;
+  }
+
+  return { entries: createdEntries, parts: managedParts };
+}
+
+export async function discardInternalEntries(
+  entries: Pick<FileEntryService, 'delete'>,
+  createdEntries: readonly InternalFileEntry[],
+): Promise<void> {
+  for (const entry of createdEntries) {
+    try {
+      await entries.delete(entry.id);
+    } catch (error) {
+      logger.warn('Failed to delete a discarded FileEntry', error as Error, { id: entry.id });
+      continue;
+    }
+    try {
+      deleteInternalFile(entry);
+    } catch (error) {
+      logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
+    }
+  }
+}
+
+export async function resolveFileEntry(
+  entries: Pick<FileEntryService, 'findById'>,
+  id: FileEntryId,
+): Promise<ResolvedFile | null> {
+  const entry = await entries.findById(id);
+  // External rows are opaque desktop-compatibility data on mobile; never dereference externalPath.
+  if (!entry || entry.origin !== 'internal') return null;
+  const uri = resolveInternalFileUri(entry);
+  return uri ? { entry, uri } : null;
+}
+
+export async function resolveRenderableFileUri(
+  entries: Pick<FileEntryService, 'findById'>,
+  id: FileEntryId,
+): Promise<string | undefined> {
+  return (await resolveFileEntry(entries, id))?.uri;
+}
+
+export function deleteInternalFile(entry: Pick<InternalFileEntry, 'ext' | 'id'>): boolean {
+  const file = managedFile(entry.id, entry.ext);
+  if (!file.exists) {
+    return false;
+  }
+  file.delete();
+  return true;
+}
+
+export function listInternalFiles(): InternalFileOnDisk[] {
+  const directory = fileDirectory();
+  if (!directory.exists) {
+    return [];
+  }
+
+  return directory
+    .list()
+    .filter((entry): entry is File => entry instanceof File)
+    .flatMap((file) => {
+      const dotIndex = file.name.indexOf('.');
+      const id = dotIndex < 0 ? file.name : file.name.slice(0, dotIndex);
+      const parsedId = FileEntryIdSchema.safeParse(id);
+      const ext = dotIndex < 0 ? null : file.name.slice(dotIndex + 1);
+      if (!parsedId.success || (ext !== null && !SafeExtSchema.safeParse(ext).success)) {
+        return [];
+      }
+      return [
+        {
+          id: parsedId.data,
+          modificationTime: file.modificationTime,
+          name: file.name,
+          uri: file.uri,
+        },
+      ];
+    });
+}
+
+export function deleteInternalFileUri(uri: string): void {
+  const file = new File(uri);
+  if (file.parentDirectory.uri !== fileDirectory().uri) {
+    throw new Error(`Refusing to delete a file outside Data/Files: ${uri}`);
+  }
+  if (file.exists) {
+    file.delete();
+  }
+}
+
+export function resolveInternalFileUri(
+  entry: Pick<InternalFileEntry, 'ext' | 'id'>,
+): string | undefined {
+  const file = managedFile(entry.id, entry.ext);
+  return file.exists ? file.uri : undefined;
+}
+
+export async function imageUriToDataUrl(uri: string, mediaType: string): Promise<string> {
+  if (uri.startsWith('data:')) {
+    return uri;
+  }
+  const file = new File(uri);
+  const base64 = await file.base64();
+  const resolvedMediaType = file.type || mediaType || 'image/*';
+  return `data:${resolvedMediaType};base64,${base64}`;
+}

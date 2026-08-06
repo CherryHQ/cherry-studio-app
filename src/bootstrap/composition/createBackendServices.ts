@@ -1,3 +1,5 @@
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
 import { ToolResolver } from '@/backend/ai/tools';
@@ -16,6 +18,7 @@ import { AssistantService } from '@/backend/data/services/AssistantService';
 import { ContentSearchService } from '@/backend/data/services/ContentSearchService';
 import { EntitySearchService } from '@/backend/data/services/EntitySearchService';
 import { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { FileRefService } from '@/backend/data/services/FileRefService';
 import { GroupService } from '@/backend/data/services/GroupService';
 import { JobService } from '@/backend/data/services/JobService';
 import { KnowledgeBaseService } from '@/backend/data/services/KnowledgeBaseService';
@@ -34,6 +37,7 @@ import { TemporaryChatService } from '@/backend/data/services/TemporaryChatServi
 import { TopicService } from '@/backend/data/services/TopicService';
 import { TranslateHistoryService } from '@/backend/data/services/TranslateHistoryService';
 import { TranslateLanguageService } from '@/backend/data/services/TranslateLanguageService';
+import { resolveFileEntry, resolveRenderableFileUri } from '@/backend/services/file/fileStorage';
 import { DevicePermissions } from '@/backend/services/permissions';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -64,12 +68,17 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const translateHistory = new TranslateHistoryService(dbService);
   const translateLanguage = new TranslateLanguageService(dbService);
   const fileEntry = new FileEntryService(dbService);
-  const painting = new PaintingService(dbService, fileEntry);
+  const fileContent = {
+    resolve: (id: FileEntryId) => resolveFileEntry(fileEntry, id),
+    resolveRenderableUri: (id: FileEntryId) => resolveRenderableFileUri(fileEntry, id),
+  };
+  const fileRef = new FileRefService(dbService);
+  const painting = new PaintingService(dbService);
   const mcpServer = new McpServerService(dbService);
   const mcpRuntime = new McpRuntimeService({ mcpServer });
   const topic = new TopicService(dbService, pin, tag);
   const assistant = new AssistantService(dbService, group, topic, model, preference, tag, pin);
-  const message = new MessageService(dbService, topic, fileEntry);
+  const message = new MessageService(dbService, topic);
   const contentSearch = new ContentSearchService(dbService);
   const entitySearch = new EntitySearchService(dbService);
   const temporaryChat = new TemporaryChatService(dbService, aiUsageRecord);
@@ -83,7 +92,7 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
   const ai = new AiService({
     assistant,
     aiUsageRecord,
-    fileEntry,
+    fileContent,
     model,
     preference,
     provider,
@@ -105,7 +114,9 @@ export function createBackendServices(dbService: DbService, cache: CacheService)
     contentSearch,
     devicePermissions,
     entitySearch,
+    fileContent,
     fileEntry,
+    fileRef,
     group,
     job,
     knowledgeBase,

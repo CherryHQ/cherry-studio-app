@@ -14,6 +14,11 @@ import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHe
  *
  * Flat list; no tree structure, no mount concept.
  *
+ * Mobile product flows create only internal entries. The external shape remains
+ * for desktop schema parity and future sync/import, where it is opaque: mobile
+ * must not dereference `externalPath`. Picker/provider URIs are transient import
+ * sources whose bytes are copied into `Data/Files`.
+ *
  * - origin='internal': Cherry owns the content, stored at `{userData}/Data/Files/{id}.{ext}`.
  *   `name` / `ext` / `size` are authoritative (kept in sync by atomic writes).
  * - origin='external': Cherry only references the user-provided path.
@@ -41,10 +46,15 @@ export const fileEntryTable = sqliteTable(
      * live value is read via File IPC `getMetadata`.
      */
     size: integer(),
+    /** Algorithm-tagged internal-content hash. Null means unknown or awaiting repair. */
+    contentHash: text(),
 
     // ─── External ───
     /** Absolute path to the user-provided file. Non-null iff origin='external' */
     externalPath: text(),
+
+    /** Safe default: zero-reference entries are retained unless a caller explicitly opts in. */
+    cleanupPolicy: text().notNull().default('manual'),
 
     // ─── Timestamps ───
     // `deletedAt` is soft-delete (NULL = not deleted). Internal-only —
@@ -59,6 +69,7 @@ export const fileEntryTable = sqliteTable(
   (t) => [
     index('fe_deleted_at_idx').on(t.deletedAt),
     index('fe_created_at_idx').on(t.createdAt),
+    index('fe_content_hash_idx').on(t.contentHash),
     // Case-insensitive uniqueness for `externalPath`. SQLite indexes
     // expressions verbatim, so this index covers both the uniqueness
     // invariant ("no two external rows whose canonical paths agree under
@@ -87,6 +98,10 @@ export const fileEntryTable = sqliteTable(
     index('fe_external_path_idx').on(t.externalPath),
     // Origin must be 'internal' or 'external'
     check('fe_origin_check', sql`${t.origin} IN ('internal', 'external')`),
+    check(
+      'fe_cleanup_policy_check',
+      sql`${t.cleanupPolicy} IN ('manual', 'delete_when_unreferenced')`,
+    ),
     // externalPath must be non-null iff origin='external'
     check(
       'fe_origin_consistency',
@@ -96,6 +111,10 @@ export const fileEntryTable = sqliteTable(
     // External removal is always immediate via permanentDelete (DB-only; the
     // physical file is left untouched, path-level @main/utils/file/fs.remove is a separate call).
     check('fe_external_no_delete', sql`${t.origin} != 'external' OR ${t.deletedAt} IS NULL`),
+    check(
+      'fe_contenthash_external_null',
+      sql`${t.origin} != 'external' OR ${t.contentHash} IS NULL`,
+    ),
     // Size semantics are origin-dependent: internal rows carry an authoritative
     // byte count (non-null, ≥ 0); external rows must leave size NULL and read
     // live values from File IPC `getMetadata`. The Zod layer rejects the same

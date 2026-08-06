@@ -1,33 +1,68 @@
 import {
-  generatedImageExtension,
-  imageMediaTypeFromExtension,
-  isImageFileExtension,
+  allSourceTypes,
+  ContentHashSchema,
+  FileEntrySchema,
+  FileHandleSchema,
+  FileRefSchema,
+  tagStoredFileRef,
 } from '../file';
 
-describe('image file types', () => {
+const entryId = '00000000-0000-7000-8000-000000000001';
+const refId = '00000000-0000-4000-8000-000000000002';
+
+describe('File contract', () => {
+  it('validates internal metadata and cleanup policy', () => {
+    expect(
+      FileEntrySchema.parse({
+        cleanupPolicy: 'manual',
+        contentHash: 'sha256:abcd',
+        createdAt: 1,
+        ext: 'png',
+        id: entryId,
+        name: 'image',
+        origin: 'internal',
+        size: 4,
+        updatedAt: 2,
+      }),
+    ).toEqual(expect.objectContaining({ cleanupPolicy: 'manual', contentHash: 'sha256:abcd' }));
+    expect(ContentHashSchema.safeParse('SHA256:ABCD').success).toBe(false);
+  });
+
+  it('keeps entry/path handles as a discriminated union', () => {
+    expect(FileHandleSchema.parse({ entryId, kind: 'entry' })).toEqual({ entryId, kind: 'entry' });
+    expect(FileHandleSchema.parse({ kind: 'path', path: '/tmp/image.png' })).toEqual({
+      kind: 'path',
+      path: '/tmp/image.png',
+    });
+  });
+
   it.each([
-    ['avif', 'image/avif'],
-    ['gif', 'image/gif'],
-    ['heic', 'image/heic'],
-    ['heif', 'image/heif'],
-    ['jpeg', 'image/jpeg'],
-    ['jpg', 'image/jpeg'],
-    ['png', 'image/png'],
-    ['webp', 'image/webp'],
-  ])('maps the %s extension to %s', (extension, mediaType) => {
-    expect(isImageFileExtension(extension)).toBe(true);
-    expect(imageMediaTypeFromExtension(extension)).toBe(mediaType);
+    { role: 'attachment', sourceId: refId, sourceType: 'chat_message' },
+    { role: 'input', sourceId: refId, sourceType: 'painting' },
+    { role: 'mask', sourceId: entryId, sourceType: 'job' },
+    { sourceId: 'provider', sourceType: 'provider_logo' },
+    { sourceId: 'mini-app', sourceType: 'mini_app_logo' },
+  ])('validates the $sourceType FileRef variant', (source) => {
+    expect(
+      FileRefSchema.parse({
+        ...source,
+        createdAt: 1,
+        fileEntryId: entryId,
+        id: refId,
+        updatedAt: 2,
+      }),
+    ).toEqual(expect.objectContaining(source));
   });
 
-  it('uses the preferred output extension for generated images', () => {
-    expect(generatedImageExtension('image/jpeg')).toBe('jpg');
-    expect(generatedImageExtension('image/heic')).toBe('heic');
-    expect(generatedImageExtension('unknown')).toBe('png');
-  });
-
-  it('falls back for unknown and missing extensions', () => {
-    expect(isImageFileExtension('pdf')).toBe(false);
-    expect(imageMediaTypeFromExtension('pdf')).toBe('image/*');
-    expect(imageMediaTypeFromExtension(null)).toBe('image/*');
+  it('exposes exactly the five persistent sources and file locator helper', () => {
+    expect(allSourceTypes).toEqual([
+      'chat_message',
+      'painting',
+      'job',
+      'provider_logo',
+      'mini_app_logo',
+    ]);
+    expect(allSourceTypes).not.toContain('temp_session');
+    expect(tagStoredFileRef(entryId)).toBe(`file:${entryId}`);
   });
 });

@@ -9,7 +9,7 @@ business-data persistence and the concrete implementations that read or write th
   adapter.
 - `PreferenceService.ts` owns cached access to SQLite-backed user preferences.
 - `db/` owns the Expo SQLite connection, Drizzle schemas, migrations, custom SQL, and seeders.
-- `services/` owns entity persistence, managed-file storage, and data-specific transformations.
+- `services/` owns entity persistence and data-specific transformations.
 - `fixtures/` contains development data consumed by the database seeders and their tests.
 
 The concrete graph is assembled only by `src/bootstrap`. Frontend resource callers see endpoint

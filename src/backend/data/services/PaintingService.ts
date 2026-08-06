@@ -1,6 +1,6 @@
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
-import type { FileEntryId, PreparedInternalFile } from '@cherrystudio/universal/data/types/file';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { createUniqueModelId, isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type {
   Painting,
@@ -17,8 +17,6 @@ import {
   paintingTable,
 } from '@/backend/data/db/schemas';
 
-import type { FileEntryService } from './FileEntryService';
-import { discardPreparedFiles } from './fileStorage';
 import { insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
@@ -31,16 +29,12 @@ type PaintingCursor = { id: string; orderKey: string };
 export interface CreatePaintingInput {
   inputFileIds?: readonly FileEntryId[];
   modelId?: string | null;
-  preparedInputFiles?: readonly PreparedInternalFile[];
   prompt: string;
   providerId: string;
 }
 
 export class PaintingService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly fileEntryService: FileEntryService,
-  ) {}
+  constructor(private readonly dbService: DbService) {}
 
   private get db() {
     return this.dbService.getDb();
@@ -115,76 +109,42 @@ export class PaintingService {
   }
 
   async create(input: CreatePaintingInput): Promise<Painting> {
-    const preparedFiles = [...(input.preparedInputFiles ?? [])];
+    const inputFileIds = [...(input.inputFileIds ?? [])];
+    const row = (await this.dbService.withWriteTx(async (tx) => {
+      const inserted = (await insertWithOrderKey(
+        tx,
+        paintingTable,
+        {
+          modelId: normalizeModelId(input.providerId, input.modelId),
+          prompt: input.prompt,
+          providerId: input.providerId,
+        },
+        { pkColumn: paintingTable.id, position: 'first' },
+      )) as PaintingRow;
+      await insertFileRefsTx(tx, inserted.id, 'input', inputFileIds);
+      return inserted;
+    })) as PaintingRow;
 
-    try {
-      const row = (await this.dbService.withWriteTx(async (tx) => {
-        await this.fileEntryService.createPreparedEntriesTx(tx, preparedFiles);
-        const inserted = (await insertWithOrderKey(
-          tx,
-          paintingTable,
-          {
-            modelId: normalizeModelId(input.providerId, input.modelId),
-            prompt: input.prompt,
-            providerId: input.providerId,
-          },
-          { pkColumn: paintingTable.id, position: 'first' },
-        )) as PaintingRow;
-        await insertFileRefsTx(tx, inserted.id, 'input', [
-          ...(input.inputFileIds ?? []),
-          ...preparedFiles.map((file) => file.id),
-        ]);
-        return inserted;
-      })) as PaintingRow;
-
-      return rowToPainting(row, {
-        input: [...(input.inputFileIds ?? []), ...preparedFiles.map((file) => file.id)],
-        output: [],
-      });
-    } catch (error) {
-      discardPreparedFiles(preparedFiles);
-      throw error;
-    }
+    return rowToPainting(row, { input: inputFileIds, output: [] });
   }
 
-  async replaceOutputs(
-    id: string,
-    preparedOutputs: readonly PreparedInternalFile[],
-  ): Promise<Painting> {
-    const outputs = [...preparedOutputs];
+  async replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting> {
+    await this.dbService.withWriteTx(async (tx) => {
+      const [painting] = await tx
+        .select({ id: paintingTable.id })
+        .from(paintingTable)
+        .where(eq(paintingTable.id, id))
+        .limit(1);
+      if (!painting) {
+        throw DataApiErrorFactory.notFound('Painting', id);
+      }
 
-    try {
-      await this.dbService.withWriteTx(async (tx) => {
-        const [painting] = await tx
-          .select({ id: paintingTable.id })
-          .from(paintingTable)
-          .where(eq(paintingTable.id, id))
-          .limit(1);
-        if (!painting) {
-          throw DataApiErrorFactory.notFound('Painting', id);
-        }
-
-        await this.fileEntryService.createPreparedEntriesTx(tx, outputs);
-        await tx
-          .delete(paintingFileRefTable)
-          .where(
-            and(eq(paintingFileRefTable.sourceId, id), eq(paintingFileRefTable.role, 'output')),
-          );
-        await insertFileRefsTx(
-          tx,
-          id,
-          'output',
-          outputs.map((file) => file.id),
-        );
-        await tx
-          .update(paintingTable)
-          .set({ updatedAt: Date.now() })
-          .where(eq(paintingTable.id, id));
-      });
-    } catch (error) {
-      discardPreparedFiles(outputs);
-      throw error;
-    }
+      await tx
+        .delete(paintingFileRefTable)
+        .where(and(eq(paintingFileRefTable.sourceId, id), eq(paintingFileRefTable.role, 'output')));
+      await insertFileRefsTx(tx, id, 'output', outputFileIds);
+      await tx.update(paintingTable).set({ updatedAt: Date.now() }).where(eq(paintingTable.id, id));
+    });
 
     return await this.getById(id);
   }

@@ -55,6 +55,9 @@ describe('bundled SQLite migrations', () => {
       const paintingFileRefColumns = database
         .prepare("PRAGMA table_info('painting_file_ref')")
         .all() as { name: string }[];
+      const jobFileRefColumns = database.prepare("PRAGMA table_info('job_file_ref')").all() as {
+        name: string;
+      }[];
       const modelColumns = database.prepare("PRAGMA table_info('user_model')").all() as {
         name: string;
       }[];
@@ -90,6 +93,10 @@ describe('bundled SQLite migrations', () => {
       const paintingFileRefIndexes = database
         .prepare("PRAGMA index_list('painting_file_ref')")
         .all() as { name: string; unique: number }[];
+      const jobFileRefIndexes = database.prepare("PRAGMA index_list('job_file_ref')").all() as {
+        name: string;
+        unique: number;
+      }[];
       const tables = database
         .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
         .all() as { name: string }[];
@@ -98,12 +105,14 @@ describe('bundled SQLite migrations', () => {
       const chatMessageFileRefTableSql = getSchemaSql(database, 'table', 'chat_message_file_ref');
       const mcpServerTableSql = getSchemaSql(database, 'table', 'mcp_server');
       const paintingFileRefTableSql = getSchemaSql(database, 'table', 'painting_file_ref');
+      const jobFileRefTableSql = getSchemaSql(database, 'table', 'job_file_ref');
       const rootIndexSql = getSchemaSql(database, 'index', 'message_topic_root_uniq');
       const assistantKnowledgeBaseFks = getForeignKeys(database, 'assistant_knowledge_base');
       const assistantMcpServerFks = getForeignKeys(database, 'assistant_mcp_server');
       const messageFks = getForeignKeys(database, 'message');
       const chatMessageFileRefFks = getForeignKeys(database, 'chat_message_file_ref');
       const paintingFileRefFks = getForeignKeys(database, 'painting_file_ref');
+      const jobFileRefFks = getForeignKeys(database, 'job_file_ref');
 
       expect(topicColumns.map((column) => column.name)).toContain('trace_id');
       expect(messageColumns.map((column) => column.name)).not.toContain('trace_id');
@@ -114,7 +123,9 @@ describe('bundled SQLite migrations', () => {
         'name',
         'ext',
         'size',
+        'content_hash',
         'external_path',
+        'cleanup_policy',
         'created_at',
         'updated_at',
         'deleted_at',
@@ -137,6 +148,14 @@ describe('bundled SQLite migrations', () => {
         'updated_at',
       ]);
       expect(paintingFileRefColumns.map((column) => column.name)).toEqual([
+        'id',
+        'file_entry_id',
+        'source_id',
+        'role',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(jobFileRefColumns.map((column) => column.name)).toEqual([
         'id',
         'file_entry_id',
         'source_id',
@@ -262,6 +281,7 @@ describe('bundled SQLite migrations', () => {
       expect(fileEntryIndexes.map((index) => index.name)).toEqual(
         expect.arrayContaining([
           'fe_created_at_idx',
+          'fe_content_hash_idx',
           'fe_deleted_at_idx',
           'fe_external_path_idx',
           'fe_external_path_lower_unique_idx',
@@ -282,13 +302,23 @@ describe('bundled SQLite migrations', () => {
           expect.objectContaining({ name: 'pfr_unique_idx', unique: 1 }),
         ]),
       );
+      expect(jobFileRefIndexes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'jfr_entry_id_idx', unique: 0 }),
+          expect.objectContaining({ name: 'jfr_source_id_idx', unique: 0 }),
+          expect.objectContaining({ name: 'jfr_unique_idx', unique: 1 }),
+        ]),
+      );
       expect(messageTableSql).toContain('message_root_parent_check');
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_check'));
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_consistency'));
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_external_no_delete'));
+      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_cleanup_policy_check'));
+      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_contenthash_external_null'));
       expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_size_internal_only'));
       expect(chatMessageFileRefTableSql).toContain('cmfr_role_check');
       expect(paintingFileRefTableSql).toContain('pfr_role_check');
+      expect(jobFileRefTableSql).toContain('jfr_role_check');
       expect(rootIndexSql).toContain('"deleted_at" is null');
       expect(assistantKnowledgeBaseFks).toContainEqual(
         expect.objectContaining({ from: 'assistant_id', on_delete: 'CASCADE', table: 'assistant' }),
@@ -337,18 +367,29 @@ describe('bundled SQLite migrations', () => {
           }),
         ]),
       );
+      expect(jobFileRefFks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            from: 'file_entry_id',
+            on_delete: 'CASCADE',
+            table: 'file_entry',
+          }),
+          expect.objectContaining({ from: 'source_id', on_delete: 'CASCADE', table: 'job' }),
+        ]),
+      );
       expect(tables.map((table) => table.name)).toEqual(
         expect.arrayContaining([
           'assistant_knowledge_base',
           'assistant_mcp_server',
           'chat_message_file_ref',
           'file_entry',
+          'job_file_ref',
           'mcp_server',
           'painting',
           'painting_file_ref',
         ]),
       );
-      expect(tables.filter((table) => !table.name.startsWith('sqlite_'))).toHaveLength(40);
+      expect(tables.filter((table) => !table.name.startsWith('sqlite_'))).toHaveLength(41);
 
       database.exec(`
         INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)
@@ -411,6 +452,46 @@ describe('bundled SQLite migrations', () => {
         DELETE FROM file_entry WHERE id = 'file-2';
       `);
       expect(database.prepare('SELECT count(*) AS count FROM painting_file_ref').get()).toEqual({
+        count: 0,
+      });
+
+      database.exec(`
+        INSERT INTO job (id, type, status, queue, scheduled_at, input, created_at, updated_at)
+        VALUES ('00000000-0000-7000-8000-000000000010', 'image', 'pending', 'default', 1, '{}', 1, 1);
+        INSERT INTO file_entry
+          (id, origin, name, ext, size, content_hash, external_path, cleanup_policy, created_at, updated_at, deleted_at)
+        VALUES
+          ('00000000-0000-7000-8000-000000000011', 'internal', 'input', 'png', 4,
+           'sha256:abcd', NULL, 'delete_when_unreferenced', 1, 1, NULL);
+        INSERT INTO job_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
+        VALUES
+          ('00000000-0000-4000-8000-000000000012',
+           '00000000-0000-7000-8000-000000000011',
+           '00000000-0000-7000-8000-000000000010', 'input', 1, 1);
+      `);
+      expect(() =>
+        database.exec(`
+          INSERT INTO job_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
+          VALUES ('bad-role', '00000000-0000-7000-8000-000000000011',
+            '00000000-0000-7000-8000-000000000010', 'output', 1, 1);
+        `),
+      ).toThrow();
+      expect(() =>
+        database.exec(`
+          INSERT INTO file_entry
+            (id, origin, name, ext, size, external_path, cleanup_policy, created_at, updated_at)
+          VALUES ('bad-policy', 'internal', 'bad', 'txt', 1, NULL, 'automatic', 1, 1);
+        `),
+      ).toThrow();
+      expect(() =>
+        database.exec(`
+          INSERT INTO file_entry
+            (id, origin, name, ext, size, content_hash, external_path, created_at, updated_at)
+          VALUES ('external-hash', 'external', 'bad', 'txt', NULL, 'sha256:abcd', '/tmp/bad', 1, 1);
+        `),
+      ).toThrow();
+      database.exec("DELETE FROM job WHERE id = '00000000-0000-7000-8000-000000000010'");
+      expect(database.prepare('SELECT count(*) AS count FROM job_file_ref').get()).toEqual({
         count: 0,
       });
     } finally {

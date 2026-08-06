@@ -1,6 +1,5 @@
-import { imageMediaTypeFromExtension } from '@cherrystudio/universal/data/types/file';
-
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
 // Mirrors the draft shape produced by useResolvedPaintingFiles for inputs; the
 // fileEntryId lets usePaintingGeneration reference the stored file instead of

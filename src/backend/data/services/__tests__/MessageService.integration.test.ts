@@ -9,7 +9,6 @@ import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
 import { AiUsageRecordService } from '../AiUsageRecordService';
-import { FileEntryService } from '../FileEntryService';
 import { MessageService } from '../MessageService';
 import { PinService } from '../PinService';
 import { TagService } from '../TagService';
@@ -99,7 +98,7 @@ describe('MessageService integration', () => {
       new PinService(dbService),
       new TagService(dbService),
     );
-    service = new MessageService(dbService, topicService, new FileEntryService(dbService));
+    service = new MessageService(dbService, topicService);
   });
 
   afterEach(() => sqlite.close());
