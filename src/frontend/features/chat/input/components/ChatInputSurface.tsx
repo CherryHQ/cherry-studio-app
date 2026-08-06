@@ -54,6 +54,7 @@ const logger = loggerService.withContext('ChatInputSurface');
 
 type ChatInputSurfaceProps = {
   allowEmptySend?: boolean;
+  dismissKeyboardOnSend?: boolean;
   getSendErrorLabel?: (error: unknown) => string | undefined;
   isSendEnabled: boolean;
   isStreaming: boolean;
@@ -81,6 +82,7 @@ export type ChatInputSendPayload = {
 
 export function ChatInputSurface({
   allowEmptySend = false,
+  dismissKeyboardOnSend = true,
   getSendErrorLabel,
   isSendEnabled,
   isStreaming,
@@ -182,27 +184,12 @@ export function ChatInputSurface({
       const draftSnapshot = draft;
       const attachmentSnapshot = [...attachments];
 
-      // 无动画瞬时收起键盘，再插入消息 + 钉顶。两个要点：
-      // 1) `animated: false`——键盘/composer 在一帧内落定，dismiss() 的 Promise 几乎立刻
-      //    resolve（keyboardDidHide 无动画即触发），因此不会像旧代码 `await` 带动画 dismiss
-      //    那样先干等 ~250ms 键盘滑落（那是「pin 前卡卡的」两段式时序的成因）。
-      // 2) `await` 它、再 onSendPress——键盘收起与插入+钉顶**串行**，插入/钉顶落在已稳定的
-      //    满视口上。若不 await（键盘带动画滑落时并发插入+钉顶），键盘 inset 动画、
-      //    anchoredEndSpace 空白重算、pin scrollToEnd、MVCP 会在同 ~100ms 内互相打架，
-      //    底部内容来回弹（实测 cBot 2378→2226→2330→2226）——正是「发送到 pin 中间布局跳动」。
-      //    先让视口一次到位，转场只剩一次确定性钉顶，无并发、无弹跳。
-      setInputFocused(false);
       setDraft('');
       clearAttachments();
-      // 瞬时收起键盘且**不阻塞**消息插入。要点：
-      // - 不 `await`：dismiss() 的 Promise 要等 keyboardDidHide 原生事件（实测 ~429ms），
-      //   若 await 它再 onSendPress，会把消息插入白白拖后 ~429ms（＝「点发送过好久消息才出来」）。
-      //   改为不 await 后，从点发送到消息出现只剩 DB 写入等真实开销（实测暖态 ~76ms）。
-      // - `animated: false` + 不 `blur()`：blur() 会触发一段带动画的键盘隐藏；改用无动画 dismiss
-      //   让键盘一帧瞬时消失、先于随后到来的钉顶滚动，二者不重叠 → 无「发送到 pin 中间布局跳动」
-      //   （旧的并发带动画版实测 cBot 来回弹 2378→2226→2330→2226；此版转场为单帧一步到位）。
-      // - 键盘仍会收起（keepFocus 默认 false，dismiss 会 resign first responder），对齐 v0/ChatGPT。
-      void KeyboardController.dismiss({ animated: false });
+      if (dismissKeyboardOnSend) {
+        setInputFocused(false);
+        void KeyboardController.dismiss({ animated: false });
+      }
 
       try {
         await onSendPress({ attachments: attachmentSnapshot, text });
@@ -221,6 +208,7 @@ export function ChatInputSurface({
     [
       attachments,
       clearAttachments,
+      dismissKeyboardOnSend,
       draft,
       getSendErrorLabel,
       onSendPress,

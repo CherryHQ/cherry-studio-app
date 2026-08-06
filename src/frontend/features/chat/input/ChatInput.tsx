@@ -40,6 +40,7 @@ type ChatInputProps = {
    * the binding and this is ignored.
    */
   assistantId?: string;
+  dismissKeyboardOnSend?: boolean;
   topicId?: string;
 };
 
@@ -52,7 +53,7 @@ type PendingWebSearchState = {
 // 诊断埋点：量化输入框「真实 model 名」解析耗时（pref 段 + model DB 段）。`[PERF]` 前缀。
 const perfLog = loggerService.withContext('ChatPerf');
 
-export function ChatInput({ assistantId, topicId }: ChatInputProps) {
+export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatInputProps) {
   const modelSettings = useModelSettingSelections();
   usePrefetchModelPickerData();
   const rawDefaultModel = modelSettings.selections.default;
@@ -274,6 +275,7 @@ export function ChatInput({ assistantId, topicId }: ChatInputProps) {
   return (
     <>
       <ChatInputSurface
+        dismissKeyboardOnSend={dismissKeyboardOnSend}
         isSendEnabled
         isStreaming={chatTopic.isBusy}
         modelIcon={selectedModelIcon}

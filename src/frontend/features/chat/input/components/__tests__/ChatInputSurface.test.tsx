@@ -171,7 +171,7 @@ jest.mock('../../hooks/useChatInputPhotoPicker', () => ({
 
 describe('ChatInputSurface', () => {
   beforeEach(() => {
-    mockToastShow.mockReset();
+    jest.clearAllMocks();
   });
 
   test('restores draft and attachments and shows a toast when send rejects', async () => {
@@ -267,6 +267,65 @@ describe('ChatInputSurface', () => {
       label: 'painting.input.invalidCustomSize',
       variant: 'danger',
     });
+  });
+
+  test('dismisses the keyboard immediately by default when sending', async () => {
+    const onSendPress = jest.fn(async () => undefined);
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedChatInputState attachments={[]} draft="hello" />
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    const sendButton = renderer?.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    await act(async () => sendButton?.props.onPress());
+
+    expect(KeyboardController.dismiss).toHaveBeenCalledWith({ animated: false });
+    expect(onSendPress).toHaveBeenCalledTimes(1);
+  });
+
+  test('can delegate send-time keyboard dismissal to the message list', async () => {
+    const onSendPress = jest.fn(async () => undefined);
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider>
+          <SeedChatInputState attachments={[]} draft="hello" />
+          <ChatInputSurface
+            dismissKeyboardOnSend={false}
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    const sendButton = renderer?.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    await act(async () => sendButton?.props.onPress());
+
+    expect(KeyboardController.dismiss).not.toHaveBeenCalled();
+    expect(onSendPress).toHaveBeenCalledTimes(1);
   });
 
   test('keeps a persistent placeholder action button that does not send without content', async () => {

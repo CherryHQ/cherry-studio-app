@@ -1,5 +1,5 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
-import { KeyboardAwareLegendList } from '@legendapp/list/keyboard';
+import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { ScrollShadow } from 'heroui-native/scroll-shadow';
 import {
@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -15,13 +16,17 @@ import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Platform,
   View,
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { LinearGradient } from '@/frontend/components/nativePrimitives';
+import { usePreference } from '@/frontend/data/hooks';
+import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { chatInputMessageListGap } from '../../input/chatInputLayout';
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';
 import { getMessageListScrollSignal } from '../utils/messageListScrollSignals';
 
@@ -32,6 +37,8 @@ const scrollLog = loggerService.withContext('ChatScroll');
 
 // 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
 const ANCHOR_TOP_GAP = 12;
+const ANCHOR_MAX_TEXT_LINES = 2;
+const USER_MESSAGE_VERTICAL_PADDING = 32;
 // 撤遮罩（onReady）前要求内容高度保持「静默」的窗口：这段时间内没有任何 contentSize 变化才判定
 // settle 完成。用于覆盖**冷 markdown 解析**——首次进入 topic 时 streamdown/代码/数学的 tokenize
 // 与 layout 全冷、耗时最长，行的真实高度可能在初始 rAF 之后才测出。若此时已 reportReady 撤遮罩，
@@ -54,16 +61,43 @@ const MAINTAIN_VISIBLE_CONTENT_POSITION = {
   shouldRestorePosition: shouldRestoreMessagePosition,
 };
 
+const MESSAGE_LIST_CONTENT_CONTAINER_STYLE = {
+  paddingBottom: chatInputMessageListGap,
+  paddingTop: 12,
+};
+const TAIL_FOLLOW_END_THRESHOLD = 20;
+
+type TailFollowPhase = 'anchoring' | 'following' | 'paused';
+
+type TailFollowState = {
+  anchorMessageId: string | undefined;
+  phase: TailFollowPhase;
+};
+
+function createTailFollowState(anchorMessageId: string | undefined): TailFollowState {
+  return { anchorMessageId, phase: 'anchoring' };
+}
+
+function resolveTailFollowState(
+  state: TailFollowState,
+  anchorMessageId: string | undefined,
+): TailFollowState {
+  return state.anchorMessageId === anchorMessageId ? state : createTailFollowState(anchorMessageId);
+}
+
 type ChatMessageListProps = {
   anchorIndex: number;
   contentBottomInset: number;
+  contentInsetEndAdjustment: SharedValue<number>;
   contentTopInset: number;
   isAtBottom: SharedValue<boolean>;
+  keyboardOffset: number;
   listRef: RefObject<LegendListRef | null>;
   messages: readonly Message[];
   onLoadOlder: () => Promise<void>;
   onPrefetchOlder: () => void;
   onReady?: () => void;
+  pendingUserMessageId?: string;
 };
 
 function renderMessageItem({ item }: LegendListRenderItemProps<Message>) {
@@ -90,14 +124,18 @@ function getMessageItemType(item: Message) {
 export function ChatMessageList({
   anchorIndex,
   contentBottomInset,
+  contentInsetEndAdjustment,
   contentTopInset,
   isAtBottom,
+  keyboardOffset,
   listRef,
   messages,
   onLoadOlder,
   onPrefetchOlder,
   onReady,
+  pendingUserMessageId,
 }: ChatMessageListProps) {
+  const [fontSizeStep] = usePreference('ui.font_size_step');
   const [contentBaseHeight, setContentBaseHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
   const didReportReadyRef = useRef(false);
@@ -105,6 +143,12 @@ export function ChatMessageList({
   const pendingReadyFrameRef = useRef<number | null>(null);
   const pendingReadySettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readyGenerationRef = useRef(0);
+  const pendingTailFollowFrameRef = useRef<number | null>(null);
+  const pendingInteractionEndFrameRef = useRef<number | null>(null);
+  const isTouchingListRef = useRef(false);
+  const isDraggingListRef = useRef(false);
+  const isMomentumScrollingRef = useRef(false);
+  const isUserInteractingRef = useRef(false);
   const lastMessageId = messages[messages.length - 1]?.id;
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
   const handleStartReached = useCallback(() => {
@@ -112,23 +156,117 @@ export function ChatMessageList({
     void onLoadOlder();
   }, [onLoadOlder]);
   const hasAnchor = anchorIndex >= 0;
+  const anchorMessage = hasAnchor ? messages[anchorIndex] : undefined;
+  const anchorMessageId = anchorMessage?.id;
+  const [tailFollowState, setTailFollowState] = useState<TailFollowState>(() =>
+    createTailFollowState(anchorMessageId),
+  );
+  const tailFollowPhase = resolveTailFollowState(tailFollowState, anchorMessageId).phase;
+  const tailFollowPhaseRef = useRef(tailFollowPhase);
+  const isFollowing = tailFollowPhase === 'following';
+  const anchorHasFile = anchorMessage?.data.parts?.some((part) => part.type === 'file') ?? false;
+  const anchorMaxSize = anchorHasFile
+    ? undefined
+    : ANCHOR_MAX_TEXT_LINES * resolveTypographyScale(fontSizeStep).base.lineHeight +
+      USER_MESSAGE_VERTICAL_PADDING;
+  const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
   // 被锚定用户消息的固定落点：距内容区顶部（导航栏/安全区之下）ANCHOR_TOP_GAP。
   // anchoredEndSpace 与钉顶滚动共用同一偏移，保证「预留空白算出的位置」和「滚动落点」一致。
   const anchorOffset = contentTopInset + ANCHOR_TOP_GAP;
-  const visibleHeightAboveInput = Math.max(0, viewportHeight - contentBottomInset);
-  // 锚定期间内容区始终视为「已撑满」，恒为浮动输入框预留底部空间。
-  const bottomPadding =
-    hasAnchor || (viewportHeight > 0 && contentBaseHeight > visibleHeightAboveInput)
-      ? contentBottomInset
-      : 0;
 
-  const contentContainerStyle = useMemo(
-    () => ({
-      paddingBottom: bottomPadding,
-      paddingTop: 12,
-    }),
-    [bottomPadding],
-  );
+  useLayoutEffect(() => {
+    tailFollowPhaseRef.current = tailFollowPhase;
+  }, [tailFollowPhase]);
+
+  // LegendList 的 maintainScrollAtEnd 会在 rAF 中捕获旧配置，拖动已暂停后仍可能执行一次。
+  // 在应用层合并 follow 请求，并在直接派发给原生 ScrollView 前重新检查同步交互锁。
+  const cancelPendingTailFollow = useCallback(() => {
+    if (pendingTailFollowFrameRef.current !== null) {
+      cancelAnimationFrame(pendingTailFollowFrameRef.current);
+      pendingTailFollowFrameRef.current = null;
+    }
+  }, []);
+
+  const scheduleTailFollow = useCallback(() => {
+    if (
+      tailFollowPhaseRef.current !== 'following' ||
+      isUserInteractingRef.current ||
+      pendingTailFollowFrameRef.current !== null
+    ) {
+      return;
+    }
+
+    pendingTailFollowFrameRef.current = requestAnimationFrame(() => {
+      pendingTailFollowFrameRef.current = null;
+
+      if (tailFollowPhaseRef.current !== 'following' || isUserInteractingRef.current) {
+        return;
+      }
+
+      const nativeScrollRef = listRef.current?.getNativeScrollRef() as
+        | { scrollToEnd?: (options: { animated?: boolean }) => void }
+        | null
+        | undefined;
+      nativeScrollRef?.scrollToEnd?.({ animated: false });
+    });
+  }, [listRef]);
+
+  const isListAtEnd = useCallback(() => {
+    const listState = listRef.current?.getState();
+    if (!listState || listState.scrollLength <= 0) {
+      return false;
+    }
+
+    const distanceFromEnd = listState.contentLength - listState.scrollLength - listState.scroll;
+    return Number.isFinite(distanceFromEnd) && distanceFromEnd <= TAIL_FOLLOW_END_THRESHOLD;
+  }, [listRef]);
+
+  const resumeTailFollowAtEnd = useCallback(() => {
+    if (!anchorMessageId || tailFollowPhaseRef.current !== 'paused' || !isListAtEnd()) {
+      return;
+    }
+
+    tailFollowPhaseRef.current = 'following';
+    setTailFollowState((previous) => {
+      const current = resolveTailFollowState(previous, anchorMessageId);
+      return current.phase === 'paused' ? { ...current, phase: 'following' } : current;
+    });
+    scheduleTailFollow();
+  }, [anchorMessageId, isListAtEnd, scheduleTailFollow]);
+
+  const cancelPendingInteractionEnd = useCallback(() => {
+    if (pendingInteractionEndFrameRef.current !== null) {
+      cancelAnimationFrame(pendingInteractionEndFrameRef.current);
+      pendingInteractionEndFrameRef.current = null;
+    }
+  }, []);
+
+  const finishUserInteraction = useCallback(() => {
+    if (isTouchingListRef.current || isDraggingListRef.current || isMomentumScrollingRef.current) {
+      return;
+    }
+
+    isUserInteractingRef.current = false;
+    if (tailFollowPhaseRef.current === 'paused') {
+      resumeTailFollowAtEnd();
+    } else {
+      scheduleTailFollow();
+    }
+  }, [resumeTailFollowAtEnd, scheduleTailFollow]);
+
+  const scheduleInteractionEnd = useCallback(() => {
+    cancelPendingInteractionEnd();
+    pendingInteractionEndFrameRef.current = requestAnimationFrame(() => {
+      pendingInteractionEndFrameRef.current = null;
+      finishUserInteraction();
+    });
+  }, [cancelPendingInteractionEnd, finishUserInteraction]);
+
+  const beginUserInteraction = useCallback(() => {
+    isUserInteractingRef.current = true;
+    cancelPendingInteractionEnd();
+    cancelPendingTailFollow();
+  }, [cancelPendingInteractionEnd, cancelPendingTailFollow]);
 
   // 把刚发送的用户消息锚定到内容区顶部，并在其下方补足空白，让助手回复流式生长其间。
   //
@@ -136,10 +274,7 @@ export function ChatMessageList({
   // （含刚 mount 的助手 pending 占位、hasUnknownTailSize=false）后，才把预留空白算成真实值
   // 并回调 onReady。此刻落点已是终值。
   //
-  // 关键：这里用 `animated: false` 瞬时定位，**不是**动画滚动。对齐 v0 iOS 的做法——
-  // 动画滚动（animated:true）会在 ~300ms 内追一个「还在异步收敛」的目标（estimatedItemSize
-  // 300→真实、空白 0→真实都在动画途中阶跃），滚动一路纠偏 = pin 前的抖动。改成测量就绪后
-  // 一次性瞬定，消息直接落到顶部、无追逐、无过冲；入场的柔和感交给气泡自身的 fade。
+  // 首轮瞬时定位，后续实时发送在权威尺寸就绪后动画钉顶；历史恢复仍瞬时定位。
   const scrolledAnchorKeyRef = useRef<string | undefined>(undefined);
   const handleAnchorReady = useCallback(
     (info: { anchorKey: string | undefined }) => {
@@ -153,39 +288,128 @@ export function ChatMessageList({
         anchorKey: info.anchorKey,
         t: Date.now(),
       });
+      const isPendingUserMessage = info.anchorKey === pendingUserMessageId;
+      const shouldAnimate = isPendingUserMessage && anchorIndex > 0;
       requestAnimationFrame(() => {
-        void listRef.current?.scrollToEnd({ animated: false });
+        void scrollMessageToEnd({
+          animated: shouldAnimate,
+          closeKeyboard: isPendingUserMessage,
+        });
       });
     },
-    [listRef],
+    [anchorIndex, pendingUserMessageId, scrollMessageToEnd],
   );
 
-  // 不设 anchorMaxSize：用被锚定用户消息的**真实完整高度**参与预留空白计算，使其顶部恒钉在
-  // anchorOffset（导航栏之下）、从顶部完整显示。此前用 120 截断会把超长消息「超出的部分滚出屏顶」，
-  // 表现为发送后消息「从中间钉」、顶部钻进 header（空话题首条尤其明显）。代价：比整屏还高的消息，
-  // 其助手回复会落在首屏之下、需向下滚动（对齐 ChatGPT 的行为）。
+  const handleAnchoredEndSpaceSizeChanged = useCallback(
+    (size: number) => {
+      if (size > 0 || !anchorMessageId) {
+        return;
+      }
+
+      const nextPhase = isUserInteractingRef.current ? 'paused' : 'following';
+      tailFollowPhaseRef.current = nextPhase;
+      setTailFollowState((previous) => {
+        const current = resolveTailFollowState(previous, anchorMessageId);
+        if (current.phase !== 'anchoring') {
+          return current;
+        }
+
+        return { ...current, phase: nextPhase };
+      });
+    },
+    [anchorMessageId],
+  );
+
+  const handleEndVisible = useCallback(
+    (visible: boolean) => {
+      if (!visible || isUserInteractingRef.current) {
+        return;
+      }
+
+      resumeTailFollowAtEnd();
+    },
+    [resumeTailFollowAtEnd],
+  );
+
+  const handleScrollBeginDrag = useCallback(() => {
+    isDraggingListRef.current = true;
+    beginUserInteraction();
+
+    if (!anchorMessageId) {
+      return;
+    }
+
+    tailFollowPhaseRef.current =
+      tailFollowPhaseRef.current === 'following' ? 'paused' : tailFollowPhaseRef.current;
+    setTailFollowState((previous) => {
+      const current = resolveTailFollowState(previous, anchorMessageId);
+      if (current.phase !== 'following') {
+        return current;
+      }
+
+      return { ...current, phase: 'paused' };
+    });
+  }, [anchorMessageId, beginUserInteraction]);
+
+  const handleScrollEndDrag = useCallback(() => {
+    isDraggingListRef.current = false;
+    scheduleInteractionEnd();
+  }, [scheduleInteractionEnd]);
+
+  const handleMomentumScrollBegin = useCallback(() => {
+    isMomentumScrollingRef.current = true;
+    beginUserInteraction();
+  }, [beginUserInteraction]);
+
+  const handleMomentumScrollEnd = useCallback(() => {
+    isMomentumScrollingRef.current = false;
+    scheduleInteractionEnd();
+  }, [scheduleInteractionEnd]);
+
+  const handleTouchStart = useCallback(() => {
+    isTouchingListRef.current = true;
+    beginUserInteraction();
+  }, [beginUserInteraction]);
+
+  const handleTouchEnd = useCallback(() => {
+    isTouchingListRef.current = false;
+    scheduleInteractionEnd();
+  }, [scheduleInteractionEnd]);
+
+  const handleItemSizeChanged = useCallback(() => {
+    scheduleTailFollow();
+  }, [scheduleTailFollow]);
+
+  // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
   const anchoredEndSpace = useMemo(
     () =>
       hasAnchor
         ? {
             anchorIndex,
+            anchorMaxSize,
             anchorOffset,
             onReady: handleAnchorReady,
+            onSizeChanged: handleAnchoredEndSpaceSizeChanged,
           }
         : undefined,
-    [anchorIndex, anchorOffset, handleAnchorReady, hasAnchor],
+    [
+      anchorIndex,
+      anchorMaxSize,
+      anchorOffset,
+      handleAnchorReady,
+      handleAnchoredEndSpaceSizeChanged,
+      hasAnchor,
+    ],
   );
 
-  // 锚定期间禁用 maintainScrollAtEnd：流式更新同一条消息时 legend-list 仍判为 dataChange
-  // （对象引用变、无 itemsAreEqual），保留 onDataChange 会逐帧滚到底=跟随。改由下方 effect 在
-  // 「新消息到达」时滚一次把消息钉顶，流式期间靠 maintainVisibleContentPosition 把消息稳在顶部。
-  const maintainScrollAtEnd = useMemo(
-    () =>
-      hasAnchor
-        ? undefined
-        : { animated: false, on: { dataChange: true, itemLayout: true, layout: true } },
-    [hasAnchor],
-  );
+  const maintainVisibleContentPosition = isFollowing
+    ? Platform.OS === 'android'
+      ? false
+      : undefined
+    : MAINTAIN_VISIBLE_CONTENT_POSITION;
+  // 导航转场会短暂产生 0x0 ScrollView；此时接入 animated inset 会让 iOS 指示器收到 NaN。
+  const resolvedContentInsetEndAdjustment =
+    viewportHeight > 0 ? contentInsetEndAdjustment : undefined;
 
   // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
@@ -231,23 +455,26 @@ export function ChatMessageList({
     onReady?.();
   });
 
-  const handleContentSizeChange = useCallback(
-    (_width: number, height: number) => {
-      // ready=true 的 contentSize 变化 = 遮罩已撤/即将撤之后仍有高度修正 = 泄漏到可见区的跳动源。
-      // 冷首次进入 markdown 解析慢，末次修正可能迟到落在 ready 之后 → 复现「第一次进入才跳」。
-      scrollLog.debug('[SCROLL] contentSize', {
-        h: Math.round(height),
-        ready: didReportReadyRef.current,
-        t: Date.now(),
-      });
-      setContentBaseHeight(Math.max(0, height - bottomPadding));
-    },
-    [bottomPadding],
-  );
+  const handleContentSizeChange = useCallback((_width: number, height: number) => {
+    // ready=true 的 contentSize 变化 = 遮罩已撤/即将撤之后仍有高度修正 = 泄漏到可见区的跳动源。
+    // 冷首次进入 markdown 解析慢，末次修正可能迟到落在 ready 之后 → 复现「第一次进入才跳」。
+    scrollLog.debug('[SCROLL] contentSize', {
+      h: Math.round(height),
+      ready: didReportReadyRef.current,
+      t: Date.now(),
+    });
+    setContentBaseHeight(Math.max(0, height - chatInputMessageListGap));
+  }, []);
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setViewportHeight(event.nativeEvent.layout.height);
   }, []);
+
+  useEffect(() => {
+    if (isFollowing) {
+      scheduleTailFollow();
+    }
+  }, [isFollowing, messages, scheduleTailFollow]);
 
   useEffect(() => {
     readyGenerationRef.current += 1;
@@ -264,7 +491,7 @@ export function ChatMessageList({
       return;
     }
 
-    const shouldScrollToEndBeforeReady = bottomPadding > 0;
+    const shouldScrollToEndBeforeReady = contentBottomInset > 0;
 
     pendingReadyFrameRef.current = requestAnimationFrame(() => {
       pendingReadyFrameRef.current = requestAnimationFrame(() => {
@@ -293,7 +520,7 @@ export function ChatMessageList({
 
         if (shouldScrollToEndBeforeReady) {
           scrollLog.debug('[SCROLL] gateScrollToEnd', {
-            bottomPadding,
+            contentBottomInset,
             contentBaseHeight: Math.round(contentBaseHeight),
             viewportHeight: Math.round(viewportHeight),
             t: Date.now(),
@@ -306,8 +533,8 @@ export function ChatMessageList({
       });
     });
   }, [
-    bottomPadding,
     cancelPendingReadyFrame,
+    contentBottomInset,
     contentBaseHeight,
     lastMessageId,
     listRef,
@@ -317,9 +544,11 @@ export function ChatMessageList({
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
+      cancelPendingInteractionEnd();
       cancelPendingReadyFrame();
+      cancelPendingTailFollow();
     };
-  }, [cancelPendingReadyFrame]);
+  }, [cancelPendingInteractionEnd, cancelPendingReadyFrame, cancelPendingTailFollow]);
 
   return (
     <ScrollShadow
@@ -330,32 +559,42 @@ export function ChatMessageList({
     >
       <KeyboardAwareLegendList
         ref={listRef}
+        applyWorkaroundForContentInsetHitTestBug
         anchoredEndSpace={anchoredEndSpace}
-        automaticallyAdjustsScrollIndicatorInsets
-        contentContainerStyle={contentContainerStyle}
+        contentContainerStyle={MESSAGE_LIST_CONTENT_CONTAINER_STYLE}
         contentInsetAdjustmentBehavior="never"
+        contentInsetEndAdjustment={resolvedContentInsetEndAdjustment}
         data={messages}
         drawDistance={80}
         estimatedItemSize={300}
         estimatedHeaderSize={contentTopInset}
+        freeze={freeze}
         getItemType={getMessageItemType}
         keyExtractor={messageKeyExtractor}
         keyboardDismissMode="interactive"
         keyboardLiftBehavior="whenAtEnd"
+        keyboardOffset={keyboardOffset}
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={listHeader}
         initialScrollAtEnd
-        maintainScrollAtEnd={maintainScrollAtEnd}
-        maintainScrollAtEndThreshold={0.12}
-        maintainVisibleContentPosition={MAINTAIN_VISIBLE_CONTENT_POSITION}
+        maintainVisibleContentPosition={maintainVisibleContentPosition}
         onContentSizeChange={handleContentSizeChange}
+        onEndVisible={handleEndVisible}
+        onItemSizeChanged={handleItemSizeChanged}
         onLayout={handleLayout}
+        onMomentumScrollBegin={handleMomentumScrollBegin}
+        onMomentumScrollEnd={handleMomentumScrollEnd}
         onScroll={handleScroll}
-        scrollEventThrottle={16}
+        onScrollBeginDrag={handleScrollBeginDrag}
+        onScrollEndDrag={handleScrollEndDrag}
         onStartReached={handleStartReached}
         onStartReachedThreshold={0.05}
+        onTouchCancel={handleTouchEnd}
+        onTouchEnd={handleTouchEnd}
+        onTouchStart={handleTouchStart}
         recycleItems={false}
         renderItem={renderMessageItem}
+        scrollEventThrottle={16}
         scrollsToTop
         sharedValues={sharedValues}
         className="flex-1"

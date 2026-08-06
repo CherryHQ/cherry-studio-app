@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { type RefObject, useCallback } from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,13 +12,19 @@ import {
 
 type FloatingChatInputProps = {
   assistantId?: string;
+  composerRef?: RefObject<View | null>;
+  dismissKeyboardOnSend?: boolean;
   onHeightChange: (height: number) => void;
+  onComposerLayout?: (event: LayoutChangeEvent) => void;
   topicId?: string;
 };
 
 export function FloatingChatInput({
   assistantId,
+  composerRef,
+  dismissKeyboardOnSend,
   onHeightChange,
+  onComposerLayout,
   topicId,
 }: FloatingChatInputProps) {
   const { bottom } = useSafeAreaInsets();
@@ -28,12 +34,14 @@ export function FloatingChatInput({
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       onHeightChange(event.nativeEvent.layout.height);
+      onComposerLayout?.(event);
     },
-    [onHeightChange],
+    [onComposerLayout, onHeightChange],
   );
 
   return (
     <View
+      ref={composerRef}
       className="absolute right-0 bottom-0 left-0 z-10"
       pointerEvents="box-none"
       style={{
@@ -43,7 +51,11 @@ export function FloatingChatInput({
       onLayout={handleLayout}
     >
       <KeyboardStickyView offset={{ opened: keyboardInputOffset }}>
-        <ChatInput assistantId={assistantId} topicId={topicId} />
+        <ChatInput
+          assistantId={assistantId}
+          dismissKeyboardOnSend={dismissKeyboardOnSend}
+          topicId={topicId}
+        />
       </KeyboardStickyView>
     </View>
   );
