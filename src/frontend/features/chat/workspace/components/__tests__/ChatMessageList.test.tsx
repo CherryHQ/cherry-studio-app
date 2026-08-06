@@ -63,15 +63,9 @@ jest.mock('@legendapp/list/keyboard', () => {
   };
 });
 
-jest.mock('heroui-native/scroll-shadow', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   ScrollShadow: ({ children }: { children: ReactNode }) => children,
 }));
-
-jest.mock('@/frontend/components/nativePrimitives', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return { LinearGradient: MockView };
-});
 
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockFontSizeStep, jest.fn()],
