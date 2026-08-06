@@ -6,6 +6,8 @@ import AppearanceSettingsScreen from '../AppearanceSettingsScreen';
 const mockPush = jest.fn();
 const mockThemeChange = jest.fn();
 const mockLanguageChange = jest.fn();
+let mockResolvedTheme = 'dark';
+let mockThemeMode = 'system';
 
 jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
@@ -13,6 +15,18 @@ jest.mock('expo-router', () => ({
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+jest.mock('uniwind', () => ({
+  useResolveClassNames: () => ({}),
+  useUniwind: () => ({ theme: mockResolvedTheme }),
+}));
+
+jest.mock('lucide-uniwind/png', () => ({
+  ALargeSmallIcon: () => null,
+  CheckIcon: () => null,
+  ChevronRightIcon: () => null,
+  GlobeIcon: () => null,
 }));
 
 jest.mock('@/frontend/components/headers', () => {
@@ -26,20 +40,15 @@ jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [2, jest.fn()],
 }));
 
-jest.mock('../components/SettingSelect', () => {
-  const { createElement } = jest.requireActual('react');
-  return {
-    SettingSelect: (props: object) => createElement('SettingSelect', props),
-  };
-});
-
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   const Section = (props: object) => createElement('Section', props);
-  Section.Item = (props: object) => createElement('SectionItem', props);
+  Section.Item = ({ children, ...props }: { children?: React.ReactNode }) =>
+    createElement('SectionItem', props, children);
 
   return {
     Section,
+    Switch: (props: object) => createElement('Switch', props),
   };
 });
 
@@ -52,8 +61,7 @@ jest.mock('../hooks/useSettingPreferences', () => ({
     },
     theme: {
       onValueChange: mockThemeChange,
-      options: [{ label: 'System', value: 'system' }],
-      value: 'system',
+      value: mockThemeMode,
     },
   }),
 }));
@@ -61,27 +69,49 @@ jest.mock('../hooks/useSettingPreferences', () => ({
 describe('AppearanceSettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResolvedTheme = 'dark';
+    mockThemeMode = 'system';
   });
 
-  test('shows theme, language, and font size settings', () => {
+  test('separates theme previews from language and font size settings', () => {
     const renderer = render(<AppearanceSettingsScreen />);
     const header = renderer.root.findByType('BackHeader');
+    const sections = renderer.root.findAllByType('Section');
     const items = renderer.root.findAllByType('SectionItem');
 
     expect(header.props.title).toBe('settings.appearance.title');
-    expect(items.map((item) => item.props.label)).toEqual([
-      'settings.items.theme',
+    expect(sections).toHaveLength(2);
+    expect(sections[0].props.title).toBe('settings.items.theme');
+    expect(sections[1].props.title).toBeUndefined();
+    expect(items[0].props.testID).toBe('theme-preview-section-item');
+    expect(items.slice(1).map((item) => item.props.label)).toEqual([
       'settings.items.appLanguage',
       'settings.items.fontSize',
     ]);
-    expect(items[0].props.trailing.props).toEqual(
-      expect.objectContaining({
-        label: 'settings.items.theme',
-        onValueChange: mockThemeChange,
-        value: 'system',
-      }),
-    );
     expect(items[1].props.trailing.props.children[0].props.children).toBe('English');
+  });
+
+  test('shows the resolved system theme and switches between automatic and manual modes', () => {
+    const renderer = render(<AppearanceSettingsScreen />);
+    const lightPreview = renderer.root.find(
+      (node) =>
+        node.props.testID === 'theme-preview-light' && typeof node.props.onPress === 'function',
+    );
+    const darkPreview = renderer.root.find(
+      (node) =>
+        node.props.testID === 'theme-preview-dark' && typeof node.props.onPress === 'function',
+    );
+    const automaticSwitch = renderer.root.findByType('Switch');
+
+    expect(lightPreview.props.accessibilityState).toEqual({ checked: false });
+    expect(darkPreview.props.accessibilityState).toEqual({ checked: true });
+    expect(automaticSwitch.props.value).toBe(true);
+
+    act(() => lightPreview.props.onPress());
+    act(() => automaticSwitch.props.onValueChange(false));
+    act(() => automaticSwitch.props.onValueChange(true));
+
+    expect(mockThemeChange.mock.calls).toEqual([['light'], ['dark'], ['system']]);
   });
 
   test('opens the language and font size detail screens', () => {

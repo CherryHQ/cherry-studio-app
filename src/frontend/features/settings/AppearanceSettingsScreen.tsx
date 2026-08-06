@@ -1,26 +1,39 @@
 import { Section } from '@cherrystudio/ui/components';
+import { ThemeMode } from '@cherrystudio/universal/data/preference';
 import { useRouter } from 'expo-router';
-import { ALargeSmallIcon, ChevronRightIcon, GlobeIcon, SunIcon } from 'lucide-uniwind/png';
+import { ALargeSmallIcon, ChevronRightIcon, GlobeIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
 
-import { SettingSelect } from './components/SettingSelect';
+import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 import { useSettingPreferences } from './hooks/useSettingPreferences';
 import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 
 export default function AppearanceSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { theme: resolvedTheme } = useUniwind();
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const normalizedFontSizeStep = normalizeFontSizeStep(fontSizeStep);
   const settingPreferences = useSettingPreferences();
   const languageLabel = settingPreferences.language.options.find(
     (option) => option.value === settingPreferences.language.value,
   )?.label;
+  const isAutomaticTheme = settingPreferences.theme.value === ThemeMode.system;
+  const resolvedThemeMode = resolvedTheme === 'dark' ? ThemeMode.dark : ThemeMode.light;
+  const selectedTheme = isAutomaticTheme
+    ? resolvedThemeMode
+    : settingPreferences.theme.value === ThemeMode.dark
+      ? ThemeMode.dark
+      : ThemeMode.light;
+  const handleAutomaticThemeChange = (isAutomatic: boolean) => {
+    settingPreferences.theme.onValueChange(isAutomatic ? ThemeMode.system : resolvedThemeMode);
+  };
 
   return (
     <>
@@ -28,23 +41,22 @@ export default function AppearanceSettingsScreen() {
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
-        contentContainerClassName="px-4 py-5"
+        contentContainerClassName="gap-6 px-4 py-5"
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
+        <Section title={t('settings.items.theme')}>
+          <Section.Item testID="theme-preview-section-item">
+            <ThemePreviewSelector
+              isAutomatic={isAutomaticTheme}
+              onAutomaticChange={handleAutomaticThemeChange}
+              onThemeChange={settingPreferences.theme.onValueChange}
+              selectedTheme={selectedTheme}
+            />
+          </Section.Item>
+        </Section>
+
         <Section>
-          <Section.Item
-            label={t('settings.items.theme')}
-            leading={<SunIcon className="size-5 text-foreground" strokeWidth={2} />}
-            trailing={
-              <SettingSelect
-                label={t('settings.items.theme')}
-                options={settingPreferences.theme.options}
-                value={settingPreferences.theme.value}
-                onValueChange={settingPreferences.theme.onValueChange}
-              />
-            }
-          />
           <Section.Item
             label={t('settings.items.appLanguage')}
             leading={<GlobeIcon className="size-5 text-foreground" strokeWidth={2} />}
