@@ -3,11 +3,7 @@ import { ArrowUpIcon, SquareIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable } from 'react-native';
 
-import {
-  useChatInputActions,
-  useChatInputMeta,
-  useChatInputState,
-} from '../context/ChatInputProvider';
+import { useChatInputMeta, useChatInputState } from '../context/ChatInputProvider';
 import { hasChatInputSendableContent } from '../utils/chatInputAttachments';
 
 const buttonSize = 32;
@@ -28,7 +24,6 @@ export function ChatInputPrimaryActionButton({
   onStopPress,
 }: ChatInputPrimaryActionButtonProps) {
   const { t } = useTranslation();
-  const { setInputFocused } = useChatInputActions();
   const { inputRef } = useChatInputMeta();
   const { attachments, draft } = useChatInputState();
   const trimmedDraft = draft.trim();
@@ -49,7 +44,6 @@ export function ChatInputPrimaryActionButton({
     }
 
     if (shouldShowSend) {
-      setInputFocused(false);
       await onSendPress(trimmedDraft);
       return;
     }

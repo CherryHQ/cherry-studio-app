@@ -15,10 +15,14 @@ type PaintingInputProps = {
 };
 
 type MessageListProps = {
+  contentInsetEndAdjustment: unknown;
+  keyboardOffset: number;
   messages: Message[];
 };
 
 const mockRouterReplace = jest.fn();
+const mockContentInsetEndAdjustment = { value: 88 };
+const mockOnComposerLayout = jest.fn();
 const mockGenerate = jest.fn<Promise<PaintingGenerationResult>, [PaintingGenerationInput]>();
 let mockPaintingInputProps: PaintingInputProps | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -79,6 +83,13 @@ jest.mock('expo-crypto', () => ({
   },
 }));
 
+jest.mock('@legendapp/list/keyboard', () => ({
+  useKeyboardChatComposerInset: () => ({
+    contentInsetEndAdjustment: mockContentInsetEndAdjustment,
+    onComposerLayout: mockOnComposerLayout,
+  }),
+}));
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -127,7 +138,9 @@ jest.mock('@/frontend/features/chat/workspace', () => ({
   useFloatingChatInputLayout: () => ({
     contentBottomInset: 0,
     handleInputHeightChange: jest.fn(),
+    inputHeight: 88,
     inputHeightShared: { value: 0 },
+    keyboardOffset: 26,
   }),
 }));
 
@@ -228,5 +241,7 @@ describe('PaintingConversationScreen', () => {
       'assistant',
     ]);
     expect(mockMessageListProps?.messages[0].searchableText).toBe(mockPainting.prompt);
+    expect(mockMessageListProps?.contentInsetEndAdjustment).toBe(mockContentInsetEndAdjustment);
+    expect(mockMessageListProps?.keyboardOffset).toBe(26);
   });
 });

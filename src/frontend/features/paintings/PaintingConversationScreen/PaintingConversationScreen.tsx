@@ -1,9 +1,10 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import { useKeyboardChatComposerInset } from '@legendapp/list/keyboard';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import * as Crypto from 'expo-crypto';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { type RefObject, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, type LayoutChangeEvent, Text, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
@@ -97,11 +98,16 @@ function PaintingConversationWorkspace({
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const listRef = useRef<LegendListRef | null>(null);
+  const composerRef = useRef<View | null>(null);
   const isAtBottom = useSharedValue(true);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const generation = usePaintingGeneration({ initialOutputs: [] });
-  const { contentBottomInset, handleInputHeightChange, inputHeightShared } =
+  const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useFloatingChatInputLayout();
+  const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
+    listRef,
+    composerRef,
+  );
   const messages = useMemo<Message[]>(
     () =>
       pendingTurn
@@ -148,14 +154,18 @@ function PaintingConversationWorkspace({
       <ChatMessageList
         anchorIndex={0}
         contentBottomInset={contentBottomInset}
+        contentInsetEndAdjustment={contentInsetEndAdjustment}
         contentTopInset={isIOS ? headerHeight : 0}
         isAtBottom={isAtBottom}
+        keyboardOffset={keyboardOffset}
         listRef={listRef}
         messages={messages}
         onLoadOlder={handleLoadOlder}
         onPrefetchOlder={handlePrefetchOlder}
       />
       <FloatingPaintingInput
+        composerRef={composerRef}
+        onComposerLayout={onComposerLayout}
         onHeightChange={handleInputHeightChange}
         onCancel={generation.cancel}
         onGenerate={handleGenerate}
@@ -174,21 +184,29 @@ function PaintingConversationWorkspace({
 }
 
 function FloatingPaintingInput({
+  composerRef,
+  onComposerLayout,
   onHeightChange,
   ...inputProps
 }: {
+  composerRef: RefObject<View | null>;
+  onComposerLayout: (event: LayoutChangeEvent) => void;
   onHeightChange: (height: number) => void;
 } & Parameters<typeof PaintingInput>[0]) {
   const { bottom } = useSafeAreaInsets();
   const bottomPadding = Math.max(bottom, chatInputMinBottomPadding);
   const keyboardInputOffset = getChatInputKeyboardStickyOffset(bottom);
   const handleLayout = useCallback(
-    (event: LayoutChangeEvent) => onHeightChange(event.nativeEvent.layout.height),
-    [onHeightChange],
+    (event: LayoutChangeEvent) => {
+      onHeightChange(event.nativeEvent.layout.height);
+      onComposerLayout(event);
+    },
+    [onComposerLayout, onHeightChange],
   );
 
   return (
     <View
+      ref={composerRef}
       className="absolute right-0 bottom-0 left-0 z-10"
       pointerEvents="box-none"
       style={{

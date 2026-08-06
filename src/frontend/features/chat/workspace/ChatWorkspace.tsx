@@ -1,9 +1,11 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import { useKeyboardChatComposerInset } from '@legendapp/list/keyboard';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
@@ -53,6 +55,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   const { t } = useTranslation();
   const { toast } = useToast();
   const listRef = useRef<LegendListRef | null>(null);
+  const composerRef = useRef<View | null>(null);
   const isAtBottom = useSharedValue(true);
   const handleScrollToEnd = useCallback(() => {
     void listRef.current?.scrollToEnd({ animated: true });
@@ -85,8 +88,12 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
     requiresInitialHistoryLayout,
   });
   const contentTopInset = isIOS ? headerHeight : 0;
-  const { contentBottomInset, handleInputHeightChange, inputHeightShared } =
+  const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useFloatingChatInputLayout();
+  const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
+    listRef,
+    composerRef,
+  );
 
   // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
   useEffect(() => {
@@ -107,16 +114,25 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
           key={listRenderKey}
           anchorIndex={anchorIndex}
           contentBottomInset={contentBottomInset}
+          contentInsetEndAdjustment={contentInsetEndAdjustment}
           contentTopInset={contentTopInset}
           isAtBottom={isAtBottom}
+          keyboardOffset={keyboardOffset}
           listRef={listRef}
           messages={visibleMessages}
           onLoadOlder={loadOlder}
           onPrefetchOlder={messageWindow.prefetchOlder}
           onReady={markListLoaded}
+          pendingUserMessageId={chatTopic.pendingUserMessage?.id}
         />
       </MessageSlideInProvider>
-      <ChatComposer onHeightChange={handleInputHeightChange} topicId={topicId} />
+      <ChatComposer
+        composerRef={composerRef}
+        dismissKeyboardOnSend={false}
+        onComposerLayout={onComposerLayout}
+        onHeightChange={handleInputHeightChange}
+        topicId={topicId}
+      />
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
         inputHeight={inputHeightShared}

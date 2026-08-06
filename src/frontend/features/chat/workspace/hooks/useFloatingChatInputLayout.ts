@@ -2,12 +2,17 @@ import { useCallback, useState } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { chatInputMessageListGap, getChatInputMinimumHeight } from '../../input/chatInputLayout';
+import {
+  chatInputMessageListGap,
+  getChatInputKeyboardStickyOffset,
+  getChatInputMinimumHeight,
+} from '../../input/chatInputLayout';
 
 export function useFloatingChatInputLayout() {
   const { bottom } = useSafeAreaInsets();
   const minimumInputHeight = getChatInputMinimumHeight(bottom);
-  // 逐帧裸高度走共享值（驱动悬浮按钮定位），离散 clamp 高度走 state（驱动列表 padding）：
+  const keyboardOffset = getChatInputKeyboardStickyOffset(bottom);
+  // 逐帧裸高度走共享值（驱动悬浮按钮定位），离散 clamp 高度走 state（驱动遮挡区尺寸）：
   // clamp 后同值不变，命中 React eager bail-out，避免逐帧 onLayout 重渲染整个 ChatWorkspace。
   const inputHeightShared = useSharedValue(minimumInputHeight);
   const [clampedInputHeight, setClampedInputHeight] = useState(minimumInputHeight);
@@ -31,5 +36,6 @@ export function useFloatingChatInputLayout() {
     handleInputHeightChange,
     inputHeight,
     inputHeightShared,
+    keyboardOffset,
   };
 }
