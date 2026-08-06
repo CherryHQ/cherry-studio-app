@@ -18,6 +18,9 @@ export default function AppearanceSettingsScreen() {
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const normalizedFontSizeStep = normalizeFontSizeStep(fontSizeStep);
   const settingPreferences = useSettingPreferences();
+  const languageLabel = settingPreferences.language.options.find(
+    (option) => option.value === settingPreferences.language.value,
+  )?.label;
 
   return (
     <>
@@ -45,13 +48,14 @@ export default function AppearanceSettingsScreen() {
           <Section.Item
             label={t('settings.items.appLanguage')}
             leading={<GlobeIcon className="size-5 text-foreground" strokeWidth={2} />}
+            onPress={() => router.push('/settings/language')}
             trailing={
-              <SettingSelect
-                label={t('settings.items.appLanguage')}
-                options={settingPreferences.language.options}
-                value={settingPreferences.language.value}
-                onValueChange={settingPreferences.language.onValueChange}
-              />
+              <View className="flex-row items-center gap-1">
+                <Text className="text-right text-base text-default-foreground">
+                  {languageLabel}
+                </Text>
+                <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2} />
+              </View>
             }
           />
           <Section.Item

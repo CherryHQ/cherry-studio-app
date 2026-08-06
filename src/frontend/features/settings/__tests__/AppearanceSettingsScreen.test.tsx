@@ -81,21 +81,17 @@ describe('AppearanceSettingsScreen', () => {
         value: 'system',
       }),
     );
-    expect(items[1].props.trailing.props).toEqual(
-      expect.objectContaining({
-        label: 'settings.items.appLanguage',
-        onValueChange: mockLanguageChange,
-        value: 'en-US',
-      }),
-    );
+    expect(items[1].props.trailing.props.children[0].props.children).toBe('English');
   });
 
-  test('opens the existing font size detail screen', () => {
+  test('opens the language and font size detail screens', () => {
     const renderer = render(<AppearanceSettingsScreen />);
     const items = renderer.root.findAllByType('SectionItem');
 
+    act(() => items[1].props.onPress());
     act(() => items[2].props.onPress());
 
+    expect(mockPush).toHaveBeenCalledWith('/settings/language');
     expect(mockPush).toHaveBeenCalledWith('/settings/font-size');
   });
 });
