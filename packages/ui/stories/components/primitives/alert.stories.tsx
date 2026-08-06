@@ -18,8 +18,10 @@ type ThemePreviewProps = {
 
 function ThemePreview({ args, label, theme }: ThemePreviewProps) {
   const [isOpen, setIsOpen] = useState(args.isOpen);
+  const [inputValue, setInputValue] = useState(args.input?.value ?? '');
 
   useEffect(() => setIsOpen(args.isOpen), [args.isOpen]);
+  useEffect(() => setInputValue(args.input?.value ?? ''), [args.input?.value]);
 
   return (
     <ScopedTheme theme={theme}>
@@ -28,6 +30,18 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
         <Button onPress={() => setIsOpen(true)}>Show alert</Button>
         <Alert
           {...args}
+          input={
+            args.input
+              ? {
+                  ...args.input,
+                  onChangeText: (value) => {
+                    setInputValue(value);
+                    args.input?.onChangeText(value);
+                  },
+                  value: inputValue,
+                }
+              : undefined
+          }
           isOpen={isOpen}
           onOpenChange={(nextIsOpen) => {
             setIsOpen(nextIsOpen);
@@ -55,6 +69,7 @@ const meta = {
   argTypes: {
     actions: { control: false },
     description: { control: 'text' },
+    input: { control: false },
     isOpen: { control: 'boolean' },
     title: { control: 'text' },
   },
@@ -83,4 +98,34 @@ export const Playground: Story = {
       ))}
     </View>
   ),
+};
+
+export const WithInput: Story = {
+  render: (args) => {
+    const inputArgs: AlertProps = {
+      ...args,
+      input: {
+        accessibilityLabel: 'Topic name',
+        autoFocus: true,
+        maxLength: 40,
+        onChangeText: fn(),
+        placeholder: 'Enter a name',
+        value: 'New topic',
+      },
+      title: 'Rename topic',
+    };
+
+    return (
+      <View className="gap-4">
+        {themes.map((theme) => (
+          <ThemePreview
+            args={inputArgs}
+            key={theme.value}
+            label={theme.label}
+            theme={theme.value}
+          />
+        ))}
+      </View>
+    );
+  },
 };

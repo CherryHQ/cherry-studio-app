@@ -40,6 +40,26 @@ jest.mock('../../button', () => {
   return { Button };
 });
 
+jest.mock('../../input', () => {
+  const React = require('react');
+  const { TextInput } = require('react-native');
+
+  return {
+    Input: (props: object) =>
+      React.createElement(TextInput, { ...props, mockComponent: 'cherry-input' }),
+  };
+});
+
+jest.mock('../../text-field', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  return {
+    TextField: (props: object) =>
+      React.createElement(View, { ...props, mockComponent: 'cherry-text-field' }),
+  };
+});
+
 describe('Alert (Android)', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -100,5 +120,40 @@ describe('Alert (Android)', () => {
     act(() => button.props.onPress());
     expect(order).toEqual(['action', 'close']);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  test('renders and controls an optional Cherry UI input', () => {
+    const onChangeText = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <Alert
+          actions={[{ label: 'Save' }]}
+          input={{
+            accessibilityLabel: 'Topic name',
+            autoFocus: true,
+            maxLength: 40,
+            onChangeText,
+            placeholder: 'Enter a name',
+            value: 'New topic',
+          }}
+          isOpen
+          onOpenChange={jest.fn()}
+          title="Rename topic"
+        />,
+      );
+    });
+
+    expect(renderer!.root.findByProps({ mockComponent: 'cherry-text-field' })).toBeTruthy();
+    const input = renderer!.root.findByProps({ mockComponent: 'cherry-input' });
+
+    expect(input.props.accessibilityLabel).toBe('Topic name');
+    expect(input.props.autoFocus).toBe(true);
+    expect(input.props.maxLength).toBe(40);
+    expect(input.props.placeholder).toBe('Enter a name');
+    expect(input.props.value).toBe('New topic');
+
+    act(() => input.props.onChangeText('Updated topic'));
+    expect(onChangeText).toHaveBeenCalledWith('Updated topic');
   });
 });
