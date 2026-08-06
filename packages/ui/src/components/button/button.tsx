@@ -1,4 +1,3 @@
-import { Spinner } from 'heroui-native';
 import {
   cloneElement,
   createContext,
@@ -11,6 +10,7 @@ import { Pressable, Text, type PressableProps, type TextProps, type View } from 
 import { useResolveClassNames } from 'uniwind';
 
 import { cn } from '../../utils';
+import { Spinner, type SpinnerSize } from '../spinner';
 
 export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
 export type ButtonSize = 'default' | 'lg' | 'sm';
@@ -33,7 +33,7 @@ const rootBaseStyles =
 
 const sizeStyles: Record<
   ButtonSize,
-  { icon: string; iconOnly: string; label: string; root: string; spinner: 'md' | 'sm' }
+  { icon: string; iconOnly: string; label: string; root: string; spinner: SpinnerSize }
 > = {
   default: {
     icon: 'size-5',
@@ -47,7 +47,7 @@ const sizeStyles: Record<
     iconOnly: 'p-3',
     label: 'text-lg',
     root: 'gap-2.5 px-5 py-3',
-    spinner: 'md',
+    spinner: 'default',
   },
   sm: {
     icon: 'size-4',

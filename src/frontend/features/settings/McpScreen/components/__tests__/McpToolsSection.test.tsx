@@ -32,16 +32,13 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('heroui-native/spinner', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return { Spinner: MockView };
-});
-
 jest.mock('@cherrystudio/ui/components', () => {
-  const { Pressable: MockPressable } = jest.requireActual('react-native');
+  const { Pressable: MockPressable, View: MockView } = jest.requireActual('react-native');
 
-  return { Switch: (props: Record<string, unknown>) => <MockPressable {...props} /> };
+  return {
+    Spinner: (props: Record<string, unknown>) => <MockView {...props} />,
+    Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
+  };
 });
 
 jest.mock('heroui-native/toast', () => ({

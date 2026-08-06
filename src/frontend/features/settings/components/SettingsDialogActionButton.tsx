@@ -1,5 +1,5 @@
+import { Spinner } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
-import { Spinner } from 'heroui-native/spinner';
 import { Pressable, Text, View } from 'react-native';
 
 type SettingsDialogActionButtonProps = {

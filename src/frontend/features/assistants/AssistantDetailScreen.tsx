@@ -1,6 +1,6 @@
+import { Button } from '@cherrystudio/ui/components';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Button } from 'heroui-native/button';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -86,12 +86,9 @@ export default function AssistantDetailScreen() {
           <Button
             accessibilityLabel={t('assistant.actions.startChat')}
             className="rounded-2xl"
-            variant="primary"
             onPress={startChat}
           >
-            <Text className="font-medium text-base text-white">
-              {t('assistant.actions.startChat')}
-            </Text>
+            {t('assistant.actions.startChat')}
           </Button>
         </View>
       ) : null}

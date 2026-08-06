@@ -1,7 +1,7 @@
+import { ScrollShadow } from '@cherrystudio/ui/components';
 import type { Message } from '@cherrystudio/universal/data/types/message';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { ScrollShadow } from 'heroui-native/scroll-shadow';
 import {
   type RefObject,
   useCallback,
@@ -21,7 +21,6 @@ import {
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { LinearGradient } from '@/frontend/components/nativePrimitives';
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -551,12 +550,7 @@ export function ChatMessageList({
   }, [cancelPendingInteractionEnd, cancelPendingReadyFrame, cancelPendingTailFollow]);
 
   return (
-    <ScrollShadow
-      LinearGradientComponent={LinearGradient}
-      className="flex-1"
-      visibility="bottom"
-      size={80}
-    >
+    <ScrollShadow className="flex-1" visibility="bottom" size={80}>
       <KeyboardAwareLegendList
         ref={listRef}
         applyWorkaroundForContentInsetHitTestBug

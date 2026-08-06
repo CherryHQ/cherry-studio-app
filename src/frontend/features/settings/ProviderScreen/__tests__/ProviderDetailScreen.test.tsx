@@ -86,7 +86,7 @@ jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('heroui-native/spinner', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   Spinner: () => {
     mockSpinnerRenderCount += 1;
     return null;

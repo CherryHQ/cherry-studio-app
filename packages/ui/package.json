@@ -59,6 +59,7 @@
   "peerDependencies": {
     "@expo/ui": "*",
     "expo-glass-effect": "*",
+    "expo-linear-gradient": "*",
     "heroui-native": "*",
     "react": "*",
     "react-native": "*",

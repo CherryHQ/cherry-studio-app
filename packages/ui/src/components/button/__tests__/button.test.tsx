@@ -4,7 +4,7 @@ import { useResolveClassNames } from 'uniwind';
 
 import { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from '../button';
 
-jest.mock('heroui-native', () => {
+jest.mock('../../spinner', () => {
   const React = require('react');
   const { View } = require('react-native');
 
@@ -254,7 +254,7 @@ describe('Button', () => {
   test('uses a medium spinner for a large button', () => {
     const tree = render('Save', { loading: true, size: 'lg' });
 
-    expect(tree.root.findByProps({ testID: 'spinner' }).props.size).toBe('md');
+    expect(tree.root.findByProps({ testID: 'spinner' }).props.size).toBe('default');
   });
 
   test('merges disabled state with caller accessibility state', () => {

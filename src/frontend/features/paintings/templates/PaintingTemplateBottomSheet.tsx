@@ -1,4 +1,4 @@
-import { Button } from 'heroui-native/button';
+import { Button } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -127,7 +127,7 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
       <Button
         accessibilityLabel={t('painting.templates.try')}
         className="mx-4 self-stretch rounded-full"
-        isDisabled={isClosing}
+        disabled={isClosing}
         onPress={() => requestClose('use')}
         size="sm"
         testID="painting-template-try"

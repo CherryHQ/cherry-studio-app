@@ -1,5 +1,5 @@
+import { Button } from '@cherrystudio/ui/components';
 import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
-import { Button } from 'heroui-native/button';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -76,17 +76,17 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
         <View className="flex-row gap-3">
           <Button
             className="flex-1"
-            isDisabled={isSubmitting}
+            disabled={isSubmitting}
             onPress={() => void submit(false)}
-            variant="danger"
+            variant="destructive"
           >
             <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
           </Button>
           <Button
             className="flex-1"
-            isDisabled={isSubmitting}
+            disabled={isSubmitting}
             onPress={() => void submit(true)}
-            variant="primary"
+            variant="default"
           >
             <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
           </Button>

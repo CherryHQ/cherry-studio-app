@@ -1,11 +1,10 @@
-import { Button } from '@cherrystudio/ui/components';
+import { Button, Spinner } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Accordion } from 'heroui-native/accordion';
-import { Spinner } from 'heroui-native/spinner';
 import { MinusIcon, PlusIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

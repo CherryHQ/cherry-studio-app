@@ -1,11 +1,10 @@
-import { Switch } from '@cherrystudio/ui/components';
+import { Spinner, Switch } from '@cherrystudio/ui/components';
 import {
   hasMcpServerWildcardRule,
   matchesMcpSourceToolRule,
 } from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQuery } from '@tanstack/react-query';
-import { Spinner } from 'heroui-native/spinner';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

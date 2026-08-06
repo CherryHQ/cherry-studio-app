@@ -1,5 +1,6 @@
+import { Button, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons/providers';
-import { Button, Card, Spinner, useToast } from 'heroui-native';
+import { useToast } from 'heroui-native/toast';
 import { LogInIcon, LogOutIcon, WalletIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -103,98 +104,92 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
   // Logged-out state
   if (!hasOAuthToken) {
     return (
-      <Card className="gap-3 p-2">
-        <View className="flex-row items-center gap-3">
-          {providerIcon?.[iconTheme] ? (
-            <Image className="h-9 w-9 rounded-xl" source={providerIcon[iconTheme]} />
-          ) : (
-            <Text>{provider.name[0]}</Text>
-          )}
-          <View className="flex-1">
-            <Text className="text-sm font-medium text-foreground">
-              {t('settings.provider.oauth.cherryIn.account_title')}
-            </Text>
-            <Text className="mt-0.5 text-foreground text-xs">
-              {t('settings.provider.oauth.cherryIn.tagline')}
-            </Text>
+      <Section>
+        <Section.Item>
+          <View className="gap-3">
+            <View className="flex-row items-center gap-3">
+              {providerIcon?.[iconTheme] ? (
+                <Image className="h-9 w-9 rounded-xl" source={providerIcon[iconTheme]} />
+              ) : (
+                <Text>{provider.name[0]}</Text>
+              )}
+              <View className="flex-1">
+                <Text className="text-sm font-medium text-foreground">
+                  {t('settings.provider.oauth.cherryIn.account_title')}
+                </Text>
+                <Text className="mt-0.5 text-foreground text-xs">
+                  {t('settings.provider.oauth.cherryIn.tagline')}
+                </Text>
+              </View>
+            </View>
+            <Button
+              className="w-full"
+              disabled={!isReady || isLoggingIn}
+              icon={<LogInIcon />}
+              loading={isLoggingIn}
+              onPress={onLoginPress}
+            >
+              {t('settings.provider.oauth.cherryIn.login_button')}
+            </Button>
           </View>
-        </View>
-        <Button
-          className="w-full justify-center gap-2 px-4 h-10"
-          isDisabled={!isReady || isLoggingIn}
-          onPress={onLoginPress}
-        >
-          {isLoggingIn ? (
-            <Spinner color="white" size="sm" />
-          ) : (
-            <>
-              <LogInIcon size={15} color="white" />
-              <Button.Label className="text-base text-white">
-                {t('settings.provider.oauth.cherryIn.login_button')}
-              </Button.Label>
-            </>
-          )}
-        </Button>
-      </Card>
+        </Section.Item>
+      </Section>
     );
   }
 
   // Logged-in state
   return (
-    <Card>
-      <View className="flex-row items-center justify-between">
-        <View className="flex-row items-center">
-          {providerIcon?.[iconTheme] ? (
-            <Image className="h-15 w-15 rounded-xl" source={providerIcon[iconTheme]} />
-          ) : (
-            <Text>{provider.name[0]}</Text>
-          )}
-
-          <View className="ml-2 gap-1">
-            <Text className="font-semibold text-base text-foreground">{provider.name}</Text>
-            <View className="flex flex-row gap-3">
-              <Button isDisabled={isLoadingData} onPress={fetchData} variant="tertiary" size="sm">
-                <Button.Label className="p-0">
-                  <Text className="text-sm text-foreground">
-                    {t('settings.provider.oauth.cherryIn.balance')}
-                  </Text>
-                  <Text className="text-sm text-foreground">
-                    {isLoadingData && balance === null ? '···' : formatCurrency(balance)}
-                  </Text>
-                </Button.Label>
-              </Button>
-              <Button onPress={handleTopup} variant="primary" size="sm">
-                <View className="flex flex-row items-center gap-1.5">
-                  <WalletIcon size={15} color="white" />
-                  <Button.Label>
-                    <Text className="text-sm">{t('settings.provider.oauth.cherryIn.topup')}</Text>
-                  </Button.Label>
-                </View>
-              </Button>
-            </View>
-          </View>
-        </View>
-
-        <View className="flex-row items-center gap-1">
-          <Button
-            className="h-9 w-9 min-w-0 rounded-full bg-transparent p-0"
-            isDisabled={isLoggingOut}
-            onPress={handleLogout}
-            variant="ghost"
-          >
-            {isLoggingOut ? <Spinner size="sm" /> : <LogOutIcon size={15} />}
-          </Button>
-        </View>
-      </View>
-      <Card.Footer className="mt-2">
+    <Section
+      footer={
         <Text
           accessibilityRole="link"
-          className="text-xs text-foreground-tertiary underline"
+          className="px-3 text-xs text-foreground-tertiary underline"
           onPress={() => void openExternalUrl('https://open.cherryin.ai')}
         >
           {t('settings.provider.oauth.cherryIn.service_attribution')}
         </Text>
-      </Card.Footer>
-    </Card>
+      }
+    >
+      <Section.Item>
+        <View className="flex-row items-center justify-between">
+          <View className="min-w-0 flex-1 flex-row items-center">
+            {providerIcon?.[iconTheme] ? (
+              <Image className="h-15 w-15 rounded-xl" source={providerIcon[iconTheme]} />
+            ) : (
+              <Text>{provider.name[0]}</Text>
+            )}
+
+            <View className="ml-2 min-w-0 flex-1 gap-1">
+              <Text className="font-semibold text-base text-foreground">{provider.name}</Text>
+              <View className="flex-row flex-wrap gap-3">
+                <Button disabled={isLoadingData} onPress={fetchData} size="sm" variant="ghost">
+                  <View className="flex-row items-center gap-1">
+                    <Text className="text-sm text-foreground">
+                      {t('settings.provider.oauth.cherryIn.balance')}
+                    </Text>
+                    <Text className="text-sm text-foreground">
+                      {isLoadingData && balance === null ? '···' : formatCurrency(balance)}
+                    </Text>
+                  </View>
+                </Button>
+                <Button icon={<WalletIcon />} onPress={handleTopup} size="sm">
+                  {t('settings.provider.oauth.cherryIn.topup')}
+                </Button>
+              </View>
+            </View>
+          </View>
+
+          <Button
+            accessibilityLabel={t('settings.provider.oauth.cherryIn.logout')}
+            className="h-9 w-9 min-w-0 rounded-full bg-transparent p-0"
+            disabled={isLoggingOut}
+            icon={<LogOutIcon />}
+            loading={isLoggingOut}
+            onPress={handleLogout}
+            variant="ghost"
+          />
+        </View>
+      </Section.Item>
+    </Section>
   );
 }
