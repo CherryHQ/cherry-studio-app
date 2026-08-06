@@ -55,6 +55,16 @@ describe('useExclusiveSwipeable', () => {
     expect(row.close).not.toHaveBeenCalled();
   });
 
+  it('closes and forgets the tracked row on demand', () => {
+    const row = createSwipeable();
+
+    hook?.notifyWillOpen(row as never);
+    hook?.closeOpen();
+    hook?.notifyWillOpen(row as never);
+
+    expect(row.close).toHaveBeenCalledTimes(1);
+  });
+
   it('forgets a row once it reports closing, so a later open of it does not self-close', () => {
     const row = createSwipeable();
 

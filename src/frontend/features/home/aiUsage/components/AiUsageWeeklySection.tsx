@@ -3,7 +3,7 @@ import {
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type NativeScrollEvent, type NativeSyntheticEvent, StyleSheet, View } from 'react-native';
 
@@ -53,8 +53,8 @@ export function AiUsageWeeklySection({
 }: AiUsageWeeklySectionProps) {
   const { t } = useTranslation();
   const listRef = useRef<LegendListRef>(null);
-  const visiblePageIndexRef = useRef<number | null>(null);
-  const visibleWeekDataKeyRef = useRef<string | null>(null);
+  const visiblePageIndexRef = useRef(activePageIndex);
+  const visibleWeekDataKeyRef = useRef(weekDataKey);
   const { onLayout, ref: viewportRef, width: pageWidth } = useMeasuredWidth();
   const previousPage = pages[activePageIndex - ADJACENT_PAGE_DISTANCE];
   const activePage = pages[activePageIndex];
@@ -92,7 +92,7 @@ export function AiUsageWeeklySection({
     ],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const needsSync =
       visiblePageIndexRef.current !== activePageIndex ||
       visibleWeekDataKeyRef.current !== weekDataKey;
@@ -174,7 +174,7 @@ export function AiUsageWeeklySection({
               extraData={listExtraData}
               getFixedItemSize={getFixedItemSize}
               horizontal
-              initialScrollIndex={AI_USAGE_CURRENT_WEEK_PAGE_INDEX}
+              initialScrollIndex={activePageIndex}
               itemsAreEqual={areDetailPagesEqual}
               keyExtractor={getWeekPageKey}
               nestedScrollEnabled

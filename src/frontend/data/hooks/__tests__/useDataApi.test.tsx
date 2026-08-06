@@ -153,6 +153,333 @@ describe('Data API hooks', () => {
     });
     expect(invalidateQueries).toHaveBeenCalledTimes(1);
   });
+
+  describe('useMutation optimistic lifecycle', () => {
+    const variables = { body: { name: 'Updated' }, params: { id: 'assistant-1' } };
+    let trigger: ((args: typeof variables) => Promise<unknown>) | undefined;
+
+    beforeEach(() => {
+      trigger = undefined;
+    });
+
+    async function mountProbe(probe: React.ReactElement) {
+      await act(async () => {
+        renderer = create(<TestProviders>{probe}</TestProviders>);
+      });
+    }
+
+    it('runs the lifecycle callbacks and refresh in order around the request', async () => {
+      const calls: string[] = [];
+      const response = { id: 'assistant-1', name: 'Updated' };
+      dataApi.patch.mockImplementationOnce(async () => {
+        calls.push('mutationFn');
+        return response as never;
+      });
+      jest.spyOn(queryClient, 'invalidateQueries').mockImplementation(async () => {
+        calls.push('invalidate');
+      });
+      const refresh = jest.fn(() => ['/assistants']);
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onError: () => {
+            calls.push('onError');
+          },
+          onMutate: () => {
+            calls.push('onMutate');
+          },
+          onSettled: () => {
+            calls.push('onSettled');
+          },
+          onSuccess: () => {
+            calls.push('onSuccess');
+          },
+          refresh,
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      let resolved: unknown;
+      await act(async () => {
+        resolved = await trigger?.(variables);
+      });
+
+      expect(resolved).toEqual(response);
+      expect(calls).toEqual(['onMutate', 'mutationFn', 'invalidate', 'onSuccess', 'onSettled']);
+      expect(refresh).toHaveBeenCalledWith({ args: variables, result: response });
+    });
+
+    it('passes the trigger variables and onMutate context to onSuccess and onSettled', async () => {
+      const response = { id: 'assistant-1', name: 'Updated' };
+      dataApi.patch.mockResolvedValueOnce(response as never);
+      const context = { previousName: 'Original' };
+      const onSettled = jest.fn();
+      const onSuccess = jest.fn();
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onMutate: () => context,
+          onSettled,
+          onSuccess,
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      await act(async () => {
+        await trigger?.(variables);
+      });
+
+      expect(onSuccess).toHaveBeenCalledWith(response, variables, context);
+      expect(onSettled).toHaveBeenCalledWith(response, null, variables, context);
+    });
+
+    it('waits for an async onMutate before the request and forwards its resolved context', async () => {
+      dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
+      const onSuccess = jest.fn();
+      let resolveContext: ((context: { snapshot: string }) => void) | undefined;
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onMutate: () =>
+            new Promise<{ snapshot: string }>((resolve) => {
+              resolveContext = resolve;
+            }),
+          onSuccess,
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      let pending: Promise<unknown> | undefined;
+      await act(async () => {
+        pending = trigger?.(variables);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(dataApi.patch).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveContext?.({ snapshot: 'assistants' });
+        await pending;
+      });
+
+      expect(dataApi.patch).toHaveBeenCalledTimes(1);
+      expect(onSuccess).toHaveBeenCalledWith({ id: 'assistant-1', name: 'Updated' }, variables, {
+        snapshot: 'assistants',
+      });
+    });
+
+    it('reports the error with variables and context and skips refresh on failure', async () => {
+      const requestError = new Error('patch failed');
+      dataApi.patch.mockRejectedValueOnce(requestError);
+      const invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
+      const onError = jest.fn();
+      const onSettled = jest.fn();
+      const onSuccess = jest.fn();
+      let latest: { error?: Error } | undefined;
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onError,
+          onMutate: () => ({ previousName: 'Original' }),
+          onSettled,
+          onSuccess,
+          refresh: ['/assistants'],
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+          latest = mutation;
+        }, [mutation]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      await act(async () => {
+        await expect(trigger?.(variables)).rejects.toThrow('patch failed');
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(onError).toHaveBeenCalledWith(requestError, variables, { previousName: 'Original' });
+      expect(onSettled).toHaveBeenCalledWith(undefined, requestError, variables, {
+        previousName: 'Original',
+      });
+      expect(onSuccess).not.toHaveBeenCalled();
+      expect(invalidateQueries).not.toHaveBeenCalled();
+      expect(latest?.error).toBe(requestError);
+    });
+
+    it('lets onError roll back an optimistic cache update from the onMutate context', async () => {
+      const original = { items: [{ id: 'assistant-1', name: 'Original' }] };
+      queryClient.setQueryData(['/assistants'], original);
+      let cacheDuringRequest: unknown;
+      dataApi.patch.mockImplementationOnce(async () => {
+        cacheDuringRequest = queryClient.getQueryData(['/assistants']);
+        throw new Error('patch failed');
+      });
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onError: (_error, _variables, context) => {
+            queryClient.setQueryData(['/assistants'], context?.previous);
+          },
+          onMutate: () => {
+            const previous = queryClient.getQueryData(['/assistants']);
+            queryClient.setQueryData(['/assistants'], {
+              items: [{ id: 'assistant-1', name: 'Updated' }],
+            });
+            return { previous };
+          },
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      await act(async () => {
+        await expect(trigger?.(variables)).rejects.toThrow('patch failed');
+      });
+
+      expect(cacheDuringRequest).toEqual({ items: [{ id: 'assistant-1', name: 'Updated' }] });
+      expect(queryClient.getQueryData(['/assistants'])).toEqual(original);
+    });
+
+    it('skips the request but still reports the failure when onMutate throws', async () => {
+      const mutateError = new Error('onMutate failed');
+      const onError = jest.fn();
+      const onSettled = jest.fn();
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onError,
+          onMutate: () => {
+            throw mutateError;
+          },
+          onSettled,
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      await act(async () => {
+        await expect(trigger?.(variables)).rejects.toThrow('onMutate failed');
+      });
+
+      expect(dataApi.patch).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledWith(mutateError, variables, undefined);
+      expect(onSettled).toHaveBeenCalledWith(undefined, mutateError, variables, undefined);
+    });
+
+    it('still runs onError and onSettled when the success callback throws', async () => {
+      dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
+      const successError = new Error('onSuccess failed');
+      const onError = jest.fn();
+      const onSettled = jest.fn();
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onError,
+          onMutate: () => ({ stage: 'before-request' }),
+          onSettled,
+          onSuccess: () => {
+            throw successError;
+          },
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      await act(async () => {
+        await expect(trigger?.(variables)).rejects.toThrow('onSuccess failed');
+      });
+
+      expect(onError).toHaveBeenCalledWith(successError, variables, { stage: 'before-request' });
+      expect(onSettled).toHaveBeenCalledWith(undefined, successError, variables, {
+        stage: 'before-request',
+      });
+    });
+
+    it('keeps the legacy single-argument callbacks working unchanged', async () => {
+      const response = { id: 'assistant-1', name: 'Updated' };
+      dataApi.patch.mockResolvedValueOnce(response as never);
+      const invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
+      const seen: unknown[] = [];
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onError: (error) => {
+            seen.push(error);
+          },
+          onSuccess: (data) => {
+            seen.push(data.id);
+          },
+          refresh: ['/assistants'],
+        });
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      await act(async () => {
+        await trigger?.(variables);
+      });
+
+      expect(seen).toEqual(['assistant-1']);
+      expect(invalidateQueries).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps path, variables, response and context statically typed', async () => {
+      dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
+      const seen: string[] = [];
+
+      function Probe() {
+        const mutation = useMutation('PATCH', '/assistants/:id', {
+          onMutate: () => ({ previous: 'Original' }),
+          onSuccess: (data, args, context) => {
+            seen.push(data.id, args?.params.id ?? '', context.previous);
+            // @ts-expect-error the context only carries what onMutate returned
+            void context.missing;
+          },
+        });
+        const invalidBody = () =>
+          // @ts-expect-error the body must match the PATCH /assistants/:id schema
+          mutation.trigger({ body: { bogus: true }, params: { id: 'assistant-1' } });
+        void invalidBody;
+        useEffect(() => {
+          trigger = mutation.trigger;
+        }, [mutation.trigger]);
+        return null;
+      }
+
+      await mountProbe(<Probe />);
+      await act(async () => {
+        await trigger?.(variables);
+      });
+
+      expect(seen).toEqual(['assistant-1', 'assistant-1', 'Original']);
+    });
+  });
 });
 
 describe('Data API key utilities', () => {

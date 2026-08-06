@@ -42,7 +42,7 @@ export default function AssistantListScreen() {
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant } = useAssistantMutations();
   const { confirmDialog, requestConfirm } = useConfirmDialog();
-  const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const setBottomTabBarHidden = useSetBottomTabBarHidden();
   const bottomInset = useMessageListBottomInset();
   const [isEditing, setIsEditing] = useState(false);
@@ -54,17 +54,23 @@ export default function AssistantListScreen() {
       return;
     }
 
-    setBottomTabBarHidden(isEditing);
     return () => setBottomTabBarHidden(false);
-  }, [isEditing, setBottomTabBarHidden]);
+  }, [setBottomTabBarHidden]);
 
   const enterEditing = useCallback(() => {
+    closeOpen();
     setIsEditing(true);
-  }, []);
+    if (process.env.EXPO_OS === 'android') {
+      setBottomTabBarHidden(true);
+    }
+  }, [closeOpen, setBottomTabBarHidden]);
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
-  }, []);
+    if (process.env.EXPO_OS === 'android') {
+      setBottomTabBarHidden(false);
+    }
+  }, [setBottomTabBarHidden]);
   const toggleAssistant = useCallback((assistantId: string) => {
     setSelectedIds((current) => toggleSelection(current, assistantId));
   }, []);
@@ -238,12 +244,6 @@ function AssistantListRow({
   const swipeableRef = useRef<SwipeableMethods>(null);
   const isSwipeOpen = useSharedValue(0);
   const pressProgress = useSharedValue(0);
-
-  useEffect(() => {
-    if (isEditing) {
-      swipeableRef.current?.close();
-    }
-  }, [isEditing]);
 
   const handleDeletePress = useCallback(() => {
     swipeableRef.current?.close();

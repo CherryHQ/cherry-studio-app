@@ -1,5 +1,4 @@
 import { Stack, useRouter } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -10,7 +9,6 @@ import {
   useMessageSelectionActions,
   useMessageSelectionState,
 } from '@/frontend/components/messageTabs';
-import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { MessagePager } from '../components/MessagePager';
 import { MessageScopeTabs } from '../components/MessageScopeTabs';
@@ -22,15 +20,11 @@ export function MessagesScreen() {
   const { scope, setScope } = useMessageScope();
   const { enterEditing, exitEditing } = useMessageSelectionActions();
   const { isEditing } = useMessageSelectionState();
-  const headerHeight = useHeaderHeight();
   const isConversationScope = scope === 'conversations';
 
   return (
     <>
-      <View
-        className="flex-1 bg-background"
-        style={{ paddingTop: isLiquidGlassAvailable ? headerHeight : 0 }}
-      >
+      <View className="flex-1 bg-background">
         <MessagePager />
         <SelectionControls />
       </View>

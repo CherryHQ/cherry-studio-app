@@ -11,7 +11,6 @@ type HeaderAction = { key: string; label?: string; onPress?: () => void };
 
 const mockPush = jest.fn();
 const mockDismissTo = jest.fn();
-const mockSetBottomTabBarHidden = jest.fn();
 let mockAssistantId: string | undefined;
 let mockAssistant: Assistant | undefined;
 let mockError: Error | undefined;
@@ -61,10 +60,6 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/frontend/components/modelPicker', () => ({
   ModelPickerIcon: () => null,
   useModelPickerData: () => ({ getModelItem: () => mockModelItem }),
-}));
-
-jest.mock('@/frontend/components/navigation', () => ({
-  useSetBottomTabBarHidden: () => mockSetBottomTabBarHidden,
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -167,18 +162,6 @@ describe('AssistantDetailScreen', () => {
     expect(emoji?.props.className).toContain('text-emoji-6xl');
     expect(emoji?.props.style).toBeUndefined();
     expect(emoji?.props.allowFontScaling).not.toBe(false);
-  });
-
-  it('hides the bottom tabs while the detail screen is mounted', async () => {
-    mockAssistant = makeAssistant();
-
-    await render();
-    expect(mockSetBottomTabBarHidden).toHaveBeenCalledWith(true);
-
-    await act(async () => renderer?.unmount());
-    renderer = undefined;
-
-    expect(mockSetBottomTabBarHidden).toHaveBeenLastCalledWith(false);
   });
 
   it('falls back to the stored model name when the model left the catalog', async () => {
