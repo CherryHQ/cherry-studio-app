@@ -19,6 +19,8 @@ module.exports = {
     '/android/',
     '/packages/ai-core/',
     '/packages/ai-sdk-provider/',
+    // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
+    '/__tests__/_',
   ],
   moduleNameMapper: {
     '^lucide-uniwind/png/generated/(.*)$':
