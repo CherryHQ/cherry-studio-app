@@ -44,22 +44,33 @@ export default function AssistantListScreen() {
   const setBottomTabBarHidden = useSetBottomTabBarHidden();
   const bottomInset = useMessageListBottomInset();
   const [isEditing, setIsEditing] = useState(false);
-  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [pendingDeletionIds, setPendingDeletionIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [searchText, setSearchText] = useState('');
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const isBatchDeleting = pendingDeletionIds.size > 0;
+
+  const visibleAssistants = useMemo(
+    () =>
+      pendingDeletionIds.size === 0
+        ? assistants
+        : assistants.filter((assistant) => !pendingDeletionIds.has(assistant.id)),
+    [assistants, pendingDeletionIds],
+  );
 
   const filteredAssistants = useMemo(() => {
     const query = searchText.trim().toLocaleLowerCase();
     if (!query) {
-      return assistants;
+      return visibleAssistants;
     }
 
-    return assistants.filter((assistant) =>
+    return visibleAssistants.filter((assistant) =>
       [assistant.name, assistant.modelName].some((value) =>
         value?.toLocaleLowerCase().includes(query),
       ),
     );
-  }, [assistants, searchText]);
+  }, [searchText, visibleAssistants]);
 
   useEffect(() => {
     if (process.env.EXPO_OS !== 'android') {
@@ -70,13 +81,17 @@ export default function AssistantListScreen() {
   }, [setBottomTabBarHidden]);
 
   const enterEditing = useCallback(() => {
+    if (isBatchDeleting) {
+      return;
+    }
+
     closeOpen();
     setSearchText('');
     setIsEditing(true);
     if (process.env.EXPO_OS === 'android') {
       setBottomTabBarHidden(true);
     }
-  }, [closeOpen, setBottomTabBarHidden]);
+  }, [closeOpen, isBatchDeleting, setBottomTabBarHidden]);
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
@@ -88,11 +103,11 @@ export default function AssistantListScreen() {
     setSelectedIds((current) => toggleSelection(current, assistantId));
   }, []);
   const toggleAllAssistants = useCallback(() => {
-    const assistantIds = assistants.map((assistant) => assistant.id);
+    const assistantIds = visibleAssistants.map((assistant) => assistant.id);
     setSelectedIds((current) =>
       areAllSelected(current, assistantIds) ? new Set() : new Set(assistantIds),
     );
-  }, [assistants]);
+  }, [visibleAssistants]);
 
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/new');
@@ -113,13 +128,13 @@ export default function AssistantListScreen() {
     () => [
       {
         accessibilityLabel: t(isEditing ? 'common.done' : 'common.edit'),
-        disabled: assistants.length === 0 || isBatchDeleting,
+        disabled: visibleAssistants.length === 0 || isBatchDeleting,
         key: 'edit-assistants',
         label: t(isEditing ? 'common.done' : 'common.edit'),
         onPress: isEditing ? exitEditing : enterEditing,
       },
     ],
-    [assistants.length, enterEditing, exitEditing, isBatchDeleting, isEditing, t],
+    [enterEditing, exitEditing, isBatchDeleting, isEditing, t, visibleAssistants.length],
   );
   const openAssistantDetail = useCallback(
     (assistantId: string) => {
@@ -152,14 +167,14 @@ export default function AssistantListScreen() {
       return;
     }
 
-    setIsBatchDeleting(true);
+    setPendingDeletionIds(new Set(ids));
     exitEditing();
     try {
       await deleteAssistants(ids);
     } catch {
       showMessage({ title: t('assistant.selection.deleteFailed') });
     } finally {
-      setIsBatchDeleting(false);
+      setPendingDeletionIds(new Set());
     }
   }, [deleteAssistants, exitEditing, selectedIds, showMessage, t]);
   const requestDeleteSelectedAssistants = useCallback(() => {
@@ -223,7 +238,7 @@ export default function AssistantListScreen() {
               />
             ))}
           </View>
-        ) : assistants.length === 0 ? (
+        ) : visibleAssistants.length === 0 ? (
           <AssistantEmptyState isLoading={isLoading} onCreate={openCreateAssistant} />
         ) : (
           <View className="items-center px-4 py-12">

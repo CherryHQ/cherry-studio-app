@@ -10,6 +10,7 @@ import type { MessageScope } from '@/frontend/components/messageTabs';
 import { MessageScopeTabs } from './MessageScopeTabs';
 
 type MessageHeaderProps = {
+  isEditDisabled: boolean;
   isEditing: boolean;
   onEditPress: () => void;
   onNewPaintingPress: () => void;
@@ -19,6 +20,7 @@ type MessageHeaderProps = {
 };
 
 export const MessageHeader = memo(function MessageHeader({
+  isEditDisabled,
   isEditing,
   onEditPress,
   onNewPaintingPress,
@@ -33,7 +35,9 @@ export const MessageHeader = memo(function MessageHeader({
       <View className="w-[88px] items-start">
         <Pressable
           accessibilityRole="button"
-          className="h-11 justify-center pr-3 active:opacity-60"
+          accessibilityState={{ disabled: isEditDisabled }}
+          className="h-11 justify-center pr-3 active:opacity-60 disabled:opacity-35"
+          disabled={isEditDisabled}
           hitSlop={8}
           onPress={onEditPress}
         >

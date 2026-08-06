@@ -59,6 +59,7 @@ describe('MessageHeader', () => {
   let renderer: ReactTestRenderer | undefined;
   const onScopeChange = jest.fn();
   const defaultProps = {
+    isEditDisabled: false,
     isEditing: false,
     onEditPress: jest.fn(),
     onNewPaintingPress: jest.fn(),
@@ -121,5 +122,21 @@ describe('MessageHeader', () => {
     expect(
       renderer.root.findAllByType(Text).some((item) => item.props.children === 'Your drawings'),
     ).toBe(true);
+  });
+
+  it('disables editing while a deletion is pending', async () => {
+    await act(async () => {
+      renderer = create(<MessageHeader {...defaultProps} isEditDisabled />);
+    });
+
+    if (!renderer) {
+      throw new Error('MessageHeader test renderer was not created.');
+    }
+
+    const editButton = renderer.root.find(
+      (node) => node.props.accessibilityState?.disabled === true,
+    );
+    expect(editButton.props.disabled).toBe(true);
+    expect(editButton.props.className).toContain('disabled:opacity-35');
   });
 });

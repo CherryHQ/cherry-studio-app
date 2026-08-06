@@ -21,13 +21,17 @@ export function MessagesScreen() {
   const router = useRouter();
   const { scope, setScope } = useMessageScope();
   const { enterEditing, exitEditing } = useMessageSelectionActions();
-  const { isEditing } = useMessageSelectionState();
+  const { isDeletionPending, isEditing } = useMessageSelectionState();
   const isConversationScope = scope === 'conversations';
   const [searchText, setSearchText] = useState('');
   const handleEnterEditing = useCallback(() => {
+    if (isDeletionPending) {
+      return;
+    }
+
     setSearchText('');
     enterEditing();
-  }, [enterEditing]);
+  }, [enterEditing, isDeletionPending]);
   const handleScopeChange = useCallback(
     (nextScope: MessageScope) => {
       setSearchText('');
@@ -71,6 +75,7 @@ export function MessagesScreen() {
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button
           accessibilityLabel={t(isEditing ? 'common.done' : 'common.edit')}
+          disabled={isDeletionPending}
           onPress={isEditing ? exitEditing : handleEnterEditing}
         >
           {t(isEditing ? 'common.done' : 'common.edit')}

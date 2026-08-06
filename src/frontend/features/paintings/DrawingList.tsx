@@ -17,6 +17,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import {
   useMessageListBottomInset,
+  useMessagePendingDeletionIds,
   useMessageScope,
   useMessageSelectionActions,
   useMessageSelectionState,
@@ -57,6 +58,7 @@ export function DrawingList() {
   const router = useRouter();
   const { scope } = useMessageScope();
   const { isEditing, selectedIds } = useMessageSelectionState();
+  const pendingDeletionIds = useMessagePendingDeletionIds('drawings');
   const { toggleId } = useMessageSelectionActions();
   const selectionSource = usePaintingSelectionSource(isEditing && scope === 'drawings');
   useRegisterSelectionSource('drawings', selectionSource);
@@ -66,7 +68,14 @@ export function DrawingList() {
   const paintings = usePaintings();
   const gallery = usePaintingGalleryItems(paintings.paintings);
   const columnWidth = (windowWidth - pageEdge * 2 - galleryGap) / 2;
-  const columns = useMemo(() => distributeMasonryItems(gallery.data ?? []), [gallery.data]);
+  const visibleGalleryItems = useMemo(
+    () =>
+      pendingDeletionIds.size === 0
+        ? (gallery.data ?? [])
+        : (gallery.data ?? []).filter((item) => !pendingDeletionIds.has(item.painting.id)),
+    [gallery.data, pendingDeletionIds],
+  );
+  const columns = useMemo(() => distributeMasonryItems(visibleGalleryItems), [visibleGalleryItems]);
   const namedColumns = [
     { items: columns[0], key: 'left' },
     { items: columns[1], key: 'right' },
@@ -233,7 +242,7 @@ export function DrawingList() {
         <View className="h-32 items-center justify-center">
           <ActivityIndicator />
         </View>
-      ) : (gallery.data?.length ?? 0) === 0 ? (
+      ) : visibleGalleryItems.length === 0 ? (
         <View className="h-32 items-center justify-center px-6">
           <Pressable
             accessibilityLabel={t('painting.history.create')}

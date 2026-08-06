@@ -20,6 +20,7 @@ const mockAssistant = {
   modelName: 'Mock Chat Model',
 } as Assistant;
 let mockPinnedTopicIds: readonly string[] = [];
+let mockPendingDeletionIds: ReadonlySet<string> = new Set();
 
 jest.mock('@legendapp/list/react-native', () => {
   const React = jest.requireActual('react');
@@ -133,8 +134,13 @@ jest.mock('../context/TopicListProvider', () => ({
 
 jest.mock('@/frontend/components/messageTabs', () => ({
   useMessageListBottomInset: () => 0,
+  useMessagePendingDeletionIds: () => mockPendingDeletionIds,
   useMessageSelectionActions: () => ({ toggleId: jest.fn() }),
-  useMessageSelectionState: () => ({ isEditing: false, selectedIds: new Set() }),
+  useMessageSelectionState: () => ({
+    isDeletionPending: mockPendingDeletionIds.size > 0,
+    isEditing: false,
+    selectedIds: new Set(),
+  }),
   useRegisterSelectionSource: () => undefined,
 }));
 
@@ -151,6 +157,7 @@ describe('TopicList pin action', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPendingDeletionIds = new Set();
     mockPinnedTopicIds = [];
   });
 
@@ -199,5 +206,15 @@ describe('TopicList pin action', () => {
     expect(emoji?.props.className).not.toContain('h-12');
     expect(emoji?.props.style).toBeUndefined();
     expect(emoji?.props.allowFontScaling).not.toBe(false);
+  });
+
+  it('hides a topic immediately while its deletion is pending', async () => {
+    mockPendingDeletionIds = new Set(['topic-1']);
+
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Pinned topic' })).toHaveLength(0);
   });
 });

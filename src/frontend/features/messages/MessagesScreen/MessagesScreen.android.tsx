@@ -24,13 +24,17 @@ export function MessagesScreen() {
   const router = useRouter();
   const { scope, setScope } = useMessageScope();
   const { enterEditing, exitEditing } = useMessageSelectionActions();
-  const { isEditing } = useMessageSelectionState();
+  const { isDeletionPending, isEditing } = useMessageSelectionState();
   const isConversationScope = scope === 'conversations';
   const [searchText, setSearchText] = useState('');
   const handleEnterEditing = useCallback(() => {
+    if (isDeletionPending) {
+      return;
+    }
+
     setSearchText('');
     enterEditing();
-  }, [enterEditing]);
+  }, [enterEditing, isDeletionPending]);
   const handleScopeChange = useCallback(
     (nextScope: MessageScope) => {
       setSearchText('');
@@ -44,6 +48,7 @@ export function MessagesScreen() {
   return (
     <SafeAreaView className="flex-1 bg-background" edges={['top']} style={{ flex: 1 }}>
       <MessageHeader
+        isEditDisabled={isDeletionPending}
         isEditing={isEditing}
         onEditPress={isEditing ? exitEditing : handleEnterEditing}
         onNewPaintingPress={() => router.push('/paintings')}

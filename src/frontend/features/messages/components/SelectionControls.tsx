@@ -15,7 +15,7 @@ export function SelectionControls() {
   const { showConfirmation, showMessage } = useAppAlert();
   const { scope } = useMessageScope();
   const source = useMessageSelectionSource(scope);
-  const { exitEditing, toggleAll } = useMessageSelectionActions();
+  const { beginDeletion, finishDeletion, toggleAll } = useMessageSelectionActions();
   const { isEditing, selectedIds } = useMessageSelectionState();
   const selectedCount = selectedIds.size;
 
@@ -33,15 +33,18 @@ export function SelectionControls() {
       confirmLabel: t('common.delete'),
       description: t(source.copy.deleteMessage, { count: ids.length }),
       onConfirm: () => {
-        exitEditing();
-        void source.deleteSelected(ids).catch(() => {
-          showMessage({ title: t(source.copy.deleteFailed) });
-        });
+        beginDeletion(scope, ids);
+        void source
+          .deleteSelected(ids)
+          .catch(() => {
+            showMessage({ title: t(source.copy.deleteFailed) });
+          })
+          .finally(() => finishDeletion(scope, ids));
       },
       role: 'destructive',
       title: t(source.copy.deleteTitle),
     });
-  }, [exitEditing, selectedIds, showConfirmation, showMessage, source, t]);
+  }, [beginDeletion, finishDeletion, scope, selectedIds, showConfirmation, showMessage, source, t]);
 
   return (
     <>

@@ -21,6 +21,7 @@ import Animated, {
 
 import {
   useMessageListBottomInset,
+  useMessagePendingDeletionIds,
   useMessageSelectionActions,
   useMessageSelectionState,
   useRegisterSelectionSource,
@@ -105,6 +106,7 @@ const TopicListView = memo(function TopicListView() {
   const { assistants } = useAssistantsApi();
   const { toggleId } = useMessageSelectionActions();
   const { isEditing, selectedIds } = useMessageSelectionState();
+  const pendingDeletionIds = useMessagePendingDeletionIds('conversations');
   const selectionSource = useTopicSelectionSource();
   useRegisterSelectionSource('conversations', selectionSource);
   const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
@@ -119,6 +121,13 @@ const TopicListView = memo(function TopicListView() {
   const contentContainerStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
     [bottomInset],
+  );
+  const visibleTopics = useMemo(
+    () =>
+      pendingDeletionIds.size === 0
+        ? topics
+        : topics.filter((topic) => !pendingDeletionIds.has(topic.id)),
+    [pendingDeletionIds, topics],
   );
   const listExtraData = useMemo(
     () => ({ isEditing, isPinActionDisabled, pinnedTopicIds, selectedIds }),
@@ -145,7 +154,7 @@ const TopicListView = memo(function TopicListView() {
         isEditing={isEditing}
         isPinActionDisabled={isPinActionDisabled}
         isPinned={pinnedTopicIdSet.has(item.id)}
-        isLast={index === topics.length - 1}
+        isLast={index === visibleTopics.length - 1}
         isSelected={selectedIds.has(item.id)}
         notifyClose={notifyClose}
         notifyWillOpen={notifyWillOpen}
@@ -170,7 +179,7 @@ const TopicListView = memo(function TopicListView() {
       requestRename,
       selectedIds,
       toggleId,
-      topics.length,
+      visibleTopics.length,
     ],
   );
 
@@ -193,7 +202,7 @@ const TopicListView = memo(function TopicListView() {
         className="flex-1 bg-background"
         contentInsetAdjustmentBehavior="never"
         contentContainerStyle={contentContainerStyle}
-        data={topics}
+        data={visibleTopics}
         estimatedItemSize={TOPIC_ITEM_ESTIMATED_HEIGHT}
         extraData={listExtraData}
         keyExtractor={topicKeyExtractor}
