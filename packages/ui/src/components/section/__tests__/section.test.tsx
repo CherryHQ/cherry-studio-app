@@ -178,4 +178,29 @@ describe('Section', () => {
 
     expect(row.props.accessibilityState).toEqual({ checked: true, disabled: undefined });
   });
+
+  test('supports custom row content while preserving item layout', () => {
+    const tree = render(
+      <Section>
+        <Section.Item testID="custom-row">
+          <View testID="custom-content" />
+        </Section.Item>
+      </Section>,
+    );
+    const row = tree.root.find(
+      (node) =>
+        node.props.testID === 'custom-row' &&
+        typeof node.props.className === 'string' &&
+        node.props.className.includes('px-3 py-2'),
+    );
+    const contentContainer = tree.root.find(
+      (node) =>
+        typeof node.props.className === 'string' &&
+        node.props.className.includes('min-w-0 flex-1') &&
+        node.findAllByProps({ testID: 'custom-content' }).length > 0,
+    );
+
+    expect(row).toBeDefined();
+    expect(contentContainer).toBeDefined();
+  });
 });

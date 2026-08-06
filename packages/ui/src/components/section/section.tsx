@@ -22,6 +22,7 @@ function SectionItem({
   accessibilityLabel,
   accessibilityRole,
   accessibilityState,
+  children,
   className,
   description,
   destructive = false,
@@ -49,21 +50,24 @@ function SectionItem({
     disabled && 'opacity-40',
     className,
   );
-  const content = (
-    <>
-      {leading ? <View className="shrink-0 items-center justify-center">{leading}</View> : null}
-      <View className="min-w-0 flex-1 gap-1">
-        {renderTextSlot(label, cn('text-base', destructive ? 'text-danger' : 'text-foreground'))}
-        {description ? renderTextSlot(description, 'text-sm text-muted-foreground') : null}
-      </View>
-      {trailing ? <View className="shrink-0 items-center justify-center">{trailing}</View> : null}
-      {shouldShowChevron ? (
-        <View className="shrink-0" testID="section-chevron">
-          <ChevronRightIcon className="size-5 text-muted-foreground" strokeWidth={2} />
+  const content =
+    children !== undefined ? (
+      <View className="min-w-0 flex-1">{children}</View>
+    ) : (
+      <>
+        {leading ? <View className="shrink-0 items-center justify-center">{leading}</View> : null}
+        <View className="min-w-0 flex-1 gap-1">
+          {renderTextSlot(label, cn('text-base', destructive ? 'text-danger' : 'text-foreground'))}
+          {description ? renderTextSlot(description, 'text-sm text-muted-foreground') : null}
         </View>
-      ) : null}
-    </>
-  );
+        {trailing ? <View className="shrink-0 items-center justify-center">{trailing}</View> : null}
+        {shouldShowChevron ? (
+          <View className="shrink-0" testID="section-chevron">
+            <ChevronRightIcon className="size-5 text-muted-foreground" strokeWidth={2} />
+          </View>
+        ) : null}
+      </>
+    );
 
   if (onPress) {
     return (

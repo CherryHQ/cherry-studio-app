@@ -15,18 +15,34 @@ export type SectionProps = Omit<ViewProps, 'children'> & {
   title?: ReactNode;
 };
 
-export type SectionItemProps = AccessibilityProps & {
+type SectionItemBaseProps = AccessibilityProps & {
   className?: string;
-  description?: ReactNode;
   destructive?: boolean;
   disabled?: boolean;
-  label: ReactNode;
-  leading?: ReactNode;
   onPress?: () => void;
   onPressIn?: PressableProps['onPressIn'];
   onPressOut?: PressableProps['onPressOut'];
-  showChevron?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
+};
+
+type SectionItemSlotsProps = {
+  children?: never;
+  description?: ReactNode;
+  label: ReactNode;
+  leading?: ReactNode;
+  showChevron?: boolean;
   trailing?: ReactNode;
 };
+
+type SectionItemCustomProps = {
+  children: ReactNode;
+  description?: never;
+  label?: never;
+  leading?: never;
+  showChevron?: never;
+  trailing?: never;
+};
+
+export type SectionItemProps = SectionItemBaseProps &
+  (SectionItemSlotsProps | SectionItemCustomProps);
