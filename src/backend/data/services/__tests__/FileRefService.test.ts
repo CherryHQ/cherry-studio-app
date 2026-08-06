@@ -1,6 +1,6 @@
+import { createServiceTestDatabase } from '../../serviceTestDatabase';
 import { FileEntryService } from '../FileEntryService';
 import { FileRefService } from '../FileRefService';
-import { createServiceTestDatabase } from './helpers/serviceTestDatabase';
 
 jest.mock('uuid', () => ({
   v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
