@@ -1,0 +1,86 @@
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import WebSearchCompressionMethodScreen from '../WebSearchCompressionMethodScreen';
+import WebSearchDefaultProviderScreen from '../WebSearchDefaultProviderScreen';
+
+const mockCompressionChange = jest.fn();
+const mockProviderChange = jest.fn();
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
+
+jest.mock('lucide-uniwind/png', () => ({ CheckIcon: () => null }));
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const { createElement } = jest.requireActual('react');
+  const Section = (props: object) => createElement('Section', props);
+  Section.Item = (props: object) => createElement('SectionItem', props);
+  return { Section };
+});
+
+jest.mock('@/frontend/components/headers', () => ({ BackHeader: () => null }));
+jest.mock('@/frontend/components/nativePrimitives', () => ({ Image: () => null }));
+jest.mock('../../hooks/useWebSearchProviderPreferences', () => ({
+  useWebSearchProviderPreferences: () => ({
+    compressionMethod: {
+      onValueChange: mockCompressionChange,
+      options: [
+        { label: 'None', value: 'none' },
+        { label: 'Cutoff', value: 'cutoff' },
+      ],
+      value: 'none',
+    },
+    searchKeywords: {
+      onValueChange: mockProviderChange,
+      options: [
+        { label: 'Tavily', value: 'tavily' },
+        { label: 'Exa', value: 'exa' },
+      ],
+      value: 'tavily',
+    },
+  }),
+}));
+jest.mock('../utils/providerIcons', () => ({ resolveWebSearchProviderIcon: () => undefined }));
+
+describe('Web Search selection screens', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    jest.clearAllMocks();
+  });
+
+  test('selects the default provider without automatically leaving the screen', () => {
+    act(() => {
+      renderer = create(<WebSearchDefaultProviderScreen />);
+    });
+
+    const rows = renderer!.root.findAllByType('SectionItem');
+    expect(rows.map((row) => row.props.accessibilityState)).toEqual([
+      { checked: true },
+      { checked: false },
+    ]);
+
+    act(() => rows[1].props.onPress());
+    expect(mockProviderChange).toHaveBeenCalledWith('exa');
+  });
+
+  test('selects the compression method without automatically leaving the screen', () => {
+    act(() => {
+      renderer = create(<WebSearchCompressionMethodScreen />);
+    });
+
+    const rows = renderer!.root.findAllByType('SectionItem');
+    expect(rows.map((row) => row.props.accessibilityState)).toEqual([
+      { checked: true },
+      { checked: false },
+    ]);
+
+    act(() => rows[1].props.onPress());
+    expect(mockCompressionChange).toHaveBeenCalledWith('cutoff');
+  });
+});

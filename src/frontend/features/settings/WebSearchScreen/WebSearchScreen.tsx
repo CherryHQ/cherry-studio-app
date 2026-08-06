@@ -1,19 +1,18 @@
 import { Section } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
 import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useRouter } from 'expo-router';
+import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
 
 import { SettingNumberInput } from '../components/SettingNumberInput';
-import { SettingSelect, type SettingSelectOption } from '../components/SettingSelect';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
+import { resolveWebSearchProviderIcon } from './utils/providerIcons';
 
 export default function WebSearchSettingsScreen() {
   const { t } = useTranslation();
@@ -21,9 +20,11 @@ export default function WebSearchSettingsScreen() {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const webSearchProviders = useWebSearchProviderPreferences();
-  const searchKeywordProviderOptions = useWebSearchProviderIconOptions(
-    webSearchProviders.searchKeywords.options,
-    iconTheme,
+  const selectedSearchProvider = webSearchProviders.searchKeywords.options.find(
+    (option) => option.value === webSearchProviders.searchKeywords.value,
+  );
+  const selectedCompressionMethod = webSearchProviders.compressionMethod.options.find(
+    (option) => option.value === webSearchProviders.compressionMethod.value,
   );
   const webSearchProviderItems = useMemo(
     () =>
@@ -53,12 +54,13 @@ export default function WebSearchSettingsScreen() {
         <Section title={t('settings.websearch.general.title')}>
           <Section.Item
             label={t('settings.websearch.defaultProvider')}
+            onPress={() => router.push('/settings/websearch/default-provider')}
             trailing={
-              <SettingSelect
-                label={t('settings.websearch.defaultProvider')}
-                options={searchKeywordProviderOptions}
-                value={webSearchProviders.searchKeywords.value}
-                onValueChange={webSearchProviders.searchKeywords.onValueChange}
+              <SelectionValue
+                imageSource={
+                  resolveWebSearchProviderIcon(webSearchProviders.searchKeywords.value)?.[iconTheme]
+                }
+                label={selectedSearchProvider?.label ?? t('settings.select.placeholder')}
               />
             }
           />
@@ -74,12 +76,10 @@ export default function WebSearchSettingsScreen() {
           />
           <Section.Item
             label={t('settings.websearch.compressionMethod')}
+            onPress={() => router.push('/settings/websearch/compression-method')}
             trailing={
-              <SettingSelect
-                label={t('settings.websearch.compressionMethod')}
-                options={webSearchProviders.compressionMethod.options}
-                value={webSearchProviders.compressionMethod.value}
-                onValueChange={webSearchProviders.compressionMethod.onValueChange}
+              <SelectionValue
+                label={selectedCompressionMethod?.label ?? t('settings.select.placeholder')}
               />
             }
           />
@@ -121,28 +121,25 @@ export default function WebSearchSettingsScreen() {
   );
 }
 
-function useWebSearchProviderIconOptions(
-  options: SettingSelectOption<WebSearchProviderId>[],
-  iconTheme: 'dark' | 'light',
-) {
-  return useMemo(
-    () =>
-      options.map((option) => ({
-        ...option,
-        imageSource: resolveWebSearchProviderIcon(option.value)?.[iconTheme],
-      })),
-    [iconTheme, options],
+function SelectionValue({
+  imageSource,
+  label,
+}: {
+  imageSource?: React.ComponentProps<typeof Image>['source'];
+  label: string;
+}) {
+  return (
+    <View className="min-w-0 max-w-52 flex-row items-center justify-end gap-2">
+      {imageSource ? (
+        <Image className="size-5 shrink-0" contentFit="contain" source={imageSource} />
+      ) : null}
+      <Text
+        className="min-w-0 shrink text-right text-base text-default-foreground"
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <ChevronRightIcon className="size-5 shrink-0 text-default-foreground" strokeWidth={2} />
+    </View>
   );
-}
-
-function resolveWebSearchProviderIcon(providerId: WebSearchProviderId) {
-  if (providerId === 'fetch') {
-    return resolveProviderIcon('cherryin');
-  }
-
-  if (providerId === 'exa-mcp') {
-    return resolveProviderIcon('exa') ?? resolveProviderIcon('mcp');
-  }
-
-  return resolveProviderIcon(providerId);
 }
