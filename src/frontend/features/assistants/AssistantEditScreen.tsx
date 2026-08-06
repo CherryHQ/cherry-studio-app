@@ -23,8 +23,8 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
+import { SingleSelectionSheet } from '@/frontend/components/selectionSheet';
 import { usePreference } from '@/frontend/data/hooks';
-import { SettingSelect } from '@/frontend/features/settings/components/SettingSelect';
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
@@ -96,6 +96,7 @@ function AssistantEditForm({
   const { servers: mcpServers } = useMcpServersApi();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [isMcpModeSheetOpen, setIsMcpModeSheetOpen] = useState(false);
   const [defaultModelPreference] = usePreference('chat.default_model_id');
   const [form, setForm] = useState<AssistantFormState>(() => createFormState(assistant));
   const [hasPickedModel, setHasPickedModel] = useState(false);
@@ -160,6 +161,17 @@ function AssistantEditForm({
     ],
     [t],
   );
+  const selectedMcpMode = mcpModeOptions.find((option) => option.value === form.mcpMode);
+  const openMcpModeSheet = useCallback(() => {
+    Keyboard.dismiss();
+    setIsMcpModeSheetOpen(true);
+  }, []);
+  const closeMcpModeSheet = useCallback(() => {
+    setIsMcpModeSheetOpen(false);
+  }, []);
+  const handleMcpModeSelect = useCallback((value: McpMode) => {
+    setForm((current) => ({ ...current, mcpMode: value }));
+  }, []);
   const handleSave = useCallback(async () => {
     const dto = buildAssistantDto(form, assistant?.settings);
 
@@ -363,17 +375,28 @@ function AssistantEditForm({
               onChangeText={(value) => updateForm('maxToolCalls', value)}
             />
           ) : null}
-          <View className="min-h-10 flex-row items-center justify-between gap-4">
+          <Pressable
+            accessibilityLabel={t('assistant.form.mcpMode.label')}
+            accessibilityRole="button"
+            className="min-h-10 flex-row items-center justify-between gap-4 active:opacity-70"
+            onPress={openMcpModeSheet}
+          >
             <Text className="min-w-0 flex-1 font-medium text-base text-foreground">
               {t('assistant.form.mcpMode.label')}
             </Text>
-            <SettingSelect
-              label={t('assistant.form.mcpMode.label')}
-              options={mcpModeOptions}
-              value={form.mcpMode}
-              onValueChange={(value) => updateForm('mcpMode', value)}
-            />
-          </View>
+            <View className="min-w-0 max-w-48 flex-row items-center justify-end gap-1">
+              <Text
+                className="min-w-0 shrink text-right text-base text-default-foreground"
+                numberOfLines={1}
+              >
+                {selectedMcpMode?.label}
+              </Text>
+              <ChevronDownIcon
+                className="size-5 shrink-0 text-default-foreground"
+                strokeWidth={2}
+              />
+            </View>
+          </Pressable>
           {form.mcpMode === 'manual' ? (
             mcpServers.length > 0 ? (
               <View className="gap-3">
@@ -404,6 +427,18 @@ function AssistantEditForm({
         isOpen={isEmojiPickerOpen}
         onClose={closeEmojiPicker}
         onSelect={handleEmojiSelect}
+      />
+      <SingleSelectionSheet
+        closeAccessibilityLabel={t('common.close')}
+        emptyText={t('settings.select.placeholder')}
+        heightFraction={0.6}
+        isOpen={isMcpModeSheetOpen}
+        onClose={closeMcpModeSheet}
+        onSelect={handleMcpModeSelect}
+        options={mcpModeOptions}
+        selectedValue={form.mcpMode}
+        testID="assistant-mcp-mode-selection"
+        title={t('assistant.form.mcpMode.label')}
       />
     </>
   );

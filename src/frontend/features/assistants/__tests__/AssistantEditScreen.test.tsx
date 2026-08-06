@@ -79,6 +79,13 @@ jest.mock('@/frontend/components/modelPicker', () => ({
   }),
 }));
 
+jest.mock('@/frontend/components/selectionSheet', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    SingleSelectionSheet: (props: object) => createElement('SingleSelectionSheet', props),
+  };
+});
+
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockDefaultModelPreference, jest.fn()],
 }));
@@ -95,10 +102,6 @@ jest.mock('@/frontend/hooks/chat', () => ({
 
 jest.mock('@/frontend/hooks/mcp/useMcpServers', () => ({
   useMcpServersApi: () => ({ servers: [] }),
-}));
-
-jest.mock('@/frontend/features/settings/components/SettingSelect', () => ({
-  SettingSelect: () => null,
 }));
 
 jest.mock('../components/EmojiPickerBottomSheet', () => ({
@@ -292,6 +295,35 @@ describe('AssistantEditScreen', () => {
       }),
     );
     expect(mockRouterBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('selects the MCP mode from a sheet and persists it', async () => {
+    mockAssistant = makeAssistant();
+    mockIsLoading = false;
+    render();
+
+    const mcpModeButton = renderer!.root.find(
+      (node) =>
+        node.props.accessibilityLabel === 'assistant.form.mcpMode.label' &&
+        node.props.accessibilityRole === 'button',
+    );
+    act(() => mcpModeButton.props.onPress());
+
+    let sheet = renderer!.root.findByType('SingleSelectionSheet');
+    expect(sheet.props.heightFraction).toBe(0.6);
+    expect(sheet.props.isOpen).toBe(true);
+    expect(sheet.props.selectedValue).toBe('auto');
+
+    act(() => sheet.props.onSelect('manual'));
+    sheet = renderer!.root.findByType('SingleSelectionSheet');
+    expect(sheet.props.selectedValue).toBe('manual');
+
+    await save();
+
+    expect(mockUpdateAssistant).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ settings: expect.objectContaining({ mcpMode: 'manual' }) }),
+    );
   });
 
   it('rejects a non-positive max tool call value', async () => {
