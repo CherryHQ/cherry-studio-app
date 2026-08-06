@@ -35,44 +35,38 @@ jest.mock('@cherrystudio/ui/components', () => {
     TextInput: MockTextInput,
     View: MockView,
   } = jest.requireActual('react-native');
+  const MockSection = ({ children, ...props }: { children?: ReactNode }) => (
+    <MockView {...props}>{children}</MockView>
+  );
+  MockSection.Item = ({ children, label, trailing, ...props }: Record<string, unknown>) => (
+    <MockPressable {...props}>
+      <MockText>{label}</MockText>
+      {children}
+      {trailing}
+    </MockPressable>
+  );
 
   return {
     Description: MockText,
     FieldError: MockText,
     Input: MockTextInput,
     Label: MockText,
+    Section: MockSection,
     Slider: (props: Record<string, unknown>) => <MockView {...props} />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
     TextField: MockView,
   };
 });
 
-jest.mock('heroui-native/select', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  function MockSelect({ children, ...props }: { children?: ReactNode }) {
-    return (
-      <MockView testID="mock-select" {...props}>
-        {children}
-      </MockView>
-    );
-  }
-  MockSelect.Trigger = MockView;
-  MockSelect.Value = MockView;
-  MockSelect.Portal = MockView;
-  MockSelect.Overlay = MockView;
-  MockSelect.Content = MockView;
-  MockSelect.Item = MockView;
-  MockSelect.ItemLabel = MockView;
-  MockSelect.ItemIndicator = MockView;
-
-  return { Select: MockSelect };
-});
-
 jest.mock('lucide-uniwind/png', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
-  return { ChevronDownIcon: MockView, XIcon: MockView };
+  return {
+    CheckIcon: MockView,
+    ChevronLeftIcon: MockView,
+    ChevronRightIcon: MockView,
+    XIcon: MockView,
+  };
 });
 
 // SlotText 拖 reanimated 全链，jest 下必崩；这里只关心文本内容。
@@ -109,6 +103,7 @@ const resolvedMode = {
       },
       numImages: { default: 1, max: 4, min: 1, type: 'range' },
       quality: { default: 'high', options: ['low', 'high'], type: 'enum' },
+      resolution: { default: '1K', options: ['1K', '2K'], type: 'enum' },
       promptEnhancement: { default: true, type: 'switch' },
       negativePrompt: { multiline: true, type: 'text' },
     },
@@ -182,9 +177,14 @@ describe('PaintingSettingsBottomSheet', () => {
         .findByProps({ accessibilityLabel: 'painting.settings.param.negativePrompt' })
         .props.onChangeText('no blur'),
     );
+    act(() => renderer?.root.findByProps({ testID: 'painting-setting-quality' }).props.onPress());
+    expect(renderer.root.findByProps({ testID: 'painting-setting-options-quality' })).toBeDefined();
     act(() =>
-      renderer?.root.findByProps({ testID: 'mock-select' }).props.onValueChange({ value: 'low' }),
+      renderer?.root.findByProps({ testID: 'painting-setting-option-quality-low' }).props.onPress(),
     );
+    expect(renderer.root.findByProps({ testID: 'painting-setting-options-quality' })).toBeDefined();
+    act(() => renderer?.root.findByProps({ testID: 'painting-settings-back' }).props.onPress());
+
     const squareChip = renderer.root.findAll(
       (node) =>
         typeof node.props.onPress === 'function' &&
@@ -218,6 +218,47 @@ describe('PaintingSettingsBottomSheet', () => {
     expect(mockBottomSheetProps.index).toBe(0);
     act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
     expect(onDismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens every select enum as an in-sheet secondary page', () => {
+    const onValueChange = jest.fn();
+    act(() => {
+      renderer = create(
+        <PaintingSettingsBottomSheet
+          onDismiss={jest.fn()}
+          onValueChange={onValueChange}
+          resolvedMode={resolvedMode}
+          values={{ quality: 'high', resolution: '1K', size: '1024x1024' }}
+        />,
+      );
+    });
+
+    act(() => renderer?.root.findByProps({ testID: 'painting-setting-quality' }).props.onPress());
+    expect(renderer?.root.findByProps({ testID: 'painting-settings-back' })).toBeDefined();
+    expect(
+      renderer?.root.findByProps({ testID: 'painting-setting-options-quality' }),
+    ).toBeDefined();
+
+    act(() =>
+      renderer?.root.findByProps({ testID: 'painting-setting-option-quality-low' }).props.onPress(),
+    );
+    expect(onValueChange).toHaveBeenCalledWith('quality', 'low');
+    expect(
+      renderer?.root.findByProps({ testID: 'painting-setting-options-quality' }),
+    ).toBeDefined();
+
+    act(() => renderer?.root.findByProps({ testID: 'painting-settings-back' }).props.onPress());
+    expect(renderer?.root.findByProps({ testID: 'painting-setting-quality' })).toBeDefined();
+
+    act(() =>
+      renderer?.root.findByProps({ testID: 'painting-setting-resolution' }).props.onPress(),
+    );
+    expect(
+      renderer?.root.findByProps({ testID: 'painting-setting-options-resolution' }),
+    ).toBeDefined();
+    expect(
+      renderer?.root.findAllByProps({ testID: 'painting-setting-options-quality' }),
+    ).toHaveLength(0);
   });
 
   it('hides custom dimensions until the paired enum selects custom', () => {
