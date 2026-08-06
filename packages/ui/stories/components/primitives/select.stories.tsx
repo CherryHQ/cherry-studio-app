@@ -40,8 +40,8 @@ function SelectExample({
         }}
         value={value}
       >
-        <Select.Trigger accessibilityLabel="Provider">
-          <Select.Value placeholder="Select a provider" />
+        <Select.Trigger accessibilityLabel="Provider" className="w-44">
+          <Select.Value className="min-w-0" numberOfLines={1} placeholder="Select a provider" />
           <Select.TriggerIndicator />
         </Select.Trigger>
         <Select.Portal>
@@ -49,7 +49,7 @@ function SelectExample({
           <Select.Content presentation="popover" width="trigger">
             {options.map((option) => (
               <Select.Item key={option.value} label={option.label} value={option.value}>
-                <Select.ItemLabel />
+                <Select.ItemLabel numberOfLines={1} />
                 <Select.ItemIndicator />
               </Select.Item>
             ))}

@@ -21,10 +21,19 @@ jest.mock('heroui-native/select', () => {
   Root.Content = (props: object) =>
     React.createElement(View, { ...props, mockComponent: 'content' });
   Root.Item = (props: object) => React.createElement(View, { ...props, mockComponent: 'item' });
-  Root.ItemLabel = (props: object) => React.createElement(View, props);
+  Root.ItemLabel = (props: object) =>
+    React.createElement(View, { ...props, mockComponent: 'item-label' });
   Root.ItemIndicator = (props: object) => React.createElement(View, props);
 
   return { Select: Root };
+});
+
+jest.mock('heroui-native/utils', () => {
+  const { twMerge } = require('tailwind-merge');
+
+  return {
+    cn: (...values: unknown[]) => twMerge(values.filter(Boolean).join(' ')),
+  };
 });
 
 describe('Select', () => {
@@ -68,6 +77,7 @@ describe('Select', () => {
 
     const root = renderer!.root.findByProps({ mockComponent: 'select' });
     const trigger = renderer!.root.findByProps({ mockComponent: 'trigger' });
+    const value = renderer!.root.findByProps({ mockComponent: 'value' });
     const content = renderer!.root.findByProps({ mockComponent: 'content' });
     const items = renderer!.root
       .findAllByProps({ mockComponent: 'item' })
@@ -76,6 +86,8 @@ describe('Select', () => {
     expect(root.props.isDisabled).toBeUndefined();
     expect(root.props.value).toEqual({ label: 'OpenAI', value: 'openai' });
     expect(trigger.props.accessibilityLabel).toBe('Provider');
+    expect(trigger.props.className).toBe('border border-border shadow-none');
+    expect(value.props.className).toBe('text-base');
     expect(content.props.presentation).toBe('popover');
     expect(content.props.width).toBe('trigger');
     expect(items.map((item) => [item.props.label, item.props.value])).toEqual([
@@ -83,6 +95,12 @@ describe('Select', () => {
       ['OpenAI', 'openai'],
       ['Anthropic', 'anthropic'],
     ]);
+    expect(
+      renderer!.root
+        .findAllByProps({ mockComponent: 'item-label' })
+        .filter((item) => item.type === View)
+        .map((item) => item.props.className),
+    ).toEqual(['text-base', 'text-base', 'text-base']);
 
     act(() => root.props.onValueChange({ label: 'Anthropic', value: 'anthropic' }));
     expect(onValueChange).toHaveBeenCalledWith({ label: 'Anthropic', value: 'anthropic' });
