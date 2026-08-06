@@ -8,15 +8,12 @@ import { ScrollView, View } from 'react-native';
 import { BackHeader } from '@/frontend/components/headers';
 
 import {
-  buildAddableEndpointOptions,
   buildProviderApiServiceEndpointUpdates,
   canEditProviderEndpoint,
   type EndpointDraft,
-  getEndpointLabel,
   getProviderApiServiceEndpointDirtyState,
   ProviderApiServiceEndpointForm,
   ProviderApiServiceSaveError,
-  useProviderApiServiceConfirmDialog,
   useProviderApiServiceEndpointDraft,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
@@ -78,14 +75,12 @@ function ProviderEndpointSettingsForm({
   const [endpointErrors, setEndpointErrors] = useState<Partial<Record<EndpointType, string>>>({});
   const [pendingEndpoint, setPendingEndpoint] = useState<EndpointType | null>(null);
   const pendingEndpointRef = useRef<EndpointType | null>(null);
-  const { addEndpoint, draft, removeEndpoint, updateBaseUrl, updatePrimaryEndpoint } =
-    useProviderApiServiceEndpointDraft(provider);
+  const { draft, updateBaseUrl } = useProviderApiServiceEndpointDraft(provider);
   const hasUnsavedChanges =
     Object.keys(endpointErrors).length > 0 ||
     getProviderApiServiceEndpointDirtyState({ draft, provider });
   const isSaving = pendingEndpoint !== null;
-  const { confirmDialog, requestConfirm } = useProviderApiServiceConfirmDialog();
-  const { discardDialog, requestClose } = useProviderApiServiceSheetClose({
+  const { requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
   });
@@ -150,87 +145,18 @@ function ProviderEndpointSettingsForm({
           ...draft.baseUrlByEndpoint,
           [endpoint]: value,
         },
-        visibleEndpointTypes:
-          value.trim() || endpoint === draft.primaryEndpoint
-            ? draft.visibleEndpointTypes
-            : draft.visibleEndpointTypes.filter((item) => item !== endpoint),
       };
 
       updateBaseUrl(endpoint, value);
 
-      void (async () => {
-        const didSave = await saveEndpointDraft({ endpoint, nextDraft });
-
-        if (didSave && !value.trim() && endpoint !== draft.primaryEndpoint) {
-          removeEndpoint(endpoint);
-        }
-      })();
+      void saveEndpointDraft({ endpoint, nextDraft });
     },
-    [draft, removeEndpoint, saveEndpointDraft, updateBaseUrl],
-  );
-
-  const handleRemoveEndpoint = useCallback(
-    (endpoint: EndpointType) => {
-      if (endpoint === draft.primaryEndpoint) {
-        return;
-      }
-
-      requestConfirm({
-        message: t('settings.provider.apiService.removeEndpointMessage', {
-          endpoint: getEndpointLabel(endpoint),
-        }),
-        onConfirm: () => {
-          const { [endpoint]: _removedBaseUrl, ...baseUrlByEndpoint } = draft.baseUrlByEndpoint;
-          const nextDraft = {
-            ...draft,
-            baseUrlByEndpoint,
-            visibleEndpointTypes: draft.visibleEndpointTypes.filter((item) => item !== endpoint),
-          };
-
-          void (async () => {
-            const didSave = await saveEndpointDraft({ endpoint, nextDraft });
-
-            if (didSave) {
-              removeEndpoint(endpoint);
-              setEndpointErrors((current) => removeEndpointError(current, endpoint));
-            }
-          })();
-        },
-        title: t('settings.provider.apiService.removeEndpointTitle'),
-      });
-    },
-    [draft, removeEndpoint, requestConfirm, saveEndpointDraft, t],
-  );
-
-  const handlePrimaryEndpointChange = useCallback(
-    (endpoint: EndpointType) => {
-      if (endpoint === draft.primaryEndpoint) return;
-
-      const previousEndpoint = draft.primaryEndpoint;
-      const nextDraft = { ...draft, primaryEndpoint: endpoint };
-      updatePrimaryEndpoint(endpoint);
-
-      void (async () => {
-        const didSave = await saveEndpointDraft({ endpoint, nextDraft });
-        if (!didSave) updatePrimaryEndpoint(previousEndpoint);
-      })();
-    },
-    [draft, saveEndpointDraft, updatePrimaryEndpoint],
-  );
-
-  const handleAddEndpoint = useCallback(
-    (endpoint: EndpointType) => {
-      addEndpoint(endpoint);
-      setEndpointErrors((current) => removeEndpointError(current, endpoint));
-    },
-    [addEndpoint],
+    [draft, saveEndpointDraft, updateBaseUrl],
   );
 
   return (
     <>
       <BackHeader title={t('settings.provider.apiService.manageEndpoints')} onBack={requestClose} />
-      {discardDialog}
-      {confirmDialog}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -242,20 +168,12 @@ function ProviderEndpointSettingsForm({
       >
         <View className="px-4 py-5">
           <ProviderApiServiceEndpointForm
-            addableEndpointOptions={buildAddableEndpointOptions(
-              provider,
-              draft.visibleEndpointTypes,
-            )}
             baseUrlByEndpoint={draft.baseUrlByEndpoint}
             endpointErrors={endpointErrors}
+            endpointTypes={draft.visibleEndpointTypes}
             pendingEndpoint={pendingEndpoint}
-            primaryEndpoint={draft.primaryEndpoint}
-            visibleEndpointTypes={draft.visibleEndpointTypes}
-            onAddEndpoint={handleAddEndpoint}
             onBaseUrlChange={handleBaseUrlChange}
             onBaseUrlCommit={handleBaseUrlCommit}
-            onPrimaryEndpointChange={handlePrimaryEndpointChange}
-            onRemoveEndpoint={handleRemoveEndpoint}
           />
         </View>
       </ScrollView>

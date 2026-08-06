@@ -20,6 +20,7 @@
     ".agents/**",
     ".context/**",
     ".expo/**",
+    ".rnstorybook/storybook.requires.ts",
     ".vscode/**",
     "android/**",
     "ios/**",

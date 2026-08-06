@@ -11,6 +11,7 @@ import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
+import { AppAlertProvider } from '@/frontend/components/AppAlertProvider';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -31,9 +32,11 @@ export default function RootLayout() {
             <AppBootstrapProvider>
               <AppBootstrapGate>
                 <NavigationThemeProvider>
-                  <BottomSheetProvider>
-                    <RootStack />
-                  </BottomSheetProvider>
+                  <AppAlertProvider>
+                    <BottomSheetProvider>
+                      <RootStack />
+                    </BottomSheetProvider>
+                  </AppAlertProvider>
                 </NavigationThemeProvider>
               </AppBootstrapGate>
             </AppBootstrapProvider>

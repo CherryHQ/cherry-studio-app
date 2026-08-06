@@ -1,6 +1,7 @@
 const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
 const { getBundleModeMetroConfig } = require('react-native-worklets/bundleMode');
+const { withStorybook } = require('@storybook/react-native/withStorybook');
 const { withUniwindConfig } = require('uniwind/metro');
 
 let config = getDefaultConfig(__dirname);
@@ -14,6 +15,7 @@ config.watchFolders.push(workletsDir);
 
 // Apply Bundle Mode config
 config = getBundleModeMetroConfig(config);
+config = withStorybook(config);
 
 module.exports = withUniwindConfig(config, {
   cssEntryFile: './src/frontend/styles/global.css',

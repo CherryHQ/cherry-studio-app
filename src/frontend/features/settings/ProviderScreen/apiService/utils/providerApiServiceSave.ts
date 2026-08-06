@@ -31,11 +31,6 @@ export function buildProviderApiServiceEndpointUpdates({
 }
 
 function validateEndpointDraft(draft: EndpointDraft) {
-  const primaryBaseUrl = draft.baseUrlByEndpoint[draft.primaryEndpoint]?.trim() ?? '';
-  if (!primaryBaseUrl || !isValidEndpointBaseUrl(primaryBaseUrl)) {
-    throw new ProviderApiServiceSaveError('invalid-base-url');
-  }
-
   for (const endpoint of new Set([draft.primaryEndpoint, ...draft.visibleEndpointTypes])) {
     const baseUrl = draft.baseUrlByEndpoint[endpoint] ?? '';
 

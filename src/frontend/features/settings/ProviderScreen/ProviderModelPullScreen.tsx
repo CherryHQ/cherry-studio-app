@@ -1,10 +1,8 @@
+import { Button, Section, Spinner } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Accordion } from 'heroui-native/accordion';
-import { Spinner } from 'heroui-native/spinner';
-import { cn } from 'heroui-native/utils';
 import { MinusIcon, PlusIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,7 +11,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BackHeader } from '@/frontend/components/headers';
 
 import { useProviderDetailSettings } from './detail';
-import { ProviderModelRow, providerModelRowHeight } from './models/components/ProviderModelRow';
+import {
+  ProviderModelRow,
+  providerModelRowEstimatedHeight,
+} from './models/components/ProviderModelRow';
 import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
 import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
@@ -40,8 +41,6 @@ type PullTranslator = ReturnType<typeof useTranslation>['t'];
 type PullListExtraData = {
   appliedIds: ReadonlySet<UniqueModelId>;
   displayedPreview: ProviderModelPullPreview;
-  expandedSections: readonly ProviderModelPullSectionKey[];
-  onSectionExpandedChange: (section: ProviderModelPullSectionKey, isExpanded: boolean) => void;
   onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
   onToggleSection: (models: readonly Model[], section: ProviderModelPullSectionKey) => void;
   pendingIds: ReadonlySet<UniqueModelId>;
@@ -142,10 +141,6 @@ function ProviderModelPullPreviewPage({
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
-  const [expandedSections, setExpandedSections] = useState<ProviderModelPullSectionKey[]>([
-    'added',
-    'missing',
-  ]);
   const [typeFilter, setTypeFilter] = useState<ProviderModelTypeFilter>('all');
   const missingCount = preview.missing.length;
   const searchedPreview = useMemo(
@@ -174,88 +169,70 @@ function ProviderModelPullPreviewPage({
     [missingCount],
   );
   const listItems = useMemo(
-    () => buildProviderModelPullListItems(displayedPreview, expandedSections, visibleSections),
-    [displayedPreview, expandedSections, visibleSections],
-  );
-  const handleSectionExpandedChange = useCallback(
-    (section: ProviderModelPullSectionKey, isExpanded: boolean) => {
-      setExpandedSections((current) => {
-        if (isExpanded) {
-          return current.includes(section) ? current : [...current, section];
-        }
-
-        return current.filter((item) => item !== section);
-      });
-    },
-    [],
+    () => buildProviderModelPullListItems(displayedPreview, visibleSections),
+    [displayedPreview, visibleSections],
   );
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
       appliedIds,
       displayedPreview,
-      expandedSections,
-      onSectionExpandedChange: handleSectionExpandedChange,
       onToggleModel: toggleModel,
       onToggleSection: toggleSection,
       pendingIds,
       provider,
       t,
     }),
-    [
-      appliedIds,
-      displayedPreview,
-      expandedSections,
-      handleSectionExpandedChange,
-      pendingIds,
-      provider,
-      t,
-      toggleModel,
-      toggleSection,
-    ],
+    [appliedIds, displayedPreview, pendingIds, provider, t, toggleModel, toggleSection],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
 
   return (
-    <LegendList
-      alwaysBounceVertical={false}
-      contentContainerStyle={styles.listContent}
-      contentInsetAdjustmentBehavior="automatic"
-      data={listItems}
-      drawDistance={320}
-      estimatedItemSize={providerModelRowHeight}
-      extraData={listExtraData}
-      getItemType={getPullListItemType}
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
-      keyExtractor={pullListKeyExtractor}
-      ListFooterComponent={
-        isSearchEmpty ? (
-          <View className="items-center justify-center px-4 py-10">
-            <Text className="text-center text-base text-default-foreground">
-              {t('settings.provider.models.search.empty')}
-            </Text>
+    <>
+      {process.env.EXPO_OS === 'ios' ? (
+        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+      ) : null}
+      <LegendList
+        alwaysBounceVertical={false}
+        contentContainerStyle={styles.listContent}
+        contentInsetAdjustmentBehavior="automatic"
+        data={listItems}
+        drawDistance={320}
+        estimatedItemSize={providerModelRowEstimatedHeight}
+        extraData={listExtraData}
+        getItemType={getPullListItemType}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        keyExtractor={pullListKeyExtractor}
+        ListFooterComponent={
+          isSearchEmpty ? (
+            <View className="items-center justify-center px-4 py-10">
+              <Text className="text-center text-base text-default-foreground">
+                {t('settings.provider.models.search.empty')}
+              </Text>
+            </View>
+          ) : null
+        }
+        ListHeaderComponent={
+          // One gap for the whole screen: the Android search field, the filter
+          // bar and the first section are all 12 apart.
+          <View className="gap-3 pb-3">
+            {process.env.EXPO_OS === 'ios' ? null : (
+              <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+            )}
+            <ProviderModelTypeFilterBar
+              counts={typeCounts}
+              selectedFilter={typeFilter}
+              onSelect={setTypeFilter}
+            />
           </View>
-        ) : null
-      }
-      ListHeaderComponent={
-        // One gap for the whole screen: the search field, the filter bar and
-        // the first section are all 12 apart, the same distance two sections
-        // keep from each other and the same the content keeps from the header.
-        <View className="gap-3 pb-3">
-          <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-          <ProviderModelTypeFilterBar
-            counts={typeCounts}
-            selectedFilter={typeFilter}
-            onSelect={setTypeFilter}
-          />
-        </View>
-      }
-      maintainVisibleContentPosition={false}
-      recycleItems
-      renderItem={renderPullListItem}
-      showsVerticalScrollIndicator={false}
-      style={styles.list}
-    />
+        }
+        maintainVisibleContentPosition={false}
+        recycleItems
+        renderItem={renderPullListItem}
+        showsVerticalScrollIndicator={false}
+        style={styles.list}
+      />
+    </>
   );
 }
 
@@ -293,16 +270,13 @@ function renderPullListItem({
       <PullSectionHeader
         actionLabel={listData.t(actionLabelKey)}
         count={sectionModels.length}
-        isExpanded={listData.expandedSections.includes(item.section)}
         isFirstSection={item.isFirstSection}
-        section={item.section}
         title={listData.t(
           isAddedSection
             ? 'settings.provider.models.pullAddedSection'
             : 'settings.provider.models.pullMissingSection',
         )}
         onActionPress={() => listData.onToggleSection(sectionModels, item.section)}
-        onExpandedChange={listData.onSectionExpandedChange}
       />
     );
   }
@@ -324,56 +298,29 @@ function renderPullListItem({
 function PullSectionHeader({
   actionLabel,
   count,
-  isExpanded,
   isFirstSection,
   onActionPress,
-  onExpandedChange,
-  section,
   title,
 }: {
   actionLabel: string;
   count: number;
-  isExpanded: boolean;
   isFirstSection: boolean;
   onActionPress: () => void;
-  onExpandedChange: (section: ProviderModelPullSectionKey, isExpanded: boolean) => void;
-  section: ProviderModelPullSectionKey;
   title: string;
 }) {
   return (
-    <Accordion
-      animation={false}
-      className={cn('w-full', !isFirstSection && 'pt-3')}
-      hideSeparator
-      isCollapsible
-      selectionMode="single"
-      value={isExpanded ? section : undefined}
-      onValueChange={(value: string | undefined) => onExpandedChange(section, value === section)}
-    >
-      <Accordion.Item value={section}>
-        {/* Padded like a row so the title lines up with the model names below it. */}
-        <View className="relative min-h-11 w-full">
-          <Accordion.Trigger className="min-h-11 w-full px-4 py-2 pr-32">
-            <View className="min-w-0 flex-1">
-              <Text className="font-medium text-default-foreground text-sm" numberOfLines={1}>
-                {title} ({count})
-              </Text>
-            </View>
-            <Accordion.Indicator className="absolute right-4" iconProps={{ size: 18 }} />
-          </Accordion.Trigger>
-          <Pressable
-            accessibilityLabel={actionLabel}
-            accessibilityRole="button"
-            className="absolute top-0 right-11 bottom-0 z-10 justify-center px-1 active:opacity-60 disabled:opacity-40"
-            disabled={count === 0}
-            hitSlop={6}
-            onPress={onActionPress}
-          >
-            <Text className="font-medium text-primary text-sm">{actionLabel}</Text>
-          </Pressable>
-        </View>
-      </Accordion.Item>
-    </Accordion>
+    <Section.Header className={isFirstSection ? 'pb-2' : 'mt-3 pb-2'} title={`${title} (${count})`}>
+      <Pressable
+        accessibilityLabel={actionLabel}
+        accessibilityRole="button"
+        className="shrink-0 justify-center px-1 active:opacity-60 disabled:opacity-40"
+        disabled={count === 0}
+        hitSlop={6}
+        onPress={onActionPress}
+      >
+        <Text className="font-medium text-primary text-sm">{actionLabel}</Text>
+      </Pressable>
+    </Section.Header>
   );
 }
 
@@ -396,6 +343,7 @@ const PullModelRow = memo(function PullModelRow({
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
 }) {
+  const { t } = useTranslation();
   const isMissing = section === 'missing';
   const handleToggle = useCallback(() => {
     onToggleModel(model, section);
@@ -406,7 +354,6 @@ const PullModelRow = memo(function PullModelRow({
 
   return (
     <ProviderModelRow
-      isDisabled={isPending}
       isFirst={isFirst}
       isLast={isLast}
       model={model}
@@ -414,17 +361,25 @@ const PullModelRow = memo(function PullModelRow({
       // Desktop tints the whole row once the model is in the provider.
       surfaceClassName={isApplied && !isMissing ? 'bg-success/10' : undefined}
       tone={isMissing && !isApplied ? 'struck' : 'default'}
-      onPress={handleToggle}
     >
-      {/* Not a button of its own: the row is the target, so this only pictures
-          which way the next tap goes. */}
-      <View className="size-7 shrink-0 items-center justify-center rounded-lg">
-        {showsMinus ? (
-          <MinusIcon className="size-4 text-danger" strokeWidth={2} />
-        ) : (
-          <PlusIcon className="size-4 text-primary" strokeWidth={2} />
+      <Button
+        accessibilityLabel={t(
+          showsMinus ? 'settings.provider.models.remove' : 'settings.provider.models.add',
         )}
-      </View>
+        accessibilityState={{ busy: isPending }}
+        disabled={isPending}
+        hitSlop={6}
+        icon={
+          showsMinus ? (
+            <MinusIcon className="text-danger" strokeWidth={2} />
+          ) : (
+            <PlusIcon className="text-primary" strokeWidth={2} />
+          )
+        }
+        onPress={handleToggle}
+        size="sm"
+        variant="ghost"
+      />
     </ProviderModelRow>
   );
 });

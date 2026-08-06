@@ -61,6 +61,10 @@ glass/solid surface, and the safe-area bottom gap. The body is `children`.
 - `isCloseDisabled?` — disables the close button and blocks gesture / scrim
   dismissal while a blocking task owns the sheet (e.g. a running check).
 - `headerRight?` — optional right-header slot (defaults to a balancing spacer).
+- `onBack?` — switches the header into secondary-page mode: a back button on
+  the left calls this callback, while the close button moves to the right.
+- `backAccessibilityLabel?` — accessibility label for the secondary-page back
+  button.
 - `closeAccessibilityLabel?`, `testID?`.
 
 ## `useBottomSheet()`

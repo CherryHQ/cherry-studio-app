@@ -1,7 +1,7 @@
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useRouter } from 'expo-router';
 import { PlusIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
@@ -17,6 +17,11 @@ export function McpScreen() {
   const router = useRouter();
   const { error, isLoading, refetch, servers } = useMcpServersApi();
   const { summaries } = useMcpServerRuntimeSummaries(servers);
+  const [pressedServerId, setPressedServerId] = useState<string>();
+
+  const handleServerPressedChange = useCallback((id: string, isPressed: boolean) => {
+    setPressedServerId((currentId) => (isPressed ? id : currentId === id ? undefined : currentId));
+  }, []);
 
   const openCreate = useCallback(() => {
     router.push({ pathname: './mcp/[serverId]', params: { serverId: 'new' } });
@@ -74,14 +79,18 @@ export function McpScreen() {
             />
           </View>
         ) : (
-          <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
+          <View className="overflow-hidden rounded-2xl bg-settings-grouped-surface">
             {servers.map((server, index) => {
+              const previousServerId = servers[index - 1]?.id;
               const summary = summaries[server.id];
               const status = getServerStatus(server, summary);
 
               return (
                 <SettingsServiceRow
                   id={server.id}
+                  hideSeparator={
+                    pressedServerId === server.id || pressedServerId === previousServerId
+                  }
                   isEnabled={server.isActive}
                   key={server.id}
                   name={server.name}
@@ -92,6 +101,7 @@ export function McpScreen() {
                       params: { serverId: server.id },
                     })
                   }
+                  onPressedChange={handleServerPressedChange}
                   statusLabel={t(`settings.mcp.list.status.${status}`)}
                   statusTone={
                     status === 'connected' ? 'success' : status === 'error' ? 'danger' : 'default'

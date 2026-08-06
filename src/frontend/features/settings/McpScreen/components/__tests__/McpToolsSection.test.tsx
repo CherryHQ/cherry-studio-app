@@ -1,5 +1,5 @@
+import { Switch } from '@cherrystudio/ui/components';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
-import { Switch } from 'heroui-native/switch';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -32,16 +32,13 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('heroui-native/spinner', () => {
-  const { View: MockView } = jest.requireActual('react-native');
+jest.mock('@cherrystudio/ui/components', () => {
+  const { Pressable: MockPressable, View: MockView } = jest.requireActual('react-native');
 
-  return { Spinner: MockView };
-});
-
-jest.mock('heroui-native/switch', () => {
-  const { Pressable: MockPressable } = jest.requireActual('react-native');
-
-  return { Switch: (props: Record<string, unknown>) => <MockPressable {...props} /> };
+  return {
+    Spinner: (props: Record<string, unknown>) => <MockView {...props} />,
+    Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
+  };
 });
 
 jest.mock('heroui-native/toast', () => ({
@@ -123,7 +120,7 @@ describe('McpToolsSection auto-approve toggle', () => {
   /** The first tool row's switches, in column order: enabled, auto-approve. */
   async function toggleFirstTool(column: 'autoApprove' | 'enabled', isSelected: boolean) {
     const toggle = renderer.root.findAllByType(Switch)[column === 'enabled' ? 0 : 1];
-    await act(async () => toggle.props.onSelectedChange(isSelected));
+    await act(async () => toggle.props.onValueChange(isSelected));
   }
 
   async function toggleFirstToolAutoApprove(autoApprove: boolean) {
@@ -139,7 +136,7 @@ describe('McpToolsSection auto-approve toggle', () => {
   test('disables both tool controls in read-only mode', () => {
     render([], [], {}, true);
 
-    expect(renderer.root.findAllByType(Switch).map((toggle) => toggle.props.isDisabled)).toEqual([
+    expect(renderer.root.findAllByType(Switch).map((toggle) => toggle.props.disabled)).toEqual([
       true,
       true,
       true,
@@ -169,16 +166,14 @@ describe('McpToolsSection auto-approve toggle', () => {
     const toggles = renderer.root.findAllByType(Switch);
 
     await act(async () => {
-      toggles[0].props.onSelectedChange(false);
+      toggles[0].props.onValueChange(false);
       await Promise.resolve();
     });
 
-    expect(renderer.root.findAllByType(Switch).every((toggle) => toggle.props.isDisabled)).toBe(
-      true,
-    );
+    expect(renderer.root.findAllByType(Switch).every((toggle) => toggle.props.disabled)).toBe(true);
 
     await act(async () => {
-      toggles[2].props.onSelectedChange(false);
+      toggles[2].props.onValueChange(false);
       await Promise.resolve();
     });
     expect(onToggleTool).toHaveBeenCalledTimes(1);
@@ -189,9 +184,7 @@ describe('McpToolsSection auto-approve toggle', () => {
       await Promise.resolve();
     });
 
-    expect(renderer.root.findAllByType(Switch).some((toggle) => toggle.props.isDisabled)).toBe(
-      false,
-    );
+    expect(renderer.root.findAllByType(Switch).some((toggle) => toggle.props.disabled)).toBe(false);
   });
 
   test('needs no tool list when no rule is wider than one tool', async () => {

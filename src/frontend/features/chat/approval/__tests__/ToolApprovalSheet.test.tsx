@@ -1,4 +1,4 @@
-import { Button } from 'heroui-native/button';
+import { Button } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -27,7 +27,7 @@ jest.mock('@/frontend/components/bottomSheet', () => {
   };
 });
 
-jest.mock('heroui-native/button', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { Text: MockText, View: MockView } = jest.requireActual('react-native');
 
   function MockButton({ children, ...props }: { children?: ReactNode }) {
@@ -140,8 +140,8 @@ describe('ToolApprovalSheet', () => {
   test('uses a solid danger action for denial', () => {
     render();
 
-    expect(findButton(denyLabel)?.props.variant).toBe('danger');
-    expect(findButton(allowLabel)?.props.variant).toBe('primary');
+    expect(findButton(denyLabel)?.props.variant).toBe('destructive');
+    expect(findButton(allowLabel)?.props.variant).toBe('default');
   });
 
   test('ignores a second decision while the first is still in flight', async () => {
@@ -158,8 +158,8 @@ describe('ToolApprovalSheet', () => {
       await Promise.resolve();
     });
 
-    expect(findButton(allowLabel)?.props.isDisabled).toBe(true);
-    expect(findButton(denyLabel)?.props.isDisabled).toBe(true);
+    expect(findButton(allowLabel)?.props.disabled).toBe(true);
+    expect(findButton(denyLabel)?.props.disabled).toBe(true);
 
     // Disabled is what the user sees; the guard in `submit` is what actually
     // holds. A second response to an approval already being settled comes back
@@ -171,7 +171,7 @@ describe('ToolApprovalSheet', () => {
     await act(async () => {
       settle();
     });
-    expect(findButton(allowLabel)?.props.isDisabled).toBe(false);
+    expect(findButton(allowLabel)?.props.disabled).toBe(false);
   });
 
   test('keeps the decided request on screen while the sheet closes', () => {

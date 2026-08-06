@@ -26,7 +26,7 @@ jest.mock('expo-glass-effect', () => {
 jest.mock('lucide-uniwind/png', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
-  return { XIcon: MockView };
+  return { ChevronLeftIcon: MockView, XIcon: MockView };
 });
 
 jest.mock('@/frontend/utils/constants', () => ({
@@ -163,6 +163,31 @@ describe('BottomSheet', () => {
     act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledWith('use');
+  });
+
+  test('shows back on the left and keeps close on the right for a secondary page', () => {
+    const onBack = jest.fn();
+    const onClose = jest.fn();
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          backAccessibilityLabel="Back"
+          closeAccessibilityLabel="Close"
+          onBack={onBack}
+          onClose={onClose}
+          testID="test-sheet"
+        >
+          <Text>body</Text>
+        </BottomSheet>,
+      );
+    });
+
+    act(() => renderer?.root.findByProps({ testID: 'test-sheet-back' }).props.onPress());
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(mockBottomSheetProps.index).toBe(1);
+
+    act(() => renderer?.root.findByProps({ testID: 'test-sheet-close' }).props.onPress());
+    expect(mockBottomSheetProps.index).toBe(0);
   });
 
   test('positions the close circle concentrically inside the top-left corner', () => {

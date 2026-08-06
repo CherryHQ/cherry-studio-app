@@ -19,6 +19,18 @@
       "import": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./components": {
+      "types": "./src/components/index.ts",
+      "react-native": "./src/components/index.ts",
+      "import": "./src/components/index.ts",
+      "default": "./src/components/index.ts"
+    },
+    "./utils": {
+      "types": "./src/utils/index.ts",
+      "react-native": "./src/utils/index.ts",
+      "import": "./src/utils/index.ts",
+      "default": "./src/utils/index.ts"
+    },
     "./icons": {
       "types": "./src/icons/index.ts",
       "react-native": "./src/icons/index.ts",
@@ -45,7 +57,13 @@
     }
   },
   "peerDependencies": {
+    "@expo/ui": "*",
+    "expo-glass-effect": "*",
+    "expo-linear-gradient": "*",
+    "heroui-native": "*",
     "react": "*",
-    "react-native": "*"
+    "react-native": "*",
+    "react-native-reanimated": "*",
+    "uniwind": "*"
   }
 }

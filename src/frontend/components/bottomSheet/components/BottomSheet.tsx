@@ -1,6 +1,6 @@
 import { type Detent, ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import { GlassView } from 'expo-glass-effect';
-import { XIcon } from 'lucide-uniwind/png';
+import { ChevronLeftIcon, XIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,6 +36,8 @@ const TOP_CORNER_RADIUS = bottomSheet.cornerRadius;
 const HEADER_INSET = Math.max(0, TOP_CORNER_RADIUS - bottomSheet.headerSideWidth / 2);
 
 type BottomSheetProps = {
+  // Accessibility label for the optional secondary-page back button.
+  backAccessibilityLabel?: string;
   children: ReactNode;
   // Accessibility label for the built-in circular close button.
   closeAccessibilityLabel?: string;
@@ -58,6 +60,8 @@ type BottomSheetProps = {
   isOpen?: boolean;
   // Fires once, after the closing animation settles, with the close reason.
   onClose: (reason: BottomSheetCloseReason) => void;
+  // Enables a secondary-page header: back on the left and close on the right.
+  onBack?: () => void;
   // Prefix for the derived part testIDs: `${testID}-sheet`, `-sheet-surface`,
   // `-sheet-bottom-gap`, `-header`, `-close`, `-close-glass`.
   testID?: string;
@@ -67,6 +71,7 @@ type BottomSheetProps = {
 };
 
 export function BottomSheet({
+  backAccessibilityLabel,
   children,
   closeAccessibilityLabel,
   detents = DEFAULT_DETENTS,
@@ -75,6 +80,7 @@ export function BottomSheet({
   isCloseDisabled = false,
   isOpen = true,
   onClose,
+  onBack,
   testID,
   title,
 }: BottomSheetProps) {
@@ -192,6 +198,27 @@ export function BottomSheet({
       testID={testID ? `${testID}-close` : undefined}
     />
   );
+  const closeControl = (
+    <BottomSheetHeaderControl
+      isInteractive={!isCloseButtonDisabled}
+      testID={testID ? `${testID}-close-glass` : undefined}
+    >
+      {closeButton}
+    </BottomSheetHeaderControl>
+  );
+  const backControl = onBack ? (
+    <BottomSheetHeaderControl
+      isInteractive={!isCloseButtonDisabled}
+      testID={testID ? `${testID}-back-glass` : undefined}
+    >
+      <BottomSheetBackButton
+        disabled={isCloseButtonDisabled}
+        label={backAccessibilityLabel}
+        onPress={onBack}
+        testID={testID ? `${testID}-back` : undefined}
+      />
+    </BottomSheetHeaderControl>
+  ) : null;
 
   return (
     // The provider must live *inside* ModalBottomSheet: the sheet hosts its
@@ -233,20 +260,7 @@ export function BottomSheet({
               style={styles.header}
               testID={testID ? `${testID}-header` : undefined}
             >
-              {isLiquidGlassAvailable ? (
-                <GlassView
-                  glassEffectStyle="regular"
-                  isInteractive={!isCloseButtonDisabled}
-                  style={styles.closeSurface}
-                  testID={testID ? `${testID}-close-glass` : undefined}
-                >
-                  {closeButton}
-                </GlassView>
-              ) : (
-                <View className="bg-surface-secondary" style={styles.closeSurface}>
-                  {closeButton}
-                </View>
-              )}
+              {backControl ?? closeControl}
 
               {typeof title === 'string' ? (
                 <Text
@@ -259,7 +273,7 @@ export function BottomSheet({
                 title
               )}
 
-              {headerRight ?? <View style={styles.headerSide} />}
+              {onBack ? closeControl : (headerRight ?? <View style={styles.headerSide} />)}
             </View>
 
             {children}
@@ -271,6 +285,57 @@ export function BottomSheet({
         </View>
       </BottomSheetContext.Provider>
     </ModalBottomSheet>
+  );
+}
+
+function BottomSheetHeaderControl({
+  children,
+  isInteractive,
+  testID,
+}: {
+  children: ReactNode;
+  isInteractive: boolean;
+  testID?: string;
+}) {
+  return isLiquidGlassAvailable ? (
+    <GlassView
+      glassEffectStyle="regular"
+      isInteractive={isInteractive}
+      style={styles.closeSurface}
+      testID={testID}
+    >
+      {children}
+    </GlassView>
+  ) : (
+    <View className="bg-surface-secondary" style={styles.closeSurface} testID={testID}>
+      {children}
+    </View>
+  );
+}
+
+function BottomSheetBackButton({
+  disabled,
+  label,
+  onPress,
+  testID,
+}: {
+  disabled: boolean;
+  label?: string;
+  onPress: () => void;
+  testID?: string;
+}) {
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="button"
+      className="h-full w-full items-center justify-center rounded-full active:opacity-60 disabled:opacity-40"
+      disabled={disabled}
+      hitSlop={8}
+      onPress={onPress}
+      testID={testID}
+    >
+      <ChevronLeftIcon className="size-5 text-foreground" strokeWidth={2.25} />
+    </Pressable>
   );
 }
 

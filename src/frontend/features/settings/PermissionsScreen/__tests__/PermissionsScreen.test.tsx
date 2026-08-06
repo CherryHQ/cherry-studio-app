@@ -27,37 +27,31 @@ jest.mock('../hooks/usePermissionPolicies', () => ({
 jest.mock('../hooks/usePermissionSystemStatuses', () => ({
   usePermissionSystemStatuses: () => ({ statuses: mockStatuses }),
 }));
-jest.mock('@/frontend/components/Section', () => ({
-  Section: ({
-    items,
+jest.mock('@cherrystudio/ui/components', () => {
+  const Section = ({ children }: { children: ReactNode }) => children;
+  Section.Item = function MockSectionItem({
+    label,
+    leading,
+    trailing,
   }: {
-    items: { accessory?: ReactNode; id: string; leading?: ReactNode; title: string }[];
-  }) => {
+    label: ReactNode;
+    leading?: React.ReactElement<{ source?: unknown }>;
+    trailing?: ReactNode;
+  }) {
     const { Fragment } = jest.requireActual('react');
     const { Text: MockText } = jest.requireActual('react-native');
     return (
       <Fragment>
-        {items.map((item) => (
-          <Fragment key={item.id}>
-            <MockText>{item.title}</MockText>
-            <MockText>{item.accessory ? 'custom-accessory' : 'default-accessory'}</MockText>
-            {item.leading}
-            {item.accessory}
-          </Fragment>
-        ))}
+        <MockText>{label}</MockText>
+        <MockText>{trailing ? 'custom-accessory' : 'default-accessory'}</MockText>
+        <MockText>{leading?.props.source ? 'image-source' : 'component-icon'}</MockText>
+        {trailing}
       </Fragment>
     );
-  },
-  // Stand-ins that report which leading variant the screen picked per platform.
-  SectionIcon: ({ icon }: { icon?: unknown }) => {
-    const { Text: MockText } = jest.requireActual('react-native');
-    return <MockText>{icon ? 'component-icon' : 'no-icon'}</MockText>;
-  },
-  SectionImage: ({ source }: { source?: unknown }) => {
-    const { Text: MockText } = jest.requireActual('react-native');
-    return <MockText>{source ? 'image-source' : 'no-image'}</MockText>;
-  },
-}));
+  };
+
+  return { Section };
+});
 
 describe('PermissionsSettingsScreen', () => {
   let renderer: ReactTestRenderer | undefined;

@@ -1,7 +1,56 @@
 # UI Package
 
-Shared Cherry Studio UI assets for the mobile app. This package owns the mobile
-WebP runtime for the desktop UI icon set.
+Shared Cherry Studio UI for the mobile app. This package owns product interaction
+components and the mobile WebP runtime for the desktop UI icon set.
+
+## Components
+
+Runtime imports use the component-only entry point so Metro does not traverse the icon registries:
+
+```tsx
+import { Button } from '@cherrystudio/ui/components';
+import { PlusIcon } from 'lucide-uniwind/png';
+
+<Button icon={<PlusIcon />} loading={isSaving} onPress={save} size="lg" variant="default">
+  Save
+</Button>;
+
+<Button accessibilityLabel="Add" icon={<PlusIcon />} onPress={add} />;
+```
+
+`Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
+`destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
+behavior. The `sm`, `default`, and `lg` sizes use content-driven typography and padding without
+fixed dimensions. The `icon` prop renders an icon before the label and automatically switches to
+the matching icon-only padding when no label is provided. Icon-only buttons must provide an
+`accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
+need an Expo UI `Host`.
+
+Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
+system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
+using padding for its touch target and letting its label shrink and grow the container.
+
+The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
+tokens. This workspace does so in `src/frontend/styles/global.css`.
+
+## Storybook
+
+Stories are development-only assets kept outside the runtime source tree, matching the desktop UI
+package structure:
+
+```txt
+packages/ui/stories/components/primitives/button.stories.tsx
+```
+
+Run the native Storybook entry with:
+
+```sh
+pnpm storybook
+```
+
+The command opens Storybook in Expo Go, keeping it isolated from the Cherry Studio development
+client. Use `pnpm storybook:clear` after changing Storybook or Metro configuration. Storybook is
+enabled by entry-point swapping, so the normal Expo entry and production bundles do not import it.
 
 ## Icon Sync
 

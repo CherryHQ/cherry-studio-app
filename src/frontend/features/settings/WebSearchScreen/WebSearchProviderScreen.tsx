@@ -3,17 +3,18 @@ import {
   type WebSearchProviderId,
 } from '@cherrystudio/universal/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/universal/data/presets/webSearchProviders';
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
+import { WebSearchProviderChrome } from './components/WebSearchProviderChrome/WebSearchProviderChrome';
 import {
   getWebSearchProviderOfficialWebsite,
   getWebSearchProviderPreset,
@@ -26,6 +27,7 @@ function isWebSearchProviderId(value: string): value is WebSearchProviderId {
 export default function WebSearchProviderSettingsScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string }>();
   const { t } = useTranslation();
+  const router = useRouter();
   const webSearchProviders = useWebSearchProviderPreferences();
   const validProviderId =
     providerId &&
@@ -60,8 +62,19 @@ export default function WebSearchProviderSettingsScreen() {
         : [],
     [officialWebsite, openOfficialWebsite, t],
   );
+  const openCheckScreen = useCallback(() => {
+    if (!provider) {
+      return;
+    }
 
-  if (!provider || provider.type !== 'api') {
+    Keyboard.dismiss();
+    router.push({
+      params: { providerId: provider.id, providerName: provider.name },
+      pathname: '/settings/websearch/[providerId]/check',
+    });
+  }, [provider, router]);
+
+  if (!provider) {
     return <Redirect href="/settings/websearch" />;
   }
 
@@ -75,7 +88,7 @@ export default function WebSearchProviderSettingsScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="px-4 py-5">
+        <View className="px-4 pt-5" style={styles.content}>
           <WebSearchApiManagementSection
             provider={provider}
             providerOverrides={webSearchProviders.providerOverrides.value}
@@ -86,6 +99,11 @@ export default function WebSearchProviderSettingsScreen() {
           />
         </View>
       </ScrollView>
+      <WebSearchProviderChrome onCheck={openCheckScreen} />
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { paddingBottom: 96 },
+});

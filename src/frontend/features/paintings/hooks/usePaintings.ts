@@ -1,5 +1,7 @@
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
+  type InfiniteData,
   keepPreviousData,
   useQueryClient,
   useQuery as useTanStackQuery,
@@ -14,10 +16,17 @@ import {
   useMutation,
   useQuery,
 } from '@/frontend/data';
+import {
+  dataApiCollectionFilters,
+  removeItemsFromInfiniteData,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
 import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
 const pageSize = 20;
+type PaintingListData = InfiniteData<CursorPaginationResponse<Painting>, string | undefined>;
 
 export type PaintingGalleryItem = {
   aspectRatio: number;
@@ -56,7 +65,26 @@ export function usePaintingIds({ enabled }: { enabled: boolean }) {
 export function useDeletePaintings() {
   const queryClient = useQueryClient();
   const mutation = useMutation('DELETE', '/paintings', {
-    refresh: ['/paintings'],
+    onMutate: async (variables) => {
+      const ids = new Set(variables?.query?.ids ?? []);
+      const paintings = await updateQueriesOptimistically<PaintingListData>(
+        queryClient,
+        dataApiCollectionFilters('/paintings'),
+        (current) => removeItemsFromInfiniteData(current, ids),
+      );
+      const paintingIds = await updateQueriesOptimistically<string[]>(
+        queryClient,
+        { exact: true, queryKey: ['/paintings/ids'] },
+        (current) => current?.filter((id) => !ids.has(id)),
+      );
+
+      return { paintingIds, paintings };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.paintingIds);
+      restoreQuerySnapshot(queryClient, context?.paintings);
+    },
+    refresh: ['/paintings', '/paintings/ids'],
   });
   const deletePaintings = mutation.trigger;
 

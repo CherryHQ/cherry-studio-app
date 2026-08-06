@@ -57,6 +57,7 @@ describe('ProviderDetailChrome.android', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete
+          checkAction={{ onPress: jest.fn() }}
           isActive={false}
           isDisabled={false}
           onDelete={onDelete}
@@ -93,6 +94,7 @@ describe('ProviderDetailChrome.android', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
+          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -147,11 +149,12 @@ describe('ProviderDetailChrome.android', () => {
     expect(onCheck).toHaveBeenCalledTimes(1);
   });
 
-  it('omits pull and check outside the models tab', async () => {
+  it('keeps check visible when pull is omitted outside the models tab', async () => {
     await act(async () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
+          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -161,6 +164,8 @@ describe('ProviderDetailChrome.android', () => {
     });
 
     expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Pull models' })).toHaveLength(0);
-    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Check models' })).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Check models' })).not.toHaveLength(
+      0,
+    );
   });
 });

@@ -1,5 +1,5 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { cn } from 'heroui-native/utils';
+import { cn } from '@cherrystudio/ui/utils';
 import {
   AudioLinesIcon,
   Code2Icon,

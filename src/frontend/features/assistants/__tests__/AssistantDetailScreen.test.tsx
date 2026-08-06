@@ -47,7 +47,7 @@ jest.mock('@/frontend/components/headers', () => ({
   },
 }));
 
-jest.mock('heroui-native/button', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { Pressable: MockPressable } = jest.requireActual('react-native');
 
   return { Button: MockPressable };

@@ -1,5 +1,5 @@
 // Android-only: mirrors the native iOS messages-tab header actions.
-import { Menu } from 'heroui-native/menu';
+import { Menu } from '@cherrystudio/ui/components';
 import { ImageIcon, MessageCircleIcon, SquarePenIcon } from 'lucide-uniwind/png';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import type { MessageScope } from '@/frontend/components/messageTabs';
 import { MessageScopeTabs } from './MessageScopeTabs';
 
 type MessageHeaderProps = {
+  isEditDisabled: boolean;
   isEditing: boolean;
   onEditPress: () => void;
   onNewPaintingPress: () => void;
@@ -19,6 +20,7 @@ type MessageHeaderProps = {
 };
 
 export const MessageHeader = memo(function MessageHeader({
+  isEditDisabled,
   isEditing,
   onEditPress,
   onNewPaintingPress,
@@ -33,7 +35,9 @@ export const MessageHeader = memo(function MessageHeader({
       <View className="w-[88px] items-start">
         <Pressable
           accessibilityRole="button"
-          className="h-11 justify-center pr-3 active:opacity-60"
+          accessibilityState={{ disabled: isEditDisabled }}
+          className="h-11 justify-center pr-3 active:opacity-60 disabled:opacity-35"
+          disabled={isEditDisabled}
           hitSlop={8}
           onPress={onEditPress}
         >
@@ -54,39 +58,35 @@ export const MessageHeader = memo(function MessageHeader({
       <View className="w-[88px] items-end">
         {isEditing ? null : (
           <View className="flex-row rounded-3xl bg-field android:shadow-sm">
-            <Menu presentation="popover">
-              <Menu.Trigger asChild>
-                <Pressable
-                  accessibilityLabel={t('navigation.new')}
-                  accessibilityRole="button"
-                  className="size-11 items-center justify-center rounded-3xl active:opacity-60"
-                  hitSlop={8}
-                  testID="topic-create-menu"
-                >
-                  <SquarePenIcon className="size-5 text-foreground" strokeWidth={2} />
-                </Pressable>
-              </Menu.Trigger>
-              <Menu.Portal>
-                <Menu.Overlay />
-                <Menu.Content align="end" placement="bottom" presentation="popover" width={210}>
-                  <Menu.Item
-                    className="flex-row items-center gap-3"
-                    onPress={onNewTopicPress}
-                    testID="topic-create-chat"
-                  >
-                    <MessageCircleIcon className="size-5 text-foreground" strokeWidth={2} />
-                    <Menu.ItemTitle>{t('navigation.newChat')}</Menu.ItemTitle>
-                  </Menu.Item>
-                  <Menu.Item
-                    className="flex-row items-center gap-3"
-                    onPress={onNewPaintingPress}
-                    testID="topic-create-painting"
-                  >
-                    <ImageIcon className="size-5 text-foreground" strokeWidth={2} />
-                    <Menu.ItemTitle>{t('navigation.newPainting')}</Menu.ItemTitle>
-                  </Menu.Item>
-                </Menu.Content>
-              </Menu.Portal>
+            <Menu
+              items={[
+                {
+                  icon: <MessageCircleIcon className="size-5 text-foreground" strokeWidth={2} />,
+                  id: 'new-chat',
+                  label: t('navigation.newChat'),
+                  onPress: onNewTopicPress,
+                  systemImage: 'message',
+                  testID: 'topic-create-chat',
+                },
+                {
+                  icon: <ImageIcon className="size-5 text-foreground" strokeWidth={2} />,
+                  id: 'new-painting',
+                  label: t('navigation.newPainting'),
+                  onPress: onNewPaintingPress,
+                  systemImage: 'paintbrush',
+                  testID: 'topic-create-painting',
+                },
+              ]}
+            >
+              <Pressable
+                accessibilityLabel={t('navigation.new')}
+                accessibilityRole="button"
+                className="size-11 items-center justify-center rounded-3xl active:opacity-60"
+                hitSlop={8}
+                testID="topic-create-menu"
+              >
+                <SquarePenIcon className="size-5 text-foreground" strokeWidth={2} />
+              </Pressable>
             </Menu>
           </View>
         )}

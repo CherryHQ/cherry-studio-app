@@ -19,6 +19,7 @@ type QueryState = { isPending: boolean; isError: boolean; isSuccess: boolean };
 type SectionProps = {
   apiKeysInput?: string;
   baseUrl?: string;
+  onApiKeysCommit?: (value: string) => void;
   provider?: Provider;
   showApiKeys: boolean;
   showBaseUrl: boolean;
@@ -47,6 +48,9 @@ let mockRedirectHref: unknown;
 let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
 let mockSectionRenders: SectionProps[];
+const mockReplaceApiKeys = jest.fn(async () => undefined);
+const mockShowConfirmation = jest.fn();
+const mockShowMessage = jest.fn();
 let queryClient: QueryClient;
 
 const providersBackend = {
@@ -71,15 +75,18 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
 }));
 
-jest.mock('@/frontend/components/confirmDialog', () => ({
-  useConfirmDialog: () => ({ confirmDialog: null, requestConfirm: jest.fn() }),
+jest.mock('@/frontend/components/AppAlertProvider', () => ({
+  useAppAlert: () => ({
+    showConfirmation: mockShowConfirmation,
+    showMessage: mockShowMessage,
+  }),
 }));
 
 jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('heroui-native/spinner', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   Spinner: () => {
     mockSpinnerRenderCount += 1;
     return null;
@@ -110,6 +117,7 @@ jest.mock('../apiService', () => ({
     apiKeysQuery: mockApiKeysQuery,
     authConfig: mockAuthConfig,
     authConfigQuery: mockAuthConfigQuery,
+    replaceApiKeysMutation: { mutateAsync: mockReplaceApiKeys },
   }),
 }));
 
@@ -145,25 +153,6 @@ jest.mock('../components/ProviderModelList', () => ({
   // The API management section is handed over as this list's header, so the stub has to
   // render it for the assertions below to see anything.
   ProviderModelList: ({ header }: { header?: ReactElement }) => header ?? null,
-}));
-
-jest.mock('../models/components/ProviderModelCheckSheet', () => ({
-  ProviderModelCheckSheet: () => null,
-}));
-
-jest.mock('../models/hooks/useProviderModelCheck', () => ({
-  useProviderModelCheck: () => ({
-    apiKeyOptions: [],
-    closeSheet: jest.fn(),
-    isChecking: false,
-    isSheetOpen: false,
-    openCheckSheet: jest.fn(),
-    selectedApiKeyId: undefined,
-    selectedModelId: undefined,
-    setSelectedApiKeyId: jest.fn(),
-    setSelectedModelId: jest.fn(),
-    startCheck: jest.fn(),
-  }),
 }));
 
 jest.mock('../models/hooks/useProviderModelPull', () => ({
@@ -218,6 +207,7 @@ describe('ProviderDetailScreen', () => {
     mockSpinnerRenderCount = 0;
     mockChromeRenderCount = 0;
     mockSectionRenders = [];
+    mockReplaceApiKeys.mockClear();
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
 
@@ -287,6 +277,22 @@ describe('ProviderDetailScreen', () => {
     rerender();
 
     expect(mockSectionRenders.at(-1)?.apiKeysInput).toBe('sk-a,sk-b');
+  });
+
+  it('persists API keys edited directly in the configuration field', () => {
+    loadEverything();
+    mockApiKeys = [
+      { id: 'key-a', isEnabled: true, key: 'sk-a' },
+      { id: 'key-b', isEnabled: false, key: 'sk-b' },
+    ];
+    render();
+
+    act(() => mockSectionRenders[0]?.onApiKeysCommit?.('next-a, next-b'));
+
+    expect(mockReplaceApiKeys).toHaveBeenCalledWith([
+      { id: 'key-a', isEnabled: true, key: 'next-a' },
+      { id: 'key-b', isEnabled: false, key: 'next-b' },
+    ]);
   });
 
   it('hides the API keys and base URL blocks for providers that use neither', () => {

@@ -7,11 +7,15 @@ type KeyFormProps = {
   apiKeys: readonly WebSearchApiKeyEntry[];
   onAdd: () => void;
   onCommitKey: (id: string, key: string) => void;
+  onRemove: (id: string) => void;
 };
 type ProviderOverrides = Record<string, { apiKeys?: string[] } | undefined>;
 
 let mockProviderOverrides: ProviderOverrides;
 let mockKeyFormProps: KeyFormProps | undefined;
+const mockSetPreference = jest.fn();
+const mockShowConfirmation = jest.fn();
+const mockShowMessage = jest.fn();
 
 jest.mock('expo-router', () => ({
   Redirect: () => null,
@@ -23,8 +27,11 @@ jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('@/frontend/components/confirmDialog', () => ({
-  useConfirmDialog: () => ({ confirmDialog: null, requestConfirm: jest.fn() }),
+jest.mock('@/frontend/components/AppAlertProvider', () => ({
+  useAppAlert: () => ({
+    showConfirmation: mockShowConfirmation,
+    showMessage: mockShowMessage,
+  }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -32,12 +39,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/data/hooks', () => ({
-  usePreference: () => [
-    mockProviderOverrides,
-    jest.fn().mockImplementation(async (next: ProviderOverrides) => {
-      mockProviderOverrides = next;
-    }),
-  ],
+  usePreference: () => [mockProviderOverrides, mockSetPreference],
 }));
 
 // Keep the real hook and key helpers; only the row UI is stubbed so the test can drive it.
@@ -68,8 +70,12 @@ describe('WebSearchApiKeySettingsScreen', () => {
   }
 
   beforeEach(() => {
+    jest.clearAllMocks();
     mockProviderOverrides = { tavily: { apiKeys: ['key-a'] } };
     mockKeyFormProps = undefined;
+    mockSetPreference.mockImplementation(async (next: ProviderOverrides) => {
+      mockProviderOverrides = next;
+    });
   });
 
   afterEach(() => {
@@ -125,4 +131,36 @@ describe('WebSearchApiKeySettingsScreen', () => {
     expect(mockProviderOverrides).toEqual({ tavily: { apiKeys: ['key-a'] } });
     expect(keyForm().apiKeys.at(-1)?.isNew).toBe(true);
   });
+
+  it('restores an optimistically removed key and shows an Alert when saving fails', async () => {
+    const saving = deferred<void>();
+    mockSetPreference.mockReturnValueOnce(saving.promise);
+    render();
+    const keyId = keyForm().apiKeys[0].id;
+
+    act(() => keyForm().onRemove(keyId));
+    act(() => mockShowConfirmation.mock.calls[0][0].onConfirm());
+    expect(keyForm().apiKeys).toEqual([]);
+
+    saving.reject(new Error('save failed'));
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(keyForm().apiKeys.map((entry) => entry.key)).toEqual(['key-a']);
+    expect(mockShowMessage).toHaveBeenCalledWith({
+      title: 'settings.websearch.provider.saveFailed',
+    });
+  });
 });
+
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+  return { promise, reject, resolve };
+}

@@ -38,18 +38,18 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
-jest.mock('heroui-native/button', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { Pressable: MockPressable, Text: MockText } = jest.requireActual('react-native');
 
   const MockButton = ({
     children,
-    isDisabled,
+    disabled,
     ...props
   }: {
     children?: ReactNode;
-    isDisabled?: boolean;
+    disabled?: boolean;
   }) => (
-    <MockPressable disabled={isDisabled} {...props}>
+    <MockPressable disabled={disabled} {...props}>
       {children}
     </MockPressable>
   );

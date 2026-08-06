@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import {
   BellRingIcon,
@@ -12,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Section, SectionIcon, SectionImage } from '@/frontend/components/Section';
+import { Image } from '@/frontend/components/nativePrimitives';
 
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
@@ -56,24 +57,31 @@ export default function PermissionsSettingsScreen() {
         ? 'settings.permissions.accessRequired'
         : getPermissionSummaryKey(kind, policies);
 
+    const Icon = permissionIcons[kind];
+
     return {
-      accessory: (
+      id: kind,
+      label: t(`settings.permissions.type.${kind}`),
+      leading:
+        Platform.OS === 'ios' ? (
+          <Image
+            cachePolicy="memory-disk"
+            className="size-5"
+            contentFit="contain"
+            source={iosPermissionImages[kind]}
+          />
+        ) : (
+          <Icon className="size-5 text-foreground" strokeWidth={2} />
+        ),
+      onPress: () => router.push(`/settings/permissions/${kind}`),
+      trailing: (
         <View className="flex-row items-center gap-2">
           <Text className="text-base text-default-foreground" numberOfLines={1}>
             {t(summaryKey)}
           </Text>
-          <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
+          <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2} />
         </View>
       ),
-      id: kind,
-      leading:
-        Platform.OS === 'ios' ? (
-          <SectionImage source={iosPermissionImages[kind]} />
-        ) : (
-          <SectionIcon icon={permissionIcons[kind]} />
-        ),
-      onPress: () => router.push(`/settings/permissions/${kind}`),
-      title: t(`settings.permissions.type.${kind}`),
     };
   });
 
@@ -87,7 +95,11 @@ export default function PermissionsSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4 py-5">
-          <Section items={items} />
+          <Section>
+            {items.map(({ id, ...item }) => (
+              <Section.Item key={id} {...item} />
+            ))}
+          </Section>
         </View>
       </ScrollView>
     </>

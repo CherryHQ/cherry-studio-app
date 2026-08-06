@@ -1,4 +1,4 @@
-import { Portal } from 'heroui-native/portal';
+import { Portal } from '@cherrystudio/ui/components';
 import { type ReactNode, useId } from 'react';
 import { StyleSheet, View } from 'react-native';
 

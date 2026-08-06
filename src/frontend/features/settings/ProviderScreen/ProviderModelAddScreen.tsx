@@ -1,8 +1,8 @@
+import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
-import { cn } from 'heroui-native/utils';
 import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -288,28 +288,23 @@ function ProviderModelAddTextField({
   value: string;
 }) {
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField isDisabled={isDisabled} isInvalid={Boolean(errorMessage)}>
+      <Label>{label}</Label>
       <Input
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        className={cn('min-h-10 rounded-xl px-3 py-0 text-base', multiline ? 'h-16' : 'h-10')}
-        isDisabled={isDisabled}
-        isInvalid={Boolean(errorMessage)}
         multiline={multiline}
         onChangeText={onChangeText}
         onFocus={onFocus}
         placeholder={placeholder}
         returnKeyType="done"
-        style={styles.input}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
-        variant="secondary"
         {...textInputProps}
       />
-      {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
-    </View>
+      <FieldError>{errorMessage}</FieldError>
+    </TextField>
   );
 }
 
@@ -387,12 +382,6 @@ function EndpointTypeChip({
 }
 
 const styles = StyleSheet.create({
-  input: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    verticalAlign: 'middle',
-  },
   scrollContent: {
     gap: 16,
     paddingHorizontal: 16,

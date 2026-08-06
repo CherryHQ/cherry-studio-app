@@ -1,37 +1,24 @@
-import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
-import { SearchField } from 'heroui-native/search-field';
+import { SearchField, Section } from '@cherrystudio/ui/components';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
+import { Keyboard, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { Section } from '@/frontend/components/Section';
 import { useQuery } from '@/frontend/data';
-import {
-  hiddenProviderListIds,
-  isLiquidGlassAvailable,
-  settingsServiceRow,
-} from '@/frontend/utils/constants';
+import { hiddenProviderListIds, isIOS } from '@/frontend/utils/constants';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
-import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
 const providerListStaleTime = 1000 * 60 * 5;
-
-const keyExtractor = (item: SettingsServiceRowProps) => item.id;
-const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
-  <SettingsServiceRow {...item} />
-);
+const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
-  const headerHeight = useHeaderHeight();
   const router = useRouter();
-  const topInset = isLiquidGlassAvailable ? headerHeight : 0;
   const [searchText, setSearchText] = useState('');
+  const [isNativeSearchFocused, setIsNativeSearchFocused] = useState(false);
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
 
@@ -46,7 +33,7 @@ export default function ProviderSettingsScreen() {
   const providersQuery = useQuery('/providers', {
     staleTime: providerListStaleTime,
   });
-  const providerItems = useMemo<SettingsServiceRowProps[]>(
+  const providerItems = useMemo(
     () =>
       (providersQuery.data ?? [])
         .filter((provider) => !hiddenProviderListIds.includes(provider.id))
@@ -75,37 +62,15 @@ export default function ProviderSettingsScreen() {
             });
           },
           statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
-          statusTone: 'success',
         })),
     [providersQuery.data, router, t],
   );
   const filteredProviderItems = useMemo(() => {
     const query = searchText.trim().toLocaleLowerCase();
-    const matches = query
+    return query
       ? providerItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
       : providerItems;
-
-    // Stamp the separator onto the row data instead of deriving it from
-    // `renderItem`'s `index`: a recycled LegendList row keeps its previous index
-    // when the list shrinks, which resurrects the separator above the first row.
-    return matches.map((item, index) => ({ ...item, showSeparator: index > 0 }));
   }, [providerItems, searchText]);
-  // Rows are a fixed `rowHeight` plus the 1px separator above every row but the
-  // first, so the card can be sized on the very first frame instead of flashing
-  // full-height. `onContentSizeChange` then corrects it, because Dynamic Type can
-  // make rows taller than the estimate; keying the measurement to the row count
-  // discards it as soon as the data changes, so a search never renders one frame
-  // at the previous result's height.
-  const [measuredList, setMeasuredList] = useState<{ height: number; rowCount: number }>();
-  const handleContentSizeChange = useCallback(
-    (_width: number, height: number) =>
-      setMeasuredList({ height, rowCount: filteredProviderItems.length }),
-    [filteredProviderItems.length],
-  );
-  const cardHeight =
-    measuredList?.rowCount === filteredProviderItems.length
-      ? measuredList.height
-      : filteredProviderItems.length * (settingsServiceRow.rowHeight + 1) - 1;
   const openCreateProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
@@ -125,77 +90,88 @@ export default function ProviderSettingsScreen() {
   return (
     <>
       <BackHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
-      <Pressable
-        accessible={false}
-        className="flex-1 gap-3 px-4 pb-5"
-        onPress={Keyboard.dismiss}
-        style={{ paddingTop: topInset }}
-      >
-        <SearchField className="w-full" onChange={setSearchText} value={searchText}>
-          <SearchField.Group className="h-10 rounded-xl bg-settings-grouped-surface">
-            <SearchField.SearchIcon iconProps={{ size: 18 }} />
-            <SearchField.Input
-              accessibilityLabel={t('navigation.search')}
-              autoCapitalize="none"
-              autoComplete="off"
-              autoCorrect={false}
-              className="h-10 min-h-10 rounded-xl border-0 bg-transparent py-0 pl-9 pr-3 text-base"
-              placeholder={t('navigation.search')}
-              returnKeyType="search"
-              spellCheck={false}
-              style={styles.searchInput}
-              textContentType="none"
-            />
-          </SearchField.Group>
-        </SearchField>
-        {filteredProviderItems.length > 0 ? (
-          // The card hugs its rows instead of filling the screen: `height` tracks
-          // the list's content, capped at the space left below the search field by
-          // `maxHeight: 100%`, which the `flex-1` wrapper resolves for us. The list
-          // still gets a bounded height either way, so virtualization keeps working.
-          <View className="min-h-0 flex-1">
-            <View
-              className="overflow-hidden rounded-xl bg-settings-grouped-surface"
-              style={{ height: cardHeight, maxHeight: '100%' }}
-            >
-              <LegendList
-                alwaysBounceVertical={false}
-                data={filteredProviderItems}
-                estimatedItemSize={settingsServiceRow.rowHeight}
-                keyboardDismissMode="on-drag"
-                keyboardShouldPersistTaps="handled"
-                keyExtractor={keyExtractor}
-                onContentSizeChange={handleContentSizeChange}
-                recycleItems
-                renderItem={renderProviderRow}
-                showsVerticalScrollIndicator={false}
-                style={styles.list}
-              />
-            </View>
-          </View>
-        ) : (
-          <Section
-            items={[
-              {
-                hideAccessory: true,
-                title: providersQuery.isPending
-                  ? t('settings.provider.loading')
-                  : t('settings.provider.search.empty'),
-              },
-            ]}
+      {usesNativeBottomSearch ? (
+        <>
+          <Stack.SearchBar
+            allowToolbarIntegration
+            autoCapitalize="none"
+            hideWhenScrolling={false}
+            obscureBackground={false}
+            placeholder={t('navigation.search')}
+            placement="integrated"
+            onBlur={() => setIsNativeSearchFocused(false)}
+            onCancelButtonPress={() => {
+              setIsNativeSearchFocused(false);
+              setSearchText('');
+            }}
+            onChangeText={(event) => setSearchText(event.nativeEvent.text)}
+            onFocus={() => setIsNativeSearchFocused(true)}
           />
-        )}
-      </Pressable>
+          <Stack.Toolbar placement="bottom">
+            <Stack.Toolbar.SearchBarSlot />
+          </Stack.Toolbar>
+        </>
+      ) : null}
+      <ScrollView
+        alwaysBounceVertical={false}
+        className="flex-1"
+        contentContainerClassName="grow px-4 pb-5"
+        contentContainerStyle={{ paddingTop: isNativeSearchFocused ? 12 : 0 }}
+        contentInsetAdjustmentBehavior="automatic"
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Pressable accessible={false} className="flex-1 gap-3" onPress={Keyboard.dismiss}>
+          {usesNativeBottomSearch ? null : (
+            <SearchField
+              accessibilityLabel={t('navigation.search')}
+              clearAccessibilityLabel={t('common.clear')}
+              onChangeText={setSearchText}
+              onClear={() => setSearchText('')}
+              placeholder={t('navigation.search')}
+              value={searchText}
+            />
+          )}
+          <Section>
+            {filteredProviderItems.length > 0 ? (
+              filteredProviderItems.map((item) => (
+                <Section.Item
+                  key={item.id}
+                  label={item.name}
+                  leading={item.avatar}
+                  onPress={item.onPress}
+                  showChevron
+                  trailing={
+                    item.statusLabel ? (
+                      <View
+                        className="h-5 items-center justify-center rounded-lg border px-1.5"
+                        style={{ backgroundColor: '#00b96b20', borderColor: '#00b96b66' }}
+                      >
+                        <Text
+                          className="font-medium text-xs"
+                          numberOfLines={1}
+                          style={{ color: '#00b96b' }}
+                        >
+                          {item.statusLabel}
+                        </Text>
+                      </View>
+                    ) : undefined
+                  }
+                />
+              ))
+            ) : (
+              <Section.Item
+                label={
+                  providersQuery.isPending
+                    ? t('settings.provider.loading')
+                    : t('settings.provider.search.empty')
+                }
+              />
+            )}
+          </Section>
+        </Pressable>
+      </ScrollView>
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  list: {
-    flex: 1,
-  },
-  searchInput: {
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
-});

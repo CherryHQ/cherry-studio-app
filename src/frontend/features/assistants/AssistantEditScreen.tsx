@@ -1,3 +1,4 @@
+import { Description, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
 import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -8,9 +9,6 @@ import {
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
-import { Switch } from 'heroui-native/switch';
-import { TextArea } from 'heroui-native/text-area';
 import { useToast } from 'heroui-native/toast';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
@@ -25,8 +23,8 @@ import {
   type ModelPickerModelItem,
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
+import { SingleSelectionSheet } from '@/frontend/components/selectionSheet';
 import { usePreference } from '@/frontend/data/hooks';
-import { SettingSelect } from '@/frontend/features/settings/components/SettingSelect';
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
@@ -98,6 +96,7 @@ function AssistantEditForm({
   const { servers: mcpServers } = useMcpServersApi();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [isMcpModeSheetOpen, setIsMcpModeSheetOpen] = useState(false);
   const [defaultModelPreference] = usePreference('chat.default_model_id');
   const [form, setForm] = useState<AssistantFormState>(() => createFormState(assistant));
   const [hasPickedModel, setHasPickedModel] = useState(false);
@@ -162,6 +161,17 @@ function AssistantEditForm({
     ],
     [t],
   );
+  const selectedMcpMode = mcpModeOptions.find((option) => option.value === form.mcpMode);
+  const openMcpModeSheet = useCallback(() => {
+    Keyboard.dismiss();
+    setIsMcpModeSheetOpen(true);
+  }, []);
+  const closeMcpModeSheet = useCallback(() => {
+    setIsMcpModeSheetOpen(false);
+  }, []);
+  const handleMcpModeSelect = useCallback((value: McpMode) => {
+    setForm((current) => ({ ...current, mcpMode: value }));
+  }, []);
   const handleSave = useCallback(async () => {
     const dto = buildAssistantDto(form, assistant?.settings);
 
@@ -220,52 +230,40 @@ function AssistantEditForm({
             <Pressable
               accessibilityLabel={t('assistant.form.emoji')}
               accessibilityRole="button"
-              className="min-h-12 min-w-12 items-center justify-center rounded-2xl border border-border active:opacity-70"
+              className="min-h-10 min-w-10 items-center justify-center rounded-lg border border-border active:opacity-70"
               onPress={openEmojiPicker}
             >
               <Text className="text-emoji-2xl" style={styles.emojiGlyph}>
                 {form.emoji.trim() || defaultEmoji}
               </Text>
             </Pressable>
-            <View className="min-w-0 flex-1">
+            <TextField className="min-w-0 flex-1">
               <Input
                 accessibilityLabel={t('assistant.form.name')}
                 autoCorrect={false}
-                variant="secondary"
-                className="rounded-2xl px-4 text-base text-foreground"
                 onChangeText={(value) => updateForm('name', value)}
                 placeholder={t('assistant.form.namePlaceholder')}
-                placeholderColorClassName="accent-muted-foreground"
                 returnKeyType="next"
-                style={styles.textInput}
                 value={form.name}
               />
-            </View>
+            </TextField>
           </View>
           <FormField label={t('assistant.form.description')}>
             <Input
               accessibilityLabel={t('assistant.form.description')}
               autoCorrect
-              variant="secondary"
-              className="rounded-2xl px-4 text-base text-foreground"
               onChangeText={(value) => updateForm('description', value)}
               placeholder={t('assistant.form.descriptionPlaceholder')}
-              placeholderColorClassName="accent-muted-foreground"
-              style={styles.textInput}
               value={form.description}
             />
           </FormField>
           <FormField label={t('assistant.form.prompt')}>
-            <TextArea
+            <Input
               accessibilityLabel={t('assistant.form.prompt')}
               autoCorrect
-              variant="secondary"
-              className="min-h-32 rounded-2xl px-4 text-base text-foreground"
               multiline
               onChangeText={(value) => updateForm('prompt', value)}
               placeholder={t('assistant.form.promptPlaceholder')}
-              placeholderColorClassName="accent-muted-foreground"
-              style={styles.textArea}
               value={form.prompt}
             />
           </FormField>
@@ -351,18 +349,14 @@ function AssistantEditForm({
             label={t('assistant.form.customParameters')}
             description={t('assistant.form.customParametersDescription')}
           >
-            <TextArea
+            <Input
               accessibilityLabel={t('assistant.form.customParameters')}
               autoCapitalize="none"
-              variant="secondary"
               autoCorrect={false}
-              className="min-h-28 rounded-2xl px-4 font-mono text-sm text-foreground"
               multiline
               onChangeText={(value) => updateForm('customParametersJson', value)}
               placeholder="[]"
-              placeholderColorClassName="accent-muted-foreground"
               spellCheck={false}
-              style={styles.textArea}
               value={form.customParametersJson}
             />
           </FormField>
@@ -381,17 +375,28 @@ function AssistantEditForm({
               onChangeText={(value) => updateForm('maxToolCalls', value)}
             />
           ) : null}
-          <View className="min-h-10 flex-row items-center justify-between gap-4">
+          <Pressable
+            accessibilityLabel={t('assistant.form.mcpMode.label')}
+            accessibilityRole="button"
+            className="min-h-10 flex-row items-center justify-between gap-4 active:opacity-70"
+            onPress={openMcpModeSheet}
+          >
             <Text className="min-w-0 flex-1 font-medium text-base text-foreground">
               {t('assistant.form.mcpMode.label')}
             </Text>
-            <SettingSelect
-              label={t('assistant.form.mcpMode.label')}
-              options={mcpModeOptions}
-              value={form.mcpMode}
-              onValueChange={(value) => updateForm('mcpMode', value)}
-            />
-          </View>
+            <View className="min-w-0 max-w-48 flex-row items-center justify-end gap-1">
+              <Text
+                className="min-w-0 shrink text-right text-base text-default-foreground"
+                numberOfLines={1}
+              >
+                {selectedMcpMode?.label}
+              </Text>
+              <ChevronDownIcon
+                className="size-5 shrink-0 text-default-foreground"
+                strokeWidth={2}
+              />
+            </View>
+          </Pressable>
           {form.mcpMode === 'manual' ? (
             mcpServers.length > 0 ? (
               <View className="gap-3">
@@ -423,6 +428,18 @@ function AssistantEditForm({
         onClose={closeEmojiPicker}
         onSelect={handleEmojiSelect}
       />
+      <SingleSelectionSheet
+        closeAccessibilityLabel={t('common.close')}
+        emptyText={t('settings.select.placeholder')}
+        heightFraction={0.6}
+        isOpen={isMcpModeSheetOpen}
+        onClose={closeMcpModeSheet}
+        onSelect={handleMcpModeSelect}
+        options={mcpModeOptions}
+        selectedValue={form.mcpMode}
+        testID="assistant-mcp-mode-selection"
+        title={t('assistant.form.mcpMode.label')}
+      />
     </>
   );
 }
@@ -446,15 +463,11 @@ function FormField({
   label: string;
 }) {
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-foreground text-sm">{label}</Text>
+    <TextField>
+      <Label>{label}</Label>
       {children}
-      {description ? (
-        <Text className="text-default-foreground text-xs" selectable>
-          {description}
-        </Text>
-      ) : null}
-    </View>
+      {description ? <Description selectable>{description}</Description> : null}
+    </TextField>
   );
 }
 
@@ -472,7 +485,7 @@ function SwitchRow({
       <Text className="min-w-0 flex-1 font-medium text-base text-foreground" numberOfLines={2}>
         {label}
       </Text>
-      <Switch accessibilityLabel={label} isSelected={value} onSelectedChange={onValueChange} />
+      <Switch accessibilityLabel={label} onValueChange={onValueChange} value={value} />
     </View>
   );
 }
@@ -489,18 +502,16 @@ function NumberField({
   value: string;
 }) {
   return (
-    <Input
-      accessibilityLabel={accessibilityLabel}
-      className="rounded-2xl px-4 text-base text-foreground"
-      variant="secondary"
-      inputMode={inputMode}
-      keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
-      onChangeText={onChangeText}
-      placeholder="0"
-      placeholderColorClassName="accent-muted-foreground"
-      style={styles.textInput}
-      value={value}
-    />
+    <TextField>
+      <Input
+        accessibilityLabel={accessibilityLabel}
+        inputMode={inputMode}
+        keyboardType={inputMode === 'numeric' ? 'number-pad' : 'decimal-pad'}
+        onChangeText={onChangeText}
+        placeholder="0"
+        value={value}
+      />
+    </TextField>
   );
 }
 
@@ -632,19 +643,5 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     paddingHorizontal: 16,
     paddingTop: 20,
-  },
-  textArea: {
-    includeFontPadding: false,
-    paddingBottom: 12,
-    paddingTop: 12,
-    textAlignVertical: 'top',
-  },
-  textInput: {
-    includeFontPadding: false,
-    minHeight: 48,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
   },
 });

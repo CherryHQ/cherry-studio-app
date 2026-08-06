@@ -13,6 +13,25 @@ export function buildApiKeysInputFromEntries(apiKeys: readonly ApiKeyEntry[]): s
   return apiKeys.flatMap((entry) => entry.key.trim() || []).join(',');
 }
 
+export function buildApiKeyEntriesFromInput(
+  input: string,
+  currentEntries: readonly ApiKeyEntry[],
+): ApiKeyEntry[] {
+  const keys = [
+    ...new Set(
+      input
+        .split(/[\n,]/)
+        .map((key) => key.trim())
+        .filter(Boolean),
+    ),
+  ];
+
+  return keys.map((key, index) => ({
+    ...(currentEntries[index] ?? createEmptyApiKeyEntry()),
+    key,
+  }));
+}
+
 export function cloneApiKeyEntries(apiKeys: readonly ApiKeyEntry[]): ApiKeyEntry[] {
   return apiKeys.map((entry) => ({ ...entry }));
 }

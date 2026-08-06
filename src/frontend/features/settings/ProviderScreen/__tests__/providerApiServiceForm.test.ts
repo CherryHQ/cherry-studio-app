@@ -10,7 +10,6 @@ import {
 } from '../apiService/utils/providerApiServiceDirtyState';
 import type { EndpointDraft } from '../apiService/utils/providerApiServiceEndpointDraft';
 import {
-  buildAddableEndpointOptions,
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
   getProviderPrimaryBaseUrl,
@@ -117,8 +116,8 @@ describe('provider API service form helpers', () => {
     expect(getProviderPrimaryBaseUrl({ endpointConfigs: {} } as never)).toBe('');
   });
 
-  it('rejects clearing the default endpoint base URL', () => {
-    expect(() =>
+  it('removes a cleared default endpoint base URL without changing the endpoint type', () => {
+    expect(
       buildProviderApiServiceEndpointUpdates({
         draft: createTestEndpointDraft({
           baseUrlByEndpoint: {
@@ -132,7 +131,10 @@ describe('provider API service form helpers', () => {
           },
         } as never,
       }),
-    ).toThrow(new ProviderApiServiceSaveError('invalid-base-url'));
+    ).toEqual({
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {},
+    });
   });
 
   it('saves endpoint configs with the selected defaultChatEndpoint', () => {
@@ -317,12 +319,6 @@ describe('provider API service form helpers', () => {
       'anthropic-messages',
       'google-generate-content',
     ]);
-    expect(
-      buildAddableEndpointOptions({ authType: 'api-key' } as never, [
-        'openai-chat-completions',
-        'openai-responses',
-      ]),
-    ).toEqual(['anthropic-messages', 'google-generate-content']);
     expect(getConfigurableEndpointTypesForProvider({ authType: 'iam-gcp' } as never)).toEqual([]);
   });
 

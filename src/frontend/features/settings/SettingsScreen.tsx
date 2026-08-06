@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import {
@@ -18,7 +19,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { Section, SectionIcon, SectionImage } from '@/frontend/components/Section';
+import { Image } from '@/frontend/components/nativePrimitives';
 import { usePreference } from '@/frontend/data/hooks';
 
 import { usePrefetchProviders } from './hooks/usePrefetchProviders';
@@ -67,76 +68,73 @@ export default function SettingsScreen() {
           userName={userName}
         />
         <View className="gap-6 px-2 pt-6">
-          <Section
-            items={[
-              {
-                leading: <SectionIcon icon={CircleUserRoundIcon} />,
-                title: t('settings.items.profile'),
-                onPress: openProfileSettings,
-              },
-            ]}
-          />
-          <Section
-            items={[
-              {
-                leading: <SectionIcon icon={CloudIcon} />,
-                title: t('settings.items.modelService'),
-                onPress: () => router.push('/settings/provider'),
-                onPressIn: prefetchProviders,
-              },
-              {
-                leading: <SectionIcon icon={SparklesIcon} />,
-                title: t('settings.items.defaultModel'),
-                onPress: () => router.push('/settings/model'),
-              },
-            ]}
-          />
-          <Section
-            items={[
-              {
-                leading: <SectionIcon icon={EarthIcon} />,
-                title: t('settings.items.webSearch'),
-                onPress: () => router.push('/settings/websearch'),
-              },
-              {
-                leading: <SectionImage source={mcpIcon} />,
-                title: t('settings.items.mcp'),
-                onPress: () => router.push('/settings/mcp'),
-              },
-            ]}
-          />
-          <Section
-            items={[
-              {
-                leading: <SectionIcon icon={DatabaseIcon} />,
-                title: t('settings.items.dataBackup'),
-                onPress: () => router.push('/settings/data'),
-              },
-              {
-                leading: <SectionIcon icon={ShieldCheckIcon} />,
-                title: t('settings.items.permissions'),
-                onPress: () => router.push('/settings/permissions'),
-              },
-            ]}
-          />
-          <Section
-            items={[
-              {
-                leading: <SectionIcon icon={SunIcon} />,
-                onPress: () => router.push('/settings/appearance'),
-                title: t('settings.appearance.title'),
-              },
-            ]}
-          />
-          <Section
-            items={[
-              {
-                leading: <SectionIcon icon={InfoIcon} />,
-                title: t('settings.items.aboutUs'),
-                onPress: () => router.push('/settings/about'),
-              },
-            ]}
-          />
+          <Section>
+            <Section.Item
+              label={t('settings.items.profile')}
+              leading={<CircleUserRoundIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={openProfileSettings}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.items.modelService')}
+              leading={<CloudIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/provider')}
+              onPressIn={prefetchProviders}
+            />
+            <Section.Item
+              label={t('settings.items.defaultModel')}
+              leading={<SparklesIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/model')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.items.webSearch')}
+              leading={<EarthIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/websearch')}
+            />
+            <Section.Item
+              label={t('settings.items.mcp')}
+              leading={
+                mcpIcon ? (
+                  <Image
+                    cachePolicy="memory-disk"
+                    className="size-5"
+                    contentFit="contain"
+                    source={mcpIcon}
+                  />
+                ) : null
+              }
+              onPress={() => router.push('/settings/mcp')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.items.dataBackup')}
+              leading={<DatabaseIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/data')}
+            />
+            <Section.Item
+              label={t('settings.items.permissions')}
+              leading={<ShieldCheckIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/permissions')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.appearance.title')}
+              leading={<SunIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/appearance')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.items.aboutUs')}
+              leading={<InfoIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/about')}
+            />
+          </Section>
         </View>
       </Animated.ScrollView>
       <ProfileStickyBar scrollY={scrollY} topInset={insets.top} userName={userName} />

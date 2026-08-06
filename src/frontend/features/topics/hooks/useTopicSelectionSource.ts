@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 
-import type { SelectionSource } from '@/frontend/components/messageTabs';
+import {
+  type SelectionSource,
+  useMessagePendingDeletionIds,
+} from '@/frontend/components/messageTabs';
 
 import { useTopicListActions, useTopicListTopics } from '../context/TopicListProvider';
 
@@ -9,6 +12,7 @@ import { useTopicListActions, useTopicListTopics } from '../context/TopicListPro
 export function useTopicSelectionSource(): SelectionSource {
   const { topics } = useTopicListTopics();
   const { deleteTopics } = useTopicListActions();
+  const pendingDeletionIds = useMessagePendingDeletionIds('conversations');
 
   return useMemo(
     () => ({
@@ -18,8 +22,9 @@ export function useTopicSelectionSource(): SelectionSource {
         deleteTitle: 'topic.selection.deleteTitle',
       },
       deleteSelected: deleteTopics,
-      getAllIds: () => topics.map((topic) => topic.id),
+      getAllIds: () =>
+        topics.filter((topic) => !pendingDeletionIds.has(topic.id)).map((topic) => topic.id),
     }),
-    [deleteTopics, topics],
+    [deleteTopics, pendingDeletionIds, topics],
   );
 }

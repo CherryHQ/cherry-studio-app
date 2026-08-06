@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
+import { useAppAlert } from '@/frontend/components/AppAlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
 
 import {
@@ -13,7 +14,6 @@ import {
   ProviderApiServiceApiKeyForm,
   shouldShowApiKeys,
   useProviderApiServiceApiKeysDraft,
-  useProviderApiServiceConfirmDialog,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
 } from './apiService';
@@ -72,14 +72,14 @@ function ProviderApiKeySettingsForm({
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
   const pendingApiKeyIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const { addKey, entries, removeKey, updateKey, updateKeyEnabled } =
+  const { showConfirmation, showMessage } = useAppAlert();
+  const { addKey, entries, removeKey, restoreKey, updateKey, updateKeyEnabled } =
     useProviderApiServiceApiKeysDraft(apiKeys);
   const hasUnsavedChanges =
     Object.keys(apiKeyErrors).length > 0 ||
     getProviderApiServiceApiKeysDirtyState({ apiKeys, entries });
   const isSaving = pendingApiKeyIds.size > 0;
-  const { confirmDialog, requestConfirm } = useProviderApiServiceConfirmDialog();
-  const { discardDialog, requestClose } = useProviderApiServiceSheetClose({
+  const { requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
   });
@@ -174,8 +174,13 @@ function ProviderApiKeySettingsForm({
 
   const handleRemoveApiKey = useCallback(
     (id: string) => {
-      const entry = entries.find((item) => item.id === id);
+      const entryIndex = entries.findIndex((item) => item.id === id);
+      const entry = entries[entryIndex];
       const isPersisted = apiKeys.some((item) => item.id === id);
+
+      if (!entry) {
+        return;
+      }
 
       if (!entry?.key.trim() && !isPersisted) {
         removeKey(id);
@@ -183,31 +188,33 @@ function ProviderApiKeySettingsForm({
         return;
       }
 
-      requestConfirm({
-        message: t('settings.provider.apiService.removeApiKeyMessage'),
+      showConfirmation({
+        confirmLabel: t('common.remove'),
+        description: t('settings.provider.apiService.removeApiKeyMessage'),
         onConfirm: () => {
           const nextEntries = entries.filter((item) => item.id !== id);
+          removeKey(id);
+          setApiKeyErrors((current) => removeApiKeyError(current, id));
 
           void (async () => {
             const didSave = await saveEntries({ apiKeyId: id, nextEntries });
 
-            if (didSave) {
-              removeKey(id);
-              setApiKeyErrors((current) => removeApiKeyError(current, id));
+            if (!didSave) {
+              restoreKey(entry, entryIndex);
+              showMessage({ title: t('settings.provider.apiService.saveFailed') });
             }
           })();
         },
+        role: 'destructive',
         title: t('settings.provider.apiService.removeApiKeyTitle'),
       });
     },
-    [apiKeys, entries, removeKey, requestConfirm, saveEntries, t],
+    [apiKeys, entries, removeKey, restoreKey, saveEntries, showConfirmation, showMessage, t],
   );
 
   return (
     <>
       <BackHeader title={t('settings.provider.apiService.manageApiKeys')} onBack={requestClose} />
-      {discardDialog}
-      {confirmDialog}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

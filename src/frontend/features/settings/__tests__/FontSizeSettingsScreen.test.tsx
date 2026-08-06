@@ -26,15 +26,10 @@ jest.mock('@/frontend/utils/theme', () => ({
   applyFontSizeStepPreference: (step: number) => mockApplyFontSizeStep(step),
 }));
 
-jest.mock('heroui-native/slider', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
 
-  const Slider = ({ children, ...props }: { children: React.ReactNode }) =>
-    createElement('Slider', props, children);
-  Slider.Track = ({ children }: { children: React.ReactNode }) =>
-    createElement('SliderTrack', null, children);
-  Slider.Fill = () => createElement('SliderFill');
-  Slider.Thumb = () => createElement('SliderThumb');
+  const Slider = (props: object) => createElement('Slider', props);
 
   return { Slider };
 });
@@ -63,17 +58,16 @@ describe('FontSizeSettingsScreen', () => {
     renderer = undefined;
   });
 
-  test('previews changes immediately and persists at interaction end', async () => {
+  test('previews and persists changes immediately', () => {
     const slider = renderer?.root.findByType('Slider');
 
-    act(() => slider?.props.onChange(2));
+    expect(slider?.props.minimumValueLabel).toBe('settings.fontSize.level.standard');
+    expect(slider?.props.maximumValueLabel).toBe('settings.fontSize.level.extraLarge');
+
+    act(() => slider?.props.onValueChange(2));
 
     expect(mockApplyFontSizeStep).toHaveBeenLastCalledWith(2);
     expect(renderer?.root.findByType('MarkdownText').props.fontSizeStep).toBe(2);
-    expect(mockSetStoredStep).not.toHaveBeenCalled();
-
-    await act(async () => slider?.props.onChangeEnd(2));
-
     expect(mockSetStoredStep).toHaveBeenCalledWith(2, { optimistic: true });
   });
 
@@ -81,9 +75,8 @@ describe('FontSizeSettingsScreen', () => {
     mockSetStoredStep.mockRejectedValueOnce(new Error('write failed'));
     const slider = renderer?.root.findByType('Slider');
 
-    act(() => slider?.props.onChange(2));
     await act(async () => {
-      slider?.props.onChangeEnd(2);
+      slider?.props.onValueChange(2);
       await Promise.resolve();
     });
 

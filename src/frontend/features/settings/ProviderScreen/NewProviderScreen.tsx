@@ -1,12 +1,10 @@
+import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { Accordion } from 'heroui-native/accordion';
-import { Button } from 'heroui-native/button';
-import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
 import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
@@ -19,9 +17,7 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
-import { SettingsIconButton } from '../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
-import { providerApiServiceStyles } from './apiService/utils/providerApiServiceStyles';
 
 const avatarPreviewSize = 96;
 
@@ -201,38 +197,34 @@ export default function NewProviderScreen() {
 
           <FormField label={t('settings.provider.add.name')} required>
             <Input
+              accessibilityLabel={t('settings.provider.add.name')}
               autoCapitalize="none"
               autoCorrect={false}
-              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
               onChangeText={setName}
               placeholder={t('settings.provider.add.namePlaceholder')}
-              style={providerApiServiceStyles.input}
               value={name}
-              variant="secondary"
             />
           </FormField>
 
           <FormField label={t('settings.provider.apiService.baseUrl')} required>
             <Input
+              accessibilityLabel={t('settings.provider.apiService.baseUrl')}
               autoCapitalize="none"
               autoCorrect={false}
-              className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
               keyboardType="url"
               onChangeText={setBaseUrl}
               placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-              style={providerApiServiceStyles.input}
               value={baseUrl}
-              variant="secondary"
             />
           </FormField>
 
           <FormField label={t('settings.provider.apiService.apiKey')}>
             <View className="flex-row items-center gap-2">
-              <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
+              <View className="min-w-0 flex-1 overflow-hidden">
                 <Input
+                  accessibilityLabel={t('settings.provider.apiService.apiKey')}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  className="h-10 max-h-10 min-h-0 w-full rounded-xl px-3 py-0 text-base"
                   lineBreakModeIOS="clip"
                   multiline={false}
                   numberOfLines={1}
@@ -241,62 +233,43 @@ export default function NewProviderScreen() {
                   returnKeyType="done"
                   scrollEnabled={false}
                   secureTextEntry={!apiKeyVisible}
-                  style={providerApiServiceStyles.input}
                   value={apiKey}
-                  variant="secondary"
                 />
               </View>
-              <SettingsIconButton
+              <Button
                 accessibilityLabel={
                   apiKeyVisible
                     ? t('settings.provider.apiService.hideApiKeys')
                     : t('settings.provider.apiService.showApiKeys')
                 }
+                hitSlop={6}
+                icon={apiKeyVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
                 onPress={() => setApiKeyVisible((visible) => !visible)}
-              >
-                {apiKeyVisible ? (
-                  <EyeIcon className="size-5 text-default-foreground" strokeWidth={2} />
-                ) : (
-                  <EyeOffIcon className="size-5 text-default-foreground" strokeWidth={2} />
-                )}
-              </SettingsIconButton>
+                variant="secondary"
+              />
             </View>
           </FormField>
 
-          <Accordion
-            className="overflow-hidden rounded-xl bg-settings-grouped-surface"
-            hideSeparator
-            isCollapsible
-            selectionMode="single"
-          >
-            <Accordion.Item value="more-endpoints">
-              <Accordion.Trigger className="min-h-11 px-3 py-3">
-                <View className="flex-1">
-                  <Text className="font-medium text-default-foreground text-sm">
-                    {t('settings.provider.apiService.moreEndpoints')}
-                  </Text>
-                </View>
-                <Accordion.Indicator iconProps={{ size: 18 }} />
-              </Accordion.Trigger>
-              <Accordion.Content className="gap-4 px-3 pb-4">
-                <EndpointField
-                  label={t('settings.provider.add.endpoint.anthropic')}
-                  onChangeText={setAnthropicUrl}
-                  value={anthropicUrl}
-                />
-                <EndpointField
-                  label={t('settings.provider.add.endpoint.gemini')}
-                  onChangeText={setGeminiUrl}
-                  value={geminiUrl}
-                />
-                <EndpointField
-                  label={t('settings.provider.add.endpoint.openaiResponses')}
-                  onChangeText={setOpenaiResponsesUrl}
-                  value={openaiResponsesUrl}
-                />
-              </Accordion.Content>
-            </Accordion.Item>
-          </Accordion>
+          <View className="gap-4">
+            <Text className="font-medium text-default-foreground text-sm">
+              {t('settings.provider.apiService.moreEndpoints')}
+            </Text>
+            <EndpointField
+              label={t('settings.provider.add.endpoint.anthropic')}
+              onChangeText={setAnthropicUrl}
+              value={anthropicUrl}
+            />
+            <EndpointField
+              label={t('settings.provider.add.endpoint.gemini')}
+              onChangeText={setGeminiUrl}
+              value={geminiUrl}
+            />
+            <EndpointField
+              label={t('settings.provider.add.endpoint.openaiResponses')}
+              onChangeText={setOpenaiResponsesUrl}
+              value={openaiResponsesUrl}
+            />
+          </View>
         </View>
       </KeyboardAwareScrollView>
     </>
@@ -377,23 +350,17 @@ function NewProviderAvatarSection({
       <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarUri} />
       <View className="flex-row items-center gap-3">
         <MenuView actions={uploadActions} onPressAction={handleUploadAction}>
-          <Button className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4" variant="secondary">
-            <ImageUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
-            <Text className="text-base text-foreground">
-              {t('settings.provider.add.uploadImage')}
-            </Text>
+          <Button icon={<ImageUpIcon strokeWidth={2} />} variant="secondary">
+            {t('settings.provider.add.uploadImage')}
           </Button>
         </MenuView>
         <Button
-          className="h-10 min-h-10 flex-row gap-2 rounded-xl px-4"
-          isDisabled={!avatarUri}
+          disabled={!avatarUri}
+          icon={<RotateCcwIcon strokeWidth={2} />}
           onPress={resetAvatar}
           variant="secondary"
         >
-          <RotateCcwIcon className="size-4 text-default-foreground" strokeWidth={2} />
-          <Text className="text-base text-foreground">
-            {t('settings.provider.add.resetAvatar')}
-          </Text>
+          {t('settings.provider.add.resetAvatar')}
         </Button>
       </View>
     </View>
@@ -439,13 +406,10 @@ function FormField({
   required?: boolean;
 }) {
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-default-foreground text-sm">
-        {label}
-        {required ? <Text className="text-danger"> *</Text> : null}
-      </Text>
+    <TextField isRequired={required}>
+      <Label>{label}</Label>
       {children}
-    </View>
+    </TextField>
   );
 }
 
@@ -459,19 +423,17 @@ function EndpointField({
   value: string;
 }) {
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField>
+      <Label>{label}</Label>
       <Input
+        accessibilityLabel={label}
         autoCapitalize="none"
         autoCorrect={false}
-        className="h-10 min-h-0 rounded-xl px-3 py-0 text-base"
         keyboardType="url"
         onChangeText={onChangeText}
         placeholder="https://api.example.com"
-        style={providerApiServiceStyles.input}
         value={value}
-        variant="secondary"
       />
-    </View>
+    </TextField>
   );
 }

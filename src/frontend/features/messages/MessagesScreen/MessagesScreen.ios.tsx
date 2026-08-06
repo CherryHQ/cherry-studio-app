@@ -1,8 +1,10 @@
 import { Stack, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import {
+  type MessageScope,
   MessageScopeProvider,
   MessageSelectionProvider,
   useMessageScope,
@@ -19,13 +21,29 @@ export function MessagesScreen() {
   const router = useRouter();
   const { scope, setScope } = useMessageScope();
   const { enterEditing, exitEditing } = useMessageSelectionActions();
-  const { isEditing } = useMessageSelectionState();
+  const { isDeletionPending, isEditing } = useMessageSelectionState();
   const isConversationScope = scope === 'conversations';
+  const [searchText, setSearchText] = useState('');
+  const handleEnterEditing = useCallback(() => {
+    if (isDeletionPending) {
+      return;
+    }
+
+    setSearchText('');
+    enterEditing();
+  }, [enterEditing, isDeletionPending]);
+  const handleScopeChange = useCallback(
+    (nextScope: MessageScope) => {
+      setSearchText('');
+      setScope(nextScope);
+    },
+    [setScope],
+  );
 
   return (
     <>
       <View className="flex-1 bg-background">
-        <MessagePager />
+        <MessagePager topicSearchText={searchText} />
         <SelectionControls />
       </View>
       <Stack.Screen
@@ -39,13 +57,26 @@ export function MessagesScreen() {
         </Stack.Title>
       ) : (
         <Stack.Title asChild>
-          <MessageScopeTabs scope={scope} onScopeChange={setScope} />
+          <MessageScopeTabs scope={scope} onScopeChange={handleScopeChange} />
         </Stack.Title>
       )}
+      {isConversationScope && !isEditing ? (
+        <Stack.SearchBar
+          autoCapitalize="none"
+          hideNavigationBar={false}
+          hideWhenScrolling={false}
+          obscureBackground={false}
+          placeholder={t('navigation.search')}
+          placement="stacked"
+          onCancelButtonPress={() => setSearchText('')}
+          onChangeText={(event) => setSearchText(event.nativeEvent.text)}
+        />
+      ) : null}
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button
           accessibilityLabel={t(isEditing ? 'common.done' : 'common.edit')}
-          onPress={isEditing ? exitEditing : enterEditing}
+          disabled={isDeletionPending}
+          onPress={isEditing ? exitEditing : handleEnterEditing}
         >
           {t(isEditing ? 'common.done' : 'common.edit')}
         </Stack.Toolbar.Button>

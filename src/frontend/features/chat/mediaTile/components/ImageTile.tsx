@@ -1,4 +1,4 @@
-import { cn } from 'heroui-native/utils';
+import { cn } from '@cherrystudio/ui/utils';
 import type { ReactNode } from 'react';
 import { type AccessibilityState, Pressable, View } from 'react-native';
 

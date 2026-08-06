@@ -78,23 +78,21 @@ export function ProviderDetailChrome({
           ) : null}
         </View>
 
-        {checkAction ? (
-          <View className="overflow-hidden rounded-full border border-border bg-field android:shadow-lg">
-            <Pressable
-              accessibilityLabel={t('settings.provider.models.check')}
-              accessibilityRole="button"
-              accessibilityState={{
-                busy: checkAction.isLoading,
-                disabled: checkAction.isDisabled || checkAction.isLoading,
-              }}
-              className="size-12 items-center justify-center active:opacity-60 disabled:opacity-35"
-              disabled={checkAction.isDisabled || checkAction.isLoading}
-              onPress={checkAction.onPress}
-            >
-              <ActivityIcon className="size-5 text-foreground" strokeWidth={2} />
-            </Pressable>
-          </View>
-        ) : null}
+        <View className="overflow-hidden rounded-full border border-border bg-field android:shadow-lg">
+          <Pressable
+            accessibilityLabel={t('settings.provider.models.check')}
+            accessibilityRole="button"
+            accessibilityState={{
+              busy: checkAction.isLoading,
+              disabled: checkAction.isDisabled || checkAction.isLoading,
+            }}
+            className="size-12 items-center justify-center active:opacity-60 disabled:opacity-35"
+            disabled={checkAction.isDisabled || checkAction.isLoading}
+            onPress={checkAction.onPress}
+          >
+            <ActivityIcon className="size-5 text-foreground" strokeWidth={2} />
+          </Pressable>
+        </View>
       </View>
     </View>
   );

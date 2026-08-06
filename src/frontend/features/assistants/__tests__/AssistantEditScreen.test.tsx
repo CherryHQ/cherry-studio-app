@@ -34,23 +34,16 @@ jest.mock('@/frontend/components/headers', () => ({
   },
 }));
 
-jest.mock('heroui-native/input', () => {
-  const { TextInput } = jest.requireActual('react-native');
-
-  return { Input: TextInput };
-});
-
-jest.mock('heroui-native/text-area', () => {
-  const { TextInput } = jest.requireActual('react-native');
-
-  return { TextArea: TextInput };
-});
-
-jest.mock('heroui-native/switch', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
+  const { Text, TextInput, View } = jest.requireActual('react-native');
 
   return {
+    Description: Text,
+    Input: TextInput,
+    Label: Text,
     Switch: (props: Record<string, unknown>) => React.createElement('MockSwitch', props),
+    TextField: View,
   };
 });
 
@@ -86,6 +79,13 @@ jest.mock('@/frontend/components/modelPicker', () => ({
   }),
 }));
 
+jest.mock('@/frontend/components/selectionSheet', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    SingleSelectionSheet: (props: object) => createElement('SingleSelectionSheet', props),
+  };
+});
+
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockDefaultModelPreference, jest.fn()],
 }));
@@ -102,10 +102,6 @@ jest.mock('@/frontend/hooks/chat', () => ({
 
 jest.mock('@/frontend/hooks/mcp/useMcpServers', () => ({
   useMcpServersApi: () => ({ servers: [] }),
-}));
-
-jest.mock('@/frontend/features/settings/components/SettingSelect', () => ({
-  SettingSelect: () => null,
 }));
 
 jest.mock('../components/EmojiPickerBottomSheet', () => ({
@@ -252,8 +248,8 @@ describe('AssistantEditScreen', () => {
 
     render();
 
-    expect(switchControl('assistant.form.streamOutput').props.isSelected).toBe(false);
-    expect(switchControl('assistant.form.enableMaxToolCalls').props.isSelected).toBe(true);
+    expect(switchControl('assistant.form.streamOutput').props.value).toBe(false);
+    expect(switchControl('assistant.form.enableMaxToolCalls').props.value).toBe(true);
     expect(field('assistant.form.maxToolCalls')[0]?.props.value).toBe('7');
   });
 
@@ -271,7 +267,7 @@ describe('AssistantEditScreen', () => {
     expect(field('assistant.form.maxToolCalls')).toEqual([]);
 
     act(() => {
-      switchControl('assistant.form.enableMaxToolCalls').props.onSelectedChange(true);
+      switchControl('assistant.form.enableMaxToolCalls').props.onValueChange(true);
     });
 
     expect(field('assistant.form.maxToolCalls')[0]?.props.value).toBe('12');
@@ -283,7 +279,7 @@ describe('AssistantEditScreen', () => {
     render();
 
     act(() => {
-      switchControl('assistant.form.streamOutput').props.onSelectedChange(false);
+      switchControl('assistant.form.streamOutput').props.onValueChange(false);
       field('assistant.form.maxToolCalls')[0]?.props.onChangeText('35');
     });
     await save();
@@ -299,6 +295,35 @@ describe('AssistantEditScreen', () => {
       }),
     );
     expect(mockRouterBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('selects the MCP mode from a sheet and persists it', async () => {
+    mockAssistant = makeAssistant();
+    mockIsLoading = false;
+    render();
+
+    const mcpModeButton = renderer!.root.find(
+      (node) =>
+        node.props.accessibilityLabel === 'assistant.form.mcpMode.label' &&
+        node.props.accessibilityRole === 'button',
+    );
+    act(() => mcpModeButton.props.onPress());
+
+    let sheet = renderer!.root.findByType('SingleSelectionSheet');
+    expect(sheet.props.heightFraction).toBe(0.6);
+    expect(sheet.props.isOpen).toBe(true);
+    expect(sheet.props.selectedValue).toBe('auto');
+
+    act(() => sheet.props.onSelect('manual'));
+    sheet = renderer!.root.findByType('SingleSelectionSheet');
+    expect(sheet.props.selectedValue).toBe('manual');
+
+    await save();
+
+    expect(mockUpdateAssistant).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ settings: expect.objectContaining({ mcpMode: 'manual' }) }),
+    );
   });
 
   it('rejects a non-positive max tool call value', async () => {

@@ -8,12 +8,20 @@ import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
 const mockRouterPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
+const mockCancelQueries = jest.fn(async () => undefined);
+const mockGetQueriesData = jest.fn();
 const mockPrefetch = jest.fn(async (_path: string, _options?: unknown) => undefined);
 const mockPrefetchInfinite = jest.fn(async (_path: string, _options?: unknown) => undefined);
 const mockRemoveQueries = jest.fn();
+const mockSetQueriesData = jest.fn();
+const mockSetQueryData = jest.fn();
 const mockQueryClient = {
+  cancelQueries: mockCancelQueries,
+  getQueriesData: mockGetQueriesData,
   invalidateQueries: mockInvalidateQueries,
   removeQueries: mockRemoveQueries,
+  setQueriesData: mockSetQueriesData,
+  setQueryData: mockSetQueryData,
 };
 const defaultModelId = 'provider::default-model';
 const mockGetCachedPreferenceValue = jest.fn((): string | null => defaultModelId);
@@ -53,6 +61,15 @@ const mockLoadMoreTopics = jest.fn(async () => undefined);
 const mockTogglePin = jest.fn(async () => undefined);
 
 let mutationHookIndex = 0;
+let renameMutationOptions:
+  | {
+      onError?: (error: Error, variables: unknown, context: Record<string, unknown>) => void;
+      onMutate?: (variables: {
+        body: { isNameManuallyEdited: true; name: string };
+        params: { id: string };
+      }) => Promise<Record<string, unknown>>;
+    }
+  | undefined;
 let currentActions: ReturnType<typeof useTopicListActions> | undefined;
 let renderer: ReactTestRenderer | undefined;
 
@@ -74,6 +91,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   currentActions = undefined;
   mutationHookIndex = 0;
+  renameMutationOptions = undefined;
   renderer = undefined;
   mockGetCachedPreferenceValue.mockReturnValue(defaultModelId);
 
@@ -89,8 +107,12 @@ beforeEach(() => {
     togglePin: mockTogglePin,
   });
 
-  useMutationMock.mockImplementation(() => {
-    const trigger = mutationHookIndex % 2 === 0 ? mockRenameTopic : mockDeleteTopics;
+  useMutationMock.mockImplementation((_method, _path, options) => {
+    const isRenameMutation = mutationHookIndex % 2 === 0;
+    const trigger = isRenameMutation ? mockRenameTopic : mockDeleteTopics;
+    if (isRenameMutation) {
+      renameMutationOptions = options;
+    }
     mutationHookIndex += 1;
     return { trigger };
   });
@@ -214,5 +236,52 @@ describe('TopicListProvider', () => {
 
     expect(mockTogglePin).toHaveBeenCalledWith('topic-1');
     expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['/topics'] });
+  });
+
+  test('optimistically renames list and detail caches and restores both on failure', async () => {
+    const originalTopic = makeTopic(1);
+    const originalList = {
+      pageParams: [undefined],
+      pages: [{ items: [originalTopic], nextCursor: undefined }],
+    };
+    const updatedCaches: unknown[] = [];
+    mockGetQueriesData
+      .mockReturnValueOnce([[['/topics'], originalList]])
+      .mockReturnValueOnce([[['/topics/topic-1'], originalTopic]]);
+    mockSetQueriesData
+      .mockImplementationOnce((_filters, update) => updatedCaches.push(update(originalList)))
+      .mockImplementationOnce((_filters, update) => updatedCaches.push(update(originalTopic)));
+
+    await renderProvider([originalTopic]);
+    const variables = {
+      body: { isNameManuallyEdited: true as const, name: 'Renamed topic' },
+      params: { id: 'topic-1' },
+    };
+    const context = await renameMutationOptions?.onMutate?.(variables);
+
+    expect(updatedCaches).toEqual([
+      expect.objectContaining({
+        pages: [
+          expect.objectContaining({
+            items: [
+              expect.objectContaining({
+                id: 'topic-1',
+                isNameManuallyEdited: true,
+                name: 'Renamed topic',
+              }),
+            ],
+          }),
+        ],
+      }),
+      expect.objectContaining({
+        id: 'topic-1',
+        isNameManuallyEdited: true,
+        name: 'Renamed topic',
+      }),
+    ]);
+
+    renameMutationOptions?.onError?.(new Error('rename failed'), variables, context ?? {});
+    expect(mockSetQueryData).toHaveBeenCalledWith(['/topics'], originalList);
+    expect(mockSetQueryData).toHaveBeenCalledWith(['/topics/topic-1'], originalTopic);
   });
 });

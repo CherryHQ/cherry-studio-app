@@ -1,7 +1,6 @@
-import { FONT_SIZE_STEPS, type FontSizeStep } from '@cherrystudio/universal/data/preference';
-import { Slider } from 'heroui-native/slider';
+import { Slider } from '@cherrystudio/ui/components';
 import { useToast } from 'heroui-native/toast';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -18,17 +17,20 @@ export default function FontSizeSettingsScreen() {
   const { toast } = useToast();
   const [storedStep, setStoredStep] = usePreference('ui.font_size_step');
   const [draftStep, setDraftStep] = useState(() => normalizeFontSizeStep(storedStep));
+  const persistenceVersionRef = useRef(0);
 
-  const handleChange = (value: number | number[]) => {
-    const nextStep = readSliderStep(value);
+  const handleChange = (value: number) => {
+    const nextStep = normalizeFontSizeStep(value);
+    const persistenceVersion = ++persistenceVersionRef.current;
+
     setDraftStep(nextStep);
     applyFontSizeStepPreference(nextStep);
-  };
-
-  const handleChangeEnd = (value: number | number[]) => {
-    const nextStep = readSliderStep(value);
 
     void setStoredStep(nextStep, { optimistic: true }).catch(() => {
+      if (persistenceVersion !== persistenceVersionRef.current) {
+        return;
+      }
+
       const restoredStep = normalizeFontSizeStep(storedStep);
       setDraftStep(restoredStep);
       applyFontSizeStepPreference(restoredStep);
@@ -57,40 +59,14 @@ export default function FontSizeSettingsScreen() {
           </View>
           <Slider
             accessibilityLabel={t('settings.fontSize.sliderLabel')}
-            maxValue={2}
-            minValue={0}
-            onChange={handleChange}
-            onChangeEnd={handleChangeEnd}
+            max={2}
+            maximumValueLabel={t(FONT_SIZE_STEP_LABEL_KEYS[2])}
+            min={0}
+            minimumValueLabel={t(FONT_SIZE_STEP_LABEL_KEYS[0])}
+            onValueChange={handleChange}
             step={1}
             value={draftStep}
-          >
-            <Slider.Track>
-              <Slider.Fill />
-              <View
-                className="absolute inset-y-0 left-[14px] right-[14px] flex-row items-center justify-between"
-                pointerEvents="none"
-              >
-                {FONT_SIZE_STEPS.map((step) => (
-                  <View className="h-2 w-1 rounded-full bg-default-foreground/25" key={step} />
-                ))}
-              </View>
-              <Slider.Thumb />
-            </Slider.Track>
-          </Slider>
-          <View className="h-6 flex-row items-start justify-between">
-            {FONT_SIZE_STEPS.map((step) => (
-              <Text
-                className={
-                  step === draftStep
-                    ? 'font-medium text-foreground text-xs'
-                    : 'text-default-foreground text-xs'
-                }
-                key={step}
-              >
-                {t(FONT_SIZE_STEP_LABEL_KEYS[step])}
-              </Text>
-            ))}
-          </View>
+          />
         </View>
 
         <View className="gap-2">
@@ -107,8 +83,4 @@ export default function FontSizeSettingsScreen() {
       </ScrollView>
     </>
   );
-}
-
-function readSliderStep(value: number | number[]): FontSizeStep {
-  return normalizeFontSizeStep(Array.isArray(value) ? value[0] : value);
 }

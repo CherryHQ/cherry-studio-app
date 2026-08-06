@@ -3,6 +3,7 @@ export { MessageScopeProvider, useMessageScope } from './MessageScopeProvider';
 export {
   MessageSelectionProvider,
   type SelectionSource,
+  useMessagePendingDeletionIds,
   useMessageSelectionActions,
   useMessageSelectionSource,
   useMessageSelectionState,

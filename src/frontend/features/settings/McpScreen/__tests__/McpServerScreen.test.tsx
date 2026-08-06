@@ -36,7 +36,8 @@ let mockServerLoading = false;
 const mockCreateServer = jest.fn();
 const mockDeleteServer = jest.fn();
 const mockGetServerInfo = jest.fn();
-const mockRequestConfirm = jest.fn();
+const mockShowConfirmation = jest.fn();
+const mockShowMessage = jest.fn();
 const mockRouterBack = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockServerRefetch = jest.fn();
@@ -51,10 +52,16 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: mockRouterBack, replace: mockRouterReplace }),
 }));
 
-jest.mock('heroui-native/input', () => {
-  const { View: MockView } = jest.requireActual('react-native');
+jest.mock('@cherrystudio/ui/components', () => {
+  const { Text: MockText, View: MockView } = jest.requireActual('react-native');
 
-  return { Input: (props: Record<string, unknown>) => <MockView {...props} /> };
+  return {
+    Input: (props: Record<string, unknown>) => <MockView {...props} />,
+    Label: (props: Record<string, unknown>) => <MockText {...props} />,
+    TextField: (props: Record<string, unknown>) => (
+      <MockView {...props} mockComponent="text-field" />
+    ),
+  };
 });
 
 jest.mock('heroui-native/toast', () => ({
@@ -78,8 +85,11 @@ jest.mock('@/frontend/components/headers', () => ({
   },
 }));
 
-jest.mock('@/frontend/components/confirmDialog', () => ({
-  useConfirmDialog: () => ({ confirmDialog: null, requestConfirm: mockRequestConfirm }),
+jest.mock('@/frontend/components/AppAlertProvider', () => ({
+  useAppAlert: () => ({
+    showConfirmation: mockShowConfirmation,
+    showMessage: mockShowMessage,
+  }),
 }));
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -488,20 +498,21 @@ describe('McpServerScreen tabs', () => {
     mockServerId = 'server-1';
     mockServer = makeServer();
     const tree = await render();
-    const findNameInput = () =>
-      tree.root.find(
-        (node) =>
-          typeof node.type === 'string' &&
-          node.props.accessibilityLabel === 'settings.mcp.fields.name',
-      );
+    const findNameField = () =>
+      tree.root
+        .findAllByProps({ mockComponent: 'text-field' })
+        .find(
+          (field) =>
+            field.findAllByProps({ accessibilityLabel: 'settings.mcp.fields.name' }).length > 0,
+        )!;
 
-    expect(findNameInput().props.isDisabled).toBe(true);
+    expect(findNameField().props.isDisabled).toBe(true);
 
     await act(async () => {
       mockHeaderProps.rightActions?.find((action) => action.key === 'edit')?.onPress?.();
     });
 
-    expect(findNameInput().props.isDisabled).toBe(false);
+    expect(findNameField().props.isDisabled).toBe(false);
     expect(mockHeaderProps.rightActions?.map((action) => action.key)).toEqual(['save']);
     expect(mockHeaderProps.rightActions?.[0]?.label).toBe('Save');
     expect(mockHeaderProps.title).toBe('Config');
@@ -586,15 +597,17 @@ describe('McpServerScreen tabs', () => {
 
     chrome.props.onDelete();
 
-    expect(mockRequestConfirm).toHaveBeenCalledWith(
+    expect(mockShowConfirmation).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: 'settings.mcp.delete.message',
+        confirmLabel: 'common.delete',
+        description: 'settings.mcp.delete.message',
+        role: 'destructive',
         title: 'settings.mcp.delete.title',
       }),
     );
     mockDeleteServer.mockResolvedValue(undefined);
     await act(async () => {
-      await mockRequestConfirm.mock.calls[0][0].onConfirm();
+      await mockShowConfirmation.mock.calls[0][0].onConfirm();
     });
     expect(mockRouterBack).toHaveBeenCalled();
   });
