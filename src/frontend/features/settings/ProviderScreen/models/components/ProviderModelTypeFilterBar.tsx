@@ -1,3 +1,4 @@
+import { Tabs } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import {
   ArrowUpDownIcon,
@@ -10,7 +11,7 @@ import {
   VideoIcon,
 } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   PROVIDER_MODEL_TYPE_FILTERS,
@@ -19,8 +20,6 @@ import {
   type ProviderModelTypeFilter,
 } from '../utils/providerModelTypeFilter';
 
-// `all` is the only tab without a glyph, the same way desktop draws it: it is a
-// reset rather than a type, so there is nothing to picture.
 const providerModelTypeIcons = {
   all: null,
   audio: AudioLinesIcon,
@@ -32,6 +31,46 @@ const providerModelTypeIcons = {
   transcription: MicIcon,
   video: VideoIcon,
 } as const satisfies Record<ProviderModelTypeFilter, typeof TypeIcon | null>;
+
+function ProviderModelTypeTabContent({
+  count,
+  filter,
+  isSelected,
+  label,
+}: {
+  count: number;
+  filter: ProviderModelTypeFilter;
+  isSelected: boolean;
+  label: string;
+}) {
+  const Icon = providerModelTypeIcons[filter];
+
+  return (
+    <View className="max-w-full flex-row items-center justify-center gap-1.5">
+      {Icon ? (
+        <Icon
+          className={cn(
+            'size-3.5 shrink-0',
+            isSelected ? 'text-foreground' : 'text-default-foreground',
+          )}
+          strokeWidth={2}
+        />
+      ) : null}
+      <Text
+        adjustsFontSizeToFit
+        className={cn(
+          'min-w-0 text-xs',
+          isSelected ? 'font-medium text-foreground' : 'text-default-foreground',
+        )}
+        minimumFontScale={0.8}
+        numberOfLines={1}
+      >
+        {label}
+      </Text>
+      <Text className="shrink-0 text-foreground-tertiary text-xs">{count}</Text>
+    </View>
+  );
+}
 
 /**
  * Desktop's model-type tab row. Every type is always offered, count and all —
@@ -51,54 +90,34 @@ export function ProviderModelTypeFilterBar({
 
   return (
     <ScrollView
-      className="rounded-xl bg-settings-grouped-surface"
-      contentContainerStyle={styles.track}
       horizontal
       keyboardShouldPersistTaps="handled"
       showsHorizontalScrollIndicator={false}
       style={styles.bar}
     >
-      {PROVIDER_MODEL_TYPE_FILTERS.map((filter) => {
-        const Icon = providerModelTypeIcons[filter];
-        const isSelected = filter === selectedFilter;
-        const label = t(PROVIDER_MODEL_TYPE_LABEL_KEYS[filter]);
+      <Tabs
+        items={PROVIDER_MODEL_TYPE_FILTERS.map((filter) => {
+          const label = t(PROVIDER_MODEL_TYPE_LABEL_KEYS[filter]);
 
-        return (
-          <Pressable
-            accessibilityLabel={label}
-            accessibilityRole="button"
-            accessibilityState={{ selected: isSelected }}
-            className={cn(
-              'h-7 flex-row items-center gap-1.5 rounded-lg px-2 active:opacity-60',
-              // The track and the selected pill share one translucent token, so
-              // the pill reads as raised in either theme without a second color.
-              isSelected && 'bg-settings-grouped-surface',
-            )}
-            key={filter}
-            onPress={() => onSelect(filter)}
-          >
-            {Icon ? (
-              <Icon
-                className={cn(
-                  'size-3.5',
-                  isSelected ? 'text-foreground' : 'text-default-foreground',
-                )}
-                strokeWidth={2}
+          return {
+            children: (
+              <ProviderModelTypeTabContent
+                count={counts[filter]}
+                filter={filter}
+                isSelected={filter === selectedFilter}
+                label={label}
               />
-            ) : null}
-            <Text
-              className={cn(
-                'text-xs',
-                isSelected ? 'font-medium text-foreground' : 'text-default-foreground',
-              )}
-              numberOfLines={1}
-            >
-              {label}
-            </Text>
-            <Text className="text-foreground-tertiary text-xs">{counts[filter]}</Text>
-          </Pressable>
-        );
-      })}
+            ),
+            label,
+            testID: `provider-model-type-tab-${filter}`,
+            value: filter,
+          };
+        })}
+        onValueChange={onSelect}
+        style={styles.tabs}
+        testID="provider-model-type-tabs"
+        value={selectedFilter}
+      />
     </ScrollView>
   );
 }
@@ -107,9 +126,7 @@ const styles = StyleSheet.create({
   bar: {
     flexGrow: 0,
   },
-  track: {
-    alignItems: 'center',
-    gap: 4,
-    padding: 4,
+  tabs: {
+    width: PROVIDER_MODEL_TYPE_FILTERS.length * 96,
   },
 });

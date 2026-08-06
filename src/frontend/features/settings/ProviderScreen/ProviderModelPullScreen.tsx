@@ -1,10 +1,8 @@
-import { Button, Spinner } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
+import { Button, Section, Spinner } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Accordion } from 'heroui-native/accordion';
 import { MinusIcon, PlusIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,8 +41,6 @@ type PullTranslator = ReturnType<typeof useTranslation>['t'];
 type PullListExtraData = {
   appliedIds: ReadonlySet<UniqueModelId>;
   displayedPreview: ProviderModelPullPreview;
-  expandedSections: readonly ProviderModelPullSectionKey[];
-  onSectionExpandedChange: (section: ProviderModelPullSectionKey, isExpanded: boolean) => void;
   onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
   onToggleSection: (models: readonly Model[], section: ProviderModelPullSectionKey) => void;
   pendingIds: ReadonlySet<UniqueModelId>;
@@ -145,10 +141,6 @@ function ProviderModelPullPreviewPage({
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
-  const [expandedSections, setExpandedSections] = useState<ProviderModelPullSectionKey[]>([
-    'added',
-    'missing',
-  ]);
   const [typeFilter, setTypeFilter] = useState<ProviderModelTypeFilter>('all');
   const missingCount = preview.missing.length;
   const searchedPreview = useMemo(
@@ -177,44 +169,20 @@ function ProviderModelPullPreviewPage({
     [missingCount],
   );
   const listItems = useMemo(
-    () => buildProviderModelPullListItems(displayedPreview, expandedSections, visibleSections),
-    [displayedPreview, expandedSections, visibleSections],
-  );
-  const handleSectionExpandedChange = useCallback(
-    (section: ProviderModelPullSectionKey, isExpanded: boolean) => {
-      setExpandedSections((current) => {
-        if (isExpanded) {
-          return current.includes(section) ? current : [...current, section];
-        }
-
-        return current.filter((item) => item !== section);
-      });
-    },
-    [],
+    () => buildProviderModelPullListItems(displayedPreview, visibleSections),
+    [displayedPreview, visibleSections],
   );
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
       appliedIds,
       displayedPreview,
-      expandedSections,
-      onSectionExpandedChange: handleSectionExpandedChange,
       onToggleModel: toggleModel,
       onToggleSection: toggleSection,
       pendingIds,
       provider,
       t,
     }),
-    [
-      appliedIds,
-      displayedPreview,
-      expandedSections,
-      handleSectionExpandedChange,
-      pendingIds,
-      provider,
-      t,
-      toggleModel,
-      toggleSection,
-    ],
+    [appliedIds, displayedPreview, pendingIds, provider, t, toggleModel, toggleSection],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
 
@@ -302,16 +270,13 @@ function renderPullListItem({
       <PullSectionHeader
         actionLabel={listData.t(actionLabelKey)}
         count={sectionModels.length}
-        isExpanded={listData.expandedSections.includes(item.section)}
         isFirstSection={item.isFirstSection}
-        section={item.section}
         title={listData.t(
           isAddedSection
             ? 'settings.provider.models.pullAddedSection'
             : 'settings.provider.models.pullMissingSection',
         )}
         onActionPress={() => listData.onToggleSection(sectionModels, item.section)}
-        onExpandedChange={listData.onSectionExpandedChange}
       />
     );
   }
@@ -333,56 +298,29 @@ function renderPullListItem({
 function PullSectionHeader({
   actionLabel,
   count,
-  isExpanded,
   isFirstSection,
   onActionPress,
-  onExpandedChange,
-  section,
   title,
 }: {
   actionLabel: string;
   count: number;
-  isExpanded: boolean;
   isFirstSection: boolean;
   onActionPress: () => void;
-  onExpandedChange: (section: ProviderModelPullSectionKey, isExpanded: boolean) => void;
-  section: ProviderModelPullSectionKey;
   title: string;
 }) {
   return (
-    <Accordion
-      animation={false}
-      className={cn('w-full', !isFirstSection && 'pt-3')}
-      hideSeparator
-      isCollapsible
-      selectionMode="single"
-      value={isExpanded ? section : undefined}
-      onValueChange={(value: string | undefined) => onExpandedChange(section, value === section)}
-    >
-      <Accordion.Item value={section}>
-        {/* Padded like a row so the title lines up with the model names below it. */}
-        <View className="relative min-h-11 w-full">
-          <Accordion.Trigger className="min-h-11 w-full px-4 py-2 pr-32">
-            <View className="min-w-0 flex-1">
-              <Text className="font-medium text-default-foreground text-sm" numberOfLines={1}>
-                {title} ({count})
-              </Text>
-            </View>
-            <Accordion.Indicator className="absolute right-4" iconProps={{ size: 18 }} />
-          </Accordion.Trigger>
-          <Pressable
-            accessibilityLabel={actionLabel}
-            accessibilityRole="button"
-            className="absolute top-0 right-11 bottom-0 z-10 justify-center px-1 active:opacity-60 disabled:opacity-40"
-            disabled={count === 0}
-            hitSlop={6}
-            onPress={onActionPress}
-          >
-            <Text className="font-medium text-primary text-sm">{actionLabel}</Text>
-          </Pressable>
-        </View>
-      </Accordion.Item>
-    </Accordion>
+    <Section.Header className={isFirstSection ? 'pb-2' : 'mt-3 pb-2'} title={`${title} (${count})`}>
+      <Pressable
+        accessibilityLabel={actionLabel}
+        accessibilityRole="button"
+        className="shrink-0 justify-center px-1 active:opacity-60 disabled:opacity-40"
+        disabled={count === 0}
+        hitSlop={6}
+        onPress={onActionPress}
+      >
+        <Text className="font-medium text-primary text-sm">{actionLabel}</Text>
+      </Pressable>
+    </Section.Header>
   );
 }
 

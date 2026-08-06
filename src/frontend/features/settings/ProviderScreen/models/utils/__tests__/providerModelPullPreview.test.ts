@@ -26,24 +26,23 @@ describe('provider model pull preview helpers', () => {
     expect(filterProviderModelPullPreview(preview, '  ')).toBe(preview);
   });
 
-  test('keeps both section headers visible and only includes rows from expanded sections', () => {
+  test('keeps both section headers visible and includes every model row', () => {
     const preview = {
       added: [model({ modelId: 'new-model' })],
       missing: [model({ modelId: 'old-model' })],
     };
 
     expect(
-      buildProviderModelPullListItems(preview, ['added'], ['added', 'missing']).map(
-        (item) => item.key,
-      ),
-    ).toEqual(['section:added', 'model:added:openai::new-model', 'section:missing']);
-    expect(
-      buildProviderModelPullListItems(preview, [], ['added', 'missing']).map((item) => item.key),
-    ).toEqual(['section:added', 'section:missing']);
+      buildProviderModelPullListItems(preview, ['added', 'missing']).map((item) => item.key),
+    ).toEqual([
+      'section:added',
+      'model:added:openai::new-model',
+      'section:missing',
+      'model:missing:openai::old-model',
+    ]);
   });
 
-  // Each section draws its own card, so the placement restarts rather than
-  // running across the whole list.
+  // The header sits outside each card, so row placement restarts per section.
   test('marks the first and last row of every section', () => {
     const preview = {
       added: [model({ modelId: 'new-model' }), model({ modelId: 'other-new-model' })],
@@ -51,7 +50,7 @@ describe('provider model pull preview helpers', () => {
     };
 
     expect(
-      buildProviderModelPullListItems(preview, ['added', 'missing'], ['added', 'missing'])
+      buildProviderModelPullListItems(preview, ['added', 'missing'])
         .filter((item) => item.type === 'model')
         .map((item) => [item.key, item.isFirst, item.isLast]),
     ).toEqual([
@@ -61,16 +60,31 @@ describe('provider model pull preview helpers', () => {
     ]);
   });
 
-  test('only includes section headers that are configured as visible', () => {
+  test('does not include section headers without models', () => {
     expect(
-      buildProviderModelPullListItems({ added: [], missing: [] }, ['added', 'missing'], ['added']),
-    ).toEqual([
+      buildProviderModelPullListItems({ added: [], missing: [] }, ['added', 'missing']),
+    ).toEqual([]);
+  });
+
+  test('marks the first non-empty section as the first rendered section', () => {
+    const preview = {
+      added: [],
+      missing: [model({ modelId: 'old-model' })],
+    };
+
+    expect(buildProviderModelPullListItems(preview, ['added', 'missing'])).toEqual([
       {
         isFirstSection: true,
-        key: 'section:added',
-        section: 'added',
+        key: 'section:missing',
+        section: 'missing',
         type: 'section',
       },
+      expect.objectContaining({
+        isFirst: true,
+        isLast: true,
+        key: 'model:missing:openai::old-model',
+        type: 'model',
+      }),
     ]);
   });
 });
