@@ -9,7 +9,6 @@ import {
   type PropsWithChildren,
   use,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -44,6 +43,7 @@ type QueuedAlert = {
     onPress?: (inputValue?: string) => void;
   })[];
   description?: string;
+  id: number;
   input?: Omit<AlertInput, 'onChangeText'>;
   title: string;
 };
@@ -58,13 +58,14 @@ const AppAlertContext = createContext<AppAlertContextValue | null>(null);
 
 export function AppAlertProvider({ children }: PropsWithChildren) {
   const { t } = useTranslation();
-  const shouldAdvanceRef = useRef(false);
-  const [isOpen, setIsOpen] = useState(false);
+  const nextAlertIdRef = useRef(0);
   const [queue, setQueue] = useState<QueuedAlert[]>([]);
   const activeAlert = queue[0];
 
-  const enqueue = useCallback((alert: QueuedAlert) => {
-    setQueue((current) => [...current, alert]);
+  const enqueue = useCallback((alert: Omit<QueuedAlert, 'id'>) => {
+    const id = nextAlertIdRef.current;
+    nextAlertIdRef.current += 1;
+    setQueue((current) => [...current, { ...alert, id }]);
   }, []);
 
   const showConfirmation = useCallback(
@@ -141,30 +142,10 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
   }, []);
 
   const handleOpenChange = useCallback((nextIsOpen: boolean) => {
-    if (nextIsOpen) {
-      setIsOpen(true);
-      return;
-    }
-
-    shouldAdvanceRef.current = true;
-    setIsOpen(false);
-  }, []);
-
-  useEffect(() => {
-    if (isOpen) {
-      return;
-    }
-
-    if (shouldAdvanceRef.current) {
-      shouldAdvanceRef.current = false;
+    if (!nextIsOpen) {
       setQueue((current) => current.slice(1));
-      return;
     }
-
-    if (activeAlert) {
-      setIsOpen(true);
-    }
-  }, [activeAlert, isOpen]);
+  }, []);
 
   const contextValue = useMemo(
     () => ({ showConfirmation, showMessage, showPrompt }),
@@ -184,10 +165,11 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
     <AppAlertContext value={contextValue}>
       {children}
       <Alert
+        key={activeAlert?.id ?? 'empty'}
         actions={actions}
         description={activeAlert?.description}
         input={input}
-        isOpen={isOpen}
+        isOpen={Boolean(activeAlert)}
         onOpenChange={handleOpenChange}
         testID="app-alert"
         title={activeAlert?.title ?? ''}
