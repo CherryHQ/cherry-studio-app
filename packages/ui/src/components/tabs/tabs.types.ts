@@ -1,0 +1,17 @@
+import type { StyleProp, ViewStyle } from 'react-native';
+
+export type TabsItem<TValue extends string> = {
+  disabled?: boolean;
+  label: string;
+  testID?: string;
+  value: TValue;
+};
+
+export type TabsProps<TValue extends string> = {
+  accessibilityLabel?: string;
+  items: readonly TabsItem<TValue>[];
+  onValueChange: (value: TValue) => void;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+  value: TValue;
+};

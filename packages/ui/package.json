@@ -58,9 +58,11 @@
   },
   "peerDependencies": {
     "@expo/ui": "*",
+    "expo-glass-effect": "*",
     "heroui-native": "*",
     "react": "*",
     "react-native": "*",
+    "react-native-reanimated": "*",
     "uniwind": "*"
   }
 }

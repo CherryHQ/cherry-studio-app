@@ -1,33 +1,39 @@
-import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MessageScopeTabs } from '../MessageScopeTabs.ios';
 
-jest.mock('expo-glass-effect', () => ({
-  GlassView: ({ children, ...props }: { children?: ReactNode }) => {
-    const React = jest.requireActual('react');
-    const { View: MockView } = jest.requireActual('react-native');
-
-    return React.createElement(MockView, { ...props, testID: 'topic-list-tabs-glass' }, children);
-  },
-}));
-
-jest.mock('react-native-reanimated', () => {
-  const { View: MockView } = jest.requireActual('react-native');
+jest.mock('@cherrystudio/ui/components', () => {
+  const { Pressable, Text: MockText, View } = jest.requireActual('react-native');
 
   return {
-    __esModule: true,
-    default: { View: MockView },
-    useAnimatedStyle: (factory: () => object) => factory(),
-    useSharedValue: (value: number) => ({ value }),
-    withTiming: (value: number) => value,
+    Tabs: ({ items, onValueChange, style, value }: MockTabsProps) => (
+      <View testID="cherry-tabs" style={style} value={value}>
+        {items.map((item) => (
+          <Pressable
+            accessibilityRole="tab"
+            accessibilityState={{ selected: item.value === value }}
+            key={item.value}
+            onPress={() => onValueChange(item.value)}
+            testID={item.testID}
+          >
+            <MockText>{item.label}</MockText>
+          </Pressable>
+        ))}
+      </View>
+    ),
   };
 });
 
+type MockTabsProps = {
+  items: readonly { label: string; testID?: string; value: string }[];
+  onValueChange: (value: string) => void;
+  style?: object;
+  value: string;
+};
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
-    i18n: { resolvedLanguage: 'en-US' },
     t: (key: string) =>
       ({
         'topic.tabs.chat': 'Chat',
@@ -40,12 +46,14 @@ describe('MessageScopeTabs.ios', () => {
   let renderer: ReactTestRenderer | undefined;
   const onScopeChange = jest.fn();
 
-  afterEach(async () => {
-    await act(async () => renderer?.unmount());
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    jest.clearAllMocks();
   });
 
-  it('renders a compact controlled tab list and selects a new scope', async () => {
-    await act(async () => {
+  it('configures Cherry UI tabs and selects a new scope', () => {
+    act(() => {
       renderer = create(<MessageScopeTabs scope="conversations" onScopeChange={onScopeChange} />);
     });
 
@@ -53,25 +61,24 @@ describe('MessageScopeTabs.ios', () => {
       throw new Error('MessageScopeTabs test renderer was not created.');
     }
 
-    const glass = renderer.root.findByProps({ testID: 'topic-list-tabs-glass' });
+    const root = renderer.root.findByProps({ testID: 'cherry-tabs' });
     const chat = renderer.root.findByProps({ testID: 'topic-list-tab-conversations' });
     const paint = renderer.root.findByProps({ testID: 'topic-list-tab-drawings' });
 
-    expect(glass.props.style).toMatchObject({ borderRadius: 17, height: 34, width: 144 });
+    expect(root.props).toMatchObject({ style: { width: 144 }, value: 'conversations' });
     expect(renderer.root.findAllByType(Text).map((item) => item.props.children)).toEqual([
       'Chat',
       'Paint',
     ]);
-    expect(chat.props.accessibilityRole).toBe('tab');
     expect(chat.props.accessibilityState).toEqual({ selected: true });
     expect(paint.props.accessibilityState).toEqual({ selected: false });
 
-    await act(async () => paint.props.onPress());
+    act(() => paint.props.onPress());
     expect(onScopeChange).toHaveBeenCalledWith('drawings');
   });
 
-  it('reflects the controlled selected scope', async () => {
-    await act(async () => {
+  it('reflects the controlled selected scope', () => {
+    act(() => {
       renderer = create(<MessageScopeTabs scope="drawings" onScopeChange={onScopeChange} />);
     });
 
@@ -79,10 +86,12 @@ describe('MessageScopeTabs.ios', () => {
       throw new Error('MessageScopeTabs test renderer was not created.');
     }
 
-    const chat = renderer.root.findByProps({ testID: 'topic-list-tab-conversations' });
-    const paint = renderer.root.findByProps({ testID: 'topic-list-tab-drawings' });
-
-    expect(chat.props.accessibilityState).toEqual({ selected: false });
-    expect(paint.props.accessibilityState).toEqual({ selected: true });
+    expect(
+      renderer.root.findByProps({ testID: 'topic-list-tab-conversations' }).props
+        .accessibilityState,
+    ).toEqual({ selected: false });
+    expect(
+      renderer.root.findByProps({ testID: 'topic-list-tab-drawings' }).props.accessibilityState,
+    ).toEqual({ selected: true });
   });
 });

@@ -5,4 +5,5 @@ export * from './search-field';
 export * from './section';
 export * from './slider';
 export * from './switch';
+export * from './tabs';
 export * from './text-field';

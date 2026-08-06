@@ -1,7 +1,7 @@
-import { Tabs } from 'heroui-native';
+import { Tabs } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import { type MessageScope, messageScopes } from '@/frontend/components/messageTabs';
+import { messageScopes } from '@/frontend/components/messageTabs';
 
 import type { MessageScopeTabsProps } from './types';
 
@@ -15,36 +15,14 @@ export function MessageScopeTabs({ onScopeChange, scope }: MessageScopeTabsProps
 
   return (
     <Tabs
-      className="w-full max-w-36 gap-0"
+      items={messageScopes.map((item) => ({
+        label: t(labelKeys[item]),
+        testID: `topic-list-tab-${item}`,
+        value: item,
+      }))}
+      onValueChange={onScopeChange}
+      style={{ width: 144 }}
       value={scope}
-      onValueChange={(value) => {
-        onScopeChange(value as MessageScope);
-      }}
-    >
-      <Tabs.List className="h-[34px] w-full self-stretch rounded-[17px]">
-        <Tabs.Indicator />
-        {messageScopes.map((item) => (
-          <Tabs.Trigger
-            key={item}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: item === scope }}
-            className="h-7 flex-1 px-1 py-0"
-            hitSlop={{ bottom: 5, top: 5 }}
-            testID={`topic-list-tab-${item}`}
-            value={item}
-          >
-            <Tabs.Label
-              adjustsFontSizeToFit
-              className="text-[13px]"
-              maxFontSizeMultiplier={1.2}
-              minimumFontScale={0.9}
-              numberOfLines={1}
-            >
-              {t(labelKeys[item])}
-            </Tabs.Label>
-          </Tabs.Trigger>
-        ))}
-      </Tabs.List>
-    </Tabs>
+    />
   );
 }
