@@ -5,7 +5,6 @@ import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/comm
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { Accordion } from 'heroui-native/accordion';
 import { useToast } from 'heroui-native/toast';
 import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
@@ -251,40 +250,26 @@ export default function NewProviderScreen() {
             </View>
           </FormField>
 
-          <Accordion
-            className="overflow-hidden rounded-xl bg-settings-grouped-surface"
-            hideSeparator
-            isCollapsible
-            selectionMode="single"
-          >
-            <Accordion.Item value="more-endpoints">
-              <Accordion.Trigger className="min-h-11 px-3 py-3">
-                <View className="flex-1">
-                  <Text className="font-medium text-default-foreground text-sm">
-                    {t('settings.provider.apiService.moreEndpoints')}
-                  </Text>
-                </View>
-                <Accordion.Indicator iconProps={{ size: 18 }} />
-              </Accordion.Trigger>
-              <Accordion.Content className="gap-4 px-3 pb-4">
-                <EndpointField
-                  label={t('settings.provider.add.endpoint.anthropic')}
-                  onChangeText={setAnthropicUrl}
-                  value={anthropicUrl}
-                />
-                <EndpointField
-                  label={t('settings.provider.add.endpoint.gemini')}
-                  onChangeText={setGeminiUrl}
-                  value={geminiUrl}
-                />
-                <EndpointField
-                  label={t('settings.provider.add.endpoint.openaiResponses')}
-                  onChangeText={setOpenaiResponsesUrl}
-                  value={openaiResponsesUrl}
-                />
-              </Accordion.Content>
-            </Accordion.Item>
-          </Accordion>
+          <View className="gap-4">
+            <Text className="font-medium text-default-foreground text-sm">
+              {t('settings.provider.apiService.moreEndpoints')}
+            </Text>
+            <EndpointField
+              label={t('settings.provider.add.endpoint.anthropic')}
+              onChangeText={setAnthropicUrl}
+              value={anthropicUrl}
+            />
+            <EndpointField
+              label={t('settings.provider.add.endpoint.gemini')}
+              onChangeText={setGeminiUrl}
+              value={geminiUrl}
+            />
+            <EndpointField
+              label={t('settings.provider.add.endpoint.openaiResponses')}
+              onChangeText={setOpenaiResponsesUrl}
+              value={openaiResponsesUrl}
+            />
+          </View>
         </View>
       </KeyboardAwareScrollView>
     </>
