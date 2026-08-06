@@ -1,5 +1,15 @@
 {
   "translation": {
+    "agent": {
+      "clear": "清除",
+      "empty": "讓智慧體用手機能力幫你辦事——提醒、行事曆、捷徑、網頁。",
+      "inputPlaceholder": "描述一個任務給智慧體。它可以讀取提醒、行事曆、捷徑，並抓取網頁內容。",
+      "running": "智慧體執行中…",
+      "selectModel": "選擇模型",
+      "send": "傳送",
+      "stop": "停止",
+      "title": "智慧體"
+    },
     "assistants": {
       "market": {
         "add": {

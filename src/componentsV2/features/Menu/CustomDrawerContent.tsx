@@ -8,6 +8,7 @@ import { IconButton } from '@/componentsV2/base/IconButton'
 import Image from '@/componentsV2/base/Image'
 import Text from '@/componentsV2/base/Text'
 import { MarketIcon, MCPIcon, Settings } from '@/componentsV2/icons'
+import { Sparkles } from '@/componentsV2/icons/LucideIcon'
 import PressableRow from '@/componentsV2/layout/PressableRow'
 import RowRightArrow from '@/componentsV2/layout/Row/RowRightArrow'
 import XStack from '@/componentsV2/layout/XStack'
@@ -45,6 +46,10 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
 
   const handleNavigateMcpScreen = () => {
     props.navigation.navigate('Mcp', { screen: 'McpScreen' })
+  }
+
+  const handleNavigateAgentScreen = () => {
+    props.navigation.navigate('Agent', { screen: 'AgentScreen' })
   }
 
   const handleNavigateSettingsScreen = () => {
@@ -104,6 +109,16 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
             <XStack className="items-center justify-center gap-2.5">
               <MCPIcon size={24} />
               <Text className="text-base">{t('mcp.server.title')}</Text>
+            </XStack>
+            <RowRightArrow />
+          </PressableRow>
+
+          <PressableRow
+            className="flex-row items-center justify-between rounded-lg px-2.5 py-2.5"
+            onPress={handleNavigateAgentScreen}>
+            <XStack className="items-center justify-center gap-2.5">
+              <Sparkles size={24} />
+              <Text className="text-base">{t('agent.title')}</Text>
             </XStack>
             <RowRightArrow />
           </PressableRow>

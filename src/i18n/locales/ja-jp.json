@@ -1,5 +1,15 @@
 {
   "translation": {
+    "agent": {
+      "clear": "Clear",
+      "empty": "Ask the agent to do something with your phone capabilities — reminders, calendar, shortcuts, web.",
+      "inputPlaceholder": "Describe a task for the agent. It can read reminders, calendars, shortcuts and fetch web content.",
+      "running": "Agent is working…",
+      "selectModel": "Select Model",
+      "send": "Send",
+      "stop": "Stop",
+      "title": "Agent"
+    },
     "assistants": {
       "market": {
         "add": {

@@ -7,6 +7,7 @@ import { getFocusedRouteNameFromRoute, type RouteProp } from '@react-navigation/
 import React from 'react'
 
 import CustomDrawerContent from '@/componentsV2/features/Menu/CustomDrawerContent'
+import AgentStackNavigator from '@/navigators/AgentStackNavigator'
 import AssistantMarketStackNavigator from '@/navigators/AssistantMarketStackNavigator'
 import AssistantStackNavigator from '@/navigators/AssistantStackNavigator'
 import HomeStackNavigator from '@/navigators/HomeStackNavigator'
@@ -80,6 +81,7 @@ export default function AppDrawerNavigator() {
       <Drawer.Screen name="Assistant" options={options} component={AssistantStackNavigator} />
       <Drawer.Screen name="AssistantMarket" options={options} component={AssistantMarketStackNavigator} />
       <Drawer.Screen name="Mcp" options={getMcpScreenOptions} component={McpStackNavigator} />
+      <Drawer.Screen name="Agent" options={options} component={AgentStackNavigator} />
 
       {/* Individual screens for backward compatibility */}
       {/*<Drawer.Screen name="ChatScreen" options={options} component={ChatScreen} />

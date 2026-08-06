@@ -1,5 +1,15 @@
 {
   "translation": {
+    "agent": {
+      "clear": "清空",
+      "empty": "让智能体用手机能力帮你办事——提醒、日历、快捷指令、网页。",
+      "inputPlaceholder": "描述一个任务给智能体。它可以读取提醒、日历、快捷指令，并抓取网页内容。",
+      "running": "智能体运行中…",
+      "selectModel": "选择模型",
+      "send": "发送",
+      "stop": "停止",
+      "title": "智能体"
+    },
     "assistants": {
       "market": {
         "add": {
