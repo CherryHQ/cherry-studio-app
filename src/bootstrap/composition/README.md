@@ -5,8 +5,11 @@ dependency interfaces. It is wiring code, not a service locator and not a home f
 
 ## Current Modules
 
-- `createBackendServices.ts` constructs the private desktop-aligned services plus mobile AI, MCP,
-  tool-resolver, and device-adapter dependencies.
+- `createDataServices.ts` constructs the private desktop-aligned persistence graph.
+- `createPlatformAdapters.ts` creates the device-permission and managed-file adapters.
+- `createAiServices.ts` constructs AI, MCP, web-search, and tool-resolution runtimes from narrow
+  data and platform dependencies.
+- `createBackendServices.ts` assembles those ownership modules into the private backend graph.
 - `createBackend.ts` creates the app-owned `ChatRuntime`, builds factory-shaped workflow modules,
   adapts the graph into the workflow-only `Backend` interface, and supplies the MCP mutation
   coordinator required by Data API handlers.
