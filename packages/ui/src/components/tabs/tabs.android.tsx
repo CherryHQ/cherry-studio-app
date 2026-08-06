@@ -21,28 +21,41 @@ export function Tabs<TValue extends string>({
     >
       <HeroTabs.List className="h-[34px] w-full self-stretch rounded-[17px]">
         <HeroTabs.Indicator />
-        {items.map((item) => (
-          <HeroTabs.Trigger
-            accessibilityRole="tab"
-            accessibilityState={{ disabled: item.disabled, selected: item.value === value }}
-            className="h-7 flex-1 px-1 py-0"
-            hitSlop={{ bottom: 5, top: 5 }}
-            isDisabled={item.disabled}
-            key={item.value}
-            testID={item.testID}
-            value={item.value}
-          >
-            <HeroTabs.Label
-              adjustsFontSizeToFit
-              className="text-[13px]"
-              maxFontSizeMultiplier={1.2}
-              minimumFontScale={0.9}
-              numberOfLines={1}
+        {items.map((item) => {
+          const isSelected = item.value === value;
+          const customContent =
+            typeof item.children === 'function'
+              ? item.children({ isDisabled: Boolean(item.disabled), isSelected })
+              : item.children;
+
+          return (
+            <HeroTabs.Trigger
+              accessibilityLabel={item.label}
+              accessibilityRole="tab"
+              accessibilityState={{ disabled: item.disabled, selected: isSelected }}
+              className="h-7 flex-1 px-1 py-0"
+              hitSlop={{ bottom: 5, top: 5 }}
+              isDisabled={item.disabled}
+              key={item.value}
+              testID={item.testID}
+              value={item.value}
             >
-              {item.label}
-            </HeroTabs.Label>
-          </HeroTabs.Trigger>
-        ))}
+              {item.children !== undefined ? (
+                customContent
+              ) : (
+                <HeroTabs.Label
+                  adjustsFontSizeToFit
+                  className="text-[13px]"
+                  maxFontSizeMultiplier={1.2}
+                  minimumFontScale={0.9}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </HeroTabs.Label>
+              )}
+            </HeroTabs.Trigger>
+          );
+        })}
       </HeroTabs.List>
     </HeroTabs>
   );

@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Tabs } from '../tabs.android';
+import type { TabsItemState } from '../tabs.types';
 
 jest.mock('heroui-native/tabs', () => {
   const React = jest.requireActual('react');
@@ -110,5 +111,40 @@ describe('Tabs.android', () => {
 
     expect(renderer.root.findByProps({ testID: 'default-tabs' }).props.style).toBeUndefined();
     expect(renderer.root.findByProps({ testID: 'hero-tabs-list' })).toBeDefined();
+  });
+
+  it('renders custom children with the current item state', () => {
+    const customItems = [
+      {
+        children: ({ isDisabled, isSelected }: TabsItemState) => (
+          <Text testID="custom-tab-content">
+            {isSelected ? 'selected' : 'idle'}-{isDisabled ? 'disabled' : 'enabled'}
+          </Text>
+        ),
+        disabled: true,
+        label: 'Text',
+        testID: 'text-tab',
+        value: 'text',
+      },
+    ] as const;
+
+    act(() => {
+      renderer = create(<Tabs items={customItems} onValueChange={jest.fn()} value="text" />);
+    });
+
+    if (!renderer) {
+      throw new Error('Tabs test renderer was not created.');
+    }
+
+    const trigger = renderer.root
+      .findAllByProps({ testID: 'hero-tabs-trigger' })
+      .find((node) => node.props.value === 'text');
+
+    expect(trigger?.props.accessibilityLabel).toBe('Text');
+    expect(renderer.root.findByProps({ testID: 'custom-tab-content' }).props.children).toEqual([
+      'selected',
+      '-',
+      'disabled',
+    ]);
   });
 });

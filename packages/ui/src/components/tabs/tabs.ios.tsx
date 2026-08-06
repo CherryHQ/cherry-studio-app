@@ -74,9 +74,14 @@ export function Tabs<TValue extends string>({
         <View className="h-full flex-row">
           {items.map((item) => {
             const isSelected = item.value === value;
+            const customContent =
+              typeof item.children === 'function'
+                ? item.children({ isDisabled: Boolean(item.disabled), isSelected })
+                : item.children;
 
             return (
               <Pressable
+                accessibilityLabel={item.label}
                 accessibilityRole="tab"
                 accessibilityState={{ disabled: item.disabled, selected: isSelected }}
                 className="h-full flex-1 items-center justify-center disabled:opacity-40"
@@ -86,20 +91,24 @@ export function Tabs<TValue extends string>({
                 onPress={() => onValueChange(item.value)}
                 testID={item.testID}
               >
-                <Text
-                  adjustsFontSizeToFit
-                  className="font-medium"
-                  maxFontSizeMultiplier={1.2}
-                  minimumFontScale={0.9}
-                  numberOfLines={1}
-                  style={{
-                    color: PlatformColor(isSelected ? 'label' : 'secondaryLabel'),
-                    fontSize: 13,
-                    lineHeight: 16,
-                  }}
-                >
-                  {item.label}
-                </Text>
+                {item.children !== undefined ? (
+                  customContent
+                ) : (
+                  <Text
+                    adjustsFontSizeToFit
+                    className="font-medium"
+                    maxFontSizeMultiplier={1.2}
+                    minimumFontScale={0.9}
+                    numberOfLines={1}
+                    style={{
+                      color: PlatformColor(isSelected ? 'label' : 'secondaryLabel'),
+                      fontSize: 13,
+                      lineHeight: 16,
+                    }}
+                  >
+                    {item.label}
+                  </Text>
+                )}
               </Pressable>
             );
           })}

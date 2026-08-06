@@ -3,6 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Tabs } from '../tabs.ios';
+import type { TabsItemState } from '../tabs.types';
 
 jest.mock('expo-glass-effect', () => ({
   GlassView: ({ children, ...props }: { children?: ReactNode }) => {
@@ -106,5 +107,36 @@ describe('Tabs.ios', () => {
         renderer.root.findByProps({ testID: 'default-tabs-indicator' }).props.style,
       ),
     ).toMatchObject({ width: 144 });
+  });
+
+  it('renders custom children with the current item state', () => {
+    const customItems = [
+      {
+        children: ({ isDisabled, isSelected }: TabsItemState) => (
+          <Text testID="custom-tab-content">
+            {isSelected ? 'selected' : 'idle'}-{isDisabled ? 'disabled' : 'enabled'}
+          </Text>
+        ),
+        disabled: true,
+        label: 'Text',
+        testID: 'text-tab',
+        value: 'text',
+      },
+    ] as const;
+
+    act(() => {
+      renderer = create(<Tabs items={customItems} onValueChange={jest.fn()} value="text" />);
+    });
+
+    if (!renderer) {
+      throw new Error('Tabs test renderer was not created.');
+    }
+
+    expect(renderer.root.findByProps({ testID: 'text-tab' }).props.accessibilityLabel).toBe('Text');
+    expect(renderer.root.findByProps({ testID: 'custom-tab-content' }).props.children).toEqual([
+      'selected',
+      '-',
+      'disabled',
+    ]);
   });
 });

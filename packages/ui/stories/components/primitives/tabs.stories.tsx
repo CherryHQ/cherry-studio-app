@@ -1,5 +1,6 @@
-import { Tabs, type TabsProps } from '@cherrystudio/ui/components';
+import { Tabs, type TabsItemState, type TabsProps } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
+import { MessageCircleIcon, SettingsIcon } from 'lucide-uniwind/png';
 import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
@@ -9,6 +10,40 @@ const items = [
   { label: 'Messages', value: 'messages' },
   { label: 'Assistants', value: 'assistants' },
   { label: 'Settings', value: 'settings' },
+] as const;
+
+const customItems = [
+  {
+    children: ({ isSelected }: TabsItemState) => (
+      <View className="flex-row items-center gap-1.5">
+        <MessageCircleIcon
+          className={isSelected ? 'size-4 text-foreground' : 'size-4 text-muted-foreground'}
+          strokeWidth={2}
+        />
+        <Text className={isSelected ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+          Messages
+        </Text>
+        <Text className="text-foreground-tertiary">12</Text>
+      </View>
+    ),
+    label: 'Messages',
+    value: 'messages',
+  },
+  {
+    children: ({ isSelected }: TabsItemState) => (
+      <View className="flex-row items-center gap-1.5">
+        <SettingsIcon
+          className={isSelected ? 'size-4 text-foreground' : 'size-4 text-muted-foreground'}
+          strokeWidth={2}
+        />
+        <Text className={isSelected ? 'font-medium text-foreground' : 'text-muted-foreground'}>
+          Settings
+        </Text>
+      </View>
+    ),
+    label: 'Settings',
+    value: 'settings',
+  },
 ] as const;
 
 type TabValue = (typeof items)[number]['value'];
@@ -32,6 +67,12 @@ function TabsPreview({ args }: { args: TabsStoryArgs }) {
       />
     </View>
   );
+}
+
+function CustomTabsPreview() {
+  const [value, setValue] = useState<(typeof customItems)[number]['value']>('messages');
+
+  return <Tabs items={customItems} onValueChange={setValue} value={value} />;
 }
 
 const meta = {
@@ -73,6 +114,7 @@ export const Playground: Story = {
               {theme === 'light' ? 'Light' : 'Dark'}
             </Text>
             <TabsPreview args={args} />
+            <CustomTabsPreview />
           </View>
         </ScopedTheme>
       ))}
