@@ -8,19 +8,8 @@ let mockScopeTabsProps:
   | { onScopeChange: (scope: 'conversations' | 'drawings') => void; scope: string }
   | undefined;
 
-jest.mock('heroui-native/menu', () => {
-  const { Text: MockText, View: MockView } = jest.requireActual('react-native');
-  const Passthrough = ({ children }: { children?: ReactNode }) => children;
-  const Menu = Object.assign(Passthrough, {
-    Content: Passthrough,
-    Item: ({ children, ...props }: { children?: ReactNode }) => (
-      <MockView {...props}>{children}</MockView>
-    ),
-    ItemTitle: MockText,
-    Overlay: () => null,
-    Portal: Passthrough,
-    Trigger: Passthrough,
-  });
+jest.mock('@cherrystudio/ui/components', () => {
+  const Menu = ({ children }: { children: ReactNode }) => children;
 
   return { Menu };
 });
