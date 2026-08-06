@@ -2,6 +2,7 @@ export * from './alert';
 export * from './button';
 export * from './input';
 export * from './menu';
+export * from './portal';
 export * from './search-field';
 export * from './scroll-shadow';
 export * from './section';

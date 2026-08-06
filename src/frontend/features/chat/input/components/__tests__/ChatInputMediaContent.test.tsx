@@ -100,7 +100,7 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-jest.mock('heroui-native/portal', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   Portal: ({ children }: { children: ReactNode }) => children,
 }));
 
