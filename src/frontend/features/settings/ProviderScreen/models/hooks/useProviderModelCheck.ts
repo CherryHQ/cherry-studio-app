@@ -5,6 +5,7 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAppAlert } from '@/frontend/components/AppAlertProvider';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 
 import {
@@ -30,8 +31,7 @@ export type ProviderModelCheckApiKeyOption = {
 
 type ProviderModelCheckState = {
   isChecking: boolean;
-  isSheetOpen: boolean;
-  modelStatuses: ProviderModelHealthCheckStatus[];
+  modelStatus: ProviderModelHealthCheckStatus | null;
   providerId: string;
 };
 
@@ -42,6 +42,7 @@ export function useProviderModelCheck({
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { showMessage } = useAppAlert();
   const modelsBackend = useBackendModule('models');
   const queryClient = useQueryClient();
   const [checkState, setCheckState] = useState<ProviderModelCheckState>(() =>
@@ -88,14 +89,10 @@ export function useProviderModelCheck({
   );
   const isCheckStateCurrent = checkState.providerId === providerId;
   const isChecking = isCheckStateCurrent && checkState.isChecking;
-  const isSheetOpen = isCheckStateCurrent && checkState.isSheetOpen;
-  const pendingModelStatuses = useMemo(
-    () => (selectedModel ? createProviderModelHealthPendingStatuses([selectedModel]) : []),
-    [selectedModel],
-  );
-  const modelStatuses = isChecking ? checkState.modelStatuses : pendingModelStatuses;
-  const resolvedSelectedApiKeyId = selectedApiKey?.value ?? defaultApiKeySelectValue;
-  const resolvedSelectedModelId = selectedModel?.id ?? null;
+  const modelStatus =
+    isCheckStateCurrent && checkState.modelStatus
+      ? checkState.modelStatus
+      : (createProviderModelHealthPendingStatuses(selectedModel ? [selectedModel] : [])[0] ?? null);
 
   useEffect(() => {
     return () => {
@@ -105,36 +102,8 @@ export function useProviderModelCheck({
     };
   }, []);
 
-  const closeSheet = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    runIdRef.current += 1;
-    setCheckState(createProviderModelCheckState(providerId));
-  }, [providerId]);
-
-  const openCheckSheet = useCallback(() => {
-    if (!providerId || !selectedModel) {
-      toast.show({
-        label: t('settings.provider.models.checkNoModels'),
-        variant: 'danger',
-      });
-      return;
-    }
-
-    setCheckState({
-      isChecking: false,
-      isSheetOpen: true,
-      modelStatuses: pendingModelStatuses,
-      providerId,
-    });
-  }, [pendingModelStatuses, providerId, selectedModel, t, toast]);
-
   const startCheck = useCallback(async () => {
-    if (!providerId || !selectedModel) {
-      toast.show({
-        label: t('settings.provider.models.checkNoModels'),
-        variant: 'danger',
-      });
+    if (!providerId || !selectedModel || isChecking) {
       return;
     }
 
@@ -145,29 +114,18 @@ export function useProviderModelCheck({
     runIdRef.current = runId;
     setCheckState({
       isChecking: true,
-      isSheetOpen: true,
-      modelStatuses: [{ model: selectedModel, status: 'checking' }],
+      modelStatus: { model: selectedModel, status: 'checking' },
       providerId,
     });
 
-    const runCheck = async () => {
+    try {
       const results = await modelsBackend.checkHealth({
         ...(selectedApiKey?.key !== undefined && { apiKey: selectedApiKey.key }),
         modelIds: [selectedModel.id],
-        onResult: (result, index) => {
-          if (runIdRef.current !== runId) {
-            return;
+        onResult: (result) => {
+          if (runIdRef.current === runId) {
+            setCheckState({ isChecking: true, modelStatus: result, providerId });
           }
-
-          setCheckState((current) => {
-            if (current.providerId !== providerId) {
-              return current;
-            }
-
-            const updated = [...current.modelStatuses];
-            updated[index] = result;
-            return { ...current, modelStatuses: updated };
-          });
         },
         providerId,
         signal: abortController.signal,
@@ -178,10 +136,10 @@ export function useProviderModelCheck({
         return;
       }
 
-      if (results.length > 0 && results.every((result) => result.status === 'success')) {
-        setCheckState((current) =>
-          current.providerId === providerId ? { ...current, isSheetOpen: false } : current,
-        );
+      const result = results[0] ?? { model: selectedModel, status: 'failed' as const };
+      setCheckState({ isChecking: false, modelStatus: result, providerId });
+
+      if (result?.status === 'success') {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: queryKeys.providers.detail(providerId) }),
           queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
@@ -190,51 +148,65 @@ export function useProviderModelCheck({
           label: t('settings.provider.models.checkSuccess'),
           variant: 'success',
         });
-        return;
+      } else {
+        showMessage({
+          description: result.error || t('settings.provider.models.checkFailedStatus'),
+          title: t('settings.provider.models.checkFailed'),
+        });
       }
-
-      toast.show({
-        label: t('settings.provider.models.checkFailed'),
-        variant: 'danger',
-      });
-    };
-
-    await runCheck()
-      .catch(() => {
-        if (!abortController.signal.aborted && runIdRef.current === runId) {
-          toast.show({
-            label: t('settings.provider.models.checkFailed'),
-            variant: 'danger',
-          });
-        }
-      })
-      .finally(() => {
-        if (runIdRef.current === runId) {
-          abortControllerRef.current = null;
-          setCheckState((current) =>
-            current.providerId === providerId ? { ...current, isChecking: false } : current,
-          );
-        }
-      });
-  }, [modelsBackend, providerId, queryClient, selectedApiKey, selectedModel, t, toast]);
+    } catch (error) {
+      if (!abortController.signal.aborted && runIdRef.current === runId) {
+        setCheckState({
+          isChecking: false,
+          modelStatus: {
+            error: error instanceof Error ? error.message : undefined,
+            model: selectedModel,
+            status: 'failed',
+          },
+          providerId,
+        });
+        showMessage({
+          description:
+            error instanceof Error
+              ? error.message
+              : t('settings.provider.models.checkFailedStatus'),
+          title: t('settings.provider.models.checkFailed'),
+        });
+      }
+    } finally {
+      if (runIdRef.current === runId) {
+        abortControllerRef.current = null;
+        setCheckState((current) => ({ ...current, isChecking: false }));
+      }
+    }
+  }, [
+    isChecking,
+    modelsBackend,
+    providerId,
+    queryClient,
+    selectedApiKey,
+    selectedModel,
+    showMessage,
+    t,
+    toast,
+  ]);
 
   const updateSelectedModelId = useCallback((modelId: UniqueModelId) => {
     setSelectedModelId(modelId);
+    setCheckState((current) => ({ ...current, modelStatus: null }));
   }, []);
 
   const updateSelectedApiKeyId = useCallback((apiKeyId: string) => {
     setSelectedApiKeyId(apiKeyId);
+    setCheckState((current) => ({ ...current, modelStatus: null }));
   }, []);
 
   return {
     apiKeyOptions,
-    closeSheet,
     isChecking,
-    isSheetOpen,
-    modelStatuses,
-    openCheckSheet,
-    selectedApiKeyId: resolvedSelectedApiKeyId,
-    selectedModelId: resolvedSelectedModelId,
+    modelStatus,
+    selectedApiKey,
+    selectedModel,
     setSelectedApiKeyId: updateSelectedApiKeyId,
     setSelectedModelId: updateSelectedModelId,
     startCheck,
@@ -244,8 +216,7 @@ export function useProviderModelCheck({
 function createProviderModelCheckState(providerId: string): ProviderModelCheckState {
   return {
     isChecking: false,
-    isSheetOpen: false,
-    modelStatuses: [],
+    modelStatus: null,
     providerId,
   };
 }

@@ -1,7 +1,6 @@
 import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
 import {
-  ActivityIcon,
   CopyIcon,
   EyeIcon,
   EyeOffIcon,
@@ -20,14 +19,12 @@ export function WebSearchApiServiceApiKeysField({
   apiKeysInput,
   apiKeysVisible,
   onApiKeysInputChange,
-  onCheckPress,
   onManagePress,
   onToggleVisible,
 }: {
   apiKeysInput: string;
   apiKeysVisible: boolean;
   onApiKeysInputChange: (value: string) => void;
-  onCheckPress: () => void;
   onManagePress: () => void;
   onToggleVisible: () => void;
 }) {
@@ -62,13 +59,6 @@ export function WebSearchApiServiceApiKeysField({
           hitSlop={2}
           icon={<KeyRoundIcon strokeWidth={2} />}
           onPress={onManagePress}
-          variant="secondary"
-        />
-        <Button
-          accessibilityLabel={t('settings.websearch.provider.check')}
-          hitSlop={2}
-          icon={<ActivityIcon strokeWidth={2} />}
-          onPress={onCheckPress}
           variant="secondary"
         />
       </View>

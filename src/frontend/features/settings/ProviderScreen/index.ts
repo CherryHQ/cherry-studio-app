@@ -6,4 +6,5 @@ export { default as ProviderApiKeySettingsScreen } from './ProviderApiKeySetting
 export { default as ProviderDetailScreen } from './ProviderDetailScreen';
 export { default as ProviderEndpointSettingsScreen } from './ProviderEndpointSettingsScreen';
 export { default as ProviderModelAddScreen } from './ProviderModelAddScreen';
+export { default as ProviderModelCheckScreen } from './ProviderModelCheckScreen';
 export { default as ProviderModelPullScreen } from './ProviderModelPullScreen';

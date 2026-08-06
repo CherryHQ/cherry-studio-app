@@ -1,6 +1,5 @@
 import type {
   WebSearchCapability,
-  WebSearchProvider,
   WebSearchProviderId,
   WebSearchProviderOverride,
 } from '@cherrystudio/universal/data/preference';
@@ -21,10 +20,6 @@ export type WebSearchApiManagementContextValue = {
     ) => void;
     openApiKeySettings: () => void;
     openZhipuApiKeySettings: () => void;
-    checkProvider: (
-      provider: WebSearchProvider,
-      capability?: WebSearchCapability,
-    ) => Promise<{ error?: string; valid: boolean }>;
   };
   meta: {
     t: ReturnType<typeof useTranslation>['t'];

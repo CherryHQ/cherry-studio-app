@@ -155,25 +155,6 @@ jest.mock('../components/ProviderModelList', () => ({
   ProviderModelList: ({ header }: { header?: ReactElement }) => header ?? null,
 }));
 
-jest.mock('../models/components/ProviderModelCheckSheet', () => ({
-  ProviderModelCheckSheet: () => null,
-}));
-
-jest.mock('../models/hooks/useProviderModelCheck', () => ({
-  useProviderModelCheck: () => ({
-    apiKeyOptions: [],
-    closeSheet: jest.fn(),
-    isChecking: false,
-    isSheetOpen: false,
-    openCheckSheet: jest.fn(),
-    selectedApiKeyId: undefined,
-    selectedModelId: undefined,
-    setSelectedApiKeyId: jest.fn(),
-    setSelectedModelId: jest.fn(),
-    startCheck: jest.fn(),
-  }),
-}));
-
 jest.mock('../models/hooks/useProviderModelPull', () => ({
   useProviderModelPull: () => ({ isPreviewLoading: false, loadPullPreview: jest.fn() }),
 }));

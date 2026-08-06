@@ -34,8 +34,6 @@ import { useProviderDetailSettings } from './detail';
 import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
 import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
-import { ProviderModelCheckSheet } from './models/components/ProviderModelCheckSheet';
-import { useProviderModelCheck } from './models/hooks/useProviderModelCheck';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
@@ -77,22 +75,6 @@ export default function ProviderDetailSettingsScreen() {
   });
   const { apiKeys, apiKeysQuery, authConfig, authConfigQuery, replaceApiKeysMutation } =
     useProviderApiServiceQueries(providerId ?? '');
-  const {
-    apiKeyOptions: checkApiKeyOptions,
-    closeSheet: closeCheckSheet,
-    isChecking: isModelChecking,
-    isSheetOpen: isCheckSheetOpen,
-    openCheckSheet,
-    selectedApiKeyId: selectedCheckApiKeyId,
-    selectedModelId: selectedCheckModelId,
-    setSelectedApiKeyId: setSelectedCheckApiKeyId,
-    setSelectedModelId: setSelectedCheckModelId,
-    startCheck: startModelCheck,
-  } = useProviderModelCheck({
-    apiKeys,
-    models,
-    providerId: providerId ?? '',
-  });
   const { isPreviewLoading: isModelPullLoading, loadPullPreview } = useProviderModelPull({
     onPreviewReady: (preview) => {
       if (!providerId) {
@@ -171,6 +153,19 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/model-add',
     });
   }, [provider, providerId, router]);
+  const openModelCheckSettings = useCallback(() => {
+    if (!providerId || models.length === 0) {
+      return;
+    }
+
+    router.push({
+      params: {
+        ...(provider?.name ? { providerName: provider.name } : {}),
+        providerId,
+      },
+      pathname: '/settings/provider/[providerId]/model-check',
+    });
+  }, [models.length, provider, providerId, router]);
   const openModelPullSettings = useCallback(async () => {
     if (!providerId) {
       return;
@@ -217,33 +212,24 @@ export default function ProviderDetailSettingsScreen() {
     ],
     [openModelAddSettings, provider, t],
   );
-  // Pull and check act on the model list, so they only belong in the bottom
-  // toolbar while that tab is up; `undefined` drops them from the toolbar.
-  const modelActionsForTab = useMemo(
+  const checkAction = useMemo(
+    () => ({
+      isDisabled: models.length === 0,
+      isLoading: false,
+      onPress: openModelCheckSettings,
+    }),
+    [models.length, openModelCheckSettings],
+  );
+  const pullAction = useMemo(
     () =>
       activeTab === 'models'
         ? {
-            check: {
-              isDisabled: models.length === 0,
-              isLoading: isModelChecking,
-              onPress: openCheckSheet,
-            },
-            pull: {
-              isDisabled: !provider || isModelPullLoading,
-              isLoading: isModelPullLoading,
-              onPress: () => void openModelPullSettings(),
-            },
+            isDisabled: !provider || isModelPullLoading,
+            isLoading: isModelPullLoading,
+            onPress: () => void openModelPullSettings(),
           }
         : undefined,
-    [
-      activeTab,
-      isModelChecking,
-      isModelPullLoading,
-      models.length,
-      openCheckSheet,
-      openModelPullSettings,
-      provider,
-    ],
+    [activeTab, isModelPullLoading, openModelPullSettings, provider],
   );
   const handleToggleProvider = useCallback(() => {
     if (!provider) {
@@ -335,33 +321,21 @@ export default function ProviderDetailSettingsScreen() {
           isLoading={modelsQuery.isPending}
           models={models}
           provider={provider}
-          pullAction={modelActionsForTab?.pull}
+          pullAction={pullAction}
         />
       )}
-      <ProviderModelCheckSheet
-        apiKeyOptions={checkApiKeyOptions}
-        isChecking={isModelChecking}
-        isOpen={isCheckSheetOpen}
-        models={models}
-        selectedApiKeyId={selectedCheckApiKeyId}
-        selectedModelId={selectedCheckModelId}
-        onApiKeyChange={setSelectedCheckApiKeyId}
-        onClose={closeCheckSheet}
-        onModelChange={setSelectedCheckModelId}
-        onStart={startModelCheck}
-      />
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
         canDelete={provider ? providers.canRemove(provider) : false}
-        checkAction={modelActionsForTab?.check}
+        checkAction={checkAction}
         isActive={provider?.isEnabled ?? false}
         isDisabled={
           !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isLoading
         }
         onDelete={requestDeleteProvider}
         onToggleActive={handleToggleProvider}
-        pullAction={modelActionsForTab?.pull}
+        pullAction={pullAction}
       />
     </>
   );
