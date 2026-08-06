@@ -1,0 +1,504 @@
+# Mobile Job Manager Design
+
+> Updated: 2026-08-03
+> Status: design proposal (runtime not yet built)
+> Desktop source: `CherryHQ/cherry-studio@d498753ecfd0f2572612456281ec222563ce7bf3`
+> Mobile baseline: post `v0.2` merge (`fd1552c6` desktop-sync) — the job **ledger scaffolding
+> already exists**; see [What Already Landed](#what-already-landed)
+> Companion assessment: [job-manager-portability.md](./job-manager-portability.md)
+> Mobile architecture baseline: [architecture-overview.md](./architecture-overview.md),
+> [runtime-ownership.md](./runtime-ownership.md)
+
+This document turns the portability assessment into a concrete implementation design. The
+assessment answers "what can the OS give us"; this document answers "what do we build, where does
+it live, and in what order". Where the two disagree, this document wins and the disagreement is
+called out explicitly in [Deviations From The Assessment](#deviations-from-the-assessment).
+
+## Decision Summary
+
+Build an app-owned job runtime whose **domain layer is a near-verbatim port of the desktop Job
+Manager** (state machine, retry/backoff, catch-up, recovery strategies, typed registry, error
+codes) and whose **runtime layer is rewritten for one mobile reality**: a single Hermes runtime,
+async serialized SQLite writes, OS suspension instead of graceful shutdown, and no reliable
+background execution until native adapters exist.
+
+The v0.2 merge already delivered the passive half — contracts, tables, migration, and read-only
+Data API. What remains is the active half, shipped deliberately small:
+
+- Phase 1 is a **foreground durable core**: enqueue/cancel/claim/retry/recovery on the existing
+  ledger, owned by `AppBootstrapRuntime`, with painting generation as the first real handler.
+  It needs zero OS background APIs and is fully testable in jest.
+- Background wake (Expo BackgroundTask), user-visible leases (iOS 26 Continued Processing, Android
+  FGS), transfers, and schedules come later, each behind its own device-validated gate.
+
+What we do not build: desktop's pause/drain write-quiesce (no mobile backup-restore consumer;
+roughly a third of desktop `JobManager.ts` complexity), croner-armed cron timers as a correctness
+mechanism, silent-audio keep-alive, or any promise that a local job runs while the app is dead.
+
+## What Already Landed
+
+The v0.2 merge (desktop-sync `fd1552c6`) brought in, all desktop-verbatim:
+
+| Piece | Location | State |
+| --- | --- | --- |
+| Jobs DTO contracts (status atoms, `Trigger`, `CatchUpPolicy`, `RetryPolicy`, `JobSnapshot`, `JobScheduleSnapshot`, `JobProgress`, `JOB_ERROR_CODES`, `JobSchemas` endpoints) | `packages/universal/src/data/api/schemas/jobs.ts` | Desktop mirror, formatting-only diff; already in the `ApiSchemas` intersection |
+| `job` + `job_schedule` drizzle tables | `src/backend/data/db/schemas/job.ts` | Desktop-verbatim columns, indexes, CHECK constraint, and the partial unique idempotency index |
+| Migration | `migrations/sqlite-drizzle/0006_*.sql` | Verified: the partial unique index and `job_status_check` emitted correctly |
+| Read repository | `src/backend/data/services/JobService.ts` | `list` / `getById` / bare `create`; `rowToSnapshot` maps timestamps to ISO strings (matches desktop's string-typed snapshot) |
+| GET-only Data API | `src/backend/data/api/handlers/jobs.ts`, aggregated in `apiHandlers.ts`, `JobService` constructed in `createBackendServices` | `/jobs` and `/jobs/:id` reads work today |
+
+Missing — the subject of this design: the runtime (claim/dispatch/fencing/retry/cancel/recovery/
+GC), the handler registry and contract, business handlers, bootstrap ownership of the pump, and
+every platform adapter.
+
+One structural consequence: `src/backend/data/db/schemas/job.ts` and the universal `jobs.ts` are
+**desktop mirrors under the `$sync-cherry-desktop` audit**. Mobile-only state must not be patched
+into them, or every future sync becomes a merge conflict and the schema-AST audit reports drift.
+The design below therefore adds **no schema at all**: everything mobile-only is derived from the
+handler registry, carried in `metadata`, or expressed as a runtime invariant.
+
+## Desktop: What We Port And What We Don't
+
+The desktop subsystem (`src/main/core/job/JobManager.ts`, 2,331 lines, plus pure-function runtime
+helpers, repositories, and shared zod contracts) splits cleanly along one line:
+
+| Desktop area | Verdict | Why |
+| --- | --- | --- |
+| Six-state machine (`pending/delayed/running/completed/failed/cancelled`), terminal/active sets | **Already landed** (universal mirror) | Pure vocabulary, zero Electron coupling |
+| `job` / `job_schedule` schemas, indexes, partial unique idempotency index, CHECK constraint | **Already landed** (schema + migration) | Same drizzle + SQLite on both ends |
+| Jobs DTO / error codes / endpoint map | **Already landed** (universal mirror) | Serialized data contract — dual-end alignment applies letter-for-letter |
+| `runtime/backoff.ts`, `runtime/catchUp.ts`, `runtime/recovery.ts` pure functions | **Port verbatim** | Zero platform dependencies; desktop tests port with them |
+| Claim query (`priority ASC, scheduledAt ASC`, `cancelRequested=false`, double-checked UPDATE) | **Port** | SQL is engine-portable |
+| `JobRegistry` declaration-merging type safety, `JobHandler` contract, `JobContext` (signal, `patchMetadata`, `reportProgress`) | **Port** | Pure TypeScript |
+| `enqueue`/`enqueueTx`/`JobHandle.finished` contract (finished never rejects; status carries the outcome; resolvers dropped, not rejected, on shutdown) | **Port semantics** | The "never resolves across shutdown" caveat is *more* true on mobile, not less |
+| Cancel flow (persist `cancelRequested` → abort controller → grace `cancelTimeoutMs` 30 s → force-finalize `timed-out`) | **Port** | |
+| Recovery strategies `abandon`/`retry`/`singleton` + `cancelRequested` override + in-flight exclusion + orphan-type cancel | **Port verbatim** | We do NOT add a fourth "resume" strategy — see deviations |
+| GC (terminal TTL 7 d, keep latest 100 per type) | **Port, run from the pump** | Two independent prune steps are trivial |
+| Layer 1 per-queue `async-mutex` + `DispatchQueue` map | **Drop** | Existed to reduce wasted write-tx traffic at ~200 dispatch/s; mobile throughput is orders of magnitude lower and `DbService.withWriteTx` already serializes globally |
+| 60 s quiet window + `onInit`/`onAllReady` lifecycle framework | **Drop** | Mobile explicitly does not port the desktop lifecycle framework; registry is frozen at composition (kills the registration-timing race by construction) |
+| Pause/drain write quiesce + release compensation | **Drop** | Serves desktop backup-restore fingerprinting; no mobile consumer |
+| croner / `SchedulerService` timers | **Defer, foreground-only optimization** | Background timers freeze under Hermes/OS suspension; correctness moves to evaluate-on-pump (Phase 4) |
+| Shared-window cache progress (`jobs.state.*` / `jobs.progress.*`) | **Adapt** | Single JS context; replace transport, keep the snapshot shape |
+| `globalMaxConcurrency = 50` | **Replace with 2** | Backend JS shares the UI Hermes thread; tune from device measurement |
+
+## Architecture
+
+### Placement
+
+Follows the standard "new backend module" drop points; read-path files already exist:
+
+```text
+packages/universal/src/data/api/schemas/jobs.ts   # landed — desktop mirror, do not fork
+src/backend/data/db/schemas/job.ts                # landed — desktop mirror, do not fork
+src/backend/data/services/JobService.ts           # landed reads; ADD claim/terminal/retry writers
+src/backend/data/api/handlers/jobs.ts             # landed — GET-only, stays read-only
+src/backend/services/jobs/JobRuntime.ts           # NEW: orchestrator (enqueue/cancel/pump)
+src/backend/services/jobs/jobRegistry.ts          # NEW: declaration-merging JobRegistry
+src/backend/services/jobs/types.ts                # NEW: JobHandler / JobContext / EnqueueOptions
+src/backend/services/jobs/runtime/backoff.ts      # NEW: ported pure functions + their tests
+src/backend/services/jobs/runtime/catchUp.ts
+src/backend/services/jobs/runtime/recovery.ts
+src/backend/services/jobs/adapters/               # Phase 2+: wake & lease platform seams
+src/backend/services/<domain>/tasks/<Name>JobHandler.ts   # handlers live with their domain
+```
+
+Handler runtime types (`JobHandler`, `JobContext`) stay app-side, exactly as desktop keeps them
+out of `src/shared` ("main-process internals" per the universal file's own header comment). Ported
+runtime files carry the repo's alignment-comment convention
+(`// Keep aligned with desktop src/main/core/job/...`).
+
+### Ownership and composition
+
+`AppBootstrapRuntime` owns the module, mirroring how `McpRuntimeService` is owned today:
+
+1. `createBackendServices` already constructs `JobService`; it additionally constructs
+   `JobRuntime`, passing the **complete handler registry as a constructor argument** — an
+   immutable array assembled in composition from each domain's exported handler. There is no
+   `registerHandler` call at runtime. Desktop needs its `onInit`-only registration rule because
+   registration is distributed across lifecycle phases; mobile composition is explicit and
+   synchronous, so we eliminate the orphan-cancel race structurally instead of documenting it.
+2. `createAppBootstrapRuntime` adds `jobRuntime.dispose()` to the dispose sequence (abort all
+   controllers, drop `finished` resolvers without rejecting — desktop `onStop` semantics minus
+   drain).
+3. `runPostReadyTasks` calls `jobRuntime.pump({ reason: 'cold-start' })` fire-and-forget, next to
+   `reconcileStalePendingMessages`. The existing comment there is the load-bearing axiom for the
+   whole design: *cold start is the only reliable "no writer is streaming into this" signal,
+   because the OS suspends rather than kills a backgrounded app*.
+4. A single `AppState` listener (inside the runtime, not in React) pumps on `active`. Frontend
+   never imports the runtime; routes and hooks never own dispatch.
+
+React routes, `ChatSessionProvider`, and hooks must not own the job dispatcher. This is the
+navigation-ownership fix that PR #473 could not deliver.
+
+### Runtime interface
+
+```ts
+type JobRuntime = {
+  enqueue<K extends JobType>(
+    type: K,
+    input: JobPayloadOf<K>,
+    opts?: EnqueueOptions,
+  ): Promise<JobHandle>;
+  enqueueTx<K extends JobType>(
+    tx: Database,
+    type: K,
+    input: JobPayloadOf<K>,
+    opts?: EnqueueOptions,
+  ): Promise<JobHandle>;
+  cancel(id: string, reason?: string): Promise<JobCancelResult>;
+  pump(request: PumpRequest): Promise<PumpResult>;
+  dispose(): void;
+};
+```
+
+Same shape as desktop with one signature change: `enqueue` is async (mobile SQLite writes are
+async). `JobHandle` keeps the desktop contract — `{ id, snapshot, finished }`, where `finished`
+resolves the terminal `JobSnapshot`, **never rejects**, and silently never settles across a
+process death; callers that must survive restart observe the ledger via Data API instead.
+`enqueueTx` composes with `DbService.withWriteTx` for atomic business-write + job-insert
+(e.g. create the painting receipt and enqueue its generation in one transaction), with the
+desktop rule that post-commit side effects (dispatch, handle publication) defer past the commit.
+
+Business modules enqueue; UI never does. The renderer-side rule ports unchanged: **Data API stays
+read-only for jobs**, and any user-initiated job goes through the owning domain's workflow
+contract (e.g. `PaintingsBackend` in `src/shared/contracts`), which internally calls
+`JobRuntime`. This preserves compile-time payload safety and keeps queue names, retry policies,
+and idempotency keys out of the frontend.
+
+## Data Model
+
+### Mirrored tables stay verbatim
+
+`job` and `job_schedule` are already desktop-verbatim and must remain so — they are sync-audited
+mirrors. Checkpoints (provider task IDs, cursors) live in `metadata` via `ctx.patchMetadata`,
+exactly like desktop's remote-poll handler; they get promoted to typed columns only when a
+handler's correctness depends on them, and any such promotion is negotiated as a deliberate,
+documented mirror divergence — not slipped in.
+
+Two properties the assessment wanted as columns are instead derived, keeping the mirror clean:
+
+- **Execution class** is a function of the handler, not the row: the registry maps
+  `type → executionClass`, and the pump filters claimable candidates by
+  `type IN (classes allowed in this window)`. A per-row column would only matter if one type
+  could be enqueued under different classes, which has no use case.
+- **Payload version** is a `metadata.payloadVersion` convention (enqueue stamps the handler's
+  current version; dispatch fails rows newer than the handler understands, terminal and
+  non-retryable). Promote to a typed column only if a real migration ever needs to query on it.
+
+### Fencing: a weak fence plus an invariant, not a sidecar table
+
+Zero new tables. Attempt-scoped writes (`patchMetadata`, retry scheduling, terminal finalization)
+are guarded by a **conditional UPDATE** rather than a per-attempt token:
+
+```ts
+// setTerminalTx(…, expectedStatuses) — 0 rows updated means the fence held.
+.where(and(eq(jobTable.id, id), inArray(jobTable.status, expectedStatuses)))
+// setDelayedRetryTx / setMetadataTx are fenced on status='running'.
+```
+
+This is already **stricter than desktop**, which updates by id alone
+(`.where(eq(jobTable.id, jobId))`) and has no fence at all. It is weaker than a `runToken`
+sidecar in exactly one way: it isolates by *state*, not by *attempt*. A late write from attempt 1
+is stopped only while the row is not back in the expected state — if attempt 2 had already
+re-claimed the row to `running`, attempt 1's write would match and overwrite it.
+
+**Why that window is closed.** For an attempt-1 promise to outlive its own claim, it must still be
+running while attempt 2 is claimed:
+
+- `claimNext` skips candidates in `inFlightExecuted`, and that entry is deleted in the `finally`
+  block — i.e. only after the handler settles. A live handler is always still in the set.
+- Cancel-grace force-finalization leaves the row `cancelled`; claims only select `pending`.
+- Across a process death the old attempt's promise does not exist at all.
+
+So the weak fence is sufficient **exactly as long as this invariant holds**:
+
+> At most ONE live `JobRuntime` per process per database.
+
+That invariant is stated at the top of `JobRuntime.ts` and enforced by single-instance
+registration in the composition root. Fencing is therefore an *architectural* constraint here,
+not a schema feature — cheaper than a table, a migration, a per-claim upsert, and a token compare
+on every write.
+
+**The upgrade trigger.** Phase 2's background window must reuse the *same* `JobRuntime` instance.
+On iOS this is free (BGTaskScheduler wakes the same JS runtime). If an Android headless path is
+ever forced to construct a second React context — two live runtimes against one database — this
+invariant breaks and the weak fence with it. That is the signal to introduce a per-attempt
+`runToken` (a `job_claim` sidecar keyed by `jobId`, holding `runToken` / `runtimeId` /
+`claimedAt` / `claimExpiresAt`, so the `job` mirror still never diverges). Build it then, on
+evidence — not now, on speculation. Phase 2's device spike carries the check.
+
+### The all-writes-in-tx rule
+
+All job and claim writes — including single statements — go through `DbService.withWriteTx`.
+This is stricter than both desktop convention ("single writes ride the connection") and current
+mobile habit, and it is deliberate: on an async single connection, a stray write issued outside
+the serialized queue can interleave into another transaction's `BEGIN IMMEDIATE … COMMIT` window.
+Desktop is immune because better-sqlite3 is synchronous; we are not. Claim atomicity
+(count → select → double-checked claim UPDATE in one queued transaction) depends on this rule.
+
+## Execution Semantics
+
+### Dispatch
+
+Single coalescing dispatcher instead of desktop's per-queue mutex fleet:
+
+1. `schedulePump()` — if a pump is running, mark dirty and return; else start one.
+2. Pump loop: promote due `delayed → pending`; then repeatedly claim inside one
+   `withWriteTx` (global running count < 2 → per-queue running count < handler concurrency →
+   claim next by `priority ASC, scheduledAt ASC`, filtered to types whose execution class is
+   allowed in this window) until no candidate or caps reached.
+3. Spawn `handler.execute` outside the transaction with a `JobContext` whose `signal` is the
+   combined abort of: user cancel, handler timeout sentinel (`JobHandlerTimeoutError`, matched by
+   abort reason, never by message text), runtime dispose, and — Phase 2+ — lease expiration and
+   pump deadline.
+4. On settle: finalize fenced on the expected status; retry via `computeBackoff`
+   (`none`/`fixed`/`exponential` with clamp, desktop defaults `{3, exponential, 1s, 60s}`) into
+   `delayed` with a future `scheduledAt`; fire `onSettled` projection (errors swallowed and
+   logged); re-run pump.
+5. Arm exactly one foreground `setTimeout` for the earliest future `scheduledAt` among
+   `delayed` rows; re-arm after every pump. Timers frozen by backgrounding are harmless: the next
+   `AppState.active` or cold-start pump promotes overdue rows anyway. Timers are a latency
+   optimization, never a correctness mechanism — this is the design's version of desktop's
+   "5-minute fallback tick", except the fallback is the pump itself.
+6. Run the two GC prunes (bounded) on cold-start pumps only.
+
+Global concurrency starts at 2 (painting generation + one light job) and is a constructor
+parameter, not a hardcode. Backend JS shares the UI thread; desktop's 50 is meaningless here.
+
+### Recovery
+
+Cold-start pump runs the ported `runStartupRecovery` before any claim, with desktop semantics
+verbatim: exclude rows the current process is executing; `cancelRequested=true` overrides every
+strategy; `abandon` cancels leftovers; `retry` resets `running → pending` (attempt unchanged) and
+leaves `delayed` alone; `singleton` keeps the newest row and cancels the rest; rows whose type has
+no registered handler are cancelled as orphans. Staleness detection needs no marker column: with
+one runtime per process, every active row outside this instance's in-flight set is by definition a
+prior-process leftover. Rows this instance enqueued *before* recovery ran are excluded too —
+otherwise lazy recovery would cancel work the current session just created.
+
+There is no 60 s quiet window. Recovery rides `runPostReadyTasks` (already after the startup
+gate, off the critical path), and because the registry is frozen at construction, the desktop
+failure mode "recovery saw a partial registry" cannot occur.
+
+### Cancellation
+
+Desktop flow verbatim: persist `cancelRequested`, abort the live controller if the job is
+running, wait up to `cancelTimeoutMs` (default 30 s) for the handler to settle, then
+force-finalize `cancelled` and report `timed-out` (the handler may still be running in memory —
+fencing makes its late writes no-ops). Pending/delayed rows finalize immediately. Platform
+Stop/Cancel surfaces (Phase 3 notifications, Live Activity) call this same path.
+
+### Progress and observation
+
+- **Durable truth**: the `job` row plus the handler's domain destination (painting receipt,
+  file entry, message rows). Terminal business results always land in domain tables; `output`
+  carries orchestration-level results only.
+- **Foreground latency**: `JobHandle.finished` for the enqueuing owner that is still mounted;
+  TanStack Query invalidation after settle for everyone else. Phase 1 has no live-progress
+  consumer (image generation is a single provider call — there is nothing incremental to report),
+  so we ship **no subscription surface yet**. When a progress-bearing handler arrives (Phase 2/3),
+  add a ChatSession-style `subscribe(jobId)` snapshot listener on a jobs workflow contract,
+  reusing the universal `JobProgress` shape (`{progress: 0-100, detail}`) and throttling
+  persistence to meaningful checkpoints. Do not build it speculatively.
+- Live Activity / Android notifications (Phase 3) observe progress; they never own it, and they
+  never mark a job complete.
+
+## Handler Contract
+
+Ported `JobHandler` surface: `recovery` (required), `defaultQueue?(input)`,
+`defaultConcurrency?`, `defaultRetryPolicy?`, `defaultTimeoutMs?`, `cancelTimeoutMs?`,
+`execute(ctx)`, `onSettled?`, plus two mobile-only fields:
+
+```ts
+type JobHandler<K extends JobType> = {
+  executionClass: JobExecutionClass;   // mobile-only, required; drives window eligibility
+  payloadVersion?: number;             // mobile-only, default 1; stamped into metadata
+  recovery: 'abandon' | 'retry' | 'singleton';
+  // ... desktop fields unchanged
+};
+```
+
+`JobExecutionClass` is `'foreground-only' | 'bounded-background' | 'user-continued' |
+'system-transfer'`. Phase 1 dispatches only `foreground-only`. `server-required` from the
+assessment is deliberately not a class — such work must never be enqueued locally.
+
+Every first-wave handler must declare, in its PR description: destination, idempotency rule,
+checkpoint format (or "none"), cancellation behavior, and recovery policy — the assessment's
+go/no-go checklist enforced at review time.
+
+### First handlers
+
+**`painting.generate`** — the first real consumer, replacing the route-owned
+`PaintingGenerationSessionImpl` execution path while keeping its receipt design:
+
+- The receipt (`PaintingRepository.create`) is already the durable destination, created before
+  generation — today's session logic ports almost directly into a handler.
+- Input: `{ paintingId, prompt, modelId, mode, paramValues, inputFileIds }` — file-entry IDs, not
+  ephemeral URIs; the handler re-reads data URLs from storage.
+- `executionClass: 'foreground-only'`, `recovery: 'abandon'`, `maxAttempts: 1`, queue
+  `'painting'`, concurrency 1. Mobile `generateImage` is a single un-resumable provider call with
+  no task ID; process death mid-call is an ambiguous external outcome, so recovery must not
+  resubmit. Idempotency key: reuse the session's existing `generationSignature` so double-taps
+  join the active job instead of double-charging.
+- `PaintingsBackend` gains `startGeneration(input) → { paintingId, jobId }` and cancel;
+  `usePaintingGeneration` drops its AbortController ownership, awaits `finished` while mounted,
+  and re-attaches via the paintings query + `GET /jobs/:id` after navigation. This delivers the
+  actual product ask — generation survives leaving the screen — with zero OS background APIs.
+
+**`internal.echo`** — dev/test-only proof handler (desktop `dummy.echo` precedent), excluded from
+the production registry; drives the jest suite and the device sanity pass.
+
+**Deliberately not chat.** `ChatSession` stays route-owned for now; an agent turn is a workflow
+with approvals and tool calls, not a replayable job, and no provider recovery contract exists.
+Moving chat to app lifetime is its own project; the job module only becomes its execution
+coordinator afterwards, if ever.
+
+**Second-consumer candidates** (whichever lands first validates the shared module):
+`messages.crash-settle` (migrating `reconcileStalePendingMessages` into a `bounded-background`
+job — idempotent, checkpointable, the canonical Phase 2 pilot), file orphan cleanup, or a
+desktop-style content-hash backfill (`recovery: 'singleton'`).
+
+## Platform Seams (Phase 2+)
+
+Interfaces defined now, implemented per phase; the pump must stay correct when `acquire` returns
+`null` or the signal aborts immediately:
+
+```ts
+type JobWakeScheduler = {
+  reconcile(input: { earliestAt: number | null; requiresNetwork: boolean }): Promise<void>;
+};
+
+type JobExecutionLeaseProvider = {
+  acquire(input: {
+    jobId: string;
+    executionClass: JobExecutionClass;
+    title: string;
+  }): Promise<JobExecutionLease | null>;
+};
+
+type JobExecutionLease = {
+  signal: AbortSignal;
+  update(progress: JobProgress): void;
+  release(outcome: 'completed' | 'checkpointed' | 'expired'): Promise<void>;
+};
+```
+
+- **Phase 2 wake**: one Expo BackgroundTask registration (single global entry, multiplexed to the
+  same pump with `{ allowedClasses: ['bounded-background'], deadline, maxJobs }`). The headless
+  composition opens the same `cherry.db` through a headless-safe subset of
+  `createBackendServices` — no React, navigation, i18n, or route sessions. OS registration is a
+  hint; SQLite stays authoritative; foreground resume remains the guaranteed catch-up path.
+  This subset must resolve the *same* `JobRuntime` instance the foreground uses — that is the
+  precondition the weak fence rests on (see Fencing), and the spike has to prove it per platform.
+- **Phase 3 leases**: local Expo modules + config plugins (repo pattern:
+  `modules/pdf-text-extractor` + `scripts/with-health-connect.js`) for iOS 26
+  `BGContinuedProcessingTask` and an honestly-typed Android foreground service. iOS 17–25 gets
+  `beginBackgroundTask` checkpoint grace only — the product copy must not promise long
+  continuation there, and silent audio is not a fallback.
+- **Transfers**: system-owned engines (background `URLSession`, Android UIDT/WorkManager) behind a
+  separate transfer adapter; a JS handler loop never owns bytes.
+
+## Schedules (Phase 4)
+
+The `job_schedule` table already exists (mirror), but no runtime reads it until Phase 4. Port the
+semantics with the mobile inversion the assessment mandates: **durable rows are the schedule; OS
+registrations and foreground timers are replaceable hints.** Every pump transactionally evaluates
+due occurrences (ported `computeCatchUpAction`/`isScheduleOverdue` pure functions: cron by
+`nextRun`, interval by `lastRun + ms`, `once` never overdue) and creates occurrence jobs with
+deterministic `(scheduleId, occurrenceAt)` idempotency keys, so late, coalesced, or duplicated
+wakes cannot double-fire. Croner runs foreground-only as a latency optimization, if at all — it
+must first be validated on Hermes. Android exact alarms are an optional, explicitly Android-only
+precision tier gated on product accepting the special-access UX; exact cross-platform wall-clock
+scheduling and unattended multi-day agents are server-owned, full stop.
+
+## Testing
+
+Reuse the repo's proven backend harness (`McpServerService.test.ts` pattern): `node:sqlite`
+in-memory database + drizzle sqlite-proxy + the real generated migration SQL + a duck-typed
+`withWriteTx` that replays `BEGIN IMMEDIATE` semantics. Port the desktop scenario list onto it:
+
+1. Six-state transition legality; terminal states never reopen.
+2. Recovery matrix: `abandon`/`retry`/`singleton` × `cancelRequested` override × in-flight
+   exclusion × orphan-type cancel × this-session-enqueued exclusion.
+3. `computeBackoff` three branches + clamp; `computeCatchUpAction` overdue judgments (pure
+   functions — desktop tests port nearly verbatim).
+4. Idempotency: duplicate enqueue joins the active handle; unique-index backstop under racing
+   enqueues.
+5. Cancel grace timeout → force-finalize `timed-out`; late handler settle is a fenced no-op.
+6. **Weak fence**: a force-finalized row stays terminal when its handler settles late — status
+   and output are not overwritten and `onSettled` fires exactly once; `setDelayedRetryTx` /
+   `setMetadataTx` no-op once the row leaves `running`.
+7. `enqueueTx` rollback: no row, no dispatch, resolver dropped without rejection.
+8. Concurrency caps: global and per-queue, backlog does not occupy slots.
+9. Payload-version refusal path (metadata stamp newer than handler).
+10. Pump coalescing: concurrent `schedulePump` calls produce one pump + one rerun.
+
+Device sanity (not jest): cold start with leftover `running` rows; backgrounding mid-generation
+and resuming; force-quit mid-generation → relaunch → `abandon` verdict visible in history.
+
+## Delivery Plan
+
+Re-sequenced from the assessment — each phase carries its own gate instead of one up-front
+all-platform spike (see deviations):
+
+| Phase | Contents | Entry gate | Exit criteria |
+| --- | --- | --- | --- |
+| 1. Foreground durable core (~2 wk) | Zero schema change; `JobService` writers, `JobRuntime` (claim/weak fence/retry/cancel/recovery/GC), bootstrap wiring, `painting.generate` + `internal.echo`, jest suite | None beyond this design | Painting survives navigation; force-quit yields honest `abandon` history; all jest scenarios green; device sanity pass |
+| 2. Opportunistic background pump (~1–2 wk) | One Expo BackgroundTask registration, headless-safe composition, pump budgets/class filter, first `bounded-background` handler (`messages.crash-settle`) | 1–2 day device spike: task actually fires on physical iPhone + API-36 Android; denied/disabled background refresh handled; **the headless entry resolves the same `JobRuntime` instance** (if it cannot, add the `runToken` sidecar before shipping the window) | Dual-entry safety proven on device (foreground activation racing a headless window); catch-up correct when the OS never calls |
+| 3. User-continued leases + transfers (~1–2 wk) | CP module (iOS 26), typed FGS or long worker (Android), Live Activity/notification progress + Stop plumbing, transfer adapter | Device spike per platform: CP submit/queue/cancel/app-switcher-removal; FGS type/policy review sanity | A user-started job continues after backgrounding on iOS 26 + Android; older iOS checkpoints and stops cleanly |
+| 4. Schedules (~1–2 wk) | Schedule runtime over the existing table, CRUD via domain routes, due-occurrence evaluation in pump, catch-up policies, foreground timer optimization | A committed product feature that needs schedules; croner-on-Hermes validation | Late/duplicate wake cannot double-fire an occurrence; UI wording distinguishes best-effort/Android-exact/server tiers |
+
+Phase 1 has product value on its own. Stop-loss: if after Phase 1 no second consumer
+materializes, the module cost was ~the cost of an app-owned painting operation plus a reusable
+ledger — acceptable; do not build Phases 2–4 speculatively.
+
+## Deviations From The Assessment
+
+Explicit disagreements with [job-manager-portability.md](./job-manager-portability.md), so future
+readers know they are decisions, not oversights:
+
+1. **No up-front all-platform spike.** The assessment's Phase 0 (4–7 days validating CP, FGS,
+   exact alarms, BGTask delivery) gates work that ships in Phases 2–4. The foreground core needs
+   none of it. Each phase gets a narrow entry spike instead; total spike effort is similar but no
+   longer blocks first value.
+2. **Three recovery strategies, not four.** The assessment adds "resume from checkpoint" as a
+   policy. Desktop expresses resume as `recovery: 'retry'` + a persisted checkpoint in
+   `metadata` (the remote-poll handler pattern), which composes and keeps the vocabulary aligned.
+   We keep desktop's three.
+3. **No mobile columns on the `job` table at all — and no sidecar either.** The assessment wants
+   execution class, payload version, fencing tokens, and checkpoint/provider IDs as typed job
+   columns. Post-merge, `job` is a sync-audited desktop mirror; execution class derives from the
+   handler registry, payload version is a metadata convention, checkpoints stay in `metadata`
+   desktop-style, and fencing is an invariant rather than state (see Fencing). Net schema change
+   for the runtime: zero.
+4. **No destination-ID column.** Handler input already carries the business key
+   (`paintingId` …); adding a generic column duplicates it. Convention over schema until a
+   generic "open the result" UI exists.
+5. **`enqueue` returns a full desktop-style `JobHandle`,** not a bare `{ id }`. The assessment's
+   worry (promise lifetime treated as truth) is addressed by the ported contract itself:
+   `finished` never rejects and never settles across restart, and the ledger stays authoritative.
+6. **Fencing is scoped honestly — and stays desktop-shaped.** The assessment reads as if
+   dual-runtime races are a Phase 1 threat. With one Hermes runtime, zero background frameworks,
+   and cold-start-only recovery, they are not. Rather than pre-building token fencing, Phase 1
+   ships a conditional-UPDATE fence (already stricter than desktop, which updates by id alone) and
+   pays for it with an explicit single-runtime invariant. Upgrading to `runToken` is a decision
+   deferred to evidence, not a schema paid for upfront.
+7. **No subscription/progress surface in Phase 1.** The first handler has no incremental
+   progress; building the listener plumbing now is speculation. The universal `JobProgress`
+   shape is reserved for when it exists.
+8. **`server-required` is not an execution class value.** It is a product-mapping decision
+   ("don't build this locally"); a local row with that class would be a bug, not a state.
+
+## Open Questions
+
+- **`useJob` polling cadence**: Phase 1 re-attach uses query + `GET /jobs/:id`; pick a bounded
+  `refetchInterval` for active jobs (only while an active job exists) and stop conditions.
+- **Painting UX copy**: force-quit mid-generation now surfaces an honest failed/abandoned receipt
+  instead of silently vanishing work — needs a small UI state for "interrupted, tap to retry".
+- **Sync-audit registration**: confirm with the `$sync-cherry-desktop` skill that the jobs mirror
+  files are classified correctly, and that `JobService`'s mobile-only writers (fenced signatures,
+  `*Tx`-only surface) read as `semantic-port` rather than drift.
+
+Resolved since the first draft: the drizzle partial unique index generates correctly (verified in
+`0006_*.sql`), and snapshot timestamps follow desktop's ISO-string convention via the landed
+`rowToSnapshot`.

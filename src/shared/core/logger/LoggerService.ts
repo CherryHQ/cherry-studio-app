@@ -27,7 +27,7 @@ const LEVEL_MAP: Record<LogLevel, number> = {
 const isDevelopment = () => typeof __DEV__ !== 'undefined' && __DEV__;
 const DEFAULT_LEVEL: LogLevel = isDevelopment() ? LEVEL.SILLY : LEVEL.INFO;
 
-class LoggerService {
+export class LoggerService {
   private level: LogLevel = DEFAULT_LEVEL;
   private module = '';
   private context: LogContext = {};
