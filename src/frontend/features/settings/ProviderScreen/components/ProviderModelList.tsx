@@ -1,15 +1,15 @@
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { useState } from 'react';
+import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
-import { ProviderModelAccordion } from '../models/components/ProviderModelAccordion';
+import { ProviderModelListContent } from '../models/components/ProviderModelListContent';
 import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';
-import { useProviderModelGroups } from '../models/hooks/useProviderModelGroups';
 import { useProviderModelRemove } from '../models/hooks/useProviderModelRemove';
 import type { ProviderModelAction } from '../models/types';
+import { filterModelsByKeywords } from '../models/utils/providerModelSearch';
 
 type ProviderModelListProps = {
   isLoading: boolean;
@@ -27,8 +27,12 @@ export function ProviderModelList({
 }: ProviderModelListProps) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
-  const { displayedExpandedValues, groups, isSearching, setExpandedValues } =
-    useProviderModelGroups({ models, searchText });
+  const deferredSearchText = useDeferredValue(searchText);
+  const displayedModels = useMemo(
+    () => filterModelsByKeywords(deferredSearchText, models),
+    [deferredSearchText, models],
+  );
+  const isSearching = searchText.trim().length > 0;
   const { isDefaultModel, removeModel, removingIds } = useProviderModelRemove();
 
   // A provider with no models at all has nothing to search and nothing to say, so
@@ -40,9 +44,7 @@ export function ProviderModelList({
       {!hasNoModels && process.env.EXPO_OS === 'ios' ? (
         <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
       ) : null}
-      <ProviderModelAccordion
-        displayedExpandedValues={displayedExpandedValues}
-        groups={groups}
+      <ProviderModelListContent
         isDefaultModel={isDefaultModel}
         ListEmptyComponent={
           hasNoModels && pullAction ? (
@@ -70,9 +72,9 @@ export function ProviderModelList({
             </View>
           )
         }
+        models={displayedModels}
         provider={provider}
         removingIds={removingIds}
-        onExpandedValuesChange={setExpandedValues}
         onRemoveModel={removeModel}
         onScrollBeginDrag={Keyboard.dismiss}
       />
