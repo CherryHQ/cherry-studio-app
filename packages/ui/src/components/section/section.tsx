@@ -3,7 +3,7 @@ import { Children, cloneElement, Fragment, isValidElement, type ReactNode, useSt
 import { Pressable, Text, View } from 'react-native';
 
 import { cn } from '../../utils';
-import type { SectionItemProps, SectionProps } from './section.types';
+import type { SectionHeaderProps, SectionItemProps, SectionProps } from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {
   onPressedChange?: (isPressed: boolean) => void;
@@ -14,6 +14,25 @@ function renderTextSlot(content: ReactNode, className?: string) {
     <Text className={className}>{content}</Text>
   ) : (
     content
+  );
+}
+
+function SectionHeader({
+  children,
+  className,
+  title,
+  titleClassName,
+  ...viewProps
+}: SectionHeaderProps) {
+  return (
+    <View className={cn('flex-row items-center gap-3 px-3', className)} {...viewProps}>
+      <View className="min-w-0 flex-1">
+        {renderTextSlot(title, cn('text-base font-semibold text-foreground', titleClassName))}
+      </View>
+      {children !== undefined ? (
+        <View className="shrink-0 items-center justify-center">{children}</View>
+      ) : null}
+    </View>
   );
 }
 
@@ -118,7 +137,13 @@ function SectionRoot({
   title,
   ...viewProps
 }: SectionProps) {
-  const rows = Children.toArray(children);
+  const childNodes = Children.toArray(children);
+  const headers = childNodes.filter(
+    (child) => isValidElement<SectionHeaderProps>(child) && child.type === SectionHeader,
+  );
+  const rows = childNodes.filter(
+    (child) => !(isValidElement<SectionHeaderProps>(child) && child.type === SectionHeader),
+  );
   const [pressedIndex, setPressedIndex] = useState<number | null>(null);
   const hasLeading = rows.some(
     (row) =>
@@ -128,8 +153,8 @@ function SectionRoot({
   );
 
   return (
-    <View className={cn('gap-3', className)} {...viewProps}>
-      {title ? renderTextSlot(title, 'px-3 text-base font-semibold text-muted-foreground') : null}
+    <View className={cn('gap-1', className)} {...viewProps}>
+      {title !== undefined ? <SectionHeader title={title} /> : headers}
       <View
         className={cn('overflow-hidden rounded-2xl bg-settings-grouped-surface', contentClassName)}
         style={{ borderCurve: 'continuous' }}
@@ -161,14 +186,16 @@ function SectionRoot({
           );
         })}
       </View>
-      {footer ? renderTextSlot(footer, 'px-3 text-sm text-muted-foreground') : null}
+      {footer ? renderTextSlot(footer, 'mt-2 px-3 text-sm text-muted-foreground') : null}
     </View>
   );
 }
 
 SectionRoot.displayName = 'Section';
+SectionHeader.displayName = 'Section.Header';
 SectionItem.displayName = 'Section.Item';
 
 export const Section = Object.assign(SectionRoot, {
+  Header: SectionHeader,
   Item: SectionItem,
 });

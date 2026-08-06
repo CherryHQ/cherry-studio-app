@@ -72,6 +72,51 @@ describe('Section', () => {
           node.props.className.includes('min-h-10 flex-row items-center gap-3 px-3 py-2'),
       ).length,
     ).toBeGreaterThan(0);
+    expect(tree.root.findByProps({ children: 'General' }).props.className).toContain(
+      'text-foreground',
+    );
+    expect(
+      tree.root.findByProps({ children: 'Changes apply immediately.' }).props.className,
+    ).toContain('mt-2');
+  });
+
+  test('renders a standalone header with optional trailing content', () => {
+    const tree = render(
+      <Section.Header title="Models" testID="section-header">
+        <Text testID="header-action">Add all</Text>
+      </Section.Header>,
+    );
+
+    const header = tree.root.find(
+      (node) => node.type === View && node.props.testID === 'section-header',
+    );
+    const title = tree.root.findByProps({ children: 'Models' });
+
+    expect(header.props.className).toContain('flex-row items-center gap-3 px-3');
+    expect(header.props.className).not.toContain('min-h-10');
+    expect(title.props.className).toContain('text-base font-semibold text-foreground');
+    expect(tree.root.findByProps({ testID: 'header-action' })).toBeDefined();
+  });
+
+  test('keeps a nested header outside the grouped card and separator rows', () => {
+    const tree = render(
+      <Section>
+        <Section.Header title="Models" testID="section-header" />
+        <Section.Item label="Model A" />
+        <Section.Item label="Model B" />
+      </Section>,
+    );
+    const groupedCard = tree.root.find(
+      (node) =>
+        node.type === View &&
+        typeof node.props.className === 'string' &&
+        node.props.className.includes('bg-settings-grouped-surface'),
+    );
+
+    expect(groupedCard.findAllByProps({ testID: 'section-header' })).toHaveLength(0);
+    expect(
+      tree.root.findAll((node) => node.type === View && node.props.testID === 'section-separator'),
+    ).toHaveLength(1);
   });
 
   test('uses Pressable only for interactive items and shows a default chevron', () => {

@@ -1,4 +1,4 @@
-import { Section, Switch } from '@cherrystudio/ui/components';
+import { Button, Section, Switch } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import {
   BellIcon,
@@ -25,7 +25,8 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
       <View className="gap-6 bg-background p-4">
         <Text className="text-lg font-semibold text-foreground">{label}</Text>
 
-        <Section title="General">
+        <Section>
+          <Section.Header title="General" />
           <Section.Item
             label="Appearance"
             leading={<PaletteIcon className="size-5 text-primary" strokeWidth={2} />}
@@ -49,7 +50,12 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
           />
         </Section>
 
-        <Section footer="Version information is read-only." title="About">
+        <Section footer="Version information is read-only.">
+          <Section.Header title="About">
+            <Button size="sm" variant="ghost">
+              View all
+            </Button>
+          </Section.Header>
           <Section.Item
             description="Build 2026.08.05"
             label="Cherry Studio"

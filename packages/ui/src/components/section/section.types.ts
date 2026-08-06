@@ -15,6 +15,13 @@ export type SectionProps = Omit<ViewProps, 'children'> & {
   title?: ReactNode;
 };
 
+export type SectionHeaderProps = Omit<ViewProps, 'children'> & {
+  children?: ReactNode;
+  className?: string;
+  title: ReactNode;
+  titleClassName?: string;
+};
+
 type SectionItemBaseProps = AccessibilityProps & {
   className?: string;
   destructive?: boolean;
