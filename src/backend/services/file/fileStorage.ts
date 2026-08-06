@@ -24,6 +24,7 @@ export type CreateInternalEntryInput =
   | {
       cleanupPolicy: CleanupPolicy;
       name?: string;
+      /** Transient import source; its bytes are copied to Data/Files and the URI is not persisted. */
       source: 'uri';
       uri: string;
     }
@@ -229,6 +230,7 @@ export async function resolveFileEntry(
   id: FileEntryId,
 ): Promise<ResolvedFile | null> {
   const entry = await entries.findById(id);
+  // External rows are opaque desktop-compatibility data on mobile; never dereference externalPath.
   if (!entry || entry.origin !== 'internal') return null;
   const uri = resolveInternalFileUri(entry);
   return uri ? { entry, uri } : null;

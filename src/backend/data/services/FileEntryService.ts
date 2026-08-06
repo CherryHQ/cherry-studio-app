@@ -59,6 +59,8 @@ const CreateFileEntrySchema = z.discriminatedUnion('origin', [
     origin: z.literal('internal'),
     size: InternalEntrySchema.shape.size,
   }),
+  // Persistence parity only. Mobile product flows must use fileStorage.createInternalEntry()
+  // so picker/provider URIs are copied into managed storage instead of persisted as paths.
   z.strictObject({
     cleanupPolicy: CleanupPolicySchema,
     ext: ExternalEntrySchema.shape.ext,

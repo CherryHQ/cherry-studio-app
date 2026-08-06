@@ -269,6 +269,24 @@ describe('fileStorage', () => {
     await expect(resolveRenderableFileUri(entries, entry.id)).resolves.toBe(uri);
   });
 
+  test('keeps external entries opaque instead of resolving their paths', async () => {
+    const entries = createEntryStore();
+    const entry = FileEntrySchema.parse({
+      cleanupPolicy: 'manual',
+      createdAt: 1,
+      ext: 'png',
+      externalPath: '/user-selected/image.png',
+      id: '00000000-0000-7000-8000-000000000001',
+      name: 'image',
+      origin: 'external',
+      updatedAt: 1,
+    });
+    entries.stored.set(entry.id, entry);
+
+    await expect(resolveFileEntry(entries, entry.id)).resolves.toBeNull();
+    await expect(resolveRenderableFileUri(entries, entry.id)).resolves.toBeUndefined();
+  });
+
   test('removes every copied destination when a later copy fails partially', async () => {
     testState.files.set('file:///picker/first.txt', 1);
     testState.files.set('file:///picker/second.txt', 2);

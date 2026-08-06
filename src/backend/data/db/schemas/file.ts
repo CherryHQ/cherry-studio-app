@@ -14,6 +14,11 @@ import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHe
  *
  * Flat list; no tree structure, no mount concept.
  *
+ * Mobile product flows create only internal entries. The external shape remains
+ * for desktop schema parity and future sync/import, where it is opaque: mobile
+ * must not dereference `externalPath`. Picker/provider URIs are transient import
+ * sources whose bytes are copied into `Data/Files`.
+ *
  * - origin='internal': Cherry owns the content, stored at `{userData}/Data/Files/{id}.{ext}`.
  *   `name` / `ext` / `size` are authoritative (kept in sync by atomic writes).
  * - origin='external': Cherry only references the user-provided path.
