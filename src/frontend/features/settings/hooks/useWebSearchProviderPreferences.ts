@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 
-import type { SettingSelectOption } from '../components/SettingSelect';
+import type { SettingOption } from '../settingOptions';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
 
 const preferenceMapping = {
@@ -30,7 +30,7 @@ const searchKeywordsProviderOptions = createWebSearchProviderOptions(
 
 function createWebSearchProviderOptions(
   providers: readonly WebSearchProviderPreset[],
-): SettingSelectOption<WebSearchProviderId>[] {
+): SettingOption<WebSearchProviderId>[] {
   return providers.map((provider) => ({
     label: provider.name,
     value: provider.id,
@@ -41,7 +41,7 @@ export function useWebSearchProviderPreferences() {
   const { t } = useTranslation();
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
 
-  const compressionMethodOptions = useMemo<SettingSelectOption<WebSearchCompressionMethod>[]>(
+  const compressionMethodOptions = useMemo<SettingOption<WebSearchCompressionMethod>[]>(
     () => [
       { label: t('settings.websearch.compression.method.none'), value: 'none' },
       { label: t('settings.websearch.compression.method.cutoff'), value: 'cutoff' },

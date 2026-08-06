@@ -6,7 +6,7 @@ import { useMultiplePreferences } from '@/frontend/data/hooks';
 import { initI18n, resolveLanguage } from '@/frontend/i18n';
 import { applyThemeModePreference } from '@/frontend/utils/theme';
 
-import type { SettingSelectOption } from '../components/SettingSelect';
+import type { SettingOption } from '../settingOptions';
 
 const preferenceMapping = {
   language: 'app.language',
@@ -18,7 +18,7 @@ export function useSettingPreferences() {
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
   const languageValue = resolveLanguage(preferences.language);
 
-  const languageOptions = useMemo<SettingSelectOption<LanguageVarious>[]>(
+  const languageOptions = useMemo<SettingOption<LanguageVarious>[]>(
     () => [
       { label: t('settings.options.language.zhCN'), value: 'zh-CN' },
       { label: t('settings.options.language.enUS'), value: 'en-US' },
