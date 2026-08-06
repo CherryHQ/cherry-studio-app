@@ -127,6 +127,49 @@ describe('AppAlertProvider', () => {
     expect(alert.props.isOpen).toBe(true);
     expect(alert.props.title).toBe('Background failure');
   });
+
+  it('controls prompt input and confirms with its latest value', async () => {
+    const onConfirm = jest.fn();
+
+    act(() => {
+      alertApi?.showPrompt({
+        confirmLabel: 'Save',
+        input: {
+          accessibilityLabel: 'Topic name',
+          autoFocus: true,
+          initialValue: 'Original topic',
+          maxLength: 255,
+          placeholder: 'Enter topic name',
+        },
+        onConfirm,
+        title: 'Rename topic',
+      });
+    });
+    await flushEffects();
+
+    let alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    expect(alert.props.input).toEqual(
+      expect.objectContaining({
+        accessibilityLabel: 'Topic name',
+        autoFocus: true,
+        maxLength: 255,
+        placeholder: 'Enter topic name',
+        value: 'Original topic',
+      }),
+    );
+
+    act(() => alert.props.input.onChangeText('Renamed topic'));
+    alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    expect(alert.props.input.value).toBe('Renamed topic');
+
+    act(() => {
+      alert.props.actions[1].onPress();
+      alert.props.onOpenChange(false);
+    });
+    expect(onConfirm).toHaveBeenCalledWith('Renamed topic');
+    await flushEffects();
+    expect(renderer!.root.findByProps({ mockComponent: 'app-alert' }).props.isOpen).toBe(false);
+  });
 });
 
 function deferred<T>() {

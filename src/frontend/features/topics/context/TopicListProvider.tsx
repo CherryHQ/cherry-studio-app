@@ -101,6 +101,41 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
   );
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
+    onMutate: async (variables) => {
+      const id = variables?.params.id;
+      const name = variables?.body?.name;
+      if (!id || !name) {
+        return {};
+      }
+
+      const topicFilters = dataApiCollectionFilters('/topics');
+      const detailFilters = { exact: true, queryKey: queryKeys.topics.detail(id) };
+      await Promise.all([
+        queryClient.cancelQueries(topicFilters),
+        queryClient.cancelQueries(detailFilters),
+      ]);
+      const topics = queryClient.getQueriesData<TopicListData>(topicFilters);
+      const detail = queryClient.getQueriesData<Topic>(detailFilters);
+
+      try {
+        queryClient.setQueriesData<TopicListData>(topicFilters, (current) =>
+          renameTopicInInfiniteData(current, id, name),
+        );
+        queryClient.setQueriesData<Topic>(detailFilters, (current) =>
+          current ? { ...current, isNameManuallyEdited: true, name } : current,
+        );
+      } catch (error) {
+        restoreQuerySnapshot(queryClient, topics);
+        restoreQuerySnapshot(queryClient, detail);
+        throw error;
+      }
+
+      return { detail, topics };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.topics);
+      restoreQuerySnapshot(queryClient, context?.detail);
+    },
     refresh: ({ args }) => ['/topics', ...(args ? [`/topics/${args.params.id}`] : [])],
   });
 
@@ -246,4 +281,32 @@ function normalizeTopicIds(ids: string | readonly string[] | undefined): string[
         .map((id) => id.trim())
         .filter(Boolean)
     : [];
+}
+
+function renameTopicInInfiniteData(
+  current: TopicListData | undefined,
+  topicId: string,
+  name: string,
+): TopicListData | undefined {
+  if (!current) {
+    return current;
+  }
+
+  let changed = false;
+  const pages = current.pages.map((page) => {
+    let pageChanged = false;
+    const items = page.items.map((topic) => {
+      if (topic.id !== topicId) {
+        return topic;
+      }
+
+      changed = true;
+      pageChanged = true;
+      return { ...topic, isNameManuallyEdited: true, name };
+    });
+
+    return pageChanged ? { ...page, items } : page;
+  });
+
+  return changed ? { ...current, pages } : current;
 }

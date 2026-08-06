@@ -29,7 +29,7 @@ import {
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
 
-import { useTopicActionDialogs } from './components/TopicActionDialogs';
+import { useTopicActionAlerts } from './components/useTopicActionAlerts';
 import {
   TopicListProvider,
   useTopicListActions,
@@ -109,7 +109,7 @@ const TopicListView = memo(function TopicListView() {
   const pendingDeletionIds = useMessagePendingDeletionIds('conversations');
   const selectionSource = useTopicSelectionSource();
   useRegisterSelectionSource('conversations', selectionSource);
-  const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
+  const { requestDelete, requestRename } = useTopicActionAlerts();
   const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   useEffect(() => {
     if (isEditing) {
@@ -214,7 +214,6 @@ const TopicListView = memo(function TopicListView() {
         recycleItems
         renderItem={renderItem}
       />
-      {dialogs}
     </View>
   );
 });

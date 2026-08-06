@@ -144,9 +144,8 @@ jest.mock('@/frontend/components/messageTabs', () => ({
   useRegisterSelectionSource: () => undefined,
 }));
 
-jest.mock('../components/TopicActionDialogs', () => ({
-  useTopicActionDialogs: () => ({
-    dialogs: null,
+jest.mock('../components/useTopicActionAlerts', () => ({
+  useTopicActionAlerts: () => ({
     requestDelete: jest.fn(),
     requestRename: jest.fn(),
   }),
