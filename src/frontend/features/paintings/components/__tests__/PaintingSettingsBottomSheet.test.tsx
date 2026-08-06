@@ -38,13 +38,20 @@ jest.mock('@cherrystudio/ui/components', () => {
   const MockSection = ({ children, ...props }: { children?: ReactNode }) => (
     <MockView {...props}>{children}</MockView>
   );
-  MockSection.Item = ({ children, label, trailing, ...props }: Record<string, unknown>) => (
-    <MockPressable {...props}>
-      <MockText>{label}</MockText>
-      {children}
-      {trailing}
-    </MockPressable>
-  );
+  MockSection.Item = function MockSectionItem({
+    children,
+    label,
+    trailing,
+    ...props
+  }: Record<string, unknown>) {
+    return (
+      <MockPressable {...props}>
+        <MockText>{label}</MockText>
+        {children}
+        {trailing}
+      </MockPressable>
+    );
+  };
 
   return {
     Description: MockText,

@@ -29,7 +29,7 @@ jest.mock('../hooks/usePermissionSystemStatuses', () => ({
 }));
 jest.mock('@cherrystudio/ui/components', () => {
   const Section = ({ children }: { children: ReactNode }) => children;
-  Section.Item = ({
+  Section.Item = function MockSectionItem({
     label,
     leading,
     trailing,
@@ -37,7 +37,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     label: ReactNode;
     leading?: React.ReactElement<{ source?: unknown }>;
     trailing?: ReactNode;
-  }) => {
+  }) {
     const { Fragment } = jest.requireActual('react');
     const { Text: MockText } = jest.requireActual('react-native');
     return (

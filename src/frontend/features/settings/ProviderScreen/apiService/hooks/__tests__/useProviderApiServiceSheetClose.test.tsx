@@ -1,3 +1,4 @@
+import { useEffect, type MutableRefObject } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useProviderApiServiceSheetClose } from '../useProviderApiServiceSheetClose';
@@ -8,7 +9,6 @@ const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockAddListener = jest.fn(() => jest.fn());
 const mockShowConfirmation = jest.fn();
-let hookResult: HookResult | undefined;
 
 jest.mock('expo-router', () => ({
   useNavigation: () => ({
@@ -26,17 +26,29 @@ jest.mock('@/frontend/components/AppAlertProvider', () => ({
   useAppAlert: () => ({ showConfirmation: mockShowConfirmation }),
 }));
 
-function HookHarness({ hasUnsavedChanges = true }: { hasUnsavedChanges?: boolean }) {
-  hookResult = useProviderApiServiceSheetClose({ hasUnsavedChanges, isSaving: false });
+function HookHarness({
+  hasUnsavedChanges = true,
+  resultRef,
+}: {
+  hasUnsavedChanges?: boolean;
+  resultRef: MutableRefObject<HookResult | undefined>;
+}) {
+  const result = useProviderApiServiceSheetClose({ hasUnsavedChanges, isSaving: false });
+
+  useEffect(() => {
+    resultRef.current = result;
+  }, [result, resultRef]);
+
   return null;
 }
 
 describe('useProviderApiServiceSheetClose', () => {
+  const hookResultRef: MutableRefObject<HookResult | undefined> = { current: undefined };
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    hookResult = undefined;
+    hookResultRef.current = undefined;
   });
 
   afterEach(() => {
@@ -46,14 +58,16 @@ describe('useProviderApiServiceSheetClose', () => {
 
   function renderHook(hasUnsavedChanges = true) {
     act(() => {
-      renderer = create(<HookHarness hasUnsavedChanges={hasUnsavedChanges} />);
+      renderer = create(
+        <HookHarness hasUnsavedChanges={hasUnsavedChanges} resultRef={hookResultRef} />,
+      );
     });
   }
 
   test('requests a destructive discard confirmation', () => {
     renderHook();
 
-    act(() => hookResult?.requestClose());
+    act(() => hookResultRef.current?.requestClose());
 
     expect(mockShowConfirmation).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -67,7 +81,7 @@ describe('useProviderApiServiceSheetClose', () => {
 
   test('closes when the user confirms discard', () => {
     renderHook();
-    act(() => hookResult?.requestClose());
+    act(() => hookResultRef.current?.requestClose());
 
     act(() => mockShowConfirmation.mock.calls[0][0].onConfirm());
 
@@ -77,7 +91,7 @@ describe('useProviderApiServiceSheetClose', () => {
   test('closes without an Alert when there are no unsaved changes', () => {
     renderHook(false);
 
-    act(() => hookResult?.requestClose());
+    act(() => hookResultRef.current?.requestClose());
 
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     expect(mockShowConfirmation).not.toHaveBeenCalled();
