@@ -1,5 +1,5 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { Text } from 'heroui-native/text';
+import { Text } from 'react-native';
 
 import type { ResolvedCitationText } from '../citations';
 import type { MessagePartRenderMode } from './MessageParts';
@@ -19,7 +19,11 @@ export function TextPart({
   resolvedText,
 }: TextPartProps) {
   if (renderMode === 'plainText') {
-    return <Text type="body">{resolvedText?.plainText ?? part.text}</Text>;
+    return (
+      <Text className="text-base leading-7 text-foreground">
+        {resolvedText?.plainText ?? part.text}
+      </Text>
+    );
   }
 
   return <PartMarkdown isStreaming={isStreaming} markdown={resolvedText?.markdown ?? part.text} />;
