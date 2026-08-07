@@ -4,7 +4,6 @@ export { ModelPickerSheetContent } from './components/ModelPickerSheetContent';
 export { ModelPickerTagChip } from './components/ModelPickerTagChip';
 export { useModelPickerData } from './hooks/useModelPickerData';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
-export { usePrefetchModelPickerData } from './hooks/usePrefetchModelPickerData';
 export {
   filterModelsByModelPickerTags,
   getAvailableModelPickerFilterTagsForModels,

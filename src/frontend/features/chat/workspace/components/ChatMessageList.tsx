@@ -27,7 +27,6 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { chatInputMessageListGap } from '../../input/chatInputLayout';
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';
-import { getMessageListScrollSignal } from '../utils/messageListScrollSignals';
 
 // 滚动/布局诊断埋点：记录会驱动列表位移的关键数值（scroll offset、内容高度、锚点就绪、
 // 翻页触发、钉顶滚动），用于把「界面跳动」量化成时间-位移轨迹。走 logger.debug → 仅 dev
@@ -94,7 +93,6 @@ type ChatMessageListProps = {
   listRef: RefObject<LegendListRef | null>;
   messages: readonly Message[];
   onLoadOlder: () => Promise<void>;
-  onPrefetchOlder: () => void;
   onReady?: () => void;
   pendingUserMessageId?: string;
 };
@@ -130,7 +128,6 @@ export function ChatMessageList({
   listRef,
   messages,
   onLoadOlder,
-  onPrefetchOlder,
   onReady,
   pendingUserMessageId,
 }: ChatMessageListProps) {
@@ -413,26 +410,17 @@ export function ChatMessageList({
   // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
 
-  const handleScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-      // 滚动位移轨迹：y=当前滚动偏移，ch=内容总高，vh=视口高。逐帧连成时间-位移曲线后，
-      // 「跳动」= y 的非单调突变。scrollEventThrottle 见下方 props（诊断期设 16 取每帧）。
-      scrollLog.debug('[SCROLL] scroll', {
-        y: Math.round(contentOffset.y),
-        ch: Math.round(contentSize.height),
-        vh: Math.round(layoutMeasurement.height),
-        t: Date.now(),
-      });
-
-      const { isNearStart } = getMessageListScrollSignal(event);
-
-      if (isNearStart) {
-        onPrefetchOlder();
-      }
-    },
-    [onPrefetchOlder],
-  );
+  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    // 滚动位移轨迹：y=当前滚动偏移，ch=内容总高，vh=视口高。逐帧连成时间-位移曲线后，
+    // 「跳动」= y 的非单调突变。scrollEventThrottle 见下方 props（诊断期设 16 取每帧）。
+    scrollLog.debug('[SCROLL] scroll', {
+      y: Math.round(contentOffset.y),
+      ch: Math.round(contentSize.height),
+      vh: Math.round(layoutMeasurement.height),
+      t: Date.now(),
+    });
+  }, []);
 
   const cancelPendingReadyFrame = useCallback(() => {
     if (pendingReadyFrameRef.current !== null) {

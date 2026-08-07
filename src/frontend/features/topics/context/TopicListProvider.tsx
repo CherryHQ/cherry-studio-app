@@ -1,18 +1,10 @@
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
-import { useIsFocused, useRouter } from 'expo-router';
-import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
+import { useRouter } from 'expo-router';
+import { createContext, type PropsWithChildren, use, useCallback, useMemo } from 'react';
 
-import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
-import {
-  queryKeys,
-  useMutation,
-  usePreference,
-  usePrefetch,
-  usePrefetchInfiniteQuery,
-} from '@/frontend/data';
+import { queryKeys, useMutation } from '@/frontend/data';
 import {
   dataApiCollectionFilters,
   removeItemsFromInfiniteData,
@@ -20,14 +12,9 @@ import {
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
-import {
-  getMessagesQueryKey,
-  initialMessagesPageSize,
-} from '@/frontend/hooks/chat/utils/messageQueryOptions';
-import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
+import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
 type TopicListData = InfiniteData<CursorPaginationResponse<Topic>, string | undefined>;
 
 type TopicListTopicsContextValue = {
@@ -57,47 +44,18 @@ type TopicListProviderProps = PropsWithChildren<{
 }>;
 
 export function TopicListProvider({ children, searchText = '' }: TopicListProviderProps) {
-  const isFocused = useIsFocused();
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [defaultModelId] = usePreference(MODEL_SETTING_PREFERENCE_KEYS.default);
-  const prefetch = usePrefetch();
-  const prefetchInfiniteQuery = usePrefetchInfiniteQuery();
   const topicList = useTopics({ q: searchText });
   const topicPins = usePins('topic');
   const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
 
-  useEffect(() => {
-    if (!isFocused) {
-      return;
-    }
-
-    void prefetchDefaultModelDetail(prefetch, defaultModelId);
-
-    for (const topic of topicList.topics.slice(
-      0,
-      messageWindowPolicy.topicListPrefetchTopicCount,
-    )) {
-      void prefetchInfiniteQuery('/topics/:topicId/messages', {
-        limit: initialMessagesPageSize,
-        params: { topicId: topic.id },
-        staleTime: messageWindowPolicy.prefetchStaleTimeMs,
-      });
-    }
-  }, [defaultModelId, isFocused, prefetch, prefetchInfiniteQuery, topicList.topics]);
-
   const openTopic = useCallback(
     (topicId: string) => {
       perfLog.debug('[PERF] tap->push', { topicId, t: Date.now() });
-      void prefetchDefaultModelDetail(prefetch, defaultModelId);
-      void prefetchInfiniteQuery('/topics/:topicId/messages', {
-        limit: initialMessagesPageSize,
-        params: { topicId },
-        staleTime: messageWindowPolicy.prefetchStaleTimeMs,
-      });
       router.push({ pathname: '/topics', params: { topicId } });
     },
-    [defaultModelId, prefetch, prefetchInfiniteQuery, router],
+    [router],
   );
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
@@ -237,17 +195,6 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
       <TopicListActionsContext value={actionsValue}>{children}</TopicListActionsContext>
     </TopicListTopicsContext>
   );
-}
-
-function prefetchDefaultModelDetail(prefetch: ReturnType<typeof usePrefetch>, modelId: unknown) {
-  if (!isUniqueModelId(modelId)) {
-    return;
-  }
-
-  return prefetch('/models/:uniqueModelId*', {
-    params: { uniqueModelId: modelId },
-    staleTime: MODEL_DETAIL_PREFETCH_STALE_TIME_MS,
-  });
 }
 
 export function useTopicListTopics() {

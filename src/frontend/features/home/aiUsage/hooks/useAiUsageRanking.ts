@@ -1,6 +1,4 @@
-import { useEffect } from 'react';
-
-import { usePrefetch, useQuery } from '@/frontend/data';
+import { useQuery } from '@/frontend/data';
 
 import type { AiUsageRankingGroup } from '../types';
 import { buildAiUsageRanking, getAiUsageDayStatsQuery } from '../utils/aiUsageDetail';
@@ -18,23 +16,12 @@ type UseAiUsageRankingOptions = {
 };
 
 export function useAiUsageRanking({ enabled, groupBy, selectedDateKey }: UseAiUsageRankingOptions) {
-  const prefetch = usePrefetch();
   const query = useQuery('/ai-usage-records/stats', {
     enabled,
     keepPreviousData: true,
     query: getAiUsageDayStatsQuery(selectedDateKey, groupBy),
     staleTime: RANKING_STALE_TIME,
   });
-
-  // Warm the grouping the toggle switches to, so toggling never hits a cold cache.
-  useEffect(() => {
-    if (!enabled) return;
-
-    void prefetch('/ai-usage-records/stats', {
-      query: getAiUsageDayStatsQuery(selectedDateKey, groupBy === 'model' ? 'provider' : 'model'),
-      staleTime: RANKING_STALE_TIME,
-    });
-  }, [enabled, groupBy, prefetch, selectedDateKey]);
 
   return {
     query: {

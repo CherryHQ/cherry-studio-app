@@ -7,7 +7,6 @@ import {
   ModelPickerBottomSheet,
   type ModelPickerModelItem,
   useModelSettingSelections,
-  usePrefetchModelPickerData,
 } from '@/frontend/components/modelPicker';
 import {
   useAssistantApiById,
@@ -55,7 +54,6 @@ const perfLog = loggerService.withContext('ChatPerf');
 
 export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatInputProps) {
   const modelSettings = useModelSettingSelections();
-  usePrefetchModelPickerData();
   const rawDefaultModel = modelSettings.selections.default;
   const defaultModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
   const chatTopic = useChatTopic(topicId);

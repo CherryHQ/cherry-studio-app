@@ -85,17 +85,17 @@ describe('useAiUsageRanking', () => {
     queryClient.clear();
   });
 
-  test('queries the selected day and warms the grouping the toggle switches to', async () => {
+  test('queries only the grouping on screen and fetches the other one on toggle', async () => {
     await renderHook(false, 'model');
     expect(dataApi.get).not.toHaveBeenCalled();
 
     await updateHook(true, 'model');
-    expect(requestedGroupings()).toEqual(['model', 'provider']);
+    expect(requestedGroupings()).toEqual(['model']);
     expect(latestResult?.query.hasData).toBe(true);
     expect(latestResult?.ranking).toEqual([]);
 
-    // The prefetched grouping is already cached, so toggling issues no request and
-    // never drops back to the loading skeleton.
+    // Toggling fetches the other grouping on demand; `keepPreviousData` keeps the current
+    // ranking on screen instead of dropping back to the loading skeleton.
     await updateHook(true, 'provider');
     expect(requestedGroupings()).toEqual(['model', 'provider']);
     expect(latestResult?.query.isLoading).toBe(false);
