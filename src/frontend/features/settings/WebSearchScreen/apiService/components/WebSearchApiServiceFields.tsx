@@ -25,7 +25,7 @@ function ZhipuApiKeyShortcutSection() {
     <Pressable
       accessibilityLabel={t('settings.websearch.provider.configureZhipuApiKey')}
       accessibilityRole="button"
-      className="h-12 items-center justify-center rounded-xl bg-vbg-gray-100 active:opacity-60"
+      className="h-12 items-center justify-center rounded-xl bg-secondary active:opacity-60"
       hitSlop={6}
       onPress={openZhipuApiKeySettings}
     >
@@ -48,7 +48,7 @@ function DescriptionSection() {
   }
 
   return (
-    <View className="rounded-2xl bg-vbg-gray-100 p-4">
+    <View className="rounded-2xl bg-grouped-surface p-4">
       <Text className="text-base text-default-foreground">{t(descriptionKey)}</Text>
     </View>
   );

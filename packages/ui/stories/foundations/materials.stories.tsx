@@ -37,8 +37,8 @@ function ElevationStack() {
         </View>
       </View>
 
-      <View className="rounded-xl bg-vbg-gray-100 p-4">
-        <Text className="text-xs text-muted-foreground">bg-vbg-gray-100（分组列表卡片）</Text>
+      <View className="rounded-xl bg-grouped-surface p-4">
+        <Text className="text-xs text-muted-foreground">bg-grouped-surface（分组列表卡片）</Text>
       </View>
     </View>
   );

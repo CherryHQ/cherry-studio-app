@@ -88,7 +88,7 @@ export function Section({
       ) : null}
 
       <View
-        className={`overflow-hidden rounded-xl bg-vbg-gray-100${contentClassName ? ` ${contentClassName}` : ''}`}
+        className={`overflow-hidden rounded-xl bg-grouped-surface${contentClassName ? ` ${contentClassName}` : ''}`}
         testID={testID ? `${testID}-content` : undefined}
       >
         {items?.map((item) => (

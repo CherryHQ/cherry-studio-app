@@ -635,6 +635,8 @@
   --color-inline-code: var(--inline-code);
   --color-inline-code-foreground: var(--inline-code-foreground);
   --color-chat-user: var(--chat-user);
+  --color-grouped-background: var(--grouped-background);
+  --color-grouped-surface: var(--grouped-surface);
   --radius-4xs: var(--cs-radius-4xs);
   --radius-3xs: var(--cs-radius-3xs);
   --radius-2xs: var(--cs-radius-2xs);
@@ -722,6 +724,8 @@
       --cs-foreground-disabled: var(--cs-foreground-tertiary);
       --cs-card: var(--cs-vbg-background-100);
       --cs-popover: var(--cs-vbg-background-100);
+      --cs-grouped-background: var(--cs-vbg-gray-100);
+      --cs-grouped-surface: var(--cs-vbg-background-100);
       --cs-border-subtle: var(--cs-vbg-gray-alpha-100);
       --cs-border: var(--cs-vbg-gray-alpha-200);
       --cs-border-strong: var(--cs-vbg-gray-alpha-500);
@@ -818,6 +822,8 @@
       --error-subtle: var(--cs-error-subtle);
       --error-subtle-foreground: var(--cs-error-subtle-foreground);
       --error-border: var(--cs-error-border);
+      --grouped-background: var(--cs-grouped-background);
+      --grouped-surface: var(--cs-grouped-surface);
       --code-block: var(--cs-vbg-gray-100);
       --inline-code: var(--cs-vbg-gray-alpha-100);
       --inline-code-foreground: var(--cs-vbg-red-900);
@@ -891,6 +897,8 @@
       --cs-foreground-disabled: var(--cs-foreground-tertiary);
       --cs-card: var(--cs-vbg-background-200);
       --cs-popover: var(--cs-vbg-gray-100);
+      --cs-grouped-background: var(--cs-vbg-background-100);
+      --cs-grouped-surface: var(--cs-vbg-gray-100);
       --cs-border-subtle: var(--cs-vbg-gray-alpha-100);
       --cs-border: var(--cs-vbg-gray-alpha-200);
       --cs-border-strong: var(--cs-vbg-gray-alpha-500);
@@ -987,6 +995,8 @@
       --error-subtle: var(--cs-error-subtle);
       --error-subtle-foreground: var(--cs-error-subtle-foreground);
       --error-border: var(--cs-error-border);
+      --grouped-background: var(--cs-grouped-background);
+      --grouped-surface: var(--cs-grouped-surface);
       --code-block: var(--cs-vbg-gray-100);
       --inline-code: var(--cs-vbg-gray-alpha-100);
       --inline-code-foreground: var(--cs-vbg-red-900);

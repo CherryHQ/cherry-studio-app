@@ -73,7 +73,7 @@ export function AiUsageRankingList({
   return (
     <LegendList
       alwaysBounceVertical={false}
-      className="flex-1 bg-background"
+      className="flex-1 bg-grouped-background"
       contentContainerClassName="px-4 py-5"
       contentInsetAdjustmentBehavior="automatic"
       data={visibleItems}
@@ -82,7 +82,7 @@ export function AiUsageRankingList({
       keyExtractor={getRankingItemKey}
       ListEmptyComponent={
         <View
-          className="overflow-hidden rounded-xl bg-vbg-gray-100"
+          className="overflow-hidden rounded-xl bg-grouped-surface"
           style={styles.continuousCorners}
         >
           {emptyState}
@@ -91,7 +91,7 @@ export function AiUsageRankingList({
       ListFooterComponent={
         hasMore ? (
           <View
-            className="items-center rounded-b-xl bg-vbg-gray-100 px-4 pt-3 pb-4"
+            className="items-center rounded-b-xl bg-grouped-surface px-4 pt-3 pb-4"
             style={styles.continuousCorners}
           >
             <Pressable
@@ -136,7 +136,7 @@ function AiUsageRankingRow({
 
   return (
     <View
-      className={`bg-vbg-gray-100 px-4${isFirst ? ' rounded-t-xl pt-4' : ''}${roundsBottom ? ' rounded-b-xl pb-4' : ''}`}
+      className={`bg-grouped-surface px-4${isFirst ? ' rounded-t-xl pt-4' : ''}${roundsBottom ? ' rounded-b-xl pb-4' : ''}`}
       style={isFirst || roundsBottom ? styles.continuousCorners : undefined}
     >
       <View

@@ -42,6 +42,10 @@
   --error-subtle-foreground: var(--cs-error-subtle-foreground);
   --error-border: var(--cs-error-border);
 
+  /* Stable product domain: grouped-list screens (settings / assistants / AI usage) */
+  --grouped-background: var(--cs-grouped-background);
+  --grouped-surface: var(--cs-grouped-surface);
+
   /* Stable product domain: rich text and code (MarkdownText) */
   --code-block: var(--cs-vbg-gray-100);
   --inline-code: var(--cs-vbg-gray-alpha-100);

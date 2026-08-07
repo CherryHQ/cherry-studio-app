@@ -170,7 +170,7 @@ export default function WebSearchCheckScreen() {
         </Section>
 
         {successMessage ? (
-          <View className="gap-1 rounded-xl bg-vbg-gray-100 px-4 py-3">
+          <View className="gap-1 rounded-xl bg-grouped-surface px-4 py-3">
             <Text selectable className="text-base text-success">
               {successMessage}
             </Text>

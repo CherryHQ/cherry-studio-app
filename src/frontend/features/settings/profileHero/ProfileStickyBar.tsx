@@ -46,7 +46,7 @@ export function ProfileStickyBar({ scrollY, topInset, userName }: ProfileStickyB
   return (
     <View className="absolute top-0 right-0 left-0" pointerEvents="none">
       <Animated.View
-        className="absolute inset-0 bg-background"
+        className="absolute inset-0 bg-grouped-background"
         style={[
           backgroundStyle,
           { borderBottomColor: separatorColor, borderBottomWidth: StyleSheet.hairlineWidth },

@@ -126,7 +126,7 @@ export function ModelPickerSheetContent({
   if (listItems.length === 0) {
     return (
       <View className="px-4 pb-5 pt-3">
-        <View className="min-h-12 items-center justify-center rounded-xl bg-vbg-gray-100 px-4 py-4">
+        <View className="min-h-12 items-center justify-center rounded-xl bg-secondary px-4 py-4">
           <Text className="text-base text-default-foreground">
             {isLoading ? loadingText : emptyText}
           </Text>

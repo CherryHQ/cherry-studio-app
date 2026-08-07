@@ -62,7 +62,7 @@ describe('Section', () => {
       tree.root.findAll(
         (node) =>
           typeof node.props.className === 'string' &&
-          node.props.className.includes('bg-vbg-gray-100'),
+          node.props.className.includes('bg-grouped-surface'),
       ).length,
     ).toBeGreaterThan(0);
     expect(
@@ -110,7 +110,7 @@ describe('Section', () => {
       (node) =>
         node.type === View &&
         typeof node.props.className === 'string' &&
-        node.props.className.includes('bg-vbg-gray-100'),
+        node.props.className.includes('bg-grouped-surface'),
     );
 
     expect(groupedCard.findAllByProps({ testID: 'section-header' })).toHaveLength(0);

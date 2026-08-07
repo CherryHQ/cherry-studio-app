@@ -48,7 +48,7 @@ export default function FontSizeSettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-4 rounded-xl bg-vbg-gray-100 px-4 py-5">
+        <View className="gap-4 rounded-xl bg-grouped-surface px-4 py-5">
           <View className="flex-row items-center justify-between gap-3">
             <Text className="font-medium text-foreground text-base">
               {t('settings.fontSize.title')}
@@ -73,7 +73,7 @@ export default function FontSizeSettingsScreen() {
           <Text className="px-1 font-medium text-default-foreground text-sm">
             {t('settings.fontSize.previewTitle')}
           </Text>
-          <View className="rounded-xl bg-vbg-gray-100 px-4 py-5">
+          <View className="rounded-xl bg-grouped-surface px-4 py-5">
             <MarkdownText
               fontSizeStep={draftStep}
               markdown={t('settings.fontSize.previewMarkdown')}

@@ -39,7 +39,7 @@ describe('Section', () => {
     await act(async () => item?.props.onPress());
     expect(mockPress).toHaveBeenCalledTimes(1);
     expect(renderer?.root.findByProps({ testID: 'section-content' }).props.className).toContain(
-      'bg-vbg-gray-100',
+      'bg-grouped-surface',
     );
   });
 

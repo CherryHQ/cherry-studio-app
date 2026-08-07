@@ -27,7 +27,7 @@ export function SettingsDialogActionButton({
       accessibilityState={{ disabled: isDisabled }}
       className={cn(
         'h-9 min-w-20 items-center justify-center rounded-xl px-4 active:opacity-80 disabled:opacity-40',
-        isPrimary ? 'bg-primary' : 'bg-vbg-gray-100',
+        isPrimary ? 'bg-primary' : 'bg-secondary',
         isFullWidth && 'w-full',
       )}
       disabled={isDisabled}

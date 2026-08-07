@@ -30,7 +30,7 @@ export function SettingsGroupedSurface({
   return (
     <View
       className={cn(
-        'overflow-hidden bg-vbg-gray-100',
+        'overflow-hidden bg-grouped-surface',
         getSurfaceRadiusClassName(isFirst, isLast),
         className,
       )}

@@ -156,7 +156,7 @@ function SectionRoot({
     <View className={cn('gap-1', className)} {...viewProps}>
       {title !== undefined ? <SectionHeader title={title} /> : headers}
       <View
-        className={cn('overflow-hidden rounded-2xl bg-vbg-gray-100', contentClassName)}
+        className={cn('overflow-hidden rounded-2xl bg-grouped-surface', contentClassName)}
         style={{ borderCurve: 'continuous' }}
       >
         {rows.map((row, index) => {

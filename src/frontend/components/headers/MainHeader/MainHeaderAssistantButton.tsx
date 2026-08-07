@@ -43,7 +43,7 @@ export function MainHeaderAssistantButton({
     <Pressable
       accessibilityLabel={assistant.name}
       accessibilityRole="button"
-      className="size-10 items-center justify-center overflow-hidden rounded-full bg-vbg-gray-100 active:opacity-60"
+      className="size-10 items-center justify-center overflow-hidden rounded-full bg-secondary active:opacity-60"
       hitSlop={8}
       onPress={onPress}
       testID="current-assistant-button"

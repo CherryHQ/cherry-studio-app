@@ -4,7 +4,7 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isIOS, isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 export default function HomeStackLayout() {
-  const foregroundColor = useThemeColor('foreground');
+  const [foregroundColor, groupedBackground] = useThemeColor(['foreground', 'grouped-background']);
 
   return (
     <Stack
@@ -18,9 +18,15 @@ export default function HomeStackLayout() {
           initial route is whichever comes first. Declaring `index` keeps Home rooted at the
           overview instead of booting straight into the usage detail. */}
       <Stack.Screen name="index" />
+      {/* Home itself is a hero page on the ordinary background; only the usage
+          detail is a grouped-card screen. */}
       <Stack.Screen
         name="ai-usage"
-        options={{ fullScreenGestureEnabled: true, gestureEnabled: true }}
+        options={{
+          contentStyle: { backgroundColor: groupedBackground },
+          fullScreenGestureEnabled: true,
+          gestureEnabled: true,
+        }}
       />
     </Stack>
   );

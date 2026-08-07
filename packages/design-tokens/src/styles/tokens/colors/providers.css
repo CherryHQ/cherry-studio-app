@@ -43,6 +43,14 @@
   --cs-card: var(--cs-vbg-background-100);
   --cs-popover: var(--cs-vbg-background-100);
 
+  /* Grouped lists — 设置/助手/AI 用量那类「页面 + 卡片」的屏幕。
+   * 两条在明暗之间是对调的：浅色把页面压暗、卡片留白，深色把页面留黑、卡片提亮。
+   * 这正是 iOS systemGroupedBackground / secondarySystemGroupedBackground 的做法
+   * （#F2F2F7 + #FFF / #000 + #1C1C1E），也是本文件里唯一必须分主题写两遍的一对：
+   * 其余产品域都指向按主题自动翻转的调色板名，这一对却要在明暗里换档位。 */
+  --cs-grouped-background: var(--cs-vbg-gray-100);
+  --cs-grouped-surface: var(--cs-vbg-background-100);
+
   /* Border - 四级叠加色，见文件头的档位说明 */
   --cs-border-subtle: var(--cs-vbg-gray-alpha-100);
   --cs-border: var(--cs-vbg-gray-alpha-200);
@@ -120,8 +128,15 @@
   --cs-foreground-tertiary: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
 
   /* Card & Popover - 纯黑底上必须抬升，否则边界不可见 */
+  /* ⚠️ --cs-card 没做到这句话：background-200 深色是 oklch(0.027)，落到 sRGB
+   * 就是 #000000，和页面底逐字节相同。修它会连带 heroui 的 --surface /
+   * --field-background（约 50 处），是独立一步，不在本次范围内。 */
   --cs-card: var(--cs-vbg-background-200);
   --cs-popover: var(--cs-vbg-gray-100);
+
+  /* Grouped lists - 与浅色对调，见 :root 的说明 */
+  --cs-grouped-background: var(--cs-vbg-background-100);
+  --cs-grouped-surface: var(--cs-vbg-gray-100);
 
   /* Border - 四级叠加色，见文件头的档位说明 */
   --cs-border-subtle: var(--cs-vbg-gray-alpha-100);

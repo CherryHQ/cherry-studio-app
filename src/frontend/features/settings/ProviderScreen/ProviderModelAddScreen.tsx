@@ -213,7 +213,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
           <Pressable
             accessibilityLabel={t('settings.provider.models.addMoreSettings')}
             accessibilityRole="button"
-            className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-vbg-gray-100 px-3 active:opacity-70 disabled:opacity-40"
+            className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-secondary px-3 active:opacity-70 disabled:opacity-40"
             disabled={isSubmitting}
             onPress={toggleMoreSettings}
           >
@@ -364,7 +364,7 @@ function EndpointTypeChip({
       accessibilityState={{ checked: isSelected, disabled: isDisabled }}
       className={cn(
         'h-8 flex-row items-center gap-1 rounded-full px-3 active:opacity-70 disabled:opacity-40',
-        isSelected ? null : 'border border-border bg-vbg-gray-100',
+        isSelected ? null : 'border border-border bg-secondary',
       )}
       disabled={isDisabled}
       onPress={onPress}
