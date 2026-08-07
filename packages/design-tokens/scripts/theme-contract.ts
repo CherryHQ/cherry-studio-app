@@ -110,7 +110,11 @@ export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   'inline-code-foreground',
   'chat-user',
   'grouped-background',
-  'grouped-surface'
+  'grouped-surface',
+  'usage-level-1',
+  'usage-level-2',
+  'usage-level-3',
+  'usage-level-4'
 ] as const
 
 /**

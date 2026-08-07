@@ -4,7 +4,6 @@ import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
-import { thinkingAccentColor } from '../../effortSlider';
 import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
 import { ChatInputSurface } from '../ChatInputSurface';
 
@@ -512,7 +511,7 @@ describe('ChatInputSurface', () => {
     expect(effortLabels[0].props.style).toBeUndefined();
   });
 
-  test('shows the max effort label in the thinking accent color', async () => {
+  test('shows the max effort label in the brand color', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
@@ -541,7 +540,9 @@ describe('ChatInputSurface', () => {
     });
     expect(effortLabels.length).toBeGreaterThan(0);
     expect(effortLabels[0].props.children).toBe('chat.reasoning.max');
-    expect(effortLabels[0].props.style).toEqual({ color: thinkingAccentColor.light });
+    // `text-primary`, not a literal: the theme-colour setting rewrites --primary
+    // at runtime, so pinning a hex here would pin a value the app can change.
+    expect(effortLabels[0].props.className).toContain('text-primary');
   });
 
   test('hides the effort label when the model has no reasoning stops', async () => {

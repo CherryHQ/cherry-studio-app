@@ -9,6 +9,14 @@
  * same hue relationships but flips the luminance structure: bases are pushed
  * down toward the surface, highlights stay bright, so the field reads as
  * self-lit LEDs on a dark track instead of a washed-out sticker.
+ *
+ * These stay literal on purpose, as the one place in the app that does not name
+ * a token. They are an 11-stop tonal ramp plus its mix targets, share-weighted
+ * so deep tones dominate; the palette ships five green steps, which cannot
+ * reconstruct that and would flatten the field into bands. What did name a
+ * token was the accent — a frozen copy of `--primary`, which the theme-colour
+ * setting rewrites at runtime, so it went stale the moment anyone changed it.
+ * That one now reads the variable at its point of use.
  */
 
 export type ThinkingPaletteUniforms = {
@@ -97,15 +105,15 @@ export const darkThinkingPalette: ThinkingPaletteUniforms = {
 };
 
 /**
- * Accent for the highest stop's dot and the panel's value label. Matches the
- * app's --accent (--primary, oklch(0.77 0.208 146)) in both schemes.
+ * Stop-dot color (the original's `.tick`: #b6b2af at 0.82 opacity).
+ *
+ * Literal like everything else above it, and for the same reason: these values
+ * were eyedropped from the original and then hue-rotated as a set, so they hold
+ * their relationships to each other rather than to any semantic role. There is
+ * no token that means "the neutral this particular field reads well against" —
+ * the nearest neutrals (`--foreground-disabled` resolves to 125 in both themes)
+ * match the dark tick and miss the light one by 57.
  */
-export const thinkingAccentColor = {
-  light: '#3fd55a',
-  dark: '#3fd55a',
-} as const;
-
-/** Stop-dot color (the original's `.tick`: #b6b2af at 0.82 opacity). */
 export const effortTickColor = {
   light: 'rgba(182, 178, 175, 0.82)',
   dark: 'rgba(126, 122, 134, 0.9)',

@@ -114,6 +114,12 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
     variables: ['--code-block', '--inline-code', '--chat-user'],
   },
   {
+    title: '用量热力阶',
+    hint: 'AI 用量日历的四档强度，同一个绿档按 25/50/75/100 调出；空白格用的是 --border，不在这里。',
+    kind: 'surface',
+    variables: ['--usage-level-1', '--usage-level-2', '--usage-level-3', '--usage-level-4'],
+  },
+  {
     title: '图表',
     hint: 'VBG 明确「分类系列默认单色」，所以这里是一条灰阶而不是彩虹。',
     kind: 'surface',

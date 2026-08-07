@@ -51,8 +51,10 @@ export const screenBottomActionInset = 16;
 export const searchBarAutoFocusDelayMs = 100;
 
 // Tuning knobs for the GitHub-style AI usage calendars.
-// Sizes, colors and spring feel replicate the reference contribution-graph
-// animation 1:1 — adjust here, not in the AI usage components.
+// Sizes and spring feel replicate the reference contribution-graph animation
+// 1:1 — adjust here, not in the AI usage components. The heat scale is not
+// here: it was GitHub's own two ladders of five hex, one per theme, and it now
+// comes from `--usage-level-*`, which `AiUsageCalendar` names.
 export const aiUsageCalendar = {
   cellSize: 14,
   cellGap: 3,
@@ -60,12 +62,6 @@ export const aiUsageCalendar = {
   summaryCellGap: 2,
   summaryFallbackCellSize: 10,
   cardShadow: '0px 0px 20px 0px rgba(0, 0, 0, 0.05)',
-  // no activity → highest; GitHub's green scales for both themes. Level 0 in
-  // dark sits slightly above the dark surface so empty cells stay visible.
-  levelColors: {
-    light: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'],
-    dark: ['#2c2c2c', '#0e4429', '#006d32', '#26a641', '#39d353'],
-  },
   dimmedOpacity: 0.35,
   sweepStepMs: 45, // per-diagonal delay of the bottom-left → top-right entrance wave
   enterSpring: { mass: 1.1, damping: 13, stiffness: 150, overshootClamping: false },

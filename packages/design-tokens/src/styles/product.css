@@ -70,6 +70,15 @@
 
   /* Stable product domain: user-message surface (UserMessageItem) */
   --chat-user: var(--gray-alpha-100);
+
+  /* Stable product domain: AI usage heat scale (AiUsageCalendar).
+   * 四档由同一个绿档按 25/50/75/100 调出来，所以强度是均匀的、也不可能逐档跑偏；
+   * 空白格直接用 --border。混的是 transparent 而不是某个表面色，因为这个日历有两
+   * 个落点（首页概览卡与用量全屏），压在哪张表面上不由这里决定。 */
+  --usage-level-1: color-mix(in srgb, var(--green-700) 25%, transparent);
+  --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
+  --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);
+  --usage-level-4: var(--green-700);
 }
 
 .dark {

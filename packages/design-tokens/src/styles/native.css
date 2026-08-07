@@ -77,6 +77,10 @@
   --color-chat-user: var(--chat-user);
   --color-grouped-background: var(--grouped-background);
   --color-grouped-surface: var(--grouped-surface);
+  --color-usage-level-1: var(--usage-level-1);
+  --color-usage-level-2: var(--usage-level-2);
+  --color-usage-level-3: var(--usage-level-3);
+  --color-usage-level-4: var(--usage-level-4);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -197,6 +201,10 @@
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);
       --chat-user: var(--gray-alpha-100);
+      --usage-level-1: color-mix(in srgb, var(--green-700) 25%, transparent);
+      --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
+      --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);
+      --usage-level-4: var(--green-700);
     }
 
     @variant dark {
@@ -307,6 +315,10 @@
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);
       --chat-user: var(--gray-alpha-100);
+      --usage-level-1: color-mix(in srgb, var(--green-700) 25%, transparent);
+      --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
+      --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);
+      --usage-level-4: var(--green-700);
     }
   }
 }

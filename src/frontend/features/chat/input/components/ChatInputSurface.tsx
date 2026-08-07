@@ -1,5 +1,6 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import type { IconSource } from '@cherrystudio/ui/icons';
+import { cn } from '@cherrystudio/ui/utils';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
 import { Settings2Icon } from 'lucide-uniwind/png';
@@ -31,7 +32,6 @@ import {
   useChatInputMeta,
   useChatInputState,
 } from '../context/ChatInputProvider';
-import { thinkingAccentColor } from '../effortSlider';
 import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
 import { chatInputMotionConfig, chatInputSpringConfig } from '../utils/chatInputMotion';
 import {
@@ -353,13 +353,8 @@ function ChatInputModelButton({
       </Text>
       {effortLabel ? (
         <Text
-          className="shrink-0 text-foreground text-sm"
+          className={cn('shrink-0 text-sm', isEffortMax ? 'text-primary' : 'text-foreground')}
           numberOfLines={1}
-          style={
-            isEffortMax
-              ? { color: thinkingAccentColor[theme === 'dark' ? 'dark' : 'light'] }
-              : undefined
-          }
           testID="chat-input-model-effort-label"
         >
           {effortLabel}
