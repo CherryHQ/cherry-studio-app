@@ -25,20 +25,22 @@ function RadiusRows() {
 }
 
 function ElevationStack() {
+  // 两套页面各配一个抬升面，和 iOS 一样。规则是「抬起来的面朝中灰走」：
+  // 白页面上抬升 = 变灰，黑页面上抬升 = 变亮，灰页面上抬升 = 变白。
   return (
-    <View className="gap-3">
-      <View className="gap-2 rounded-xl bg-background-subtle p-4">
-        <Text className="text-xs text-muted-foreground">bg-background-subtle</Text>
-        <View className="gap-2 rounded-lg border border-border-subtle bg-card p-4">
-          <Text className="text-xs text-muted-foreground">bg-card</Text>
-          <View className="rounded-md border border-border bg-popover p-3">
-            <Text className="text-xs text-muted-foreground">bg-popover</Text>
-          </View>
+    <View className="gap-4">
+      <View className="gap-2 rounded-xl bg-background p-4">
+        <Text className="text-xs text-muted-foreground">bg-background（普通页面）</Text>
+        <View className="rounded-lg border border-border-subtle bg-card p-4">
+          <Text className="text-xs text-muted-foreground">bg-card（抬起来的面）</Text>
         </View>
       </View>
 
-      <View className="rounded-xl bg-grouped-surface p-4">
-        <Text className="text-xs text-muted-foreground">bg-grouped-surface（分组列表卡片）</Text>
+      <View className="gap-2 rounded-xl bg-grouped-background p-4">
+        <Text className="text-xs text-muted-foreground">bg-grouped-background（分组页面）</Text>
+        <View className="rounded-lg border border-border-subtle bg-grouped-surface p-4">
+          <Text className="text-xs text-muted-foreground">bg-grouped-surface（分组卡片）</Text>
+        </View>
       </View>
     </View>
   );

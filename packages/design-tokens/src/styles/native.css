@@ -722,7 +722,7 @@
       --cs-muted-foreground: var(--cs-vbg-gray-900);
       --cs-foreground-tertiary: var(--cs-vbg-gray-800);
       --cs-foreground-disabled: var(--cs-foreground-tertiary);
-      --cs-card: var(--cs-vbg-background-100);
+      --cs-card: var(--cs-vbg-gray-100);
       --cs-popover: var(--cs-vbg-background-100);
       --cs-grouped-background: var(--cs-vbg-gray-100);
       --cs-grouped-surface: var(--cs-vbg-background-100);
@@ -895,7 +895,7 @@
       --cs-muted-foreground: var(--cs-vbg-gray-900);
       --cs-foreground-tertiary: var(--cs-vbg-gray-800);
       --cs-foreground-disabled: var(--cs-foreground-tertiary);
-      --cs-card: var(--cs-vbg-background-200);
+      --cs-card: var(--cs-vbg-gray-100);
       --cs-popover: var(--cs-vbg-gray-100);
       --cs-grouped-background: var(--cs-vbg-background-100);
       --cs-grouped-surface: var(--cs-vbg-gray-100);

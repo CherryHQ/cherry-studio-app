@@ -51,7 +51,7 @@ export function ProfileAvatarEditBadge({ icon, size }: ProfileAvatarEditBadgePro
 
   return (
     <View
-      className="absolute right-0 bottom-0 items-center justify-center border border-border bg-surface"
+      className="absolute right-0 bottom-0 items-center justify-center border border-border bg-card"
       style={{
         borderRadius: badgeSize / 2,
         height: badgeSize,

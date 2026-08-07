@@ -39,8 +39,16 @@
   --cs-foreground-tertiary: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
   --cs-foreground-disabled: var(--cs-foreground-tertiary);
 
-  /* Card & Popover */
-  --cs-card: var(--cs-vbg-background-100);
+  /* Card & Popover
+   * `--cs-card` 是「普通页面上抬起来的面」，对应 iOS secondarySystemBackground
+   * （浅 #F2F2F7 / 深 #1C1C1E）。gray-100 本身按主题翻转，所以明暗写同一行就够：
+   * 浅色比白页面暗 13 级，深色比黑页面亮 26 级，两侧都落在 iOS 的位置上。
+   * 它此前两个主题都等于 `--cs-background`（浅色都是 background-100，深色写的是
+   * background-200 但落到 sRGB 同样是 #000000），也就是说 card 从来没抬起来过——
+   * 这正是当初不得不发明一个 settings-grouped-surface 的原因。
+   * `--cs-popover` 先不动：浮层压在遮罩上、靠阴影分离，没有同样的问题，而且
+   * 全仓没有一处产品代码消费 `bg-popover`。 */
+  --cs-card: var(--cs-vbg-gray-100);
   --cs-popover: var(--cs-vbg-background-100);
 
   /* Grouped lists — 设置/助手/AI 用量那类「页面 + 卡片」的屏幕。
@@ -128,10 +136,7 @@
   --cs-foreground-tertiary: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
 
   /* Card & Popover - 纯黑底上必须抬升，否则边界不可见 */
-  /* ⚠️ --cs-card 没做到这句话：background-200 深色是 oklch(0.027)，落到 sRGB
-   * 就是 #000000，和页面底逐字节相同。修它会连带 heroui 的 --surface /
-   * --field-background（约 50 处），是独立一步，不在本次范围内。 */
-  --cs-card: var(--cs-vbg-background-200);
+  --cs-card: var(--cs-vbg-gray-100);
   --cs-popover: var(--cs-vbg-gray-100);
 
   /* Grouped lists - 与浅色对调，见 :root 的说明 */
