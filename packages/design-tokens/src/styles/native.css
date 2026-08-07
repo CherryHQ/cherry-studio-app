@@ -589,6 +589,10 @@
   --color-error-subtle: var(--error-subtle);
   --color-error-subtle-foreground: var(--error-subtle-foreground);
   --color-error-border: var(--error-border);
+  --color-code-block: var(--code-block);
+  --color-inline-code: var(--inline-code);
+  --color-inline-code-foreground: var(--inline-code-foreground);
+  --color-chat-user: var(--chat-user);
   --radius-4xs: var(--cs-radius-4xs);
   --radius-3xs: var(--cs-radius-3xs);
   --radius-2xs: var(--cs-radius-2xs);
@@ -775,12 +779,6 @@
       --code-block: var(--cs-vbg-gray-100);
       --inline-code: var(--cs-vbg-gray-alpha-100);
       --inline-code-foreground: var(--cs-vbg-red-900);
-      --reference: var(--cs-vbg-blue-100);
-      --reference-foreground: var(--cs-vbg-blue-1000);
-      --reference-subtle: var(--cs-vbg-background-200);
-      --highlight-foreground: var(--foreground);
-      --highlight: var(--cs-vbg-amber-100);
-      --highlight-accent: var(--cs-vbg-amber-400);
       --chat-user: var(--cs-vbg-gray-alpha-100);
     }
 
@@ -950,12 +948,6 @@
       --code-block: var(--cs-vbg-gray-100);
       --inline-code: var(--cs-vbg-gray-alpha-100);
       --inline-code-foreground: var(--cs-vbg-red-900);
-      --reference: var(--cs-vbg-blue-100);
-      --reference-foreground: var(--cs-vbg-blue-1000);
-      --reference-subtle: var(--cs-vbg-background-200);
-      --highlight-foreground: var(--foreground);
-      --highlight: var(--cs-vbg-amber-100);
-      --highlight-accent: var(--cs-vbg-amber-400);
       --chat-user: var(--cs-vbg-gray-alpha-100);
     }
   }

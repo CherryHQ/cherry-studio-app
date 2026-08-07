@@ -9,6 +9,9 @@
  * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
  * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
  * 现在只同步图标。原先此处的 hex / rgba 字面量一并换成 VBG 的 oklch 取值。
+ *
+ * 没有 `.dark` 块，这是刻意的：产品域取值都指向 `vercel.css` 的调色板名，而那些
+ * 名字本身已经按主题翻转，写一份深色覆盖只是把同样的值抄一遍。
  */
 
 :root {
@@ -39,40 +42,11 @@
   --error-subtle-foreground: var(--cs-error-subtle-foreground);
   --error-border: var(--cs-error-border);
 
-  /* Stable product domain: rich text and code */
+  /* Stable product domain: rich text and code (MarkdownText) */
   --code-block: var(--cs-vbg-gray-100);
   --inline-code: var(--cs-vbg-gray-alpha-100);
   --inline-code-foreground: var(--cs-vbg-red-900);
 
-  /* Stable product domain: references and search highlights */
-  --reference: var(--cs-vbg-blue-100);
-  --reference-foreground: var(--cs-vbg-blue-1000);
-  --reference-subtle: var(--cs-vbg-background-200);
-  --highlight-foreground: var(--foreground);
-  --highlight: var(--cs-vbg-amber-100);
-  --highlight-accent: var(--cs-vbg-amber-400);
-
-  /* Stable product domain: user-message surface */
-  --chat-user: var(--cs-vbg-gray-alpha-100);
-}
-
-.dark {
-  /* Shared product semantics */
-  --link: var(--cs-vbg-blue-900);
-
-  /* Stable product domain: rich text and code */
-  --code-block: var(--cs-vbg-gray-100);
-  --inline-code: var(--cs-vbg-gray-alpha-100);
-  --inline-code-foreground: var(--cs-vbg-red-900);
-
-  /* Stable product domain: references and search highlights */
-  --reference: var(--cs-vbg-blue-100);
-  --reference-foreground: var(--cs-vbg-blue-1000);
-  --reference-subtle: var(--cs-vbg-background-200);
-  --highlight-foreground: var(--foreground);
-  --highlight: var(--cs-vbg-amber-100);
-  --highlight-accent: var(--cs-vbg-amber-400);
-
-  /* Stable product domain: user-message surface */
+  /* Stable product domain: user-message surface (UserMessageItem) */
   --chat-user: var(--cs-vbg-gray-alpha-100);
 }

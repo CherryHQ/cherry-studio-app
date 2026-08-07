@@ -116,17 +116,9 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '产品域',
-    hint: '没有对应 Tailwind 工具类，用 bg-[var(--code-block)] 这样的任意值消费。',
+    hint: '各自只有一个消费者：代码块与行内代码在 MarkdownText，chat-user 是 user 气泡底色（bg-chat-user）。',
     kind: 'surface',
-    variables: [
-      '--code-block',
-      '--inline-code',
-      '--reference',
-      '--reference-subtle',
-      '--highlight',
-      '--highlight-accent',
-      '--chat-user',
-    ],
+    variables: ['--code-block', '--inline-code', '--chat-user'],
   },
   {
     title: '图表',
@@ -150,8 +142,6 @@ export const SURFACE_PAIRS: string[][] = [
   ['--success-subtle', '--success-subtle-foreground'],
   ['--info-subtle', '--info-subtle-foreground'],
   ['--inline-code', '--inline-code-foreground'],
-  ['--reference', '--reference-foreground'],
-  ['--highlight', '--highlight-foreground'],
 ];
 
 export const PAIR_VARIABLES = SURFACE_PAIRS.flat();

@@ -1,6 +1,5 @@
 import type { FontSizeStep } from '@cherrystudio/universal/data/preference';
 import { useMemo } from 'react';
-import { useColorScheme } from 'react-native';
 import {
   EnrichedMarkdownText,
   type LinkPressEvent,
@@ -48,19 +47,38 @@ function createMarkdownTypographyStyle(fontSizeStep: FontSizeStep): MarkdownStyl
 
 export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: MarkdownTextProps) {
   const [storedFontSizeStep] = usePreference('ui.font_size_step');
-  const colorScheme = useColorScheme();
-  const [foreground, background, mutedForeground, link, primary, border, secondary] = useThemeColor(
-    ['foreground', 'background', 'muted-foreground', 'link', 'primary', 'border', 'secondary'],
-  );
+  const [
+    foreground,
+    background,
+    mutedForeground,
+    link,
+    primary,
+    border,
+    secondary,
+    codeBlock,
+    inlineCode,
+    inlineCodeForeground,
+  ] = useThemeColor([
+    'foreground',
+    'background',
+    'muted-foreground',
+    'link',
+    'primary',
+    'border',
+    'secondary',
+    'code-block',
+    'inline-code',
+    'inline-code-foreground',
+  ]);
   const resolvedStep = fontSizeStep ?? storedFontSizeStep;
   const MarkdownRenderer = isStreaming ? StreamdownText : EnrichedMarkdownText;
 
+  // Applied to both themes. This used to short-circuit to bare typography in
+  // light mode, which left the renderer on its own built-in palette — so light
+  // mode never saw the token layer at all. `useThemeColor` already resolves per
+  // active theme, so one style object covers both.
   const markdownStyle = useMemo<MarkdownStyle>(() => {
     const typography = createMarkdownTypographyStyle(resolvedStep);
-
-    if (colorScheme !== 'dark') {
-      return typography;
-    }
 
     return {
       ...typography,
@@ -85,13 +103,13 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
       },
       code: {
         ...typography.code,
-        backgroundColor: secondary,
+        backgroundColor: inlineCode,
         borderColor: border,
-        color: foreground,
+        color: inlineCodeForeground,
       },
       codeBlock: {
         ...typography.codeBlock,
-        backgroundColor: secondary,
+        backgroundColor: codeBlock,
         borderColor: border,
         color: foreground,
       },
@@ -127,8 +145,10 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
   }, [
     background,
     border,
-    colorScheme,
+    codeBlock,
     foreground,
+    inlineCode,
+    inlineCodeForeground,
     link,
     mutedForeground,
     primary,

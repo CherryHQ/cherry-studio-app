@@ -99,44 +99,24 @@ export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   'error-subtle-foreground',
   'error-border',
 
-  /* Product domains */
+  /* Product domains
+   * `reference{,-foreground,-subtle}` and `highlight{,-foreground,-accent}` were
+   * here too. Mobile renders citations as ordinary markdown links and has no
+   * search-term highlighting at all, so those six named a UI that does not
+   * exist. Reintroduce them alongside the component, not before it. */
   'code-block',
   'inline-code',
   'inline-code-foreground',
-  'reference',
-  'reference-foreground',
-  'reference-subtle',
-  'highlight',
-  'highlight-foreground',
-  'highlight-accent',
   'chat-user'
 ] as const
 
-export const CHERRY_PRODUCT_COLOR_TOKENS = [
-  'background-subtle',
-  'foreground-tertiary',
-  'foreground-disabled',
-  'border-subtle',
-  'border-strong',
-  'border-selected',
-  'link',
-  'success',
-  'success-subtle',
-  'success-subtle-foreground',
-  'success-border',
-  'warning',
-  'warning-subtle',
-  'warning-subtle-foreground',
-  'warning-border',
-  'info',
-  'info-subtle',
-  'info-subtle-foreground',
-  'info-border',
-  'error',
-  'error-subtle',
-  'error-subtle-foreground',
-  'error-border'
-] as const
+/**
+ * Every product variable currently doubles as a Tailwind color, so this is the
+ * whole list above. Kept as its own export because the two answer different
+ * questions — "must be declared" versus "is exposed to utilities" — and a future
+ * non-color product variable would separate them again.
+ */
+export const CHERRY_PRODUCT_COLOR_TOKENS = CHERRY_PRODUCT_VARIABLE_TOKENS
 
 /**
  * Frozen Tailwind compatibility surface for historical semantic utilities.
@@ -162,7 +142,5 @@ export const CHERRY_PRODUCT_SURFACE_PAIRS = [
   ['warning-subtle', 'warning-subtle-foreground'],
   ['info-subtle', 'info-subtle-foreground'],
   ['error-subtle', 'error-subtle-foreground'],
-  ['inline-code', 'inline-code-foreground'],
-  ['reference', 'reference-foreground'],
-  ['highlight', 'highlight-foreground']
+  ['inline-code', 'inline-code-foreground']
 ] as const
