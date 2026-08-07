@@ -402,7 +402,7 @@ function McpServerEditor({
           showsVerticalScrollIndicator={false}
           style={styles.scroll}
         >
-          <View className="rounded-2xl bg-settings-grouped-surface p-4">
+          <View className="rounded-2xl bg-vbg-gray-100 p-4">
             <McpToolsSection
               isReadOnly={isUpdating}
               onToggleAutoApprove={handleToggleAutoApprove}

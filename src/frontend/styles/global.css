@@ -13,8 +13,6 @@
 @source "../../../node_modules/heroui-native/lib";
 
 @theme static {
-  --color-settings-grouped-surface: var(--settings-grouped-surface);
-
   /* Tailwind 默认的 --font-mono 是一整条 CSS 字体栈，而 RN 的 fontFamily 只接受
    * 单个已注册的字体名，所以必须覆盖。字体本体由 app.json 的 expo-font 插件在
    * 构建期嵌入原生工程（改完要 prebuild + 重新编译，Metro reload 不生效）。
@@ -143,7 +141,6 @@
       --warning-foreground: var(--cs-black);
       --separator: var(--border-strong);
       --focus: var(--ring);
-      --settings-grouped-surface: var(--cs-vbg-gray-alpha-100);
     }
 
     @variant dark {
@@ -170,7 +167,6 @@
       --warning-foreground: var(--cs-black);
       --separator: var(--border-strong);
       --focus: var(--ring);
-      --settings-grouped-surface: var(--cs-vbg-gray-alpha-100);
     }
   }
 }

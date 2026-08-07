@@ -46,12 +46,20 @@ export async function buildNativeCss(): Promise<string> {
   const primitiveNames = extractDeclarations(sources.primitive, 'primitive.css').map(({ name }) =>
     name.replace(/^--cs-/, ''),
   );
+  // The Vercel palette gets the same treatment as the legacy primitive one, so
+  // a step can be named straight from a className (`bg-vbg-gray-100`). Deduped
+  // because `vercel.css` declares each name twice — once per theme block — and
+  // the adapter only needs the name, which is theme-independent.
+  const paletteNames = unique(
+    extractDeclarations(sources.vercel, 'vercel.css').map(({ name }) => name.replace(/^--cs-/, '')),
+  );
   const typographyNames = extractDeclarations(sources.typography, 'typography.css').map(
     ({ name }) => name.replace(/^--cs-/, ''),
   );
   const publicColors = unique([...SHADCN_COLOR_TOKENS, ...CHERRY_PRODUCT_COLOR_TOKENS]);
   const adapterLines = [
     ...primitiveNames.map((name) => `--color-${name}: var(--cs-${name});`),
+    ...paletteNames.map((name) => `--color-${name}: var(--cs-${name});`),
     ...publicColors.map((name) => `--color-${name}: var(--${name});`),
     ...radiusLines,
     ...typographyNames.map((name) => `--${name}: var(--cs-${name});`),

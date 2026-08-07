@@ -419,7 +419,7 @@ const TopicRow = memo(function TopicRow({
             }
           >
             <Animated.View
-              className="absolute inset-0 bg-settings-grouped-surface"
+              className="absolute inset-0 bg-vbg-gray-100"
               pointerEvents="none"
               style={pressedBackgroundStyle}
             />

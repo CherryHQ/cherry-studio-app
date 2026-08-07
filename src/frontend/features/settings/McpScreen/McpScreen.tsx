@@ -79,7 +79,7 @@ export function McpScreen() {
             />
           </View>
         ) : (
-          <View className="overflow-hidden rounded-2xl bg-settings-grouped-surface">
+          <View className="overflow-hidden rounded-2xl bg-vbg-gray-100">
             {servers.map((server, index) => {
               const previousServerId = servers[index - 1]?.id;
               const summary = summaries[server.id];

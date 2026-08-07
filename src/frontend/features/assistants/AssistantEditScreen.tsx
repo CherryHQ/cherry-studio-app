@@ -448,7 +448,7 @@ function FormSection({ children, title }: { children: React.ReactNode; title: st
   return (
     <View className="gap-2">
       <Text className="px-1 font-medium text-default-foreground text-sm">{title}</Text>
-      <View className="gap-4 rounded-2xl bg-settings-grouped-surface p-4">{children}</View>
+      <View className="gap-4 rounded-2xl bg-vbg-gray-100 p-4">{children}</View>
     </View>
   );
 }

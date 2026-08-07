@@ -369,7 +369,7 @@ function AssistantListRow({
         >
           <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
             <Animated.View
-              className="absolute inset-0 bg-settings-grouped-surface"
+              className="absolute inset-0 bg-vbg-gray-100"
               pointerEvents="none"
               style={pressedBackgroundStyle}
             />
@@ -459,7 +459,7 @@ function AssistantEmptyState({
 
   return (
     <View className="items-center justify-center gap-4 px-8 py-16">
-      <View className="size-14 items-center justify-center rounded-full bg-settings-grouped-surface">
+      <View className="size-14 items-center justify-center rounded-full bg-vbg-gray-100">
         <BotIcon className="size-7 text-default-foreground" strokeWidth={2} />
       </View>
       <View className="items-center gap-1">

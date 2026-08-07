@@ -114,7 +114,7 @@ function AssistantSummary({ assistant }: { assistant: Assistant }) {
         </View>
       </View>
       {prompt ? (
-        <View className="w-full gap-2 rounded-2xl bg-settings-grouped-surface p-4">
+        <View className="w-full gap-2 rounded-2xl bg-vbg-gray-100 p-4">
           <Text className="font-medium text-default-foreground text-sm">
             {t('assistant.form.prompt')}
           </Text>

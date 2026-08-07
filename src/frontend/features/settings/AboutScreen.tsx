@@ -53,7 +53,7 @@ export default function AboutSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-4 py-5">
-          <View className="flex-row gap-4 rounded-2xl bg-settings-grouped-surface px-4 py-5">
+          <View className="flex-row gap-4 rounded-2xl bg-vbg-gray-100 px-4 py-5">
             <Image
               accessibilityIgnoresInvertColors
               source={require('@/assets/icon.png')}
