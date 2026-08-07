@@ -1,3 +1,13 @@
+/**
+ * Mirrors the desktop icon catalog into mobile.
+ *
+ * Despite living in the design-tokens package, this no longer touches a single
+ * token: values *and* names are mobile-owned since the Vercel Brand Guidelines
+ * fork (see the tombstones under src/styles). It stays here because
+ * `desktop-sync-manifest.json` delegates its `design` fingerprint to
+ * src/sync-manifest.json, which this script writes.
+ */
+
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -110,17 +120,6 @@ async function syncDirectory(
 
   await rm(destinationRoot, { recursive: true, force: true });
   for (const { destination, source } of entries) {
-    await mkdir(path.dirname(destination), { recursive: true });
-    await copyFile(source, destination);
-  }
-}
-
-async function syncFiles(entries: SyncEntry[], check: boolean): Promise<void> {
-  for (const { destination, source } of entries) {
-    if (check) {
-      await assertFileEqual(source, destination);
-      continue;
-    }
     await mkdir(path.dirname(destination), { recursive: true });
     await copyFile(source, destination);
   }
@@ -328,37 +327,20 @@ async function main() {
     throw new Error('[design-sync] --desktop-root does not contain the Cherry Studio UI package');
   }
 
-  // `packages/ui/src/styles` is intentionally absent: mobile forked the token
-  // values (see the tombstone comments in src/styles) and no longer mirrors
-  // them, so unrelated desktop style edits must not report this sync as dirty.
+  // Only icons. Neither `packages/ui/src/styles` nor `scripts/theme-contract.ts`
+  // is tracked: mobile owns the token values *and* their names outright, so an
+  // unrelated desktop style edit must not report this sync as dirty.
   const trackedSources = [
-    'packages/ui/scripts/theme-contract.ts',
     'packages/ui/icons',
     'packages/ui/src/components/icons/registry.ts',
     'packages/ui/src/components/icons/providers/radeon-cloud',
   ];
   const dirty = run('git', ['status', '--porcelain', '--', ...trackedSources], desktopRoot);
   if (dirty) {
-    throw new Error(`[design-sync] desktop design sources have uncommitted changes:\n${dirty}`);
+    throw new Error(`[design-sync] desktop icon sources have uncommitted changes:\n${dirty}`);
   }
 
   const commit = run('git', ['rev-parse', 'HEAD'], desktopRoot);
-  // Token *values* are forked: mobile uses the Vercel Brand Guidelines (Geist)
-  // palette and typography, so `src/styles/**` is owned locally and is not
-  // mirrored. The token *name* contract still tracks desktop — when desktop
-  // adds a role, it lands here and `pnpm design:check` then reports the local
-  // sources as missing it, which is exactly the signal we want.
-  const desktopThemeContract = path.join(desktopUi, 'scripts/theme-contract.ts');
-  await syncFiles(
-    [
-      {
-        destination: path.join(packageRoot, 'scripts/theme-contract.ts'),
-        source: desktopThemeContract,
-      },
-    ],
-    check,
-  );
-
   const desktopIcons = path.join(desktopUi, 'icons');
   const mobileIcons = path.join(repoRoot, 'packages/ui/icons');
   for (const group of ['general', 'models', 'providers']) {
@@ -391,9 +373,6 @@ async function main() {
           desktopRoot,
         ),
         icons: await hashFiles(iconFiles, desktopRoot),
-        // Was `tokens`, covering every mirrored style file. Mobile now owns the
-        // token values, so only the name contract is still fingerprinted.
-        themeContract: await hashFiles([desktopThemeContract], desktopRoot),
       },
     },
     null,
@@ -401,17 +380,12 @@ async function main() {
   )}\n`;
   await writeOrCheckText(manifestPath, manifest, check);
 
-  if (check) {
-    const { assertNativeCssCurrent } = await import('./build-native-css');
-    await assertNativeCssCurrent();
-    run('pnpm', ['exec', 'tsx', 'packages/ui/src/scripts/check-icons.ts'], repoRoot);
-  } else {
-    const { writeNativeCss } = await import('./build-native-css');
-    await writeNativeCss();
-    run('pnpm', ['exec', 'tsx', 'packages/ui/src/scripts/generate-icons.ts'], repoRoot);
-  }
+  // native.css is not rebuilt here — it derives purely from local token sources,
+  // which this sync no longer touches. `pnpm design:build` / `design:check` own it.
+  const iconScript = check ? 'check-icons.ts' : 'generate-icons.ts';
+  run('pnpm', ['exec', 'tsx', `packages/ui/src/scripts/${iconScript}`], repoRoot);
 
-  process.stdout.write(`Design sources ${check ? 'match' : 'synced from'} desktop ${commit}.\n`);
+  process.stdout.write(`Icon sources ${check ? 'match' : 'synced from'} desktop ${commit}.\n`);
 }
 
 void main().catch((error: unknown) => {

@@ -88,8 +88,6 @@ export async function checkDesignTokens(): Promise<void> {
     .filter((match) => !match[2].startsWith('cs-'))
     .map((match) => match[1]);
   assertEqual('public semantic colors', semanticMappings, [...expectedPublicColors]);
-
-  await readFile(path.join(stylesDir, '../sync-manifest.json'), 'utf8');
 }
 
 void checkDesignTokens()

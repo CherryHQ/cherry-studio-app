@@ -8,9 +8,9 @@
  * New feedback work uses the `--success`/`--warning`/`--info`/`--error`
  * product roles, never these names.
  *
- * ⚠️ 取值已 fork：颜色取值不再从 Cherry Studio 桌面端镜像。移动端改用 Vercel
- * Brand Guidelines（Geist）色彩体系，故取值与桌面端有意分叉。token 名字仍与桌面
- * `theme-contract.ts` 一致，且该契约文件继续由 `pnpm design:sync` 从桌面同步。
+ * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
+ * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
+ * 现在只同步图标。
  *
  * VBG 每个 intent 的 base 档位不同（error/info 取 700，success/warning 取 900），
  * 这是上游刻意的对比度调校，此处照搬。

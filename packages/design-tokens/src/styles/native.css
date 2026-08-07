@@ -2,8 +2,8 @@
  * Generated from the token sources in this package's src/styles.
  * Do not edit directly. Run `pnpm design:build` after changing them.
  *
- * Token values are mobile-owned (Vercel Brand Guidelines) and are no longer
- * mirrored from desktop; only scripts/theme-contract.ts still tracks it.
+ * Both the token values (Vercel Brand Guidelines) and their names are
+ * mobile-owned; nothing here is mirrored from desktop.
  */
 
 @theme {

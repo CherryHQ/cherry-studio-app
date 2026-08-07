@@ -4,14 +4,13 @@
 
 Stop Metro before generators replace asset directories. Run the repository `design:*` commands; do not add a duplicate generator to this Skill. The pipeline must resolve `--desktop-root` or `CHERRY_STUDIO_DESKTOP_ROOT`, validate the desktop and `@cherrystudio/ui` package identities, reject dirty selected sources, and record the desktop commit and SHA-256 hashes.
 
-Keep the desktop checkout read-only. Let `packages/design-tokens/src/sync-manifest.json` own the canonical theme-contract and SVG baseline. Keep catalog routing, manual icon adaptations, and provider fan-out in the broad desktop Manifest.
+Keep the desktop checkout read-only. Let `packages/design-tokens/src/sync-manifest.json` own the SVG baseline. Keep catalog routing, manual icon adaptations, and provider fan-out in the broad desktop Manifest.
 
 ## Theme Contract
 
-Token **values** are forked. Mobile adopted the Vercel Brand Guidelines (Geist) palette, typography, and radii, so everything under `packages/design-tokens/src/styles/` is mobile-owned and is never mirrored from desktop. Token **names** still track desktop. This split follows the repo's dual-end criteria: align the contract that gets serialized, fork the presentation.
+The design tokens are fully forked. Mobile adopted the Vercel Brand Guidelines (Geist) palette, typography, and radii, so both the values under `packages/design-tokens/src/styles/` and the role names in `scripts/theme-contract.ts` are mobile-owned and are never mirrored from desktop. This does not contradict the repo's dual-end criteria: no token name crosses the wire between the two apps, so there is no serialized contract to align — only presentation, which forks.
 
-- Mirror desktop `theme-contract.ts` only. Do not reintroduce mirroring for `tokens/`, `tokens.css`, `contract.css`, `theme-input.css`, `shadcn.css`, or `product.css`.
-- When a desktop sync adds a role to `theme-contract.ts`, `pnpm design:check` will report the local sources as missing it. Add the token by hand with a Vercel-derived value; that failure is the intended signal, not a regression.
+- `pnpm design:sync` mirrors icons and nothing else. Do not reintroduce mirroring for `theme-contract.ts`, `tokens/`, `tokens.css`, `contract.css`, `theme-input.css`, `shadcn.css`, or `product.css` — the goal is retiring roles mobile does not render, and a sync would reinstate every deleted name.
 - Regenerate `native.css` with `pnpm design:build` after editing any token source. Keep the `@variant light` and `@variant dark` sets complete and symmetric. Reject missing references, cycles, and unequal variable sets.
 - Expose only Shadcn and Cherry product semantic colors through the public Tailwind contract.
 - Keep mobile-only presentation in the host layer, such as `settings-grouped-surface`. The dark background is now opaque in the token layer itself, so the host no longer overrides it.

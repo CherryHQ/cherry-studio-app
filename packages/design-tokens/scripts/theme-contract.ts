@@ -1,6 +1,15 @@
 /**
  * Machine-readable theme contract.
  *
+ * Mobile-owned. This file used to be mirrored from the desktop
+ * `packages/ui/scripts/theme-contract.ts` on every `pnpm design:sync`, on the
+ * theory that token *names* are a shared contract even though the Vercel Brand
+ * Guidelines fork made the *values* mobile's own. That theory does not survive
+ * contact with the goal: mobile is retiring the roles it does not render, and a
+ * sync that reinstates a desktop-only name would undo each deletion. Nothing
+ * crosses the wire between the two apps here — these names only ever meet CSS
+ * in the same repository — so there is no serialized contract to align.
+ *
  * Runtime inputs are host-written internal values, not public component roles.
  * Stability and Tailwind exposure are independent decisions:
  * - stable unprefixed product variables are valid defaults for new product code;

@@ -9,9 +9,9 @@
  * providers. The frozen legacy status palette it currently draws from stays in
  * `status-legacy.css` (shrink-only compatibility).
  *
- * ⚠️ 取值已 fork：颜色取值不再从 Cherry Studio 桌面端镜像。移动端改用 Vercel
- * Brand Guidelines（Geist）色彩体系，故取值与桌面端有意分叉。token 名字仍与桌面
- * `theme-contract.ts` 一致，且该契约文件继续由 `pnpm design:sync` 从桌面同步。
+ * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
+ * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
+ * 现在只同步图标。
  *
  * 品牌链路是唯一的例外：`--cs-primary` / `--cs-primary-foreground` / `--cs-ring`
  * 仍由 Cherry 品牌色驱动，运行时主题色选择器（`--cs-theme-primary`）照常生效。

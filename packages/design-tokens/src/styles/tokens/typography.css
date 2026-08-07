@@ -2,9 +2,9 @@
  * Typography
  * 排版系统 - 只剩字重
  *
- * ⚠️ 取值已 fork：不再从 Cherry Studio 桌面端镜像。移动端改用 Vercel Brand
- * Guidelines（Geist）的排版刻度，故取值与桌面端有意分叉。token 名字仍与桌面
- * `theme-contract.ts` 一致，且该契约文件继续由 `pnpm design:sync` 从桌面同步。
+ * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
+ * Guidelines（Geist）的排版刻度，token 名字也随之归移动端自有 ——
+ * `pnpm design:sync` 现在只同步图标。
  *
  * 这里曾经还有 31 个字号/行高/段落间距/字体族 token，全部零消费者，已删。
  * `build-native-css.ts` 把本文件的 `--cs-x` 适配成 `--x`，而其中只有
