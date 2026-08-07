@@ -30,6 +30,41 @@ Shared components with text must be content-driven: avoid fixed width or height,
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
 
+`Composer` is the chat input bar: a leading action, a pill that grows with its content, and a
+primary action that flips between send and stop. It is fully controlled — the caller owns `value`
+and `attachments` — and carries no i18n or attachment-picking logic, so the same component backs a
+chat screen, a prompt box, or a story.
+
+```tsx
+import { Composer } from '@cherrystudio/ui/components';
+
+<Composer
+  attachments={attachments}
+  labels={{ send: t('chat.input.action.sendMessage') }}
+  onAttachmentRemove={removeAttachment}
+  onChangeText={setDraft}
+  onLeadingPress={openAttachmentSheet}
+  onSend={send}
+  onStop={stop}
+  placeholder={t('chat.inputPlaceholder')}
+  streaming={isStreaming}
+  value={draft}
+/>;
+```
+
+Only the platform-divergent chrome sits behind a `.ios` / `.android` seam
+(`composerPlatform.*`): the surface material (Liquid Glass on iOS 26+, a plain rounded surface
+elsewhere) and the text field's vertical insets, which iOS needs asymmetric to cancel UITextView's
+baseline offset. Layout, state, and the strip animation are identical on both platforms and stay in
+`composer.tsx` rather than being duplicated into a `composer.ios` / `composer.android` pair that
+would drift.
+
+The attachment strip is height-clipped and animates between zero and its measured content height,
+so adding or removing a thumbnail swells and shrinks the pill instead of snapping it. The thumbnails
+stay mounted through the collapse — rendering `attachments` directly would unmount them the instant
+the list empties, leaving an empty box to shrink. Pass `leading` to replace the built-in "+" circle
+with your own menu or sheet trigger; pass `leading={null}` to drop it entirely.
+
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
 

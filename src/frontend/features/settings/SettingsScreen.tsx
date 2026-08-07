@@ -10,6 +10,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   SunIcon,
+  TextCursorInputIcon,
 } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -126,6 +127,11 @@ export default function SettingsScreen() {
             />
           </Section>
           <Section>
+            <Section.Item
+              label={t('settings.items.composerPreview')}
+              leading={<TextCursorInputIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/composer-preview')}
+            />
             <Section.Item
               label={t('settings.items.aboutUs')}
               leading={<InfoIcon className="size-5 text-foreground" strokeWidth={2} />}
