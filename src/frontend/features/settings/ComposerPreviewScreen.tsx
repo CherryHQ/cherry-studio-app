@@ -1,11 +1,4 @@
-import {
-  Composer,
-  composerActionSize,
-  type ComposerAttachment,
-  MorphMenu,
-  Section,
-  Switch,
-} from '@cherrystudio/ui/components';
+import { Composer, type ComposerAttachment, Section, Switch } from '@cherrystudio/ui/components';
 import { CameraIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -113,37 +106,42 @@ export default function ComposerPreviewScreen() {
                 send: t('chat.input.action.sendMessage'),
                 stop: t('chat.input.action.stopGenerating'),
               }}
-              leading={
-                <MorphMenu
-                  accessibilityLabel={t('chat.media.photos')}
-                  testID="composer-morph-menu"
-                  triggerSize={composerActionSize}
-                >
-                  <MorphMenu.Item
-                    icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
-                    label={t('chat.media.camera')}
-                    onPress={() => recordMenuChoice(t('chat.media.camera'))}
-                  />
-                  <MorphMenu.Item
-                    icon={<ImagesIcon className="size-5 text-foreground" strokeWidth={2} />}
-                    label={t('chat.media.photos')}
-                    onPress={() => recordMenuChoice(t('chat.media.photos'))}
-                  />
-                  <MorphMenu.Item
-                    icon={<FileIcon className="size-5 text-foreground" strokeWidth={2} />}
-                    label={t('chat.media.file')}
-                    onPress={() => recordMenuChoice(t('chat.media.file'))}
-                  />
-                </MorphMenu>
-              }
               onAttachmentRemove={removeAttachment}
               onChangeText={setDraft}
               onSend={send}
               onStop={() => setIsStreaming(false)}
-              placeholder={t('chat.inputPlaceholder')}
               streaming={isStreaming}
+              testID="composer"
               value={draft}
-            />
+            >
+              <Composer.Attachments />
+              <Composer.Input placeholder={t('chat.inputPlaceholder')} testID="composer-input" />
+              {/* The tools are the caller's: nothing but the field is built in,
+                  and the send button pins itself right however many are added. */}
+              <Composer.Toolbar>
+                <Composer.Menu
+                  accessibilityLabel={t('chat.media.photos')}
+                  testID="composer-morph-menu"
+                >
+                  <Composer.Menu.Item
+                    icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
+                    label={t('chat.media.camera')}
+                    onPress={() => recordMenuChoice(t('chat.media.camera'))}
+                  />
+                  <Composer.Menu.Item
+                    icon={<ImagesIcon className="size-5 text-foreground" strokeWidth={2} />}
+                    label={t('chat.media.photos')}
+                    onPress={() => recordMenuChoice(t('chat.media.photos'))}
+                  />
+                  <Composer.Menu.Item
+                    icon={<FileIcon className="size-5 text-foreground" strokeWidth={2} />}
+                    label={t('chat.media.file')}
+                    onPress={() => recordMenuChoice(t('chat.media.file'))}
+                  />
+                </Composer.Menu>
+                <Composer.Send testID="composer-send" />
+              </Composer.Toolbar>
+            </Composer>
           </View>
         </KeyboardStickyView>
       </View>

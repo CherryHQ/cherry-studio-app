@@ -21,11 +21,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';
 
-import { Portal } from '../portal';
-import { Surface } from '../surface';
+import { Portal } from '../../../portal';
+import { Surface } from '../../../surface';
+import { composerActionSize } from '../../composer.layout';
 import type { MorphMenuItemProps, MorphMenuProps } from './morph-menu.types';
 
-const defaultTriggerSize = 44;
+// It sits in the composer's toolbar, so it defaults to the same circle as the
+// tools beside it.
+const defaultTriggerSize = composerActionSize;
 const openRadius = 20;
 const defaultPanelWidth = 200;
 const fallbackPanelHeight = 172;
@@ -58,23 +61,27 @@ const MorphMenuContext = createContext<MorphMenuContextValue | null>(null);
 function useMorphMenu() {
   const context = use(MorphMenuContext);
 
+  // Named for the composition surface, not the file: callers only ever see this
+  // as `Composer.Menu`.
   if (!context) {
-    throw new Error('MorphMenu.Item must be rendered inside a MorphMenu');
+    throw new Error('Composer.Menu.Item must be rendered inside a Composer.Menu');
   }
 
   return context;
 }
 
 /**
- * A circular trigger that morphs into a panel: the container animates its size
- * and corner radius while the plus and the menu swap places.
+ * `Composer.Menu` — a circular trigger that morphs into a panel: the container
+ * animates its size and corner radius while the plus and the menu swap places.
+ * Private to the composer, since the morph is tuned to open out of a toolbar
+ * button.
  *
  * The panel is always laid out at full size; the closed state is a clip window
  * over it. That keeps the children's layout pass off the animation's critical
  * path — animating the container's size would otherwise re-measure them on
  * every frame.
  */
-export function MorphMenu({
+function MorphMenuRoot({
   accessibilityLabel,
   children,
   onOpenChange,
@@ -285,7 +292,10 @@ function MorphMenuItem({ icon, label, onPress, testID }: MorphMenuItemProps) {
   );
 }
 
-MorphMenu.Item = MorphMenuItem;
+MorphMenuRoot.displayName = 'Composer.Menu';
+MorphMenuItem.displayName = 'Composer.Menu.Item';
+
+export const MorphMenu = Object.assign(MorphMenuRoot, { Item: MorphMenuItem });
 
 const fillStyle = { height: '100%', width: '100%' } as const;
 // Pinned bottom-left so the panel grows up and to the right out of the button,

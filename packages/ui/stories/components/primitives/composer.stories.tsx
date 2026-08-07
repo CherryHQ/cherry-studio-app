@@ -1,6 +1,7 @@
 import { Composer, type ComposerAttachment, type ComposerProps } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { useState } from 'react';
+import { CameraIcon, FileIcon, ImagesIcon, SlidersHorizontalIcon } from 'lucide-uniwind/png';
+import { type ReactNode, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';
@@ -20,6 +21,8 @@ const sampleAttachments: ComposerAttachment[] = [
 
 type ThemePreviewProps = {
   args: ComposerProps;
+  children?: (attach: () => void) => ReactNode;
+  hint: string;
   label: string;
   theme: 'dark' | 'light';
 };
@@ -28,13 +31,13 @@ type ThemePreviewProps = {
  * Owns the composer's controlled state so the story exercises the real flow:
  * type, attach, send (which clears), and the send/stop flip.
  */
-function ThemePreview({ args, label, theme }: ThemePreviewProps) {
+function ThemePreview({ args, children, hint, label, theme }: ThemePreviewProps) {
   const [value, setValue] = useState(args.value);
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>(
     args.attachments ?? [],
   );
 
-  const addAttachment = () => {
+  const attach = () => {
     const next = sampleAttachments.find(
       (candidate) => !attachments.some((current) => current.id === candidate.id),
     );
@@ -42,8 +45,6 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
     if (next) {
       setAttachments([...attachments, next]);
     }
-
-    args.onLeadingPress?.();
   };
 
   return (
@@ -61,20 +62,23 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
             setValue(text);
             args.onChangeText(text);
           }}
-          onLeadingPress={addAttachment}
           onSend={() => {
             setValue('');
             setAttachments([]);
             args.onSend();
           }}
           value={value}
-        />
-        <Text className="text-sm text-muted-foreground">
-          Tap ＋ to attach, ✕ to remove, ↑ to send.
-        </Text>
+        >
+          {children?.(attach)}
+        </Composer>
+        <Text className="text-sm text-muted-foreground">{hint}</Text>
       </View>
     </ScopedTheme>
   );
+}
+
+function bothThemes(preview: (theme: (typeof themes)[number]) => ReactNode) {
+  return <View className="gap-4">{themes.map(preview)}</View>;
 }
 
 const meta = {
@@ -85,7 +89,6 @@ const meta = {
     autoFocus: false,
     onAttachmentRemove: fn(),
     onChangeText: fn(),
-    onLeadingPress: fn(),
     onSend: fn(),
     onStop: fn(),
     placeholder: 'Chat With Cherry Studio',
@@ -115,34 +118,91 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
+/** The default layout: no children, so the toolbar holds nothing but send. */
 export const Playground: Story = {
-  render: (args) => (
-    <View className="gap-4">
-      {themes.map((theme) => (
-        <ThemePreview args={args} key={theme.value} label={theme.label} theme={theme.value} />
-      ))}
-    </View>
-  ),
+  render: (args) =>
+    bothThemes((theme) => (
+      <ThemePreview
+        args={args}
+        hint="Type, then tap ↑ to send. The toolbar is empty until you fill it."
+        key={theme.value}
+        label={theme.label}
+        theme={theme.value}
+      />
+    )),
+};
+
+/**
+ * The point of the split: tools are the caller's, and adding one never moves the
+ * send button.
+ */
+export const Composed: Story = {
+  render: (args) =>
+    bothThemes((theme) => (
+      <ThemePreview
+        args={args}
+        hint="Tap ＋ for the menu, the sliders for a plain tool, ↑ to send."
+        key={theme.value}
+        label={theme.label}
+        theme={theme.value}
+      >
+        {(attach) => (
+          <>
+            <Composer.Attachments />
+            <Composer.Input placeholder={args.placeholder} />
+            <Composer.Toolbar>
+              <Composer.Menu accessibilityLabel="Add attachment">
+                <Composer.Menu.Item
+                  icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
+                  label="Camera"
+                  onPress={attach}
+                />
+                <Composer.Menu.Item
+                  icon={<ImagesIcon className="size-5 text-foreground" strokeWidth={2} />}
+                  label="Photos"
+                  onPress={attach}
+                />
+                <Composer.Menu.Item
+                  icon={<FileIcon className="size-5 text-foreground" strokeWidth={2} />}
+                  label="File"
+                  onPress={attach}
+                />
+              </Composer.Menu>
+              <Composer.Action accessibilityLabel="Settings" onPress={fn()}>
+                <SlidersHorizontalIcon className="size-6 text-foreground" strokeWidth={2} />
+              </Composer.Action>
+              <Composer.Send />
+            </Composer.Toolbar>
+          </>
+        )}
+      </ThemePreview>
+    )),
 };
 
 export const WithAttachments: Story = {
   args: { attachments: sampleAttachments.slice(0, 2), value: 'What is in these photos?' },
-  render: (args) => (
-    <View className="gap-4">
-      {themes.map((theme) => (
-        <ThemePreview args={args} key={theme.value} label={theme.label} theme={theme.value} />
-      ))}
-    </View>
-  ),
+  render: (args) =>
+    bothThemes((theme) => (
+      <ThemePreview
+        args={args}
+        hint="Tap ✕ to remove; the surface shrinks as the strip empties."
+        key={theme.value}
+        label={theme.label}
+        theme={theme.value}
+      />
+    )),
 };
 
 export const Streaming: Story = {
   args: { streaming: true, value: '' },
-  render: (args) => (
-    <View className="gap-4">
-      {themes.map((theme) => (
-        <ThemePreview args={args} key={theme.value} label={theme.label} theme={theme.value} />
-      ))}
-    </View>
-  ),
+  render: (args) =>
+    bothThemes((theme) => (
+      <ThemePreview
+        args={args}
+        hint="The send arrow becomes a stop square while a reply streams in."
+        key={theme.value}
+        label={theme.label}
+        theme={theme.value}
+      />
+    )),
 };

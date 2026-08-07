@@ -3,7 +3,6 @@ export * from './button';
 export * from './composer';
 export * from './input';
 export * from './menu';
-export * from './morph-menu';
 export * from './portal';
 export * from './surface';
 export * from './search-field';

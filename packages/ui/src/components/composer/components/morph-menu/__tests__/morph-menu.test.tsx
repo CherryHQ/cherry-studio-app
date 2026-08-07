@@ -193,7 +193,7 @@ describe('MorphMenu', () => {
       act(() => {
         create(<MorphMenu.Item label="Camera" onPress={jest.fn()} />);
       }),
-    ).toThrow('MorphMenu.Item must be rendered inside a MorphMenu');
+    ).toThrow('Composer.Menu.Item must be rendered inside a Composer.Menu');
 
     consoleError.mockRestore();
   });
