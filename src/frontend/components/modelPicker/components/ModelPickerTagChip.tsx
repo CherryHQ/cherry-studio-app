@@ -1,5 +1,4 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { cn } from '@cherrystudio/ui/utils';
 import {
   AudioLinesIcon,
   Code2Icon,
@@ -12,27 +11,13 @@ import {
   WrenchIcon,
 } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { Pressable } from 'react-native';
-import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { View } from 'react-native';
 import { useCSSVariable } from 'uniwind';
 
 import type { ModelPickerTag } from '../utils/modelPickerData';
 import { getModelPickerTagLabelKey } from '../utils/modelPickerData';
 
-type ModelPickerTagChipProps = {
-  isActive?: boolean;
-  onPress?: () => void;
-  showLabel?: boolean;
-  size?: 'md' | 'sm';
-  tag: ModelPickerTag;
-};
-
 type ModelPickerTagHue = 'amber' | 'blue' | 'green' | 'red';
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
-const tagChipLayoutTransition = LinearTransition.duration(180);
-const tagChipLabelEntering = FadeIn.duration(120);
-const tagChipLabelExiting = FadeOut.duration(80);
 
 /**
  * `[tint, ink]` per hue. The palette is built for exactly this shape: the 100
@@ -82,58 +67,30 @@ const modelPickerTagMeta = {
   free: { hue: 'green', Icon: GiftIcon },
 } satisfies Record<ModelPickerTag, { hue: ModelPickerTagHue; Icon: typeof EyeIcon }>;
 
-export function ModelPickerTagChip({
-  isActive = true,
-  onPress,
-  showLabel = false,
-  size = 'sm',
-  tag,
-}: ModelPickerTagChipProps) {
+/**
+ * One capability icon on a wash of its own hue, announced by its label.
+ *
+ * Icon-only and inert. It also took `isActive`/`showLabel`/`size`/`onPress`,
+ * for the horizontal tag filter strip that sat above the model list until
+ * `e1c036e6` removed it; nothing has passed any of them since. The `md` size,
+ * the label and its fade transitions, the pressed state and the layout
+ * animation all belonged to that strip, so they go with it. What is left needs
+ * no `Pressable` and no `Animated`, which is worth something here: the list
+ * recycles its rows and renders up to four of these in each one.
+ */
+export function ModelPickerTagChip({ tag }: { tag: ModelPickerTag }) {
   const { t } = useTranslation();
   const { hue, Icon } = modelPickerTagMeta[tag];
   const [tint, ink] = useCSSVariable(tagHueVariables[hue]) as [string, string];
-  const label = t(getModelPickerTagLabelKey(tag));
-  // An inactive chip drops to the neutral pair in the classNames below. Both the
-  // `style` prop and the icon's `color` prop win over a class, so leaving them
-  // off is what lets the neutral show through.
-  const activeInk = isActive ? ink : undefined;
-  const isLabelVisible = showLabel && (!onPress || !isActive);
 
   return (
-    <AnimatedPressable
-      accessibilityLabel={label}
-      accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityState={onPress ? { selected: isActive } : undefined}
+    <View
+      accessibilityLabel={t(getModelPickerTagLabelKey(tag))}
       accessible
-      className={cn(
-        'flex-row items-center justify-center rounded-lg bg-secondary',
-        size === 'md' ? 'h-8 gap-1.5 px-3' : 'h-5 gap-1 px-1.5',
-        onPress ? 'active:opacity-70' : null,
-      )}
-      disabled={!onPress}
-      hitSlop={size === 'md' ? 6 : undefined}
-      layout={tagChipLayoutTransition}
-      onPress={onPress}
-      style={isActive ? { backgroundColor: tint } : undefined}
+      className="h-5 flex-row items-center justify-center rounded-lg px-1.5"
+      style={{ backgroundColor: tint }}
     >
-      <Icon
-        className={cn(size === 'md' ? 'size-4' : 'size-3', 'text-foreground-disabled')}
-        color={activeInk}
-      />
-      {isLabelVisible ? (
-        <Animated.Text
-          className={cn(
-            'font-medium text-foreground-disabled',
-            size === 'md' ? 'text-sm' : 'text-xs',
-          )}
-          entering={tagChipLabelEntering}
-          exiting={tagChipLabelExiting}
-          numberOfLines={1}
-          style={activeInk ? { color: activeInk } : undefined}
-        >
-          {label}
-        </Animated.Text>
-      ) : null}
-    </AnimatedPressable>
+      <Icon className="size-3" color={ink} />
+    </View>
   );
 }
