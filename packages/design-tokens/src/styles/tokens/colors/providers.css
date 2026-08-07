@@ -25,65 +25,65 @@
 :root {
   /* Brand Colors - 品牌链路不参与 VBG 替换 */
   --cs-primary: var(--cs-brand-500);
-  --cs-destructive: oklch(0.6256 0.2524 23.03); /* vbg red-700 */
-  --cs-destructive-hover: oklch(0.5499 0.232 25.29); /* vbg red-900 */
+  --cs-destructive: var(--cs-vbg-red-700);
+  --cs-destructive-hover: var(--cs-vbg-red-900);
   --cs-success: var(--cs-success-base);
   --cs-warning: var(--cs-warning-base);
   --cs-info: var(--cs-info-base);
 
   /* Background & Foreground */
-  --cs-background: oklch(1 0 0); /* vbg background-100 */
-  --cs-background-subtle: oklch(0.984 0 0); /* vbg background-200 */
-  --cs-foreground: oklch(0.205 0 0); /* vbg gray-1000 */
-  --cs-muted-foreground: oklch(0.42 0 0); /* vbg gray-900 */
-  --cs-foreground-tertiary: oklch(0.59 0 0); /* vbg gray-800（双主题同值） */
+  --cs-background: var(--cs-vbg-background-100);
+  --cs-background-subtle: var(--cs-vbg-background-200);
+  --cs-foreground: var(--cs-vbg-gray-1000);
+  --cs-muted-foreground: var(--cs-vbg-gray-900);
+  --cs-foreground-tertiary: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
   --cs-foreground-disabled: var(--cs-foreground-tertiary);
 
   /* Card & Popover */
-  --cs-card: oklch(1 0 0); /* vbg background-100 */
-  --cs-popover: oklch(1 0 0); /* vbg background-100 */
+  --cs-card: var(--cs-vbg-background-100);
+  --cs-popover: var(--cs-vbg-background-100);
 
   /* Border - 四级叠加色，见文件头的档位说明 */
-  --cs-border-subtle: oklch(0 0 0 / 0.05); /* vbg gray-alpha-100 */
-  --cs-border: oklch(0 0 0 / 0.081); /* vbg gray-alpha-200 */
-  --cs-border-strong: oklch(0 0 0 / 0.21); /* vbg gray-alpha-500 */
-  --cs-border-selected: oklch(0 0 0 / 0.44); /* vbg gray-alpha-700 */
+  --cs-border-subtle: var(--cs-vbg-gray-alpha-100);
+  --cs-border: var(--cs-vbg-gray-alpha-200);
+  --cs-border-strong: var(--cs-vbg-gray-alpha-500);
+  --cs-border-selected: var(--cs-vbg-gray-alpha-700);
 
   /* Ring (Focus) - 跟随品牌色 */
   --cs-ring: color-mix(in srgb, var(--cs-primary) 40%, transparent);
 
   /* UI Element Colors */
-  --cs-secondary: oklch(0 0 0 / 0.05); /* vbg gray-alpha-100 */
-  --cs-secondary-hover: oklch(0 0 0 / 0.081); /* vbg gray-alpha-200 */
-  --cs-secondary-active: oklch(0 0 0 / 0.1); /* vbg gray-alpha-300 */
-  --cs-muted: oklch(0 0 0 / 0.05); /* vbg gray-alpha-100 */
-  --cs-accent: oklch(0 0 0 / 0.05); /* vbg gray-alpha-100 */
-  --cs-ghost-active: oklch(0 0 0 / 0.081); /* vbg gray-alpha-200 */
+  --cs-secondary: var(--cs-vbg-gray-alpha-100);
+  --cs-secondary-hover: var(--cs-vbg-gray-alpha-200);
+  --cs-secondary-active: var(--cs-vbg-gray-alpha-300);
+  --cs-muted: var(--cs-vbg-gray-alpha-100);
+  --cs-accent: var(--cs-vbg-gray-alpha-100);
+  --cs-ghost-active: var(--cs-vbg-gray-alpha-200);
 
   /* Sidebar */
-  --cs-sidebar: oklch(0.984 0 0); /* vbg background-200 */
-  --cs-sidebar-accent: oklch(0.961 0 0); /* vbg gray-100 */
+  --cs-sidebar: var(--cs-vbg-background-200);
+  --cs-sidebar-accent: var(--cs-vbg-gray-100);
 
   /* Surface-paired foregrounds */
-  --cs-card-foreground: oklch(0.205 0 0); /* vbg gray-1000 */
-  --cs-popover-foreground: oklch(0.205 0 0); /* vbg gray-1000 */
-  --cs-secondary-foreground: oklch(0.205 0 0); /* vbg gray-1000 */
-  --cs-accent-foreground: oklch(0.205 0 0); /* vbg gray-1000 */
+  --cs-card-foreground: var(--cs-vbg-gray-1000);
+  --cs-popover-foreground: var(--cs-vbg-gray-1000);
+  --cs-secondary-foreground: var(--cs-vbg-gray-1000);
+  --cs-accent-foreground: var(--cs-vbg-gray-1000);
 
   /* Foregrounds used on solid colored fills */
   --cs-primary-foreground: oklch(0.985 0 0);
   --cs-destructive-foreground: var(--cs-white);
 
   /* Input border */
-  --cs-input: oklch(0 0 0 / 0.081); /* vbg gray-alpha-200 */
+  --cs-input: var(--cs-vbg-gray-alpha-200);
 
   /* Sidebar sub-palette */
-  --cs-sidebar-foreground: oklch(0.205 0 0); /* vbg gray-1000 */
-  --cs-sidebar-primary: oklch(0.205 0 0); /* vbg gray-1000 */
-  --cs-sidebar-primary-foreground: oklch(1 0 0); /* vbg background-100 */
-  --cs-sidebar-accent-foreground: oklch(0.205 0 0); /* vbg gray-1000 */
-  --cs-sidebar-border: oklch(0 0 0 / 0.081); /* vbg gray-alpha-200 */
-  --cs-sidebar-ring: oklch(0.59 0 0); /* vbg gray-800 */
+  --cs-sidebar-foreground: var(--cs-vbg-gray-1000);
+  --cs-sidebar-primary: var(--cs-vbg-gray-1000);
+  --cs-sidebar-primary-foreground: var(--cs-vbg-background-100);
+  --cs-sidebar-accent-foreground: var(--cs-vbg-gray-1000);
+  --cs-sidebar-border: var(--cs-vbg-gray-alpha-200);
+  --cs-sidebar-ring: var(--cs-vbg-gray-800);
 
   /* Canonical Cherry Studio feedback contract.
    * Base intents are defined above; subtle/border pairs draw from the frozen
@@ -93,82 +93,82 @@
   --cs-error-subtle-foreground: var(--cs-error-text);
 
   --cs-success-subtle: var(--cs-success-bg);
-  --cs-success-subtle-foreground: oklch(0.2915 0.1197 147.38); /* vbg green-1000 */
-  --cs-success-border: oklch(0.9149 0.0976 146.24); /* vbg green-400 */
+  --cs-success-subtle-foreground: var(--cs-vbg-green-1000);
+  --cs-success-border: var(--cs-vbg-green-400);
 
   --cs-warning-subtle: var(--cs-warning-bg);
-  --cs-warning-subtle-foreground: oklch(0.3083 0.099 45.48); /* vbg amber-1000 */
-  --cs-warning-border: oklch(0.9102 0.1322 88.25); /* vbg amber-400 */
+  --cs-warning-subtle-foreground: var(--cs-vbg-amber-1000);
+  --cs-warning-border: var(--cs-vbg-amber-400);
 
   --cs-info-subtle: var(--cs-info-bg);
-  --cs-info-subtle-foreground: oklch(0.2667 0.1099 254.34); /* vbg blue-1000 */
-  --cs-info-border: oklch(0.9158 0.0473 245.116); /* vbg blue-400 */
+  --cs-info-subtle-foreground: var(--cs-vbg-blue-1000);
+  --cs-info-border: var(--cs-vbg-blue-400);
 }
 
 /* Dark Mode */
 .dark {
-  --cs-destructive: oklch(0.6256 0.2234 23.03); /* vbg red-700 dark */
-  --cs-destructive-hover: oklch(0.6996 0.2136 22.03); /* vbg red-900 dark */
+  --cs-destructive: var(--cs-vbg-red-700);
+  --cs-destructive-hover: var(--cs-vbg-red-900);
 
   /* Background & Foreground */
   /* 桌面端此处用半透明底，原生屏幕必须不透明；fork 后本层直接给不透明值，
    * host 层（global.css）不再需要覆盖。 */
-  --cs-background: oklch(0 0 0); /* vbg background-100 dark（纯黑） */
-  --cs-background-subtle: oklch(0.027 0 0); /* vbg background-200 dark */
-  --cs-foreground: oklch(0.946 0 0); /* vbg gray-1000 dark */
-  --cs-muted-foreground: oklch(0.706 0 0); /* vbg gray-900 dark */
-  --cs-foreground-tertiary: oklch(0.59 0 0); /* vbg gray-800（双主题同值） */
+  --cs-background: var(--cs-vbg-background-100); /* vbg background-100 dark（纯黑） */
+  --cs-background-subtle: var(--cs-vbg-background-200);
+  --cs-foreground: var(--cs-vbg-gray-1000);
+  --cs-muted-foreground: var(--cs-vbg-gray-900);
+  --cs-foreground-tertiary: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
 
   /* Card & Popover - 纯黑底上必须抬升，否则边界不可见 */
-  --cs-card: oklch(0.027 0 0); /* vbg background-200 dark */
-  --cs-popover: oklch(0.218 0 0); /* vbg gray-100 dark */
+  --cs-card: var(--cs-vbg-background-200);
+  --cs-popover: var(--cs-vbg-gray-100);
 
   /* Border - 四级叠加色，见文件头的档位说明 */
-  --cs-border-subtle: oklch(1 0 0 / 0.07); /* vbg gray-alpha-100 dark */
-  --cs-border: oklch(1 0 0 / 0.09); /* vbg gray-alpha-200 dark */
-  --cs-border-strong: oklch(1 0 0 / 0.24); /* vbg gray-alpha-500 dark */
-  --cs-border-selected: oklch(1 0 0 / 0.54); /* vbg gray-alpha-700 dark */
+  --cs-border-subtle: var(--cs-vbg-gray-alpha-100);
+  --cs-border: var(--cs-vbg-gray-alpha-200);
+  --cs-border-strong: var(--cs-vbg-gray-alpha-500);
+  --cs-border-selected: var(--cs-vbg-gray-alpha-700);
 
   /* UI Element Colors - Dark Mode */
-  --cs-secondary: oklch(1 0 0 / 0.07); /* vbg gray-alpha-100 dark */
-  --cs-secondary-hover: oklch(1 0 0 / 0.09); /* vbg gray-alpha-200 dark */
-  --cs-secondary-active: oklch(1 0 0 / 0.13); /* vbg gray-alpha-300 dark */
-  --cs-muted: oklch(1 0 0 / 0.07); /* vbg gray-alpha-100 dark */
-  --cs-accent: oklch(1 0 0 / 0.07); /* vbg gray-alpha-100 dark */
-  --cs-ghost-active: oklch(1 0 0 / 0.09); /* vbg gray-alpha-200 dark */
+  --cs-secondary: var(--cs-vbg-gray-alpha-100);
+  --cs-secondary-hover: var(--cs-vbg-gray-alpha-200);
+  --cs-secondary-active: var(--cs-vbg-gray-alpha-300);
+  --cs-muted: var(--cs-vbg-gray-alpha-100);
+  --cs-accent: var(--cs-vbg-gray-alpha-100);
+  --cs-ghost-active: var(--cs-vbg-gray-alpha-200);
 
   /* Sidebar */
-  --cs-sidebar: oklch(0.218 0 0); /* vbg gray-100 dark */
-  --cs-sidebar-accent: oklch(0.239 0 0); /* vbg gray-200 dark */
+  --cs-sidebar: var(--cs-vbg-gray-100);
+  --cs-sidebar-accent: var(--cs-vbg-gray-200);
 
   /* Surface-paired foregrounds */
-  --cs-card-foreground: oklch(0.946 0 0); /* vbg gray-1000 dark */
-  --cs-popover-foreground: oklch(0.946 0 0); /* vbg gray-1000 dark */
-  --cs-secondary-foreground: oklch(0.946 0 0); /* vbg gray-1000 dark */
-  --cs-accent-foreground: oklch(0.946 0 0); /* vbg gray-1000 dark */
+  --cs-card-foreground: var(--cs-vbg-gray-1000);
+  --cs-popover-foreground: var(--cs-vbg-gray-1000);
+  --cs-secondary-foreground: var(--cs-vbg-gray-1000);
+  --cs-accent-foreground: var(--cs-vbg-gray-1000);
 
   /* Foregrounds used on solid colored fills */
   --cs-primary-foreground: oklch(0.205 0 0);
   --cs-destructive-foreground: var(--cs-white);
 
   /* Input border */
-  --cs-input: oklch(1 0 0 / 0.09); /* vbg gray-alpha-200 dark */
+  --cs-input: var(--cs-vbg-gray-alpha-200);
 
   /* Sidebar sub-palette */
-  --cs-sidebar-foreground: oklch(0.946 0 0); /* vbg gray-1000 dark */
-  --cs-sidebar-primary: oklch(0.946 0 0); /* vbg gray-1000 dark */
-  --cs-sidebar-primary-foreground: oklch(0 0 0); /* vbg background-100 dark */
-  --cs-sidebar-accent-foreground: oklch(0.946 0 0); /* vbg gray-1000 dark */
-  --cs-sidebar-border: oklch(1 0 0 / 0.09); /* vbg gray-alpha-200 dark */
-  --cs-sidebar-ring: oklch(0.59 0 0); /* vbg gray-800 */
+  --cs-sidebar-foreground: var(--cs-vbg-gray-1000);
+  --cs-sidebar-primary: var(--cs-vbg-gray-1000);
+  --cs-sidebar-primary-foreground: var(--cs-vbg-background-100);
+  --cs-sidebar-accent-foreground: var(--cs-vbg-gray-1000);
+  --cs-sidebar-border: var(--cs-vbg-gray-alpha-200);
+  --cs-sidebar-ring: var(--cs-vbg-gray-800);
 
   /* Canonical Cherry Studio feedback contract */
-  --cs-success-subtle-foreground: oklch(0.9676 0.056 154.18); /* vbg green-1000 dark */
-  --cs-success-border: oklch(0.3439 0.1039 147.78); /* vbg green-400 dark */
+  --cs-success-subtle-foreground: var(--cs-vbg-green-1000);
+  --cs-success-border: var(--cs-vbg-green-400);
 
-  --cs-warning-subtle-foreground: oklch(0.967 0.0418 84.59); /* vbg amber-1000 dark */
-  --cs-warning-border: oklch(0.3553 0.0903 66.297); /* vbg amber-400 dark */
+  --cs-warning-subtle-foreground: var(--cs-vbg-amber-1000);
+  --cs-warning-border: var(--cs-vbg-amber-400);
 
-  --cs-info-subtle-foreground: oklch(0.9675 0.0179 242.423); /* vbg blue-1000 dark */
-  --cs-info-border: oklch(0.341 0.121 254.74); /* vbg blue-400 dark */
+  --cs-info-subtle-foreground: var(--cs-vbg-blue-1000);
+  --cs-info-border: var(--cs-vbg-blue-400);
 }

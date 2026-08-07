@@ -20,6 +20,7 @@ export type ThemeSources = {
   tokens: string;
   tokensIndex: string;
   typography: string;
+  vercel: string;
 };
 
 const customPropertyPattern = /^--[a-z0-9-]+$/;
@@ -113,6 +114,7 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
     tokens,
     tokensIndex,
     typography,
+    vercel,
   ] = await Promise.all([
     read('contract.css'),
     read('tokens/colors/primitive.css'),
@@ -126,6 +128,7 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
     read('tokens.css'),
     readFile(path.join(tokensRoot, 'index.css'), 'utf8'),
     read('tokens/typography.css'),
+    read('tokens/colors/vercel.css'),
   ]);
 
   return {
@@ -141,6 +144,7 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
     tokens,
     tokensIndex,
     typography,
+    vercel,
   };
 }
 
@@ -173,6 +177,8 @@ export function buildThemeModel(sources: ThemeSources) {
     ['tokens/typography.css', sources.typography],
   ] as const;
   const themedEntries = [
+    // The palette comes first so the semantic layers below can reference it.
+    ['tokens/colors/vercel.css', sources.vercel],
     ['tokens/colors/status-legacy.css', sources.statusLegacy],
     ['tokens/colors/providers.css', sources.providers],
     ['theme-input.css', sources.themeInput],

@@ -7,7 +7,8 @@
  * - Properly separated Light/Dark Mode
  *
  * File structure:
- * - colors/primitive.css: Base color palette
+ * - colors/primitive.css: Legacy Tailwind-shaped palette, pending retirement
+ * - colors/vercel.css: Vercel Brand Guidelines palette, the design source of truth
  * - colors/status-legacy.css: Frozen legacy status palette (shrink-only compat)
  * - colors/providers.css: Semantic --cs-* value providers backing the contract
  * - spacing.css: Spacing and sizing
@@ -16,6 +17,7 @@
  */
 
 @import './colors/primitive.css';
+@import './colors/vercel.css';
 @import './colors/status-legacy.css';
 @import './colors/providers.css';
 @import './spacing.css';
