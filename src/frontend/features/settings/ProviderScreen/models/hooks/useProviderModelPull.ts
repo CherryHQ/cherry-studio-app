@@ -112,6 +112,5 @@ async function refreshProviderQueries(
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.providers.detail(providerId) }),
     queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: true }) }),
   ]);
 }

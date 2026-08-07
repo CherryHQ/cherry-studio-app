@@ -66,6 +66,38 @@ describe('Data API hooks', () => {
     });
   });
 
+  it('inherits the client staleTime when a caller does not set one', async () => {
+    // react-query merges `{...clientDefaults, ...options}`, so forwarding an unset
+    // `staleTime` as an explicit `undefined` would wipe the client default and leave every
+    // query permanently stale — remounting a screen would refetch what it just loaded.
+    queryClient = new QueryClient({
+      defaultOptions: { queries: { gcTime: Infinity, retry: false, staleTime: 30_000 } },
+    });
+    dataApi.get.mockResolvedValue({ items: [] } as never);
+
+    function Probe() {
+      useQuery('/providers');
+      return null;
+    }
+
+    async function mountProbe() {
+      let probeRenderer: ReactTestRenderer | undefined;
+      await act(async () => {
+        probeRenderer = create(
+          <TestProviders>
+            <Probe />
+          </TestProviders>,
+        );
+      });
+      await act(async () => probeRenderer?.unmount());
+    }
+
+    await mountProbe();
+    await mountProbe();
+
+    expect(dataApi.get).toHaveBeenCalledTimes(1);
+  });
+
   it('holds the previous key on screen while the next one loads', async () => {
     let resolveSecondPage: ((value: unknown) => void) | undefined;
     dataApi.get.mockResolvedValueOnce({ id: 'assistant-1' } as never);

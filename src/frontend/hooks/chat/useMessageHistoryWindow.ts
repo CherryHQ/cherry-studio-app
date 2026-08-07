@@ -6,6 +6,7 @@ import { useInfiniteQuery } from '@/frontend/data';
 import { useMessageRenderWindow } from './useMessageRenderWindow';
 import { getOlderLoadAction } from './utils/messageHistoryWindowStrategy';
 import { initialMessagesPageSize } from './utils/messageQueryOptions';
+import { messageWindowPolicy } from './utils/messageWindowPolicy';
 
 export type MessageHistoryWindowOptions = {
   enabled: boolean;
@@ -47,6 +48,7 @@ export function useMessageHistoryWindow(
     enabled,
     limit: initialMessagesPageSize,
     params: { topicId: queryTopicId },
+    staleTime: messageWindowPolicy.staleTimeMs,
   });
 
   const allMessages = useMemo(() => flattenMessagePages(query.pages), [query.pages]);
