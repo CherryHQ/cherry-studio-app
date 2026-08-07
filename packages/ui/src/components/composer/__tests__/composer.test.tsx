@@ -78,8 +78,13 @@ describe('Composer', () => {
     return renderer!;
   }
 
+  // A testID matches both the component that declares it and the `Pressable` it
+  // renders; the innermost one carries what a tap actually hits.
   function pressPrimaryAction(tree: ReactTestRenderer) {
-    const button = tree.root.findByProps({ testID: 'composer-primary-action' });
+    const matches = tree.root
+      .findAllByProps({ testID: 'composer-primary-action' })
+      .filter((node) => typeof node.props.onPress === 'function');
+    const button = matches[matches.length - 1]!;
 
     act(() => {
       button.props.onPress();

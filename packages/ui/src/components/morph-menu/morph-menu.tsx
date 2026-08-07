@@ -1,0 +1,294 @@
+import { PlusIcon } from 'lucide-uniwind/png';
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  Easing,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import { useResolveClassNames } from 'uniwind';
+
+import { Portal } from '../portal';
+import { Surface } from '../surface';
+import type { MorphMenuItemProps, MorphMenuProps } from './morph-menu.types';
+
+const defaultTriggerSize = 44;
+const openRadius = 20;
+const defaultPanelWidth = 200;
+const fallbackPanelHeight = 172;
+
+// How far the plus slides left and the panel slides in from the right. The two
+// move in opposite directions so they read as one swap, not two fades.
+const slideDistance = 40;
+const restingScale = 0.97;
+const blurRadius = 2;
+
+// Opening overshoots (the y=1.25 control point) and takes longer; closing is
+// pure deceleration. That asymmetry is where the whole feel lives — matching
+// the durations would make it read as a plain toggle.
+const openMotion = {
+  duration: 350,
+  easing: Easing.bezier(0.34, 1.25, 0.64, 1),
+} as const;
+const closeMotion = {
+  duration: 250,
+  easing: Easing.bezier(0.22, 1, 0.36, 1),
+} as const;
+// The cross-fade is deliberately shorter than the shape change, so the panel is
+// already legible while the container is still settling.
+const fadeMotion = { duration: 200, easing: closeMotion.easing } as const;
+
+type MorphMenuContextValue = { close: () => void };
+
+const MorphMenuContext = createContext<MorphMenuContextValue | null>(null);
+
+function useMorphMenu() {
+  const context = use(MorphMenuContext);
+
+  if (!context) {
+    throw new Error('MorphMenu.Item must be rendered inside a MorphMenu');
+  }
+
+  return context;
+}
+
+/**
+ * A circular trigger that morphs into a panel: the container animates its size
+ * and corner radius while the plus and the menu swap places.
+ *
+ * The panel is always laid out at full size; the closed state is a clip window
+ * over it. That keeps the children's layout pass off the animation's critical
+ * path — animating the container's size would otherwise re-measure them on
+ * every frame.
+ */
+export function MorphMenu({
+  accessibilityLabel,
+  children,
+  onOpenChange,
+  style,
+  testID,
+  triggerSize = defaultTriggerSize,
+  width = defaultPanelWidth,
+}: MorphMenuProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  // Where the trigger sat when the menu opened. Non-null means the menu is
+  // floating in the portal; it stays there until the close animation lands, so
+  // the collapse doesn't play back under the composer.
+  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
+  const [panelHeight, setPanelHeight] = useState(fallbackPanelHeight);
+  const isReducedMotion = useReducedMotion();
+  const progress = useSharedValue(0);
+  const footprintRef = useRef<View>(null);
+  const portalName = useId();
+  // The same colour on both branches: `GlassView` ignores className, and an
+  // untinted one is invisible when it sits on another glass surface — the
+  // material has nothing behind it to refract. A menu that opens out of a
+  // composer's toolbar does exactly that.
+  const material = useResolveClassNames('bg-surface-secondary');
+  const triggerFootprint = useMemo(
+    () => ({ height: triggerSize, width: triggerSize }),
+    [triggerSize],
+  );
+
+  useEffect(() => {
+    if (isOpen) {
+      progress.set(isReducedMotion ? 1 : withTiming(1, openMotion));
+      return;
+    }
+
+    if (isReducedMotion) {
+      progress.set(0);
+      setAnchor(null);
+      return;
+    }
+
+    progress.set(
+      withTiming(0, closeMotion, (finished) => {
+        // A re-open cancels this one; landing the portal teardown then would
+        // yank the menu back inline mid-animation.
+        if (finished) {
+          runOnJS(setAnchor)(null);
+        }
+      }),
+    );
+  }, [isOpen, isReducedMotion, progress]);
+
+  const close = useCallback(() => {
+    setIsOpen(false);
+    onOpenChange?.(false);
+  }, [onOpenChange]);
+  const toggle = () => {
+    if (isOpen) {
+      close();
+      return;
+    }
+
+    // Measured before the state flip so the floating copy mounts exactly where
+    // the inline trigger was — otherwise the morph starts from a jump.
+    footprintRef.current?.measureInWindow((x, y) => {
+      setAnchor({ left: x, top: y });
+      setIsOpen(true);
+      onOpenChange?.(true);
+    });
+  };
+  // Every item subscribes to this, so a fresh object each render would re-render
+  // the whole panel on any parent update.
+  const contextValue = useMemo(() => ({ close }), [close]);
+
+  const containerStyle = useAnimatedStyle(() => ({
+    borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, openRadius]),
+    height: interpolate(progress.value, [0, 1], [triggerSize, panelHeight]),
+    width: interpolate(progress.value, [0, 1], [triggerSize, width]),
+  }));
+  // Fade out over the first 200/350 of the open so the plus is gone before the
+  // panel is readable, rather than the two ghosting through each other.
+  const plusStyle = useAnimatedStyle(() => {
+    const fade = Math.min(progress.value / (fadeMotion.duration / openMotion.duration), 1);
+
+    return {
+      filter: [{ blur: fade * blurRadius }],
+      opacity: 1 - fade,
+      transform: [
+        { translateX: -slideDistance * progress.value },
+        { rotate: `${45 * progress.value}deg` },
+        { scale: 1 - (1 - restingScale) * progress.value },
+      ],
+    };
+  });
+  const panelStyle = useAnimatedStyle(() => ({
+    filter: [{ blur: (1 - progress.value) * blurRadius }],
+    opacity: progress.value,
+    transform: [
+      { translateX: slideDistance * (1 - progress.value) },
+      { scale: restingScale + (1 - restingScale) * progress.value },
+    ],
+  }));
+
+  const handlePanelLayout = (event: LayoutChangeEvent) => {
+    const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+
+    setPanelHeight((current) => (Math.abs(current - nextHeight) <= 1 ? current : nextHeight));
+  };
+
+  // The morphing container plus the trigger. Rendered inline while closed and
+  // inside the portal while open, so it is the same subtree either way.
+  //
+  // The provider travels with it: the portal re-renders its children under the
+  // host rather than teleporting the React node, so a provider left behind at
+  // the call site would not reach the items once they float.
+  const menu = (
+    <MorphMenuContext value={contextValue}>
+      <Animated.View style={[panelAnchorStyle, containerStyle]}>
+        {/* The panel stays inside the surface: an empty `GlassView` draws no
+            material at all, so the two cannot be split into siblings to fade
+            them separately. */}
+        <Surface
+          className="bg-surface-secondary"
+          cornerRadius={openRadius}
+          style={fillStyle}
+          tintColor={
+            typeof material.backgroundColor === 'string' ? material.backgroundColor : undefined
+          }
+        >
+          <Animated.View
+            onLayout={handlePanelLayout}
+            pointerEvents={isOpen ? 'auto' : 'none'}
+            style={[panelContentStyle, { width }, panelStyle]}
+            testID={testID ? `${testID}-panel` : undefined}
+          >
+            {children}
+          </Animated.View>
+        </Surface>
+      </Animated.View>
+
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: isOpen }}
+        className="absolute bottom-0 left-0 items-center justify-center"
+        onPress={toggle}
+        pointerEvents={isOpen ? 'none' : 'auto'}
+        style={triggerFootprint}
+        testID={testID ? `${testID}-trigger` : undefined}
+      >
+        <Animated.View style={plusStyle}>
+          <PlusIcon className="size-6 text-foreground" strokeWidth={2} />
+        </Animated.View>
+      </Pressable>
+    </MorphMenuContext>
+  );
+
+  return (
+    <>
+      {/* Reserves the closed footprint in the parent's flow, and is what gets
+          measured — the floating copy is positioned from it. */}
+      <View className="relative" ref={footprintRef} style={[triggerFootprint, style]}>
+        {anchor ? null : menu}
+      </View>
+
+      {/* The open menu is portalled for two reasons: it has to paint over the
+          composer next to it, and its dismiss catcher has to reach the whole
+          screen — an in-place one only receives touches inside its ancestors'
+          bounds, which here is a composer row a fraction of the screen tall.
+          The catcher renders first so the menu sits on top of it. */}
+      {anchor ? (
+        <Portal name={`morph-menu-${portalName}`}>
+          <Pressable
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            onPress={close}
+            style={StyleSheet.absoluteFill}
+            testID={testID ? `${testID}-backdrop` : undefined}
+          />
+
+          <View className="absolute" style={[triggerFootprint, anchor]}>
+            {menu}
+          </View>
+        </Portal>
+      ) : null}
+    </>
+  );
+}
+
+function MorphMenuItem({ icon, label, onPress, testID }: MorphMenuItemProps) {
+  const { close } = useMorphMenu();
+
+  return (
+    <Pressable
+      accessibilityLabel={label}
+      accessibilityRole="menuitem"
+      className="h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-surface-tertiary"
+      onPress={() => {
+        close();
+        onPress();
+      }}
+      testID={testID}
+    >
+      {icon}
+      <Text className="text-base text-foreground" numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+MorphMenu.Item = MorphMenuItem;
+
+const fillStyle = { height: '100%', width: '100%' } as const;
+// Pinned bottom-left so the panel grows up and to the right out of the button,
+// which is where the composer's add button sits.
+const panelAnchorStyle = { bottom: 0, left: 0, position: 'absolute' } as const;
+const panelContentStyle = { gap: 2, left: 0, padding: 8, position: 'absolute', bottom: 0 } as const;

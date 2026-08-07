@@ -1,5 +1,12 @@
-import { Composer, type ComposerAttachment, Section, Switch } from '@cherrystudio/ui/components';
-import * as ImagePicker from 'expo-image-picker';
+import {
+  Composer,
+  composerActionSize,
+  type ComposerAttachment,
+  MorphMenu,
+  Section,
+  Switch,
+} from '@cherrystudio/ui/components';
+import { CameraIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
@@ -27,35 +34,13 @@ export default function ComposerPreviewScreen() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [sentMessages, setSentMessages] = useState<readonly SentMessage[]>([]);
 
-  const pickPhotos = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-
-    if (!permission.granted) {
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsMultipleSelection: true,
-      mediaTypes: ['images'],
-      selectionLimit: 4,
-    });
-
-    if (result.canceled) {
-      return;
-    }
-
-    setAttachments((current) => {
-      const seen = new Set(current.map((attachment) => attachment.uri));
-      const additions = result.assets
-        .filter((asset) => !seen.has(asset.uri))
-        .map((asset) => ({
-          id: asset.assetId ?? asset.uri,
-          name: asset.fileName ?? undefined,
-          uri: asset.uri,
-        }));
-
-      return [...current, ...additions];
-    });
+  // The picker is deliberately not wired up yet — this screen is here to judge
+  // the morph and the menu's hit targets, so each item just records what it was.
+  const recordMenuChoice = useCallback((choice: string) => {
+    setSentMessages((current) => [
+      { attachmentCount: 0, id: `menu-${current.length}`, text: choice },
+      ...current,
+    ]);
   }, []);
 
   const removeAttachment = useCallback((id: string) => {
@@ -124,14 +109,35 @@ export default function ComposerPreviewScreen() {
             <Composer
               attachments={attachments}
               labels={{
-                addAttachment: t('chat.media.photos'),
                 removeAttachment: t('common.remove'),
                 send: t('chat.input.action.sendMessage'),
                 stop: t('chat.input.action.stopGenerating'),
               }}
+              leading={
+                <MorphMenu
+                  accessibilityLabel={t('chat.media.photos')}
+                  testID="composer-morph-menu"
+                  triggerSize={composerActionSize}
+                >
+                  <MorphMenu.Item
+                    icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
+                    label={t('chat.media.camera')}
+                    onPress={() => recordMenuChoice(t('chat.media.camera'))}
+                  />
+                  <MorphMenu.Item
+                    icon={<ImagesIcon className="size-5 text-foreground" strokeWidth={2} />}
+                    label={t('chat.media.photos')}
+                    onPress={() => recordMenuChoice(t('chat.media.photos'))}
+                  />
+                  <MorphMenu.Item
+                    icon={<FileIcon className="size-5 text-foreground" strokeWidth={2} />}
+                    label={t('chat.media.file')}
+                    onPress={() => recordMenuChoice(t('chat.media.file'))}
+                  />
+                </MorphMenu>
+              }
               onAttachmentRemove={removeAttachment}
               onChangeText={setDraft}
-              onLeadingPress={pickPhotos}
               onSend={send}
               onStop={() => setIsStreaming(false)}
               placeholder={t('chat.inputPlaceholder')}

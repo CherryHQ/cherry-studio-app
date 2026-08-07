@@ -27,8 +27,10 @@ export type ComposerProps = {
   autoFocus?: boolean;
   labels?: Partial<ComposerLabels>;
   /**
-   * Replaces the built-in "+" circle — pass a menu/sheet trigger to own the
-   * attachment flow. `onLeadingPress` is ignored when this is set.
+   * The toolbar's tools, replacing the built-in "+" — pass a menu/sheet trigger
+   * to own the attachment flow, or a fragment to sit several side by side. They
+   * pack to the left; the send action stays pinned right. `onLeadingPress` is
+   * ignored when this is set, and `null` drops the slot entirely.
    */
   leading?: ReactNode;
   /** Omit to render the thumbnails without a remove badge. */

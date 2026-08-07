@@ -30,10 +30,11 @@ Shared components with text must be content-driven: avoid fixed width or height,
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
 
-`Composer` is the chat input bar: a leading action, a pill that grows with its content, and a
-primary action that flips between send and stop. It is fully controlled — the caller owns `value`
-and `attachments` — and carries no i18n or attachment-picking logic, so the same component backs a
-chat screen, a prompt box, or a story.
+`Composer` is the chat input bar: one surface holding a text field that grows with its content and,
+under it, a toolbar row with the tools on the left and a primary action on the right that flips
+between send and stop. It is fully controlled — the caller owns `value` and `attachments` — and
+carries no i18n or attachment-picking logic, so the same component backs a chat screen, a prompt
+box, or a story.
 
 ```tsx
 import { Composer } from '@cherrystudio/ui/components';
@@ -52,18 +53,58 @@ import { Composer } from '@cherrystudio/ui/components';
 />;
 ```
 
-Only the platform-divergent chrome sits behind a `.ios` / `.android` seam
-(`composerPlatform.*`): the surface material (Liquid Glass on iOS 26+, a plain rounded surface
-elsewhere) and the text field's vertical insets, which iOS needs asymmetric to cancel UITextView's
-baseline offset. Layout, state, and the strip animation are identical on both platforms and stay in
-`composer.tsx` rather than being duplicated into a `composer.ios` / `composer.android` pair that
-would drift.
+Only the platform-divergent chrome sits behind a `.ios` / `.android` seam: `Surface` for the material
+(Liquid Glass on iOS 26+, a plain rounded surface elsewhere) and `composerTextStyle.*` for the text
+field's line height, which iOS has to override. Layout, state, and the strip animation are identical
+on both platforms and stay in `composer.tsx` rather than being duplicated into a `composer.ios` /
+`composer.android` pair that would drift.
+
+The line height override is worth understanding before touching the field's padding. Tailwind's
+`text-base` carries a 24pt line height, 6pt more than the font needs, and UIKit puts all of that extra
+leading below the baseline instead of splitting it. The glyphs end up low inside their own box while
+the caret, which tracks the line box, stays centered — so padding cannot fix it, since shifting the
+field moves both together and centering one puts the other 3pt out. Only the line height closes the
+gap. 20 leaves a 1pt glyph offset that is invisible at this size while keeping enough leading for CJK
+to breathe when the field wraps.
+
+`Surface` takes its geometry in `style`, never `className` — `GlassView` ignores `className`, so
+anything expressed there would apply to the fallback branch only and the two would silently diverge.
+That includes content alignment, which is why callers own it.
+
+The toolbar's buttons are sized to their icons rather than to their reach — `composerActionSize` is
+the circle, and the rest of the 44pt target comes from slop. The text lines up with the icons' *ink*,
+not their boxes: lucide draws its 24pt icons with ~4pt of margin inside the box, and aligning the
+boxes leaves the toolbar looking indented from the text above it.
 
 The attachment strip is height-clipped and animates between zero and its measured content height,
-so adding or removing a thumbnail swells and shrinks the pill instead of snapping it. The thumbnails
-stay mounted through the collapse — rendering `attachments` directly would unmount them the instant
-the list empties, leaving an empty box to shrink. Pass `leading` to replace the built-in "+" circle
-with your own menu or sheet trigger; pass `leading={null}` to drop it entirely.
+so adding or removing a thumbnail swells and shrinks the surface instead of snapping it. The
+thumbnails stay mounted through the collapse — rendering `attachments` directly would unmount them
+the instant the list empties, leaving an empty box to shrink. Pass `leading` to replace the built-in
+"+" with your own tools; pass `leading={null}` to drop the slot entirely.
+
+`MorphMenu` is one such trigger: a circular button that morphs into a panel, sized from its items.
+
+```tsx
+import { MorphMenu } from '@cherrystudio/ui/components';
+
+<MorphMenu accessibilityLabel={t('chat.media.attach')}>
+  <MorphMenu.Item icon={<CameraIcon />} label={t('chat.media.camera')} onPress={openCamera} />
+  <MorphMenu.Item icon={<ImagesIcon />} label={t('chat.media.photos')} onPress={pickPhotos} />
+</MorphMenu>;
+```
+
+The panel is laid out at full size from the first frame and the closed button is a clip window over
+it, so the children are measured once instead of on every animation frame. While open it moves into
+a `Portal`: it has to paint over whatever sits beside it, and its dismiss catcher has to reach the
+whole screen — an in-place one only receives touches inside its ancestors' bounds. It stays there
+until the close animation lands, so the collapse does not play back under the neighbouring content.
+`MorphMenu.Item` closes the menu before running `onPress`, and the context provider travels with the
+menu into the portal, since the portal re-renders its children under the host rather than teleporting
+the React node.
+
+Its surface is tinted rather than left as plain glass. A `GlassView` renders nothing when it sits on
+another one — the material has nothing behind it to refract — and a menu that opens out of a
+composer's toolbar does exactly that. The same applies to the composer's own toolbar buttons.
 
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
