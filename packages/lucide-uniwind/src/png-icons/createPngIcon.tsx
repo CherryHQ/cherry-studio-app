@@ -40,7 +40,7 @@ function toColor(value: unknown): string | undefined {
  * of react-native-svg's `<Svg>` + `<Path>` tree. In long virtualized lists the RNSVG mount cost
  * dominates, so the PNG variant is dramatically cheaper to mount while keeping the same call sites
  * as the lucide icon it replaces — both explicit props (`color`/`size`/`width`/`height`) and
- * className (`size-6 text-default-foreground`).
+ * className (`size-6 text-foreground`).
  *
  * Precedence matches the SVG `iconWithClassName` wrapper: explicit props win over className, which
  * wins over the default size.

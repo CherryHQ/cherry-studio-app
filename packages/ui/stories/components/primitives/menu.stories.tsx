@@ -52,7 +52,7 @@ export const Playground: Story = {
                   systemImage: 'pencil',
                 },
                 {
-                  icon: <Trash2Icon className="size-5 text-danger" />,
+                  icon: <Trash2Icon className="size-5 text-destructive" />,
                   id: 'delete',
                   label: 'Delete',
                   onPress: onDelete,

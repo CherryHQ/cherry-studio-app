@@ -82,16 +82,9 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '交互叠加',
-    hint: '半透明叠加层，随下方表面变化。hover/active 各档仍留在 --cs- 命名空间，只经 --color-* 暴露成工具类。',
+    hint: '半透明叠加层，随下方表面变化。secondary/muted/accent 三个名字目前是同一个值（gray-alpha-100），按下才升到 300 档。',
     kind: 'surface',
-    variables: [
-      '--secondary',
-      '--cs-secondary-hover',
-      '--cs-secondary-active',
-      '--cs-ghost-active',
-      '--muted',
-      '--cs-destructive-hover',
-    ],
+    variables: ['--secondary', '--secondary-active', '--muted', '--accent'],
   },
   {
     title: '品牌',

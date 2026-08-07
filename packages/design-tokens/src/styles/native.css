@@ -63,6 +63,7 @@
   --color-border-strong: var(--border-strong);
   --color-border-selected: var(--border-selected);
   --color-link: var(--link);
+  --color-secondary-active: var(--secondary-active);
   --color-success: var(--success);
   --color-success-subtle: var(--success-subtle);
   --color-success-subtle-foreground: var(--success-subtle-foreground);
@@ -160,7 +161,6 @@
       --cs-info-bg: var(--cs-blue-100);
       --cs-primary: oklch(0.77 0.208 146);
       --cs-destructive: var(--cs-red-700);
-      --cs-destructive-hover: var(--cs-red-900);
       --cs-success: var(--cs-success-base);
       --cs-warning: var(--cs-warning-base);
       --cs-info: var(--cs-info-base);
@@ -180,11 +180,9 @@
       --cs-border-selected: var(--cs-gray-alpha-700);
       --cs-ring: color-mix(in srgb, var(--cs-primary) 40%, transparent);
       --cs-secondary: var(--cs-gray-alpha-100);
-      --cs-secondary-hover: var(--cs-gray-alpha-200);
       --cs-secondary-active: var(--cs-gray-alpha-300);
       --cs-muted: var(--cs-gray-alpha-100);
       --cs-accent: var(--cs-gray-alpha-100);
-      --cs-ghost-active: var(--cs-gray-alpha-200);
       --cs-sidebar: var(--cs-background-200);
       --cs-sidebar-accent: var(--cs-gray-100);
       --cs-card-foreground: var(--cs-gray-1000);
@@ -254,6 +252,7 @@
       --border-strong: var(--cs-border-strong);
       --border-selected: var(--cs-border-selected);
       --link: var(--cs-blue-900);
+      --secondary-active: var(--cs-secondary-active);
       --success: var(--cs-success);
       --success-subtle: var(--cs-success-subtle);
       --success-subtle-foreground: var(--cs-success-subtle-foreground);
@@ -333,7 +332,6 @@
       --cs-info-bg: var(--cs-blue-100);
       --cs-primary: oklch(0.77 0.208 146);
       --cs-destructive: var(--cs-red-700);
-      --cs-destructive-hover: var(--cs-red-900);
       --cs-success: var(--cs-success-base);
       --cs-warning: var(--cs-warning-base);
       --cs-info: var(--cs-info-base);
@@ -353,11 +351,9 @@
       --cs-border-selected: var(--cs-gray-alpha-700);
       --cs-ring: color-mix(in srgb, var(--cs-primary) 40%, transparent);
       --cs-secondary: var(--cs-gray-alpha-100);
-      --cs-secondary-hover: var(--cs-gray-alpha-200);
       --cs-secondary-active: var(--cs-gray-alpha-300);
       --cs-muted: var(--cs-gray-alpha-100);
       --cs-accent: var(--cs-gray-alpha-100);
-      --cs-ghost-active: var(--cs-gray-alpha-200);
       --cs-sidebar: var(--cs-gray-100);
       --cs-sidebar-accent: var(--cs-gray-200);
       --cs-card-foreground: var(--cs-gray-1000);
@@ -427,6 +423,7 @@
       --border-strong: var(--cs-border-strong);
       --border-selected: var(--cs-border-selected);
       --link: var(--cs-blue-900);
+      --secondary-active: var(--cs-secondary-active);
       --success: var(--cs-success);
       --success-subtle: var(--cs-success-subtle);
       --success-subtle-foreground: var(--cs-success-subtle-foreground);

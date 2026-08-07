@@ -29,7 +29,6 @@
    * 唯一被引用的一档，其余十档随 primitive.css 一起退役了。 */
   --cs-primary: oklch(0.77 0.208 146);
   --cs-destructive: var(--cs-red-700);
-  --cs-destructive-hover: var(--cs-red-900);
   --cs-success: var(--cs-success-base);
   --cs-warning: var(--cs-warning-base);
   --cs-info: var(--cs-info-base);
@@ -73,11 +72,9 @@
 
   /* UI Element Colors */
   --cs-secondary: var(--cs-gray-alpha-100);
-  --cs-secondary-hover: var(--cs-gray-alpha-200);
   --cs-secondary-active: var(--cs-gray-alpha-300);
   --cs-muted: var(--cs-gray-alpha-100);
   --cs-accent: var(--cs-gray-alpha-100);
-  --cs-ghost-active: var(--cs-gray-alpha-200);
 
   /* Sidebar */
   --cs-sidebar: var(--cs-background-200);
@@ -127,7 +124,6 @@
 /* Dark Mode */
 .dark {
   --cs-destructive: var(--cs-red-700);
-  --cs-destructive-hover: var(--cs-red-900);
 
   /* Background & Foreground */
   /* 桌面端此处用半透明底，原生屏幕必须不透明；fork 后本层直接给不透明值，
@@ -154,11 +150,9 @@
 
   /* UI Element Colors - Dark Mode */
   --cs-secondary: var(--cs-gray-alpha-100);
-  --cs-secondary-hover: var(--cs-gray-alpha-200);
   --cs-secondary-active: var(--cs-gray-alpha-300);
   --cs-muted: var(--cs-gray-alpha-100);
   --cs-accent: var(--cs-gray-alpha-100);
-  --cs-ghost-active: var(--cs-gray-alpha-200);
 
   /* Sidebar */
   --cs-sidebar: var(--cs-gray-100);

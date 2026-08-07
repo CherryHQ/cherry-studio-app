@@ -49,7 +49,7 @@ function DescriptionSection() {
 
   return (
     <View className="rounded-2xl bg-grouped-surface p-4">
-      <Text className="text-base text-default-foreground">{t(descriptionKey)}</Text>
+      <Text className="text-base text-foreground">{t(descriptionKey)}</Text>
     </View>
   );
 }
@@ -155,7 +155,7 @@ function BasicAuthSection() {
 
   return (
     <View className="gap-4">
-      <Text className="font-medium text-default-foreground text-sm">
+      <Text className="font-medium text-foreground text-sm">
         {t('settings.websearch.provider.basicAuth')}
       </Text>
       <ConfigField label={t('settings.websearch.provider.basicAuthUsername')}>

@@ -127,9 +127,7 @@ export function ModelPickerSheetContent({
     return (
       <View className="px-4 pb-5 pt-3">
         <View className="min-h-12 items-center justify-center rounded-xl bg-secondary px-4 py-4">
-          <Text className="text-base text-default-foreground">
-            {isLoading ? loadingText : emptyText}
-          </Text>
+          <Text className="text-base text-foreground">{isLoading ? loadingText : emptyText}</Text>
         </View>
       </View>
     );
@@ -174,12 +172,8 @@ function ModelPickerGroupHeader({
 
   return (
     <View className={cn('flex-row items-center gap-2 pb-1', !isFirstGroup && 'mt-3')}>
-      <Text className="text-default-foreground text-lg">
-        {groupKind === 'pinned' ? t(title) : title}
-      </Text>
-      {groupKind === 'pinned' ? (
-        <Text className="text-default-foreground text-lg">{count}</Text>
-      ) : null}
+      <Text className="text-foreground text-lg">{groupKind === 'pinned' ? t(title) : title}</Text>
+      {groupKind === 'pinned' ? <Text className="text-foreground text-lg">{count}</Text> : null}
     </View>
   );
 }
@@ -213,7 +207,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
           {item.model.name}
         </Text>
         {isPinned ? (
-          <Text className="shrink text-base text-default-foreground" numberOfLines={1}>
+          <Text className="shrink text-base text-foreground" numberOfLines={1}>
             | {item.provider.name}
           </Text>
         ) : null}

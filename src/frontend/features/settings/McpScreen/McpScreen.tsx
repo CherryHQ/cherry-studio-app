@@ -53,16 +53,14 @@ export function McpScreen() {
         {isLoading ? (
           <View className="items-center gap-2 px-1 py-8">
             <ActivityIndicator size="small" />
-            <Text className="text-default-foreground text-sm">
-              {t('settings.mcp.list.loading')}
-            </Text>
+            <Text className="text-foreground text-sm">{t('settings.mcp.list.loading')}</Text>
           </View>
         ) : error ? (
           <View className="items-center gap-3 px-1 py-8">
-            <Text className="text-danger-foreground text-sm">
+            <Text className="text-destructive-foreground text-sm">
               {t('settings.mcp.list.loadFailed')}
             </Text>
-            <Text className="text-center text-default-foreground text-xs" selectable>
+            <Text className="text-center text-foreground text-xs" selectable>
               {error instanceof Error ? error.message : String(error)}
             </Text>
             <SettingsDialogActionButton

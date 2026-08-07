@@ -439,10 +439,10 @@ function DeleteAction({ drag, label, onPress }: DeleteActionProps) {
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
-        className="w-16 flex-1 items-center justify-center bg-danger active:opacity-80"
+        className="w-16 flex-1 items-center justify-center bg-destructive active:opacity-80"
         onPress={onPress}
       >
-        <Trash2Icon className="size-5 text-danger-foreground" strokeWidth={2} />
+        <Trash2Icon className="size-5 text-destructive-foreground" strokeWidth={2} />
       </Pressable>
     </Animated.View>
   );
@@ -460,14 +460,14 @@ function AssistantEmptyState({
   return (
     <View className="items-center justify-center gap-4 px-8 py-16">
       <View className="size-14 items-center justify-center rounded-full bg-secondary">
-        <BotIcon className="size-7 text-default-foreground" strokeWidth={2} />
+        <BotIcon className="size-7 text-foreground" strokeWidth={2} />
       </View>
       <View className="items-center gap-1">
         <Text className="text-center font-semibold text-foreground text-lg">
           {isLoading ? t('assistant.list.loading') : t('assistant.list.emptyTitle')}
         </Text>
         {!isLoading ? (
-          <Text className="text-center text-default-foreground text-sm">
+          <Text className="text-center text-foreground text-sm">
             {t('assistant.list.emptyDescription')}
           </Text>
         ) : null}

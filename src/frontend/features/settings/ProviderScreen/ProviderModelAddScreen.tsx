@@ -190,7 +190,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
 
           {showEndpointTypes ? (
             <View className="gap-2">
-              <Text className="font-medium text-default-foreground text-sm">
+              <Text className="font-medium text-foreground text-sm">
                 {t('settings.provider.models.addEndpointTypeLabel')}
               </Text>
               <View className="flex-row flex-wrap gap-2">
@@ -205,7 +205,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
                 ))}
               </View>
               {endpointTypeError ? (
-                <Text className="text-danger text-xs">{endpointTypeError}</Text>
+                <Text className="text-destructive text-xs">{endpointTypeError}</Text>
               ) : null}
             </View>
           ) : null}
@@ -221,9 +221,9 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
               {t('settings.provider.models.addMoreSettings')}
             </Text>
             {showMoreSettings ? (
-              <ChevronUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
+              <ChevronUpIcon className="size-4 text-foreground" strokeWidth={2} />
             ) : (
-              <ChevronDownIcon className="size-4 text-default-foreground" strokeWidth={2} />
+              <ChevronDownIcon className="size-4 text-foreground" strokeWidth={2} />
             )}
           </Pressable>
 
@@ -371,7 +371,7 @@ function EndpointTypeChip({
       style={isSelected ? { backgroundColor: `${selectedEndpointTypeColor}20` } : undefined}
     >
       <Text
-        className="font-medium text-default-foreground text-sm"
+        className="font-medium text-foreground text-sm"
         numberOfLines={1}
         style={isSelected ? { color: selectedEndpointTypeColor } : undefined}
       >

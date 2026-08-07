@@ -223,7 +223,7 @@ export function DrawingList() {
             ) : (
               <Pressable
                 accessibilityRole="button"
-                className="mx-4 h-20 items-center justify-center rounded-md bg-surface-secondary active:opacity-70"
+                className="mx-4 h-20 items-center justify-center rounded-md bg-secondary active:opacity-70"
                 onPress={() => void handleViewAllPress()}
               >
                 <ImageIcon className="size-6 text-foreground-tertiary" strokeWidth={1.5} />
@@ -319,7 +319,7 @@ function DrawingGridItem({
         accessibilityLabel={label}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isSelected }}
-        className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+        className="overflow-hidden rounded-md bg-secondary active:opacity-75"
         onPress={() => onToggle(item.painting.id)}
         style={{ height }}
         testID={`painting-history-${item.key}`}
@@ -347,7 +347,7 @@ function DrawingGridItem({
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
-        className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+        className="overflow-hidden rounded-md bg-secondary active:opacity-75"
         style={{ height }}
         testID={`painting-history-${item.key}`}
       >

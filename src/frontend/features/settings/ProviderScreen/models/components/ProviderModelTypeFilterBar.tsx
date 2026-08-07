@@ -49,10 +49,7 @@ function ProviderModelTypeTabContent({
     <View className="max-w-full flex-row items-center justify-center gap-1.5">
       {Icon ? (
         <Icon
-          className={cn(
-            'size-3.5 shrink-0',
-            isSelected ? 'text-foreground' : 'text-default-foreground',
-          )}
+          className={cn('size-3.5 shrink-0', isSelected ? 'text-foreground' : 'text-foreground')}
           strokeWidth={2}
         />
       ) : null}
@@ -60,7 +57,7 @@ function ProviderModelTypeTabContent({
         adjustsFontSizeToFit
         className={cn(
           'min-w-0 text-xs',
-          isSelected ? 'font-medium text-foreground' : 'text-default-foreground',
+          isSelected ? 'font-medium text-foreground' : 'text-foreground',
         )}
         minimumFontScale={0.8}
         numberOfLines={1}

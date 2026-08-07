@@ -34,7 +34,7 @@ export function ChatInputActionList({
             accessibilityLabel={title}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
-            className="min-h-14 flex-row items-center gap-4 rounded-2xl px-3 py-2 active:bg-surface-secondary active:opacity-70"
+            className="min-h-14 flex-row items-center gap-4 rounded-2xl px-3 py-2 active:bg-secondary active:opacity-70"
             key={action.id}
             onPress={() => onActionPress(action.id)}
           >

@@ -85,7 +85,7 @@ export function PaintingSkeleton({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="progressbar"
       accessible
-      className="flex-1 overflow-hidden rounded-md bg-surface-secondary"
+      className="flex-1 overflow-hidden rounded-md bg-secondary"
       onLayout={handleLayout}
       testID={testID}
     >

@@ -68,13 +68,10 @@ export function EffortSliderTrack({
   return (
     <View className="w-full" style={{ height: trackHeight }}>
       <View
-        className="absolute inset-0 overflow-hidden bg-surface-secondary"
+        className="absolute inset-0 overflow-hidden bg-secondary"
         style={{ borderRadius: effortSliderTrackRadius }}
       >
-        <Animated.View
-          className="absolute top-0 bottom-0 left-0 bg-surface-tertiary"
-          style={fillStyle}
-        />
+        <Animated.View className="absolute top-0 bottom-0 left-0 bg-secondary" style={fillStyle} />
         {children}
       </View>
       {hideTicks

@@ -76,7 +76,7 @@ export function PaintingCanvas({
       {error ? (
         <Text
           accessibilityRole="alert"
-          className="pt-2 text-center text-danger text-sm"
+          className="pt-2 text-center text-destructive text-sm"
           testID="painting-generation-error"
         >
           {t('painting.status.failed')}

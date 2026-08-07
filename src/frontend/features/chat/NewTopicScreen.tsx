@@ -17,7 +17,7 @@ export function NewTopicScreen({ assistantId }: { assistantId?: string }) {
         <Text className="text-center font-semibold text-foreground text-lg">
           {t('chat.newTopic.title')}
         </Text>
-        <Text className="mt-2 text-center text-default-foreground text-sm" numberOfLines={3}>
+        <Text className="mt-2 text-center text-foreground text-sm" numberOfLines={3}>
           {t('chat.newTopic.description')}
         </Text>
       </View>

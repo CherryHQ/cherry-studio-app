@@ -85,7 +85,7 @@ describe('Section', () => {
     });
 
     expect(renderer?.root.findByProps({ children: 'stub' }).props.className).toBe(
-      'size-6 text-default-foreground',
+      'size-6 text-foreground',
     );
   });
 

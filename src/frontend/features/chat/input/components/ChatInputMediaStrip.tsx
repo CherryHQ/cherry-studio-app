@@ -144,7 +144,7 @@ function MediaTile({ accessibilityLabel, icon: Icon, label, onPress }: MediaTile
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="size-28 items-center justify-center gap-2 rounded-2xl bg-surface-secondary active:opacity-70"
+      className="size-28 items-center justify-center gap-2 rounded-2xl bg-secondary active:opacity-70"
       onPress={onPress}
     >
       <Icon className="size-7 text-foreground" strokeWidth={2} />

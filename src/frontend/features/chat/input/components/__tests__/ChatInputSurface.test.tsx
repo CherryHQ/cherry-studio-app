@@ -508,7 +508,7 @@ describe('ChatInputSurface', () => {
     });
     expect(effortLabels.length).toBeGreaterThan(0);
     expect(effortLabels[0].props.children).toBe('chat.reasoning.default');
-    expect(effortLabels[0].props.className).toContain('text-default-foreground');
+    expect(effortLabels[0].props.className).toContain('text-foreground');
     expect(effortLabels[0].props.style).toBeUndefined();
   });
 

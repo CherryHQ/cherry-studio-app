@@ -53,7 +53,7 @@ export default function FontSizeSettingsScreen() {
             <Text className="font-medium text-foreground text-base">
               {t('settings.fontSize.title')}
             </Text>
-            <Text className="text-default-foreground text-sm">
+            <Text className="text-foreground text-sm">
               {t(FONT_SIZE_STEP_LABEL_KEYS[draftStep])}
             </Text>
           </View>
@@ -70,7 +70,7 @@ export default function FontSizeSettingsScreen() {
         </View>
 
         <View className="gap-2">
-          <Text className="px-1 font-medium text-default-foreground text-sm">
+          <Text className="px-1 font-medium text-foreground text-sm">
             {t('settings.fontSize.previewTitle')}
           </Text>
           <View className="rounded-xl bg-grouped-surface px-4 py-5">

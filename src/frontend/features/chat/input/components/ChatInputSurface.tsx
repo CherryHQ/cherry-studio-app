@@ -300,11 +300,11 @@ function ChatInputSettingsButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-secondary active:bg-surface-tertiary active:opacity-70"
+      className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary active:bg-secondary-active active:opacity-70"
       onPress={onPress}
       testID="chat-input-model-settings-button"
     >
-      <Settings2Icon className="size-4 text-default-foreground" strokeWidth={2} />
+      <Settings2Icon className="size-4 text-foreground" strokeWidth={2} />
     </Pressable>
   );
 }
@@ -334,7 +334,7 @@ function ChatInputModelButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="h-8 min-w-0 shrink flex-row items-center gap-1.5 rounded-full bg-surface-secondary px-2.5 active:bg-surface-tertiary active:opacity-70"
+      className="h-8 min-w-0 shrink flex-row items-center gap-1.5 rounded-full bg-secondary px-2.5 active:bg-secondary-active active:opacity-70"
       onPress={onPress}
       testID="chat-input-model-button"
     >
@@ -353,7 +353,7 @@ function ChatInputModelButton({
       </Text>
       {effortLabel ? (
         <Text
-          className="shrink-0 text-default-foreground text-sm"
+          className="shrink-0 text-foreground text-sm"
           numberOfLines={1}
           style={
             isEffortMax
@@ -384,7 +384,7 @@ function ChatInputPill({
     <Pressable
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
-      className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-lg bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
+      className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-lg bg-secondary px-3 active:bg-secondary-active active:opacity-70 ${maxWidthClassName}`}
       onPress={onPress}
     >
       <Text className="font-semibold text-foreground text-sm" numberOfLines={1}>

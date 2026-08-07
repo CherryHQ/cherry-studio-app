@@ -55,7 +55,7 @@ export function ModelPickerIcon({
 
   return (
     <View className="items-center justify-center" style={frameStyle}>
-      <Text className="font-medium text-default-foreground text-xs">{avatarInitial}</Text>
+      <Text className="font-medium text-foreground text-xs">{avatarInitial}</Text>
     </View>
   );
 }

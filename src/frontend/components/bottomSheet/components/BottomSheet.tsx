@@ -307,7 +307,7 @@ function BottomSheetHeaderControl({
       {children}
     </GlassView>
   ) : (
-    <View className="bg-surface-secondary" style={styles.closeSurface} testID={testID}>
+    <View className="bg-secondary" style={styles.closeSurface} testID={testID}>
       {children}
     </View>
   );

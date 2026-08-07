@@ -63,7 +63,7 @@ export default function AboutSettingsScreen() {
               <Text className="font-bold text-[22px] text-foreground" numberOfLines={1}>
                 {t('common.cherryStudio')}
               </Text>
-              <Text className="text-default-foreground text-sm" numberOfLines={0}>
+              <Text className="text-foreground text-sm" numberOfLines={0}>
                 {t('common.cherryStudioDescription')}
               </Text>
               <View className="self-start rounded-full bg-primary/10 px-2 py-0.5">
@@ -78,10 +78,7 @@ export default function AboutSettingsScreen() {
               leading={<GitHubIcon className="size-5" />}
               onPress={() => openLink(ABOUT_LINKS.repository)}
               trailing={
-                <SquareArrowOutUpRightIcon
-                  className="size-5 text-default-foreground"
-                  strokeWidth={2}
-                />
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
               }
             />
             <Section.Item
@@ -89,10 +86,7 @@ export default function AboutSettingsScreen() {
               leading={<RssIcon className="size-5 text-foreground" strokeWidth={2} />}
               onPress={() => openLink(ABOUT_LINKS.releases)}
               trailing={
-                <SquareArrowOutUpRightIcon
-                  className="size-5 text-default-foreground"
-                  strokeWidth={2}
-                />
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
               }
             />
             <Section.Item
@@ -100,10 +94,7 @@ export default function AboutSettingsScreen() {
               leading={<GlobeIcon className="size-5 text-foreground" strokeWidth={2} />}
               onPress={() => openLink(ABOUT_LINKS.website)}
               trailing={
-                <SquareArrowOutUpRightIcon
-                  className="size-5 text-default-foreground"
-                  strokeWidth={2}
-                />
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
               }
             />
             <Section.Item
@@ -111,10 +102,7 @@ export default function AboutSettingsScreen() {
               leading={<CodeIcon className="size-5 text-foreground" strokeWidth={2} />}
               onPress={() => openLink(ABOUT_LINKS.feedback)}
               trailing={
-                <SquareArrowOutUpRightIcon
-                  className="size-5 text-default-foreground"
-                  strokeWidth={2}
-                />
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
               }
             />
             <Section.Item
@@ -122,10 +110,7 @@ export default function AboutSettingsScreen() {
               leading={<CopyrightIcon className="size-5 text-foreground" strokeWidth={2} />}
               onPress={() => openLink(ABOUT_LINKS.license)}
               trailing={
-                <SquareArrowOutUpRightIcon
-                  className="size-5 text-default-foreground"
-                  strokeWidth={2}
-                />
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
               }
             />
             <Section.Item
@@ -133,10 +118,7 @@ export default function AboutSettingsScreen() {
               leading={<MailIcon className="size-5 text-foreground" strokeWidth={2} />}
               onPress={() => openLink(ABOUT_LINKS.contact)}
               trailing={
-                <SquareArrowOutUpRightIcon
-                  className="size-5 text-default-foreground"
-                  strokeWidth={2}
-                />
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
               }
             />
           </Section>

@@ -38,7 +38,7 @@ export function AiUsageSummaryCard() {
         <View className="min-w-0 shrink flex-row items-center gap-2">
           <Text
             adjustsFontSizeToFit
-            className="min-w-0 shrink font-semibold text-default-foreground text-lg"
+            className="min-w-0 shrink font-semibold text-foreground text-lg"
             maxFontSizeMultiplier={1.2}
             minimumFontScale={0.85}
             numberOfLines={1}
@@ -55,13 +55,13 @@ export function AiUsageSummaryCard() {
             <Pressable
               accessibilityLabel={t('aiUsage.retry')}
               accessibilityRole="button"
-              className="size-8 items-center justify-center rounded-full active:bg-surface-secondary active:opacity-70"
+              className="size-8 items-center justify-center rounded-full active:bg-secondary active:opacity-70"
               hitSlop={6}
               style={styles.continuousCorners}
               testID="ai-usage-summary-refresh-retry"
               onPress={() => void refetch()}
             >
-              <RefreshCwIcon className="size-4 text-danger" strokeWidth={2} />
+              <RefreshCwIcon className="size-4 text-destructive" strokeWidth={2} />
             </Pressable>
           ) : null}
         </View>
@@ -83,20 +83,18 @@ export function AiUsageSummaryCard() {
 
       {showInitialError ? (
         <View className="items-center justify-center gap-3" style={styles.stateContent}>
-          <Text selectable className="text-center text-danger-foreground text-sm">
+          <Text selectable className="text-center text-destructive-foreground text-sm">
             {t('aiUsage.loadError')}
           </Text>
           <Pressable
             accessibilityRole="button"
-            className="flex-row items-center gap-2 rounded-lg bg-surface-secondary px-4 py-2 active:opacity-70"
+            className="flex-row items-center gap-2 rounded-lg bg-secondary px-4 py-2 active:opacity-70"
             style={styles.continuousCorners}
             testID="ai-usage-summary-retry"
             onPress={() => void refetch()}
           >
-            <RefreshCwIcon className="size-4 text-default-foreground" strokeWidth={2} />
-            <Text className="font-medium text-default-foreground text-sm">
-              {t('aiUsage.retry')}
-            </Text>
+            <RefreshCwIcon className="size-4 text-foreground" strokeWidth={2} />
+            <Text className="font-medium text-foreground text-sm">{t('aiUsage.retry')}</Text>
           </Pressable>
         </View>
       ) : (
@@ -112,7 +110,7 @@ export function AiUsageSummaryCard() {
               <Text
                 selectable
                 adjustsFontSizeToFit
-                className="min-w-0 font-semibold text-default-foreground text-lg"
+                className="min-w-0 font-semibold text-foreground text-lg"
                 maxFontSizeMultiplier={1.2}
                 minimumFontScale={0.65}
                 numberOfLines={1}
@@ -128,7 +126,7 @@ export function AiUsageSummaryCard() {
               <Text
                 selectable
                 adjustsFontSizeToFit
-                className="min-w-0 font-semibold text-default-foreground text-lg"
+                className="min-w-0 font-semibold text-foreground text-lg"
                 maxFontSizeMultiplier={1.2}
                 minimumFontScale={0.65}
                 numberOfLines={1}
@@ -203,7 +201,7 @@ function AiUsageProviderPill({
       ) : (
         <BrandAvatar label={label} size={24} />
       )}
-      <Text className="min-w-0 shrink text-default-foreground text-sm" numberOfLines={1}>
+      <Text className="min-w-0 shrink text-foreground text-sm" numberOfLines={1}>
         {label}
       </Text>
     </View>

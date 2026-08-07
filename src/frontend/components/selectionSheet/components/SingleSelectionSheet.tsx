@@ -147,7 +147,7 @@ function SelectionSheetOptions<TValue extends string>({
   if (options.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-5">
-        <Text className="text-center text-base text-default-foreground">{emptyText}</Text>
+        <Text className="text-center text-base text-foreground">{emptyText}</Text>
       </View>
     );
   }

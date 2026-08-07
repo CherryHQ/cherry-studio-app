@@ -187,7 +187,7 @@ const TopicListView = memo(function TopicListView() {
     () => (
       <View className="items-center justify-center px-6 py-8">
         {isTopicListLoading ? null : (
-          <Text className="text-center text-default-foreground text-sm">
+          <Text className="text-center text-foreground text-sm">
             {t('navigation.noMatchingChats')}
           </Text>
         )}
@@ -414,7 +414,7 @@ const TopicRow = memo(function TopicRow({
           <View
             className={
               isPinned
-                ? 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-surface-secondary py-2 pl-2'
+                ? 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-secondary py-2 pl-2'
                 : 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-transparent py-2 pl-2'
             }
           >
@@ -496,7 +496,7 @@ function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: To
       <Pressable
         accessibilityLabel={renameLabel}
         accessibilityRole="button"
-        className="w-16 items-center justify-center bg-surface-secondary active:opacity-80"
+        className="w-16 items-center justify-center bg-secondary active:opacity-80"
         onPress={onRename}
       >
         <PencilIcon className="size-5 text-foreground" strokeWidth={2} />
@@ -504,10 +504,10 @@ function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: To
       <Pressable
         accessibilityLabel={deleteLabel}
         accessibilityRole="button"
-        className="w-16 items-center justify-center bg-danger active:opacity-80"
+        className="w-16 items-center justify-center bg-destructive active:opacity-80"
         onPress={onDelete}
       >
-        <Trash2Icon className="size-5 text-danger-foreground" strokeWidth={2} />
+        <Trash2Icon className="size-5 text-destructive-foreground" strokeWidth={2} />
       </Pressable>
     </Animated.View>
   );

@@ -43,7 +43,7 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
       title={title}
     >
       {results.length === 0 ? (
-        <Text className="text-default-foreground text-base italic" selectable>
+        <Text className="text-foreground text-base italic" selectable>
           {statusText}
         </Text>
       ) : (

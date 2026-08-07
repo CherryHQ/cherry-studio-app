@@ -75,7 +75,7 @@ export function PaintingConversationScreen() {
         </View>
       ) : hasLoadError || !painting || !files ? (
         <View className="flex-1 items-center justify-center px-6">
-          <Text selectable className="text-center text-default-foreground text-sm">
+          <Text selectable className="text-center text-foreground text-sm">
             {t('painting.conversation.loadFailed')}
           </Text>
         </View>

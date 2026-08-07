@@ -57,10 +57,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
         }
         label={
           <Text
-            className={cn(
-              'min-w-0 text-base',
-              isEnabled ? 'text-foreground' : 'text-default-foreground',
-            )}
+            className={cn('min-w-0 text-base', isEnabled ? 'text-foreground' : 'text-foreground')}
             numberOfLines={1}
           >
             {name}
@@ -110,7 +107,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
               <Text
                 className={cn(
                   'shrink-0 text-xs',
-                  statusTone === 'danger' ? 'text-danger' : 'text-default-foreground',
+                  statusTone === 'danger' ? 'text-destructive' : 'text-foreground',
                 )}
                 numberOfLines={1}
               >

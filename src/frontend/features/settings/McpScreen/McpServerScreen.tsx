@@ -92,14 +92,14 @@ function McpServerLoadState({
         <Text
           className={
             onRetry
-              ? 'text-center text-danger-foreground text-sm'
-              : 'text-center text-default-foreground text-sm'
+              ? 'text-center text-destructive-foreground text-sm'
+              : 'text-center text-foreground text-sm'
           }
         >
           {message}
         </Text>
         {detail ? (
-          <Text className="text-center text-default-foreground text-xs" selectable>
+          <Text className="text-center text-foreground text-xs" selectable>
             {detail}
           </Text>
         ) : null}
@@ -362,9 +362,7 @@ function McpServerEditor({
               value={displayedForm.baseUrl}
             />
             {showHttpWarning ? (
-              <Text className="text-warning-foreground text-xs">
-                {t('settings.mcp.fields.httpWarning')}
-              </Text>
+              <Text className="text-warning text-xs">{t('settings.mcp.fields.httpWarning')}</Text>
             ) : null}
           </FormField>
           {!isCreating ? (

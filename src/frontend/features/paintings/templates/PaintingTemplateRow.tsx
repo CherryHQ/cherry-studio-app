@@ -42,7 +42,7 @@ export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps)
             <Pressable
               accessibilityLabel={t('painting.templates.item', { title: template.title })}
               accessibilityRole="button"
-              className="overflow-hidden bg-surface-secondary active:opacity-70"
+              className="overflow-hidden bg-secondary active:opacity-70"
               key={template.id}
               onPress={() => setSelectedTemplate(template)}
               style={styles.card}

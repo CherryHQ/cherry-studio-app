@@ -27,11 +27,11 @@ export function ScrollToBottomButton({
         <Pressable
           accessibilityLabel="滚动到底部"
           accessibilityRole="button"
-          className="size-10 items-center justify-center rounded-full border border-border bg-surface-secondary shadow-sm active:bg-surface-tertiary"
+          className="size-10 items-center justify-center rounded-full border border-border bg-secondary shadow-sm active:bg-secondary-active"
           hitSlop={8}
           onPress={onPress}
         >
-          <ArrowDownIcon className="size-5 text-default-foreground" strokeWidth={2} />
+          <ArrowDownIcon className="size-5 text-foreground" strokeWidth={2} />
         </Pressable>
       </Animated.View>
     </Animated.View>

@@ -118,7 +118,7 @@ export default function ProviderModelPullScreen() {
       ) : (
         <View className="flex-1 items-center justify-center gap-3 px-4">
           <Spinner />
-          <Text className="text-base text-default-foreground">
+          <Text className="text-base text-foreground">
             {isPreviewLoading || providerQuery.isPending
               ? t('settings.provider.models.loading')
               : t('settings.provider.models.pull')}
@@ -206,7 +206,7 @@ function ProviderModelPullPreviewPage({
         ListFooterComponent={
           isSearchEmpty ? (
             <View className="items-center justify-center px-4 py-10">
-              <Text className="text-center text-base text-default-foreground">
+              <Text className="text-center text-base text-foreground">
                 {t('settings.provider.models.search.empty')}
               </Text>
             </View>
@@ -371,7 +371,7 @@ const PullModelRow = memo(function PullModelRow({
         hitSlop={6}
         icon={
           showsMinus ? (
-            <MinusIcon className="text-danger" strokeWidth={2} />
+            <MinusIcon className="text-destructive" strokeWidth={2} />
           ) : (
             <PlusIcon className="text-primary" strokeWidth={2} />
           )

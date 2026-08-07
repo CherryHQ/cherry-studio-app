@@ -26,13 +26,13 @@ export function AiUsageSectionStatus({
     <Pressable
       accessibilityLabel={t('aiUsage.retry')}
       accessibilityRole="button"
-      className="size-8 items-center justify-center rounded-full active:bg-surface-secondary active:opacity-70"
+      className="size-8 items-center justify-center rounded-full active:bg-secondary active:opacity-70"
       hitSlop={6}
       style={styles.continuousCorners}
       testID={retryTestID}
       onPress={onRetry}
     >
-      <RefreshCwIcon className="size-4 text-danger" strokeWidth={2} />
+      <RefreshCwIcon className="size-4 text-destructive" strokeWidth={2} />
     </Pressable>
   );
 }
@@ -55,8 +55,8 @@ export function AiUsageSectionAction({
       accessibilityRole="button"
       className={
         isCompact
-          ? 'shrink-0 rounded-lg px-2 active:bg-surface-secondary active:opacity-70'
-          : 'shrink-0 rounded-lg px-2 py-1.5 active:bg-surface-secondary active:opacity-70'
+          ? 'shrink-0 rounded-lg px-2 active:bg-secondary active:opacity-70'
+          : 'shrink-0 rounded-lg px-2 py-1.5 active:bg-secondary active:opacity-70'
       }
       hitSlop={isCompact ? 10 : 4}
       style={styles.continuousCorners}
@@ -83,18 +83,18 @@ export function AiUsageSectionError({
 
   return (
     <View className="min-h-40 items-center justify-center gap-4 px-6">
-      <Text selectable className="text-center text-danger-foreground text-sm">
+      <Text selectable className="text-center text-destructive-foreground text-sm">
         {message}
       </Text>
       <Pressable
         accessibilityRole="button"
-        className="flex-row items-center gap-2 rounded-lg bg-surface-secondary px-4 py-2 active:opacity-70"
+        className="flex-row items-center gap-2 rounded-lg bg-secondary px-4 py-2 active:opacity-70"
         style={styles.continuousCorners}
         testID={testID}
         onPress={onRetry}
       >
-        <RefreshCwIcon className="size-4 text-default-foreground" strokeWidth={2} />
-        <Text className="font-medium text-default-foreground text-sm">{t('aiUsage.retry')}</Text>
+        <RefreshCwIcon className="size-4 text-foreground" strokeWidth={2} />
+        <Text className="font-medium text-foreground text-sm">{t('aiUsage.retry')}</Text>
       </Pressable>
     </View>
   );

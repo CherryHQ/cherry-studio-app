@@ -96,7 +96,7 @@ export function AiUsageRankingList({
           >
             <Pressable
               accessibilityRole="button"
-              className="flex-row items-center gap-1.5 rounded-lg px-3 py-2 active:bg-surface-secondary active:opacity-70"
+              className="flex-row items-center gap-1.5 rounded-lg px-3 py-2 active:bg-secondary active:opacity-70"
               style={styles.continuousCorners}
               testID="ai-usage-show-more"
               onPress={() => setVisibleCount((count) => count + AI_USAGE_RANKING_PAGE_SIZE)}
@@ -151,11 +151,7 @@ function AiUsageRankingRow({
         ) : null}
         <AiUsageRankingIcon item={item} label={primaryLabel} />
         <View className="min-w-0 flex-1 gap-1">
-          <Text
-            selectable
-            className="font-semibold text-default-foreground text-base"
-            numberOfLines={1}
-          >
+          <Text selectable className="font-semibold text-foreground text-base" numberOfLines={1}>
             {primaryLabel}
             {item.groupBy === 'model' && providerLabel ? (
               <Text className="font-normal text-muted-foreground text-sm">
@@ -191,10 +187,10 @@ export function AiUsageRankingListSkeleton() {
     <View className="p-4" testID="ai-usage-ranking-list-loading">
       {Array.from({ length: AI_USAGE_RANKING_PAGE_SIZE }, (_, index) => (
         <View key={index} className="flex-row items-center gap-3 py-2">
-          <View className="size-8 rounded-md bg-surface-secondary" />
+          <View className="size-8 rounded-md bg-secondary" />
           <View className="flex-1 gap-1">
-            <View className="h-6 w-2/3 rounded-sm bg-surface-secondary" />
-            <View className="h-4 w-full rounded-sm bg-surface-secondary" />
+            <View className="h-6 w-2/3 rounded-sm bg-secondary" />
+            <View className="h-4 w-full rounded-sm bg-secondary" />
           </View>
         </View>
       ))}

@@ -76,7 +76,10 @@ function SectionItem({
       <>
         {leading ? <View className="shrink-0 items-center justify-center">{leading}</View> : null}
         <View className="min-w-0 flex-1 gap-1">
-          {renderTextSlot(label, cn('text-base', destructive ? 'text-danger' : 'text-foreground'))}
+          {renderTextSlot(
+            label,
+            cn('text-base', destructive ? 'text-destructive' : 'text-foreground'),
+          )}
           {description ? renderTextSlot(description, 'text-sm text-muted-foreground') : null}
         </View>
         {trailing ? <View className="shrink-0 items-center justify-center">{trailing}</View> : null}

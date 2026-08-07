@@ -23,6 +23,11 @@
   --border-strong: var(--cs-border-strong);
   --border-selected: var(--cs-border-selected);
   --link: var(--cs-blue-900);
+  /* Pressed state for `--secondary` fills. Not a Shadcn name — upstream models
+   * interaction states as hover, which a touch surface does not have. The
+   * provider has always declared it; exposing it is what makes `active:` on a
+   * secondary fill visible, since `secondary` itself is only a 5% overlay. */
+  --secondary-active: var(--cs-secondary-active);
 
   /* Feedback */
   --success: var(--cs-success);

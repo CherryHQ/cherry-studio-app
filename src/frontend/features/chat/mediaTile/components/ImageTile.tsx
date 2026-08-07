@@ -25,7 +25,7 @@ export function ImageTile({
   uri,
 }: ImageTileProps) {
   const containerClassName = cn(
-    'items-center justify-center overflow-hidden rounded-2xl bg-surface-secondary',
+    'items-center justify-center overflow-hidden rounded-2xl bg-secondary',
     fill ? 'absolute inset-0' : 'size-28',
     onPress && 'active:opacity-80',
     className,

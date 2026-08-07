@@ -194,7 +194,7 @@ describe('Section', () => {
 
     expect(row.props.disabled).toBe(true);
     expect(row.props.className).toContain('opacity-40');
-    expect(label.props.className).toContain('text-danger');
+    expect(label.props.className).toContain('text-destructive');
     expect(tree.root.findByProps({ testID: 'custom-trailing' })).toBeDefined();
     expect(
       tree.root.findAll((node) => node.type === View && node.props.testID === 'section-chevron'),

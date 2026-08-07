@@ -64,10 +64,10 @@ export function ToolPartTrigger({
         <Icon
           className={
             isDanger
-              ? 'size-4 text-danger'
+              ? 'size-4 text-destructive'
               : isWarning
                 ? 'size-4 text-warning'
-                : 'size-4 text-default-foreground'
+                : 'size-4 text-foreground'
           }
           strokeWidth={2}
         />
@@ -75,10 +75,10 @@ export function ToolPartTrigger({
       <Text
         className={
           isDanger
-            ? 'min-w-0 flex-1 text-danger text-sm'
+            ? 'min-w-0 flex-1 text-destructive text-sm'
             : isWarning
               ? 'min-w-0 flex-1 text-warning text-sm'
-              : 'min-w-0 flex-1 text-default-foreground text-sm'
+              : 'min-w-0 flex-1 text-foreground text-sm'
         }
         numberOfLines={1}
       >
@@ -88,10 +88,10 @@ export function ToolPartTrigger({
         <Text
           className={
             isDanger
-              ? 'max-w-[38%] shrink-0 text-danger text-sm'
+              ? 'max-w-[38%] shrink-0 text-destructive text-sm'
               : isWarning
                 ? 'max-w-[38%] shrink-0 text-warning text-sm'
-                : 'max-w-[38%] shrink-0 text-default-foreground text-sm'
+                : 'max-w-[38%] shrink-0 text-foreground text-sm'
           }
           numberOfLines={1}
         >
@@ -101,10 +101,10 @@ export function ToolPartTrigger({
       <ChevronRightIcon
         className={
           isDanger
-            ? 'size-4 shrink-0 text-danger'
+            ? 'size-4 shrink-0 text-destructive'
             : isWarning
               ? 'size-4 shrink-0 text-warning'
-              : 'size-4 shrink-0 text-default-foreground'
+              : 'size-4 shrink-0 text-foreground'
         }
         strokeWidth={2}
       />

@@ -32,7 +32,7 @@ export type PrismSweepProps = {
 export function PrismSweep({
   active = true,
   accessibilityLabel = 'Loading',
-  dotClassName = 'bg-default-foreground',
+  dotClassName = 'bg-foreground',
   durationMs = 1400,
   size = 20,
 }: PrismSweepProps) {
