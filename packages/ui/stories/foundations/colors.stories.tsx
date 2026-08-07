@@ -162,8 +162,8 @@ export const Palette: Story = {
   render: () => (
     <ThemeSplit>
       <Text className="text-xs text-muted-foreground">
-        {'--cs-vbg-* 是脚手架命名：primitive.css 里那套遗留调色板还占着 --cs-gray-100 之类的名字。' +
-          '等它退役，去掉 -vbg- 是一次纯机械改名，不涉及取值。'}
+        {'--cs-* 前缀表示「内部」：调色板不导出成 Tailwind 工具类，' +
+          '组件只消费下面那页无前缀的语义契约。这里的色块是直接读变量画的。'}
       </Text>
       {PALETTE_SCALES.map((paletteScale) => (
         <PaletteScaleRow key={paletteScale.title} {...paletteScale} />

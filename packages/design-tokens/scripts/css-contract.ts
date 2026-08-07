@@ -9,7 +9,6 @@ export type Declaration = {
 
 export type ThemeSources = {
   contract: string;
-  primitive: string;
   product: string;
   providers: string;
   radius: string;
@@ -102,7 +101,6 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
 
   const [
     contract,
-    primitive,
     product,
     providers,
     radius,
@@ -115,7 +113,6 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
     vercel,
   ] = await Promise.all([
     read('contract.css'),
-    read('tokens/colors/primitive.css'),
     read('product.css'),
     read('tokens/colors/providers.css'),
     read('tokens/radius.css'),
@@ -130,7 +127,6 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
 
   return {
     contract,
-    primitive,
     product,
     providers,
     radius,
@@ -166,8 +162,9 @@ function declarationMap(
 }
 
 export function buildThemeModel(sources: ThemeSources) {
+  // No colour source is static any more: every colour in the system flips with
+  // the theme, so it belongs in the themed maps below.
   const staticEntries = [
-    ['tokens/colors/primitive.css', sources.primitive],
     ['tokens/radius.css', sources.radius],
     ['tokens/typography.css', sources.typography],
   ] as const;

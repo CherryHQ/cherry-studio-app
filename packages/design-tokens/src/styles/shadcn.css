@@ -42,11 +42,11 @@
    * gray-1000/900/800 重复两轮，对 5 系列图表不可用，此处顺延到 700/600。
    * 深色下 gray-700(0.65) 比 gray-800(0.59) 更亮，第 3/4 档亮度会反序 —— 目前
    * 没有任何组件消费 chart-1..5（AiUsageWeeklyChart 用的是语义色），故不额外处理。 */
-  --chart-1: var(--cs-vbg-gray-1000);
-  --chart-2: var(--cs-vbg-gray-900);
-  --chart-3: var(--cs-vbg-gray-800);
-  --chart-4: var(--cs-vbg-gray-700);
-  --chart-5: var(--cs-vbg-gray-600);
+  --chart-1: var(--cs-gray-1000);
+  --chart-2: var(--cs-gray-900);
+  --chart-3: var(--cs-gray-800);
+  --chart-4: var(--cs-gray-700);
+  --chart-5: var(--cs-gray-600);
 
   /* Sidebar */
   --sidebar: var(--cs-sidebar);
@@ -64,9 +64,9 @@
 
 .dark {
   /* Existing `--cs-*` semantic providers switch mode independently. */
-  --chart-1: var(--cs-vbg-gray-1000);
-  --chart-2: var(--cs-vbg-gray-900);
-  --chart-3: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
-  --chart-4: var(--cs-vbg-gray-700); /* vbg gray-700（双主题同值） */
-  --chart-5: var(--cs-vbg-gray-600);
+  --chart-1: var(--cs-gray-1000);
+  --chart-2: var(--cs-gray-900);
+  --chart-3: var(--cs-gray-800); /* 双主题同值 */
+  --chart-4: var(--cs-gray-700); /* 双主题同值 */
+  --chart-5: var(--cs-gray-600);
 }

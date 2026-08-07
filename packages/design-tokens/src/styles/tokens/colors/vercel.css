@@ -9,12 +9,6 @@
  * These are providers, not the public API: they are never exposed as Tailwind
  * utilities, and components consume the unprefixed semantic contract instead.
  *
- * ⚠️ The `-vbg-` infix is deliberate scaffolding. `primitive.css` still ships
- * the legacy Tailwind-shaped palette (`--cs-gray-500`, `--cs-red-500`, …) that
- * predates this migration, and the two would collide on names such as
- * `--cs-gray-100`. Once that legacy palette is retired, dropping `-vbg-` here
- * is a mechanical rename with no value changes.
- *
  * Upstream defines each step with CSS `light-dark()`. React Native has no such
  * function, and this project switches themes by redeclaring variables, so each
  * step is split into the `:root` (light) and `.dark` blocks below. Percentage
@@ -37,112 +31,112 @@
 
 :root {
   /* Page and surface bases */
-  --cs-vbg-background-100: oklch(1 0 0);
-  --cs-vbg-background-200: oklch(0.984 0 0);
+  --cs-background-100: oklch(1 0 0);
+  --cs-background-200: oklch(0.984 0 0);
 
   /* Neutral ramp */
-  --cs-vbg-gray-100: oklch(0.961 0 0);
-  --cs-vbg-gray-200: oklch(0.94 0 0);
-  --cs-vbg-gray-300: oklch(0.925 0 0);
-  --cs-vbg-gray-400: oklch(0.937 0 0);
-  --cs-vbg-gray-500: oklch(0.836 0 0);
-  --cs-vbg-gray-600: oklch(0.732 0 0);
-  --cs-vbg-gray-700: oklch(0.65 0 0);
-  --cs-vbg-gray-800: oklch(0.59 0 0);
-  --cs-vbg-gray-900: oklch(0.42 0 0);
-  --cs-vbg-gray-1000: oklch(0.205 0 0);
+  --cs-gray-100: oklch(0.961 0 0);
+  --cs-gray-200: oklch(0.94 0 0);
+  --cs-gray-300: oklch(0.925 0 0);
+  --cs-gray-400: oklch(0.937 0 0);
+  --cs-gray-500: oklch(0.836 0 0);
+  --cs-gray-600: oklch(0.732 0 0);
+  --cs-gray-700: oklch(0.65 0 0);
+  --cs-gray-800: oklch(0.59 0 0);
+  --cs-gray-900: oklch(0.42 0 0);
+  --cs-gray-1000: oklch(0.205 0 0);
 
   /* Neutral ramp, as overlays that keep the surface beneath visible */
-  --cs-vbg-gray-alpha-100: oklch(0 0 0 / 0.05);
-  --cs-vbg-gray-alpha-200: oklch(0 0 0 / 0.081);
-  --cs-vbg-gray-alpha-300: oklch(0 0 0 / 0.1);
-  --cs-vbg-gray-alpha-400: oklch(0 0 0 / 0.08);
-  --cs-vbg-gray-alpha-500: oklch(0 0 0 / 0.21);
-  --cs-vbg-gray-alpha-600: oklch(0 0 0 / 0.24);
-  --cs-vbg-gray-alpha-700: oklch(0 0 0 / 0.44);
-  --cs-vbg-gray-alpha-800: oklch(0 0 0 / 0.51);
-  --cs-vbg-gray-alpha-900: oklch(0 0 0 / 0.7);
-  --cs-vbg-gray-alpha-1000: oklch(0 0 0 / 0.91);
+  --cs-gray-alpha-100: oklch(0 0 0 / 0.05);
+  --cs-gray-alpha-200: oklch(0 0 0 / 0.081);
+  --cs-gray-alpha-300: oklch(0 0 0 / 0.1);
+  --cs-gray-alpha-400: oklch(0 0 0 / 0.08);
+  --cs-gray-alpha-500: oklch(0 0 0 / 0.21);
+  --cs-gray-alpha-600: oklch(0 0 0 / 0.24);
+  --cs-gray-alpha-700: oklch(0 0 0 / 0.44);
+  --cs-gray-alpha-800: oklch(0 0 0 / 0.51);
+  --cs-gray-alpha-900: oklch(0 0 0 / 0.7);
+  --cs-gray-alpha-1000: oklch(0 0 0 / 0.91);
 
   /* Chromatic ramps. Upstream ships five steps per hue: 100 tint, 400 border,
    * 700 solid, 900 emphasis, 1000 text-on-tint. */
-  --cs-vbg-blue-100: oklch(0.9732 0.0141 251.56);
-  --cs-vbg-blue-400: oklch(0.9158 0.0473 245.116);
-  --cs-vbg-blue-700: oklch(0.5761 0.2508 258.23);
-  --cs-vbg-blue-900: oklch(0.5318 0.2399 256.99);
-  --cs-vbg-blue-1000: oklch(0.2667 0.1099 254.34);
+  --cs-blue-100: oklch(0.9732 0.0141 251.56);
+  --cs-blue-400: oklch(0.9158 0.0473 245.116);
+  --cs-blue-700: oklch(0.5761 0.2508 258.23);
+  --cs-blue-900: oklch(0.5318 0.2399 256.99);
+  --cs-blue-1000: oklch(0.2667 0.1099 254.34);
 
-  --cs-vbg-green-100: oklch(0.9759 0.0289 145.42);
-  --cs-vbg-green-400: oklch(0.9149 0.0976 146.24);
-  --cs-vbg-green-700: oklch(0.6458 0.1746 147.27);
-  --cs-vbg-green-900: oklch(0.5175 0.1453 147.65);
-  --cs-vbg-green-1000: oklch(0.2915 0.1197 147.38);
+  --cs-green-100: oklch(0.9759 0.0289 145.42);
+  --cs-green-400: oklch(0.9149 0.0976 146.24);
+  --cs-green-700: oklch(0.6458 0.1746 147.27);
+  --cs-green-900: oklch(0.5175 0.1453 147.65);
+  --cs-green-1000: oklch(0.2915 0.1197 147.38);
 
-  --cs-vbg-amber-100: oklch(0.9748 0.0331 85.79);
-  --cs-vbg-amber-400: oklch(0.9102 0.1322 88.25);
-  --cs-vbg-amber-700: oklch(0.8187 0.1969 76.46);
-  --cs-vbg-amber-900: oklch(0.5279 0.1496 54.65);
-  --cs-vbg-amber-1000: oklch(0.3083 0.099 45.48);
+  --cs-amber-100: oklch(0.9748 0.0331 85.79);
+  --cs-amber-400: oklch(0.9102 0.1322 88.25);
+  --cs-amber-700: oklch(0.8187 0.1969 76.46);
+  --cs-amber-900: oklch(0.5279 0.1496 54.65);
+  --cs-amber-1000: oklch(0.3083 0.099 45.48);
 
-  --cs-vbg-red-100: oklch(0.965 0.0223 13.09);
-  --cs-vbg-red-400: oklch(0.9151 0.0471 19.8);
-  --cs-vbg-red-700: oklch(0.6256 0.2524 23.03);
-  --cs-vbg-red-900: oklch(0.5499 0.232 25.29);
-  --cs-vbg-red-1000: oklch(0.248 0.1041 18.86);
+  --cs-red-100: oklch(0.965 0.0223 13.09);
+  --cs-red-400: oklch(0.9151 0.0471 19.8);
+  --cs-red-700: oklch(0.6256 0.2524 23.03);
+  --cs-red-900: oklch(0.5499 0.232 25.29);
+  --cs-red-1000: oklch(0.248 0.1041 18.86);
 }
 
 /* Dark Mode */
 .dark {
   /* Page and surface bases */
-  --cs-vbg-background-100: oklch(0 0 0);
-  --cs-vbg-background-200: oklch(0.027 0 0);
+  --cs-background-100: oklch(0 0 0);
+  --cs-background-200: oklch(0.027 0 0);
 
   /* Neutral ramp */
-  --cs-vbg-gray-100: oklch(0.218 0 0);
-  --cs-vbg-gray-200: oklch(0.239 0 0);
-  --cs-vbg-gray-300: oklch(0.281 0 0);
-  --cs-vbg-gray-400: oklch(0.301 0 0);
-  --cs-vbg-gray-500: oklch(0.39 0 0);
-  --cs-vbg-gray-600: oklch(0.623 0 0);
-  --cs-vbg-gray-700: oklch(0.65 0 0);
-  --cs-vbg-gray-800: oklch(0.59 0 0);
-  --cs-vbg-gray-900: oklch(0.706 0 0);
-  --cs-vbg-gray-1000: oklch(0.946 0 0);
+  --cs-gray-100: oklch(0.218 0 0);
+  --cs-gray-200: oklch(0.239 0 0);
+  --cs-gray-300: oklch(0.281 0 0);
+  --cs-gray-400: oklch(0.301 0 0);
+  --cs-gray-500: oklch(0.39 0 0);
+  --cs-gray-600: oklch(0.623 0 0);
+  --cs-gray-700: oklch(0.65 0 0);
+  --cs-gray-800: oklch(0.59 0 0);
+  --cs-gray-900: oklch(0.706 0 0);
+  --cs-gray-1000: oklch(0.946 0 0);
 
   /* Neutral ramp, as overlays that keep the surface beneath visible */
-  --cs-vbg-gray-alpha-100: oklch(1 0 0 / 0.07);
-  --cs-vbg-gray-alpha-200: oklch(1 0 0 / 0.09);
-  --cs-vbg-gray-alpha-300: oklch(1 0 0 / 0.13);
-  --cs-vbg-gray-alpha-400: oklch(1 0 0 / 0.14);
-  --cs-vbg-gray-alpha-500: oklch(1 0 0 / 0.24);
-  --cs-vbg-gray-alpha-600: oklch(1 0 0 / 0.51);
-  --cs-vbg-gray-alpha-700: oklch(1 0 0 / 0.54);
-  --cs-vbg-gray-alpha-800: oklch(1 0 0 / 0.47);
-  --cs-vbg-gray-alpha-900: oklch(1 0 0 / 0.61);
-  --cs-vbg-gray-alpha-1000: oklch(1 0 0 / 0.92);
+  --cs-gray-alpha-100: oklch(1 0 0 / 0.07);
+  --cs-gray-alpha-200: oklch(1 0 0 / 0.09);
+  --cs-gray-alpha-300: oklch(1 0 0 / 0.13);
+  --cs-gray-alpha-400: oklch(1 0 0 / 0.14);
+  --cs-gray-alpha-500: oklch(1 0 0 / 0.24);
+  --cs-gray-alpha-600: oklch(1 0 0 / 0.51);
+  --cs-gray-alpha-700: oklch(1 0 0 / 0.54);
+  --cs-gray-alpha-800: oklch(1 0 0 / 0.47);
+  --cs-gray-alpha-900: oklch(1 0 0 / 0.61);
+  --cs-gray-alpha-1000: oklch(1 0 0 / 0.92);
 
   /* Chromatic ramps */
-  --cs-vbg-blue-100: oklch(0.2217 0.069 259.89);
-  --cs-vbg-blue-400: oklch(0.341 0.121 254.74);
-  --cs-vbg-blue-700: oklch(0.5761 0.2321 258.23);
-  --cs-vbg-blue-900: oklch(0.717 0.1648 250.794);
-  --cs-vbg-blue-1000: oklch(0.9675 0.0179 242.423);
+  --cs-blue-100: oklch(0.2217 0.069 259.89);
+  --cs-blue-400: oklch(0.341 0.121 254.74);
+  --cs-blue-700: oklch(0.5761 0.2321 258.23);
+  --cs-blue-900: oklch(0.717 0.1648 250.794);
+  --cs-blue-1000: oklch(0.9675 0.0179 242.423);
 
-  --cs-vbg-green-100: oklch(0.2309 0.0716 149.68);
-  --cs-vbg-green-400: oklch(0.3439 0.1039 147.78);
-  --cs-vbg-green-700: oklch(0.6458 0.199 147.27);
-  --cs-vbg-green-900: oklch(0.731 0.2158 148.29);
-  --cs-vbg-green-1000: oklch(0.9676 0.056 154.18);
+  --cs-green-100: oklch(0.2309 0.0716 149.68);
+  --cs-green-400: oklch(0.3439 0.1039 147.78);
+  --cs-green-700: oklch(0.6458 0.199 147.27);
+  --cs-green-900: oklch(0.731 0.2158 148.29);
+  --cs-green-1000: oklch(0.9676 0.056 154.18);
 
-  --cs-vbg-amber-100: oklch(0.2246 0.0538 76.04);
-  --cs-vbg-amber-400: oklch(0.3553 0.0903 66.297);
-  --cs-vbg-amber-700: oklch(0.8187 0.1969 76.46);
-  --cs-vbg-amber-900: oklch(0.7721 0.1991 64.28);
-  --cs-vbg-amber-1000: oklch(0.967 0.0418 84.59);
+  --cs-amber-100: oklch(0.2246 0.0538 76.04);
+  --cs-amber-400: oklch(0.3553 0.0903 66.297);
+  --cs-amber-700: oklch(0.8187 0.1969 76.46);
+  --cs-amber-900: oklch(0.7721 0.1991 64.28);
+  --cs-amber-1000: oklch(0.967 0.0418 84.59);
 
-  --cs-vbg-red-100: oklch(0.221 0.0657 15.11);
-  --cs-vbg-red-400: oklch(0.3527 0.1273 21.23);
-  --cs-vbg-red-700: oklch(0.6256 0.2234 23.03);
-  --cs-vbg-red-900: oklch(0.6996 0.2136 22.03);
-  --cs-vbg-red-1000: oklch(0.956 0.0293 6.61);
+  --cs-red-100: oklch(0.221 0.0657 15.11);
+  --cs-red-400: oklch(0.3527 0.1273 21.23);
+  --cs-red-700: oklch(0.6256 0.2234 23.03);
+  --cs-red-900: oklch(0.6996 0.2136 22.03);
+  --cs-red-1000: oklch(0.956 0.0293 6.61);
 }

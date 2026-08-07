@@ -23,20 +23,23 @@
  */
 
 :root {
-  /* Brand Colors - 品牌链路不参与 VBG 替换 */
-  --cs-primary: var(--cs-brand-500);
-  --cs-destructive: var(--cs-vbg-red-700);
-  --cs-destructive-hover: var(--cs-vbg-red-900);
+  /* Brand Colors - 品牌链路不参与 VBG 替换。
+   * Cherry 品牌绿 #00b96b，与 `theme.ts` 的 DEFAULT_PRIMARY_COLOR 同一个颜色。
+   * 这里是它在 CSS 侧的定义点：此前它叫 `--cs-brand-500`，是一条 50→950 的色阶里
+   * 唯一被引用的一档，其余十档随 primitive.css 一起退役了。 */
+  --cs-primary: oklch(0.77 0.208 146);
+  --cs-destructive: var(--cs-red-700);
+  --cs-destructive-hover: var(--cs-red-900);
   --cs-success: var(--cs-success-base);
   --cs-warning: var(--cs-warning-base);
   --cs-info: var(--cs-info-base);
 
   /* Background & Foreground */
-  --cs-background: var(--cs-vbg-background-100);
-  --cs-background-subtle: var(--cs-vbg-background-200);
-  --cs-foreground: var(--cs-vbg-gray-1000);
-  --cs-muted-foreground: var(--cs-vbg-gray-900);
-  --cs-foreground-tertiary: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
+  --cs-background: var(--cs-background-100);
+  --cs-background-subtle: var(--cs-background-200);
+  --cs-foreground: var(--cs-gray-1000);
+  --cs-muted-foreground: var(--cs-gray-900);
+  --cs-foreground-tertiary: var(--cs-gray-800); /* 双主题同值 */
   --cs-foreground-disabled: var(--cs-foreground-tertiary);
 
   /* Card & Popover
@@ -48,58 +51,58 @@
    * 这正是当初不得不发明一个 settings-grouped-surface 的原因。
    * `--cs-popover` 先不动：浮层压在遮罩上、靠阴影分离，没有同样的问题，而且
    * 全仓没有一处产品代码消费 `bg-popover`。 */
-  --cs-card: var(--cs-vbg-gray-100);
-  --cs-popover: var(--cs-vbg-background-100);
+  --cs-card: var(--cs-gray-100);
+  --cs-popover: var(--cs-background-100);
 
   /* Grouped lists — 设置/助手/AI 用量那类「页面 + 卡片」的屏幕。
    * 两条在明暗之间是对调的：浅色把页面压暗、卡片留白，深色把页面留黑、卡片提亮。
    * 这正是 iOS systemGroupedBackground / secondarySystemGroupedBackground 的做法
    * （#F2F2F7 + #FFF / #000 + #1C1C1E），也是本文件里唯一必须分主题写两遍的一对：
    * 其余产品域都指向按主题自动翻转的调色板名，这一对却要在明暗里换档位。 */
-  --cs-grouped-background: var(--cs-vbg-gray-100);
-  --cs-grouped-surface: var(--cs-vbg-background-100);
+  --cs-grouped-background: var(--cs-gray-100);
+  --cs-grouped-surface: var(--cs-background-100);
 
   /* Border - 四级叠加色，见文件头的档位说明 */
-  --cs-border-subtle: var(--cs-vbg-gray-alpha-100);
-  --cs-border: var(--cs-vbg-gray-alpha-200);
-  --cs-border-strong: var(--cs-vbg-gray-alpha-500);
-  --cs-border-selected: var(--cs-vbg-gray-alpha-700);
+  --cs-border-subtle: var(--cs-gray-alpha-100);
+  --cs-border: var(--cs-gray-alpha-200);
+  --cs-border-strong: var(--cs-gray-alpha-500);
+  --cs-border-selected: var(--cs-gray-alpha-700);
 
   /* Ring (Focus) - 跟随品牌色 */
   --cs-ring: color-mix(in srgb, var(--cs-primary) 40%, transparent);
 
   /* UI Element Colors */
-  --cs-secondary: var(--cs-vbg-gray-alpha-100);
-  --cs-secondary-hover: var(--cs-vbg-gray-alpha-200);
-  --cs-secondary-active: var(--cs-vbg-gray-alpha-300);
-  --cs-muted: var(--cs-vbg-gray-alpha-100);
-  --cs-accent: var(--cs-vbg-gray-alpha-100);
-  --cs-ghost-active: var(--cs-vbg-gray-alpha-200);
+  --cs-secondary: var(--cs-gray-alpha-100);
+  --cs-secondary-hover: var(--cs-gray-alpha-200);
+  --cs-secondary-active: var(--cs-gray-alpha-300);
+  --cs-muted: var(--cs-gray-alpha-100);
+  --cs-accent: var(--cs-gray-alpha-100);
+  --cs-ghost-active: var(--cs-gray-alpha-200);
 
   /* Sidebar */
-  --cs-sidebar: var(--cs-vbg-background-200);
-  --cs-sidebar-accent: var(--cs-vbg-gray-100);
+  --cs-sidebar: var(--cs-background-200);
+  --cs-sidebar-accent: var(--cs-gray-100);
 
   /* Surface-paired foregrounds */
-  --cs-card-foreground: var(--cs-vbg-gray-1000);
-  --cs-popover-foreground: var(--cs-vbg-gray-1000);
-  --cs-secondary-foreground: var(--cs-vbg-gray-1000);
-  --cs-accent-foreground: var(--cs-vbg-gray-1000);
+  --cs-card-foreground: var(--cs-gray-1000);
+  --cs-popover-foreground: var(--cs-gray-1000);
+  --cs-secondary-foreground: var(--cs-gray-1000);
+  --cs-accent-foreground: var(--cs-gray-1000);
 
   /* Foregrounds used on solid colored fills */
   --cs-primary-foreground: oklch(0.985 0 0);
-  --cs-destructive-foreground: var(--cs-white);
+  --cs-destructive-foreground: oklch(1 0 0); /* 白色，两个主题都压在 red-700 实色上 */
 
   /* Input border */
-  --cs-input: var(--cs-vbg-gray-alpha-200);
+  --cs-input: var(--cs-gray-alpha-200);
 
   /* Sidebar sub-palette */
-  --cs-sidebar-foreground: var(--cs-vbg-gray-1000);
-  --cs-sidebar-primary: var(--cs-vbg-gray-1000);
-  --cs-sidebar-primary-foreground: var(--cs-vbg-background-100);
-  --cs-sidebar-accent-foreground: var(--cs-vbg-gray-1000);
-  --cs-sidebar-border: var(--cs-vbg-gray-alpha-200);
-  --cs-sidebar-ring: var(--cs-vbg-gray-800);
+  --cs-sidebar-foreground: var(--cs-gray-1000);
+  --cs-sidebar-primary: var(--cs-gray-1000);
+  --cs-sidebar-primary-foreground: var(--cs-background-100);
+  --cs-sidebar-accent-foreground: var(--cs-gray-1000);
+  --cs-sidebar-border: var(--cs-gray-alpha-200);
+  --cs-sidebar-ring: var(--cs-gray-800);
 
   /* Canonical Cherry Studio feedback contract.
    * Base intents are defined above; subtle/border pairs draw from the frozen
@@ -109,86 +112,86 @@
   --cs-error-subtle-foreground: var(--cs-error-text);
 
   --cs-success-subtle: var(--cs-success-bg);
-  --cs-success-subtle-foreground: var(--cs-vbg-green-1000);
-  --cs-success-border: var(--cs-vbg-green-400);
+  --cs-success-subtle-foreground: var(--cs-green-1000);
+  --cs-success-border: var(--cs-green-400);
 
   --cs-warning-subtle: var(--cs-warning-bg);
-  --cs-warning-subtle-foreground: var(--cs-vbg-amber-1000);
-  --cs-warning-border: var(--cs-vbg-amber-400);
+  --cs-warning-subtle-foreground: var(--cs-amber-1000);
+  --cs-warning-border: var(--cs-amber-400);
 
   --cs-info-subtle: var(--cs-info-bg);
-  --cs-info-subtle-foreground: var(--cs-vbg-blue-1000);
-  --cs-info-border: var(--cs-vbg-blue-400);
+  --cs-info-subtle-foreground: var(--cs-blue-1000);
+  --cs-info-border: var(--cs-blue-400);
 }
 
 /* Dark Mode */
 .dark {
-  --cs-destructive: var(--cs-vbg-red-700);
-  --cs-destructive-hover: var(--cs-vbg-red-900);
+  --cs-destructive: var(--cs-red-700);
+  --cs-destructive-hover: var(--cs-red-900);
 
   /* Background & Foreground */
   /* 桌面端此处用半透明底，原生屏幕必须不透明；fork 后本层直接给不透明值，
    * host 层（global.css）不再需要覆盖。 */
-  --cs-background: var(--cs-vbg-background-100); /* vbg background-100 dark（纯黑） */
-  --cs-background-subtle: var(--cs-vbg-background-200);
-  --cs-foreground: var(--cs-vbg-gray-1000);
-  --cs-muted-foreground: var(--cs-vbg-gray-900);
-  --cs-foreground-tertiary: var(--cs-vbg-gray-800); /* vbg gray-800（双主题同值） */
+  --cs-background: var(--cs-background-100); /* 纯黑 */
+  --cs-background-subtle: var(--cs-background-200);
+  --cs-foreground: var(--cs-gray-1000);
+  --cs-muted-foreground: var(--cs-gray-900);
+  --cs-foreground-tertiary: var(--cs-gray-800); /* 双主题同值 */
 
   /* Card & Popover - 纯黑底上必须抬升，否则边界不可见 */
-  --cs-card: var(--cs-vbg-gray-100);
-  --cs-popover: var(--cs-vbg-gray-100);
+  --cs-card: var(--cs-gray-100);
+  --cs-popover: var(--cs-gray-100);
 
   /* Grouped lists - 与浅色对调，见 :root 的说明 */
-  --cs-grouped-background: var(--cs-vbg-background-100);
-  --cs-grouped-surface: var(--cs-vbg-gray-100);
+  --cs-grouped-background: var(--cs-background-100);
+  --cs-grouped-surface: var(--cs-gray-100);
 
   /* Border - 四级叠加色，见文件头的档位说明 */
-  --cs-border-subtle: var(--cs-vbg-gray-alpha-100);
-  --cs-border: var(--cs-vbg-gray-alpha-200);
-  --cs-border-strong: var(--cs-vbg-gray-alpha-500);
-  --cs-border-selected: var(--cs-vbg-gray-alpha-700);
+  --cs-border-subtle: var(--cs-gray-alpha-100);
+  --cs-border: var(--cs-gray-alpha-200);
+  --cs-border-strong: var(--cs-gray-alpha-500);
+  --cs-border-selected: var(--cs-gray-alpha-700);
 
   /* UI Element Colors - Dark Mode */
-  --cs-secondary: var(--cs-vbg-gray-alpha-100);
-  --cs-secondary-hover: var(--cs-vbg-gray-alpha-200);
-  --cs-secondary-active: var(--cs-vbg-gray-alpha-300);
-  --cs-muted: var(--cs-vbg-gray-alpha-100);
-  --cs-accent: var(--cs-vbg-gray-alpha-100);
-  --cs-ghost-active: var(--cs-vbg-gray-alpha-200);
+  --cs-secondary: var(--cs-gray-alpha-100);
+  --cs-secondary-hover: var(--cs-gray-alpha-200);
+  --cs-secondary-active: var(--cs-gray-alpha-300);
+  --cs-muted: var(--cs-gray-alpha-100);
+  --cs-accent: var(--cs-gray-alpha-100);
+  --cs-ghost-active: var(--cs-gray-alpha-200);
 
   /* Sidebar */
-  --cs-sidebar: var(--cs-vbg-gray-100);
-  --cs-sidebar-accent: var(--cs-vbg-gray-200);
+  --cs-sidebar: var(--cs-gray-100);
+  --cs-sidebar-accent: var(--cs-gray-200);
 
   /* Surface-paired foregrounds */
-  --cs-card-foreground: var(--cs-vbg-gray-1000);
-  --cs-popover-foreground: var(--cs-vbg-gray-1000);
-  --cs-secondary-foreground: var(--cs-vbg-gray-1000);
-  --cs-accent-foreground: var(--cs-vbg-gray-1000);
+  --cs-card-foreground: var(--cs-gray-1000);
+  --cs-popover-foreground: var(--cs-gray-1000);
+  --cs-secondary-foreground: var(--cs-gray-1000);
+  --cs-accent-foreground: var(--cs-gray-1000);
 
   /* Foregrounds used on solid colored fills */
   --cs-primary-foreground: oklch(0.205 0 0);
-  --cs-destructive-foreground: var(--cs-white);
+  --cs-destructive-foreground: oklch(1 0 0); /* 白色，两个主题都压在 red-700 实色上 */
 
   /* Input border */
-  --cs-input: var(--cs-vbg-gray-alpha-200);
+  --cs-input: var(--cs-gray-alpha-200);
 
   /* Sidebar sub-palette */
-  --cs-sidebar-foreground: var(--cs-vbg-gray-1000);
-  --cs-sidebar-primary: var(--cs-vbg-gray-1000);
-  --cs-sidebar-primary-foreground: var(--cs-vbg-background-100);
-  --cs-sidebar-accent-foreground: var(--cs-vbg-gray-1000);
-  --cs-sidebar-border: var(--cs-vbg-gray-alpha-200);
-  --cs-sidebar-ring: var(--cs-vbg-gray-800);
+  --cs-sidebar-foreground: var(--cs-gray-1000);
+  --cs-sidebar-primary: var(--cs-gray-1000);
+  --cs-sidebar-primary-foreground: var(--cs-background-100);
+  --cs-sidebar-accent-foreground: var(--cs-gray-1000);
+  --cs-sidebar-border: var(--cs-gray-alpha-200);
+  --cs-sidebar-ring: var(--cs-gray-800);
 
   /* Canonical Cherry Studio feedback contract */
-  --cs-success-subtle-foreground: var(--cs-vbg-green-1000);
-  --cs-success-border: var(--cs-vbg-green-400);
+  --cs-success-subtle-foreground: var(--cs-green-1000);
+  --cs-success-border: var(--cs-green-400);
 
-  --cs-warning-subtle-foreground: var(--cs-vbg-amber-1000);
-  --cs-warning-border: var(--cs-vbg-amber-400);
+  --cs-warning-subtle-foreground: var(--cs-amber-1000);
+  --cs-warning-border: var(--cs-amber-400);
 
-  --cs-info-subtle-foreground: var(--cs-vbg-blue-1000);
-  --cs-info-border: var(--cs-vbg-blue-400);
+  --cs-info-subtle-foreground: var(--cs-blue-1000);
+  --cs-info-border: var(--cs-blue-400);
 }

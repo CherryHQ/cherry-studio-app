@@ -22,7 +22,7 @@
   --border-subtle: var(--cs-border-subtle);
   --border-strong: var(--cs-border-strong);
   --border-selected: var(--cs-border-selected);
-  --link: var(--cs-vbg-blue-900);
+  --link: var(--cs-blue-900);
 
   /* Feedback */
   --success: var(--cs-success);
@@ -47,10 +47,10 @@
   --grouped-surface: var(--cs-grouped-surface);
 
   /* Stable product domain: rich text and code (MarkdownText) */
-  --code-block: var(--cs-vbg-gray-100);
-  --inline-code: var(--cs-vbg-gray-alpha-100);
-  --inline-code-foreground: var(--cs-vbg-red-900);
+  --code-block: var(--cs-gray-100);
+  --inline-code: var(--cs-gray-alpha-100);
+  --inline-code-foreground: var(--cs-red-900);
 
   /* Stable product domain: user-message surface (UserMessageItem) */
-  --chat-user: var(--cs-vbg-gray-alpha-100);
+  --chat-user: var(--cs-gray-alpha-100);
 }

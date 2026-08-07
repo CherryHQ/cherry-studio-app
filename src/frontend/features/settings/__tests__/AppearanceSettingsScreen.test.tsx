@@ -17,10 +17,17 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('uniwind', () => ({
-  useResolveClassNames: () => ({}),
-  useUniwind: () => ({ theme: mockResolvedTheme }),
-}));
+jest.mock('uniwind', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    // Rendered as a host element rather than a passthrough so the two theme
+    // previews stay distinguishable in the tree — the scope is the only thing
+    // that differs between them now that both draw from the same class names.
+    ScopedTheme: (props: object) => createElement('ScopedTheme', props),
+    useResolveClassNames: () => ({}),
+    useUniwind: () => ({ theme: mockResolvedTheme }),
+  };
+});
 
 jest.mock('lucide-uniwind/png', () => ({
   ALargeSmallIcon: () => null,

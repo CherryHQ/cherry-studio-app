@@ -19,7 +19,7 @@ const neutralSteps = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 /** Upstream ships five steps per hue: 100 tint, 400 border, 700 solid, 900 emphasis, 1000 text. */
 const hueSteps = [100, 400, 700, 900, 1000];
 
-const scale = (name: string, steps: number[]) => steps.map((step) => `--cs-vbg-${name}-${step}`);
+const scale = (name: string, steps: number[]) => steps.map((step) => `--cs-${name}-${step}`);
 
 export const PALETTE_SCALES: PaletteScale[] = [
   {

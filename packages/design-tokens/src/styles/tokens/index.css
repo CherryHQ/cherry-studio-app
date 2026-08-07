@@ -1,13 +1,12 @@
 /**
  * CherryStudio Design Tokens
  *
- * Design tokens based on Figma design system
- * - All variables use --cs-* prefix (CherryStudio)
- * - Layered architecture: Primitive → Semantic
+ * - All variables use --cs-* prefix (CherryStudio), which marks them internal:
+ *   the public contract in ../shadcn.css and ../product.css is unprefixed
+ * - Layered architecture: Palette → Semantic
  * - Properly separated Light/Dark Mode
  *
  * File structure:
- * - colors/primitive.css: Legacy Tailwind-shaped palette, pending retirement
  * - colors/vercel.css: Vercel Brand Guidelines palette, the design source of truth
  * - colors/status-legacy.css: Frozen legacy status palette (shrink-only compat)
  * - colors/providers.css: Semantic --cs-* value providers backing the contract
@@ -17,9 +16,14 @@
  * Spacing has no file. VBG's 4/8/12/16/20/24/32/40/48/64 ladder is already
  * Tailwind's default scale, so the `--cs-size-*` tokens that used to live here
  * restated it — sixteen of them, with no consumer.
+ *
+ * Colours have no static file either. `colors/primitive.css` held a
+ * Tailwind-shaped 23 × 11 palette of theme-independent steps, of which exactly
+ * three were still referenced by the time VBG landed; those three are now
+ * literals at their single point of use. Every remaining colour flips with the
+ * theme, so all of them live in the two blocks of the files below.
  */
 
-@import './colors/primitive.css';
 @import './colors/vercel.css';
 @import './colors/status-legacy.css';
 @import './colors/providers.css';

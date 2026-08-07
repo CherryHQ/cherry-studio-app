@@ -43,23 +43,17 @@ function unique(values: readonly string[]): string[] {
 export async function buildNativeCss(): Promise<string> {
   const sources = await loadThemeSources();
   const { darkDeclarations, lightDeclarations, staticDeclarations } = buildThemeModel(sources);
-  const primitiveNames = extractDeclarations(sources.primitive, 'primitive.css').map(({ name }) =>
-    name.replace(/^--cs-/, ''),
-  );
-  // The Vercel palette gets the same treatment as the legacy primitive one, so
-  // a step can be named straight from a className (`bg-vbg-gray-100`). Deduped
-  // because `vercel.css` declares each name twice — once per theme block — and
-  // the adapter only needs the name, which is theme-independent.
-  const paletteNames = unique(
-    extractDeclarations(sources.vercel, 'vercel.css').map(({ name }) => name.replace(/^--cs-/, '')),
-  );
   const typographyNames = extractDeclarations(sources.typography, 'typography.css').map(
     ({ name }) => name.replace(/^--cs-/, ''),
   );
+  // Only the semantic contract becomes a Tailwind colour. The palette behind it
+  // deliberately stays out: a `bg-gray-100` would sit in the same name family as
+  // the Tailwind steps VBG does not define (`bg-gray-50`, `bg-gray-500`, …),
+  // which are static defaults rather than theme-flipping tokens — one class
+  // name, two provenances. Storybook reads the ramps through `useCSSVariable`
+  // instead, which needs no adapter entry.
   const publicColors = unique([...SHADCN_COLOR_TOKENS, ...CHERRY_PRODUCT_COLOR_TOKENS]);
   const adapterLines = [
-    ...primitiveNames.map((name) => `--color-${name}: var(--cs-${name});`),
-    ...paletteNames.map((name) => `--color-${name}: var(--cs-${name});`),
     ...publicColors.map((name) => `--color-${name}: var(--${name});`),
     ...radiusLines,
     ...typographyNames.map((name) => `--${name}: var(--cs-${name});`),

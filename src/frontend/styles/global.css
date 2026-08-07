@@ -137,8 +137,9 @@
       --segment-foreground: var(--card-foreground);
       --danger: var(--destructive);
       --danger-foreground: var(--destructive-foreground);
-      --success-foreground: var(--cs-black);
-      --warning-foreground: var(--cs-black);
+      /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
+      --success-foreground: oklch(0 0 0);
+      --warning-foreground: oklch(0 0 0);
       --separator: var(--border-strong);
       --focus: var(--ring);
     }
@@ -163,8 +164,9 @@
       --segment-foreground: var(--secondary-foreground);
       --danger: var(--destructive);
       --danger-foreground: var(--destructive-foreground);
-      --success-foreground: var(--cs-black);
-      --warning-foreground: var(--cs-black);
+      /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
+      --success-foreground: oklch(0 0 0);
+      --warning-foreground: oklch(0 0 0);
       --separator: var(--border-strong);
       --focus: var(--ring);
     }

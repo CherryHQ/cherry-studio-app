@@ -22,20 +22,20 @@
 
 :root {
   /* Status Colors - Error */
-  --cs-error-base: var(--cs-vbg-red-700);
-  --cs-error-text: var(--cs-vbg-red-1000);
-  --cs-error-bg: var(--cs-vbg-red-100);
-  --cs-error-border: var(--cs-vbg-red-400);
+  --cs-error-base: var(--cs-red-700);
+  --cs-error-text: var(--cs-red-1000);
+  --cs-error-bg: var(--cs-red-100);
+  --cs-error-border: var(--cs-red-400);
 
   /* Status Colors - Success */
-  --cs-success-base: var(--cs-vbg-green-900);
-  --cs-success-bg: var(--cs-vbg-green-100);
+  --cs-success-base: var(--cs-green-900);
+  --cs-success-bg: var(--cs-green-100);
 
   /* Status Colors - Warning */
-  --cs-warning-base: var(--cs-vbg-amber-900);
-  --cs-warning-bg: var(--cs-vbg-amber-100);
+  --cs-warning-base: var(--cs-amber-900);
+  --cs-warning-bg: var(--cs-amber-100);
 
   /* Status Colors - Info */
-  --cs-info-base: var(--cs-vbg-blue-700);
-  --cs-info-bg: var(--cs-vbg-blue-100);
+  --cs-info-base: var(--cs-blue-700);
+  --cs-info-bg: var(--cs-blue-100);
 }
