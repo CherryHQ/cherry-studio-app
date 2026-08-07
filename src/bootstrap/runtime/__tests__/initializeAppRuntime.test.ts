@@ -47,8 +47,8 @@ describe('initializeAppRuntime', () => {
 
     expect(mockSetTheme).toHaveBeenCalledWith('system');
     const variables = expect.objectContaining({
-      '--cs-theme-primary': '#00b96b',
-      '--cs-theme-primary-foreground': '#000000',
+      '--theme-primary': '#00b96b',
+      '--theme-primary-foreground': '#000000',
       '--ui-text-base': 18,
     });
     expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', variables);

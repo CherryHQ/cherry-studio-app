@@ -19,7 +19,7 @@ const neutralSteps = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
 /** Upstream ships five steps per hue: 100 tint, 400 border, 700 solid, 900 emphasis, 1000 text. */
 const hueSteps = [100, 400, 700, 900, 1000];
 
-const scale = (name: string, steps: number[]) => steps.map((step) => `--cs-${name}-${step}`);
+const scale = (name: string, steps: number[]) => steps.map((step) => `--${name}-${step}`);
 
 export const PALETTE_SCALES: PaletteScale[] = [
   {
@@ -173,11 +173,12 @@ export const SIZE_VARIABLES = TYPE_SCALE.flatMap(({ name }) => [
 ]);
 
 /**
- * Deliberately no resolved numbers next to these: `--font-weight-*` lives in
- * `@theme inline static`, so Tailwind substitutes the value into the utility
- * and the variable itself may never reach the runtime. The last row carries the
- * claim instead — `font-bold` is remapped to 600, so it has to render
- * identically to the row above it.
+ * Deliberately no resolved numbers next to these: only `--font-weight-bold` is
+ * authored at all, and it lives in `@theme`, whose variables Tailwind prunes by
+ * usage — so reading it back proves nothing about what a utility renders. The
+ * last row carries the claim instead: `font-bold` is remapped to 600, so it has
+ * to render identically to the row above it. The other three rows are Tailwind's
+ * own defaults, which already match VBG.
  */
 export const WEIGHTS: WeightStep[] = [
   { className: 'font-normal', label: 'font-normal', note: 'VBG 400 — 正文' },
@@ -212,7 +213,7 @@ export const RADIUS_STEPS: RadiusStep[] = [
   { className: 'rounded-2xl', derivation: '--radius × 1.8' },
   { className: 'rounded-3xl', derivation: '--radius × 2.2' },
   { className: 'rounded-4xl', derivation: '--radius × 2.6' },
-  { className: 'rounded-round', derivation: '9999px' },
+  { className: 'rounded-full', derivation: '9999px' },
 ];
 
 export const BORDER_RAMP: BorderStep[] = [

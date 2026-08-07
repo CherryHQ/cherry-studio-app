@@ -1,22 +1,16 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import {
-  buildThemeModel,
-  type Declaration,
-  extractDeclarations,
-  loadThemeSources,
-  stylesDir,
-} from './css-contract';
+import { buildThemeModel, type Declaration, loadThemeSources, stylesDir } from './css-contract';
 import { CHERRY_PRODUCT_COLOR_TOKENS, SHADCN_COLOR_TOKENS } from './theme-contract';
 
 const outputPath = path.join(stylesDir, 'native.css');
 
+// The whole `rounded-*` ladder is derived from the one authored step,
+// `--radius` (8px, VBG's only body radius). The hairline steps below it are not
+// multiples of anything and are authored in tokens/radius.css, whose names now
+// sit directly in Tailwind's `--radius-*` namespace and so need no line here.
 const radiusLines = [
-  '--radius-4xs: var(--cs-radius-4xs);',
-  '--radius-3xs: var(--cs-radius-3xs);',
-  '--radius-2xs: var(--cs-radius-2xs);',
-  '--radius-xs: var(--cs-radius-xs);',
   '--radius-sm: calc(var(--radius) * 0.6);',
   '--radius-md: calc(var(--radius) * 0.8);',
   '--radius-lg: var(--radius);',
@@ -24,8 +18,7 @@ const radiusLines = [
   '--radius-2xl: calc(var(--radius) * 1.8);',
   '--radius-3xl: calc(var(--radius) * 2.2);',
   '--radius-4xl: calc(var(--radius) * 2.6);',
-  '--radius-full: var(--cs-radius-round);',
-  '--radius-round: var(--cs-radius-round);',
+  '--radius-full: 9999px;',
 ];
 
 function renderDeclarations(declarations: Iterable<Declaration>, indent: string): string {
@@ -43,9 +36,6 @@ function unique(values: readonly string[]): string[] {
 export async function buildNativeCss(): Promise<string> {
   const sources = await loadThemeSources();
   const { darkDeclarations, lightDeclarations, staticDeclarations } = buildThemeModel(sources);
-  const typographyNames = extractDeclarations(sources.typography, 'typography.css').map(
-    ({ name }) => name.replace(/^--cs-/, ''),
-  );
   // Only the semantic contract becomes a Tailwind colour. The palette behind it
   // deliberately stays out: a `bg-gray-100` would sit in the same name family as
   // the Tailwind steps VBG does not define (`bg-gray-50`, `bg-gray-500`, …),
@@ -53,10 +43,11 @@ export async function buildNativeCss(): Promise<string> {
   // name, two provenances. Storybook reads the ramps through `useCSSVariable`
   // instead, which needs no adapter entry.
   const publicColors = unique([...SHADCN_COLOR_TOKENS, ...CHERRY_PRODUCT_COLOR_TOKENS]);
+  // Font weights need no adapter line either: `tokens/typography.css` already
+  // authors `--font-weight-bold` under its final Tailwind name.
   const adapterLines = [
     ...publicColors.map((name) => `--color-${name}: var(--${name});`),
     ...radiusLines,
-    ...typographyNames.map((name) => `--${name}: var(--cs-${name});`),
   ];
 
   return `/**

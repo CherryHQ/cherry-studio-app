@@ -250,11 +250,14 @@ const styles = StyleSheet.create({
     flex: 1,
     transformOrigin: 'top',
   },
-  // Matches `rounded-t-3xl`'s --cs-radius-3xl (22px) — GlassView doesn't take
-  // className, so the radius is set directly to keep the same silhouette as
-  // the non-glass fallback.
+  // Matches the `rounded-t-3xl` fallback on the line below the GlassView, which
+  // resolves to --radius × 2.2 = 17.6px. GlassView takes no className, so the
+  // radius is set directly to keep the same silhouette.
+  // It read 22 until now, and used to be right: --radius was 10px, so 3xl was
+  // 22px. VBG moved --radius to 8px and this literal did not follow, leaving
+  // the glass surface 4.4px rounder than the fallback it is supposed to match.
   surfaceGlass: {
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    borderTopLeftRadius: 17.6,
+    borderTopRightRadius: 17.6,
   },
 });

@@ -61,7 +61,7 @@ export async function checkDesignTokens(): Promise<void> {
   assertNoCycles('dark', darkResolved);
 
   const lightNames = new Set(lightDeclarations.keys());
-  assertRequired(lightNames, RUNTIME_THEME_INPUT_TOKENS, '--cs-theme-');
+  assertRequired(lightNames, RUNTIME_THEME_INPUT_TOKENS, '--theme-');
   assertRequired(lightNames, SHADCN_VARIABLE_TOKENS, '--');
   assertRequired(lightNames, CHERRY_PRODUCT_VARIABLE_TOKENS, '--');
 

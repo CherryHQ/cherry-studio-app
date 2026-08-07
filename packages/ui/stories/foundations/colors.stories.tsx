@@ -162,8 +162,8 @@ export const Palette: Story = {
   render: () => (
     <ThemeSplit>
       <Text className="text-xs text-muted-foreground">
-        {'--cs-* 前缀表示「内部」：调色板不导出成 Tailwind 工具类，' +
-          '组件只消费下面那页无前缀的语义契约。这里的色块是直接读变量画的。'}
+        {'调色板不导出成 Tailwind 工具类，组件只消费下面那页的语义契约；' +
+          '两者靠形状区分：带档位号的是色阶，角色名的是契约。这里的色块是直接读变量画的。'}
       </Text>
       {PALETTE_SCALES.map((paletteScale) => (
         <PaletteScaleRow key={paletteScale.title} {...paletteScale} />

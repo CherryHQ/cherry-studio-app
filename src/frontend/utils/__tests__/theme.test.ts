@@ -48,8 +48,8 @@ describe('theme runtime', () => {
     applyPrimaryColorPreference('#0b6');
 
     const variables = {
-      '--cs-theme-primary': '#00bb66',
-      '--cs-theme-primary-foreground': '#000000',
+      '--theme-primary': '#00bb66',
+      '--theme-primary-foreground': '#000000',
     };
     expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'light', variables);
     expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'dark', variables);
@@ -60,7 +60,7 @@ describe('theme runtime', () => {
 
     expect(mockUpdateCSSVariables).toHaveBeenLastCalledWith(
       'light',
-      expect.objectContaining({ '--cs-theme-primary': DEFAULT_PRIMARY_COLOR }),
+      expect.objectContaining({ '--theme-primary': DEFAULT_PRIMARY_COLOR }),
     );
   });
 
@@ -72,7 +72,7 @@ describe('theme runtime', () => {
     expect(mockUpdateCSSVariables).toHaveBeenLastCalledWith(
       'dark',
       expect.objectContaining({
-        '--cs-theme-primary': '#000000',
+        '--theme-primary': '#000000',
         '--ui-text-base': 16,
       }),
     );

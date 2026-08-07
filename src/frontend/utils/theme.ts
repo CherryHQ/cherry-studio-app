@@ -17,8 +17,8 @@ function createPrimaryColorVariables(primaryColor: string) {
   const normalized = normalizeHexColor(primaryColor);
 
   return {
-    '--cs-theme-primary': normalized,
-    '--cs-theme-primary-foreground': getPrimaryForeground(normalized),
+    '--theme-primary': normalized,
+    '--theme-primary-foreground': getPrimaryForeground(normalized),
   };
 }
 
