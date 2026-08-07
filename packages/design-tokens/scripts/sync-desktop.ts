@@ -13,7 +13,6 @@ type SyncEntry = {
 };
 
 const repoRoot = path.resolve(packageRoot, '../..');
-const stylesDestination = path.join(packageRoot, 'src/styles');
 const manifestPath = path.join(packageRoot, 'src/sync-manifest.json');
 const routingDestination = path.join(repoRoot, 'packages/ui/src/icons/desktop-routing.ts');
 const catalogOnlyProviderDestination = path.join(
@@ -329,8 +328,10 @@ async function main() {
     throw new Error('[design-sync] --desktop-root does not contain the Cherry Studio UI package');
   }
 
+  // `packages/ui/src/styles` is intentionally absent: mobile forked the token
+  // values (see the tombstone comments in src/styles) and no longer mirrors
+  // them, so unrelated desktop style edits must not report this sync as dirty.
   const trackedSources = [
-    'packages/ui/src/styles',
     'packages/ui/scripts/theme-contract.ts',
     'packages/ui/icons',
     'packages/ui/src/components/icons/registry.ts',
@@ -342,27 +343,17 @@ async function main() {
   }
 
   const commit = run('git', ['rev-parse', 'HEAD'], desktopRoot);
-  const desktopStyles = path.join(desktopUi, 'src/styles');
-  await syncDirectory(
-    path.join(desktopStyles, 'tokens'),
-    path.join(stylesDestination, 'tokens'),
-    '.css',
-    check,
-  );
-  await syncFiles(
-    ['contract.css', 'product.css', 'shadcn.css', 'theme-input.css', 'tokens.css'].map(
-      (fileName) => ({
-        destination: path.join(stylesDestination, fileName),
-        source: path.join(desktopStyles, fileName),
-      }),
-    ),
-    check,
-  );
+  // Token *values* are forked: mobile uses the Vercel Brand Guidelines (Geist)
+  // palette and typography, so `src/styles/**` is owned locally and is not
+  // mirrored. The token *name* contract still tracks desktop — when desktop
+  // adds a role, it lands here and `pnpm design:check` then reports the local
+  // sources as missing it, which is exactly the signal we want.
+  const desktopThemeContract = path.join(desktopUi, 'scripts/theme-contract.ts');
   await syncFiles(
     [
       {
         destination: path.join(packageRoot, 'scripts/theme-contract.ts'),
-        source: path.join(desktopUi, 'scripts/theme-contract.ts'),
+        source: desktopThemeContract,
       },
     ],
     check,
@@ -385,15 +376,6 @@ async function main() {
   const catalogOnlyProvider = await buildCatalogOnlyProviderSource(desktopRoot, commit);
   await writeOrCheckText(catalogOnlyProviderDestination, catalogOnlyProvider.source, check);
 
-  const styleFiles = [
-    ...(await listFiles(path.join(desktopStyles, 'tokens'), '.css')).map((file) =>
-      path.join(desktopStyles, 'tokens', file),
-    ),
-    ...['contract.css', 'product.css', 'shadcn.css', 'theme-input.css', 'tokens.css'].map((file) =>
-      path.join(desktopStyles, file),
-    ),
-    path.join(desktopUi, 'scripts/theme-contract.ts'),
-  ];
   const iconFiles = (await listFiles(desktopIcons, '.svg')).map((file) =>
     path.join(desktopIcons, file),
   );
@@ -409,7 +391,9 @@ async function main() {
           desktopRoot,
         ),
         icons: await hashFiles(iconFiles, desktopRoot),
-        tokens: await hashFiles(styleFiles, desktopRoot),
+        // Was `tokens`, covering every mirrored style file. Mobile now owns the
+        // token values, so only the name contract is still fingerprinted.
+        themeContract: await hashFiles([desktopThemeContract], desktopRoot),
       },
     },
     null,

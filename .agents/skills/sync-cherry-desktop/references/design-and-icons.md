@@ -4,14 +4,19 @@
 
 Stop Metro before generators replace asset directories. Run the repository `design:*` commands; do not add a duplicate generator to this Skill. The pipeline must resolve `--desktop-root` or `CHERRY_STUDIO_DESKTOP_ROOT`, validate the desktop and `@cherrystudio/ui` package identities, reject dirty selected sources, and record the desktop commit and SHA-256 hashes.
 
-Keep the desktop checkout read-only. Let `packages/design-tokens/src/sync-manifest.json` own the canonical design token, CSS, contract, and SVG baseline. Keep catalog routing, manual icon adaptations, and provider fan-out in the broad desktop Manifest.
+Keep the desktop checkout read-only. Let `packages/design-tokens/src/sync-manifest.json` own the canonical theme-contract and SVG baseline. Keep catalog routing, manual icon adaptations, and provider fan-out in the broad desktop Manifest.
 
 ## Theme Contract
 
-- Mirror desktop `tokens/`, `tokens.css`, `contract.css`, `theme-input.css`, `shadcn.css`, `product.css`, and `theme-contract.ts`.
-- Generate `native.css` with complete, symmetric `@variant light` and `@variant dark` sets. Reject missing references, cycles, and unequal variable sets.
+Token **values** are forked. Mobile adopted the Vercel Brand Guidelines (Geist) palette, typography, and radii, so everything under `packages/design-tokens/src/styles/` is mobile-owned and is never mirrored from desktop. Token **names** still track desktop. This split follows the repo's dual-end criteria: align the contract that gets serialized, fork the presentation.
+
+- Mirror desktop `theme-contract.ts` only. Do not reintroduce mirroring for `tokens/`, `tokens.css`, `contract.css`, `theme-input.css`, `shadcn.css`, or `product.css`.
+- When a desktop sync adds a role to `theme-contract.ts`, `pnpm design:check` will report the local sources as missing it. Add the token by hand with a Vercel-derived value; that failure is the intended signal, not a regression.
+- Regenerate `native.css` with `pnpm design:build` after editing any token source. Keep the `@variant light` and `@variant dark` sets complete and symmetric. Reject missing references, cycles, and unequal variable sets.
 - Expose only Shadcn and Cherry product semantic colors through the public Tailwind contract.
-- Keep mobile-only presentation in the host layer, including the opaque dark background and `settings-grouped-surface`.
+- Keep mobile-only presentation in the host layer, such as `settings-grouped-surface`. The dark background is now opaque in the token layer itself, so the host no longer overrides it.
+- Geist's gray ramp is deliberately non-monotonic (`gray-400` is lighter than `gray-300` in light mode; `gray-alpha-400` is fainter than `-300`; `gray-alpha-800` is fainter than `-700` in dark). Map tiered roles such as the four border levels by measured lightness, never by step number.
+- The brand chain is exempt from the Vercel palette: `--cs-primary`, `--cs-primary-foreground`, `--cs-ring`, and the `--cs-theme-primary*` runtime inputs stay Cherry green.
 - Map HeroUI brand, content, field, and surface semantics to canonical tokens in `src/frontend/styles/global.css`; never patch HeroUI.
 - Use `primary` for business brand color and `muted-foreground` for placeholders. Remove retired tokens and utilities instead of aliasing them.
 - Read `ui.theme_mode` and `ui.theme_user.color_primary` at startup. Fall back invalid primary colors to `#00b96b`, choose black or white foreground from brightness, update the inactive theme first, and update the active theme last.
