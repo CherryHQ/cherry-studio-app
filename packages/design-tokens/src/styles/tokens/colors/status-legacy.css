@@ -1,8 +1,8 @@
 /**
- * Legacy Status Palette - Light & Dark Mode
+ * Legacy Status Palette
  *
  * ⚠️ Frozen, shrink-only provider layer. Do NOT add new tokens here.
- * These `--cs-{intent}-{base,text,bg,...}` values provide internal values to
+ * These `--cs-{intent}-{base,text,bg,border}` values provide internal values to
  * the canonical feedback contract in `providers.css`; they are not exposed as
  * Tailwind utilities.
  * New feedback work uses the `--success`/`--warning`/`--info`/`--error`
@@ -13,8 +13,11 @@
  * `theme-contract.ts` 一致，且该契约文件继续由 `pnpm design:sync` 从桌面同步。
  *
  * VBG 每个 intent 的 base 档位不同（error/info 取 700，success/warning 取 900），
- * 这是上游刻意的对比度调校，此处照搬。取值来源见每行注释，对应 Geist 的
- * 5 档色阶 100/400/700/900/1000。
+ * 这是上游刻意的对比度调校，此处照搬。
+ *
+ * 没有 `.dark` 块，这是刻意的：每条都指向 `vercel.css` 的调色板名，而那些名字
+ * 本身已经按主题翻转，所以再写一份深色覆盖只是把同样的值抄一遍。此前那 22 行
+ * 与 `:root` 逐字相同，是纯冗余，已删。
  */
 
 :root {
@@ -22,62 +25,17 @@
   --cs-error-base: var(--cs-vbg-red-700);
   --cs-error-text: var(--cs-vbg-red-1000);
   --cs-error-bg: var(--cs-vbg-red-100);
-  --cs-error-text-hover: var(--cs-vbg-red-900);
-  --cs-error-bg-hover: var(--cs-vbg-red-400);
   --cs-error-border: var(--cs-vbg-red-400);
-  --cs-error-border-hover: var(--cs-vbg-red-700);
-  --cs-error-active: var(--cs-vbg-red-900);
 
   /* Status Colors - Success */
   --cs-success-base: var(--cs-vbg-green-900);
-  --cs-success-text-hover: var(--cs-vbg-green-1000);
   --cs-success-bg: var(--cs-vbg-green-100);
-  --cs-success-bg-hover: var(--cs-vbg-green-400);
 
   /* Status Colors - Warning */
   --cs-warning-base: var(--cs-vbg-amber-900);
-  --cs-warning-text-hover: var(--cs-vbg-amber-1000);
   --cs-warning-bg: var(--cs-vbg-amber-100);
-  --cs-warning-bg-hover: var(--cs-vbg-amber-400);
-  --cs-warning-active: var(--cs-vbg-amber-700);
 
   /* Status Colors - Info */
   --cs-info-base: var(--cs-vbg-blue-700);
-  --cs-info-text-hover: var(--cs-vbg-blue-1000);
   --cs-info-bg: var(--cs-vbg-blue-100);
-  --cs-info-bg-hover: var(--cs-vbg-blue-400);
-  --cs-info-active: var(--cs-vbg-blue-900);
-}
-
-/* Dark Mode */
-.dark {
-  /* Status Colors - Error (Dark Mode) */
-  --cs-error-base: var(--cs-vbg-red-700);
-  --cs-error-text: var(--cs-vbg-red-1000);
-  --cs-error-bg: var(--cs-vbg-red-100);
-  --cs-error-text-hover: var(--cs-vbg-red-900);
-  --cs-error-bg-hover: var(--cs-vbg-red-400);
-  --cs-error-border: var(--cs-vbg-red-400);
-  --cs-error-border-hover: var(--cs-vbg-red-700);
-  --cs-error-active: var(--cs-vbg-red-900);
-
-  /* Status Colors - Success (Dark Mode) */
-  --cs-success-base: var(--cs-vbg-green-900);
-  --cs-success-text-hover: var(--cs-vbg-green-1000);
-  --cs-success-bg: var(--cs-vbg-green-100);
-  --cs-success-bg-hover: var(--cs-vbg-green-400);
-
-  /* Status Colors - Warning (Dark Mode) */
-  --cs-warning-base: var(--cs-vbg-amber-900);
-  --cs-warning-text-hover: var(--cs-vbg-amber-1000);
-  --cs-warning-bg: var(--cs-vbg-amber-100);
-  --cs-warning-bg-hover: var(--cs-vbg-amber-400);
-  --cs-warning-active: var(--cs-vbg-amber-700);
-
-  /* Status Colors - Info (Dark Mode) */
-  --cs-info-base: var(--cs-vbg-blue-700);
-  --cs-info-text-hover: var(--cs-vbg-blue-1000);
-  --cs-info-bg: var(--cs-vbg-blue-100);
-  --cs-info-bg-hover: var(--cs-vbg-blue-400);
-  --cs-info-active: var(--cs-vbg-blue-900);
 }

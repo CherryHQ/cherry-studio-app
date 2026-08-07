@@ -11,15 +11,17 @@
  * - colors/vercel.css: Vercel Brand Guidelines palette, the design source of truth
  * - colors/status-legacy.css: Frozen legacy status palette (shrink-only compat)
  * - colors/providers.css: Semantic --cs-* value providers backing the contract
- * - spacing.css: Spacing and sizing
  * - radius.css: Border radius
- * - typography.css: Typography system
+ * - typography.css: Font weights (the rest of the type scale is runtime-owned)
+ *
+ * Spacing has no file. VBG's 4/8/12/16/20/24/32/40/48/64 ladder is already
+ * Tailwind's default scale, so the `--cs-size-*` tokens that used to live here
+ * restated it — sixteen of them, with no consumer.
  */
 
 @import './colors/primitive.css';
 @import './colors/vercel.css';
 @import './colors/status-legacy.css';
 @import './colors/providers.css';
-@import './spacing.css';
 @import './radius.css';
 @import './typography.css';

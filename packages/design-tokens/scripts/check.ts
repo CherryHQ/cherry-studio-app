@@ -45,7 +45,6 @@ export async function checkDesignTokens(): Promise<void> {
     './colors/vercel.css',
     './colors/status-legacy.css',
     './colors/providers.css',
-    './spacing.css',
     './radius.css',
     './typography.css',
   ]);

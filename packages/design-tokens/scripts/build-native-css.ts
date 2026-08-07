@@ -94,7 +94,7 @@ export async function writeNativeCss(): Promise<void> {
 export async function assertNativeCssCurrent(): Promise<void> {
   const [actual, expected] = await Promise.all([readFile(outputPath, 'utf8'), buildNativeCss()]);
   if (actual !== expected) {
-    throw new Error('[design-tokens] native.css is stale; run pnpm design:sync');
+    throw new Error('[design-tokens] native.css is stale; run pnpm design:build');
   }
 }
 

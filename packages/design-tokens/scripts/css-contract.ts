@@ -14,7 +14,6 @@ export type ThemeSources = {
   providers: string;
   radius: string;
   shadcn: string;
-  spacing: string;
   statusLegacy: string;
   themeInput: string;
   tokens: string;
@@ -108,7 +107,6 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
     providers,
     radius,
     shadcn,
-    spacing,
     statusLegacy,
     themeInput,
     tokens,
@@ -122,7 +120,6 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
     read('tokens/colors/providers.css'),
     read('tokens/radius.css'),
     read('shadcn.css'),
-    read('tokens/spacing.css'),
     read('tokens/colors/status-legacy.css'),
     read('theme-input.css'),
     read('tokens.css'),
@@ -138,7 +135,6 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
     providers,
     radius,
     shadcn,
-    spacing,
     statusLegacy,
     themeInput,
     tokens,
@@ -172,7 +168,6 @@ function declarationMap(
 export function buildThemeModel(sources: ThemeSources) {
   const staticEntries = [
     ['tokens/colors/primitive.css', sources.primitive],
-    ['tokens/spacing.css', sources.spacing],
     ['tokens/radius.css', sources.radius],
     ['tokens/typography.css', sources.typography],
   ] as const;
