@@ -3,48 +3,7 @@ import { Text, View } from 'react-native';
 import { useCSSVariable } from 'uniwind';
 
 import { FoundationPage, formatTokenValue, Group, SpecRow, ThemeSplit } from './showcase';
-
-type TypeStep = { className: string; name: string; role: string; sample: string };
-
-const LONG = '设计令牌 Design tokens 0123';
-const SHORT = '设计令牌 Ag';
-const GLYPHS = 'Ag';
-
-/**
- * The ladder itself lives in `src/frontend/utils/typographyScale.ts` — these
- * rows only name the Tailwind utility each step backs. Sizes shown are read
- * from `--ui-text-*` at runtime, so an accessibility step shift is visible here
- * too rather than being documented as a fixed number.
- */
-const TYPE_SCALE: TypeStep[] = [
-  { className: 'text-xs', name: 'xs', role: 'vbg label / metadata', sample: LONG },
-  { className: 'text-sm', name: 'sm', role: 'vbg compact', sample: LONG },
-  { className: 'text-base', name: 'base', role: 'vbg body', sample: LONG },
-  { className: 'text-lg', name: 'lg', role: 'vbg lede', sample: LONG },
-  { className: 'text-xl', name: 'xl', role: 'vbg subsection', sample: LONG },
-  { className: 'text-2xl', name: '2xl', role: 'vbg section', sample: SHORT },
-  { className: 'text-3xl', name: '3xl', role: 'vbg title', sample: SHORT },
-  { className: 'text-4xl', name: '4xl', role: 'vbg page-title', sample: SHORT },
-  { className: 'text-5xl', name: '5xl', role: 'vbg display', sample: GLYPHS },
-  { className: 'text-6xl', name: '6xl', role: 'VBG 无对应角色，沿用旧值', sample: GLYPHS },
-  { className: 'text-7xl', name: '7xl', role: 'VBG 无对应角色，沿用旧值', sample: GLYPHS },
-  { className: 'text-8xl', name: '8xl', role: 'VBG 无对应角色，沿用旧值', sample: GLYPHS },
-  { className: 'text-9xl', name: '9xl', role: 'VBG 无对应角色，沿用旧值', sample: GLYPHS },
-];
-
-const SIZE_VARIABLES = TYPE_SCALE.flatMap(({ name }) => [
-  `--ui-text-${name}`,
-  `--ui-text-${name}--line-height`,
-]);
-
-const WEIGHTS = [
-  { className: 'font-normal', label: 'font-normal', note: 'VBG 400 — 正文' },
-  { className: 'font-medium', label: 'font-medium', note: 'VBG 500 — 强调、按钮' },
-  { className: 'font-semibold', label: 'font-semibold', note: 'VBG 600 — 标题' },
-  { className: 'font-bold', label: 'font-bold', note: '已由 700 重映射到 600（VBG 最重档）' },
-];
-
-const WEIGHT_VARIABLES = ['--font-weight-regular', '--font-weight-medium', '--font-weight-bold'];
+import { MONO_VARIABLE, SIZE_VARIABLES, TYPE_SCALE, WEIGHT_SAMPLE, WEIGHTS } from './tokens';
 
 function TypeScaleRows() {
   const values = useCSSVariable(SIZE_VARIABLES);
@@ -66,35 +25,20 @@ function TypeScaleRows() {
 }
 
 function WeightRows() {
-  const values = useCSSVariable(WEIGHT_VARIABLES);
-
   return (
-    <View className="gap-5">
-      <View className="gap-3">
-        {WEIGHTS.map(({ className, label, note }) => (
-          <View className="gap-1" key={label}>
-            <Text className={`text-xl text-foreground ${className}`}>{SHORT}</Text>
-            <Text className="text-xs text-muted-foreground">{`${label} · ${note}`}</Text>
-          </View>
-        ))}
-      </View>
-
-      <Group
-        hint="契约里只有这三档驱动工具类。VBG 的 450 需要可变字体，而正文走系统字体的 RN fontWeight，没有 450，故丢弃。"
-        title="字重契约"
-      >
-        <View className="gap-2">
-          {WEIGHT_VARIABLES.map((variable, index) => (
-            <SpecRow key={variable} name={variable} value={formatTokenValue(values[index])} />
-          ))}
+    <View className="gap-3">
+      {WEIGHTS.map(({ className, label, note }) => (
+        <View className="gap-1" key={label}>
+          <Text className={`text-xl text-foreground ${className}`}>{WEIGHT_SAMPLE}</Text>
+          <Text className="text-xs text-muted-foreground">{`${label} · ${note}`}</Text>
         </View>
-      </Group>
+      ))}
     </View>
   );
 }
 
 function MonoRows() {
-  const family = useCSSVariable('--font-mono');
+  const family = useCSSVariable(MONO_VARIABLE);
 
   return (
     <View className="gap-4">
@@ -105,11 +49,11 @@ function MonoRows() {
         <Text className="font-mono text-sm text-foreground">{'// 0123456789 Il1 O0 -> =>'}</Text>
       </View>
 
-      <SpecRow name="--font-mono" value={formatTokenValue(family)} />
+      <SpecRow name={MONO_VARIABLE} value={formatTokenValue(family)} />
 
       <Text className="text-xs text-muted-foreground">
-        {'字体本体由 app.json 的 expo-font 插件在构建期嵌入原生工程。上面这行显示了字体名，但只有 ' +
-          'prebuild + 重新编译之后字形才会真的变成 Geist Mono —— 名字对而字形还是系统等宽，就说明原生没重编。'}
+        {'字体本体由 app.json 的 expo-font 插件在构建期嵌入原生工程。判断它有没有真的生效，看字宽是否等宽：' +
+          'iOS 上没注册成功的 fontFamily 会回落到比例字体 San Francisco，而不是别的等宽字体。'}
       </Text>
     </View>
   );
@@ -146,7 +90,10 @@ export const TypeScale: Story = {
 export const Weights: Story = {
   render: () => (
     <ThemeSplit>
-      <Group title="字重">
+      <Group
+        hint="契约里只有 400/500/600 三档驱动工具类。VBG 的 450 需要可变字体，而正文走系统字体的 RN fontWeight，没有 450，故丢弃。"
+        title="字重"
+      >
         <WeightRows />
       </Group>
     </ThemeSplit>
