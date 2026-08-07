@@ -91,7 +91,7 @@ export const paintingSkeleton = {
   keyframeTimes: [0.39, 0.5, 0.68], // rise start / peak / afterglow points of the loop
   reducedMotionAlpha: 0.66, // static snapshot opacity when Reduce Motion is on
   // Cell color is foreground × foregroundAlpha × the animated opacity; rgb is
-  // normalized for the shader and matches --cs-foreground (black light / white
+  // normalized for the shader and matches --foreground (black light / white
   // dark), whose 0.9 alpha lives in foregroundAlpha.
   foregroundAlpha: 0.9,
   foreground: { light: [0, 0, 0], dark: [1, 1, 1] },

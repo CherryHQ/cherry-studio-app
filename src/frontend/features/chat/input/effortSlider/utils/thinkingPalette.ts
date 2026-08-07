@@ -3,7 +3,7 @@
  * flattened into the layouts the shader uniforms expect.
  *
  * The web original (claude-model-selector) is purple; this port hue-rotates
- * every chromatic value onto the app's brand green (--cs-primary,
+ * every chromatic value onto the app's brand green (--primary,
  * oklch hue 146) in OKLCH, preserving each color's lightness and chroma so
  * the field keeps the original's tonal structure. The dark palette keeps the
  * same hue relationships but flips the luminance structure: bases are pushed
@@ -98,7 +98,7 @@ export const darkThinkingPalette: ThinkingPaletteUniforms = {
 
 /**
  * Accent for the highest stop's dot and the panel's value label. Matches the
- * app's --accent (--cs-primary, oklch(0.77 0.208 146)) in both schemes.
+ * app's --accent (--primary, oklch(0.77 0.208 146)) in both schemes.
  */
 export const thinkingAccentColor = {
   light: '#3fd55a',

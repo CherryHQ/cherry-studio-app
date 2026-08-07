@@ -2,9 +2,9 @@
  * Vercel Brand Guidelines (Geist) palette.
  *
  * The literal source of truth for every colour the mobile app is designed
- * against. Semantic layers (`status-legacy.css`, `providers.css`,
- * `shadcn.css`, `product.css`) must reference these names rather than
- * repeating raw `oklch()` values, so a ramp step has exactly one edit point.
+ * against. The public contract (`shadcn.css`, `product.css`) must reference
+ * these names rather than repeating raw `oklch()` values, so a ramp step has
+ * exactly one edit point.
  *
  * These are providers, not the public API: they are never exposed as Tailwind
  * utilities, and components consume the unprefixed semantic contract instead.

@@ -42,8 +42,6 @@ export async function checkDesignTokens(): Promise<void> {
   assertEqual('tokens.css imports', extractImports(sources.tokens), ['./tokens/index.css']);
   assertEqual('tokens/index.css imports', extractImports(sources.tokensIndex), [
     './colors/vercel.css',
-    './colors/status-legacy.css',
-    './colors/providers.css',
     './radius.css',
     './typography.css',
   ]);

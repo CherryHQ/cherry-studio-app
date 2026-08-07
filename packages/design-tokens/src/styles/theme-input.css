@@ -4,10 +4,24 @@
  * The host application may write these values. They are inputs rather than
  * public component semantics and are therefore not exported through the
  * Tailwind adapter. Semantic layers decide which public roles consume them.
+ *
+ * The literals below are the *defaults* — what the first frame shows, and what
+ * hosts that never bootstrap (Storybook) show forever. `applyThemePreferences`
+ * overwrites both themes at startup via `Uniwind.updateCSSVariables`.
  */
 
 :root {
-  /* Current compatibility inputs written by useUserTheme. */
-  --cs-theme-primary: var(--cs-primary);
-  --cs-theme-primary-foreground: var(--cs-primary-foreground);
+  /* Cherry brand green, #00b96b. Also `theme.ts`'s DEFAULT_PRIMARY_COLOR — the
+   * value the runtime writes back here when no colour has been picked. */
+  --cs-theme-primary: oklch(0.77 0.208 146);
+
+  /* Black, in both themes, because the fill above is the same green in both.
+   * `getPrimaryForeground` picks by luminance rather than by theme, and for
+   * #00b96b (relative luminance 0.358, over its 0.179 threshold) it returns
+   * #000000 — so this literal is what the runtime immediately confirms.
+   * It used to be near-white in light and near-black in dark, inherited from
+   * Shadcn where `--primary` is a dark neutral that flips. Ours does not flip,
+   * and white on this green measures 2.6:1 against black's 8.2:1, so the light
+   * branch was both dead (overwritten at bootstrap) and unreadable. */
+  --cs-theme-primary-foreground: oklch(0 0 0);
 }

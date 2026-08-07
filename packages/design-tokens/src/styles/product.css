@@ -10,46 +10,59 @@
  * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
  * 现在只同步图标。原先此处的 hex / rgba 字面量一并换成 VBG 的 oklch 取值。
  *
- * 没有 `.dark` 块，这是刻意的：产品域取值都指向 `vercel.css` 的调色板名，而那些
- * 名字本身已经按主题翻转，写一份深色覆盖只是把同样的值抄一遍。
+ * 每条直接指向 `vercel.css` 的调色板档位，理由同 `shadcn.css`。反馈色此前还多绕
+ * 一层：`--success` → `--cs-success` → `--cs-success-base` → `--cs-green-900`，
+ * 三跳之后才看得到档位。
+ *
+ * `.dark` 只写真正换档的那两条，其余角色指向的调色板名本身就按主题翻转。
  */
 
 :root {
   /* Shared product semantics */
-  --background-subtle: var(--cs-background-subtle);
-  --foreground-tertiary: var(--cs-foreground-tertiary);
-  --foreground-disabled: var(--cs-foreground-disabled);
-  --border-subtle: var(--cs-border-subtle);
-  --border-strong: var(--cs-border-strong);
-  --border-selected: var(--cs-border-selected);
+  --background-subtle: var(--cs-background-200);
+  --foreground-tertiary: var(--cs-gray-800);
+  --foreground-disabled: var(--foreground-tertiary);
+  /* 边框四级。Geist 的灰阶不单调 —— 浅色下 `gray-alpha-400`(0.08) 比
+   * `gray-alpha-300`(0.1) 更淡，深色下 `gray-alpha-800`(0.47) 比 `-700`(0.54)
+   * 更淡。若按名字顺序对齐四级边框，浅色模式层级会反转。故跳过 300/400 档，
+   * 取 100/200/500/700，两套主题都单调递增。默认档 `--border` 在 shadcn.css。 */
+  --border-subtle: var(--cs-gray-alpha-100);
+  --border-strong: var(--cs-gray-alpha-500);
+  --border-selected: var(--cs-gray-alpha-700);
   --link: var(--cs-blue-900);
   /* Pressed state for `--secondary` fills. Not a Shadcn name — upstream models
-   * interaction states as hover, which a touch surface does not have. The
-   * provider has always declared it; exposing it is what makes `active:` on a
-   * secondary fill visible, since `secondary` itself is only a 5% overlay. */
-  --secondary-active: var(--cs-secondary-active);
+   * interaction states as hover, which a touch surface does not have. */
+  --secondary-active: var(--cs-gray-alpha-300);
 
-  /* Feedback */
-  --success: var(--cs-success);
-  --success-subtle: var(--cs-success-subtle);
-  --success-subtle-foreground: var(--cs-success-subtle-foreground);
-  --success-border: var(--cs-success-border);
-  --warning: var(--cs-warning);
-  --warning-subtle: var(--cs-warning-subtle);
-  --warning-subtle-foreground: var(--cs-warning-subtle-foreground);
-  --warning-border: var(--cs-warning-border);
-  --info: var(--cs-info);
-  --info-subtle: var(--cs-info-subtle);
-  --info-subtle-foreground: var(--cs-info-subtle-foreground);
-  --info-border: var(--cs-info-border);
-  --error: var(--cs-error);
-  --error-subtle: var(--cs-error-subtle);
-  --error-subtle-foreground: var(--cs-error-subtle-foreground);
-  --error-border: var(--cs-error-border);
+  /* Feedback.
+   * 每个 intent 的 base 档位不同（error/info 取 700，success/warning 取 900），
+   * 这是 VBG 刻意的对比度调校，照搬。subtle 是 100 号浅底，其上的文字用 1000
+   * 号，边框用 400 号。 */
+  --success: var(--cs-green-900);
+  --success-subtle: var(--cs-green-100);
+  --success-subtle-foreground: var(--cs-green-1000);
+  --success-border: var(--cs-green-400);
+  --warning: var(--cs-amber-900);
+  --warning-subtle: var(--cs-amber-100);
+  --warning-subtle-foreground: var(--cs-amber-1000);
+  --warning-border: var(--cs-amber-400);
+  --info: var(--cs-blue-700);
+  --info-subtle: var(--cs-blue-100);
+  --info-subtle-foreground: var(--cs-blue-1000);
+  --info-border: var(--cs-blue-400);
+  /* `--error` 与 shadcn 的 `--destructive` 同为 red-700：前者是反馈语气，后者是
+   * 破坏性操作，语义不同而取值相同。 */
+  --error: var(--cs-red-700);
+  --error-subtle: var(--cs-red-100);
+  --error-subtle-foreground: var(--cs-red-1000);
+  --error-border: var(--cs-red-400);
 
-  /* Stable product domain: grouped-list screens (settings / assistants / AI usage) */
-  --grouped-background: var(--cs-grouped-background);
-  --grouped-surface: var(--cs-grouped-surface);
+  /* Stable product domain: grouped-list screens (settings / assistants / AI usage).
+   * 这一对在明暗之间是对调的：浅色把页面压暗、卡片留白，深色把页面留黑、卡片提亮。
+   * 这正是 iOS systemGroupedBackground / secondarySystemGroupedBackground 的做法
+   * （#F2F2F7 + #FFF / #000 + #1C1C1E）。 */
+  --grouped-background: var(--cs-gray-100);
+  --grouped-surface: var(--cs-background-100);
 
   /* Stable product domain: rich text and code (MarkdownText) */
   --code-block: var(--cs-gray-100);
@@ -58,4 +71,10 @@
 
   /* Stable product domain: user-message surface (UserMessageItem) */
   --chat-user: var(--cs-gray-alpha-100);
+}
+
+.dark {
+  /* 与浅色对调，见上。 */
+  --grouped-background: var(--cs-background-100);
+  --grouped-surface: var(--cs-gray-100);
 }

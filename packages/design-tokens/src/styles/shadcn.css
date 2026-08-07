@@ -10,31 +10,44 @@
  * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
  * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
  * 现在只同步图标。
+ *
+ * 每条直接指向 `vercel.css` 的调色板档位。此前中间还隔着一层 `--cs-<同名>`
+ * provider（`--background: var(--cs-background)` → `--cs-background:
+ * var(--cs-background-100)`），那一层每个名字只有一个消费者，等于把「这个角色用
+ * 哪一档」这件事拆到两个文件里说，读的时候要跳一次才看得到答案。
+ *
+ * `.dark` 只写真正换档的那几条：深色声明继承浅色，其余角色指向的调色板名本身
+ * 就按主题翻转，抄一遍是纯冗余。
  */
 
 :root {
   /* Core surfaces and content */
-  --background: var(--cs-background);
-  --foreground: var(--cs-foreground);
-  --card: var(--cs-card);
-  --card-foreground: var(--cs-card-foreground);
-  --popover: var(--cs-popover);
-  --popover-foreground: var(--cs-popover-foreground);
+  --background: var(--cs-background-100);
+  --foreground: var(--cs-gray-1000);
+  --card: var(--cs-gray-100);
+  --card-foreground: var(--cs-gray-1000);
+  --popover: var(--cs-background-100);
+  --popover-foreground: var(--cs-gray-1000);
   --primary: var(--cs-theme-primary);
   --primary-foreground: var(--cs-theme-primary-foreground);
-  --secondary: var(--cs-secondary);
-  --secondary-foreground: var(--cs-secondary-foreground);
-  --muted: var(--cs-muted);
-  --muted-foreground: var(--cs-muted-foreground);
-  --accent: var(--cs-accent);
-  --accent-foreground: var(--cs-accent-foreground);
-  --destructive: var(--cs-destructive);
-  --destructive-foreground: var(--cs-destructive-foreground);
+  --secondary: var(--cs-gray-alpha-100);
+  --secondary-foreground: var(--cs-gray-1000);
+  --muted: var(--cs-gray-alpha-100);
+  --muted-foreground: var(--cs-gray-900);
+  --accent: var(--cs-gray-alpha-100);
+  --accent-foreground: var(--cs-gray-1000);
+  --destructive: var(--cs-red-700);
+  /* White in both themes: red-700 is a solid fill, not a tint. */
+  --destructive-foreground: oklch(1 0 0);
 
   /* Controls */
-  --border: var(--cs-border);
-  --input: var(--cs-input);
-  --ring: var(--cs-ring);
+  --border: var(--cs-gray-alpha-200);
+  --input: var(--cs-gray-alpha-200);
+  /* Follows the picked accent rather than the brand default: this used to mix
+   * against the static green, so choosing a custom theme colour left the focus
+   * ring green. No component of ours consumes `--ring`; HeroUI's `--focus`
+   * does. */
+  --ring: color-mix(in srgb, var(--primary) 40%, transparent);
 
   /* Charts
    * VBG：「Category series are monochrome by default. Reserve chromatic tokens
@@ -48,25 +61,24 @@
   --chart-4: var(--cs-gray-700);
   --chart-5: var(--cs-gray-600);
 
-  /* Sidebar */
-  --sidebar: var(--cs-sidebar);
-  --sidebar-foreground: var(--cs-sidebar-foreground);
-  --sidebar-primary: var(--cs-sidebar-primary);
-  --sidebar-primary-foreground: var(--cs-sidebar-primary-foreground);
-  --sidebar-accent: var(--cs-sidebar-accent);
-  --sidebar-accent-foreground: var(--cs-sidebar-accent-foreground);
-  --sidebar-border: var(--cs-sidebar-border);
-  --sidebar-ring: var(--cs-sidebar-ring);
+  /* Sidebar. Kept for contract completeness — the mobile app has no sidebar and
+   * consumes none of these. */
+  --sidebar: var(--cs-background-200);
+  --sidebar-foreground: var(--cs-gray-1000);
+  --sidebar-primary: var(--cs-gray-1000);
+  --sidebar-primary-foreground: var(--cs-background-100);
+  --sidebar-accent: var(--cs-gray-100);
+  --sidebar-accent-foreground: var(--cs-gray-1000);
+  --sidebar-border: var(--cs-gray-alpha-200);
+  --sidebar-ring: var(--cs-gray-800);
 
   /* Shadcn radius input */
   --radius: var(--cs-radius-lg);
 }
 
 .dark {
-  /* Existing `--cs-*` semantic providers switch mode independently. */
-  --chart-1: var(--cs-gray-1000);
-  --chart-2: var(--cs-gray-900);
-  --chart-3: var(--cs-gray-800); /* 双主题同值 */
-  --chart-4: var(--cs-gray-700); /* 双主题同值 */
-  --chart-5: var(--cs-gray-600);
+  /* 抬升：浅色下浮层与页面同为白，深色下纯黑页面上必须提一档才有可见边界。 */
+  --popover: var(--cs-gray-100);
+  --sidebar: var(--cs-gray-100);
+  --sidebar-accent: var(--cs-gray-200);
 }
