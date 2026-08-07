@@ -1,18 +1,26 @@
 import { SearchField, Section } from '@cherrystudio/ui/components';
+import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Platform, Pressable, ScrollView, Text, View } from 'react-native';
+import { Keyboard, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useQuery } from '@/frontend/data';
 import { hiddenProviderListIds, isIOS } from '@/frontend/utils/constants';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
+import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
+const PROVIDER_ROW_ESTIMATED_HEIGHT = 44;
+
+const keyExtractor = (item: SettingsServiceRowProps) => item.id;
+const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
+  <SettingsServiceRow {...item} />
+);
 
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
@@ -33,7 +41,7 @@ export default function ProviderSettingsScreen() {
   const providersQuery = useQuery('/providers', {
     staleTime: providerListStaleTime,
   });
-  const providerItems = useMemo(
+  const providerItems = useMemo<SettingsServiceRowProps[]>(
     () =>
       (providersQuery.data ?? [])
         .filter((provider) => !hiddenProviderListIds.includes(provider.id))
@@ -62,15 +70,28 @@ export default function ProviderSettingsScreen() {
             });
           },
           statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
+          statusTone: 'success',
         })),
     [providersQuery.data, router, t],
   );
   const filteredProviderItems = useMemo(() => {
     const query = searchText.trim().toLocaleLowerCase();
-    return query
+    const matches = query
       ? providerItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
       : providerItems;
+
+    return matches.map((item, index) => ({ ...item, showSeparator: index > 0 }));
   }, [providerItems, searchText]);
+  const [measuredList, setMeasuredList] = useState<{ height: number; rowCount: number }>();
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) =>
+      setMeasuredList({ height, rowCount: filteredProviderItems.length }),
+    [filteredProviderItems.length],
+  );
+  const cardHeight =
+    measuredList?.rowCount === filteredProviderItems.length
+      ? measuredList.height
+      : filteredProviderItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT;
   const openCreateProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
@@ -112,66 +133,62 @@ export default function ProviderSettingsScreen() {
           </Stack.Toolbar>
         </>
       ) : null}
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentContainerClassName="grow px-4 pb-5"
-        contentContainerStyle={{ paddingTop: isNativeSearchFocused ? 12 : 0 }}
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <Pressable
+        accessible={false}
+        className="flex-1 gap-3 px-4 pb-5"
+        onPress={Keyboard.dismiss}
+        style={{ paddingTop: isNativeSearchFocused ? 12 : 0 }}
       >
-        <Pressable accessible={false} className="flex-1 gap-3" onPress={Keyboard.dismiss}>
-          {usesNativeBottomSearch ? null : (
-            <SearchField
-              accessibilityLabel={t('navigation.search')}
-              clearAccessibilityLabel={t('common.clear')}
-              onChangeText={setSearchText}
-              onClear={() => setSearchText('')}
-              placeholder={t('navigation.search')}
-              value={searchText}
-            />
-          )}
-          <Section>
-            {filteredProviderItems.length > 0 ? (
-              filteredProviderItems.map((item) => (
-                <Section.Item
-                  key={item.id}
-                  label={item.name}
-                  leading={item.avatar}
-                  onPress={item.onPress}
-                  showChevron
-                  trailing={
-                    item.statusLabel ? (
-                      <View
-                        className="h-5 items-center justify-center rounded-lg border px-1.5"
-                        style={{ backgroundColor: '#00b96b20', borderColor: '#00b96b66' }}
-                      >
-                        <Text
-                          className="font-medium text-xs"
-                          numberOfLines={1}
-                          style={{ color: '#00b96b' }}
-                        >
-                          {item.statusLabel}
-                        </Text>
-                      </View>
-                    ) : undefined
-                  }
-                />
-              ))
-            ) : (
-              <Section.Item
-                label={
-                  providersQuery.isPending
-                    ? t('settings.provider.loading')
-                    : t('settings.provider.search.empty')
-                }
+        {usesNativeBottomSearch ? null : (
+          <SearchField
+            accessibilityLabel={t('navigation.search')}
+            clearAccessibilityLabel={t('common.clear')}
+            onChangeText={setSearchText}
+            onClear={() => setSearchText('')}
+            placeholder={t('navigation.search')}
+            value={searchText}
+          />
+        )}
+        {filteredProviderItems.length > 0 ? (
+          <View className="min-h-0 flex-1">
+            <View
+              className="overflow-hidden rounded-2xl bg-settings-grouped-surface"
+              style={{ height: cardHeight, maxHeight: '100%' }}
+            >
+              <LegendList
+                alwaysBounceVertical={false}
+                data={filteredProviderItems}
+                estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
+                keyboardDismissMode="on-drag"
+                keyboardShouldPersistTaps="handled"
+                keyExtractor={keyExtractor}
+                maintainVisibleContentPosition={false}
+                onContentSizeChange={handleContentSizeChange}
+                recycleItems
+                renderItem={renderProviderRow}
+                showsVerticalScrollIndicator={false}
+                style={styles.list}
               />
-            )}
+            </View>
+          </View>
+        ) : (
+          <Section>
+            <Section.Item
+              label={
+                providersQuery.isPending
+                  ? t('settings.provider.loading')
+                  : t('settings.provider.search.empty')
+              }
+            />
           </Section>
-        </Pressable>
-      </ScrollView>
+        )}
+      </Pressable>
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  list: {
+    flex: 1,
+  },
+});

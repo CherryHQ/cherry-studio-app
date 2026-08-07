@@ -54,6 +54,19 @@ type RefreshOption<TPath extends ApiPath, TMethod extends MutationMethod> =
   | readonly string[]
   | ((context: RefreshContext<TPath, TMethod>) => readonly string[]);
 
+/**
+ * react-query merges options as `{...clientDefaults, ...options}`, so passing an explicit
+ * `staleTime: undefined` *overrides* the client default (see `createMobileQueryClient`) and
+ * leaves the query permanently stale — every observer that mounts refetches. Forward these
+ * two only when a caller actually set them, so unset callers inherit the client defaults.
+ */
+function callerQueryOverrides(options?: { retry?: boolean | number; staleTime?: number }) {
+  return {
+    ...(options?.retry === undefined ? {} : { retry: options.retry }),
+    ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
+  };
+}
+
 export function useQuery<TPath extends ApiPath>(
   path: TPath,
   options?: ParamsOption<TPath, 'GET'> & {
@@ -79,8 +92,7 @@ export function useQuery<TPath extends ApiPath>(
         query: query as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
       }) as Promise<ResponseForPath<TPath, 'GET'>>,
     queryKey: buildQueryKey(resolvedPath, query),
-    retry: options?.retry,
-    staleTime: options?.staleTime,
+    ...callerQueryOverrides(options),
   });
 
   return {
@@ -235,8 +247,7 @@ export function useInfiniteQuery<TPath extends ApiPath>(
         } as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
       }) as Promise<ResponseForPath<TPath, 'GET'>>,
     queryKey,
-    retry: options?.retry,
-    staleTime: options?.staleTime,
+    ...callerQueryOverrides(options),
   });
   const pages = useMemo(() => result.data?.pages ?? [], [result.data?.pages]);
   const fetchNextPage = result.fetchNextPage;

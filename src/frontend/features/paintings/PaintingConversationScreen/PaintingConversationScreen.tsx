@@ -119,7 +119,6 @@ function PaintingConversationWorkspace({
     void listRef.current?.scrollToEnd({ animated: true });
   }, []);
   const handleLoadOlder = useCallback(async () => {}, []);
-  const handlePrefetchOlder = useCallback(() => {}, []);
   const handleGenerate = useCallback(
     async (input: PaintingGenerationInput) => {
       const createdAt = new Date().toISOString();
@@ -161,7 +160,6 @@ function PaintingConversationWorkspace({
         listRef={listRef}
         messages={messages}
         onLoadOlder={handleLoadOlder}
-        onPrefetchOlder={handlePrefetchOlder}
       />
       <FloatingPaintingInput
         composerRef={composerRef}
