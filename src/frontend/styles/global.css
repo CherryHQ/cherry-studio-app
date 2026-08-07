@@ -21,8 +21,13 @@
    * 这个字面量与 src/frontend/utils/constants.ts 的 monoFontFamily 必须同名。 */
   --font-mono: GeistMono-Regular;
 
-  --ui-text-xs: 12px;
-  --ui-text-xs--line-height: 16px;
+  /* 这一段是字号阶梯的「无障碍档位 0」快照。运行时由 applyFontSizeStep 用
+   * createTypographyCSSVariables(step) 覆盖，但覆盖发生在 app bootstrap 里——
+   * 首帧、以及不跑 bootstrap 的宿主（Storybook）看到的就是这里的值。所以它必须
+   * 与 typographyScale.ts 的 sizeSequence 起始档逐项相等，
+   * typographyScale.test.ts 会断言这一点。 */
+  --ui-text-xs: 13px;
+  --ui-text-xs--line-height: 18px;
   --ui-text-sm: 14px;
   --ui-text-sm--line-height: 20px;
   --ui-text-base: 16px;
@@ -30,18 +35,18 @@
   --ui-text-lg: 18px;
   --ui-text-lg--line-height: 28px;
   --ui-text-xl: 20px;
-  --ui-text-xl--line-height: 28px;
+  --ui-text-xl--line-height: 26px;
   --ui-emoji-xl--line-height: 28px;
   --ui-text-2xl: 24px;
   --ui-text-2xl--line-height: 32px;
   --ui-emoji-2xl--line-height: 32px;
-  --ui-text-3xl: 30px;
-  --ui-text-3xl--line-height: 36px;
-  --ui-emoji-3xl--line-height: 40px;
-  --ui-text-4xl: 36px;
-  --ui-text-4xl--line-height: 40px;
+  --ui-text-3xl: 32px;
+  --ui-text-3xl--line-height: 40px;
+  --ui-emoji-3xl--line-height: 44px;
+  --ui-text-4xl: 40px;
+  --ui-text-4xl--line-height: 48px;
   --ui-text-5xl: 48px;
-  --ui-text-5xl--line-height: 48px;
+  --ui-text-5xl--line-height: 56px;
   --ui-text-6xl: 60px;
   --ui-text-6xl--line-height: 60px;
   --ui-emoji-6xl--line-height: 80px;

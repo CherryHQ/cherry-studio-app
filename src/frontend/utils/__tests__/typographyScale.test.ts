@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import {
   createTypographyCSSVariables,
   normalizeFontSizeStep,
@@ -48,4 +51,24 @@ describe('typography scale', () => {
       });
     },
   );
+
+  // applyFontSizeStep only writes these variables once the app runtime boots, so
+  // the first frame — and any host that skips bootstrap, such as Storybook —
+  // renders whatever `@theme static` declared at build time. That snapshot has
+  // no other guard, and a stale copy is invisible in the running app.
+  test('global.css seeds the same variables the runtime writes for step 0', () => {
+    const globalCss = readFileSync(path.join(__dirname, '../../styles/global.css'), 'utf8');
+    const staticTheme = /@theme static \{([\s\S]*?)\n\}/.exec(globalCss)?.[1];
+    if (!staticTheme) {
+      throw new Error('global.css no longer declares a `@theme static` block.');
+    }
+
+    const declared = Object.fromEntries(
+      [...staticTheme.matchAll(/(--ui-(?:text|emoji)-[\w-]+):\s*(\d+)px;/g)].map(
+        ([, name, value]) => [name, Number(value)],
+      ),
+    );
+
+    expect(declared).toEqual(createTypographyCSSVariables(0));
+  });
 });
