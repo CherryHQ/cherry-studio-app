@@ -143,7 +143,7 @@
       --warning-foreground: var(--cs-black);
       --separator: var(--border-strong);
       --focus: var(--ring);
-      --settings-grouped-surface: oklch(0 0 0 / 0.05);
+      --settings-grouped-surface: var(--cs-vbg-gray-alpha-100);
     }
 
     @variant dark {
@@ -170,7 +170,7 @@
       --warning-foreground: var(--cs-black);
       --separator: var(--border-strong);
       --focus: var(--ring);
-      --settings-grouped-surface: oklch(1 0 0 / 0.05);
+      --settings-grouped-surface: var(--cs-vbg-gray-alpha-100);
     }
   }
 }
