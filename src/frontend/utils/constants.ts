@@ -147,7 +147,6 @@ export const profileHero = {
   unlockScrollPx: 150, // scroll-up distance (from locked) that releases the lock
   lockTimingMs: 220, // lock / unlock spring-to-rest duration
   expandedRadius: 20, // locked full-width photo bottom-corner radius
-  expandedScrimOpacity: 0.18, // dim over the locked photo, so the white name stays legible
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
 } as const;
 
