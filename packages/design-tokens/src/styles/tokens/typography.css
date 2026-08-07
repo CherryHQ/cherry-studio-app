@@ -1,47 +1,62 @@
 /**
  * Typography
  * 排版系统 - 字体、字号、行高、段落间距
+ *
+ * ⚠️ 取值已 fork：不再从 Cherry Studio 桌面端镜像。移动端改用 Vercel Brand
+ * Guidelines（Geist）的排版刻度，故取值与桌面端有意分叉。token 名字仍与桌面
+ * `theme-contract.ts` 一致，且该契约文件继续由 `pnpm design:sync` 从桌面同步。
+ *
+ * 生效范围提醒：`build-native-css.ts` 把本文件的 `--cs-x` 适配成 `--x`，其中只有
+ * `--font-weight-{regular,medium,bold}` 落在 Tailwind 的 theme 命名空间里，
+ * 因此**只有字重真正驱动工具类**（`--font-weight-bold` → `font-bold`）。
+ * 字号/行高的实际来源是 `src/frontend/utils/typographyScale.ts` 的 sizeSequence
+ * （运行时可按无障碍档位平移），下面的尺寸值保持与之一致，供未来接线用。
+ * 字体族在移动端未被消费：正文走各平台系统字体，等宽字体由
+ * `src/frontend/styles/global.css` 的 `--font-mono` 单独接 Geist Mono。
  */
 
 :root {
-  /* Font Families */
-  --cs-font-family-heading: Inter;
-  --cs-font-family-body: Inter;
+  /* Font Families - 移动端不消费，RN 回落到平台系统字体 */
+  --cs-font-family-heading: system-ui;
+  --cs-font-family-body: system-ui;
 
-  /* Font Weights (修正单位错误) */
+  /* Font Weights
+   * VBG 有 400/450/500/600。450（heading）需要可变字体支撑，而正文用系统字体走
+   * RN 的 fontWeight，没有 450，故丢弃。VBG 最重的一档就是 600 semibold，
+   * 因此 bold 由 700 下调到 600。 */
   --cs-font-weight-regular: 400;
   --cs-font-weight-medium: 500;
-  --cs-font-weight-bold: 700;
+  --cs-font-weight-bold: 600;
 
   /* Font Sizes - Body */
-  --cs-font-size-body-xs: 0.75rem; /* 12px */
-  --cs-font-size-body-sm: 0.875rem; /* 14px */
-  --cs-font-size-body-md: 1rem; /* 16px */
-  --cs-font-size-body-lg: 1.125rem; /* 18px */
+  --cs-font-size-body-xs: 0.8125rem; /* 13px - vbg label / metadata */
+  --cs-font-size-body-sm: 0.875rem; /* 14px - vbg compact */
+  --cs-font-size-body-md: 1rem; /* 16px - vbg body */
+  --cs-font-size-body-lg: 1.125rem; /* 18px - vbg lede */
 
   /* Font Sizes - Heading */
-  --cs-font-size-heading-xs: 1.25rem; /* 20px */
-  --cs-font-size-heading-sm: 1.5rem; /* 24px */
-  --cs-font-size-heading-md: 2rem; /* 32px */
-  --cs-font-size-heading-lg: 2.5rem; /* 40px */
-  --cs-font-size-heading-xl: 3rem; /* 48px */
-  --cs-font-size-heading-2xl: 3.75rem; /* 60px */
+  --cs-font-size-heading-xs: 1.25rem; /* 20px - vbg subsection */
+  --cs-font-size-heading-sm: 1.5rem; /* 24px - vbg section */
+  --cs-font-size-heading-md: 2rem; /* 32px - vbg title */
+  --cs-font-size-heading-lg: 2.5rem; /* 40px - vbg page-title */
+  --cs-font-size-heading-xl: 3rem; /* 48px - vbg display */
+  --cs-font-size-heading-2xl: 3.75rem; /* 60px - VBG 无对应角色，沿用旧值 */
 
   /* Line Heights - Body */
-  --cs-line-height-body-xs: 1.25rem; /* 20px */
-  --cs-line-height-body-sm: 1.5rem; /* 24px */
-  --cs-line-height-body-md: 1.5rem; /* 24px */
-  --cs-line-height-body-lg: 1.75rem; /* 28px */
+  --cs-line-height-body-xs: 1.125rem; /* 18px - vbg leading-caption */
+  --cs-line-height-body-sm: 1.25rem; /* 20px - vbg leading-compact */
+  --cs-line-height-body-md: 1.5rem; /* 24px - vbg leading-body */
+  --cs-line-height-body-lg: 1.75rem; /* 28px - vbg leading-lede */
 
   /* Line Heights - Heading */
-  --cs-line-height-heading-xs: 2rem; /* 32px */
-  --cs-line-height-heading-sm: 2.5rem; /* 40px */
-  --cs-line-height-heading-md: 3rem; /* 48px */
-  --cs-line-height-heading-lg: 3.75rem; /* 60px */
-  --cs-line-height-heading-xl: 5rem; /* 80px */
+  --cs-line-height-heading-xs: 1.625rem; /* 26px - vbg leading-subsection */
+  --cs-line-height-heading-sm: 2rem; /* 32px - vbg leading-section */
+  --cs-line-height-heading-md: 2.5rem; /* 40px - vbg leading-title */
+  --cs-line-height-heading-lg: 3rem; /* 48px - vbg leading-page-title */
+  --cs-line-height-heading-xl: 3.5rem; /* 56px - vbg leading-display */
 
-  /* Paragraph Spacing */
-  --cs-paragraph-spacing-body-xs: 0.75rem; /* 12px */
+  /* Paragraph Spacing - 跟随上面的字号 */
+  --cs-paragraph-spacing-body-xs: 0.8125rem; /* 13px */
   --cs-paragraph-spacing-body-sm: 0.875rem; /* 14px */
   --cs-paragraph-spacing-body-md: 1rem; /* 16px */
   --cs-paragraph-spacing-body-lg: 1.125rem; /* 18px */

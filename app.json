@@ -89,7 +89,12 @@
         }
       ],
       "expo-document-picker",
-      "expo-font",
+      [
+        "expo-font",
+        {
+          "fonts": ["./assets/fonts/GeistMono-Regular.ttf"]
+        }
+      ],
       "expo-image",
       [
         "expo-camera",

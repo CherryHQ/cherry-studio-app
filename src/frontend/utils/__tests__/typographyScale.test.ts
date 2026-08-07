@@ -8,7 +8,7 @@ describe('typography scale', () => {
   test.each([
     [0, 16, 24],
     [1, 18, 28],
-    [2, 20, 28],
+    [2, 20, 26],
   ] as const)('moves base typography for step %i', (step, fontSize, lineHeight) => {
     expect(resolveTypographyScale(step).base).toEqual({ fontSize, lineHeight });
   });
@@ -36,8 +36,8 @@ describe('typography scale', () => {
   });
 
   test.each([
-    [0, 30, 40],
-    [1, 36, 48],
+    [0, 32, 44],
+    [1, 40, 56],
     [2, 48, 64],
   ] as const)(
     'creates scalable emoji typography with safe line height for step %i',

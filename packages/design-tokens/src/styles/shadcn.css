@@ -6,6 +6,10 @@
  * file. Cherry Studio product semantics are imported after it so they may
  * intentionally follow official variables and third-party themes such as
  * TweakCN.
+ *
+ * ⚠️ 取值已 fork：颜色取值不再从 Cherry Studio 桌面端镜像。移动端改用 Vercel
+ * Brand Guidelines（Geist）色彩体系，故取值与桌面端有意分叉。token 名字仍与桌面
+ * `theme-contract.ts` 一致，且该契约文件继续由 `pnpm design:sync` 从桌面同步。
  */
 
 :root {
@@ -32,12 +36,17 @@
   --input: var(--cs-input);
   --ring: var(--cs-ring);
 
-  /* Charts */
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
+  /* Charts
+   * VBG：「Category series are monochrome by default. Reserve chromatic tokens
+   * for meaning.」故改为灰阶。有意偏离之处：VBG 自己的 --vbg-chart-1..6 是
+   * gray-1000/900/800 重复两轮，对 5 系列图表不可用，此处顺延到 700/600。
+   * 深色下 gray-700(0.65) 比 gray-800(0.59) 更亮，第 3/4 档亮度会反序 —— 目前
+   * 没有任何组件消费 chart-1..5（AiUsageWeeklyChart 用的是语义色），故不额外处理。 */
+  --chart-1: oklch(0.205 0 0); /* vbg gray-1000 */
+  --chart-2: oklch(0.42 0 0); /* vbg gray-900 */
+  --chart-3: oklch(0.59 0 0); /* vbg gray-800 */
+  --chart-4: oklch(0.65 0 0); /* vbg gray-700 */
+  --chart-5: oklch(0.732 0 0); /* vbg gray-600 */
 
   /* Sidebar */
   --sidebar: var(--cs-sidebar);
@@ -55,9 +64,9 @@
 
 .dark {
   /* Existing `--cs-*` semantic providers switch mode independently. */
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
+  --chart-1: oklch(0.946 0 0); /* vbg gray-1000 dark */
+  --chart-2: oklch(0.706 0 0); /* vbg gray-900 dark */
+  --chart-3: oklch(0.59 0 0); /* vbg gray-800（双主题同值） */
+  --chart-4: oklch(0.65 0 0); /* vbg gray-700（双主题同值） */
+  --chart-5: oklch(0.623 0 0); /* vbg gray-600 dark */
 }

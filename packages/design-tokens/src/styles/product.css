@@ -5,6 +5,11 @@
  * Shadcn contract. Internal Cherry Studio value providers remain under
  * `--cs-*`, while feature-local and historical migration values stay outside
  * this public runtime contract.
+ *
+ * ⚠️ 取值已 fork：颜色取值不再从 Cherry Studio 桌面端镜像。移动端改用 Vercel
+ * Brand Guidelines（Geist）色彩体系，故取值与桌面端有意分叉。token 名字仍与桌面
+ * `theme-contract.ts` 一致，且该契约文件继续由 `pnpm design:sync` 从桌面同步。
+ * 原先此处的 hex / rgba 字面量一并换成 VBG 的 oklch 取值。
  */
 
 :root {
@@ -15,7 +20,7 @@
   --border-subtle: var(--cs-border-subtle);
   --border-strong: var(--cs-border-strong);
   --border-selected: var(--cs-border-selected);
-  --link: var(--cs-blue-600);
+  --link: oklch(0.5318 0.2399 256.99); /* vbg blue-900 */
 
   /* Feedback */
   --success: var(--cs-success);
@@ -36,38 +41,39 @@
   --error-border: var(--cs-error-border);
 
   /* Stable product domain: rich text and code */
-  --code-block: #e3e3e3;
-  --inline-code: rgba(0, 0, 0, 0.06);
-  --inline-code-foreground: rgb(218, 97, 92);
+  --code-block: oklch(0.961 0 0); /* vbg gray-100 */
+  --inline-code: oklch(0 0 0 / 0.05); /* vbg gray-alpha-100 */
+  --inline-code-foreground: oklch(0.5499 0.232 25.29); /* vbg red-900 */
 
   /* Stable product domain: references and search highlights */
-  --reference: #cfe1ff;
-  --reference-foreground: #000;
-  --reference-subtle: #f1f7ff;
+  --reference: oklch(0.9732 0.0141 251.56); /* vbg blue-100 */
+  --reference-foreground: oklch(0.2667 0.1099 254.34); /* vbg blue-1000 */
+  --reference-subtle: oklch(0.984 0 0); /* vbg background-200 */
   --highlight-foreground: var(--foreground);
-  --highlight: var(--cs-amber-50);
-  --highlight-accent: var(--cs-amber-100);
+  --highlight: oklch(0.9748 0.0331 85.79); /* vbg amber-100 */
+  --highlight-accent: oklch(0.9102 0.1322 88.25); /* vbg amber-400 */
 
   /* Stable product domain: user-message surface */
-  --chat-user: rgba(0, 0, 0, 0.045);
+  --chat-user: oklch(0 0 0 / 0.05); /* vbg gray-alpha-100 */
 }
 
 .dark {
   /* Shared product semantics */
-  --link: var(--cs-blue-400);
+  --link: oklch(0.717 0.1648 250.794); /* vbg blue-900 dark */
 
   /* Stable product domain: rich text and code */
-  --code-block: #323232;
-  --inline-code: #323232;
+  --code-block: oklch(0.218 0 0); /* vbg gray-100 dark */
+  --inline-code: oklch(1 0 0 / 0.07); /* vbg gray-alpha-100 dark */
+  --inline-code-foreground: oklch(0.6996 0.2136 22.03); /* vbg red-900 dark */
 
   /* Stable product domain: references and search highlights */
-  --reference: #404040;
-  --reference-foreground: #fff;
-  --reference-subtle: #0b0e12;
+  --reference: oklch(0.2217 0.069 259.89); /* vbg blue-100 dark */
+  --reference-foreground: oklch(0.9675 0.0179 242.423); /* vbg blue-1000 dark */
+  --reference-subtle: oklch(0.027 0 0); /* vbg background-200 dark */
   --highlight-foreground: var(--foreground);
-  --highlight: var(--cs-amber-900);
-  --highlight-accent: var(--cs-amber-800);
+  --highlight: oklch(0.2246 0.0538 76.04); /* vbg amber-100 dark */
+  --highlight-accent: oklch(0.3553 0.0903 66.297); /* vbg amber-400 dark */
 
   /* Stable product domain: user-message surface */
-  --chat-user: rgba(255, 255, 255, 0.08);
+  --chat-user: oklch(1 0 0 / 0.07); /* vbg gray-alpha-100 dark */
 }

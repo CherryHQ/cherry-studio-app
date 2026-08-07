@@ -10,6 +10,7 @@ import { StreamdownText } from 'react-native-streamdown';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { monoFontFamily } from '@/frontend/utils/constants';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 
@@ -36,7 +37,10 @@ function createMarkdownTypographyStyle(fontSizeStep: FontSizeStep): MarkdownStyl
     h6: scale.sm,
     blockquote: scale.base,
     list: scale.base,
-    codeBlock: scale.sm,
+    // Code is styled through RN style objects rather than `className`, so it
+    // cannot pick up the `font-mono` utility and needs the family named here.
+    code: { fontFamily: monoFontFamily },
+    codeBlock: { ...scale.sm, fontFamily: monoFontFamily },
     table: scale.sm,
     math: { fontSize: scale.xl.fontSize },
   };
@@ -79,7 +83,12 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
         color: foreground,
         markerColor: foreground,
       },
-      code: { backgroundColor: secondary, borderColor: border, color: foreground },
+      code: {
+        ...typography.code,
+        backgroundColor: secondary,
+        borderColor: border,
+        color: foreground,
+      },
       codeBlock: {
         ...typography.codeBlock,
         backgroundColor: secondary,

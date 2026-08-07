@@ -15,6 +15,12 @@
 @theme static {
   --color-settings-grouped-surface: var(--settings-grouped-surface);
 
+  /* Tailwind 默认的 --font-mono 是一整条 CSS 字体栈，而 RN 的 fontFamily 只接受
+   * 单个已注册的字体名，所以必须覆盖。字体本体由 app.json 的 expo-font 插件在
+   * 构建期嵌入原生工程（改完要 prebuild + 重新编译，Metro reload 不生效）。
+   * 这个字面量与 src/frontend/utils/constants.ts 的 monoFontFamily 必须同名。 */
+  --font-mono: GeistMono-Regular;
+
   --ui-text-xs: 12px;
   --ui-text-xs--line-height: 16px;
   --ui-text-sm: 14px;
@@ -136,8 +142,6 @@
     }
 
     @variant dark {
-      /* Electron uses translucency here; native screens require an opaque base. */
-      --cs-background: oklch(0.187 0 0);
       --surface: var(--card);
       --surface-foreground: var(--card-foreground);
       --surface-secondary: var(--muted);

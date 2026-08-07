@@ -58,8 +58,11 @@ export async function buildNativeCss(): Promise<string> {
   ];
 
   return `/**
- * Generated from the synchronized desktop design-token contract.
- * Do not edit directly. Run \`pnpm design:sync --desktop-root <path>\`.
+ * Generated from the token sources in this package's src/styles.
+ * Do not edit directly. Run \`pnpm design:build\` after changing them.
+ *
+ * Token values are mobile-owned (Vercel Brand Guidelines) and are no longer
+ * mirrored from desktop; only scripts/theme-contract.ts still tracks it.
  */
 
 @theme {

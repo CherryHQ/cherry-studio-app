@@ -58,10 +58,13 @@ describe('MarkdownText', () => {
       );
       expect(props.markdownStyle).toEqual(
         expect.objectContaining({
-          paragraph: { fontSize: 20, lineHeight: 28 },
-          h1: { fontSize: 48, lineHeight: 48 },
-          h2: { fontSize: 36, lineHeight: 40 },
-          codeBlock: { fontSize: 18, lineHeight: 28 },
+          paragraph: { fontSize: 20, lineHeight: 26 },
+          h1: { fontSize: 48, lineHeight: 56 },
+          h2: { fontSize: 40, lineHeight: 48 },
+          // Code cannot reach the `font-mono` utility through a style object,
+          // so the family is named explicitly for both themes.
+          code: { fontFamily: 'GeistMono-Regular' },
+          codeBlock: { fontFamily: 'GeistMono-Regular', fontSize: 18, lineHeight: 28 },
           table: { fontSize: 18, lineHeight: 28 },
         }),
       );

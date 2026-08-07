@@ -12,6 +12,14 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // the background behind them consistently. Single source of truth — tune here.
 export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
 
+// Geist Mono, embedded natively by the expo-font plugin (see app.json). This is
+// the font's PostScript name, which is also its filename, so iOS and Android
+// both resolve it from this single string. Components that style through
+// `className` should use the `font-mono` utility instead; this constant exists
+// for the few places that build RN style objects directly (MarkdownText).
+// Must stay in sync with `--font-mono` in src/frontend/styles/global.css.
+export const monoFontFamily = 'GeistMono-Regular';
+
 // Shared chrome for the floating BottomSheet frame (src/frontend/components/bottomSheet).
 // Every sheet derives its inset width, bottom gap, concentric corner radius, and
 // header placement from these values — single source of truth, tune here.
