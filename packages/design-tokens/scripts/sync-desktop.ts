@@ -1,3 +1,13 @@
+/**
+ * Mirrors the desktop icon catalog into mobile.
+ *
+ * Despite living in the design-tokens package, this no longer touches a single
+ * token: values *and* names are mobile-owned since the Vercel Brand Guidelines
+ * fork (see the tombstones under src/styles). It stays here because
+ * `desktop-sync-manifest.json` delegates its `design` fingerprint to
+ * src/sync-manifest.json, which this script writes.
+ */
+
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -13,7 +23,6 @@ type SyncEntry = {
 };
 
 const repoRoot = path.resolve(packageRoot, '../..');
-const stylesDestination = path.join(packageRoot, 'src/styles');
 const manifestPath = path.join(packageRoot, 'src/sync-manifest.json');
 const routingDestination = path.join(repoRoot, 'packages/ui/src/icons/desktop-routing.ts');
 const catalogOnlyProviderDestination = path.join(
@@ -111,17 +120,6 @@ async function syncDirectory(
 
   await rm(destinationRoot, { recursive: true, force: true });
   for (const { destination, source } of entries) {
-    await mkdir(path.dirname(destination), { recursive: true });
-    await copyFile(source, destination);
-  }
-}
-
-async function syncFiles(entries: SyncEntry[], check: boolean): Promise<void> {
-  for (const { destination, source } of entries) {
-    if (check) {
-      await assertFileEqual(source, destination);
-      continue;
-    }
     await mkdir(path.dirname(destination), { recursive: true });
     await copyFile(source, destination);
   }
@@ -329,45 +327,20 @@ async function main() {
     throw new Error('[design-sync] --desktop-root does not contain the Cherry Studio UI package');
   }
 
+  // Only icons. Neither `packages/ui/src/styles` nor `scripts/theme-contract.ts`
+  // is tracked: mobile owns the token values *and* their names outright, so an
+  // unrelated desktop style edit must not report this sync as dirty.
   const trackedSources = [
-    'packages/ui/src/styles',
-    'packages/ui/scripts/theme-contract.ts',
     'packages/ui/icons',
     'packages/ui/src/components/icons/registry.ts',
     'packages/ui/src/components/icons/providers/radeon-cloud',
   ];
   const dirty = run('git', ['status', '--porcelain', '--', ...trackedSources], desktopRoot);
   if (dirty) {
-    throw new Error(`[design-sync] desktop design sources have uncommitted changes:\n${dirty}`);
+    throw new Error(`[design-sync] desktop icon sources have uncommitted changes:\n${dirty}`);
   }
 
   const commit = run('git', ['rev-parse', 'HEAD'], desktopRoot);
-  const desktopStyles = path.join(desktopUi, 'src/styles');
-  await syncDirectory(
-    path.join(desktopStyles, 'tokens'),
-    path.join(stylesDestination, 'tokens'),
-    '.css',
-    check,
-  );
-  await syncFiles(
-    ['contract.css', 'product.css', 'shadcn.css', 'theme-input.css', 'tokens.css'].map(
-      (fileName) => ({
-        destination: path.join(stylesDestination, fileName),
-        source: path.join(desktopStyles, fileName),
-      }),
-    ),
-    check,
-  );
-  await syncFiles(
-    [
-      {
-        destination: path.join(packageRoot, 'scripts/theme-contract.ts'),
-        source: path.join(desktopUi, 'scripts/theme-contract.ts'),
-      },
-    ],
-    check,
-  );
-
   const desktopIcons = path.join(desktopUi, 'icons');
   const mobileIcons = path.join(repoRoot, 'packages/ui/icons');
   for (const group of ['general', 'models', 'providers']) {
@@ -385,15 +358,6 @@ async function main() {
   const catalogOnlyProvider = await buildCatalogOnlyProviderSource(desktopRoot, commit);
   await writeOrCheckText(catalogOnlyProviderDestination, catalogOnlyProvider.source, check);
 
-  const styleFiles = [
-    ...(await listFiles(path.join(desktopStyles, 'tokens'), '.css')).map((file) =>
-      path.join(desktopStyles, 'tokens', file),
-    ),
-    ...['contract.css', 'product.css', 'shadcn.css', 'theme-input.css', 'tokens.css'].map((file) =>
-      path.join(desktopStyles, file),
-    ),
-    path.join(desktopUi, 'scripts/theme-contract.ts'),
-  ];
   const iconFiles = (await listFiles(desktopIcons, '.svg')).map((file) =>
     path.join(desktopIcons, file),
   );
@@ -409,7 +373,6 @@ async function main() {
           desktopRoot,
         ),
         icons: await hashFiles(iconFiles, desktopRoot),
-        tokens: await hashFiles(styleFiles, desktopRoot),
       },
     },
     null,
@@ -417,17 +380,12 @@ async function main() {
   )}\n`;
   await writeOrCheckText(manifestPath, manifest, check);
 
-  if (check) {
-    const { assertNativeCssCurrent } = await import('./build-native-css');
-    await assertNativeCssCurrent();
-    run('pnpm', ['exec', 'tsx', 'packages/ui/src/scripts/check-icons.ts'], repoRoot);
-  } else {
-    const { writeNativeCss } = await import('./build-native-css');
-    await writeNativeCss();
-    run('pnpm', ['exec', 'tsx', 'packages/ui/src/scripts/generate-icons.ts'], repoRoot);
-  }
+  // native.css is not rebuilt here — it derives purely from local token sources,
+  // which this sync no longer touches. `pnpm design:build` / `design:check` own it.
+  const iconScript = check ? 'check-icons.ts' : 'generate-icons.ts';
+  run('pnpm', ['exec', 'tsx', `packages/ui/src/scripts/${iconScript}`], repoRoot);
 
-  process.stdout.write(`Design sources ${check ? 'match' : 'synced from'} desktop ${commit}.\n`);
+  process.stdout.write(`Icon sources ${check ? 'match' : 'synced from'} desktop ${commit}.\n`);
 }
 
 void main().catch((error: unknown) => {

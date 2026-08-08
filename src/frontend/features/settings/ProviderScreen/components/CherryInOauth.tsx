@@ -90,8 +90,8 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
   if (authConfigQuery.isPending || providerQuery.isPending) {
     return (
       <View className="gap-2 rounded-2xl border border-border bg-background px-4 py-4">
-        <View className="h-5 w-55 rounded bg-settings-grouped-surface" />
-        <View className="mt-2 h-4 w-full rounded bg-settings-grouped-surface" />
+        <View className="h-5 w-55 rounded bg-secondary" />
+        <View className="mt-2 h-4 w-full rounded bg-secondary" />
       </View>
     );
   }

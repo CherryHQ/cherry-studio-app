@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { paintingViewer } from '@/frontend/utils/constants';
 
 import {
@@ -24,20 +25,23 @@ export function PaintingViewerScreen() {
   const painting = usePainting(paintingId);
   const files = useResolvedPaintingFiles(painting.data);
   const current = files.data?.outputs.find((output) => output.fileEntryId === fileEntryId);
+  const constantWhite = useThemeColor('constant-white');
 
   if (!painting.data || !current) {
     return (
-      <View className="flex-1 bg-black">
+      <View className="flex-1 bg-constant-black">
         <StatusBar style="light" />
         <View className="flex-1 items-center justify-center">
-          {painting.isLoading || files.isLoading ? <ActivityIndicator color="#ffffff" /> : null}
+          {painting.isLoading || files.isLoading ? (
+            <ActivityIndicator color={constantWhite} />
+          ) : null}
         </View>
       </View>
     );
   }
 
   return (
-    <View className="flex-1 bg-black">
+    <View className="flex-1 bg-constant-black">
       <StatusBar style="light" />
       <PaintingViewerContent current={current} painting={painting.data} />
     </View>

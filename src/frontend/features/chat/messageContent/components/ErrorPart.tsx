@@ -13,14 +13,14 @@ export function ErrorPart({ part }: ErrorPartProps) {
   const message = part.data.message ?? t('chat.errorPart.message');
 
   return (
-    <View className="gap-1.5 rounded-lg border border-danger bg-danger-soft p-3">
+    <View className="gap-1.5 rounded-lg border border-destructive bg-danger-soft p-3">
       <View className="flex-row items-center gap-2">
-        <CircleAlertIcon className="size-4 text-danger" strokeWidth={2} />
-        <Text className="flex-1 font-semibold text-danger text-sm" selectable>
+        <CircleAlertIcon className="size-4 text-destructive" strokeWidth={2} />
+        <Text className="flex-1 font-semibold text-destructive text-sm" selectable>
           {title}
         </Text>
       </View>
-      <Text className="text-danger text-sm" selectable>
+      <Text className="text-destructive text-sm" selectable>
         {message}
       </Text>
     </View>

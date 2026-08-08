@@ -15,7 +15,12 @@ config.watchFolders.push(workletsDir);
 
 // Apply Bundle Mode config
 config = getBundleModeMetroConfig(config);
-config = withStorybook(config);
+// Same flag `index.ts` branches on, so the bundle never carries Storybook when
+// the entry did not select it. Defaults to enabled, which would ship the addons
+// into the app bundle.
+config = withStorybook(config, {
+  enabled: process.env.EXPO_PUBLIC_STORYBOOK_ENABLED === 'true',
+});
 
 module.exports = withUniwindConfig(config, {
   cssEntryFile: './src/frontend/styles/global.css',

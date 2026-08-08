@@ -6,7 +6,8 @@ corners concentric with the display's own corners, a circular close button
 nested into the top-left corner, a centered title, and a liquid-glass (or solid)
 surface. Built on `@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`.
 Chrome constants live in `src/frontend/utils/constants.ts` (`bottomSheet`,
-`sheetScrimColor`, `isLiquidGlassAvailable`).
+`isLiquidGlassAvailable`); the scrim comes from the `--scrim` token, which also
+backs heroui's `--backdrop` so every modal layer dims by the same amount.
 
 ## Concentric bottom corners
 

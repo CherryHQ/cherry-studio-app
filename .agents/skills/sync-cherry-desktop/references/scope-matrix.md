@@ -1,6 +1,6 @@
 # Scope Matrix
 
-Use `desktop-sync-manifest.json` as the versioned domain inventory. Let the design manifest continue to own canonical token, CSS, contract, and SVG source hashes; do not duplicate those entries in the broad Manifest. Keep runtime catalogs, manually adapted icons, and cross-domain provider coverage in the broad Manifest.
+Use `desktop-sync-manifest.json` as the versioned domain inventory. Let the design manifest (`packages/design-tokens/src/sync-manifest.json`) own the SVG, icon-routing, and catalog-only-icon hashes; do not duplicate those entries in the broad Manifest. It no longer carries token, CSS, or contract hashes — those files are mobile-owned and unsynced, so there is no desktop baseline to record. Keep runtime catalogs, manually adapted icons, and cross-domain provider coverage in the broad Manifest.
 
 ## Domain Mapping
 

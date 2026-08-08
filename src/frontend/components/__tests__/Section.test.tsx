@@ -39,7 +39,7 @@ describe('Section', () => {
     await act(async () => item?.props.onPress());
     expect(mockPress).toHaveBeenCalledTimes(1);
     expect(renderer?.root.findByProps({ testID: 'section-content' }).props.className).toContain(
-      'bg-settings-grouped-surface',
+      'bg-grouped-surface',
     );
   });
 
@@ -85,7 +85,7 @@ describe('Section', () => {
     });
 
     expect(renderer?.root.findByProps({ children: 'stub' }).props.className).toBe(
-      'size-6 text-default-foreground',
+      'size-6 text-foreground',
     );
   });
 

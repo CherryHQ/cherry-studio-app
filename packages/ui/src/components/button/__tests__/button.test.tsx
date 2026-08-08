@@ -129,7 +129,7 @@ describe('Button', () => {
 
   test('renders an icon with the label using the variant color', () => {
     const tree = render('Add', {
-      icon: <View className="size-6 text-red-500" testID="icon" />,
+      icon: <View className="size-6 text-destructive" testID="icon" />,
       variant: 'outline',
     });
     const icon = tree.root.findByProps({ testID: 'icon' });
@@ -137,7 +137,7 @@ describe('Button', () => {
 
     expect(label.props.children).toBe('Add');
     expect(icon.props.className.split(' ')).toEqual(
-      expect.arrayContaining(['size-6', 'text-red-500']),
+      expect.arrayContaining(['size-6', 'text-destructive']),
     );
     expect(icon.props.className).not.toContain('size-5');
     expect(icon.props.className).not.toContain('text-foreground');
@@ -213,13 +213,13 @@ describe('Button', () => {
 
   test('lets consumer class names override root and label defaults', () => {
     const tree = render(<Button.Label className="text-black">Delete</Button.Label>, {
-      className: 'rounded-full bg-red-500 px-6 py-4',
+      className: 'rounded-full bg-destructive px-6 py-4',
     });
     const rootClassName = findPressable(tree).props.className as string;
     const labelClassName = tree.root.findByType(Text).props.className as string;
 
     expect(rootClassName.split(' ')).toEqual(
-      expect.arrayContaining(['rounded-full', 'bg-red-500', 'px-6', 'py-4']),
+      expect.arrayContaining(['rounded-full', 'bg-destructive', 'px-6', 'py-4']),
     );
     expect(rootClassName).not.toContain('px-4');
     expect(rootClassName).not.toContain('py-2.5');

@@ -1,54 +1,25 @@
 /**
  * Typography
- * 排版系统 - 字体、字号、行高、段落间距
+ * 排版系统 - 只剩一档字重
+ *
+ * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
+ * Guidelines（Geist）的排版刻度，token 名字也随之归移动端自有 ——
+ * `pnpm design:sync` 现在只同步图标。
+ *
+ * 这里曾经还有 31 个字号/行高/段落间距/字体族 token，全部零消费者，已删。
+ * 真正的来源分别是：
+ * - 字号 / 行高：`src/frontend/utils/typographyScale.ts` 的 sizeSequence
+ *   （运行时按无障碍档位平移，写进 `--ui-text-*`）；
+ * - 正文字体族：不设，各平台走系统字体；
+ * - 等宽字体族：`src/frontend/styles/global.css` 的 `--font-mono`（Geist Mono）。
+ *
+ * 三档字重里也只剩这一档。`--font-weight-regular`(400) 对应的 `font-regular`
+ * 全仓零使用；`--font-weight-medium`(500) 与 Tailwind 的默认值逐字相同，声明它
+ * 等于没声明。只有 bold 是真的在改写默认值 —— Tailwind 默认 700，而 VBG 最重的
+ * 一档就是 600 semibold。副作用是 `font-bold` 与 `font-semibold` 现在同重，这是
+ * VBG 刻度本身的结果，不是笔误。
  */
 
 :root {
-  /* Font Families */
-  --cs-font-family-heading: Inter;
-  --cs-font-family-body: Inter;
-
-  /* Font Weights (修正单位错误) */
-  --cs-font-weight-regular: 400;
-  --cs-font-weight-medium: 500;
-  --cs-font-weight-bold: 700;
-
-  /* Font Sizes - Body */
-  --cs-font-size-body-xs: 0.75rem; /* 12px */
-  --cs-font-size-body-sm: 0.875rem; /* 14px */
-  --cs-font-size-body-md: 1rem; /* 16px */
-  --cs-font-size-body-lg: 1.125rem; /* 18px */
-
-  /* Font Sizes - Heading */
-  --cs-font-size-heading-xs: 1.25rem; /* 20px */
-  --cs-font-size-heading-sm: 1.5rem; /* 24px */
-  --cs-font-size-heading-md: 2rem; /* 32px */
-  --cs-font-size-heading-lg: 2.5rem; /* 40px */
-  --cs-font-size-heading-xl: 3rem; /* 48px */
-  --cs-font-size-heading-2xl: 3.75rem; /* 60px */
-
-  /* Line Heights - Body */
-  --cs-line-height-body-xs: 1.25rem; /* 20px */
-  --cs-line-height-body-sm: 1.5rem; /* 24px */
-  --cs-line-height-body-md: 1.5rem; /* 24px */
-  --cs-line-height-body-lg: 1.75rem; /* 28px */
-
-  /* Line Heights - Heading */
-  --cs-line-height-heading-xs: 2rem; /* 32px */
-  --cs-line-height-heading-sm: 2.5rem; /* 40px */
-  --cs-line-height-heading-md: 3rem; /* 48px */
-  --cs-line-height-heading-lg: 3.75rem; /* 60px */
-  --cs-line-height-heading-xl: 5rem; /* 80px */
-
-  /* Paragraph Spacing */
-  --cs-paragraph-spacing-body-xs: 0.75rem; /* 12px */
-  --cs-paragraph-spacing-body-sm: 0.875rem; /* 14px */
-  --cs-paragraph-spacing-body-md: 1rem; /* 16px */
-  --cs-paragraph-spacing-body-lg: 1.125rem; /* 18px */
-  --cs-paragraph-spacing-heading-xs: 1.25rem; /* 20px */
-  --cs-paragraph-spacing-heading-sm: 1.5rem; /* 24px */
-  --cs-paragraph-spacing-heading-md: 2rem; /* 32px */
-  --cs-paragraph-spacing-heading-lg: 2.5rem; /* 40px */
-  --cs-paragraph-spacing-heading-xl: 3rem; /* 48px */
-  --cs-paragraph-spacing-heading-2xl: 3.75rem; /* 60px */
+  --font-weight-bold: 600;
 }

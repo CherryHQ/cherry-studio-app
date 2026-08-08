@@ -1,6 +1,6 @@
 {
   "name": "cherry-studio-app",
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "version": "1.0.0",
   "scripts": {
     "packages:build": "pnpm --filter @cherrystudio/ai-sdk-provider build && pnpm --filter @cherrystudio/ai-core build",
@@ -8,8 +8,8 @@
     "dev:clear": "pnpm packages:build && expo start --dev-client --clear",
     "start": "pnpm packages:build && expo start --dev-client",
     "start:clear": "pnpm packages:build && expo start --dev-client --clear",
-    "storybook": "STORYBOOK_ENABLED=true expo start --go",
-    "storybook:clear": "STORYBOOK_ENABLED=true expo start --go --clear",
+    "storybook": "pnpm packages:build && EXPO_PUBLIC_STORYBOOK_ENABLED=true expo start --dev-client",
+    "storybook:clear": "pnpm packages:build && EXPO_PUBLIC_STORYBOOK_ENABLED=true expo start --dev-client --clear",
     "android": "pnpm packages:build && expo run:android",
     "ios": "pnpm packages:build && expo run:ios",
     "ios:dev": "pnpm packages:build && expo run:ios",
@@ -22,6 +22,7 @@
     "ui:icons:generate:general": "tsx packages/ui/src/scripts/generate-icons.ts --type=general",
     "ui:icons:generate:models": "tsx packages/ui/src/scripts/generate-icons.ts --type=models",
     "ui:provider-icons:generate": "tsx packages/ui/src/scripts/generate-icons.ts --type=providers",
+    "design:build": "tsx packages/design-tokens/scripts/build-native-css.ts",
     "design:sync": "tsx packages/design-tokens/scripts/sync-desktop.ts",
     "design:check": "tsx packages/design-tokens/scripts/check.ts && tsx packages/design-tokens/scripts/check-app-theme.ts && tsx packages/ui/src/scripts/check-icons.ts",
     "desktop:sync:audit": "tsx scripts/desktopSyncAudit.ts",

@@ -1,5 +1,6 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import type { IconSource } from '@cherrystudio/ui/icons';
+import { cn } from '@cherrystudio/ui/utils';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
 import { Settings2Icon } from 'lucide-uniwind/png';
@@ -31,7 +32,6 @@ import {
   useChatInputMeta,
   useChatInputState,
 } from '../context/ChatInputProvider';
-import { thinkingAccentColor } from '../effortSlider';
 import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
 import { chatInputMotionConfig, chatInputSpringConfig } from '../utils/chatInputMotion';
 import {
@@ -300,11 +300,11 @@ function ChatInputSettingsButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-secondary active:bg-surface-tertiary active:opacity-70"
+      className="h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary active:bg-secondary-active active:opacity-70"
       onPress={onPress}
       testID="chat-input-model-settings-button"
     >
-      <Settings2Icon className="size-4 text-default-foreground" strokeWidth={2} />
+      <Settings2Icon className="size-4 text-foreground" strokeWidth={2} />
     </Pressable>
   );
 }
@@ -323,7 +323,7 @@ function ChatInputModelButton({
   effortLabel?: string;
   icon?: IconSource;
   initial: string;
-  /** The max stop stands out in the thinking accent color instead of muted. */
+  /** The max stop stands out in Cherry's brand green instead of muted. */
   isEffortMax?: boolean;
   label: string;
   onPress: () => void;
@@ -334,7 +334,7 @@ function ChatInputModelButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="h-8 min-w-0 shrink flex-row items-center gap-1.5 rounded-full bg-surface-secondary px-2.5 active:bg-surface-tertiary active:opacity-70"
+      className="h-8 min-w-0 shrink flex-row items-center gap-1.5 rounded-full bg-secondary px-2.5 active:bg-secondary-active active:opacity-70"
       onPress={onPress}
       testID="chat-input-model-button"
     >
@@ -353,13 +353,8 @@ function ChatInputModelButton({
       </Text>
       {effortLabel ? (
         <Text
-          className="shrink-0 text-default-foreground text-sm"
+          className={cn('shrink-0 text-sm', isEffortMax ? 'text-brand' : 'text-foreground')}
           numberOfLines={1}
-          style={
-            isEffortMax
-              ? { color: thinkingAccentColor[theme === 'dark' ? 'dark' : 'light'] }
-              : undefined
-          }
           testID="chat-input-model-effort-label"
         >
           {effortLabel}
@@ -384,7 +379,7 @@ function ChatInputPill({
     <Pressable
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityRole="button"
-      className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-lg bg-surface-secondary px-3 active:bg-surface-tertiary active:opacity-70 ${maxWidthClassName}`}
+      className={`h-8 min-w-0 flex-row items-center justify-center gap-1.5 rounded-lg bg-secondary px-3 active:bg-secondary-active active:opacity-70 ${maxWidthClassName}`}
       onPress={onPress}
     >
       <Text className="font-semibold text-foreground text-sm" numberOfLines={1}>

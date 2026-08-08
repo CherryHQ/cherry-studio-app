@@ -131,13 +131,10 @@ export default function ProviderModelCheckScreen() {
 function SelectionRowValue({ label }: { label: string }) {
   return (
     <View className="min-w-0 max-w-56 flex-row items-center justify-end gap-1">
-      <Text
-        className="min-w-0 shrink text-right text-base text-default-foreground"
-        numberOfLines={1}
-      >
+      <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
         {label}
       </Text>
-      <ChevronRightIcon className="size-5 shrink-0 text-default-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
     </View>
   );
 }
@@ -156,10 +153,10 @@ function ModelCheckResult({
       : undefined;
 
   return (
-    <View className="gap-1 rounded-xl bg-settings-grouped-surface px-4 py-3">
+    <View className="gap-1 rounded-xl bg-grouped-surface px-4 py-3">
       <Text className="text-base text-success">{title}</Text>
       {detail ? (
-        <Text selectable className="text-sm text-default-foreground">
+        <Text selectable className="text-sm text-foreground">
           {detail}
         </Text>
       ) : null}

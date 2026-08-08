@@ -4,7 +4,6 @@ import { type LayoutChangeEvent, Pressable, Text, useWindowDimensions } from 're
 import Animated, {
   Extrapolation,
   interpolate,
-  interpolateColor,
   type SharedValue,
   useAnimatedStyle,
   useSharedValue,
@@ -12,7 +11,6 @@ import Animated, {
 
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useAvatar } from '@/frontend/hooks/useAvatar';
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { profileHero } from '@/frontend/utils/constants';
 
 type ProfileHeroProps = {
@@ -31,15 +29,17 @@ type ProfileHeroProps = {
  *
  * Resting and expanded heights are decoupled: the container's own height
  * animates from `restingHeight` to ~half the screen, so expanding pushes the
- * settings list below it down (it never draws over the list). Everything —
- * container height, avatar geometry, name position/colour, the legibility scrim
- * — is driven off the single `lockProgress` clock. Separately, the resting hero
- * fades out on scroll-up so ProfileStickyBar can take over.
+ * settings list below it down (it never draws over the list). Container height,
+ * avatar geometry and name position are all driven off the single
+ * `lockProgress` clock. Separately, the resting hero fades out on scroll-up so
+ * ProfileStickyBar can take over.
+ *
+ * The photo carries no scrim and the name keeps the theme foreground the whole
+ * way, so legibility over the expanded photo depends on the photo itself.
  */
 export function ProfileHero({ lockProgress, onPress, scrollY, userName }: ProfileHeroProps) {
   const { t } = useTranslation();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const foregroundColor = useThemeColor('foreground');
   const avatarSource = useAvatar();
   const nameWidth = useSharedValue(0);
   const measuredNameRef = useRef<string | null>(null);
@@ -96,16 +96,11 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
     ),
   }));
 
-  // Dim over the photo, fading in only as it expands, so the white name reads.
-  const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(lockProgress.value, [0, 1], [0, profileHero.expandedScrimOpacity]),
-  }));
-
   // Name: centered under the resting avatar -> left-aligned at the photo's
-  // bottom-left, colour easing from the theme foreground to white on the photo.
+  // bottom-left. Colour is the theme foreground throughout, so it stays on the
+  // className rather than being animated here.
   // Vertical placement follows the bottom-pinned wrapper as the container grows.
   const nameStyle = useAnimatedStyle(() => ({
-    color: interpolateColor(lockProgress.value, [0, 1], [foregroundColor, '#ffffff']),
     transform: [
       {
         translateX: interpolate(
@@ -134,11 +129,6 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
             source={avatarSource}
           />
         </Pressable>
-        <Animated.View
-          className="absolute inset-0 bg-black"
-          pointerEvents="none"
-          style={scrimStyle}
-        />
       </Animated.View>
       <Animated.View
         className="absolute right-0 bottom-0 left-0 items-center"
@@ -147,7 +137,7 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
       >
         {hasUserName ? (
           <Animated.Text
-            className="font-semibold"
+            className="font-semibold text-foreground"
             numberOfLines={1}
             onLayout={handleNameLayout}
             style={[
@@ -171,10 +161,7 @@ export function ProfileHero({ lockProgress, onPress, scrollY, userName }: Profil
             onPress={onPress}
             style={{ maxWidth: screenWidth - 2 * profileHero.nameOverlayInsetX }}
           >
-            <Text
-              className="text-center font-medium text-base text-muted-foreground"
-              numberOfLines={1}
-            >
+            <Text className="text-center font-medium text-base text-foreground" numberOfLines={1}>
               {t('settings.profile.setPrompt')}
             </Text>
           </Pressable>

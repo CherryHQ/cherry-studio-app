@@ -133,13 +133,10 @@ function SelectionValue({
       {imageSource ? (
         <Image className="size-5 shrink-0" contentFit="contain" source={imageSource} />
       ) : null}
-      <Text
-        className="min-w-0 shrink text-right text-base text-default-foreground"
-        numberOfLines={1}
-      >
+      <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
         {label}
       </Text>
-      <ChevronRightIcon className="size-5 shrink-0 text-default-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
     </View>
   );
 }

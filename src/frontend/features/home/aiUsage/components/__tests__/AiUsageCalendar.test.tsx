@@ -29,7 +29,11 @@ jest.mock('react-native', () => {
   };
 });
 
-jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
+// Echoes each name back so the five levels stay distinct: the legend keys on the
+// colour value, and a mock returning one constant would collide five ways.
+jest.mock('uniwind', () => ({
+  useCSSVariable: (names: string[]) => names.map((name) => `resolved${name}`),
+}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

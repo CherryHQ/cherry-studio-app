@@ -144,7 +144,7 @@ function MediaTile({ accessibilityLabel, icon: Icon, label, onPress }: MediaTile
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="size-28 items-center justify-center gap-2 rounded-2xl bg-surface-secondary active:opacity-70"
+      className="size-28 items-center justify-center gap-2 rounded-2xl bg-secondary active:opacity-70"
       onPress={onPress}
     >
       <Icon className="size-7 text-foreground" strokeWidth={2} />
@@ -166,7 +166,7 @@ function PhotoPreviewTile({
     <ImageTile
       accessibilityLabel={accessibilityLabel}
       accessibilityState={isTileSelected === undefined ? undefined : { selected: isTileSelected }}
-      className={isTileSelected ? 'border-2 border-[#007AFF]' : undefined}
+      className={isTileSelected ? 'border-2 border-primary' : undefined}
       onPress={onPress}
       uri={uri}
     >
@@ -229,32 +229,32 @@ function XBadge({ onPress }: { onPress?: () => void }) {
         className="absolute top-0 right-0 z-[1] size-11 active:opacity-70"
         onPress={handlePress}
       >
-        <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-white">
-          <XIcon className="size-4.5 text-black" strokeWidth={2.5} />
+        <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-constant-white">
+          <XIcon className="size-4.5 text-constant-black" strokeWidth={2.5} />
         </View>
       </Pressable>
     );
   }
 
   return (
-    <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-white">
-      <XIcon className="size-4.5 text-black" strokeWidth={2.5} />
+    <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-constant-white">
+      <XIcon className="size-4.5 text-constant-black" strokeWidth={2.5} />
     </View>
   );
 }
 
 function EmptySelectionBadge() {
   return (
-    <View className="absolute top-2 right-2 size-5 rounded-full border-2 border-white bg-black/20" />
+    <View className="absolute top-2 right-2 size-5 rounded-full border-2 border-constant-white bg-constant-black/20" />
   );
 }
 
 function SelectionIndexBadge({ selectionIndex }: { selectionIndex: number }) {
   return (
-    <View className="absolute top-2 right-2 size-5 items-center justify-center rounded-full bg-white">
+    <View className="absolute top-2 right-2 size-5 items-center justify-center rounded-full bg-constant-white">
       <Text
         adjustsFontSizeToFit
-        className="font-semibold text-black text-xs"
+        className="font-semibold text-constant-black text-xs"
         minimumFontScale={0.7}
         numberOfLines={1}
       >

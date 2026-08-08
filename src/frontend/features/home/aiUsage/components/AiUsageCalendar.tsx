@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import { useMeasuredWidth } from '../hooks/useMeasuredWidth';
@@ -13,6 +13,21 @@ import {
   parseLocalDateKey,
 } from '../utils/aiUsageCalendar';
 import { AiUsageSquare } from './AiUsageSquare';
+
+/**
+ * Index 0 is the empty cell, 1..4 the heat scale. `--border` is the same
+ * overlay every other hairline uses, which is what an unworked day should look
+ * like; the four levels are one green stepped 25/50/75/100 in `product.css`.
+ * Resolved to values rather than used as `bg-*` classes because `AiUsageSquare`
+ * animates between two of them, so each has to reach a style object.
+ */
+const aiUsageLevelColors = [
+  'border',
+  'usage-level-1',
+  'usage-level-2',
+  'usage-level-3',
+  'usage-level-4',
+] as const;
 
 type AiUsageCalendarProps = {
   animationStartDateKey?: string;
@@ -30,8 +45,7 @@ export function AiUsageCalendar({
   const { i18n, t } = useTranslation();
   const squareRefs = useRef(new Map<string, AiUsageAnimationControls>());
   const scrollRef = useRef<ScrollView>(null);
-  const { theme } = useUniwind();
-  const levelColors = aiUsageCalendar.levelColors[theme === 'dark' ? 'dark' : 'light'];
+  const levelColors = useThemeColor(aiUsageLevelColors);
   const weeks = useMemo(() => buildAiUsageCalendarWeeks(data), [data]);
   const activeDayCount = Object.values(data).filter((level) => level > 0).length;
   const monthLabelKeys = useMemo(() => getAiUsageMonthLabelKeys(weeks), [weeks]);

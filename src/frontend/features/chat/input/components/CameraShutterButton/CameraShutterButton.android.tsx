@@ -13,12 +13,12 @@ export function CameraShutterButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="size-[72px] items-center justify-center rounded-full border-[3px] border-white p-1.5 active:opacity-70"
+      className="size-[72px] items-center justify-center rounded-full border-[3px] border-constant-white p-1.5 active:opacity-70"
       disabled={disabled}
       onPress={onPress}
       style={disabled ? styles.disabled : undefined}
     >
-      <View className="flex-1 self-stretch rounded-full bg-white" />
+      <View className="flex-1 self-stretch rounded-full bg-constant-white" />
     </Pressable>
   );
 }

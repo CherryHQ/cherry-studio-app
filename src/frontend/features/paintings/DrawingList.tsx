@@ -223,7 +223,7 @@ export function DrawingList() {
             ) : (
               <Pressable
                 accessibilityRole="button"
-                className="mx-4 h-20 items-center justify-center rounded-md bg-surface-secondary active:opacity-70"
+                className="mx-4 h-20 items-center justify-center rounded-md bg-secondary active:opacity-70"
                 onPress={() => void handleViewAllPress()}
               >
                 <ImageIcon className="size-6 text-foreground-tertiary" strokeWidth={1.5} />
@@ -251,7 +251,7 @@ export function DrawingList() {
             onPress={handleCreatePainting}
             testID="painting-history-create"
           >
-            <Text className="font-medium text-sm text-white" numberOfLines={1}>
+            <Text className="font-medium text-primary-foreground text-sm" numberOfLines={1}>
               {t('painting.history.create')}
             </Text>
           </Pressable>
@@ -319,7 +319,7 @@ function DrawingGridItem({
         accessibilityLabel={label}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isSelected }}
-        className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+        className="overflow-hidden rounded-md bg-secondary active:opacity-75"
         onPress={() => onToggle(item.painting.id)}
         style={{ height }}
         testID={`painting-history-${item.key}`}
@@ -332,10 +332,10 @@ function DrawingGridItem({
         >
           {isSelected ? (
             <View className="size-6 items-center justify-center rounded-full bg-primary">
-              <CheckIcon className="size-4 text-white" strokeWidth={3} />
+              <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
             </View>
           ) : (
-            <View className="size-6 rounded-full border-2 border-border-strong bg-black/30" />
+            <View className="size-6 rounded-full border-2 border-border-strong bg-constant-black/30" />
           )}
         </Animated.View>
       </Pressable>
@@ -347,7 +347,7 @@ function DrawingGridItem({
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
-        className="overflow-hidden rounded-md bg-surface-secondary active:opacity-75"
+        className="overflow-hidden rounded-md bg-secondary active:opacity-75"
         style={{ height }}
         testID={`painting-history-${item.key}`}
       >

@@ -205,7 +205,7 @@ describe('ChatMessageList anchored tail following', () => {
 
     mockFontSizeStep = 2;
     act(() => renderer?.update(<ChatMessageList {...listProps(textMessages, 0)} />));
-    expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(88);
+    expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(84);
 
     const fileMessages = [
       createMessage('user-1', 'user', [filePart()]),

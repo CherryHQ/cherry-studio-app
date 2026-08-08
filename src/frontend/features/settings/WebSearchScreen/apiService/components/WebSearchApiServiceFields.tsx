@@ -25,7 +25,7 @@ function ZhipuApiKeyShortcutSection() {
     <Pressable
       accessibilityLabel={t('settings.websearch.provider.configureZhipuApiKey')}
       accessibilityRole="button"
-      className="h-12 items-center justify-center rounded-xl bg-settings-grouped-surface active:opacity-60"
+      className="h-12 items-center justify-center rounded-xl bg-secondary active:opacity-60"
       hitSlop={6}
       onPress={openZhipuApiKeySettings}
     >
@@ -48,8 +48,8 @@ function DescriptionSection() {
   }
 
   return (
-    <View className="rounded-2xl bg-settings-grouped-surface p-4">
-      <Text className="text-base text-default-foreground">{t(descriptionKey)}</Text>
+    <View className="rounded-2xl bg-grouped-surface p-4">
+      <Text className="text-base text-foreground">{t(descriptionKey)}</Text>
     </View>
   );
 }
@@ -155,7 +155,7 @@ function BasicAuthSection() {
 
   return (
     <View className="gap-4">
-      <Text className="font-medium text-default-foreground text-sm">
+      <Text className="font-medium text-foreground text-sm">
         {t('settings.websearch.provider.basicAuth')}
       </Text>
       <ConfigField label={t('settings.websearch.provider.basicAuthUsername')}>

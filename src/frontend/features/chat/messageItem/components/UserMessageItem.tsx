@@ -29,7 +29,7 @@ export function UserMessageItem({ message }: UserMessageItemProps) {
     <Animated.View className="w-full items-end px-4 py-2" style={slideInStyle}>
       <View className="max-w-[86%]">
         <MenuView actions={menuActions} shouldOpenOnLongPress>
-          <View className="gap-2 rounded-xl bg-settings-grouped-surface p-2">
+          <View className="gap-2 rounded-xl bg-chat-user p-2">
             <MessageParts message={message} renderMode="plainText" />
           </View>
         </MenuView>

@@ -56,10 +56,10 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
         onPress={() => setIsSheetOpen(true)}
       >
         {isThinking ? <PrismSweep active size={16} /> : null}
-        <Text className="flex-1 text-default-foreground text-sm" numberOfLines={1}>
+        <Text className="flex-1 text-foreground text-sm" numberOfLines={1}>
           {statusText}
         </Text>
-        <ChevronRightIcon className="size-4 text-default-foreground" strokeWidth={2} />
+        <ChevronRightIcon className="size-4 text-foreground" strokeWidth={2} />
       </Pressable>
       {isSheetOpen ? (
         <ReasoningDetailSheet

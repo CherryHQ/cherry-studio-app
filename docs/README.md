@@ -26,6 +26,7 @@ They are the source of truth for how the repository works today.
 | [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
 | [UI Components](./references/ui-components.md) | Interaction component ownership and platform enhancement rules |
+| [Design Spec](../DESIGN.md) | Visual decisions: token sourcing, contrast, type scale, hierarchy, and the literal-colour exemptions |
 
 ### Product Systems
 

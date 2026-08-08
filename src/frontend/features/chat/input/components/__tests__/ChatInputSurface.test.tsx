@@ -4,7 +4,6 @@ import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
-import { thinkingAccentColor } from '../../effortSlider';
 import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
 import { ChatInputSurface } from '../ChatInputSurface';
 
@@ -508,11 +507,11 @@ describe('ChatInputSurface', () => {
     });
     expect(effortLabels.length).toBeGreaterThan(0);
     expect(effortLabels[0].props.children).toBe('chat.reasoning.default');
-    expect(effortLabels[0].props.className).toContain('text-default-foreground');
+    expect(effortLabels[0].props.className).toContain('text-foreground');
     expect(effortLabels[0].props.style).toBeUndefined();
   });
 
-  test('shows the max effort label in the thinking accent color', async () => {
+  test('shows the max effort label in the brand color', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
@@ -541,7 +540,10 @@ describe('ChatInputSurface', () => {
     });
     expect(effortLabels.length).toBeGreaterThan(0);
     expect(effortLabels[0].props.children).toBe('chat.reasoning.max');
-    expect(effortLabels[0].props.style).toEqual({ color: thinkingAccentColor.light });
+    // `text-brand`, not a literal: pinning a hex would pin a value that belongs
+    // in the token layer. Deliberately not `text-primary` — that is the user's
+    // colour, and this mark has to stay Cherry green whatever they pick.
+    expect(effortLabels[0].props.className).toContain('text-brand');
   });
 
   test('hides the effort label when the model has no reasoning stops', async () => {

@@ -22,6 +22,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Image } from '@/frontend/components/nativePrimitives';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import {
   CHAT_INPUT_PHOTO_SELECTION_LIMIT,
@@ -76,6 +77,7 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
   onToggle,
   selectionIndex,
 }: ChatInputPhotoCellProps) {
+  const [accentColor, ringColor] = useThemeColor(['primary', 'constant-white']);
   const pressProgress = useSharedValue(1);
   const selectionProgress = useSharedValue(isSelected ? 1 : 0);
   const appliedSelectionRef = useRef(isSelected);
@@ -165,10 +167,19 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
             transition={100}
           />
         </Animated.View>
-        <Animated.View pointerEvents="none" style={[styles.selectionBadge, badgeStyle]}>
+        <Animated.View
+          pointerEvents="none"
+          // The ring is `constant-white`, not a themed border: it separates the
+          // badge from whatever photo is underneath, which is neither surface.
+          style={[
+            styles.selectionBadge,
+            { backgroundColor: accentColor, borderColor: ringColor },
+            badgeStyle,
+          ]}
+        >
           <Text
             adjustsFontSizeToFit
-            className="font-bold text-white text-xs"
+            className="font-bold text-primary-foreground text-xs"
             minimumFontScale={0.7}
             numberOfLines={1}
             style={styles.selectionBadgeText}
@@ -445,8 +456,6 @@ const styles = StyleSheet.create({
   },
   selectionBadge: {
     alignItems: 'center',
-    backgroundColor: '#0A84FF',
-    borderColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 2,
     height: 24,

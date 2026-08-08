@@ -15,7 +15,6 @@ export type SettingsServiceRowProps = {
   id: string;
   hideSeparator?: boolean;
   imageSource?: ImageSource | number;
-  isEnabled: boolean;
   name: string;
   onPress: () => void;
   onPressedChange?: (id: string, isPressed: boolean) => void;
@@ -31,7 +30,6 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   hideSeparator = false,
   id,
   imageSource,
-  isEnabled,
   name,
   onPress,
   onPressedChange,
@@ -56,13 +54,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
           ) : undefined
         }
         label={
-          <Text
-            className={cn(
-              'min-w-0 text-base',
-              isEnabled ? 'text-foreground' : 'text-default-foreground',
-            )}
-            numberOfLines={1}
-          >
+          <Text className="min-w-0 text-base text-foreground" numberOfLines={1}>
             {name}
           </Text>
         }
@@ -91,17 +83,10 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
         trailing={
           <View className="flex-row items-center gap-2">
             {statusLabel && statusTone === 'success' ? (
-              <View
-                className="h-5 shrink-0 items-center justify-center rounded-lg border px-1.5"
-                style={{
-                  backgroundColor: '#00b96b20',
-                  borderColor: '#00b96b66',
-                }}
-              >
+              <View className="h-5 shrink-0 items-center justify-center rounded-lg border border-success-border bg-success-subtle px-1.5">
                 <Text
-                  className="font-medium text-xs"
+                  className="font-medium text-success-subtle-foreground text-xs"
                   numberOfLines={1}
-                  style={{ color: '#00b96b' }}
                 >
                   {statusLabel}
                 </Text>
@@ -110,7 +95,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
               <Text
                 className={cn(
                   'shrink-0 text-xs',
-                  statusTone === 'danger' ? 'text-danger' : 'text-default-foreground',
+                  statusTone === 'danger' ? 'text-destructive' : 'text-foreground',
                 )}
                 numberOfLines={1}
               >

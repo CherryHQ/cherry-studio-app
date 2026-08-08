@@ -18,7 +18,7 @@ export type SectionItemProps = {
 
 /** Lucide icon at the row's leading size and color. */
 export function SectionIcon({ icon: Icon }: { icon?: ComponentType<PngIconProps> }) {
-  return Icon ? <Icon className="size-6 text-default-foreground" strokeWidth={2} /> : null;
+  return Icon ? <Icon className="size-6 text-foreground" strokeWidth={2} /> : null;
 }
 
 /** Bitmap logo at the row's leading size. Renders nothing when the source is missing. */
@@ -63,7 +63,7 @@ export function Section({
                 {title ? (
                   <Text
                     selectable
-                    className="shrink font-medium text-default-foreground text-sm"
+                    className="shrink font-medium text-foreground text-sm"
                     numberOfLines={1}
                   >
                     {title}
@@ -88,7 +88,7 @@ export function Section({
       ) : null}
 
       <View
-        className={`overflow-hidden rounded-xl bg-settings-grouped-surface${contentClassName ? ` ${contentClassName}` : ''}`}
+        className={`overflow-hidden rounded-xl bg-grouped-surface${contentClassName ? ` ${contentClassName}` : ''}`}
         testID={testID ? `${testID}-content` : undefined}
       >
         {items?.map((item) => (
@@ -127,9 +127,7 @@ function SectionItem({
       </View>
       {hideAccessory
         ? null
-        : (accessory ?? (
-            <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
-          ))}
+        : (accessory ?? <ChevronRightIcon className="size-6 text-foreground" strokeWidth={2} />)}
     </Pressable>
   );
 }

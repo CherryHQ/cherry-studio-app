@@ -7,6 +7,8 @@ import {
   frame,
 } from '@expo/ui/swift-ui/modifiers';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
 import type { CameraShutterButtonProps } from './CameraShutterButton.types';
 
 // Outer glass ring diameter; `frame` pins it instead of `controlSize` so the
@@ -25,6 +27,8 @@ export function CameraShutterButton({
   disabled = false,
   onPress,
 }: CameraShutterButtonProps) {
+  const constantWhite = useThemeColor('constant-white');
+
   return (
     <Host matchContents>
       <Button
@@ -37,7 +41,7 @@ export function CameraShutterButton({
         ]}
         onPress={onPress}
       >
-        <Image color="#FFFFFF" size={SHUTTER_DISC_SIZE} systemName="circle.fill" />
+        <Image color={constantWhite} size={SHUTTER_DISC_SIZE} systemName="circle.fill" />
       </Button>
     </Host>
   );

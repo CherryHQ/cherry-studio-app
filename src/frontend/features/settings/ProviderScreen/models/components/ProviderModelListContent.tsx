@@ -158,7 +158,7 @@ const ModelRow = memo(function ModelRow({
         accessibilityState={{ busy: isRemoving }}
         disabled={!canRemove || isRemoving}
         hitSlop={6}
-        icon={<MinusIcon className="text-danger" strokeWidth={2} />}
+        icon={<MinusIcon className="text-destructive" strokeWidth={2} />}
         onPress={handleRemove}
         onPressIn={() => onPressedChange(itemKey, true)}
         onPressOut={() => onPressedChange(itemKey, false)}

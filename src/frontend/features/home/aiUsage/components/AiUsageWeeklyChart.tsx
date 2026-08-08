@@ -60,9 +60,9 @@ export function AiUsageWeeklyChart({
     'info',
     'warning',
     'muted-foreground',
-    'separator',
+    'border-strong',
     'success',
-    'default-foreground',
+    'foreground',
   ]);
   const formatTokens = useMemo(() => createAiUsageTokenFormatter(locale), [locale]);
   const weekdayFormatter = useMemo(
@@ -209,7 +209,7 @@ export function AiUsageWeeklyChart({
               <Text
                 selectable
                 adjustsFontSizeToFit
-                className="font-semibold text-default-foreground text-3xl"
+                className="font-semibold text-foreground text-3xl"
                 maxFontSizeMultiplier={1.1}
                 minimumFontScale={0.75}
                 numberOfLines={1}
@@ -360,7 +360,7 @@ export function AiUsageWeeklyChart({
 
           <View className="flex-row items-center justify-between gap-3">
             <View className="flex-row items-center gap-2">
-              <Text className="text-default-foreground text-sm">{t('aiUsage.weekTotal')}</Text>
+              <Text className="text-foreground text-sm">{t('aiUsage.weekTotal')}</Text>
               {statusAccessory}
             </View>
             <Text
@@ -413,22 +413,22 @@ function WeeklyChartSkeleton() {
   return (
     <View className="gap-4" testID="ai-usage-weekly-chart-loading">
       <View className="h-16 justify-between">
-        <View className="h-4 w-28 rounded-sm bg-surface-secondary" />
-        <View className="h-8 w-36 rounded-sm bg-surface-secondary" />
+        <View className="h-4 w-28 rounded-sm bg-secondary" />
+        <View className="h-8 w-36 rounded-sm bg-secondary" />
       </View>
       <View className="flex-row items-end gap-3" style={styles.chartFrame}>
         {WEEKLY_CHART_SKELETON_HEIGHTS.map((height) => (
           <View key={height} className="flex-1 items-center justify-end gap-3">
-            <View className="w-5 rounded-sm bg-surface-secondary" style={{ height }} />
-            <View className="h-3 w-5 rounded-sm bg-surface-secondary" />
+            <View className="w-5 rounded-sm bg-secondary" style={{ height }} />
+            <View className="h-3 w-5 rounded-sm bg-secondary" />
           </View>
         ))}
       </View>
       <View className="border-border border-t" />
       {/* h-5 matches the loaded row's text-sm line height, keeping both boxes the same. */}
       <View className="flex-row items-center justify-between gap-3">
-        <View className="h-5 w-20 rounded-sm bg-surface-secondary" />
-        <View className="h-5 w-24 rounded-sm bg-surface-secondary" />
+        <View className="h-5 w-20 rounded-sm bg-secondary" />
+        <View className="h-5 w-24 rounded-sm bg-secondary" />
       </View>
     </View>
   );

@@ -69,7 +69,7 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
           <Section.Item
             destructive
             label="Delete account"
-            leading={<Trash2Icon className="size-5 text-danger" strokeWidth={2} />}
+            leading={<Trash2Icon className="size-5 text-destructive" strokeWidth={2} />}
             onPress={fn()}
             showChevron={false}
           />

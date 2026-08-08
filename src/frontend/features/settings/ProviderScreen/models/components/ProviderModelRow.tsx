@@ -77,7 +77,7 @@ export function ProviderModelRow({
         disabled={isDisabled}
         label={
           tone === 'struck' ? (
-            <Text className="text-default-foreground text-base line-through" numberOfLines={1}>
+            <Text className="text-foreground text-base line-through" numberOfLines={1}>
               {model.name}
             </Text>
           ) : (

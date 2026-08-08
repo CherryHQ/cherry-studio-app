@@ -70,7 +70,7 @@ export function PaintingViewerChrome({
         options={{
           headerLeft: () => (
             <HeaderIconButton accessibilityLabel={t('painting.viewer.close')} onPress={onClose}>
-              <XIcon className="size-6 text-white" strokeWidth={2} />
+              <XIcon className="size-6 text-constant-white" strokeWidth={2} />
             </HeaderIconButton>
           ),
           headerRight: () => (
@@ -79,7 +79,7 @@ export function PaintingViewerChrome({
                 accessibilityLabel={t('painting.viewer.download')}
                 onPress={onDownload}
               >
-                <DownloadIcon className="size-6 text-white" strokeWidth={2} />
+                <DownloadIcon className="size-6 text-constant-white" strokeWidth={2} />
               </HeaderIconButton>
               <MenuView actions={moreActions} onPressAction={handleMoreAction}>
                 <View
@@ -87,7 +87,7 @@ export function PaintingViewerChrome({
                   accessibilityRole="button"
                   className="size-9 items-center justify-center"
                 >
-                  <EllipsisIcon className="size-6 text-white" strokeWidth={2} />
+                  <EllipsisIcon className="size-6 text-constant-white" strokeWidth={2} />
                 </View>
               </MenuView>
             </View>
@@ -100,7 +100,7 @@ export function PaintingViewerChrome({
         style={[styles.bottomBar, { bottom: Math.max(insets.bottom, 12) + 12 }]}
       >
         <HeaderIconButton accessibilityLabel={t('painting.viewer.edit')} onPress={onEdit}>
-          <PencilIcon className="size-6 text-white" strokeWidth={2} />
+          <PencilIcon className="size-6 text-constant-white" strokeWidth={2} />
         </HeaderIconButton>
         <MenuView actions={resizeActions} onPressAction={handleResizeAction}>
           <View
@@ -108,7 +108,7 @@ export function PaintingViewerChrome({
             accessibilityRole="button"
             className="size-9 items-center justify-center"
           >
-            <ProportionsIcon className="size-6 text-white" strokeWidth={2} />
+            <ProportionsIcon className="size-6 text-constant-white" strokeWidth={2} />
           </View>
         </MenuView>
       </View>

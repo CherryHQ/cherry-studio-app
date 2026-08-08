@@ -41,10 +41,13 @@ The cross-platform subset of desktop `src/shared` lives in `packages/universal/s
 5. For design work, run the existing pipeline after the broad audit:
 
    ```bash
-   pnpm design:sync --desktop-root <path>
+   pnpm design:sync --desktop-root <path>   # icons only
    pnpm design:sync --desktop-root <path> --check
+   pnpm design:build                        # regenerate native.css from local token sources
    pnpm design:check
    ```
+
+   The design tokens are mobile-owned (Vercel Brand Guidelines) — values and names both — and nothing under `packages/design-tokens/src/styles` or `scripts/theme-contract.ts` is mirrored from desktop; see `references/design-and-icons.md`.
 
 6. Run focused and repository gates, then re-run the broad audit with `--check`. Advance a domain baseline manually only after all changes are classified, no blocker remains, and its required checks pass.
 

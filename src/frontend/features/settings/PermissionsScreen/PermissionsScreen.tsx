@@ -76,10 +76,10 @@ export default function PermissionsSettingsScreen() {
       onPress: () => router.push(`/settings/permissions/${kind}`),
       trailing: (
         <View className="flex-row items-center gap-2">
-          <Text className="text-base text-default-foreground" numberOfLines={1}>
+          <Text className="text-base text-foreground" numberOfLines={1}>
             {t(summaryKey)}
           </Text>
-          <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2} />
+          <ChevronRightIcon className="size-5 text-foreground" strokeWidth={2} />
         </View>
       ),
     };

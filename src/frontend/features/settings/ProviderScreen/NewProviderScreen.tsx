@@ -251,7 +251,7 @@ export default function NewProviderScreen() {
           </FormField>
 
           <View className="gap-4">
-            <Text className="font-medium text-default-foreground text-sm">
+            <Text className="font-medium text-foreground text-sm">
               {t('settings.provider.apiService.moreEndpoints')}
             </Text>
             <EndpointField
@@ -385,11 +385,8 @@ function AvatarPreview({ name, size, uri }: { name: string; size: number; uri: s
   const initial = name.trim().charAt(0).toUpperCase() || 'P';
 
   return (
-    <View className="items-center justify-center bg-surface-secondary" style={frameStyle}>
-      <Text
-        className="font-medium text-default-foreground"
-        style={{ fontSize: Math.round(size * 0.42) }}
-      >
+    <View className="items-center justify-center bg-secondary" style={frameStyle}>
+      <Text className="font-medium text-foreground" style={{ fontSize: Math.round(size * 0.42) }}>
         {initial}
       </Text>
     </View>

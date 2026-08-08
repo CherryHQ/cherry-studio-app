@@ -13,10 +13,19 @@
 @source "../../../node_modules/heroui-native/lib";
 
 @theme static {
-  --color-settings-grouped-surface: var(--settings-grouped-surface);
+  /* Tailwind 默认的 --font-mono 是一整条 CSS 字体栈，而 RN 的 fontFamily 只接受
+   * 单个已注册的字体名，所以必须覆盖。字体本体由 app.json 的 expo-font 插件在
+   * 构建期嵌入原生工程（改完要 prebuild + 重新编译，Metro reload 不生效）。
+   * 这个字面量与 src/frontend/utils/constants.ts 的 monoFontFamily 必须同名。 */
+  --font-mono: GeistMono-Regular;
 
-  --ui-text-xs: 12px;
-  --ui-text-xs--line-height: 16px;
+  /* 这一段是字号阶梯的「无障碍档位 0」快照。运行时由 applyFontSizeStep 用
+   * createTypographyCSSVariables(step) 覆盖，但覆盖发生在 app bootstrap 里——
+   * 首帧、以及不跑 bootstrap 的宿主（Storybook）看到的就是这里的值。所以它必须
+   * 与 typographyScale.ts 的 sizeSequence 起始档逐项相等，
+   * typographyScale.test.ts 会断言这一点。 */
+  --ui-text-xs: 13px;
+  --ui-text-xs--line-height: 18px;
   --ui-text-sm: 14px;
   --ui-text-sm--line-height: 20px;
   --ui-text-base: 16px;
@@ -24,18 +33,18 @@
   --ui-text-lg: 18px;
   --ui-text-lg--line-height: 28px;
   --ui-text-xl: 20px;
-  --ui-text-xl--line-height: 28px;
+  --ui-text-xl--line-height: 26px;
   --ui-emoji-xl--line-height: 28px;
   --ui-text-2xl: 24px;
   --ui-text-2xl--line-height: 32px;
   --ui-emoji-2xl--line-height: 32px;
-  --ui-text-3xl: 30px;
-  --ui-text-3xl--line-height: 36px;
-  --ui-emoji-3xl--line-height: 40px;
-  --ui-text-4xl: 36px;
-  --ui-text-4xl--line-height: 40px;
+  --ui-text-3xl: 32px;
+  --ui-text-3xl--line-height: 40px;
+  --ui-emoji-3xl--line-height: 44px;
+  --ui-text-4xl: 40px;
+  --ui-text-4xl--line-height: 48px;
   --ui-text-5xl: 48px;
-  --ui-text-5xl--line-height: 48px;
+  --ui-text-5xl--line-height: 56px;
   --ui-text-6xl: 60px;
   --ui-text-6xl--line-height: 60px;
   --ui-emoji-6xl--line-height: 80px;
@@ -117,7 +126,7 @@
       --surface-tertiary-foreground: var(--accent-foreground);
       --overlay: var(--popover);
       --overlay-foreground: var(--popover-foreground);
-      --backdrop: oklch(0 0 0 / 20%);
+      --backdrop: var(--scrim);
       --default: var(--secondary);
       --default-foreground: var(--secondary-foreground);
       --field-background: var(--card);
@@ -128,16 +137,14 @@
       --segment-foreground: var(--card-foreground);
       --danger: var(--destructive);
       --danger-foreground: var(--destructive-foreground);
-      --success-foreground: var(--cs-black);
-      --warning-foreground: var(--cs-black);
+      /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
+      --success-foreground: oklch(0 0 0);
+      --warning-foreground: oklch(0 0 0);
       --separator: var(--border-strong);
       --focus: var(--ring);
-      --settings-grouped-surface: oklch(0 0 0 / 0.05);
     }
 
     @variant dark {
-      /* Electron uses translucency here; native screens require an opaque base. */
-      --cs-background: oklch(0.187 0 0);
       --surface: var(--card);
       --surface-foreground: var(--card-foreground);
       --surface-secondary: var(--muted);
@@ -146,7 +153,7 @@
       --surface-tertiary-foreground: var(--accent-foreground);
       --overlay: var(--popover);
       --overlay-foreground: var(--popover-foreground);
-      --backdrop: oklch(0 0 0 / 20%);
+      --backdrop: var(--scrim);
       --default: var(--secondary);
       --default-foreground: var(--secondary-foreground);
       --field-background: var(--card);
@@ -157,11 +164,11 @@
       --segment-foreground: var(--secondary-foreground);
       --danger: var(--destructive);
       --danger-foreground: var(--destructive-foreground);
-      --success-foreground: var(--cs-black);
-      --warning-foreground: var(--cs-black);
+      /* 黑色：success/warning 的实色底在两个主题里都够亮，压黑字。 */
+      --success-foreground: oklch(0 0 0);
+      --warning-foreground: oklch(0 0 0);
       --separator: var(--border-strong);
       --focus: var(--ring);
-      --settings-grouped-surface: oklch(1 0 0 / 0.05);
     }
   }
 }

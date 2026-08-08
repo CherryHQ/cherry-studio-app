@@ -25,7 +25,6 @@ describe('SettingsServiceRow', () => {
       renderer = create(
         <SettingsServiceRow
           id="server-1"
-          isEnabled
           name="Docs server"
           onPress={jest.fn()}
           statusLabel="Connected"
@@ -47,7 +46,6 @@ describe('SettingsServiceRow', () => {
       renderer = create(
         <SettingsServiceRow
           id="server-1"
-          isEnabled
           name="Docs server"
           onPress={jest.fn()}
           showSeparator={showSeparator}
@@ -66,13 +64,7 @@ describe('SettingsServiceRow', () => {
   it('keeps the separator in layout and makes it transparent while pressed', async () => {
     await act(async () => {
       renderer = create(
-        <SettingsServiceRow
-          id="server-1"
-          isEnabled
-          name="Docs server"
-          onPress={jest.fn()}
-          showSeparator
-        />,
+        <SettingsServiceRow id="server-1" name="Docs server" onPress={jest.fn()} showSeparator />,
       );
     });
 
@@ -103,7 +95,6 @@ describe('SettingsServiceRow', () => {
           <SettingsServiceRow
             hideSeparator={pressedId === id || pressedId === previousId}
             id={id}
-            isEnabled
             key={id}
             name={id}
             onPress={jest.fn()}

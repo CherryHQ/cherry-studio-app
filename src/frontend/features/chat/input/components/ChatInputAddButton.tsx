@@ -12,7 +12,7 @@ export function ChatInputAddButton() {
     <Pressable
       accessibilityLabel="Add"
       accessibilityRole="button"
-      className="items-center justify-center rounded-full bg-surface-secondary active:bg-surface-tertiary active:opacity-70"
+      className="items-center justify-center rounded-full bg-secondary active:bg-secondary-active active:opacity-70"
       hitSlop={6}
       onPress={openActionSheet}
       style={{

@@ -46,11 +46,7 @@ export function AiUsageRankingSection({
         testID="ai-usage-ranking-section"
       >
         <View className="min-w-0 flex-1 flex-row items-center gap-2">
-          <Text
-            selectable
-            className="shrink font-medium text-default-foreground text-sm"
-            numberOfLines={1}
-          >
+          <Text selectable className="shrink font-medium text-foreground text-sm" numberOfLines={1}>
             {t('aiUsage.mostUsed')}
           </Text>
           <AiUsageSectionStatus

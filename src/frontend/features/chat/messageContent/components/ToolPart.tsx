@@ -38,7 +38,7 @@ export function ToolPart({ part }: ToolPartProps) {
         <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
       ) : null}
       {shouldShowNoDetails(part) ? (
-        <Text className="text-default-foreground text-base italic" selectable>
+        <Text className="text-foreground text-base italic" selectable>
           {t('chat.tool.noOutput')}
         </Text>
       ) : null}
@@ -51,7 +51,7 @@ function ToolOutputSection({ output }: { output: unknown }) {
 
   if (!hasToolPartValue(output)) {
     return (
-      <Text className="text-default-foreground text-base italic" selectable>
+      <Text className="text-foreground text-base italic" selectable>
         {t('chat.tool.noOutput')}
       </Text>
     );

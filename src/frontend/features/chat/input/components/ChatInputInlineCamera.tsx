@@ -113,7 +113,7 @@ export function ChatInputInlineCamera({
   const canCapture = shouldRenderCamera && isCameraReady;
 
   return (
-    <View className="flex-1 bg-black" style={style}>
+    <View className="flex-1 bg-constant-black" style={style}>
       {shouldRenderCamera ? (
         // Full-bleed preview: fills the whole sheet, controls float over it.
         <CameraView
@@ -134,23 +134,23 @@ export function ChatInputInlineCamera({
         />
       ) : (
         <View className="absolute inset-0 items-center justify-center gap-3 px-8">
-          <CameraIcon className="size-10 text-white/70" strokeWidth={1.5} />
-          <Text className="text-center font-semibold text-lg text-white">
+          <CameraIcon className="size-10 text-constant-white/70" strokeWidth={1.5} />
+          <Text className="text-center font-semibold text-lg text-constant-white">
             {hasPermission
               ? t('chat.media.cameraUnavailable')
               : t('chat.media.cameraPermissionTitle')}
           </Text>
           {hasPermission ? null : (
             <>
-              <Text className="text-center text-sm text-white/70">
+              <Text className="text-center text-sm text-constant-white/70">
                 {t('chat.media.cameraPermissionDescription')}
               </Text>
               <Pressable
                 accessibilityRole="button"
-                className="mt-1 rounded-full bg-white/15 px-5 py-2.5 active:opacity-70"
+                className="mt-1 rounded-full bg-constant-white/15 px-5 py-2.5 active:opacity-70"
                 onPress={handleOpenSettings}
               >
-                <Text className="font-semibold text-base text-white">
+                <Text className="font-semibold text-base text-constant-white">
                   {t('chat.media.openSettings')}
                 </Text>
               </Pressable>
