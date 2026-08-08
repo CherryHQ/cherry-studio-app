@@ -16,19 +16,6 @@ export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassE
 // Must stay in sync with `--font-mono` in src/frontend/styles/global.css.
 export const monoFontFamily = 'GeistMono-Regular';
 
-// Shared chrome for the floating BottomSheet frame (src/frontend/components/bottomSheet).
-// Every sheet derives its inset width, bottom gap, concentric corner radius, and
-// header placement from these values — single source of truth, tune here.
-export const bottomSheet = {
-  // Gap between the floating card and the screen edges, uniform on the left,
-  // right and bottom — that uniformity is what lets the bottom corners be
-  // concentric with the display's own corners.
-  outerInset: 4,
-  cornerRadius: 28, // the top corners exactly; a floor for the concentric bottom ones
-  headerHeight: 60, // minimum header row height
-  headerSideWidth: 44, // close button + right-slot square size
-} as const;
-
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 

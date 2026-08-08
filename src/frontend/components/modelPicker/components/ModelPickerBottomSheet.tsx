@@ -1,9 +1,9 @@
+import { BottomSheet } from '@cherrystudio/ui/components';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BottomSheet } from '@/frontend/components/bottomSheet';
 import { SelectionSheetSearchField } from '@/frontend/components/selectionSheet';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';

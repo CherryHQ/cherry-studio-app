@@ -1,7 +1,17 @@
+import { Composer } from '@cherrystudio/ui/components';
 import { resolveIcon } from '@cherrystudio/ui/icons';
 import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  ComposerAttachments,
+  ComposerField,
+  ComposerMenu,
+  ComposerModelPill,
+  type ComposerSendPayload,
+  ComposerSurface,
+} from '@/frontend/components/composer';
+import { createComposerMessageParts } from '@/frontend/components/composer/utils/composerAttachments';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
@@ -22,14 +32,17 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatTopic } from '../runtime';
-import { ChatInputActionSheet } from './components/ChatInputActionSheet';
+import { ChatInputEffortBadge } from './components/ChatInputEffortBadge';
+import { ChatInputMenuItems } from './components/ChatInputMenuItems';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
-import { type ChatInputSendPayload, ChatInputSurface } from './components/ChatInputSurface';
-import { useChatInputActions, useChatInputState } from './context/ChatInputProvider';
+import { ChatInputToolTag } from './components/ChatInputToolTag';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
-import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEffortSync';
-import { type ChatInputActionId, toggleChatInputAction } from './utils/chatInputActions';
-import { createChatInputMessageParts } from './utils/chatInputAttachments';
+import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
+import {
+  type ChatInputActionId,
+  getChatInputAction,
+  toggleChatInputAction,
+} from './utils/chatInputActions';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 
 type ChatInputProps = {
@@ -89,22 +102,31 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
       )
     : undefined;
   const reasoningEfforts = useChatInputReasoningEfforts();
-  useChatInputReasoningEffortSync(
-    reasoningEfforts,
-    selectedAssistant?.settings.reasoning_effort,
-    selectedAssistantId,
-  );
+  const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
+    useChatInputReasoningEffortSelection(
+      reasoningEfforts,
+      selectedAssistant?.settings.reasoning_effort,
+      selectedAssistantId,
+    );
 
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
-  const { isActionSheetOpen, isReasoningEffortSelected, reasoningEffort, selectedToolId } =
-    useChatInputState();
-  const { selectReasoningEffort, setSelectedTool } = useChatInputActions();
+  // The selected tool mirrors the assistant's `enableWebSearch`, so it is chat's
+  // own state rather than the composer's — the tag and the menu rows below are
+  // nodes this screen assembles, not something the composer models.
+  const [selectedToolId, setSelectedTool] = useState<ChatInputActionId | null>(null);
+  const selectedTool = getChatInputAction(selectedToolId);
   const pendingWebSearch = useRef<PendingWebSearchState | undefined>(undefined);
   const syncedAssistantId = useRef<string | null>(null);
 
+  // The one effect the reasoning effort's derive-on-read treatment does not fit:
+  // `enableWebSearch` is written back to the assistant, so this is not deriving
+  // a value but subscribing to an external store that the user's own optimistic
+  // write is racing. `pendingWebSearch` is what holds the optimistic value until
+  // the query reflects it, and it can only be checked once the query has moved.
+  /* eslint-disable react-hooks/set-state-in-effect -- see above */
   useEffect(() => {
     if (!selectedAssistantId) {
       syncedAssistantId.current = null;
@@ -131,7 +153,8 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
     if (selectedToolId === 'web-search' || selectedToolId === null) {
       if (selectedToolId !== canonicalToolId) setSelectedTool(canonicalToolId);
     }
-  }, [selectedAssistant, selectedAssistantId, selectedToolId, setSelectedTool]);
+  }, [selectedAssistant, selectedAssistantId, selectedToolId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const persistWebSearch = useCallback(
     (enabled: boolean) => {
@@ -243,8 +266,8 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
     [modelSettings, selectedAssistant, selectedAssistantId, selectedModelId, updateAssistant],
   );
   const handleSendPress = useCallback(
-    (payload: ChatInputSendPayload) => {
-      const parts = createChatInputMessageParts(payload.text, payload.attachments);
+    (payload: ComposerSendPayload) => {
+      const parts = createComposerMessageParts(payload.text, payload.attachments);
 
       return chatTopic.sendText({
         assistantId: selectedAssistantId,
@@ -272,19 +295,36 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
 
   return (
     <>
-      <ChatInputSurface
+      <ComposerSurface
         dismissKeyboardOnSend={dismissKeyboardOnSend}
-        isSendEnabled
-        isStreaming={chatTopic.isBusy}
-        modelIcon={selectedModelIcon}
-        modelLabel={selectedModelLabel}
-        onModelPickerPress={openModelPicker}
-        onSendPress={handleSendPress}
-        onStopPress={chatTopic.abort}
-        onToolClear={handleToolClear}
-        reasoningEfforts={reasoningEfforts}
-      />
-      {isActionSheetOpen ? <ChatInputActionSheet onActionPress={handleActionSelect} /> : null}
+        onSend={handleSendPress}
+        onStop={chatTopic.abort}
+        streaming={chatTopic.isBusy}
+      >
+        <Composer.Collapsible>
+          {selectedTool ? <ChatInputToolTag onClear={handleToolClear} tool={selectedTool} /> : null}
+        </Composer.Collapsible>
+        <ComposerAttachments />
+        <ComposerField />
+        <Composer.Toolbar>
+          <ComposerMenu>
+            <ChatInputMenuItems
+              onActionPress={handleActionSelect}
+              selectedToolId={selectedToolId}
+            />
+          </ComposerMenu>
+          <ComposerModelPill
+            icon={selectedModelIcon}
+            label={selectedModelLabel}
+            onPress={openModelPicker}
+          >
+            {reasoningEfforts.length > 0 ? (
+              <ChatInputEffortBadge reasoningEffort={reasoningEffort} />
+            ) : null}
+          </ComposerModelPill>
+          <Composer.Send />
+        </Composer.Toolbar>
+      </ComposerSurface>
       {isModelPickerOpen ? (
         <ModelPickerBottomSheet
           footer={

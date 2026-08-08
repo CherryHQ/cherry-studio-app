@@ -23,7 +23,7 @@ jest.mock('../../hooks/useFilePartUri', () => ({
   useFilePartUri: (part: unknown) => mockUseFilePartUri(part),
 }));
 
-jest.mock('../../../mediaTile', () => {
+jest.mock('@/frontend/components/mediaTile', () => {
   const { createElement } = jest.requireActual('react');
   return {
     FileTile: (props: object) => createElement('FileTile', props),

@@ -9,9 +9,10 @@ workspace behavior.
 
 ## Organization
 
-- `input/` owns the floating chat input and its sheet behavior.
-- `workspace/` owns message list placement, loading indicators, and floating input placement.
-- `mediaTile/` owns image and file tiles shared by chat input and message rendering.
+- `input/` owns what chat wires around the shared composer: its tools, its reasoning effort, and the
+  assistant/model bookkeeping behind both. The composer itself is
+  `@/frontend/components/composer`, shared with painting.
+- `workspace/` owns message list placement and loading indicators.
 - `prismSweep/` owns the thinking indicator shared by message content and message rows.
 - `messageContent/` renders structured message parts.
 - `messageItem/` renders user and assistant message rows.

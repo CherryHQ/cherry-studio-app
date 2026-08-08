@@ -65,11 +65,16 @@ Before enabling it, verify:
 
 ## Picker Sheets
 
-Short local pickers, such as model setting selection, use the app-owned
-`@/frontend/components/bottomSheet`
-`BottomSheet` (a wrapper over `@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`). These
+Short local pickers, such as model setting selection, use the package-owned
+`@cherrystudio/ui/components` `BottomSheet` (a wrapper over
+`@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`). These
 sheets are plain overlays controlled by local state; their triggers should only pass open/close
 and selection state.
+
+Multi-level component sheets keep navigation history in their owning feature and render the current
+page through `BottomSheet.PageTransition`. A stable `pageKey` identifies the page and `depth`
+determines forward versus backward motion; the UI package owns the animation, interaction isolation,
+and Reduce Motion behavior.
 
 Model selection is a reusable component-level `ModelPickerBottomSheet`. It is used by chat input and settings/model selection, includes search, tags, grouped model rows, pinning, and an 85% snap point.
 

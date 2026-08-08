@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ChatInputProvider } from '@/frontend/features/chat/input';
+import { ComposerProvider } from '@/frontend/components/composer';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { PaintingComposer } from './components/PaintingComposer';
@@ -44,12 +44,12 @@ export function PaintingScreen() {
           <ActivityIndicator />
         </View>
       ) : (
-        <ChatInputProvider
+        <ComposerProvider
           initialAttachments={handoff?.attachments ?? paintingFiles.inputs}
           initialDraft={handoff?.draft ?? painting?.prompt ?? ''}
         >
           <PaintingComposer initialFiles={paintingFiles} painting={painting} />
-        </ChatInputProvider>
+        </ComposerProvider>
       )}
     </View>
   );

@@ -1,3 +1,4 @@
+import { BottomSheet } from '@cherrystudio/ui/components';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import type { ImageSource } from 'expo-image';
 import { ChevronRightIcon, type PngIconProps, WrenchIcon } from 'lucide-uniwind/png';
@@ -13,7 +14,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BottomSheet } from '@/frontend/components/bottomSheet';
 import { Image } from '@/frontend/components/nativePrimitives';
 
 const toolSheetMediumFraction = 0.6;

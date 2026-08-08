@@ -1,4 +1,4 @@
-import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import type { ComposerAttachmentDraft } from '@/frontend/components/composer/utils/composerAttachments';
 
 import { consumePaintingDraftHandoff, createPaintingDraftHandoff } from '../paintingDraftHandoff';
 
@@ -8,7 +8,7 @@ jest.mock('expo-crypto', () => ({
 
 describe('painting draft handoff', () => {
   it('returns cloned attachments once and then clears the token', () => {
-    const attachments: ChatInputAttachmentDraft[] = [
+    const attachments: ComposerAttachmentDraft[] = [
       {
         id: 'photo:1',
         kind: 'image',

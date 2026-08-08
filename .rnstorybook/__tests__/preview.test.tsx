@@ -6,6 +6,16 @@ import preview from '../preview';
 
 jest.mock('../../src/frontend/styles/global.css', () => ({}));
 
+jest.mock('@swmansion/react-native-bottom-sheet', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+
+  return {
+    BottomSheetProvider: ({ children }: { children?: unknown }) =>
+      React.createElement(View, { testID: 'bottom-sheet-provider' }, children),
+  };
+});
+
 jest.mock('heroui-native/provider', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -41,5 +51,6 @@ describe('Storybook preview', () => {
     expect(renderer?.root.findByProps({ testID: 'hero-ui-provider' }).props.config).toEqual({
       devInfo: { stylingPrinciples: false },
     });
+    expect(renderer?.root.findByProps({ testID: 'bottom-sheet-provider' })).toBeDefined();
   });
 });

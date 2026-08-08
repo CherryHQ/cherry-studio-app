@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { duration } from '../../../motion';
 import { Tabs } from '../tabs.ios';
 import type { TabsItemState } from '../tabs.types';
 
@@ -20,6 +21,9 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: { View },
+    // The package's shared curves are built at module load, so the mock has to
+    // carry `Easing` even though nothing here asserts on it.
+    Easing: { bezier: () => 'bezier' },
     useAnimatedStyle: (factory: () => object) => factory(),
     useSharedValue: (value: number) => ({ value }),
     withTiming: jest.fn((value: number) => value),
@@ -101,7 +105,12 @@ describe('Tabs.ios', () => {
       glass.props.onLayout({ nativeEvent: { layout: { height: 40, width: 300, x: 0, y: 0 } } }),
     );
 
-    expect(withTiming).toHaveBeenLastCalledWith(153, { duration: 220 });
+    // The indicator rides the package's shared curve rather than a local one, so
+    // the assertion reads the token instead of pinning a number that would drift.
+    expect(withTiming).toHaveBeenLastCalledWith(153, {
+      duration: duration.base,
+      easing: expect.anything(),
+    });
     expect(
       StyleSheet.flatten(
         renderer.root.findByProps({ testID: 'default-tabs-indicator' }).props.style,

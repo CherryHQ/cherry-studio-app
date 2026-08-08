@@ -2,6 +2,8 @@ declare module 'react-test-renderer' {
   import type { ReactElement } from 'react';
 
   export type ReactTestInstance = {
+    /** `null` at the root, and for a node whose parents are all host-less. */
+    parent: ReactTestInstance | null;
     props: Record<string, any>;
     type: unknown;
     find: (predicate: (node: ReactTestInstance) => boolean) => ReactTestInstance;

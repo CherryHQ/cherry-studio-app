@@ -21,11 +21,11 @@ import {
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
+import { composerContentGap } from '@/frontend/components/composer/utils/composerLayout';
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { chatInputMessageListGap } from '../../input/chatInputLayout';
 import { AssistantMessageItem, UserMessageItem } from '../../messageItem';
 
 // 滚动/布局诊断埋点：记录会驱动列表位移的关键数值（scroll offset、内容高度、锚点就绪、
@@ -60,7 +60,7 @@ const MAINTAIN_VISIBLE_CONTENT_POSITION = {
 };
 
 const MESSAGE_LIST_CONTENT_CONTAINER_STYLE = {
-  paddingBottom: chatInputMessageListGap,
+  paddingBottom: composerContentGap,
   paddingTop: 12,
 };
 const TAIL_FOLLOW_END_THRESHOLD = 20;
@@ -450,7 +450,7 @@ export function ChatMessageList({
       ready: didReportReadyRef.current,
       t: Date.now(),
     });
-    setContentBaseHeight(Math.max(0, height - chatInputMessageListGap));
+    setContentBaseHeight(Math.max(0, height - composerContentGap));
   }, []);
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
