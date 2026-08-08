@@ -1,10 +1,8 @@
-import { Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
-
-import { BottomSheet } from '@/frontend/components/bottomSheet';
 
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';

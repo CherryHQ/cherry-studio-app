@@ -5,7 +5,7 @@ import { SingleSelectionSheet } from '../components/SingleSelectionSheet';
 let mockHandleSheetClose: ((reason: string) => void) | undefined;
 const mockRequestClose = jest.fn((reason: string) => mockHandleSheetClose?.(reason));
 
-jest.mock('@/frontend/components/bottomSheet', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   BottomSheet: ({
     children,
     onClose,

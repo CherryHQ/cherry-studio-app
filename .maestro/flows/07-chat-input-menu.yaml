@@ -1,0 +1,22 @@
+appId: com.cherry-ai.cherry-studio-app
+tags: [chat, gesture]
+---
+- runFlow: ../subflows/launch.yaml
+# 从消息 tab 的 header 菜单进入新会话
+- tapOn: "^New$|^新建$"
+- tapOn: "^New chat$|^新建聊天$"
+# ＋ 内联面板：不再是 sheet，所以没有标题可断言，只有行
+- tapOn: "Attach|添加附件"
+- assertVisible: "Camera|相机"
+- assertVisible: "Photos|照片"
+- assertVisible: "File|文件"
+- assertVisible: "Create image|创建图片"
+- assertVisible: "Web search|网络搜索"
+# 相机/照片/文件走系统 picker（进程外，Maestro 驱动不了），所以只走工具那条：
+# 选中即关面板，并在输入框上方长出工具标签
+- tapOn: "Create image|创建图片"
+- assertNotVisible: "Camera|相机"
+- assertVisible: "Image|图片"
+# 标签自己可清除，不必再开面板
+- tapOn: "Clear|清除"
+- assertNotVisible: "Image|图片"

@@ -30,7 +30,7 @@ jest.mock('@/frontend/components/FilePreview', () => {
   };
 });
 
-jest.mock('../../../mediaTile', () => {
+jest.mock('@/frontend/components/mediaTile', () => {
   const { createElement } = jest.requireActual('react');
   return {
     FileTile: (props: object) => createElement('FileTile', props),

@@ -1,8 +1,10 @@
 import type { RefObject } from 'react';
 import type { LayoutChangeEvent, View } from 'react-native';
 
-import { ChatInputProvider } from '../../input/context/ChatInputProvider';
-import { FloatingChatInput } from './FloatingChatInput';
+import { ComposerDock, ComposerProvider } from '@/frontend/components/composer';
+
+import { ChatInput } from '../../input';
+import { useManagedComposerAttachments } from '../../input/hooks/useManagedComposerAttachments';
 
 type ChatComposerProps = {
   /** Assistant to bind a newly created topic to; ignored once `topicId` exists. */
@@ -15,9 +17,9 @@ type ChatComposerProps = {
 };
 
 /**
- * The floating composer wrapped in the shared ChatInputProvider, so every
- * screen that shows the input (chat + new-topic) gets the provider with it.
- * The reasoning-effort control lives inside the model picker sheet
+ * The docked chat input, wrapped in the shared ComposerProvider so every screen
+ * that shows the input (chat + new-topic) gets the provider with it. The
+ * reasoning-effort control lives inside the model picker sheet
  * (ChatInputReasoningSection), not as a separate floating panel.
  */
 export function ChatComposer({
@@ -28,16 +30,21 @@ export function ChatComposer({
   onComposerLayout,
   topicId,
 }: ChatComposerProps) {
+  const attachmentStore = useManagedComposerAttachments();
+
   return (
-    <ChatInputProvider>
-      <FloatingChatInput
-        assistantId={assistantId}
-        composerRef={composerRef}
-        dismissKeyboardOnSend={dismissKeyboardOnSend}
-        onComposerLayout={onComposerLayout}
+    <ComposerProvider attachmentStore={attachmentStore}>
+      <ComposerDock
+        containerRef={composerRef}
         onHeightChange={onHeightChange}
-        topicId={topicId}
-      />
-    </ChatInputProvider>
+        onLayout={onComposerLayout}
+      >
+        <ChatInput
+          assistantId={assistantId}
+          dismissKeyboardOnSend={dismissKeyboardOnSend}
+          topicId={topicId}
+        />
+      </ComposerDock>
+    </ComposerProvider>
   );
 }

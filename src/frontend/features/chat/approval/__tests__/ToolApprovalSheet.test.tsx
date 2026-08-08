@@ -1,9 +1,7 @@
-import { Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import { BottomSheet } from '@/frontend/components/bottomSheet';
 
 import type { PendingToolApproval } from '../../runtime/chatRuntimeProjection';
 import { ToolApprovalSheet } from '../ToolApprovalSheet';
@@ -17,16 +15,6 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('@/frontend/components/bottomSheet', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    BottomSheet: ({ children, ...props }: { children: ReactNode }) => (
-      <MockView {...props}>{children}</MockView>
-    ),
-  };
-});
-
 jest.mock('@cherrystudio/ui/components', () => {
   const { Text: MockText, View: MockView } = jest.requireActual('react-native');
 
@@ -35,7 +23,11 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
   MockButton.Label = MockText;
 
-  return { Button: MockButton };
+  function MockBottomSheet({ children, ...props }: { children?: ReactNode }) {
+    return <MockView {...props}>{children}</MockView>;
+  }
+
+  return { BottomSheet: MockBottomSheet, Button: MockButton };
 });
 
 const allowLabel = 'chat.tool.approval.allow';

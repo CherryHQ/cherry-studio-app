@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import type { View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 
+import { useComposerDockLayout } from '@/frontend/components/composer';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { isIOS } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -25,7 +26,6 @@ import { ChatMessageList } from './components/ChatMessageList';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { ChatWorkspaceFrame } from './components/ChatWorkspaceFrame';
 import { ScrollToBottomButton } from './components/ScrollToBottomButton';
-import { useFloatingChatInputLayout } from './hooks/useFloatingChatInputLayout';
 import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
@@ -89,7 +89,7 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   });
   const contentTopInset = isIOS ? headerHeight : 0;
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
-    useFloatingChatInputLayout();
+    useComposerDockLayout();
   const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
     listRef,
     composerRef,

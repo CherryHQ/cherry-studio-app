@@ -1,14 +1,13 @@
+import {
+  BottomSheet,
+  type BottomSheetCloseReason,
+  useBottomSheet,
+} from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { CheckIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import {
-  BottomSheet,
-  type BottomSheetCloseReason,
-  useBottomSheet,
-} from '@/frontend/components/bottomSheet';
 
 import { SelectionSheetSearchField } from './SelectionSheetSearchField';
 

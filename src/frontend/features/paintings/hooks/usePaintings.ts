@@ -10,6 +10,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
 
+import type { ComposerAttachmentReady } from '@/frontend/components/composer/utils/composerAttachments';
 import {
   queryKeys,
   useBackendModule,
@@ -23,7 +24,6 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
-import type { ChatInputAttachmentReady } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
 const pageSize = 20;
@@ -37,7 +37,7 @@ export type PaintingGalleryItem = {
   uri: string;
 };
 
-export type ResolvedPaintingAttachment = ChatInputAttachmentReady;
+export type ResolvedPaintingAttachment = ComposerAttachmentReady;
 
 export type ResolvedPaintingFiles = {
   inputs: ResolvedPaintingAttachment[];

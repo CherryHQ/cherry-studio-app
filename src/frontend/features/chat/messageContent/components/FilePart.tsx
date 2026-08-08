@@ -5,9 +5,9 @@ import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useTranslation } from 'react-i18next';
 
 import { FilePreview } from '@/frontend/components/FilePreview';
+import { FileTile, ImageTile } from '@/frontend/components/mediaTile';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { FileTile, ImageTile } from '../../mediaTile';
 import { useFilePartUri } from '../hooks/useFilePartUri';
 
 const logger = loggerService.withContext('FilePart');

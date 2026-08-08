@@ -1,32 +1,13 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, TextInput } from 'react-native';
+import { TextInput } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { ResolvedImageGenerationMode } from '../../utils/imageGenerationParams';
 import { PaintingSettingsBottomSheet } from '../PaintingSettingsBottomSheet';
 
-let mockBottomSheetProps: Record<string, unknown> = {};
-
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-
-jest.mock('@swmansion/react-native-bottom-sheet', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    ModalBottomSheet: (props: { children: ReactNode }) => {
-      mockBottomSheetProps = props;
-      return <MockView testID="modal-bottom-sheet">{props.children}</MockView>;
-    },
-  };
-});
-
-jest.mock('expo-glass-effect', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return { GlassView: MockView };
-});
 
 jest.mock('@cherrystudio/ui/components', () => {
   const {
@@ -53,7 +34,41 @@ jest.mock('@cherrystudio/ui/components', () => {
     );
   };
 
+  function MockBottomSheet({
+    children,
+    onBack,
+    onClose,
+    testID,
+  }: {
+    children?: ReactNode;
+    onBack?: () => void;
+    onClose: (reason: string) => void;
+    testID?: string;
+  }) {
+    return (
+      <MockView testID={testID ? `${testID}-sheet` : undefined}>
+        {onBack ? (
+          <MockPressable onPress={onBack} testID={testID ? `${testID}-back` : undefined} />
+        ) : null}
+        <MockPressable
+          onPress={() => onClose('dismiss')}
+          testID={testID ? `${testID}-close` : undefined}
+        />
+        {children}
+      </MockView>
+    );
+  }
+  MockBottomSheet.PageTransition = function MockPageTransition({
+    children,
+    ...props
+  }: {
+    children?: ReactNode;
+  }) {
+    return <MockView {...props}>{children}</MockView>;
+  };
+
   return {
+    BottomSheet: MockBottomSheet,
     Description: MockText,
     FieldError: MockText,
     Input: MockTextInput,
@@ -62,6 +77,17 @@ jest.mock('@cherrystudio/ui/components', () => {
     Slider: (props: Record<string, unknown>) => <MockView {...props} />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
     TextField: MockView,
+    useBottomSheet: () => ({
+      geometry: {
+        bottomCornerRadius: 28,
+        insets: { bottom: 34, left: 0, right: 0, top: 59 },
+        outerInset: 4,
+        sheetWidth: 382,
+        topCornerRadius: 28,
+      },
+      isClosing: false,
+      requestClose: jest.fn(),
+    }),
   };
 });
 
@@ -82,11 +108,6 @@ jest.mock('@/frontend/components/SlotText', () => {
 
   return { SlotText: ({ text }: { text: string }) => <MockText>{text}</MockText> };
 });
-
-jest.mock('@/frontend/utils/constants', () => ({
-  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
-  isLiquidGlassAvailable: false,
-}));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
@@ -151,23 +172,6 @@ describe('PaintingSettingsBottomSheet', () => {
       throw new Error('PaintingSettingsBottomSheet test renderer was not created.');
     }
 
-    expect(mockBottomSheetProps.detents).toEqual([0, 'content']);
-    expect(
-      StyleSheet.flatten(
-        renderer.root.findByProps({ testID: 'painting-settings-sheet' }).props.style,
-      ),
-    ).toMatchObject({ borderBottomLeftRadius: 28, borderTopLeftRadius: 28 });
-    expect(
-      StyleSheet.flatten(
-        renderer.root.findByProps({ testID: 'painting-settings-sheet-bottom-gap' }).props.style,
-      ).height,
-    ).toBe(4);
-    expect(
-      StyleSheet.flatten(
-        renderer.root.findByProps({ testID: 'painting-settings-header' }).props.style,
-      ),
-    ).toMatchObject({ height: 60, paddingHorizontal: 6, paddingTop: 6 });
-
     act(() =>
       renderer?.root
         .findByProps({ accessibilityLabel: 'painting.settings.param.promptEnhancement' })
@@ -221,8 +225,6 @@ describe('PaintingSettingsBottomSheet', () => {
     );
 
     act(() => renderer?.root.findByProps({ testID: 'painting-settings-close' }).props.onPress());
-    expect(mockBottomSheetProps.index).toBe(0);
-    act(() => (mockBottomSheetProps.onSettle as (index: number) => void)(0));
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
@@ -240,6 +242,10 @@ describe('PaintingSettingsBottomSheet', () => {
     });
 
     act(() => renderer?.root.findByProps({ testID: 'painting-setting-quality' }).props.onPress());
+    expect(renderer?.root.findByProps({ testID: 'painting-settings-pages' }).props.depth).toBe(1);
+    expect(renderer?.root.findByProps({ testID: 'painting-settings-pages' }).props.pageKey).toBe(
+      'enum-quality',
+    );
     expect(renderer?.root.findByProps({ testID: 'painting-settings-back' })).toBeDefined();
     expect(
       renderer?.root.findByProps({ testID: 'painting-setting-options-quality' }),

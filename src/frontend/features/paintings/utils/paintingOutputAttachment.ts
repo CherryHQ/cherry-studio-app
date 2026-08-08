@@ -1,6 +1,6 @@
 import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 
-import type { ChatInputAttachmentReady } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import type { ComposerAttachmentReady } from '@/frontend/components/composer/utils/composerAttachments';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
 // Mirrors the draft shape produced by useResolvedPaintingFiles for inputs; the
@@ -9,7 +9,7 @@ import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 export function createPaintingOutputAttachmentDraft(output: {
   fileEntryId: FileEntryId;
   uri: string;
-}): ChatInputAttachmentReady {
+}): ComposerAttachmentReady {
   const fileName = output.uri.split('/').pop() || 'image';
   const dotIndex = fileName.lastIndexOf('.');
   const extension = dotIndex > 0 ? fileName.slice(dotIndex + 1) : null;

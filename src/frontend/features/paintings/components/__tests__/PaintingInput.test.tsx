@@ -1,7 +1,7 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ChatInputModelSettings, ChatInputSendPayload } from '@/frontend/features/chat/input';
+import type { ComposerSendPayload } from '@/frontend/components/composer';
 
 import type { PaintingGenerationResult } from '../../hooks/usePaintingGeneration';
 import { PaintingInput } from '../PaintingInput';
@@ -9,15 +9,14 @@ import { PaintingInput } from '../PaintingInput';
 const mockSetAttachments = jest.fn();
 const mockOnGenerate = jest.fn();
 const mockOnGenerated = jest.fn();
-let mockSurfaceProps:
+let mockComposerProps:
   | {
-      allowEmptySend?: boolean;
+      canSend?: boolean;
       getSendErrorLabel?: (error: unknown) => string | undefined;
-      isSendEnabled: boolean;
-      modelSettings?: ChatInputModelSettings;
-      onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
+      onSend: (payload: ComposerSendPayload) => Promise<void>;
     }
   | undefined;
+let mockToolbarActionLabels: string[] = [];
 let mockSelectedModel: Record<string, unknown>;
 
 jest.mock('react-i18next', () => ({
@@ -54,14 +53,31 @@ jest.mock('@/frontend/hooks/chat', () => ({
   }),
 }));
 
-jest.mock('@/frontend/features/chat/input', () => ({
-  ChatInputActionSheet: () => null,
-  ChatInputSurface: (props: typeof mockSurfaceProps) => {
-    mockSurfaceProps = props;
-    return null;
+jest.mock('@/frontend/components/composer', () => ({
+  ComposerAttachments: () => null,
+  ComposerField: () => null,
+  ComposerMenu: () => null,
+  ComposerModelPill: () => null,
+  ComposerSurface: ({ children, ...props }: { children?: React.ReactNode }) => {
+    mockComposerProps = props as typeof mockComposerProps;
+    return children;
   },
-  useChatInputActions: () => ({ setAttachments: mockSetAttachments }),
-  useChatInputState: () => ({ draft: 'refine this', isActionSheetOpen: false }),
+  useComposerActions: () => ({ setAttachments: mockSetAttachments }),
+  useComposerFieldDismiss: () => jest.fn(),
+  useComposerState: () => ({ attachments: [], draft: 'refine this' }),
+}));
+
+// The toolbar is assembled here now, so the settings button is a rendered node
+// rather than a prop. Recording its label is what keeps that assertion possible.
+jest.mock('@cherrystudio/ui/components', () => ({
+  Composer: {
+    Action: ({ accessibilityLabel }: { accessibilityLabel: string }) => {
+      mockToolbarActionLabels.push(accessibilityLabel);
+      return null;
+    },
+    Send: () => null,
+    Toolbar: ({ children }: { children?: React.ReactNode }) => children,
+  },
 }));
 
 jest.mock('../../utils/paintingOutputAttachment', () => ({
@@ -97,7 +113,8 @@ describe('PaintingInput', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSurfaceProps = undefined;
+    mockComposerProps = undefined;
+    mockToolbarActionLabels = [];
     mockSelectedModel = {
       id: 'provider::image-model',
       modelId: 'image-model',
@@ -124,7 +141,7 @@ describe('PaintingInput', () => {
       );
     });
 
-    const payload: ChatInputSendPayload = {
+    const payload: ComposerSendPayload = {
       attachments: [
         {
           fileEntryId: '00000000-0000-7000-8000-000000000000',
@@ -140,7 +157,7 @@ describe('PaintingInput', () => {
     };
 
     await act(async () => {
-      await mockSurfaceProps?.onSendPress(payload);
+      await mockComposerProps?.onSend(payload);
     });
 
     expect(mockOnGenerate).toHaveBeenCalledWith({
@@ -192,14 +209,11 @@ describe('PaintingInput', () => {
       );
     });
 
-    expect(mockSurfaceProps?.allowEmptySend).toBe(true);
-    expect(mockSurfaceProps?.isSendEnabled).toBe(true);
-    expect(mockSurfaceProps?.modelSettings).toEqual(
-      expect.objectContaining({ accessibilityLabel: 'painting.settings.open: 1024x1024' }),
-    );
+    expect(mockComposerProps?.canSend).toBe(true);
+    expect(mockToolbarActionLabels).toContain('painting.settings.open: 1024x1024');
 
     await act(async () => {
-      await mockSurfaceProps?.onSendPress({ attachments: [], text: '' });
+      await mockComposerProps?.onSend({ attachments: [], text: '' });
     });
 
     expect(mockOnGenerate).toHaveBeenCalledWith({
@@ -231,7 +245,7 @@ describe('PaintingInput', () => {
       );
     });
 
-    const attachments: ChatInputSendPayload['attachments'] = [
+    const attachments: ComposerSendPayload['attachments'] = [
       {
         fileEntryId: '00000000-0000-7000-8000-000000000011',
         id: 'input-1',
@@ -254,12 +268,12 @@ describe('PaintingInput', () => {
 
     let error: unknown;
     try {
-      await mockSurfaceProps?.onSendPress({ attachments, text: 'edit' });
+      await mockComposerProps?.onSend({ attachments, text: 'edit' });
     } catch (caughtError) {
       error = caughtError;
     }
 
-    expect(mockSurfaceProps?.getSendErrorLabel?.(error)).toBe('painting.input.tooManyImages');
+    expect(mockComposerProps?.getSendErrorLabel?.(error)).toBe('painting.input.tooManyImages');
     expect(mockOnGenerate).not.toHaveBeenCalled();
   });
 
@@ -295,16 +309,16 @@ describe('PaintingInput', () => {
       );
     });
 
-    expect(mockSurfaceProps?.isSendEnabled).toBe(true);
+    expect(mockComposerProps?.canSend).toBe(true);
 
     let error: unknown;
     try {
-      await mockSurfaceProps?.onSendPress({ attachments: [], text: 'draw' });
+      await mockComposerProps?.onSend({ attachments: [], text: 'draw' });
     } catch (caughtError) {
       error = caughtError;
     }
 
-    expect(mockSurfaceProps?.getSendErrorLabel?.(error)).toBe('painting.input.invalidCustomSize');
+    expect(mockComposerProps?.getSendErrorLabel?.(error)).toBe('painting.input.invalidCustomSize');
     expect(mockOnGenerate).not.toHaveBeenCalled();
   });
 });
