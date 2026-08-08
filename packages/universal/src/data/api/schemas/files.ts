@@ -5,6 +5,7 @@ import {
   FileEntryIdSchema,
   FileEntryOriginSchema,
   FileRefSourceTypeSchema,
+  SafeNameSchema,
 } from '@shared/data/types/file';
 import * as z from 'zod';
 
@@ -12,6 +13,16 @@ export type ResolvedFile = {
   entry: FileEntry;
   uri: string;
 };
+
+export const ImportFileBodySchema = z.strictObject({
+  name: SafeNameSchema.optional(),
+  uri: z.string().min(1),
+});
+export type ImportFileBody = z.input<typeof ImportFileBodySchema>;
+
+export interface DiscardFileResponse {
+  deleted: boolean;
+}
 
 export interface FileEntryRefCount {
   entryId: FileEntryId;
@@ -115,9 +126,19 @@ export type FileSchemas = {
   // Mobile compatibility routes. They expose the Expo URI adapter and remain
   // separate from the desktop-aligned, SQL-only entry routes above.
   '/files/:id': {
+    DELETE: {
+      params: { id: FileEntryId };
+      response: DiscardFileResponse;
+    };
     GET: {
       params: { id: FileEntryId };
       response: FileEntry | null;
+    };
+  };
+  '/files/import': {
+    POST: {
+      body: ImportFileBody;
+      response: ResolvedFile;
     };
   };
   '/files/:id/renderable-uri': {

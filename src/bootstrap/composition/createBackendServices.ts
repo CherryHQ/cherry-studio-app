@@ -9,7 +9,10 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
 
 export function createBackendServices(dbService: DbService, cache: CacheService) {
   const dataServices = createDataServices({ cache, dbService });
-  const platformAdapters = createPlatformAdapters({ fileEntry: dataServices.fileEntry });
+  const platformAdapters = createPlatformAdapters({
+    fileEntry: dataServices.fileEntry,
+    fileRef: dataServices.fileRef,
+  });
   const aiServices = createAiServices({
     aiUsageRecord: dataServices.aiUsageRecord,
     assistant: dataServices.assistant,

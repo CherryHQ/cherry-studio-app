@@ -10,6 +10,7 @@ import {
   deleteInternalFile,
   deleteInternalFileUri,
   discardInternalEntries,
+  discardUnreferencedInternalEntry,
   imageUriToDataUrl,
   listInternalFiles,
   resolveFileEntry,
@@ -379,6 +380,41 @@ describe('fileStorage', () => {
     ).toBe(true);
   });
 
+  test('discards an unreferenced managed entry and its file', async () => {
+    const entry = internalEntry();
+    const uri = `file:///documents/Data/Files/${entry.id}.txt`;
+    testState.files.set(uri, entry.size);
+    const tx = {};
+    const entries = {
+      deleteTx: jest.fn(async () => undefined),
+      findByIdTx: jest.fn(async () => entry),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback(tx)),
+    };
+    const refs = { countPersistentRefsByEntryIdTx: jest.fn(async () => 0) };
+
+    await expect(
+      discardUnreferencedInternalEntry(entries as never, refs as never, entry.id),
+    ).resolves.toBe(true);
+
+    expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
+    expect(testState.files.has(uri)).toBe(false);
+  });
+
+  test('keeps managed entries that have persistent references', async () => {
+    const entry = internalEntry();
+    const entries = {
+      deleteTx: jest.fn(async () => undefined),
+      findByIdTx: jest.fn(async () => entry),
+      withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback({})),
+    };
+    const refs = { countPersistentRefsByEntryIdTx: jest.fn(async () => 1) };
+
+    await expect(
+      discardUnreferencedInternalEntry(entries as never, refs as never, entry.id),
+    ).resolves.toBe(false);
+    expect(entries.deleteTx).not.toHaveBeenCalled();
+  });
+
   test('resolves a local image as a data URL', async () => {
     await expect(imageUriToDataUrl('file:///picker/photo.jpg', 'image/*')).resolves.toBe(
       'data:image/jpeg;base64,encoded',
@@ -453,4 +489,18 @@ function createFilePart(url: string, filename: string): CherryMessagePart {
     type: 'file',
     url,
   };
+}
+
+function internalEntry(): Extract<FileEntry, { origin: 'internal' }> {
+  return FileEntrySchema.parse({
+    cleanupPolicy: 'delete_when_unreferenced',
+    contentHash: null,
+    createdAt: 1,
+    ext: 'txt',
+    id: '00000000-0000-7000-8000-000000000001',
+    name: 'notes',
+    origin: 'internal',
+    size: 12,
+    updatedAt: 1,
+  }) as Extract<FileEntry, { origin: 'internal' }>;
 }

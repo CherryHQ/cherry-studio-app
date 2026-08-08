@@ -13,6 +13,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import type { FileRefService } from '@/backend/data/services/FileRefService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
@@ -223,6 +224,38 @@ export async function discardInternalEntries(
       logger.warn('Failed to delete a discarded internal file', error as Error, { id: entry.id });
     }
   }
+}
+
+export async function discardUnreferencedInternalEntry(
+  entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
+  refs: Pick<FileRefService, 'countPersistentRefsByEntryIdTx'>,
+  id: FileEntryId,
+): Promise<boolean> {
+  const deletedEntry = await entries.withWriteTx(async (tx) => {
+    const entry = await entries.findByIdTx(tx, id);
+    if (
+      !entry ||
+      entry.origin !== 'internal' ||
+      entry.cleanupPolicy !== 'delete_when_unreferenced' ||
+      (await refs.countPersistentRefsByEntryIdTx(tx, id)) > 0
+    ) {
+      return null;
+    }
+
+    await entries.deleteTx(tx, id);
+    return entry;
+  });
+
+  if (!deletedEntry) {
+    return false;
+  }
+
+  try {
+    deleteInternalFile(deletedEntry);
+  } catch (error) {
+    logger.warn('Failed to unlink a discarded internal file', error as Error, { id });
+  }
+  return true;
 }
 
 export async function resolveFileEntry(

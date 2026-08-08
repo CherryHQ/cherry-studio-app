@@ -37,7 +37,7 @@ import { createAgentSessionHandlers } from './agentSessions';
 import { createAgentWorkspaceHandlers } from './agentWorkspaces';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';
-import { createFileHandlers, type FileContentQueries } from './files';
+import { createFileHandlers, type FileContentOperations } from './files';
 import { createGroupHandlers } from './groups';
 import { createJobHandlers } from './jobs';
 import { createKnowledgeHandlers } from './knowledges';
@@ -69,7 +69,7 @@ export type DataApiDependencies = {
   assistants: AssistantService;
   contentSearch: ContentSearchService;
   entitySearch: EntitySearchService;
-  fileContent: FileContentQueries;
+  fileContent: FileContentOperations;
   files: FileEntryService;
   fileRefs: FileRefService;
   groups: GroupService;
