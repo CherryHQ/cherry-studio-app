@@ -1,8 +1,16 @@
+import { Composer } from '@cherrystudio/ui/components';
 import { resolveIcon } from '@cherrystudio/ui/icons';
 import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { ComposerCore, type ComposerSendPayload } from '@/frontend/components/composer';
+import {
+  ComposerAttachments,
+  ComposerField,
+  ComposerMenu,
+  ComposerModelPill,
+  type ComposerSendPayload,
+  ComposerSurface,
+} from '@/frontend/components/composer';
 import { createComposerMessageParts } from '@/frontend/components/composer/utils/composerAttachments';
 import {
   getNextModelSelection,
@@ -106,8 +114,8 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
   // The selected tool mirrors the assistant's `enableWebSearch`, so it is chat's
-  // own state rather than the composer's — the composer only renders the tag and
-  // the menu rows it is handed.
+  // own state rather than the composer's — the tag and the menu rows below are
+  // nodes this screen assembles, not something the composer models.
   const [selectedToolId, setSelectedTool] = useState<ChatInputActionId | null>(null);
   const selectedTool = getChatInputAction(selectedToolId);
   const pendingWebSearch = useRef<PendingWebSearchState | undefined>(undefined);
@@ -287,27 +295,36 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
 
   return (
     <>
-      <ComposerCore
-        accessory={
-          selectedTool ? <ChatInputToolTag onClear={handleToolClear} tool={selectedTool} /> : null
-        }
+      <ComposerSurface
         dismissKeyboardOnSend={dismissKeyboardOnSend}
-        isSendEnabled
-        isStreaming={chatTopic.isBusy}
-        menuItems={
-          <ChatInputMenuItems onActionPress={handleActionSelect} selectedToolId={selectedToolId} />
-        }
-        modelBadge={
-          reasoningEfforts.length > 0 ? (
-            <ChatInputEffortBadge reasoningEffort={reasoningEffort} />
-          ) : null
-        }
-        modelIcon={selectedModelIcon}
-        modelLabel={selectedModelLabel}
-        onModelPickerPress={openModelPicker}
-        onSendPress={handleSendPress}
-        onStopPress={chatTopic.abort}
-      />
+        onSend={handleSendPress}
+        onStop={chatTopic.abort}
+        streaming={chatTopic.isBusy}
+      >
+        <Composer.Collapsible>
+          {selectedTool ? <ChatInputToolTag onClear={handleToolClear} tool={selectedTool} /> : null}
+        </Composer.Collapsible>
+        <ComposerAttachments />
+        <ComposerField />
+        <Composer.Toolbar>
+          <ComposerMenu>
+            <ChatInputMenuItems
+              onActionPress={handleActionSelect}
+              selectedToolId={selectedToolId}
+            />
+          </ComposerMenu>
+          <ComposerModelPill
+            icon={selectedModelIcon}
+            label={selectedModelLabel}
+            onPress={openModelPicker}
+          >
+            {reasoningEfforts.length > 0 ? (
+              <ChatInputEffortBadge reasoningEffort={reasoningEffort} />
+            ) : null}
+          </ComposerModelPill>
+          <Composer.Send />
+        </Composer.Toolbar>
+      </ComposerSurface>
       {isModelPickerOpen ? (
         <ModelPickerBottomSheet
           footer={

@@ -2,7 +2,7 @@ import { Composer } from '@cherrystudio/ui/components';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
-import { type ReactNode, useCallback } from 'react';
+import { type PropsWithChildren, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
@@ -19,21 +19,15 @@ import {
 
 const logger = loggerService.withContext('ComposerMenu');
 
-type ComposerMenuProps = {
-  /**
-   * Extra rows below the media ones, behind a separator. Chat puts its tools
-   * here; painting has nothing to add, so it passes nothing and the menu is
-   * media only.
-   */
-  items?: ReactNode;
-};
-
 /**
- * The ＋ menu: camera, photos, files, plus whatever the caller appends. Every
- * row closes the menu; the media rows hand off to a system picker rather than
- * drawing anything here.
+ * The ＋ menu: camera, photos, files, plus whatever the caller appends below a
+ * separator. Every row closes the menu; the media rows hand off to a system
+ * picker rather than drawing anything here.
+ *
+ * `children` are `Composer.Menu.Item`s — chat puts its tools there; painting
+ * has nothing to add, so its menu is media only.
  */
-export function ComposerMenu({ items }: ComposerMenuProps) {
+export function ComposerMenu({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
 
@@ -140,10 +134,10 @@ export function ComposerMenu({ items }: ComposerMenuProps) {
         label={t('chat.media.file')}
         onPress={() => present('document', openDocumentPicker)}
       />
-      {items ? (
+      {children ? (
         <>
           <View className="my-1 h-px bg-border" />
-          {items}
+          {children}
         </>
       ) : null}
     </Composer.Menu>

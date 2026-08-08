@@ -11,8 +11,10 @@ them as one input:
    ＋ menu's morph. Knows nothing about the app.
 2. `@/frontend/components/composer` — attachments, the pickers, the model pill, async send with
    recovery. Shared with painting, so it knows nothing about assistants either.
-3. This directory — assistants, models, reasoning effort, web search. Reaches the composer through
-   its `accessory` / `menuItems` / `modelBadge` slots.
+3. This directory — assistants, models, reasoning effort, web search. It assembles the composer's
+   parts itself (see `ChatInput.tsx`) and drops its own nodes in: the tool tag as a
+   `Composer.Collapsible`, the tools as `ComposerMenu` children, the effort label inside
+   `ComposerModelPill`.
 
 ## Why this document exists
 
@@ -48,8 +50,9 @@ Two consequences to take seriously:
       animated dismissal races the message list's scroll-to-bottom.
 - [ ] `dismissKeyboardOnSend={false}` suppresses that call entirely, for screens where the message
       list dismisses the keyboard itself.
-- [ ] Sendability is `isSendEnabled && (allowEmptySend || there is text or an attachment)`.
-- [ ] `allowEmptySend` sends `{ attachments: [], text: '' }` — a painting prompt can be empty.
+- [ ] Sendability defaults to "there is text or an attachment". A caller that passes `canSend`
+      replaces that outright — painting does, because a promptless image model can send
+      `{ attachments: [], text: '' }`.
 - [ ] While streaming the send control becomes stop (`chat.input.action.stopGenerating`). It does not
       exist when not streaming.
 
@@ -63,7 +66,9 @@ Two consequences to take seriously:
 
 - [ ] Opening the model picker dismisses the keyboard, blurs the field, and clears the focused state
       **before** the picker opens.
-- [ ] The model-settings button (painting only) does the same.
+- [ ] The image-settings button (painting only) does the same. It is assembled by painting rather
+      than by the composer, so it calls `useComposerFieldDismiss()` explicitly — the one thing
+      assembling made the caller's job.
 - [ ] Opening the ＋ menu dismisses the keyboard but does **not** blur the field. The panel grows
       upward into the space the keyboard occupies, so the keyboard has to go; leaving the field as
       first responder is what makes iOS restore it the instant the menu closes.
@@ -88,9 +93,9 @@ rows. It is a menu and nothing else: every row closes it and hands off to a syst
 
 - [ ] The rows are camera, photos, file, then — behind a separator — the tools. All of them close the
       menu on tap.
-- [ ] The tools appear only for a caller that passes `menuItems`. Painting does not: web search and
-      "create image" are chat concepts, and nothing in the menu can act on one without a caller to
-      persist it.
+- [ ] The tools appear only for a caller that puts them in the menu's `children`. Painting does not:
+      web search and "create image" are chat concepts, and nothing in the menu can act on one
+      without a caller to persist it.
 - [ ] Camera and photos go through `expo-image-picker`; file goes through `expo-document-picker`.
       None of them is drawn here — see "Deliberately dropped".
 - [ ] Each picker asks for its own permission first and does nothing if refused. Limited photo
@@ -174,8 +179,9 @@ Do not restore these; their absence is the design, not a regression.
 
 - `@/frontend/components/composer` owns the draft, the attachments, the pickers, the send, and the
   docking geometry. Whether the ＋ panel is open is `Composer.Menu`'s, not anyone else's.
-- `ChatInput.tsx` owns the selected tool, the reasoning effort, and everything that talks to
-  assistants and models. It hands the composer three nodes and keeps the state behind them.
+- `ChatInput.tsx` owns the selected tool, the reasoning effort, everything that talks to assistants
+  and models, **and the arrangement** — it assembles the composer's parts rather than configuring a
+  single component.
 - `effortSlider/` owns the reasoning-effort control, which lives in the model picker's footer — not
   in the input.
 - Leaf components here render from what they are passed. They must not keep parallel state for
