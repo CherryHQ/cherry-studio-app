@@ -68,6 +68,16 @@
   --inline-code: var(--gray-alpha-100);
   --inline-code-foreground: var(--red-900);
 
+  /* Cherry's own green, #00b96b, in both themes and under every preference.
+   *
+   * Not the same role as `--primary`, which starts at this value but is the
+   * *user's* colour: `applyPrimaryColorPreference` rewrites `--theme-primary`
+   * behind it whenever `ui.theme_user.color_primary` is set. Anything that has
+   * to stay Cherry green when the user picks purple belongs here instead — the
+   * reasoning slider's top stop does, because the Skia field beside it is a
+   * fixed green artwork and a purple dot on it would read as a defect. */
+  --brand: oklch(0.6903 0.17 155.21);
+
   /* Stable product domain: user-message surface (UserMessageItem) */
   --chat-user: var(--gray-alpha-100);
 

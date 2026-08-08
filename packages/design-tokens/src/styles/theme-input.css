@@ -8,12 +8,19 @@
  * The literals below are the *defaults* — what the first frame shows, and what
  * hosts that never bootstrap (Storybook) show forever. `applyThemePreferences`
  * overwrites both themes at startup via `Uniwind.updateCSSVariables`.
+ *
+ * Only the *user's* colour lives here. Cherry's own green is `--brand` in
+ * product.css, which nothing rewrites — see that file for which is which.
  */
 
 :root {
-  /* Cherry brand green, #00b96b. Also `theme.ts`'s DEFAULT_PRIMARY_COLOR — the
-   * value the runtime writes back here when no colour has been picked. */
-  --theme-primary: oklch(0.77 0.208 146);
+  /* Cherry brand green #00b96b, i.e. `theme.ts`'s DEFAULT_PRIMARY_COLOR — the
+   * value the runtime writes back here when no colour has been picked, so the
+   * first frame and the bootstrapped frame agree.
+   * This read oklch(0.77 0.208 146) until now, which the comment claimed was
+   * #00b96b and is in fact #3fd55a: lighter, and 9° off in hue. Every frame
+   * before bootstrap painted that green, then swapped. */
+  --theme-primary: oklch(0.6903 0.17 155.21);
 
   /* Black, in both themes, because the fill above is the same green in both.
    * `getPrimaryForeground` picks by luminance rather than by theme, and for

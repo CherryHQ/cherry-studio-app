@@ -73,6 +73,7 @@ export const SHADCN_SURFACE_PAIRS = [
 
 export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   /* Shared product semantics */
+  'brand',
   'background-subtle',
   'foreground-tertiary',
   'foreground-disabled',

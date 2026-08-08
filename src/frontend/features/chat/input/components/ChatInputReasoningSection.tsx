@@ -74,7 +74,7 @@ export function ChatInputReasoningSection({
           text={currentOption ? t(currentOption.labelKey) : ''}
           textClassName={cn(
             'font-semibold text-base',
-            isMaxEffort ? 'text-primary' : 'text-foreground',
+            isMaxEffort ? 'text-brand' : 'text-foreground',
           )}
         />
       </View>

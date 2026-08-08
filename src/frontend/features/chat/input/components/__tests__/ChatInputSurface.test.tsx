@@ -540,9 +540,10 @@ describe('ChatInputSurface', () => {
     });
     expect(effortLabels.length).toBeGreaterThan(0);
     expect(effortLabels[0].props.children).toBe('chat.reasoning.max');
-    // `text-primary`, not a literal: the theme-colour setting rewrites --primary
-    // at runtime, so pinning a hex here would pin a value the app can change.
-    expect(effortLabels[0].props.className).toContain('text-primary');
+    // `text-brand`, not a literal: pinning a hex would pin a value that belongs
+    // in the token layer. Deliberately not `text-primary` — that is the user's
+    // colour, and this mark has to stay Cherry green whatever they pick.
+    expect(effortLabels[0].props.className).toContain('text-brand');
   });
 
   test('hides the effort label when the model has no reasoning stops', async () => {

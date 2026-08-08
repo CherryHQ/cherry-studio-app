@@ -88,9 +88,9 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '品牌',
-    hint: '唯一不来自 VBG 的一组：保留 Cherry 绿，并且仍可被设置页的主题色实时改写。',
+    hint: '唯一不来自 VBG 的一组。--primary 是「用户的颜色」，主题色偏好会实时改写它；--brand 是「Cherry 的颜色」，谁都不改。默认值下两者相同，正因如此这里最容易混用。',
     kind: 'surface',
-    variables: ['--primary', '--primary-foreground'],
+    variables: ['--primary', '--primary-foreground', '--brand'],
   },
   {
     title: '状态',

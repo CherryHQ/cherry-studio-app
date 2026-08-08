@@ -323,7 +323,7 @@ function ChatInputModelButton({
   effortLabel?: string;
   icon?: IconSource;
   initial: string;
-  /** The max stop stands out in the thinking accent color instead of muted. */
+  /** The max stop stands out in Cherry's brand green instead of muted. */
   isEffortMax?: boolean;
   label: string;
   onPress: () => void;
@@ -353,7 +353,7 @@ function ChatInputModelButton({
       </Text>
       {effortLabel ? (
         <Text
-          className={cn('shrink-0 text-sm', isEffortMax ? 'text-primary' : 'text-foreground')}
+          className={cn('shrink-0 text-sm', isEffortMax ? 'text-brand' : 'text-foreground')}
           numberOfLines={1}
           testID="chat-input-model-effort-label"
         >
