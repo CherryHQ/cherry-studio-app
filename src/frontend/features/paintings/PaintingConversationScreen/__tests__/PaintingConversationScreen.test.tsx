@@ -134,6 +134,7 @@ jest.mock('@/frontend/features/chat/workspace', () => ({
     return null;
   },
   ChatWorkspaceFrame: ({ children }: { children: React.ReactNode }) => children,
+  ComposerDock: ({ children }: { children: React.ReactNode }) => children,
   ScrollToBottomButton: () => null,
   useFloatingChatInputLayout: () => ({
     contentBottomInset: 0,

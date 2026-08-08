@@ -4,22 +4,16 @@ import type { LegendListRef } from '@legendapp/list/react-native';
 import * as Crypto from 'expo-crypto';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { type RefObject, useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, type LayoutChangeEvent, Text, View } from 'react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { ActivityIndicator, Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChatInputProvider } from '@/frontend/features/chat/input';
 import {
-  chatInputHorizontalScreenInset,
-  chatInputMinBottomPadding,
-  getChatInputKeyboardStickyOffset,
-} from '@/frontend/features/chat/input/chatInputLayout';
-import {
   ChatMessageList,
   ChatWorkspaceFrame,
+  ComposerDock,
   ScrollToBottomButton,
   useFloatingChatInputLayout,
 } from '@/frontend/features/chat/workspace';
@@ -161,16 +155,19 @@ function PaintingConversationWorkspace({
         messages={messages}
         onLoadOlder={handleLoadOlder}
       />
-      <FloatingPaintingInput
-        composerRef={composerRef}
-        onComposerLayout={onComposerLayout}
+      <ComposerDock
+        containerRef={composerRef}
         onHeightChange={handleInputHeightChange}
-        onCancel={generation.cancel}
-        onGenerate={handleGenerate}
-        onGenerated={handleGenerated}
-        painting={painting}
-        status={generation.status}
-      />
+        onLayout={onComposerLayout}
+      >
+        <PaintingInput
+          onCancel={generation.cancel}
+          onGenerate={handleGenerate}
+          onGenerated={handleGenerated}
+          painting={painting}
+          status={generation.status}
+        />
+      </ComposerDock>
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
         inputHeight={inputHeightShared}
@@ -178,45 +175,6 @@ function PaintingConversationWorkspace({
         onPress={handleScrollToEnd}
       />
     </ChatWorkspaceFrame>
-  );
-}
-
-function FloatingPaintingInput({
-  composerRef,
-  onComposerLayout,
-  onHeightChange,
-  ...inputProps
-}: {
-  composerRef: RefObject<View | null>;
-  onComposerLayout: (event: LayoutChangeEvent) => void;
-  onHeightChange: (height: number) => void;
-} & Parameters<typeof PaintingInput>[0]) {
-  const { bottom } = useSafeAreaInsets();
-  const bottomPadding = Math.max(bottom, chatInputMinBottomPadding);
-  const keyboardInputOffset = getChatInputKeyboardStickyOffset(bottom);
-  const handleLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      onHeightChange(event.nativeEvent.layout.height);
-      onComposerLayout(event);
-    },
-    [onComposerLayout, onHeightChange],
-  );
-
-  return (
-    <View
-      ref={composerRef}
-      className="absolute right-0 bottom-0 left-0 z-10"
-      pointerEvents="box-none"
-      style={{
-        paddingBottom: bottomPadding,
-        paddingHorizontal: chatInputHorizontalScreenInset,
-      }}
-      onLayout={handleLayout}
-    >
-      <KeyboardStickyView offset={{ opened: keyboardInputOffset }}>
-        <PaintingInput {...inputProps} />
-      </KeyboardStickyView>
-    </View>
   );
 }
 

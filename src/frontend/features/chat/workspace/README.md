@@ -8,6 +8,10 @@ render cover, and floating input placement.
 - `ChatWorkspace` is exported from `index.ts` for normal topic screens.
 - `ChatWorkspaceFrame`, `ChatComposer`, and `useFloatingChatInputLayout` are exported for the
   new-topic workspace, which shares the same input placement without a message list.
+- `ComposerDock` and `useFloatingChatInputLayout` are also exported for the painting conversation
+  screen, which docks a different input the same way. The two used to keep separate copies of the
+  placement; anything that moves an input relative to the keyboard or the safe area belongs in the
+  dock, not in a caller.
 - Internal workspace pieces should be imported through relative paths inside this module.
 
 ## Organization
