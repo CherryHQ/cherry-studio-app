@@ -1,3 +1,4 @@
+import type { PasteEventPayload } from 'expo-paste-input';
 import type { ReactNode, Ref } from 'react';
 import type { StyleProp, TextInput, TextStyle, ViewStyle } from 'react-native';
 
@@ -84,6 +85,11 @@ export type ComposerCollapsibleProps = {
 
 export type ComposerInputProps = {
   autoFocus?: boolean;
+  /**
+   * Every paste, not just the ones the composer could use — text arrives here
+   * too, already handled by the field. Callers filter for what they want.
+   */
+  onPaste?: (payload: PasteEventPayload) => void;
   placeholder?: string;
   ref?: Ref<TextInput>;
   style?: StyleProp<TextStyle>;

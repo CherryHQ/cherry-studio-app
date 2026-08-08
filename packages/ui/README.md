@@ -93,6 +93,13 @@ field's line height, which iOS has to override. Layout, state, and the collapse 
 on both platforms and stay in `composer.tsx` rather than being duplicated into a `composer.ios` /
 `composer.android` pair that would drift.
 
+`Composer.Input` wraps its field in `expo-paste-input`'s `TextInputWrapper` and forwards every paste
+to `onPaste`, unfiltered — text included, though the field has already handled it. Which pastes are
+worth acting on is the caller's question, and only the caller can answer it. The wrapper is there
+even when no handler is passed: it costs one native view, and making the field's hierarchy depend on
+a callback would mean a caller adding paste support later has to debug a layout change they did not
+make.
+
 The line height override is worth understanding before touching the field's padding. Tailwind's
 `text-base` carries a 24pt line height, 6pt more than the font needs, and UIKit puts all of that extra
 leading below the baseline instead of splitting it. The glyphs end up low inside their own box while

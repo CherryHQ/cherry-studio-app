@@ -210,6 +210,30 @@ describe('Composer', () => {
     expect(button.props.accessibilityLabel).toBe('Attach');
   });
 
+  it('hands pastes to the caller unfiltered', () => {
+    const onPaste = jest.fn();
+    const tree = render({
+      children: <Composer.Input onPaste={onPaste} testID="composer-input" />,
+    });
+    const wrapper = tree.root.find((node) => typeof node.props.onPaste === 'function');
+
+    act(() => {
+      wrapper.props.onPaste({ type: 'images', uris: ['file:///pasted.jpg'] });
+    });
+
+    // Including the kinds the composer has no use for: only the caller knows
+    // whether a pasted file is an attachment or something to ignore.
+    act(() => {
+      wrapper.props.onPaste({ type: 'unsupported' });
+    });
+
+    expect(onPaste).toHaveBeenNthCalledWith(1, {
+      type: 'images',
+      uris: ['file:///pasted.jpg'],
+    });
+    expect(onPaste).toHaveBeenNthCalledWith(2, { type: 'unsupported' });
+  });
+
   it('carries an icon and a label in a pill without letting the icon shrink', () => {
     const onPress = jest.fn();
     const tree = render({

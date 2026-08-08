@@ -66,6 +66,7 @@
     "@expo/ui": "*",
     "expo-glass-effect": "*",
     "expo-linear-gradient": "*",
+    "expo-paste-input": "*",
     "heroui-native": "*",
     "react": "*",
     "react-native": "*",

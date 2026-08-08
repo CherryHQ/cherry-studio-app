@@ -19,7 +19,11 @@ const pillPaddingHorizontal = 10;
 // Narrower than the toolbar's own gap so an icon and its label read as one thing
 // rather than as two tools that happen to be adjacent.
 const pillGap = 6;
-const maxTextHeight = 120;
+// Taken from the chat input this replaces rather than re-derived: a cap is a
+// judgement about how much of the conversation the composer may eat, and that
+// one has shipped. It lands mid-line on both platforms, which is useful — a
+// clipped glyph row is what tells the reader the field scrolls.
+const maxTextHeight = 132;
 // Symmetric on purpose: asymmetric padding would only trade the glyphs'
 // centering for the caret's. See `composerTextStyle.ios`.
 const textPaddingVertical = 4;
@@ -61,4 +65,7 @@ export const textInputBoxStyle = {
   maxHeight: maxTextHeight,
   paddingVertical: textPaddingVertical,
 } as const;
+// The paste wrapper shrink-wraps its child by default, which would pull the
+// field in from the surface's right edge and leave the caret short of it.
+export const pasteWrapperStyle = { alignSelf: 'stretch' } as const;
 export const toolbarStyle = { marginTop: toolbarGap } as const;
