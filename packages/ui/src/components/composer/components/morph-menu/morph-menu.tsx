@@ -99,7 +99,7 @@ function MorphMenuRoot({
   // untinted one is invisible when it sits on another glass surface — the
   // material has nothing behind it to refract. A menu that opens out of a
   // composer's toolbar does exactly that.
-  const material = useResolveClassNames('bg-surface-secondary');
+  const material = useResolveClassNames('bg-secondary');
   const triggerFootprint = useMemo(
     () => ({ height: triggerSize, width: triggerSize }),
     [triggerSize],
@@ -207,7 +207,7 @@ function MorphMenuRoot({
             material at all, so the two cannot be split into siblings to fade
             them separately. */}
         <Surface
-          className="bg-surface-secondary"
+          className="bg-secondary"
           cornerRadius={openRadius}
           style={fillStyle}
           tintColor={
@@ -282,7 +282,7 @@ function MorphMenuItem({ icon, label, onPress, selected, testID, trailing }: Mor
       accessibilityLabel={label}
       accessibilityRole="menuitem"
       accessibilityState={{ selected }}
-      className="h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-surface-tertiary"
+      className="h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-secondary-active"
       onPress={() => {
         close();
         onPress();

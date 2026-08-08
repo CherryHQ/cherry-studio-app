@@ -27,7 +27,7 @@ export function SettingsDialogActionButton({
       accessibilityState={{ disabled: isDisabled }}
       className={cn(
         'h-9 min-w-20 items-center justify-center rounded-xl px-4 active:opacity-80 disabled:opacity-40',
-        isPrimary ? 'bg-primary' : 'bg-settings-grouped-surface',
+        isPrimary ? 'bg-primary' : 'bg-secondary',
         isFullWidth && 'w-full',
       )}
       disabled={isDisabled}
@@ -37,7 +37,9 @@ export function SettingsDialogActionButton({
         {isLoading ? <Spinner size="sm" /> : null}
         <Text
           className={
-            isPrimary ? 'font-medium text-sm text-white' : 'font-medium text-foreground text-sm'
+            isPrimary
+              ? 'font-medium text-primary-foreground text-sm'
+              : 'font-medium text-foreground text-sm'
           }
           numberOfLines={1}
         >

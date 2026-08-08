@@ -9,17 +9,13 @@ export type Declaration = {
 
 export type ThemeSources = {
   contract: string;
-  primitive: string;
   product: string;
-  providers: string;
   radius: string;
   shadcn: string;
-  spacing: string;
-  statusLegacy: string;
-  themeInput: string;
   tokens: string;
   tokensIndex: string;
   typography: string;
+  vercel: string;
 };
 
 const customPropertyPattern = /^--[a-z0-9-]+$/;
@@ -100,47 +96,27 @@ export async function loadThemeSources(root = stylesDir): Promise<ThemeSources> 
   const tokensRoot = path.join(root, 'tokens');
   const read = (relativePath: string) => readFile(path.join(root, relativePath), 'utf8');
 
-  const [
-    contract,
-    primitive,
-    product,
-    providers,
-    radius,
-    shadcn,
-    spacing,
-    statusLegacy,
-    themeInput,
-    tokens,
-    tokensIndex,
-    typography,
-  ] = await Promise.all([
-    read('contract.css'),
-    read('tokens/colors/primitive.css'),
-    read('product.css'),
-    read('tokens/colors/providers.css'),
-    read('tokens/radius.css'),
-    read('shadcn.css'),
-    read('tokens/spacing.css'),
-    read('tokens/colors/status-legacy.css'),
-    read('theme-input.css'),
-    read('tokens.css'),
-    readFile(path.join(tokensRoot, 'index.css'), 'utf8'),
-    read('tokens/typography.css'),
-  ]);
+  const [contract, product, radius, shadcn, tokens, tokensIndex, typography, vercel] =
+    await Promise.all([
+      read('contract.css'),
+      read('product.css'),
+      read('tokens/radius.css'),
+      read('shadcn.css'),
+      read('tokens.css'),
+      readFile(path.join(tokensRoot, 'index.css'), 'utf8'),
+      read('tokens/typography.css'),
+      read('tokens/colors/vercel.css'),
+    ]);
 
   return {
     contract,
-    primitive,
     product,
-    providers,
     radius,
     shadcn,
-    spacing,
-    statusLegacy,
-    themeInput,
     tokens,
     tokensIndex,
     typography,
+    vercel,
   };
 }
 
@@ -166,16 +142,15 @@ function declarationMap(
 }
 
 export function buildThemeModel(sources: ThemeSources) {
+  // No colour source is static any more: every colour in the system flips with
+  // the theme, so it belongs in the themed maps below.
   const staticEntries = [
-    ['tokens/colors/primitive.css', sources.primitive],
-    ['tokens/spacing.css', sources.spacing],
     ['tokens/radius.css', sources.radius],
     ['tokens/typography.css', sources.typography],
   ] as const;
   const themedEntries = [
-    ['tokens/colors/status-legacy.css', sources.statusLegacy],
-    ['tokens/colors/providers.css', sources.providers],
-    ['theme-input.css', sources.themeInput],
+    // The palette comes first so the semantic layers below can reference it.
+    ['tokens/colors/vercel.css', sources.vercel],
     ['shadcn.css', sources.shadcn],
     ['product.css', sources.product],
   ] as const;

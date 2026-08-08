@@ -240,7 +240,7 @@ export function PaintingInput({
               onPress={openSettings}
               testID="painting-input-settings-button"
             >
-              <Settings2Icon className="size-4 text-default-foreground" strokeWidth={2} />
+              <Settings2Icon className="size-4 text-foreground" strokeWidth={2} />
             </Composer.Action>
           ) : null}
           <ComposerModelPill

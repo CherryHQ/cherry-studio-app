@@ -14,7 +14,7 @@ export function MainHeader() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const separatorColor = useThemeColor('separator');
+  const separatorColor = useThemeColor('border-strong');
   const { assistant, openAssistant } = useMainHeaderAssistant();
 
   const openNewTopic = useCallback(() => {

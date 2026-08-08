@@ -14,7 +14,6 @@ import {
 import {
   CHERRY_PRODUCT_COLOR_TOKENS,
   CHERRY_PRODUCT_VARIABLE_TOKENS,
-  RUNTIME_THEME_INPUT_TOKENS,
   SHADCN_COLOR_TOKENS,
   SHADCN_VARIABLE_TOKENS,
 } from './theme-contract';
@@ -41,16 +40,12 @@ export async function checkDesignTokens(): Promise<void> {
   const sources = await loadThemeSources();
   assertEqual('tokens.css imports', extractImports(sources.tokens), ['./tokens/index.css']);
   assertEqual('tokens/index.css imports', extractImports(sources.tokensIndex), [
-    './colors/primitive.css',
-    './colors/status-legacy.css',
-    './colors/providers.css',
-    './spacing.css',
+    './colors/vercel.css',
     './radius.css',
     './typography.css',
   ]);
   assertEqual('contract.css imports', extractImports(sources.contract), [
     './tokens.css',
-    './theme-input.css',
     './shadcn.css',
     './product.css',
   ]);
@@ -64,7 +59,6 @@ export async function checkDesignTokens(): Promise<void> {
   assertNoCycles('dark', darkResolved);
 
   const lightNames = new Set(lightDeclarations.keys());
-  assertRequired(lightNames, RUNTIME_THEME_INPUT_TOKENS, '--cs-theme-');
   assertRequired(lightNames, SHADCN_VARIABLE_TOKENS, '--');
   assertRequired(lightNames, CHERRY_PRODUCT_VARIABLE_TOKENS, '--');
 
@@ -81,15 +75,15 @@ export async function checkDesignTokens(): Promise<void> {
   );
   assertEqual('native light/dark variables', nativeDarkNames, nativeLightNames);
 
+  // Every `--color-*` the adapter emits must be a public contract name. This
+  // used to skip `var(--cs-*)` targets, back when the raw palettes were exposed
+  // as utilities too; dropping that filter turns the assertion into the stronger
+  // claim that no palette step can leak back into a className.
   const expectedPublicColors = new Set([...SHADCN_COLOR_TOKENS, ...CHERRY_PRODUCT_COLOR_TOKENS]);
   const semanticMappings = [
     ...nativeCss.matchAll(/^\s*--color-([a-z0-9-]+):\s*var\(--([a-z0-9-]+)\);$/gm),
-  ]
-    .filter((match) => !match[2].startsWith('cs-'))
-    .map((match) => match[1]);
+  ].map((match) => match[1]);
   assertEqual('public semantic colors', semanticMappings, [...expectedPublicColors]);
-
-  await readFile(path.join(stylesDir, '../sync-manifest.json'), 'utf8');
 }
 
 void checkDesignTokens()

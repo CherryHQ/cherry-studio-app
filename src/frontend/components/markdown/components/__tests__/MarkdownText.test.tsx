@@ -7,16 +7,10 @@ jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [0, jest.fn()],
 }));
 
+// Echo the requested token names back as the colors, so an assertion below
+// reads as "this style slot is fed by this token".
 jest.mock('@/frontend/hooks/useThemeColor', () => ({
-  useThemeColor: () => [
-    'foreground',
-    'background',
-    'muted-foreground',
-    'link',
-    'primary',
-    'border',
-    'secondary',
-  ],
+  useThemeColor: (names: readonly string[]) => names,
 }));
 
 jest.mock('react-native-enriched-markdown', () => {
@@ -58,11 +52,28 @@ describe('MarkdownText', () => {
       );
       expect(props.markdownStyle).toEqual(
         expect.objectContaining({
-          paragraph: { fontSize: 20, lineHeight: 28 },
-          h1: { fontSize: 48, lineHeight: 48 },
-          h2: { fontSize: 36, lineHeight: 40 },
-          codeBlock: { fontSize: 18, lineHeight: 28 },
-          table: { fontSize: 18, lineHeight: 28 },
+          paragraph: { color: 'foreground', fontSize: 20, lineHeight: 26 },
+          h1: { color: 'foreground', fontSize: 48, lineHeight: 56 },
+          h2: { color: 'foreground', fontSize: 40, lineHeight: 48 },
+          // Code cannot reach the `font-mono` utility through a style object,
+          // so the family is named explicitly. Colors come from the product
+          // domain tokens, not from the renderer's own palette — and they do so
+          // in light mode too, which is what the color-scheme branch used to
+          // skip.
+          code: {
+            backgroundColor: 'inline-code',
+            borderColor: 'border',
+            color: 'inline-code-foreground',
+            fontFamily: 'GeistMono-Regular',
+          },
+          codeBlock: {
+            backgroundColor: 'code-block',
+            borderColor: 'border',
+            color: 'foreground',
+            fontFamily: 'GeistMono-Regular',
+            fontSize: 18,
+            lineHeight: 28,
+          },
         }),
       );
       expect(renderer.root.findAllByType(excluded)).toHaveLength(0);

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { type LayoutChangeEvent, Text, View } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
-import { slotTextHighlightColor } from '@/frontend/utils/constants';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { SlotGlyph } from './components/SlotGlyph';
 import type { SlotTextProps } from './SlotText.types';
@@ -62,6 +62,11 @@ export function SlotText({
 }: SlotTextProps) {
   const resolvedEllipsizeMode = ellipsizeMode ?? 'clip';
   const reducedMotion = useReducedMotion();
+  // The user's accent, not Cherry's green: this tints ordinary foreground text
+  // for a beat to say "this value just changed", so it belongs to whatever the
+  // rest of the app's interactive accents are. It was frozen at the brand
+  // default as a literal, which made the tint ignore the theme-colour setting.
+  const highlightColor = useThemeColor('primary');
   const resolved = resolveSlotTextOptions({
     bounce,
     colorFadeDurationMs,
@@ -224,7 +229,7 @@ export function SlotText({
           const height = Math.max(currentMetrics?.height ?? 0, targetMetrics?.height ?? 0);
           const shouldAnimate =
             hasAllMetrics && shouldAnimateTransition && animatedSlotFlags[index];
-          const resolvedHighlightColor = targetSegment ? slotTextHighlightColor : undefined;
+          const resolvedHighlightColor = targetSegment ? highlightColor : undefined;
 
           return (
             <SlotGlyph

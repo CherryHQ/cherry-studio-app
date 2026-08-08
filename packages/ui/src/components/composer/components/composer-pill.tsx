@@ -13,7 +13,7 @@ import type { ComposerPillProps } from '../composer.types';
 export function ComposerPill({
   accessibilityLabel,
   children,
-  className = 'bg-surface-secondary',
+  className = 'bg-secondary',
   disabled = false,
   icon,
   onPress,

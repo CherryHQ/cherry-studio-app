@@ -23,24 +23,24 @@ export function FileTile({
   const extension = getFileExtension(name);
   const baseName = getFileBaseName(name);
   const containerClassName = cn(
-    'size-28 items-start justify-between overflow-hidden rounded-2xl border border-border bg-surface-secondary p-2',
+    'size-28 items-start justify-between overflow-hidden rounded-2xl border border-border bg-secondary p-2',
     onPress && 'active:opacity-70',
     className,
   );
   const content = (
     <>
       {statusLabel ? (
-        <Text className="font-medium text-danger text-xs" numberOfLines={2}>
+        <Text className="font-medium text-destructive text-xs" numberOfLines={2}>
           {statusLabel}
         </Text>
       ) : extension ? (
         <View className="rounded-md border border-border px-1.5 py-0.5">
-          <Text className="font-semibold text-default-foreground text-xs">{extension}</Text>
+          <Text className="font-semibold text-foreground text-xs">{extension}</Text>
         </View>
       ) : (
         <View />
       )}
-      <Text className="text-default-foreground text-xs" numberOfLines={3}>
+      <Text className="text-foreground text-xs" numberOfLines={3}>
         {baseName}
       </Text>
     </>

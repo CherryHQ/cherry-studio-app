@@ -62,7 +62,7 @@ describe('Section', () => {
       tree.root.findAll(
         (node) =>
           typeof node.props.className === 'string' &&
-          node.props.className.includes('bg-settings-grouped-surface'),
+          node.props.className.includes('bg-grouped-surface'),
       ).length,
     ).toBeGreaterThan(0);
     expect(
@@ -110,7 +110,7 @@ describe('Section', () => {
       (node) =>
         node.type === View &&
         typeof node.props.className === 'string' &&
-        node.props.className.includes('bg-settings-grouped-surface'),
+        node.props.className.includes('bg-grouped-surface'),
     );
 
     expect(groupedCard.findAllByProps({ testID: 'section-header' })).toHaveLength(0);
@@ -194,7 +194,7 @@ describe('Section', () => {
 
     expect(row.props.disabled).toBe(true);
     expect(row.props.className).toContain('opacity-40');
-    expect(label.props.className).toContain('text-danger');
+    expect(label.props.className).toContain('text-destructive');
     expect(tree.root.findByProps({ testID: 'custom-trailing' })).toBeDefined();
     expect(
       tree.root.findAll((node) => node.type === View && node.props.testID === 'section-chevron'),

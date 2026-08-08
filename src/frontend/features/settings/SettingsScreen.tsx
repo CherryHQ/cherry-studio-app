@@ -50,7 +50,7 @@ export default function SettingsScreen() {
   const contentContainerStyle = useMemo(() => ({ paddingBottom: tabBarHeight }), [tabBarHeight]);
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-grouped-background">
       <Animated.ScrollView
         alwaysBounceVertical
         contentContainerStyle={contentContainerStyle}

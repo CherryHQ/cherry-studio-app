@@ -1,9 +1,8 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
+import { cn } from '@cherrystudio/ui/utils';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
-import { useUniwind } from 'uniwind';
 
-import { thinkingAccentColor } from '../effortSlider';
 import {
   type ChatInputReasoningEffort,
   getChatInputReasoningEffortOption,
@@ -11,8 +10,8 @@ import {
 
 /**
  * The reasoning effort, shown after the model name inside the composer's model
- * pill. `max` borrows the effort slider's accent so the pill and the slider
- * agree on what "thinking hard" looks like.
+ * pill. `max` stands out in Cherry's brand green — deliberately `brand` and not
+ * `primary`, which is the user's colour and would recolour this mark.
  */
 export function ChatInputEffortBadge({
   reasoningEffort,
@@ -20,7 +19,6 @@ export function ChatInputEffortBadge({
   reasoningEffort: ChatInputReasoningEffort;
 }) {
   const { t } = useTranslation();
-  const { theme } = useUniwind();
   const labelKey = getChatInputReasoningEffortOption(reasoningEffort)?.labelKey;
 
   if (!labelKey) {
@@ -29,13 +27,11 @@ export function ChatInputEffortBadge({
 
   return (
     <Text
-      className="shrink-0 text-default-foreground text-sm"
+      className={cn(
+        'shrink-0 text-sm',
+        reasoningEffort === REASONING_EFFORT.MAX ? 'text-brand' : 'text-foreground',
+      )}
       numberOfLines={1}
-      style={
-        reasoningEffort === REASONING_EFFORT.MAX
-          ? { color: thinkingAccentColor[theme === 'dark' ? 'dark' : 'light'] }
-          : undefined
-      }
       testID="chat-input-model-effort-label"
     >
       {t(labelKey)}

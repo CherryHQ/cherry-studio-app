@@ -76,7 +76,10 @@ function SectionItem({
       <>
         {leading ? <View className="shrink-0 items-center justify-center">{leading}</View> : null}
         <View className="min-w-0 flex-1 gap-1">
-          {renderTextSlot(label, cn('text-base', destructive ? 'text-danger' : 'text-foreground'))}
+          {renderTextSlot(
+            label,
+            cn('text-base', destructive ? 'text-destructive' : 'text-foreground'),
+          )}
           {description ? renderTextSlot(description, 'text-sm text-muted-foreground') : null}
         </View>
         {trailing ? <View className="shrink-0 items-center justify-center">{trailing}</View> : null}
@@ -156,7 +159,7 @@ function SectionRoot({
     <View className={cn('gap-1', className)} {...viewProps}>
       {title !== undefined ? <SectionHeader title={title} /> : headers}
       <View
-        className={cn('overflow-hidden rounded-2xl bg-settings-grouped-surface', contentClassName)}
+        className={cn('overflow-hidden rounded-2xl bg-grouped-surface', contentClassName)}
         style={{ borderCurve: 'continuous' }}
       >
         {rows.map((row, index) => {

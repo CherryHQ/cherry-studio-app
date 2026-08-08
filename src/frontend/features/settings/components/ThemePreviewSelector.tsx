@@ -3,6 +3,7 @@ import { ThemeMode } from '@cherrystudio/universal/data/preference';
 import { CheckIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
+import { ScopedTheme } from 'uniwind';
 
 type ResolvedThemeMode = ThemeMode.dark | ThemeMode.light;
 
@@ -66,95 +67,60 @@ export function ThemePreviewSelector({
   );
 }
 
+/**
+ * Miniature of a chat screen, drawn entirely from semantic tokens inside a
+ * `ScopedTheme`. Both swatches are on screen at once while the app itself is in
+ * one theme, which is what the scope is for — it makes `bg-background` and
+ * friends resolve against the previewed theme instead of the active one.
+ *
+ * This used to hand-paint two `neutral-*` ladders with an `isDark` ternary on
+ * every node, because a raw palette step is the only thing that does not follow
+ * the active theme. That made the preview a drawing of the design rather than a
+ * view of it: it kept showing a blue user bubble long after the real one became
+ * a gray overlay, and it could not show a custom brand color at all. Scoping it
+ * costs one wrapper and keeps the preview honest by construction.
+ */
 function ThemePreview({ theme }: { theme: ResolvedThemeMode }) {
-  const isDark = theme === ThemeMode.dark;
-
   return (
-    <View
-      className={
-        isDark
-          ? 'w-24 max-w-full overflow-hidden rounded-lg border border-neutral-700 bg-neutral-950'
-          : 'w-24 max-w-full overflow-hidden rounded-lg border border-neutral-300 bg-white'
-      }
-      style={{ aspectRatio: 9 / 16, borderCurve: 'continuous' }}
-    >
+    // `ThemeMode` is a string enum, so it needs widening into uniwind's own
+    // literal union — same boundary conversion `applyThemeModePreference` does.
+    <ScopedTheme theme={theme === ThemeMode.dark ? 'dark' : 'light'}>
       <View
-        className={
-          isDark
-            ? 'h-7 flex-row items-center border-neutral-800 border-b bg-neutral-900 px-2'
-            : 'h-7 flex-row items-center border-neutral-200 border-b bg-neutral-100 px-2'
-        }
+        className="w-24 max-w-full overflow-hidden rounded-lg border border-border bg-background"
+        style={{ aspectRatio: 9 / 16, borderCurve: 'continuous' }}
       >
-        <View
-          className={
-            isDark ? 'size-2 rounded-full bg-neutral-600' : 'size-2 rounded-full bg-neutral-300'
-          }
-        />
-        <View className="flex-1 items-center">
-          <View
-            className={
-              isDark
-                ? 'h-1.5 w-7 rounded-full bg-neutral-600'
-                : 'h-1.5 w-7 rounded-full bg-neutral-300'
-            }
-          />
+        <View className="h-7 flex-row items-center border-border-subtle border-b bg-card px-2">
+          <View className="size-2 rounded-full bg-border-strong" />
+          <View className="flex-1 items-center">
+            <View className="h-1.5 w-7 rounded-full bg-border-strong" />
+          </View>
+          <View className="size-2" />
         </View>
-        <View className="size-2" />
-      </View>
-      <View className="min-h-0 flex-1 gap-2 p-2">
-        <View
-          className={
-            isDark
-              ? 'h-6 w-4/5 justify-center gap-1 rounded-lg rounded-bl-sm bg-neutral-800 px-2'
-              : 'h-6 w-4/5 justify-center gap-1 rounded-lg rounded-bl-sm bg-neutral-200 px-2'
-          }
-        >
-          <View
-            className={
-              isDark
-                ? 'h-1 w-full rounded-full bg-neutral-600'
-                : 'h-1 w-full rounded-full bg-neutral-400'
-            }
-          />
-          <View
-            className={
-              isDark
-                ? 'h-1 w-2/3 rounded-full bg-neutral-600'
-                : 'h-1 w-2/3 rounded-full bg-neutral-400'
-            }
-          />
-        </View>
-        <View className="h-5 w-3/4 self-end justify-center gap-1 rounded-lg rounded-br-sm bg-blue-500 px-2">
-          <View className="h-1 w-full rounded-full bg-white/80" />
-          <View className="h-1 w-1/2 self-end rounded-full bg-white/80" />
-        </View>
-        <View
-          className={
-            isDark
-              ? 'h-4 w-1/2 rounded-lg rounded-bl-sm bg-neutral-800'
-              : 'h-4 w-1/2 rounded-lg rounded-bl-sm bg-neutral-200'
-          }
-        />
-        <View className="flex-1" />
-        <View
-          className={
-            isDark
-              ? 'h-6 flex-row items-center rounded-full border border-neutral-700 bg-neutral-900 px-2'
-              : 'h-6 flex-row items-center rounded-full border border-neutral-300 bg-neutral-100 px-2'
-          }
-        >
-          <View
-            className={
-              isDark
-                ? 'h-1 w-1/2 rounded-full bg-neutral-700'
-                : 'h-1 w-1/2 rounded-full bg-neutral-300'
-            }
-          />
+        <View className="min-h-0 flex-1 gap-3 p-2">
+          {/* Assistant turns are bare text on the page — no bubble — so the two
+              sides are told apart by the user bubble alone. Drawing one here
+              would also be indistinguishable from it: `secondary` and
+              `chat-user` are both gray-alpha-100. */}
+          <View className="w-4/5 gap-1">
+            <View className="h-1 w-full rounded-full bg-muted-foreground" />
+            <View className="h-1 w-2/3 rounded-full bg-muted-foreground" />
+          </View>
+          <View className="h-5 w-3/4 self-end justify-center gap-1 rounded-lg bg-chat-user px-2">
+            <View className="h-1 w-full rounded-full bg-muted-foreground" />
+            <View className="h-1 w-1/2 self-end rounded-full bg-muted-foreground" />
+          </View>
+          <View className="h-1 w-1/2 rounded-full bg-muted-foreground" />
           <View className="flex-1" />
-          <View className="size-3 rounded-full bg-blue-500" />
+          <View className="h-6 flex-row items-center rounded-full border border-border bg-card px-2">
+            <View className="h-1 w-1/2 rounded-full bg-border-strong" />
+            <View className="flex-1" />
+            {/* The send button carries `primary`, so the swatch also previews
+                whatever brand color the user picked. */}
+            <View className="size-3 rounded-full bg-primary" />
+          </View>
         </View>
       </View>
-    </View>
+    </ScopedTheme>
   );
 }
 

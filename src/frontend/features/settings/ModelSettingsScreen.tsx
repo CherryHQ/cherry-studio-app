@@ -102,10 +102,10 @@ function SelectedModelAccessory({
 }) {
   return (
     <View className="max-w-[62%] flex-row items-center justify-end gap-1">
-      <Text className="min-w-0 shrink text-right text-default-foreground text-sm" numberOfLines={1}>
+      <Text className="min-w-0 shrink text-right text-foreground text-sm" numberOfLines={1}>
         {item?.model.name ?? placeholder}
       </Text>
-      <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-6 text-foreground" strokeWidth={2} />
     </View>
   );
 }

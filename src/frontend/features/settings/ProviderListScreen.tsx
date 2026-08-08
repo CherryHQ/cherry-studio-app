@@ -152,7 +152,7 @@ export default function ProviderSettingsScreen() {
         {filteredProviderItems.length > 0 ? (
           <View className="min-h-0 flex-1">
             <View
-              className="overflow-hidden rounded-2xl bg-settings-grouped-surface"
+              className="overflow-hidden rounded-2xl bg-grouped-surface"
               style={{ height: cardHeight, maxHeight: '100%' }}
             >
               <LegendList

@@ -22,7 +22,6 @@ const advancedSettingsScrollTopPadding = 16;
 const defaultKeyboardBottomOffset = 0;
 const advancedSettingsKeyboardBottomOffset = 180;
 const advancedSettingsKeyboardPadding = 220;
-const selectedEndpointTypeColor = '#00b96b';
 
 export default function ProviderModelAddScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
@@ -190,7 +189,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
 
           {showEndpointTypes ? (
             <View className="gap-2">
-              <Text className="font-medium text-default-foreground text-sm">
+              <Text className="font-medium text-foreground text-sm">
                 {t('settings.provider.models.addEndpointTypeLabel')}
               </Text>
               <View className="flex-row flex-wrap gap-2">
@@ -205,7 +204,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
                 ))}
               </View>
               {endpointTypeError ? (
-                <Text className="text-danger text-xs">{endpointTypeError}</Text>
+                <Text className="text-destructive text-xs">{endpointTypeError}</Text>
               ) : null}
             </View>
           ) : null}
@@ -213,7 +212,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
           <Pressable
             accessibilityLabel={t('settings.provider.models.addMoreSettings')}
             accessibilityRole="button"
-            className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-settings-grouped-surface px-3 active:opacity-70 disabled:opacity-40"
+            className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-secondary px-3 active:opacity-70 disabled:opacity-40"
             disabled={isSubmitting}
             onPress={toggleMoreSettings}
           >
@@ -221,9 +220,9 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
               {t('settings.provider.models.addMoreSettings')}
             </Text>
             {showMoreSettings ? (
-              <ChevronUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
+              <ChevronUpIcon className="size-4 text-foreground" strokeWidth={2} />
             ) : (
-              <ChevronDownIcon className="size-4 text-default-foreground" strokeWidth={2} />
+              <ChevronDownIcon className="size-4 text-foreground" strokeWidth={2} />
             )}
           </Pressable>
 
@@ -364,16 +363,14 @@ function EndpointTypeChip({
       accessibilityState={{ checked: isSelected, disabled: isDisabled }}
       className={cn(
         'h-8 flex-row items-center gap-1 rounded-full px-3 active:opacity-70 disabled:opacity-40',
-        isSelected ? null : 'border border-border bg-settings-grouped-surface',
+        isSelected ? 'bg-primary/10' : 'border border-border bg-secondary',
       )}
       disabled={isDisabled}
       onPress={onPress}
-      style={isSelected ? { backgroundColor: `${selectedEndpointTypeColor}20` } : undefined}
     >
       <Text
-        className="font-medium text-default-foreground text-sm"
+        className={cn('font-medium text-sm', isSelected ? 'text-primary' : 'text-foreground')}
         numberOfLines={1}
-        style={isSelected ? { color: selectedEndpointTypeColor } : undefined}
       >
         {label}
       </Text>

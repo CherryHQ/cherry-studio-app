@@ -155,22 +155,19 @@ export default function WebSearchCheckScreen() {
             trailing={
               <View className="min-w-0 max-w-56 flex-row items-center justify-end gap-1">
                 <Text
-                  className="min-w-0 shrink text-right text-base text-default-foreground"
+                  className="min-w-0 shrink text-right text-base text-foreground"
                   numberOfLines={1}
                 >
                   {selectedApiKey?.label ?? t('settings.websearch.provider.checkNoApiKeys')}
                 </Text>
-                <ChevronRightIcon
-                  className="size-5 shrink-0 text-default-foreground"
-                  strokeWidth={2}
-                />
+                <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
               </View>
             }
           />
         </Section>
 
         {successMessage ? (
-          <View className="gap-1 rounded-xl bg-settings-grouped-surface px-4 py-3">
+          <View className="gap-1 rounded-xl bg-grouped-surface px-4 py-3">
             <Text selectable className="text-base text-success">
               {successMessage}
             </Text>

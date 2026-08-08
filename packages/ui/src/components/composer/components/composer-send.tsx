@@ -40,7 +40,7 @@ export function ComposerSend({ testID }: ComposerSendProps) {
     // button is the same material as the rest, just carrying the accent.
     <ComposerAction
       accessibilityLabel={isStopping ? labels.stop : labels.send}
-      className={isActive ? 'bg-primary' : 'bg-surface-secondary'}
+      className={isActive ? 'bg-primary' : 'bg-secondary'}
       disabled={!isActive}
       onPress={handlePress}
       style={sendStyle}
@@ -48,7 +48,7 @@ export function ComposerSend({ testID }: ComposerSendProps) {
     >
       <Icon
         className={cn(
-          isActive ? 'text-white' : 'text-muted-foreground',
+          isActive ? 'text-primary-foreground' : 'text-muted-foreground',
           isStopping ? 'size-4' : 'size-6',
         )}
         strokeWidth={2}

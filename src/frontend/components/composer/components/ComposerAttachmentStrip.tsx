@@ -102,8 +102,8 @@ function RemoveBadge({ onPress }: { onPress: () => void }) {
       className="absolute top-0 right-0 z-[1] size-11 active:opacity-70"
       onPress={handlePress}
     >
-      <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-white">
-        <XIcon className="size-4.5 text-black" strokeWidth={2.5} />
+      <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-constant-white">
+        <XIcon className="size-4.5 text-constant-black" strokeWidth={2.5} />
       </View>
     </Pressable>
   );

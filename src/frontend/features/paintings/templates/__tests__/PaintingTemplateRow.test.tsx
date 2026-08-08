@@ -76,7 +76,6 @@ jest.mock('@/frontend/components/nativePrimitives', () => {
 jest.mock('@/frontend/utils/constants', () => ({
   bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
   isLiquidGlassAvailable: true,
-  sheetScrimColor: '#00000066',
 }));
 
 jest.mock('react-native-safe-area-context', () => ({

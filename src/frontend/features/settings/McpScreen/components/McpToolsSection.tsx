@@ -131,7 +131,7 @@ export function McpToolsSection({
     return (
       <View className="flex-row items-center gap-2">
         <Spinner size="sm" />
-        <Text className="text-default-foreground text-sm">{t('settings.mcp.tools.loading')}</Text>
+        <Text className="text-foreground text-sm">{t('settings.mcp.tools.loading')}</Text>
       </View>
     );
   }
@@ -139,10 +139,12 @@ export function McpToolsSection({
   if (toolsQuery.isError) {
     return (
       <View className="gap-2">
-        <Text className="text-danger-foreground text-sm">{t('settings.mcp.tools.loadFailed')}</Text>
+        <Text className="text-destructive-foreground text-sm">
+          {t('settings.mcp.tools.loadFailed')}
+        </Text>
         {/* The reason is the whole point here — an expired token and a typo'd
             URL are the same generic failure without it. */}
-        <Text className="text-default-foreground text-xs" selectable>
+        <Text className="text-foreground text-xs" selectable>
           {toolsQuery.error instanceof Error ? toolsQuery.error.message : String(toolsQuery.error)}
         </Text>
         <SettingsDialogActionButton label={t('settings.mcp.tools.retry')} onPress={refetch} />
@@ -154,16 +156,16 @@ export function McpToolsSection({
   const controlsAreReadOnly = isReadOnly || isTogglePending;
 
   if (tools.length === 0) {
-    return <Text className="text-default-foreground text-sm">{t('settings.mcp.tools.empty')}</Text>;
+    return <Text className="text-foreground text-sm">{t('settings.mcp.tools.empty')}</Text>;
   }
 
   return (
     <View className="gap-3">
       <View className="flex-row items-center justify-end gap-4">
-        <Text className="w-14 text-center text-default-foreground text-[10px]" numberOfLines={1}>
+        <Text className="w-14 text-center text-foreground text-[10px]" numberOfLines={1}>
           {t('settings.mcp.tools.enabledColumn')}
         </Text>
-        <Text className="w-14 text-center text-default-foreground text-[10px]" numberOfLines={2}>
+        <Text className="w-14 text-center text-foreground text-[10px]" numberOfLines={2}>
           {t('settings.mcp.tools.autoApproveColumn')}
         </Text>
       </View>
@@ -177,7 +179,7 @@ export function McpToolsSection({
                 {tool.name}
               </Text>
               {tool.description ? (
-                <Text className="text-default-foreground text-xs" numberOfLines={2}>
+                <Text className="text-foreground text-xs" numberOfLines={2}>
                   {tool.description}
                 </Text>
               ) : null}

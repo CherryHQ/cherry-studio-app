@@ -51,7 +51,7 @@ export function SelectionToolbar({
           disabled={isDeleteDisabled}
           onPress={onDelete}
         >
-          <Text className="font-medium text-danger text-sm" numberOfLines={1}>
+          <Text className="font-medium text-destructive text-sm" numberOfLines={1}>
             {t('common.delete')}
           </Text>
         </Pressable>

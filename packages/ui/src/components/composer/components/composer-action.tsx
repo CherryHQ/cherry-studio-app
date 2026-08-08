@@ -13,7 +13,7 @@ import type { ComposerActionProps } from '../composer.types';
 export function ComposerAction({
   accessibilityLabel,
   children,
-  className = 'bg-surface-secondary',
+  className = 'bg-secondary',
   disabled = false,
   onPress,
   style,

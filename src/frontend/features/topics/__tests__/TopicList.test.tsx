@@ -188,8 +188,7 @@ describe('TopicList pin action', () => {
     expect(renderer?.root.findByProps({ accessibilityLabel: 'Unpin topic' })).toBeTruthy();
     const highlightedRows =
       renderer?.root.findAllByProps({
-        className:
-          'relative min-w-0 flex-1 flex-row items-center gap-2 bg-surface-secondary py-2 pl-2',
+        className: 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-secondary py-2 pl-2',
       }) ?? [];
     expect(highlightedRows.length).toBeGreaterThan(0);
   });

@@ -86,7 +86,7 @@ function McpOutputSection({ output }: { output: unknown }) {
 
   if (!text.trim() && images.length === 0) {
     return (
-      <Text className="text-default-foreground text-base italic" selectable>
+      <Text className="text-foreground text-base italic" selectable>
         {t('chat.mcpTool.noOutput')}
       </Text>
     );

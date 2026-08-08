@@ -63,10 +63,8 @@ export default function AppearanceSettingsScreen() {
             onPress={() => router.push('/settings/language')}
             trailing={
               <View className="flex-row items-center gap-1">
-                <Text className="text-right text-base text-default-foreground">
-                  {languageLabel}
-                </Text>
-                <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2} />
+                <Text className="text-right text-base text-foreground">{languageLabel}</Text>
+                <ChevronRightIcon className="size-5 text-foreground" strokeWidth={2} />
               </View>
             }
           />
@@ -76,10 +74,10 @@ export default function AppearanceSettingsScreen() {
             onPress={() => router.push('/settings/font-size')}
             trailing={
               <View className="flex-row items-center gap-1">
-                <Text className="text-right text-base text-default-foreground">
+                <Text className="text-right text-base text-foreground">
                   {t(FONT_SIZE_STEP_LABEL_KEYS[normalizedFontSizeStep])}
                 </Text>
-                <ChevronRightIcon className="size-5 text-default-foreground" strokeWidth={2} />
+                <ChevronRightIcon className="size-5 text-foreground" strokeWidth={2} />
               </View>
             }
           />

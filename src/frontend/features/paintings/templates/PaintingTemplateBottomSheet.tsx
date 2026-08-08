@@ -105,7 +105,7 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
           edge, so it has nothing to be concentric with and takes a flat radius
           on all four corners rather than tracking the card's. */}
       <View
-        className="w-full rounded-xl bg-surface-secondary p-4"
+        className="w-full rounded-xl bg-secondary p-4"
         style={styles.promptPanel}
         testID="painting-template-prompt-panel"
       >

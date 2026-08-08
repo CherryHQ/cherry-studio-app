@@ -179,7 +179,7 @@ function PaintingSettingField({
         <View className="gap-3">
           <View className="flex-row items-center justify-between gap-3">
             <Text className="font-medium text-foreground text-sm">{label}</Text>
-            <Text className="text-default-foreground text-sm" style={styles.tabularText}>
+            <Text className="text-foreground text-sm" style={styles.tabularText}>
               {numericValue}
             </Text>
           </View>
@@ -249,7 +249,7 @@ function AspectRatioField({
     <View className="gap-2">
       <View className="flex-row items-center justify-between gap-3">
         <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
-        <SlotText text={headerText} textClassName="font-medium text-default-foreground text-sm" />
+        <SlotText text={headerText} textClassName="font-medium text-foreground text-sm" />
       </View>
       <Section>
         <Section.Item className="p-4">
@@ -337,7 +337,7 @@ function AspectRatioOption({
         className={
           isSelected
             ? 'font-semibold text-foreground text-sm'
-            : 'font-medium text-default-foreground text-sm'
+            : 'font-medium text-foreground text-sm'
         }
         numberOfLines={1}
         style={styles.tabularText}
@@ -378,7 +378,7 @@ function EnumChipsField({
               className={
                 isSelected
                   ? 'h-14 items-center justify-center gap-1 rounded-lg border border-primary bg-primary/10 px-2 active:opacity-70'
-                  : 'h-14 items-center justify-center gap-1 rounded-lg border border-border bg-surface-secondary px-2 active:opacity-70'
+                  : 'h-14 items-center justify-center gap-1 rounded-lg border border-border bg-secondary px-2 active:opacity-70'
               }
               key={option}
               onPress={() => onValueChange(field.key, option)}
@@ -424,13 +424,10 @@ function EnumSettingRow({
         testID={`painting-setting-${field.key}`}
         trailing={
           <View className="min-w-0 max-w-56 flex-row items-center justify-end gap-1">
-            <Text
-              className="min-w-0 shrink text-right text-base text-default-foreground"
-              numberOfLines={1}
-            >
+            <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
               {selectedLabel}
             </Text>
-            <ChevronRightIcon className="size-5 shrink-0 text-default-foreground" strokeWidth={2} />
+            <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
           </View>
         }
       />
@@ -527,7 +524,7 @@ function CustomSizeField({
           style={styles.sizeInput}
           value={width === undefined || width === null ? '' : String(width)}
         />
-        <Text className="text-default-foreground">×</Text>
+        <Text className="text-foreground">×</Text>
         <Input
           accessibilityLabel={t('painting.settings.height')}
           keyboardType="number-pad"

@@ -71,7 +71,7 @@ export default function AssistantDetailScreen() {
         {assistant ? (
           <AssistantSummary assistant={assistant} />
         ) : (
-          <Text className="text-center text-default-foreground text-sm">
+          <Text className="text-center text-foreground text-sm">
             {isLoading ? t('assistant.form.loading') : t('assistant.list.emptyTitle')}
           </Text>
         )}
@@ -114,10 +114,8 @@ function AssistantSummary({ assistant }: { assistant: Assistant }) {
         </View>
       </View>
       {prompt ? (
-        <View className="w-full gap-2 rounded-2xl bg-settings-grouped-surface p-4">
-          <Text className="font-medium text-default-foreground text-sm">
-            {t('assistant.form.prompt')}
-          </Text>
+        <View className="w-full gap-2 rounded-2xl bg-grouped-surface p-4">
+          <Text className="font-medium text-foreground text-sm">{t('assistant.form.prompt')}</Text>
           <Text className="text-base text-foreground" selectable>
             {prompt}
           </Text>
@@ -137,7 +135,7 @@ function AssistantModelLine({ modelId, modelName }: Pick<Assistant, 'modelId' | 
 
   if (!model) {
     return (
-      <Text className="text-center text-base text-default-foreground" numberOfLines={1}>
+      <Text className="text-center text-base text-foreground" numberOfLines={1}>
         {modelName ?? t('assistant.model.none')}
       </Text>
     );
@@ -146,7 +144,7 @@ function AssistantModelLine({ modelId, modelName }: Pick<Assistant, 'modelId' | 
   return (
     <View className="max-w-full flex-row items-center gap-1.5">
       <ModelPickerIcon model={model.model} provider={model.provider} size={20} />
-      <Text className="min-w-0 shrink text-base text-default-foreground" numberOfLines={1}>
+      <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
         {model.model.name}
       </Text>
     </View>

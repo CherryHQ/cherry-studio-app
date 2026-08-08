@@ -5,7 +5,8 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { bottomSheet, isLiquidGlassAvailable, sheetScrimColor } from '@/frontend/utils/constants';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { bottomSheet, isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import {
   type BottomSheetCloseReason,
@@ -87,6 +88,7 @@ export function BottomSheet({
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const screenCornerRadius = useScreenCornerRadius();
+  const scrimColor = useThemeColor('scrim');
   const [index, setIndex] = useState(isOpen ? OPEN_INDEX : CLOSED_INDEX);
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
   const reasonRef = useRef<BottomSheetCloseReason>('dismiss');
@@ -229,7 +231,7 @@ export function BottomSheet({
       index={index}
       onIndexChange={handleIndexChange}
       onSettle={handleSettle}
-      scrimColor={sheetScrimColor}
+      scrimColor={scrimColor}
     >
       <BottomSheetContext.Provider value={contextValue}>
         <View style={[styles.layout, { width: windowWidth }]}>
@@ -307,7 +309,7 @@ function BottomSheetHeaderControl({
       {children}
     </GlassView>
   ) : (
-    <View className="bg-surface-secondary" style={styles.closeSurface} testID={testID}>
+    <View className="bg-secondary" style={styles.closeSurface} testID={testID}>
       {children}
     </View>
   );
