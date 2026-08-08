@@ -1,9 +1,9 @@
 import type { RefObject } from 'react';
 import type { LayoutChangeEvent, View } from 'react-native';
 
+import { ComposerDock, ComposerProvider } from '@/frontend/components/composer';
+
 import { ChatInput } from '../../input';
-import { ChatInputProvider } from '../../input/context/ChatInputProvider';
-import { ComposerDock } from './ComposerDock';
 
 type ChatComposerProps = {
   /** Assistant to bind a newly created topic to; ignored once `topicId` exists. */
@@ -16,7 +16,7 @@ type ChatComposerProps = {
 };
 
 /**
- * The docked chat input, wrapped in the shared ChatInputProvider so every screen
+ * The docked chat input, wrapped in the shared ComposerProvider so every screen
  * that shows the input (chat + new-topic) gets the provider with it. The
  * reasoning-effort control lives inside the model picker sheet
  * (ChatInputReasoningSection), not as a separate floating panel.
@@ -30,7 +30,7 @@ export function ChatComposer({
   topicId,
 }: ChatComposerProps) {
   return (
-    <ChatInputProvider>
+    <ComposerProvider>
       <ComposerDock
         containerRef={composerRef}
         onHeightChange={onHeightChange}
@@ -42,6 +42,6 @@ export function ChatComposer({
           topicId={topicId}
         />
       </ComposerDock>
-    </ChatInputProvider>
+    </ComposerProvider>
   );
 }

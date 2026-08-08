@@ -1,11 +1,10 @@
-import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
 import type { IconSource } from '@cherrystudio/ui/icons';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import type { PasteEventPayload } from 'expo-paste-input';
 import { useToast } from 'heroui-native/toast';
 import { Settings2Icon } from 'lucide-uniwind/png';
-import { useCallback } from 'react';
+import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
@@ -14,96 +13,80 @@ import { useUniwind } from 'uniwind';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { useComposerActions, useComposerMeta, useComposerState } from '../context/ComposerProvider';
 import {
-  useChatInputActions,
-  useChatInputMeta,
-  useChatInputState,
-} from '../context/ChatInputProvider';
-import { thinkingAccentColor } from '../effortSlider';
-import type { ChatInputActionId } from '../utils/chatInputActions';
-import {
-  type ChatInputAttachmentDraft,
+  type ComposerAttachmentDraft,
   createPastedImageAttachmentDraft,
-  hasChatInputSendableContent,
-} from '../utils/chatInputAttachments';
-import {
-  type ChatInputReasoningEffort,
-  getChatInputReasoningEffortOption,
-} from '../utils/chatInputReasoning';
-import { ChatInputAttachmentStrip } from './ChatInputAttachmentStrip';
-import { ChatInputMenu } from './ChatInputMenu';
-import { ChatInputToolTag } from './ChatInputToolTag';
+  hasComposerSendableContent,
+} from '../utils/composerAttachments';
+import { ComposerAttachmentStrip } from './ComposerAttachmentStrip';
+import { ComposerMenu } from './ComposerMenu';
 
-const emptyReasoningEfforts: readonly ChatInputReasoningEffort[] = [];
+const logger = loggerService.withContext('ComposerCore');
 
-const logger = loggerService.withContext('ChatInputComposer');
-
-type ChatInputComposerProps = {
+type ComposerCoreProps = {
+  /** A row above the attachments; chat puts its selected-tool tag here. */
+  accessory?: ReactNode;
   allowEmptySend?: boolean;
   dismissKeyboardOnSend?: boolean;
   getSendErrorLabel?: (error: unknown) => string | undefined;
   isSendEnabled: boolean;
   isStreaming: boolean;
+  /** Extra rows in the ＋ menu, below the media ones. */
+  menuItems?: ReactNode;
+  /** Trailing content inside the model pill; chat puts its effort label here. */
+  modelBadge?: ReactNode;
   /** Themed icon for the selected model; the pill falls back to the label's initial. */
   modelIcon?: IconSource;
   modelLabel?: string;
-  modelSettings?: ChatInputModelSettings;
-  /** Omit to leave the tools out of the ＋ menu, as painting does. */
-  onActionPress?: (actionId: ChatInputActionId) => void;
+  modelSettings?: ComposerModelSettings;
   onModelPickerPress: () => void;
-  onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
+  onSendPress: (payload: ComposerSendPayload) => Promise<void>;
   onStopPress: () => void;
-  onToolClear?: () => void;
-  /** Reasoning stops of the selected model; empty hides the effort label in the pill. */
-  reasoningEfforts?: readonly ChatInputReasoningEffort[];
 };
 
-export type ChatInputModelSettings = {
+export type ComposerModelSettings = {
   accessibilityLabel: string;
   onPress: () => void;
 };
 
-export type ChatInputSendPayload = {
-  attachments: readonly ChatInputAttachmentDraft[];
+export type ComposerSendPayload = {
+  attachments: readonly ComposerAttachmentDraft[];
   text: string;
 };
 
 /**
- * The chat input, composed from the shared `Composer`. Everything here is what
- * the package deliberately does not know about: attachments, the selected tool,
- * the model and its reasoning effort. The shell, the rows' swell and shrink, and
- * the send button are the package's.
+ * The app's input surface, composed from the shared `Composer`. Everything here
+ * is what the package deliberately does not know about: attachments, the
+ * pickers behind the ＋ menu, the model pill, async send with recovery. What is
+ * specific to one caller — chat's tools and reasoning effort, painting's image
+ * params — arrives through the `accessory` / `menuItems` / `modelBadge` slots
+ * instead of being modelled here.
  */
-export function ChatInputComposer({
+export function ComposerCore({
+  accessory,
   allowEmptySend = false,
   dismissKeyboardOnSend = true,
   getSendErrorLabel,
   isSendEnabled,
   isStreaming,
+  menuItems,
+  modelBadge,
   modelIcon,
   modelLabel,
   modelSettings,
-  onActionPress,
   onModelPickerPress,
   onSendPress,
   onStopPress,
-  onToolClear,
-  reasoningEfforts = emptyReasoningEfforts,
-}: ChatInputComposerProps) {
+}: ComposerCoreProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const {
-    addAttachments,
-    clearAttachments,
-    clearSelectedTool,
-    removeAttachment,
-    setAttachments,
-    setDraft,
-  } = useChatInputActions();
-  const { inputRef } = useChatInputMeta();
-  const { attachments, draft, reasoningEffort, selectedTool } = useChatInputState();
+  const { addAttachments, clearAttachments, removeAttachment, setAttachments, setDraft } =
+    useComposerActions();
+  const { inputRef } = useComposerMeta();
+  const { attachments, draft } = useComposerState();
 
-  const handleAttachmentPreview = useCallback((attachment: ChatInputAttachmentDraft) => {
+  const handleAttachmentPreview = useCallback((attachment: ComposerAttachmentDraft) => {
     void ExpoQuickLook.previewFile({
       editingMode: 'disabled',
       uri: attachment.uri,
@@ -179,7 +162,7 @@ export function ChatInputComposer({
 
   return (
     <Composer
-      canSend={isSendEnabled && (allowEmptySend || hasChatInputSendableContent(draft, attachments))}
+      canSend={isSendEnabled && (allowEmptySend || hasComposerSendableContent(draft, attachments))}
       labels={{
         send: t('chat.input.action.sendMessage'),
         stop: t('chat.input.action.stopGenerating'),
@@ -190,14 +173,10 @@ export function ChatInputComposer({
       streaming={isStreaming}
       value={draft}
     >
-      <Composer.Collapsible>
-        {selectedTool ? (
-          <ChatInputToolTag onClear={onToolClear ?? clearSelectedTool} tool={selectedTool} />
-        ) : null}
-      </Composer.Collapsible>
+      <Composer.Collapsible>{accessory}</Composer.Collapsible>
       <Composer.Collapsible style={attachmentRowStyle}>
         {attachments.length > 0 ? (
-          <ChatInputAttachmentStrip
+          <ComposerAttachmentStrip
             attachments={attachments}
             onAttachmentPreview={handleAttachmentPreview}
             onAttachmentRemove={removeAttachment}
@@ -210,22 +189,21 @@ export function ChatInputComposer({
         ref={inputRef}
       />
       <Composer.Toolbar>
-        <ChatInputMenu onActionPress={onActionPress} />
+        <ComposerMenu items={menuItems} />
         {modelSettings ? (
           <Composer.Action
             accessibilityLabel={modelSettings.accessibilityLabel}
             onPress={handleModelSettingsPress}
-            testID="chat-input-model-settings-button"
+            testID="composer-model-settings-button"
           >
             <Settings2Icon className="size-4 text-default-foreground" strokeWidth={2} />
           </Composer.Action>
         ) : null}
-        <ChatInputModelPill
+        <ComposerModelPill
+          badge={modelBadge}
           modelIcon={modelIcon}
           modelLabel={modelLabel}
           onPress={handleModelPickerPress}
-          reasoningEffort={reasoningEffort}
-          reasoningEfforts={reasoningEfforts}
         />
         <Composer.Send />
       </Composer.Toolbar>
@@ -233,25 +211,19 @@ export function ChatInputComposer({
   );
 }
 
-function ChatInputModelPill({
+function ComposerModelPill({
+  badge,
   modelIcon,
   modelLabel,
   onPress,
-  reasoningEffort,
-  reasoningEfforts,
 }: {
+  badge?: ReactNode;
   modelIcon?: IconSource;
   modelLabel?: string;
   onPress: () => void;
-  reasoningEffort: ChatInputReasoningEffort;
-  reasoningEfforts: readonly ChatInputReasoningEffort[];
 }) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
-  const effortLabelKey =
-    reasoningEfforts.length > 0
-      ? getChatInputReasoningEffortOption(reasoningEffort)?.labelKey
-      : undefined;
 
   if (!modelLabel) {
     return (
@@ -281,25 +253,12 @@ function ChatInputModelPill({
         )
       }
       onPress={onPress}
-      testID="chat-input-model-button"
+      testID="composer-model-button"
     >
       <Text className="min-w-0 shrink font-semibold text-foreground text-sm" numberOfLines={1}>
         {modelLabel}
       </Text>
-      {effortLabelKey ? (
-        <Text
-          className="shrink-0 text-default-foreground text-sm"
-          numberOfLines={1}
-          style={
-            reasoningEffort === REASONING_EFFORT.MAX
-              ? { color: thinkingAccentColor[theme === 'dark' ? 'dark' : 'light'] }
-              : undefined
-          }
-          testID="chat-input-model-effort-label"
-        >
-          {t(effortLabelKey)}
-        </Text>
-      ) : null}
+      {badge}
     </Composer.Pill>
   );
 }

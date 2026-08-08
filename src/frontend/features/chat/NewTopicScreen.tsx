@@ -1,12 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { ChatComposer, ChatWorkspaceFrame, useFloatingChatInputLayout } from './workspace';
+import { useComposerDockLayout } from '@/frontend/components/composer';
+
+import { ChatComposer, ChatWorkspaceFrame } from './workspace';
 
 /** `assistantId` binds the topic this screen creates to that assistant. */
 export function NewTopicScreen({ assistantId }: { assistantId?: string }) {
   const { t } = useTranslation();
-  const { contentBottomInset, handleInputHeightChange } = useFloatingChatInputLayout();
+  const { contentBottomInset, handleInputHeightChange } = useComposerDockLayout();
 
   return (
     <ChatWorkspaceFrame>

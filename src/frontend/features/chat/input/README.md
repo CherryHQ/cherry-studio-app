@@ -2,11 +2,17 @@
 
 This directory owns the floating chat input at the bottom of chat workspaces. `ChatInput` is exported
 through `index.ts` and takes only routing identity (`topicId`, plus `assistantId` for a topic that
-does not exist yet). Callers should not reach into the internal provider or leaf components.
+does not exist yet).
 
-The shell — surface, field, toolbar, collapsing rows, the ＋ menu — comes from `Composer` in
-`@cherrystudio/ui`. What lives here is everything the package must not know about: assistants,
-models, reasoning effort, web search, photo permissions.
+It is built in three layers, and this document is the checklist for all three, because the user meets
+them as one input:
+
+1. `Composer` in `@cherrystudio/ui` — the surface, the field, the toolbar, the collapsing rows, the
+   ＋ menu's morph. Knows nothing about the app.
+2. `@/frontend/components/composer` — attachments, the pickers, the model pill, async send with
+   recovery. Shared with painting, so it knows nothing about assistants either.
+3. This directory — assistants, models, reasoning effort, web search. Reaches the composer through
+   its `accessory` / `menuItems` / `modelBadge` slots.
 
 ## Why this document exists
 
@@ -80,21 +86,22 @@ Two consequences to take seriously:
 The panel grows out of the ＋ button itself, up and to the right, and is measured from its own
 rows. It is a menu and nothing else: every row closes it and hands off to a system picker.
 
-- [ ] The rows are camera, photos, file, then the tools. All of them close the menu on tap.
-- [ ] The tools appear only for a caller that passes `onActionPress`. Painting does not: web search
-      and "create image" are chat concepts, and nothing in the menu can act on one without a caller
-      to persist it.
+- [ ] The rows are camera, photos, file, then — behind a separator — the tools. All of them close the
+      menu on tap.
+- [ ] The tools appear only for a caller that passes `menuItems`. Painting does not: web search and
+      "create image" are chat concepts, and nothing in the menu can act on one without a caller to
+      persist it.
 - [ ] Camera and photos go through `expo-image-picker`; file goes through `expo-document-picker`.
       None of them is drawn here — see "Deliberately dropped".
 - [ ] Each picker asks for its own permission first and does nothing if refused. Limited photo
       access needs no special handling: the picker runs out of process and returns what was chosen
       in it, whether or not the app can see the rest of the library.
-- [ ] The photo picker takes at most `CHAT_INPUT_PHOTO_SELECTION_LIMIT` (9) images, in the order
+- [ ] The photo picker takes at most `COMPOSER_PHOTO_SELECTION_LIMIT` (9) images, in the order
       they were selected.
 - [ ] Cancelling any picker adds nothing and leaves the menu closed.
 - [ ] A picker that fails to launch is logged. The menu has already closed by then, so without the
       log the gesture just looks ignored.
-- [ ] Choosing a tool hands it to `onActionPress`, which toggles it, and closes the menu.
+- [ ] Choosing a tool toggles it and closes the menu.
 
 ### Assistant, model, and web search
 
@@ -117,6 +124,8 @@ rows. It is a menu and nothing else: every row closes it and hands off to a syst
       `default` selection instead.
 - [ ] Choosing a reasoning effort updates local state immediately and persists to the assistant; a
       failed write is logged and nothing is rolled back.
+- [ ] A chosen effort belongs to the assistant it was chosen on: switching assistant, or switching to
+      a model with no reasoning stops, drops it back to the assistant's own value.
 
 ## Not covered by tests
 
@@ -150,23 +159,27 @@ Do not restore these; their absence is the design, not a regression.
 - **`ReduceMotion.Never`.** The old motion config opted every animation out of the system setting.
   Reduced motion is now respected, via `Composer`'s own motion.
 
-## Known defect, not fixed here
+## Known defects, not fixed here
 
-`useChatInputReasoningEfforts` derives the available effort stops from
-`modelSettings.selections.default`, while the pill shows the model bound to the assistant. For an
-assistant on a non-default model the stops and the label come from two different models.
+- `useChatInputReasoningEfforts` derives the available effort stops from
+  `modelSettings.selections.default`, while the pill shows the model bound to the assistant. For an
+  assistant on a non-default model the stops and the label come from two different models.
+- The web-search mirror in `ChatInput.tsx` is the repository's only
+  `react-hooks/set-state-in-effect` suppression. The rule is right that most such effects are
+  derivable — the reasoning effort next to it was — but this one reconciles an optimistic write
+  against the query it is racing, which cannot be read off render state. Untangling it needs tests
+  it does not have.
 
 ## Ownership
 
-- `ChatInputProvider` owns draft text, attachments, the selected tool, and the field ref. Whether
-  the ＋ panel is open is `Composer.Menu`'s, not this directory's.
-- `ChatInputMenu` owns the pickers: permission, launch, and turning what comes back into
-  attachments.
+- `@/frontend/components/composer` owns the draft, the attachments, the pickers, the send, and the
+  docking geometry. Whether the ＋ panel is open is `Composer.Menu`'s, not anyone else's.
+- `ChatInput.tsx` owns the selected tool, the reasoning effort, and everything that talks to
+  assistants and models. It hands the composer three nodes and keeps the state behind them.
 - `effortSlider/` owns the reasoning-effort control, which lives in the model picker's footer — not
   in the input.
-- `ChatInput.tsx` owns everything that talks to assistants and models.
-- Leaf components render from provider state and call provider actions. They must not keep parallel
-  state for the same thing.
+- Leaf components here render from what they are passed. They must not keep parallel state for
+  something `ChatInput.tsx` already holds.
 
 ## Manual acceptance with agent-device
 

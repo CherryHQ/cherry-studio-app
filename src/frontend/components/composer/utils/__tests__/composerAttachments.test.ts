@@ -1,20 +1,20 @@
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
 import {
-  appendChatInputAttachments,
-  type ChatInputAttachmentDraft,
+  appendComposerAttachments,
+  type ComposerAttachmentDraft,
   createCameraAttachmentDraft,
-  createChatInputMessageParts,
+  createComposerMessageParts,
   createDocumentAttachmentDraft,
   createPastedImageAttachmentDraft,
   createPhotoAttachmentDraft,
-  hasChatInputSendableContent,
-  isChatInputImageFileName,
-  isChatInputImageMediaType,
-  removeChatInputAttachment,
-} from '../chatInputAttachments';
+  hasComposerSendableContent,
+  isComposerImageFileName,
+  isComposerImageMediaType,
+  removeComposerAttachment,
+} from '../composerAttachments';
 
-const fileAttachment: ChatInputAttachmentDraft = {
+const fileAttachment: ComposerAttachmentDraft = {
   id: 'file:file-a.pdf',
   kind: 'file',
   mediaType: 'application/pdf',
@@ -22,21 +22,21 @@ const fileAttachment: ChatInputAttachmentDraft = {
   uri: 'file-a.pdf',
 };
 
-describe('chat input attachments', () => {
+describe('composer attachments', () => {
   test('appends attachments while preserving existing items and dropping duplicates', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 
-    expect(
-      appendChatInputAttachments([imageAttachment], [fileAttachment, imageAttachment]),
-    ).toEqual([imageAttachment, fileAttachment]);
+    expect(appendComposerAttachments([imageAttachment], [fileAttachment, imageAttachment])).toEqual(
+      [imageAttachment, fileAttachment],
+    );
   });
 
   test('removes an attachment by id', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 
-    expect(
-      removeChatInputAttachment([imageAttachment, fileAttachment], imageAttachment.id),
-    ).toEqual([fileAttachment]);
+    expect(removeComposerAttachment([imageAttachment, fileAttachment], imageAttachment.id)).toEqual(
+      [fileAttachment],
+    );
   });
 
   test('classifies document picker images as image attachments', () => {
@@ -119,19 +119,19 @@ describe('chat input attachments', () => {
   });
 
   test('detects image media types', () => {
-    expect(isChatInputImageMediaType('image/jpeg')).toBe(true);
-    expect(isChatInputImageMediaType('application/pdf')).toBe(false);
-    expect(isChatInputImageMediaType(undefined)).toBe(false);
+    expect(isComposerImageMediaType('image/jpeg')).toBe(true);
+    expect(isComposerImageMediaType('application/pdf')).toBe(false);
+    expect(isComposerImageMediaType(undefined)).toBe(false);
   });
 
   test('detects image file names', () => {
-    expect(isChatInputImageFileName('photo.HEIC')).toBe(true);
-    expect(isChatInputImageFileName('brief.pdf')).toBe(false);
-    expect(isChatInputImageFileName(undefined)).toBe(false);
+    expect(isComposerImageFileName('photo.HEIC')).toBe(true);
+    expect(isComposerImageFileName('brief.pdf')).toBe(false);
+    expect(isComposerImageFileName(undefined)).toBe(false);
   });
 
   test('creates message parts with text before file attachments', () => {
-    expect(createChatInputMessageParts('  summarize this  ', [fileAttachment])).toEqual([
+    expect(createComposerMessageParts('  summarize this  ', [fileAttachment])).toEqual([
       { type: 'text', text: 'summarize this' },
       {
         filename: 'file-a.pdf',
@@ -143,7 +143,7 @@ describe('chat input attachments', () => {
   });
 
   test('creates file-only message parts', () => {
-    expect(createChatInputMessageParts('   ', [fileAttachment])).toEqual([
+    expect(createComposerMessageParts('   ', [fileAttachment])).toEqual([
       {
         filename: 'file-a.pdf',
         mediaType: 'application/pdf',
@@ -154,7 +154,7 @@ describe('chat input attachments', () => {
   });
 
   test('preserves a managed file entry id in message part metadata', () => {
-    const parts = createChatInputMessageParts('', [
+    const parts = createComposerMessageParts('', [
       { ...fileAttachment, fileEntryId: '00000000-0000-7000-8000-000000000001' },
     ]);
     const part = parts[0];
@@ -169,8 +169,8 @@ describe('chat input attachments', () => {
   });
 
   test('detects sendable text or attachment content', () => {
-    expect(hasChatInputSendableContent('  hi  ', [])).toBe(true);
-    expect(hasChatInputSendableContent('   ', [fileAttachment])).toBe(true);
-    expect(hasChatInputSendableContent('   ', [])).toBe(false);
+    expect(hasComposerSendableContent('  hi  ', [])).toBe(true);
+    expect(hasComposerSendableContent('   ', [fileAttachment])).toBe(true);
+    expect(hasComposerSendableContent('   ', [])).toBe(false);
   });
 });

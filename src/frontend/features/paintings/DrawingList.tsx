@@ -16,6 +16,11 @@ import {
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import {
+  COMPOSER_PHOTO_SELECTION_LIMIT,
+  type ComposerAttachmentDraft,
+  createPhotoAttachmentDraft,
+} from '@/frontend/components/composer/utils/composerAttachments';
+import {
   useMessageListBottomInset,
   useMessagePendingDeletionIds,
   useMessageScope,
@@ -25,11 +30,6 @@ import {
 } from '@/frontend/components/messageTabs';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
-import {
-  CHAT_INPUT_PHOTO_SELECTION_LIMIT,
-  type ChatInputAttachmentDraft,
-  createPhotoAttachmentDraft,
-} from '@/frontend/features/chat/input/utils/chatInputAttachments';
 
 import {
   type PaintingGalleryItem,
@@ -86,7 +86,7 @@ export function DrawingList() {
     [router],
   );
   const openPaintingWithAttachments = useCallback(
-    (attachments: readonly ChatInputAttachmentDraft[]) => {
+    (attachments: readonly ComposerAttachmentDraft[]) => {
       openPainting({ attachments });
     },
     [openPainting],
@@ -125,7 +125,7 @@ export function DrawingList() {
         mediaTypes: ['images'],
         orderedSelection: true,
         quality: 1,
-        selectionLimit: CHAT_INPUT_PHOTO_SELECTION_LIMIT,
+        selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
       });
       if (result.canceled || result.assets.length === 0) {
         return;

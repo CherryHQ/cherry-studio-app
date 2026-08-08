@@ -1,7 +1,7 @@
 import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
-import { createChatInputMessageParts } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import { createComposerMessageParts } from '@/frontend/components/composer/utils/composerAttachments';
 
 import type { PaintingGenerationInput } from '../../hooks/usePaintingGeneration';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
@@ -28,7 +28,7 @@ export function createPaintingConversationMessages(
       id: painting.id,
       modelId: null,
       parentId: null,
-      parts: createChatInputMessageParts(painting.prompt, files.inputs),
+      parts: createComposerMessageParts(painting.prompt, files.inputs),
       role: 'user',
       searchableText: painting.prompt,
       status: 'success',
@@ -40,7 +40,7 @@ export function createPaintingConversationMessages(
       id: assistantMessageId,
       modelId: painting.modelId,
       parentId: painting.id,
-      parts: createChatInputMessageParts('', files.outputs),
+      parts: createComposerMessageParts('', files.outputs),
       role: 'assistant',
       searchableText: '',
       status: 'success',
@@ -57,7 +57,7 @@ export function createPendingPaintingConversationMessages(turn: PendingPaintingT
       id: turn.userMessageId,
       modelId: null,
       parentId: null,
-      parts: createChatInputMessageParts(turn.input.prompt, turn.input.attachments),
+      parts: createComposerMessageParts(turn.input.prompt, turn.input.attachments),
       role: 'user',
       searchableText: turn.input.prompt,
       status: 'success',

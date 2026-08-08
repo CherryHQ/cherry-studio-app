@@ -1,19 +1,5 @@
-// Public component surface of the chat input area. Other features (today:
-// paintings) compose the chat input through this module; deep imports of the
-// component/context modules below violate the module ownership boundary.
-//
-// Two pure-logic modules are additionally sanctioned for direct import so
-// logic-only consumers (and their node-env tests) don't have to load this
-// component barrel: ./chatInputLayout and ./utils/chatInputAttachments. The
-// ESLint boundary rules allowlist them.
+// The chat input: what chat wires around the shared composer
+// (`@/frontend/components/composer`) — its tools, its reasoning effort, and the
+// assistant/model bookkeeping behind both. Callers outside chat want the
+// composer itself, not this.
 export { ChatInput } from './ChatInput';
-export {
-  ChatInputComposer,
-  type ChatInputModelSettings,
-  type ChatInputSendPayload,
-} from './components/ChatInputComposer';
-export {
-  ChatInputProvider,
-  useChatInputActions,
-  useChatInputState,
-} from './context/ChatInputProvider';

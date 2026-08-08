@@ -1,7 +1,7 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ChatInputModelSettings, ChatInputSendPayload } from '@/frontend/features/chat/input';
+import type { ComposerModelSettings, ComposerSendPayload } from '@/frontend/components/composer';
 
 import type { PaintingGenerationResult } from '../../hooks/usePaintingGeneration';
 import { PaintingInput } from '../PaintingInput';
@@ -14,8 +14,8 @@ let mockComposerProps:
       allowEmptySend?: boolean;
       getSendErrorLabel?: (error: unknown) => string | undefined;
       isSendEnabled: boolean;
-      modelSettings?: ChatInputModelSettings;
-      onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
+      modelSettings?: ComposerModelSettings;
+      onSendPress: (payload: ComposerSendPayload) => Promise<void>;
     }
   | undefined;
 let mockSelectedModel: Record<string, unknown>;
@@ -54,13 +54,13 @@ jest.mock('@/frontend/hooks/chat', () => ({
   }),
 }));
 
-jest.mock('@/frontend/features/chat/input', () => ({
-  ChatInputComposer: (props: typeof mockComposerProps) => {
+jest.mock('@/frontend/components/composer', () => ({
+  ComposerCore: (props: typeof mockComposerProps) => {
     mockComposerProps = props;
     return null;
   },
-  useChatInputActions: () => ({ setAttachments: mockSetAttachments }),
-  useChatInputState: () => ({ draft: 'refine this' }),
+  useComposerActions: () => ({ setAttachments: mockSetAttachments }),
+  useComposerState: () => ({ draft: 'refine this' }),
 }));
 
 jest.mock('../../utils/paintingOutputAttachment', () => ({
@@ -122,7 +122,7 @@ describe('PaintingInput', () => {
       );
     });
 
-    const payload: ChatInputSendPayload = {
+    const payload: ComposerSendPayload = {
       attachments: [
         {
           fileEntryId: '00000000-0000-7000-8000-000000000000',
@@ -227,7 +227,7 @@ describe('PaintingInput', () => {
       );
     });
 
-    const attachments: ChatInputSendPayload['attachments'] = [
+    const attachments: ComposerSendPayload['attachments'] = [
       {
         id: 'input-1',
         kind: 'image',

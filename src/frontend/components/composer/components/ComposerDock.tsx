@@ -4,16 +4,16 @@ import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
-  chatInputHorizontalScreenInset,
-  chatInputMinBottomPadding,
-  getChatInputKeyboardStickyOffset,
-} from '../../input/chatInputLayout';
+  composerHorizontalScreenInset,
+  composerMinBottomPadding,
+  getComposerKeyboardStickyOffset,
+} from '../utils/composerLayout';
 
 type ComposerDockProps = PropsWithChildren<{
   containerRef?: RefObject<View | null>;
   /**
    * The dock's measured height, which is what the list above it reserves. See
-   * `useFloatingChatInputLayout` for why the two arrive separately.
+   * `useComposerDockLayout` for why the two arrive separately.
    */
   onHeightChange: (height: number) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
@@ -24,7 +24,7 @@ type ComposerDockProps = PropsWithChildren<{
  * from the screen edges, riding the keyboard, and reporting its own height.
  *
  * Chat and painting both dock an input this way, and neither owns the geometry
- * — it comes from `chatInputLayout`, so the two stay aligned to the pixel by
+ * — it comes from `composerLayout`, so the two stay aligned to the pixel by
  * construction rather than by two files agreeing.
  */
 export function ComposerDock({
@@ -50,11 +50,11 @@ export function ComposerDock({
       onLayout={handleLayout}
       pointerEvents="box-none"
       style={{
-        paddingBottom: Math.max(bottom, chatInputMinBottomPadding),
-        paddingHorizontal: chatInputHorizontalScreenInset,
+        paddingBottom: Math.max(bottom, composerMinBottomPadding),
+        paddingHorizontal: composerHorizontalScreenInset,
       }}
     >
-      <KeyboardStickyView offset={{ opened: getChatInputKeyboardStickyOffset(bottom) }}>
+      <KeyboardStickyView offset={{ opened: getComposerKeyboardStickyOffset(bottom) }}>
         {children}
       </KeyboardStickyView>
     </View>

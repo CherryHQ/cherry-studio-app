@@ -4,12 +4,12 @@ import type { DocumentPickerAsset } from 'expo-document-picker';
 
 import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/utils/imageFileTypes';
 
-export type ChatInputAttachmentKind = 'file' | 'image';
+export type ComposerAttachmentKind = 'file' | 'image';
 
-export type ChatInputAttachmentDraft = {
+export type ComposerAttachmentDraft = {
   fileEntryId?: string;
   id: string;
-  kind: ChatInputAttachmentKind;
+  kind: ComposerAttachmentKind;
   mediaType: string;
   name: string;
   size?: number;
@@ -27,19 +27,19 @@ const fallbackFileMediaType = 'application/octet-stream';
 const fallbackImageName = 'Image';
 const fallbackFileName = 'File';
 
-export function isChatInputImageMediaType(mediaType: string | null | undefined) {
+export function isComposerImageMediaType(mediaType: string | null | undefined) {
   return mediaType?.startsWith('image/') ?? false;
 }
 
-export function isChatInputImageFileName(name: string | null | undefined) {
+export function isComposerImageFileName(name: string | null | undefined) {
   const extension = name?.trim().split('.').pop()?.toLowerCase();
 
   return isImageFileExtension(extension);
 }
 
-export function appendChatInputAttachments(
-  current: readonly ChatInputAttachmentDraft[],
-  next: readonly ChatInputAttachmentDraft[],
+export function appendComposerAttachments(
+  current: readonly ComposerAttachmentDraft[],
+  next: readonly ComposerAttachmentDraft[],
 ) {
   const seenIds = new Set(current.map((attachment) => attachment.id));
   const additions = next.filter((attachment) => {
@@ -54,8 +54,8 @@ export function appendChatInputAttachments(
   return [...current, ...additions];
 }
 
-export function removeChatInputAttachment(
-  attachments: readonly ChatInputAttachmentDraft[],
+export function removeComposerAttachment(
+  attachments: readonly ComposerAttachmentDraft[],
   attachmentId: string,
 ) {
   return attachments.filter((attachment) => attachment.id !== attachmentId);
@@ -63,9 +63,9 @@ export function removeChatInputAttachment(
 
 // What the system photo picker is capped at. Chat and the drawing list share it
 // so a batch that is valid in one is valid in the other.
-export const CHAT_INPUT_PHOTO_SELECTION_LIMIT = 9;
+export const COMPOSER_PHOTO_SELECTION_LIMIT = 9;
 
-export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInputAttachmentDraft {
+export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ComposerAttachmentDraft {
   const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();
 
   return {
@@ -77,7 +77,7 @@ export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInp
   };
 }
 
-export function createPastedImageAttachmentDraft(uri: string): ChatInputAttachmentDraft {
+export function createPastedImageAttachmentDraft(uri: string): ComposerAttachmentDraft {
   const pathname = new URL(uri).pathname;
   const fileName = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
 
@@ -88,7 +88,7 @@ type CameraPhotoInput = {
   uri: string;
 };
 
-export function createCameraAttachmentDraft(photo: CameraPhotoInput): ChatInputAttachmentDraft {
+export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAttachmentDraft {
   const uri = photo.uri.startsWith('file://') ? photo.uri : `file://${photo.uri}`;
 
   return {
@@ -100,11 +100,9 @@ export function createCameraAttachmentDraft(photo: CameraPhotoInput): ChatInputA
   };
 }
 
-export function createDocumentAttachmentDraft(
-  asset: DocumentPickerAsset,
-): ChatInputAttachmentDraft {
+export function createDocumentAttachmentDraft(asset: DocumentPickerAsset): ComposerAttachmentDraft {
   const mediaType = asset.mimeType ?? fallbackFileMediaType;
-  const isImage = isChatInputImageMediaType(mediaType) || isChatInputImageFileName(asset.name);
+  const isImage = isComposerImageMediaType(mediaType) || isComposerImageFileName(asset.name);
 
   return {
     id: getFileAttachmentId(asset.uri),
@@ -124,9 +122,9 @@ export function getFileAttachmentId(uri: string) {
   return `file:${uri}`;
 }
 
-export function createChatInputMessageParts(
+export function createComposerMessageParts(
   text: string,
-  attachments: readonly ChatInputAttachmentDraft[],
+  attachments: readonly ComposerAttachmentDraft[],
 ): CherryMessagePart[] {
   const trimmedText = text.trim();
   const parts: CherryMessagePart[] = trimmedText
@@ -150,9 +148,9 @@ export function createChatInputMessageParts(
   return parts;
 }
 
-export function hasChatInputSendableContent(
+export function hasComposerSendableContent(
   text: string,
-  attachments: readonly ChatInputAttachmentDraft[],
+  attachments: readonly ComposerAttachmentDraft[],
 ) {
   return text.trim().length > 0 || attachments.length > 0;
 }

@@ -1,44 +1,41 @@
 import { Composer } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { CameraIcon, CheckIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
-import { useCallback } from 'react';
+import { CameraIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
+import { type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { useChatInputActions, useChatInputState } from '../context/ChatInputProvider';
-import { type ChatInputActionId, chatInputActions } from '../utils/chatInputActions';
+import { useComposerActions } from '../context/ComposerProvider';
 import {
-  CHAT_INPUT_PHOTO_SELECTION_LIMIT,
+  COMPOSER_PHOTO_SELECTION_LIMIT,
   createCameraAttachmentDraft,
   createDocumentAttachmentDraft,
   createPhotoAttachmentDraft,
-} from '../utils/chatInputAttachments';
+} from '../utils/composerAttachments';
 
-const logger = loggerService.withContext('ChatInputMenu');
+const logger = loggerService.withContext('ComposerMenu');
 
-type ChatInputMenuProps = {
+type ComposerMenuProps = {
   /**
-   * Omit to leave the tools out entirely. They are a chat concept — painting
-   * has nothing to do with web search or "create image" — and nothing here can
-   * act on one without a caller to persist it.
+   * Extra rows below the media ones, behind a separator. Chat puts its tools
+   * here; painting has nothing to add, so it passes nothing and the menu is
+   * media only.
    */
-  onActionPress?: (actionId: ChatInputActionId) => void;
+  items?: ReactNode;
 };
 
 /**
- * The ＋ menu: camera, photos, files, and — for a caller that takes them — the
- * tools. Every row closes the menu; the media rows hand off to a system picker
- * rather than drawing anything here.
+ * The ＋ menu: camera, photos, files, plus whatever the caller appends. Every
+ * row closes the menu; the media rows hand off to a system picker rather than
+ * drawing anything here.
  */
-export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
+export function ComposerMenu({ items }: ComposerMenuProps) {
   const { t } = useTranslation();
-  const { addAttachments } = useChatInputActions();
-  const { selectedToolId } = useChatInputState();
+  const { addAttachments } = useComposerActions();
 
   const handleOpenChange = useCallback((isOpen: boolean) => {
     // The panel grows into the space the keyboard would occupy, so it takes the
@@ -78,7 +75,7 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
       mediaTypes: ['images'],
       orderedSelection: true,
       quality: 1,
-      selectionLimit: CHAT_INPUT_PHOTO_SELECTION_LIMIT,
+      selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
     });
 
     if (result.canceled) {
@@ -126,7 +123,7 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
     <Composer.Menu
       accessibilityLabel={t('chat.media.attach')}
       onOpenChange={handleOpenChange}
-      testID="chat-input-menu"
+      testID="composer-menu"
     >
       <Composer.Menu.Item
         icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
@@ -143,33 +140,10 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
         label={t('chat.media.file')}
         onPress={() => present('document', openDocumentPicker)}
       />
-      {onActionPress ? (
+      {items ? (
         <>
           <View className="my-1 h-px bg-border" />
-          {chatInputActions.map((action) => {
-            const Icon = action.icon;
-            const isSelected = action.id === selectedToolId;
-
-            return (
-              <Composer.Menu.Item
-                icon={
-                  <Icon
-                    className={cn('size-5', isSelected ? 'text-primary' : 'text-foreground')}
-                    strokeWidth={2}
-                  />
-                }
-                key={action.id}
-                label={t(action.titleKey)}
-                onPress={() => onActionPress(action.id)}
-                selected={isSelected}
-                trailing={
-                  isSelected ? (
-                    <CheckIcon className="size-5 text-primary" strokeWidth={2.25} />
-                  ) : null
-                }
-              />
-            );
-          })}
+          {items}
         </>
       ) : null}
     </Composer.Menu>

@@ -6,15 +6,15 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  ComposerCore,
+  type ComposerSendPayload,
+  useComposerActions,
+  useComposerState,
+} from '@/frontend/components/composer';
+import {
   ModelPickerBottomSheet,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
-import {
-  ChatInputComposer,
-  type ChatInputSendPayload,
-  useChatInputActions,
-  useChatInputState,
-} from '@/frontend/features/chat/input';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 
 import type {
@@ -60,8 +60,8 @@ export function PaintingInput({
     modelId: UniqueModelId;
     values: ImageParamDraft;
   } | null>(null);
-  const { attachments, draft } = useChatInputState();
-  const { setAttachments } = useChatInputActions();
+  const { attachments, draft } = useComposerState();
+  const { setAttachments } = useComposerActions();
   const { model: selectedModel } = useModelById(selectedModelId);
   const { models: enabledImageModels } = useModels({
     capability: MODEL_CAPABILITY.IMAGE_GENERATION,
@@ -133,7 +133,7 @@ export function PaintingInput({
     [generationMode, paramValues, selectedModelId],
   );
   const handleSend = useCallback(
-    async ({ attachments, text }: ChatInputSendPayload) => {
+    async ({ attachments, text }: ComposerSendPayload) => {
       if (!selectedModelId || !isSelectedModelAvailable) {
         throw new Error('Select an available image generation model');
       }
@@ -202,7 +202,7 @@ export function PaintingInput({
 
   return (
     <>
-      <ChatInputComposer
+      <ComposerCore
         allowEmptySend={resolvedMode?.definition.requirePrompt === false}
         getSendErrorLabel={getSendErrorLabel}
         isSendEnabled={

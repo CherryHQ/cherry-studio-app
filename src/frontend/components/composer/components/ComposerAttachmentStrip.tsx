@@ -2,12 +2,13 @@ import { XIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { type GestureResponderEvent, Pressable, ScrollView, View } from 'react-native';
 
-import { FileTile, ImageTile } from '../../mediaTile';
-import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
+import { FileTile, ImageTile } from '@/frontend/components/mediaTile';
 
-type ChatInputAttachmentStripProps = {
-  attachments: readonly ChatInputAttachmentDraft[];
-  onAttachmentPreview: (attachment: ChatInputAttachmentDraft) => void;
+import type { ComposerAttachmentDraft } from '../utils/composerAttachments';
+
+type ComposerAttachmentStripProps = {
+  attachments: readonly ComposerAttachmentDraft[];
+  onAttachmentPreview: (attachment: ComposerAttachmentDraft) => void;
   onAttachmentRemove: (attachmentId: string) => void;
 };
 
@@ -17,11 +18,11 @@ type ChatInputAttachmentStripProps = {
  * this is written here, inside a `Composer.Collapsible` that owns the swell and
  * shrink.
  */
-export function ChatInputAttachmentStrip({
+export function ComposerAttachmentStrip({
   attachments,
   onAttachmentPreview,
   onAttachmentRemove,
-}: ChatInputAttachmentStripProps) {
+}: ComposerAttachmentStripProps) {
   return (
     <ScrollView
       alwaysBounceHorizontal={false}
@@ -54,7 +55,7 @@ function AttachmentImageTile({
   onPreview,
   onRemove,
 }: {
-  attachment: ChatInputAttachmentDraft;
+  attachment: ComposerAttachmentDraft;
   onPreview: () => void;
   onRemove: () => void;
 }) {
@@ -73,7 +74,7 @@ function AttachmentFileTile({
   attachment,
   onRemove,
 }: {
-  attachment: ChatInputAttachmentDraft;
+  attachment: ComposerAttachmentDraft;
   onRemove: () => void;
 }) {
   return (

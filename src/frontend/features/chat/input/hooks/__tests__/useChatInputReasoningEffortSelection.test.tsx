@@ -2,13 +2,8 @@ import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk'
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import {
-  ChatInputProvider,
-  useChatInputActions,
-  useChatInputState,
-} from '../../context/ChatInputProvider';
 import type { ChatInputReasoningEffort } from '../../utils/chatInputReasoning';
-import { useChatInputReasoningEffortSync } from '../useChatInputReasoningEffortSync';
+import { useChatInputReasoningEffortSelection } from '../useChatInputReasoningEffortSelection';
 
 type Snapshot = {
   isReasoningEffortSelected: boolean;
@@ -16,21 +11,19 @@ type Snapshot = {
   selectReasoningEffort: (effort: ChatInputReasoningEffort) => void;
 };
 
-describe('useChatInputReasoningEffortSync', () => {
+describe('useChatInputReasoningEffortSelection', () => {
   test('shows the assistant effort without turning it into a request override', async () => {
     let snapshot: Snapshot | undefined;
 
     await act(async () => {
       create(
-        <ChatInputProvider>
-          <Harness
-            assistantEffort="high"
-            availableEfforts={['default', 'low', 'high']}
-            onSnapshot={(value) => {
-              snapshot = value;
-            }}
-          />
-        </ChatInputProvider>,
+        <Harness
+          assistantEffort="high"
+          availableEfforts={['default', 'low', 'high']}
+          onSnapshot={(value) => {
+            snapshot = value;
+          }}
+        />,
       );
     });
 
@@ -44,15 +37,13 @@ describe('useChatInputReasoningEffortSync', () => {
     let snapshot: Snapshot | undefined;
     let renderer: ReactTestRenderer | undefined;
     const renderHarness = (assistantEffort: ReasoningEffortOption) => (
-      <ChatInputProvider>
-        <Harness
-          assistantEffort={assistantEffort}
-          availableEfforts={['default', 'low', 'high']}
-          onSnapshot={(value) => {
-            snapshot = value;
-          }}
-        />
-      </ChatInputProvider>
+      <Harness
+        assistantEffort={assistantEffort}
+        availableEfforts={['default', 'low', 'high']}
+        onSnapshot={(value) => {
+          snapshot = value;
+        }}
+      />
     );
 
     await act(async () => {
@@ -75,16 +66,14 @@ describe('useChatInputReasoningEffortSync', () => {
     let snapshot: Snapshot | undefined;
     let renderer: ReactTestRenderer | undefined;
     const renderHarness = (assistantId: string, assistantEffort: ReasoningEffortOption) => (
-      <ChatInputProvider>
-        <Harness
-          assistantEffort={assistantEffort}
-          assistantId={assistantId}
-          availableEfforts={['default', 'low', 'high']}
-          onSnapshot={(value) => {
-            snapshot = value;
-          }}
-        />
-      </ChatInputProvider>
+      <Harness
+        assistantEffort={assistantEffort}
+        assistantId={assistantId}
+        availableEfforts={['default', 'low', 'high']}
+        onSnapshot={(value) => {
+          snapshot = value;
+        }}
+      />
     );
 
     await act(async () => {
@@ -115,9 +104,8 @@ function Harness({
   availableEfforts: readonly ChatInputReasoningEffort[];
   onSnapshot: (snapshot: Snapshot) => void;
 }) {
-  useChatInputReasoningEffortSync(availableEfforts, assistantEffort, assistantId);
-  const { isReasoningEffortSelected, reasoningEffort } = useChatInputState();
-  const { selectReasoningEffort } = useChatInputActions();
+  const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
+    useChatInputReasoningEffortSelection(availableEfforts, assistantEffort, assistantId);
 
   useEffect(() => {
     onSnapshot({ isReasoningEffortSelected, reasoningEffort, selectReasoningEffort });

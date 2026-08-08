@@ -9,13 +9,15 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
 
-import { ChatInputProvider } from '@/frontend/features/chat/input';
+import {
+  ComposerDock,
+  ComposerProvider,
+  useComposerDockLayout,
+} from '@/frontend/components/composer';
 import {
   ChatMessageList,
   ChatWorkspaceFrame,
-  ComposerDock,
   ScrollToBottomButton,
-  useFloatingChatInputLayout,
 } from '@/frontend/features/chat/workspace';
 import { isIOS } from '@/frontend/utils/constants';
 
@@ -74,9 +76,9 @@ export function PaintingConversationScreen() {
           </Text>
         </View>
       ) : (
-        <ChatInputProvider key={painting.id}>
+        <ComposerProvider key={painting.id}>
           <PaintingConversationWorkspace files={files} painting={painting} />
-        </ChatInputProvider>
+        </ComposerProvider>
       )}
     </View>
   );
@@ -97,7 +99,7 @@ function PaintingConversationWorkspace({
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
   const generation = usePaintingGeneration({ initialOutputs: [] });
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
-    useFloatingChatInputLayout();
+    useComposerDockLayout();
   const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
     listRef,
     composerRef,

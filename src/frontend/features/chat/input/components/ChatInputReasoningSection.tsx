@@ -31,7 +31,7 @@ export function ChatInputReasoningSection({
   const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   // The component is rendered inside a ModalBottomSheet portal (Android)
-  // where ChatInputProvider context is unavailable, so all values must come
+  // where ComposerProvider context is unavailable, so all values must come
   // from props — no fallback to context hooks.
   const reasoningEfforts = useChatInputReasoningEfforts();
 

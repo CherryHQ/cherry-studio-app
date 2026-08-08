@@ -110,8 +110,8 @@ jest.mock('../utils/photoLibrary', () => ({
   loadPhotoPreviewPage: jest.fn(),
 }));
 
-jest.mock('@/frontend/features/chat/input/utils/chatInputAttachments', () => ({
-  CHAT_INPUT_PHOTO_SELECTION_LIMIT: 6,
+jest.mock('@/frontend/components/composer/utils/composerAttachments', () => ({
+  COMPOSER_PHOTO_SELECTION_LIMIT: 6,
   createPhotoAttachmentDraft: jest.fn(),
 }));
 
