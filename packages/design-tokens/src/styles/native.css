@@ -204,7 +204,7 @@
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);
-      --brand: oklch(0.6903 0.17 155.21);
+      --brand: var(--green-900);
       --chat-user: var(--gray-alpha-100);
       --constant-black: oklch(0 0 0);
       --constant-white: oklch(1 0 0);
@@ -322,7 +322,7 @@
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);
-      --brand: oklch(0.6903 0.17 155.21);
+      --brand: var(--green-900);
       --chat-user: var(--gray-alpha-100);
       --constant-black: oklch(0 0 0);
       --constant-white: oklch(1 0 0);

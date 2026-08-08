@@ -9,8 +9,12 @@
  * hosts that never bootstrap (Storybook) show forever. `applyThemePreferences`
  * overwrites both themes at startup via `Uniwind.updateCSSVariables`.
  *
- * Only the *user's* colour lives here. Cherry's own green is `--brand` in
- * product.css, which nothing rewrites — see that file for which is which.
+ * Only the *user's* colour lives here. The product's own green is `--brand` in
+ * product.css, which no preference rewrites — see that file for which is which.
+ * The two are no longer the same value: `--brand` moved to the palette's
+ * green-900, while this stays Cherry's #00b96b because it is the *default for a
+ * user setting*, and changing it would silently restyle everyone who never
+ * picked a colour.
  */
 
 :root {
