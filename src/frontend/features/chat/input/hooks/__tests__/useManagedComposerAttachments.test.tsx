@@ -12,7 +12,7 @@ import { useManagedComposerAttachments } from '../useManagedComposerAttachments'
 
 const mockCreateInternalEntry = jest.fn();
 const mockDeleteIfUnreferenced = jest.fn(async () => true);
-const mockToastShow = jest.fn();
+const mockAlertShow = jest.fn();
 const mockFileModule = {
   createInternalEntry: mockCreateInternalEntry,
   deleteIfUnreferenced: mockDeleteIfUnreferenced,
@@ -23,8 +23,8 @@ jest.mock('@/frontend/data', () => ({
   useBackendModule: () => mockFileModule,
 }));
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -80,9 +80,8 @@ describe('useManagedComposerAttachments', () => {
         status: 'ready',
       }),
     ]);
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'chat.attachments.importFailed:1',
-      variant: 'danger',
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'chat.attachments.importFailed:1',
     });
   });
 

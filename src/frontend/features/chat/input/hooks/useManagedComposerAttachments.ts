@@ -1,7 +1,7 @@
-import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import type { ComposerAttachmentStore } from '@/frontend/components/composer';
 import {
   appendComposerAttachments,
@@ -24,7 +24,7 @@ export function useManagedComposerAttachments(
   initialAttachments: readonly ComposerInitialAttachment[] = emptyInitialAttachments,
 ): ComposerAttachmentStore {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const file = useBackendModule('file');
   const initialAttachmentsRef = useRef(initialAttachments);
   const didImportInitialAttachmentsRef = useRef(false);
@@ -122,13 +122,12 @@ export function useManagedComposerAttachments(
       const failureCount = results.filter((result) => result === 'failed').length;
 
       if (isMountedRef.current && failureCount > 0) {
-        toast.show({
-          label: t('chat.attachments.importFailed', { count: failureCount }),
-          variant: 'danger',
+        alert.show({
+          title: t('chat.attachments.importFailed', { count: failureCount }),
         });
       }
     },
-    [importAttachment, t, toast],
+    [alert, importAttachment, t],
   );
 
   const addAttachments = useCallback(
