@@ -3,7 +3,6 @@ import { View } from 'react-native';
 
 import { Surface } from '../surface';
 import { ComposerAction } from './components/composer-action';
-import { ComposerAttachments } from './components/composer-attachments';
 import { ComposerCollapsible } from './components/composer-collapsible';
 import { ComposerInput } from './components/composer-input';
 import { ComposerSend } from './components/composer-send';
@@ -16,15 +15,9 @@ import {
   type ComposerStateContextValue,
 } from './composer.context';
 import { surfaceRadius, surfaceStyle } from './composer.layout';
-import type { ComposerAttachment, ComposerLabels, ComposerProps } from './composer.types';
-
-// Stable reference: a `= []` default would be a fresh array every render, which
-// re-triggers the "keep the last non-empty snapshot" adjustment in the strip.
-const noAttachments: readonly ComposerAttachment[] = [];
+import type { ComposerLabels, ComposerProps } from './composer.types';
 
 const defaultLabels: ComposerLabels = {
-  attachment: 'Attachment',
-  removeAttachment: 'Remove attachment',
   send: 'Send message',
   stop: 'Stop generating',
 };
@@ -35,17 +28,15 @@ const defaultLabels: ComposerLabels = {
  * children, so the same component backs a chat screen, an image prompt, or
  * whatever comes next.
  *
- * Fully controlled — `value`/`attachments` and their callbacks are the caller's
- * to own. Pass `children` to arrange the parts yourself; the default is the
- * standard layout with a lone send button.
+ * Fully controlled — `value` and its callbacks are the caller's to own. Pass
+ * `children` to arrange the parts yourself; the default is the standard layout
+ * with a lone send button.
  */
 function ComposerRoot({
-  attachments = noAttachments,
   autoFocus = false,
   canSend,
   children,
   labels,
-  onAttachmentRemove,
   onChangeText,
   onSend,
   onStop,
@@ -57,13 +48,12 @@ function ComposerRoot({
 }: ComposerProps) {
   const state = useMemo<ComposerStateContextValue>(
     () => ({
-      attachments,
-      canSend: canSend ?? (value.trim().length > 0 || attachments.length > 0),
+      canSend: canSend ?? value.trim().length > 0,
       labels: labels ? { ...defaultLabels, ...labels } : defaultLabels,
       streaming,
       value,
     }),
-    [attachments, canSend, labels, streaming, value],
+    [canSend, labels, streaming, value],
   );
 
   // Split from the state on purpose: this half only changes when the caller's
@@ -73,11 +63,10 @@ function ComposerRoot({
   const actions = useMemo<ComposerActionsContextValue>(
     () => ({
       changeText: onChangeText,
-      removeAttachment: onAttachmentRemove,
       send: onSend,
       stop: onStop,
     }),
-    [onAttachmentRemove, onChangeText, onSend, onStop],
+    [onChangeText, onSend, onStop],
   );
 
   return (
@@ -91,7 +80,6 @@ function ComposerRoot({
           <ComposerActionsContext value={actions}>
             {children ?? (
               <>
-                <ComposerAttachments />
                 <ComposerInput
                   autoFocus={autoFocus}
                   placeholder={placeholder}
@@ -113,7 +101,6 @@ ComposerRoot.displayName = 'Composer';
 
 export const Composer = Object.assign(ComposerRoot, {
   Action: ComposerAction,
-  Attachments: ComposerAttachments,
   Collapsible: ComposerCollapsible,
   Input: ComposerInput,
   Menu: MorphMenu,

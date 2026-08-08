@@ -2,8 +2,6 @@ export { Composer } from './composer';
 export type { MorphMenuItemProps, MorphMenuProps } from './components/morph-menu';
 export type {
   ComposerActionProps,
-  ComposerAttachment,
-  ComposerAttachmentsProps,
   ComposerCollapsibleProps,
   ComposerInputProps,
   ComposerLabels,

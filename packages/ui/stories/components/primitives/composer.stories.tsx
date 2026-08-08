@@ -1,4 +1,4 @@
-import { Composer, type ComposerAttachment, type ComposerProps } from '@cherrystudio/ui/components';
+import { Composer, type ComposerProps } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import {
   CameraIcon,
@@ -6,9 +6,10 @@ import {
   GlobeIcon,
   ImagesIcon,
   SlidersHorizontalIcon,
+  XIcon,
 } from 'lucide-uniwind/png';
 import { type ReactNode, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';
 
@@ -17,18 +18,63 @@ const themes = [
   { label: 'Dark', value: 'dark' },
 ] as const;
 
-// Remote placeholders: the strip's swell/shrink is the point of this story, and
-// it animates identically whether or not the images resolve on device.
-const sampleAttachments: ComposerAttachment[] = [
+type StoryAttachment = { id: string; name: string; uri: string };
+
+// Remote placeholders: the row's swell/shrink is the point of this story, and it
+// animates identically whether or not the images resolve on device.
+const sampleAttachments: StoryAttachment[] = [
   { id: 'photo-1', name: 'Sunrise', uri: 'https://picsum.photos/id/1015/240/240' },
   { id: 'photo-2', name: 'Harbor', uri: 'https://picsum.photos/id/1016/240/240' },
   { id: 'photo-3', name: 'Forest', uri: 'https://picsum.photos/id/1018/240/240' },
 ];
 
+/**
+ * Deliberately written here rather than shipped by the package: every real
+ * consumer wants a different strip (images and files, horizontal scrolling, tap
+ * to preview), and `Composer.Collapsible` is the part that is actually general.
+ */
+function AttachmentStrip({
+  attachments,
+  onRemove,
+}: {
+  attachments: readonly StoryAttachment[];
+  onRemove: (id: string) => void;
+}) {
+  return (
+    <View className="flex-row flex-wrap gap-2 pt-0.5 pb-2">
+      {attachments.map((attachment) => (
+        <View
+          accessibilityLabel={attachment.name}
+          className="size-20 overflow-hidden rounded-2xl bg-surface-secondary"
+          key={attachment.id}
+        >
+          <Image className="size-20" resizeMode="cover" source={{ uri: attachment.uri }} />
+          <Pressable
+            accessibilityLabel={`Remove ${attachment.name}`}
+            accessibilityRole="button"
+            className="absolute top-1.5 right-1.5 size-6 items-center justify-center rounded-full bg-black/55 active:opacity-70"
+            hitSlop={8}
+            onPress={() => onRemove(attachment.id)}
+          >
+            <XIcon className="size-3.5 text-white" strokeWidth={2.5} />
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+type PreviewState = {
+  attach: () => void;
+  attachments: readonly StoryAttachment[];
+  remove: (id: string) => void;
+  value: string;
+};
+
 type ThemePreviewProps = {
   args: ComposerProps;
   /** Given the live state, since the preview owns it and `args` only carries the initial value. */
-  children?: (state: { attach: () => void; value: string }) => ReactNode;
+  children?: (state: PreviewState) => ReactNode;
   hint: string;
   label: string;
   theme: 'dark' | 'light';
@@ -40,9 +86,7 @@ type ThemePreviewProps = {
  */
 function ThemePreview({ args, children, hint, label, theme }: ThemePreviewProps) {
   const [value, setValue] = useState(args.value);
-  const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>(
-    args.attachments ?? [],
-  );
+  const [attachments, setAttachments] = useState<readonly StoryAttachment[]>([]);
 
   const attach = () => {
     const next = sampleAttachments.find(
@@ -54,17 +98,19 @@ function ThemePreview({ args, children, hint, label, theme }: ThemePreviewProps)
     }
   };
 
+  const remove = (id: string) => {
+    setAttachments(attachments.filter((attachment) => attachment.id !== id));
+  };
+
   return (
     <ScopedTheme theme={theme}>
       <View className="gap-4 border border-border bg-background p-4">
         <Text className="text-lg font-semibold text-foreground">{label}</Text>
         <Composer
           {...args}
-          attachments={attachments}
-          onAttachmentRemove={(id) => {
-            setAttachments(attachments.filter((attachment) => attachment.id !== id));
-            args.onAttachmentRemove?.(id);
-          }}
+          // Text alone is the built-in rule, so a caller holding attachments has
+          // to say so — the composer cannot see them.
+          canSend={value.trim().length > 0 || attachments.length > 0}
           onChangeText={(text) => {
             setValue(text);
             args.onChangeText(text);
@@ -76,7 +122,7 @@ function ThemePreview({ args, children, hint, label, theme }: ThemePreviewProps)
           }}
           value={value}
         >
-          {children?.({ attach, value })}
+          {children?.({ attach, attachments, remove, value })}
         </Composer>
         <Text className="text-sm text-muted-foreground">{hint}</Text>
       </View>
@@ -92,9 +138,7 @@ const meta = {
   title: 'Components/Primitives/Composer',
   component: Composer,
   args: {
-    attachments: [],
     autoFocus: false,
-    onAttachmentRemove: fn(),
     onChangeText: fn(),
     onSend: fn(),
     onStop: fn(),
@@ -141,21 +185,26 @@ export const Playground: Story = {
 
 /**
  * The point of the split: tools are the caller's, and adding one never moves the
- * send button.
+ * send button. The attachment row is the caller's too — a `Composer.Collapsible`
+ * with whatever the caller wants inside it.
  */
 export const Composed: Story = {
   render: (args) =>
     bothThemes((theme) => (
       <ThemePreview
         args={args}
-        hint="Tap ＋ for the menu, the sliders for a plain tool, ↑ to send."
+        hint="Tap ＋ to attach, the sliders for a plain tool, ↑ to send."
         key={theme.value}
         label={theme.label}
         theme={theme.value}
       >
-        {({ attach }) => (
+        {({ attach, attachments, remove }) => (
           <>
-            <Composer.Attachments />
+            <Composer.Collapsible>
+              {attachments.length > 0 ? (
+                <AttachmentStrip attachments={attachments} onRemove={remove} />
+              ) : null}
+            </Composer.Collapsible>
             <Composer.Input placeholder={args.placeholder} />
             <Composer.Toolbar>
               <Composer.Menu accessibilityLabel="Add attachment">
@@ -187,8 +236,8 @@ export const Composed: Story = {
 };
 
 /**
- * Any row can swell and shrink, not just the attachment strip — render `null` to
- * collapse it and the surface follows.
+ * Any row can swell and shrink, not just attachments — render `null` to collapse
+ * it and the surface follows.
  */
 export const StatusRow: Story = {
   render: (args) =>
@@ -210,7 +259,6 @@ export const StatusRow: Story = {
                 </View>
               ) : null}
             </Composer.Collapsible>
-            <Composer.Attachments />
             <Composer.Input placeholder={args.placeholder} />
             <Composer.Toolbar>
               <Composer.Send />
@@ -218,20 +266,6 @@ export const StatusRow: Story = {
           </>
         )}
       </ThemePreview>
-    )),
-};
-
-export const WithAttachments: Story = {
-  args: { attachments: sampleAttachments.slice(0, 2), value: 'What is in these photos?' },
-  render: (args) =>
-    bothThemes((theme) => (
-      <ThemePreview
-        args={args}
-        hint="Tap ✕ to remove; the surface shrinks as the strip empties."
-        key={theme.value}
-        label={theme.label}
-        theme={theme.value}
-      />
     )),
 };
 

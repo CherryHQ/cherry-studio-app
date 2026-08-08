@@ -31,17 +31,15 @@ system font scaling enabled, and allow constrained labels to wrap. `Button` foll
 using padding for its touch target and letting its label shrink and grow the container.
 
 `Composer` is a shared input surface: a text field that grows with its content and, under it, a
-toolbar row. Nothing but the field is built in. It is fully controlled — the caller owns `value` and
-`attachments` — and carries no i18n or attachment-picking logic, so the same component backs a chat
+toolbar row. Nothing but the field is built in. It is fully controlled — the caller owns `value` —
+and carries no i18n, attachment handling, or picking logic, so the same component backs a chat
 screen, an image prompt, or a story.
 
 ```tsx
 import { Composer } from '@cherrystudio/ui/components';
 
 <Composer
-  attachments={attachments}
   labels={{ send: t('chat.input.action.sendMessage') }}
-  onAttachmentRemove={removeAttachment}
   onChangeText={setDraft}
   onSend={send}
   onStop={stop}
@@ -51,12 +49,11 @@ import { Composer } from '@cherrystudio/ui/components';
 />;
 ```
 
-That renders the default layout — attachments, the field, and a toolbar holding nothing but send.
-Pass `children` to arrange the parts yourself and to fill the toolbar with your own tools:
+That renders the default layout — the field, and a toolbar holding nothing but send. Pass `children`
+to arrange the parts yourself and to fill the toolbar with your own tools:
 
 ```tsx
 <Composer onChangeText={setDraft} onSend={send} value={draft}>
-  <Composer.Attachments />
   <Composer.Input placeholder={t('chat.inputPlaceholder')} />
   <Composer.Toolbar>
     <Composer.Menu accessibilityLabel={t('chat.media.attach')}>
@@ -80,12 +77,13 @@ who contributed a button to it.
 State reaches the parts through context, so `<Composer.Send />` takes nothing. That context is split
 in two — the state half changes on every keystroke, the actions half only when the caller's handlers
 do — so a tool that merely acts keeps its identity while the user types. Sendability defaults to
-"there is text or an attachment"; pass `canSend` when it depends on something the composer cannot
-see, such as an image model that has to be picked first or a mode that needs no prompt at all.
+"there is text"; pass `canSend` when it depends on something the composer cannot see, such as an
+attachment the caller holds, an image model that has to be picked first, or a mode that needs no
+prompt at all.
 
 Only the platform-divergent chrome sits behind a `.ios` / `.android` seam: `Surface` for the material
 (Liquid Glass on iOS 26+, a plain rounded surface elsewhere) and `composerTextStyle.*` for the text
-field's line height, which iOS has to override. Layout, state, and the strip animation are identical
+field's line height, which iOS has to override. Layout, state, and the collapse animation are identical
 on both platforms and stay in `composer.tsx` rather than being duplicated into a `composer.ios` /
 `composer.android` pair that would drift.
 
@@ -115,7 +113,7 @@ nothing when it sits on another one — the material has nothing behind it to re
 button on the composer's own surface is invisible, not merely faint. `Composer.Action` resolves the
 tint from its `className` and hands it to both branches, which is why callers never pass one.
 
-Rows above the field — a preview strip, a status line, the attachment thumbnails — are placed by the
+Rows above the field — an attachment strip, a status line, a selected-tool tag — are placed by the
 order they are written, not by named slots, and a row that never disappears is just a `View`. What is
 not free is the swell and shrink, so that is what `Composer.Collapsible` provides: render `null` to
 collapse it and the surface follows.
@@ -127,8 +125,12 @@ collapse it and the surface follows.
 ```
 
 It holds the last non-empty frame until the collapse lands, so callers write a plain conditional
-instead of keeping a copy around for the animation to shrink. `Composer.Attachments` is the same
-component with the thumbnails inside it.
+instead of keeping a copy around for the animation to shrink.
+
+The package deliberately ships no attachment strip. It had one, and every real consumer wanted a
+shape it did not have — images and files side by side, horizontal scrolling, tap to preview — so what
+generalised was the collapse, not the thumbnails. Callers write their own row inside a
+`Composer.Collapsible` and tell the composer about it through `canSend`.
 
 `composer.motion.ts` pairs the package's curves with durations and names each pairing after the
 gesture it belongs to, so anything that changes the composer's size settles on one curve and a row

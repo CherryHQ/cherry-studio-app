@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Composer } from '../composer';
-import type { ComposerAttachment, ComposerProps } from '../composer.types';
+import type { ComposerProps } from '../composer.types';
 
 jest.mock('heroui-native/utils', () => {
   const { twMerge } = require('tailwind-merge');
@@ -67,11 +67,6 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-const attachments: ComposerAttachment[] = [
-  { id: 'a', name: 'Sunrise', uri: 'file:///a.jpg' },
-  { id: 'b', name: 'Harbor', uri: 'file:///b.jpg' },
-];
-
 describe('Composer', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -116,7 +111,7 @@ describe('Composer', () => {
     return press(tree, 'composer-send');
   }
 
-  it('blocks the send action until there is text or an attachment', () => {
+  it('blocks the send action until there is text', () => {
     const onSend = jest.fn();
     const tree = render({ onSend });
     const button = pressSend(tree);
@@ -142,14 +137,6 @@ describe('Composer', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
-  it('sends on attachments alone', () => {
-    const onSend = jest.fn();
-
-    pressSend(render({ attachments, onSend }));
-
-    expect(onSend).toHaveBeenCalledTimes(1);
-  });
-
   it('stops instead of sending while streaming', () => {
     const onSend = jest.fn();
     const onStop = jest.fn();
@@ -169,44 +156,6 @@ describe('Composer', () => {
     expect(onSend).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the thumbnails mounted after the attachments clear so the strip can collapse', () => {
-    const tree = render({ attachments, value: '' });
-
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Sunrise' }).length).toBeGreaterThan(0);
-
-    act(() => {
-      tree.update(
-        <Composer
-          attachments={[]}
-          onChangeText={jest.fn()}
-          onSend={jest.fn()}
-          testID="composer"
-          value=""
-        />,
-      );
-    });
-
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Sunrise' }).length).toBeGreaterThan(0);
-  });
-
-  it('removes an attachment by id', () => {
-    const onAttachmentRemove = jest.fn();
-    const tree = render({ attachments, onAttachmentRemove });
-    const [removeButton] = tree.root.findAllByProps({ accessibilityLabel: 'Remove attachment' });
-
-    act(() => {
-      removeButton.props.onPress();
-    });
-
-    expect(onAttachmentRemove).toHaveBeenCalledWith('a');
-  });
-
-  it('omits the remove badge when no remove handler is supplied', () => {
-    const tree = render({ attachments });
-
-    expect(tree.root.findAllByProps({ accessibilityLabel: 'Remove attachment' })).toHaveLength(0);
-  });
-
   it('defers sendability to the caller when canSend is supplied', () => {
     const onSend = jest.fn();
 
@@ -216,7 +165,8 @@ describe('Composer', () => {
 
     expect(onSend).not.toHaveBeenCalled();
 
-    // …and the inverse: a mode that needs no prompt at all.
+    // …and the inverse: an attachment the caller holds, or a mode that needs no
+    // prompt at all.
     pressSend(render({ canSend: true, onSend, value: '' }));
 
     expect(onSend).toHaveBeenCalledTimes(1);

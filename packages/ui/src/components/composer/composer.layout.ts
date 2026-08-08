@@ -12,7 +12,6 @@ const surfacePaddingHorizontal = 12;
 const surfacePaddingTop = 8;
 const surfacePaddingBottom = 8;
 const toolbarGap = 12;
-export const thumbnailSize = 120;
 const maxTextHeight = 120;
 // Symmetric on purpose: asymmetric padding would only trade the glyphs'
 // centering for the caret's. See `composerTextStyle.ios`.
@@ -42,7 +41,6 @@ export const actionStyle = {
   justifyContent: 'center',
   width: composerActionSize,
 } as const;
-export const thumbnailStyle = { height: thumbnailSize, width: thumbnailSize } as const;
 export const textInputBoxStyle = {
   maxHeight: maxTextHeight,
   paddingVertical: textPaddingVertical,

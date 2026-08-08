@@ -1,9 +1,8 @@
 import { createContext, use } from 'react';
 
-import type { ComposerAttachment, ComposerLabels } from './composer.types';
+import type { ComposerLabels } from './composer.types';
 
 export type ComposerStateContextValue = {
-  attachments: readonly ComposerAttachment[];
   canSend: boolean;
   labels: ComposerLabels;
   streaming: boolean;
@@ -12,7 +11,6 @@ export type ComposerStateContextValue = {
 
 export type ComposerActionsContextValue = {
   changeText: (text: string) => void;
-  removeAttachment?: (id: string) => void;
   send: () => void;
   stop?: () => void;
 };
