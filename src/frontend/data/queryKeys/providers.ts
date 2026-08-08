@@ -1,7 +1,9 @@
+// Invalidation keys are prefixes, not exact keys: `['/providers']` reaches the list however
+// it was queried. Appending an empty params object (`['/providers', {}]`) instead matches
+// nothing, because `buildQueryKey` drops empty query objects from the key it stores.
 export const providerQueryKeys = {
-  apiKeys: (providerId: string, params: { enabled?: boolean } = {}) =>
-    [`/providers/${providerId}/api-keys`, params] as const,
+  apiKeys: (providerId: string) => [`/providers/${providerId}/api-keys`] as const,
   authConfig: (providerId: string) => [`/providers/${providerId}/auth`] as const,
   detail: (providerId: string) => [`/providers/${providerId}`] as const,
-  list: (params: { enabled?: boolean } = {}) => ['/providers', params] as const,
+  list: () => ['/providers'] as const,
 };

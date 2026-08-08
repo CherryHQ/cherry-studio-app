@@ -42,7 +42,7 @@ const gateLog = loggerService.withContext('ChatGate');
 type ChatWorkspaceProps = {
   messageWindow: Pick<
     MessagesViewModel,
-    'isLoadingInitial' | 'isLoadingOlder' | 'loadOlder' | 'messages' | 'prefetchOlder'
+    'isLoadingInitial' | 'isLoadingOlder' | 'loadOlder' | 'messages'
   >;
   renderGateKey: string;
   topicId: string;
@@ -121,7 +121,6 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
           listRef={listRef}
           messages={visibleMessages}
           onLoadOlder={loadOlder}
-          onPrefetchOlder={messageWindow.prefetchOlder}
           onReady={markListLoaded}
           pendingUserMessageId={chatTopic.pendingUserMessage?.id}
         />

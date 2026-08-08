@@ -23,10 +23,7 @@ const mockQueryClient = {
   setQueriesData: mockSetQueriesData,
   setQueryData: mockSetQueryData,
 };
-const defaultModelId = 'provider::default-model';
-const mockGetCachedPreferenceValue = jest.fn((): string | null => defaultModelId);
 jest.mock('expo-router', () => ({
-  useIsFocused: () => true,
   useRouter: () => ({ push: mockRouterPush }),
 }));
 
@@ -34,12 +31,13 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => mockQueryClient,
 }));
 
+// `usePrefetch`/`usePrefetchInfiniteQuery` stay mocked so the assertions below keep proving the
+// topic list warms no caches — opening a topic must stay a plain navigation.
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data'),
   useMutation: jest.fn(),
   usePrefetch: () => mockPrefetch,
   usePrefetchInfiniteQuery: () => mockPrefetchInfinite,
-  usePreference: () => [mockGetCachedPreferenceValue(), jest.fn()],
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -93,7 +91,6 @@ beforeEach(() => {
   mutationHookIndex = 0;
   renameMutationOptions = undefined;
   renderer = undefined;
-  mockGetCachedPreferenceValue.mockReturnValue(defaultModelId);
 
   usePinsMock.mockReturnValue({
     error: undefined,
@@ -141,47 +138,20 @@ async function renderProvider(topics: readonly Topic[]) {
 }
 
 describe('TopicListProvider', () => {
-  test('prefetches the focused topic window and pushes a selected topic', async () => {
+  test('pushes a selected topic without warming any cache', async () => {
     const topics = Array.from({ length: 14 }, (_, index) => makeTopic(index + 1));
     await renderProvider(topics);
-
-    expect(mockPrefetch).toHaveBeenCalledTimes(1);
-    expect(mockPrefetch).toHaveBeenCalledWith('/models/:uniqueModelId*', {
-      params: { uniqueModelId: defaultModelId },
-      staleTime: 1000 * 60 * 5,
-    });
-    expect(mockPrefetch.mock.invocationCallOrder[0]).toBeLessThan(
-      mockPrefetchInfinite.mock.invocationCallOrder[0],
-    );
-
-    expect(mockPrefetchInfinite).toHaveBeenCalledTimes(12);
-    expect(mockPrefetchInfinite).not.toHaveBeenCalledWith(
-      '/topics/:topicId/messages',
-      expect.objectContaining({ params: { topicId: 'topic-13' } }),
-    );
 
     await act(async () => {
       currentActions?.openTopic('topic-13');
     });
 
-    expect(mockPrefetch).toHaveBeenCalledTimes(2);
-    expect(mockPrefetchInfinite).toHaveBeenCalledWith('/topics/:topicId/messages', {
-      limit: 12,
-      params: { topicId: 'topic-13' },
-      staleTime: 30_000,
-    });
     expect(mockRouterPush).toHaveBeenCalledWith({
       params: { topicId: 'topic-13' },
       pathname: '/topics',
     });
-  });
-
-  test.each([null, 'legacy-model-id'])('skips default model prefetch for %p', async (modelId) => {
-    mockGetCachedPreferenceValue.mockReturnValue(modelId);
-
-    await renderProvider([makeTopic(1)]);
-
     expect(mockPrefetch).not.toHaveBeenCalled();
+    expect(mockPrefetchInfinite).not.toHaveBeenCalled();
   });
 
   test('passes pagination through while preserving topic mutations', async () => {
