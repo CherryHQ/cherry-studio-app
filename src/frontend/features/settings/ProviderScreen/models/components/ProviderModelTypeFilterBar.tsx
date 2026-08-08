@@ -47,12 +47,10 @@ function ProviderModelTypeTabContent({
 
   return (
     <View className="max-w-full flex-row items-center justify-center gap-1.5">
-      {Icon ? (
-        <Icon
-          className={cn('size-3.5 shrink-0', isSelected ? 'text-foreground' : 'text-foreground')}
-          strokeWidth={2}
-        />
-      ) : null}
+      {/* Selection is carried by the label's weight alone — an icon has no
+       * weight axis, and tinting only it would put the two halves of one tab
+       * on different signals. */}
+      {Icon ? <Icon className="size-3.5 shrink-0 text-foreground" strokeWidth={2} /> : null}
       <Text
         adjustsFontSizeToFit
         className={cn(

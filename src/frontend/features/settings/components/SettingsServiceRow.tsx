@@ -15,7 +15,6 @@ export type SettingsServiceRowProps = {
   id: string;
   hideSeparator?: boolean;
   imageSource?: ImageSource | number;
-  isEnabled: boolean;
   name: string;
   onPress: () => void;
   onPressedChange?: (id: string, isPressed: boolean) => void;
@@ -31,7 +30,6 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   hideSeparator = false,
   id,
   imageSource,
-  isEnabled,
   name,
   onPress,
   onPressedChange,
@@ -56,10 +54,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
           ) : undefined
         }
         label={
-          <Text
-            className={cn('min-w-0 text-base', isEnabled ? 'text-foreground' : 'text-foreground')}
-            numberOfLines={1}
-          >
+          <Text className="min-w-0 text-base text-foreground" numberOfLines={1}>
             {name}
           </Text>
         }

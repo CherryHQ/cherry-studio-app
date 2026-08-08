@@ -89,7 +89,6 @@ export function McpScreen() {
                   hideSeparator={
                     pressedServerId === server.id || pressedServerId === previousServerId
                   }
-                  isEnabled={server.isActive}
                   key={server.id}
                   name={server.name}
                   showSeparator={index > 0}
