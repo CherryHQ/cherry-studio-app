@@ -130,6 +130,12 @@ It holds the last non-empty frame until the collapse lands, so callers write a p
 instead of keeping a copy around for the animation to shrink. `Composer.Attachments` is the same
 component with the thumbnails inside it.
 
+The curves live in `composer.motion.ts` for the same reason the geometry lives in one file: anything
+that changes the composer's size settles on one shared curve, so a row swelling while the menu closes
+reads as one gesture rather than as two animations that happen to overlap. Durations and easing are
+not configurable — two rows in one surface moving at different speeds reads as broken, not as
+customisable — and reduced motion lands everything on its final size instead.
+
 The height is measured and driven by a shared value rather than left to a layout animation. A layout
 animation tweens the row's own frame *after* its parent has committed the new one, so the surface
 would snap to its final height while the row slid into place; driving the height directly makes the

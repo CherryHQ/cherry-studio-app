@@ -11,7 +11,6 @@ import {
 } from 'react';
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  Easing,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -24,6 +23,7 @@ import { useResolveClassNames } from 'uniwind';
 import { Portal } from '../../../portal';
 import { Surface } from '../../../surface';
 import { composerActionSize } from '../../composer.layout';
+import { menuFadeMotion, menuOpenMotion, settleMotion } from '../../composer.motion';
 import type { MorphMenuItemProps, MorphMenuProps } from './morph-menu.types';
 
 // It sits in the composer's toolbar, so it defaults to the same circle as the
@@ -38,21 +38,6 @@ const fallbackPanelHeight = 172;
 const slideDistance = 40;
 const restingScale = 0.97;
 const blurRadius = 2;
-
-// Opening overshoots (the y=1.25 control point) and takes longer; closing is
-// pure deceleration. That asymmetry is where the whole feel lives — matching
-// the durations would make it read as a plain toggle.
-const openMotion = {
-  duration: 350,
-  easing: Easing.bezier(0.34, 1.25, 0.64, 1),
-} as const;
-const closeMotion = {
-  duration: 250,
-  easing: Easing.bezier(0.22, 1, 0.36, 1),
-} as const;
-// The cross-fade is deliberately shorter than the shape change, so the panel is
-// already legible while the container is still settling.
-const fadeMotion = { duration: 200, easing: closeMotion.easing } as const;
 
 type MorphMenuContextValue = { close: () => void };
 
@@ -112,7 +97,7 @@ function MorphMenuRoot({
 
   useEffect(() => {
     if (isOpen) {
-      progress.set(isReducedMotion ? 1 : withTiming(1, openMotion));
+      progress.set(isReducedMotion ? 1 : withTiming(1, menuOpenMotion));
       return;
     }
 
@@ -123,7 +108,7 @@ function MorphMenuRoot({
     }
 
     progress.set(
-      withTiming(0, closeMotion, (finished) => {
+      withTiming(0, settleMotion, (finished) => {
         // A re-open cancels this one; landing the portal teardown then would
         // yank the menu back inline mid-animation.
         if (finished) {
@@ -163,7 +148,7 @@ function MorphMenuRoot({
   // Fade out over the first 200/350 of the open so the plus is gone before the
   // panel is readable, rather than the two ghosting through each other.
   const plusStyle = useAnimatedStyle(() => {
-    const fade = Math.min(progress.value / (fadeMotion.duration / openMotion.duration), 1);
+    const fade = Math.min(progress.value / (menuFadeMotion.duration / menuOpenMotion.duration), 1);
 
     return {
       filter: [{ blur: fade * blurRadius }],

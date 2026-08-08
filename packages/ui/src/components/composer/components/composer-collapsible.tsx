@@ -1,23 +1,14 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 import Animated, {
-  Easing,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
 
+import { settleMotion } from '../composer.motion';
 import type { ComposerCollapsibleProps } from '../composer.types';
-
-// One duration for the swell/shrink so the fade and the height collapse stay in
-// lockstep; anything else reads as two animations. Deliberately not
-// configurable: two rows in one surface moving at different speeds reads as
-// broken rather than as customisable.
-const motion = {
-  duration: 220,
-  easing: Easing.inOut(Easing.ease),
-} as const;
 
 /**
  * A row that grows from nothing to its content's height and shrinks back. Render
@@ -65,8 +56,10 @@ export function ComposerCollapsible({ children, style, testID }: ComposerCollaps
       return;
     }
 
-    height.set(withTiming(nextHeight, motion));
-    opacity.set(withTiming(nextOpacity, motion));
+    // Both on the one curve: a fade that outruns the height leaves an empty box
+    // shrinking, which is the thing the held frame above exists to prevent.
+    height.set(withTiming(nextHeight, settleMotion));
+    opacity.set(withTiming(nextOpacity, settleMotion));
   }, [contentHeight, height, isOpen, isReducedMotion, opacity]);
 
   const clipStyle = useAnimatedStyle(() => ({
