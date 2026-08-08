@@ -1,8 +1,8 @@
 import { Composer, type ComposerAttachment, Section, Switch } from '@cherrystudio/ui/components';
-import { CameraIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
+import { CameraIcon, FileIcon, GlobeIcon, ImagesIcon } from 'lucide-uniwind/png';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,6 +25,7 @@ export default function ComposerPreviewScreen() {
   const [draft, setDraft] = useState('');
   const [attachments, setAttachments] = useState<readonly ComposerAttachment[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [hasStatusRow, setHasStatusRow] = useState(false);
   const [sentMessages, setSentMessages] = useState<readonly SentMessage[]>([]);
 
   // The picker is deliberately not wired up yet — this screen is here to judge
@@ -72,6 +73,18 @@ export default function ComposerPreviewScreen() {
                 />
               }
             />
+            {/* The picker is not wired up, so this is the only way to watch the
+                surface swell and shrink by hand on a device. */}
+            <Section.Item
+              label={t('settings.composerPreview.statusRow')}
+              trailing={
+                <Switch
+                  accessibilityLabel={t('settings.composerPreview.statusRow')}
+                  onValueChange={setHasStatusRow}
+                  value={hasStatusRow}
+                />
+              }
+            />
           </Section>
 
           <Section title={t('settings.composerPreview.sentMessages')}>
@@ -114,6 +127,16 @@ export default function ComposerPreviewScreen() {
               testID="composer"
               value={draft}
             >
+              <Composer.Collapsible testID="composer-status">
+                {hasStatusRow ? (
+                  <View className="flex-row items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-1.5">
+                    <GlobeIcon className="size-4 text-primary" strokeWidth={2} />
+                    <Text className="text-sm text-primary">
+                      {t('settings.composerPreview.statusRowText')}
+                    </Text>
+                  </View>
+                ) : null}
+              </Composer.Collapsible>
               <Composer.Attachments />
               <Composer.Input placeholder={t('chat.inputPlaceholder')} testID="composer-input" />
               {/* The tools are the caller's: nothing but the field is built in,

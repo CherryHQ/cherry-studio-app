@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Surface } from '../surface';
 import { ComposerAction } from './components/composer-action';
 import { ComposerAttachments } from './components/composer-attachments';
+import { ComposerCollapsible } from './components/composer-collapsible';
 import { ComposerInput } from './components/composer-input';
 import { ComposerSend } from './components/composer-send';
 import { ComposerToolbar } from './components/composer-toolbar';
@@ -113,6 +114,7 @@ ComposerRoot.displayName = 'Composer';
 export const Composer = Object.assign(ComposerRoot, {
   Action: ComposerAction,
   Attachments: ComposerAttachments,
+  Collapsible: ComposerCollapsible,
   Input: ComposerInput,
   Menu: MorphMenu,
   Send: ComposerSend,

@@ -249,6 +249,8 @@
   "settings.composerPreview.noMessages": "Nothing sent yet",
   "settings.composerPreview.noText": "(attachments only)",
   "settings.composerPreview.sentMessages": "Sent",
+  "settings.composerPreview.statusRow": "Status row",
+  "settings.composerPreview.statusRowText": "Searching the web…",
   "settings.composerPreview.streaming": "Streaming",
   "settings.data.appData.title": "App data",
   "settings.data.appLogs.title": "App logs",

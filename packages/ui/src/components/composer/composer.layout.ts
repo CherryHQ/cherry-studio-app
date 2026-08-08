@@ -39,7 +39,9 @@ export const actionStyle = {
   justifyContent: 'center',
   width: composerActionSize,
 } as const;
-export const stripRowStyle = { paddingHorizontal: textPaddingHorizontal } as const;
+// Rows above the field line up with the text's ink by default. Callers that want
+// to bleed to the edge — a horizontally scrolling strip, say — override it.
+export const collapsibleStyle = { paddingHorizontal: textPaddingHorizontal } as const;
 export const thumbnailStyle = { height: thumbnailSize, width: thumbnailSize } as const;
 export const textInputBoxStyle = {
   maxHeight: maxTextHeight,

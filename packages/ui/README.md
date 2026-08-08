@@ -112,10 +112,31 @@ nothing when it sits on another one — the material has nothing behind it to re
 button on the composer's own surface is invisible, not merely faint. `Composer.Action` resolves the
 tint from its `className` and hands it to both branches, which is why callers never pass one.
 
-The attachment strip is height-clipped and animates between zero and its measured content height,
-so adding or removing a thumbnail swells and shrinks the surface instead of snapping it. The
-thumbnails stay mounted through the collapse — rendering `attachments` directly would unmount them
-the instant the list empties, leaving an empty box to shrink.
+Rows above the field — a preview strip, a status line, the attachment thumbnails — are placed by the
+order they are written, not by named slots, and a row that never disappears is just a `View`. What is
+not free is the swell and shrink, so that is what `Composer.Collapsible` provides: render `null` to
+collapse it and the surface follows.
+
+```tsx
+<Composer.Collapsible>
+  {isSearching ? <StatusPill label={t('chat.search.running')} /> : null}
+</Composer.Collapsible>
+```
+
+It holds the last non-empty frame until the collapse lands, so callers write a plain conditional
+instead of keeping a copy around for the animation to shrink. `Composer.Attachments` is the same
+component with the thumbnails inside it.
+
+The height is measured and driven by a shared value rather than left to a layout animation. A layout
+animation tweens the row's own frame *after* its parent has committed the new one, so the surface
+would snap to its final height while the row slid into place; driving the height directly makes the
+surface reflow with it, on one.
+
+Measuring the content is where the trap is. A collapsed row is a zero-height clip, and a child
+measured inside one never lays out at all — `onLayout` never fires, so the height the animation is
+waiting for never arrives and the row stays shut forever, silently and only when it starts closed.
+The content is floated out of flow so it keeps its natural height whatever the clip above it is
+doing. The chat input floats its own content column for the same reason.
 
 `Composer.Menu` is a circular trigger that morphs into a panel, sized from its items. It is private
 to the composer — the morph is tuned to open out of a toolbar button, so it is not exported on its

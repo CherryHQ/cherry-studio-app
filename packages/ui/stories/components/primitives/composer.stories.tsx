@@ -1,6 +1,12 @@
 import { Composer, type ComposerAttachment, type ComposerProps } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { CameraIcon, FileIcon, ImagesIcon, SlidersHorizontalIcon } from 'lucide-uniwind/png';
+import {
+  CameraIcon,
+  FileIcon,
+  GlobeIcon,
+  ImagesIcon,
+  SlidersHorizontalIcon,
+} from 'lucide-uniwind/png';
 import { type ReactNode, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
@@ -21,7 +27,8 @@ const sampleAttachments: ComposerAttachment[] = [
 
 type ThemePreviewProps = {
   args: ComposerProps;
-  children?: (attach: () => void) => ReactNode;
+  /** Given the live state, since the preview owns it and `args` only carries the initial value. */
+  children?: (state: { attach: () => void; value: string }) => ReactNode;
   hint: string;
   label: string;
   theme: 'dark' | 'light';
@@ -69,7 +76,7 @@ function ThemePreview({ args, children, hint, label, theme }: ThemePreviewProps)
           }}
           value={value}
         >
-          {children?.(attach)}
+          {children?.({ attach, value })}
         </Composer>
         <Text className="text-sm text-muted-foreground">{hint}</Text>
       </View>
@@ -146,7 +153,7 @@ export const Composed: Story = {
         label={theme.label}
         theme={theme.value}
       >
-        {(attach) => (
+        {({ attach }) => (
           <>
             <Composer.Attachments />
             <Composer.Input placeholder={args.placeholder} />
@@ -171,6 +178,41 @@ export const Composed: Story = {
               <Composer.Action accessibilityLabel="Settings" onPress={fn()}>
                 <SlidersHorizontalIcon className="size-6 text-foreground" strokeWidth={2} />
               </Composer.Action>
+              <Composer.Send />
+            </Composer.Toolbar>
+          </>
+        )}
+      </ThemePreview>
+    )),
+};
+
+/**
+ * Any row can swell and shrink, not just the attachment strip — render `null` to
+ * collapse it and the surface follows.
+ */
+export const StatusRow: Story = {
+  render: (args) =>
+    bothThemes((theme) => (
+      <ThemePreview
+        args={args}
+        hint="Type to raise the status row; clear the field to watch it collapse."
+        key={theme.value}
+        label={theme.label}
+        theme={theme.value}
+      >
+        {({ value }) => (
+          <>
+            <Composer.Collapsible>
+              {value.length > 0 ? (
+                <View className="flex-row items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-1.5">
+                  <GlobeIcon className="size-4 text-primary" strokeWidth={2} />
+                  <Text className="text-sm text-primary">Searching the web…</Text>
+                </View>
+              ) : null}
+            </Composer.Collapsible>
+            <Composer.Attachments />
+            <Composer.Input placeholder={args.placeholder} />
+            <Composer.Toolbar>
               <Composer.Send />
             </Composer.Toolbar>
           </>

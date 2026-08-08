@@ -249,6 +249,8 @@
   "settings.composerPreview.noMessages": "还没有发送任何内容",
   "settings.composerPreview.noText": "（仅附件）",
   "settings.composerPreview.sentMessages": "已发送",
+  "settings.composerPreview.statusRow": "状态栏",
+  "settings.composerPreview.statusRowText": "正在搜索网页…",
   "settings.composerPreview.streaming": "生成中",
   "settings.data.appData.title": "应用数据",
   "settings.data.appLogs.title": "应用日志",

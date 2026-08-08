@@ -73,6 +73,14 @@ export type ComposerAttachmentsProps = {
   testID?: string;
 };
 
+export type ComposerCollapsibleProps = {
+  /** Render `null` to collapse. The last non-empty frame stays up until the collapse lands. */
+  children?: ReactNode;
+  /** Overrides the default inset — pass `{ paddingHorizontal: 0 }` for a row that bleeds to the edge. */
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+};
+
 export type ComposerInputProps = {
   autoFocus?: boolean;
   placeholder?: string;

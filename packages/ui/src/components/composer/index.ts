@@ -4,6 +4,7 @@ export type {
   ComposerActionProps,
   ComposerAttachment,
   ComposerAttachmentsProps,
+  ComposerCollapsibleProps,
   ComposerInputProps,
   ComposerLabels,
   ComposerProps,
