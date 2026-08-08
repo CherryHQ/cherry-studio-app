@@ -31,6 +31,12 @@
       "import": "./src/utils/index.ts",
       "default": "./src/utils/index.ts"
     },
+    "./motion": {
+      "types": "./src/motion.ts",
+      "react-native": "./src/motion.ts",
+      "import": "./src/motion.ts",
+      "default": "./src/motion.ts"
+    },
     "./icons": {
       "types": "./src/icons/index.ts",
       "react-native": "./src/icons/index.ts",

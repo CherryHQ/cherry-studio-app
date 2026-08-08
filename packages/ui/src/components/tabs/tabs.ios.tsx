@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { PlatformColor, Pressable, Text, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
+import { duration, easing } from '../../motion';
 import type { TabsProps } from './tabs.types';
 
 const tabHeight = 34;
@@ -27,7 +28,8 @@ export function Tabs<TValue extends string>({
 
   useEffect(() => {
     translateX.value = withTiming(selectedIndex * segmentWidth + indicatorInset, {
-      duration: 220,
+      duration: duration.base,
+      easing: easing.settle,
     });
   }, [segmentWidth, selectedIndex, translateX]);
 

@@ -130,11 +130,11 @@ It holds the last non-empty frame until the collapse lands, so callers write a p
 instead of keeping a copy around for the animation to shrink. `Composer.Attachments` is the same
 component with the thumbnails inside it.
 
-The curves live in `composer.motion.ts` for the same reason the geometry lives in one file: anything
-that changes the composer's size settles on one shared curve, so a row swelling while the menu closes
-reads as one gesture rather than as two animations that happen to overlap. Durations and easing are
-not configurable — two rows in one surface moving at different speeds reads as broken, not as
-customisable — and reduced motion lands everything on its final size instead.
+`composer.motion.ts` pairs the package's curves with durations and names each pairing after the
+gesture it belongs to, so anything that changes the composer's size settles on one curve and a row
+swelling while the menu closes reads as one gesture rather than as two animations that happen to
+overlap. Neither is configurable — two rows in one surface moving at different speeds reads as
+broken, not as customisable — and reduced motion lands everything on its final size instead.
 
 The height is measured and driven by a shared value rather than left to a layout animation. A layout
 animation tweens the row's own frame *after* its parent has committed the new one, so the surface
@@ -157,6 +157,25 @@ until the close animation lands, so the collapse does not play back under the ne
 `Composer.Menu.Item` closes the menu before running `onPress`, and the context provider travels with
 the menu into the portal, since the portal re-renders its children under the host rather than
 teleporting the React node.
+
+## Motion
+
+Curves and durations are two axes, exported separately from `@cherrystudio/ui/motion`:
+
+```tsx
+import { duration, easing } from '@cherrystudio/ui/motion';
+
+translateX.set(withTiming(next, { duration: duration.base, easing: easing.settle }));
+```
+
+A curve is a design token — it means the same thing however far the thing travels — so components
+share it. A duration is tuned to the distance, so components pick one. `easing.settle` is pure
+deceleration and the right default for anything that moves or resizes something already on screen;
+`easing.overshoot` is for something arriving out of nothing, where the overshoot *is* the arrival.
+
+Components pair the two and name the pairing after the gesture rather than exporting a curve of their
+own, which is what `composer.motion.ts` does. Nothing here is a full motion system yet: it covers the
+package's own components, and the app still has its own easings to bring across.
 
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
