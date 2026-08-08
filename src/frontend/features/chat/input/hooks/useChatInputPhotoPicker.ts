@@ -2,7 +2,7 @@ import * as MediaLibrary from 'expo-media-library';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 
-import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
+import type { ChatInputAttachmentSource } from '../utils/chatInputAttachments';
 import { createPhotoAttachmentDraft } from '../utils/chatInputAttachments';
 import {
   filterChatInputSelectedPhotoIds,
@@ -122,7 +122,7 @@ async function readPhotoLibrarySnapshot(
 
 export function useChatInputPhotoPicker(
   isOpen: boolean,
-  onAttachmentsAdd: (attachments: ChatInputAttachmentDraft[]) => void,
+  onAttachmentsAdd: (attachments: ChatInputAttachmentSource[]) => void,
 ) {
   const isOpenRef = useRef(isOpen);
   const photoPermissionsPickerRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(

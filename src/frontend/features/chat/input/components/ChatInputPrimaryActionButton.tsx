@@ -4,7 +4,10 @@ import { useTranslation } from 'react-i18next';
 import { Pressable } from 'react-native';
 
 import { useChatInputMeta, useChatInputState } from '../context/ChatInputProvider';
-import { hasChatInputSendableContent } from '../utils/chatInputAttachments';
+import {
+  hasChatInputSendableContent,
+  hasImportingChatInputAttachments,
+} from '../utils/chatInputAttachments';
 
 const buttonSize = 32;
 
@@ -27,8 +30,12 @@ export function ChatInputPrimaryActionButton({
   const { inputRef } = useChatInputMeta();
   const { attachments, draft } = useChatInputState();
   const trimmedDraft = draft.trim();
+  const isImporting = hasImportingChatInputAttachments(attachments);
+  const isDisabled = isImporting && !isStreaming;
   const shouldShowSend =
-    isSendEnabled && (allowEmptySend || hasChatInputSendableContent(draft, attachments));
+    !isImporting &&
+    isSendEnabled &&
+    (allowEmptySend || hasChatInputSendableContent(draft, attachments));
   // Persistent button: stays mounted even with no sendable content; tapping it
   // focuses the input to expand the composer.
   const isPlaceholder = !isStreaming && !shouldShowSend;
@@ -55,11 +62,13 @@ export function ChatInputPrimaryActionButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
       className={cn(
         'absolute right-1.5 bottom-1.5 items-center justify-center rounded-full bg-primary active:opacity-70',
         isPlaceholder && 'opacity-40',
       )}
       hitSlop={6}
+      disabled={isDisabled}
       onPress={handlePress}
       style={{
         height: buttonSize,

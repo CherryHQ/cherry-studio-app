@@ -4,10 +4,39 @@ import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ChatInputProvider, useChatInputActions } from '../../context/ChatInputProvider';
-import type { ChatInputAttachmentDraft } from '../../utils/chatInputAttachments';
+import type { ChatInputAttachmentReady } from '../../utils/chatInputAttachments';
 import { ChatInputSurface } from '../ChatInputSurface';
 
 const mockToastShow = jest.fn();
+const mockImportFile = jest.fn(async ({ body }: { body: { name: string; uri: string } }) => ({
+  entry: {
+    cleanupPolicy: 'delete_when_unreferenced',
+    contentHash: null,
+    createdAt: '2026-08-08T00:00:00.000Z',
+    ext: body.name.split('.').pop()?.toLowerCase() ?? null,
+    id: '00000000-0000-7000-8000-000000000099',
+    name: body.name,
+    origin: 'internal',
+    size: 42,
+    updatedAt: '2026-08-08T00:00:00.000Z',
+  },
+  uri: `file:///managed/${body.name}`,
+}));
+const mockDiscardFile = jest.fn(async () => ({ deleted: true }));
+
+jest.mock('@/frontend/data', () => ({
+  useMutation: (_method: string, path: string) => ({
+    trigger: path === '/files/import' ? mockImportFile : mockDiscardFile,
+  }),
+}));
+
+jest.mock('@/frontend/components/FilePreview', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    FilePreview: ({ entryId }: { entryId: string }) => <View testID={`file-preview:${entryId}`} />,
+  };
+});
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -174,11 +203,13 @@ describe('ChatInputSurface', () => {
   });
 
   test('restores draft and attachments and shows a toast when send rejects', async () => {
-    const attachment: ChatInputAttachmentDraft = {
+    const attachment: ChatInputAttachmentReady = {
+      fileEntryId: '00000000-0000-7000-8000-000000000001',
       id: 'attachment-1',
       kind: 'file',
       mediaType: 'application/pdf',
       name: 'notes.pdf',
+      status: 'ready',
       uri: 'file://notes.pdf',
     };
     const onSendPress = jest.fn(async () => {
@@ -219,8 +250,11 @@ describe('ChatInputSurface', () => {
       text: 'hello',
     });
     expect(getTextInputValue(renderer)).toBe(' hello ');
-    expect(findText(renderer, 'notes')).toBe(true);
-    expect(findText(renderer, 'PDF')).toBe(true);
+    expect(
+      renderer.root.findAllByProps({
+        testID: 'file-preview:00000000-0000-7000-8000-000000000001',
+      }).length,
+    ).toBeGreaterThan(0);
     expect(mockToastShow).toHaveBeenCalledWith({
       label: 'chat.input.sendFailed',
       variant: 'danger',
@@ -400,10 +434,57 @@ describe('ChatInputSurface', () => {
       });
     });
 
+    expect(mockImportFile).toHaveBeenCalledWith({
+      body: {
+        name: 'Pasted Sticker.GIF',
+        uri: 'file:///tmp/Pasted%20Sticker.GIF',
+      },
+    });
     expect(
-      renderer.root.findAllByProps({ accessibilityLabel: 'Pasted Sticker.GIF' }).length,
+      renderer.root.findAllByProps({
+        testID: 'file-preview:00000000-0000-7000-8000-000000000099',
+      }).length,
     ).toBeGreaterThan(0);
     expect(getTextInputValue(renderer)).toBe('');
+  });
+
+  test('disables sending while an attachment is importing', async () => {
+    mockImportFile.mockImplementationOnce(() => new Promise(() => undefined));
+    const onSendPress = jest.fn();
+    let renderer: ReactTestRenderer | undefined;
+
+    await act(async () => {
+      renderer = create(
+        <ChatInputProvider
+          initialAttachments={[
+            {
+              id: 'source:pending.pdf',
+              kind: 'file',
+              mediaType: 'application/pdf',
+              name: 'pending.pdf',
+              uri: 'file:///pending.pdf',
+            },
+          ]}
+        >
+          <ChatInputSurface
+            isSendEnabled
+            isStreaming={false}
+            modelLabel="Model"
+            onModelPickerPress={jest.fn()}
+            onSendPress={onSendPress}
+            onStopPress={jest.fn()}
+          />
+        </ChatInputProvider>,
+      );
+    });
+
+    const sendButton = renderer?.root.findByProps({
+      accessibilityLabel: 'chat.input.action.sendMessage',
+    });
+    expect(sendButton?.props.accessibilityState).toEqual({ disabled: true });
+    expect(sendButton?.props.disabled).toBe(true);
+    await act(async () => sendButton?.props.onPress());
+    expect(onSendPress).not.toHaveBeenCalled();
   });
 
   test('can send an empty payload when the caller explicitly allows it', async () => {
@@ -580,7 +661,7 @@ function SeedChatInputState({
   attachments,
   draft,
 }: {
-  attachments: ChatInputAttachmentDraft[];
+  attachments: ChatInputAttachmentReady[];
   draft: string;
 }) {
   const { setAttachments, setDraft } = useChatInputActions();

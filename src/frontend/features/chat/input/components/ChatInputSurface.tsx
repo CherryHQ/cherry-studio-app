@@ -1,7 +1,6 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
 import type { IconSource } from '@cherrystudio/ui/icons';
 import { cn } from '@cherrystudio/ui/utils';
-import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useToast } from 'heroui-native/toast';
 import { Settings2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useState } from 'react';
@@ -32,7 +31,11 @@ import {
   useChatInputMeta,
   useChatInputState,
 } from '../context/ChatInputProvider';
-import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
+import {
+  hasImportingChatInputAttachments,
+  isChatInputAttachmentReady,
+  type ChatInputAttachmentReady,
+} from '../utils/chatInputAttachments';
 import { chatInputMotionConfig, chatInputSpringConfig } from '../utils/chatInputMotion';
 import {
   type ChatInputReasoningEffort,
@@ -76,7 +79,7 @@ export type ChatInputModelSettings = {
 };
 
 export type ChatInputSendPayload = {
-  attachments: readonly ChatInputAttachmentDraft[];
+  attachments: readonly ChatInputAttachmentReady[];
   text: string;
 };
 
@@ -153,14 +156,6 @@ export function ChatInputSurface({
     },
     [contentHeight],
   );
-  const handleAttachmentPreview = useCallback((attachment: ChatInputAttachmentDraft) => {
-    void ExpoQuickLook.previewFile({
-      editingMode: 'disabled',
-      uri: attachment.uri,
-    }).catch((error) => {
-      logger.warn('Failed to preview attachment', error instanceof Error ? error : null);
-    });
-  }, []);
   const dismissInput = useCallback(() => {
     if (isInputFocused) {
       void KeyboardController.dismiss();
@@ -181,8 +176,11 @@ export function ChatInputSurface({
   }, [dismissInput, modelSettings]);
   const handleSendPress = useCallback(
     async (text: string) => {
+      if (hasImportingChatInputAttachments(attachments)) {
+        return;
+      }
       const draftSnapshot = draft;
-      const attachmentSnapshot = [...attachments];
+      const attachmentSnapshot = attachments.filter(isChatInputAttachmentReady);
 
       setDraft('');
       clearAttachments();
@@ -238,7 +236,6 @@ export function ChatInputSurface({
               />
               <ChatInputAttachmentPreviewStrip
                 attachments={attachments}
-                onAttachmentPreview={handleAttachmentPreview}
                 onAttachmentRemove={removeAttachment}
               />
               <ChatInputTextArea />

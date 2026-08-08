@@ -31,7 +31,7 @@ import {
   loadPhotoPreviewPage,
 } from '@/frontend/features/chat/input/hooks/useChatInputPhotoPicker';
 import {
-  type ChatInputAttachmentDraft,
+  type ChatInputAttachmentSource,
   createPhotoAttachmentDraft,
 } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 
@@ -89,7 +89,7 @@ export function DrawingList() {
     [router],
   );
   const openPaintingWithAttachments = useCallback(
-    (attachments: readonly ChatInputAttachmentDraft[]) => {
+    (attachments: readonly ChatInputAttachmentSource[]) => {
       openPainting({ attachments });
     },
     [openPainting],

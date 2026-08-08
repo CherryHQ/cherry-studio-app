@@ -3,7 +3,7 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useBackendModule } from '@/frontend/data';
-import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import type { ChatInputAttachmentReady } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
@@ -16,7 +16,7 @@ export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
 export type PaintingOutput = PaintingGenerationOutput;
 
 export type PaintingGenerationInput = {
-  attachments: readonly ChatInputAttachmentDraft[];
+  attachments: readonly ChatInputAttachmentReady[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
   paramValues: ParamValues;

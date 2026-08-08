@@ -1,3 +1,4 @@
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { DocumentPickerAsset } from 'expo-document-picker';
@@ -6,8 +7,7 @@ import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/util
 
 export type ChatInputAttachmentKind = 'file' | 'image';
 
-export type ChatInputAttachmentDraft = {
-  fileEntryId?: string;
+export type ChatInputAttachmentSource = {
   id: string;
   kind: ChatInputAttachmentKind;
   mediaType: string;
@@ -15,6 +15,19 @@ export type ChatInputAttachmentDraft = {
   size?: number;
   uri: string;
 };
+
+export type ChatInputAttachmentImporting = ChatInputAttachmentSource & {
+  status: 'importing';
+};
+
+export type ChatInputAttachmentReady = ChatInputAttachmentSource & {
+  fileEntryId: FileEntryId;
+  status: 'ready';
+};
+
+export type ChatInputAttachmentDraft = ChatInputAttachmentImporting | ChatInputAttachmentReady;
+
+export type ChatInputInitialAttachment = ChatInputAttachmentSource | ChatInputAttachmentReady;
 
 type PhotoAttachmentInput = {
   fileName?: string;
@@ -61,7 +74,7 @@ export function removeChatInputAttachment(
   return attachments.filter((attachment) => attachment.id !== attachmentId);
 }
 
-export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInputAttachmentDraft {
+export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInputAttachmentSource {
   const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();
 
   return {
@@ -73,7 +86,7 @@ export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInp
   };
 }
 
-export function createPastedImageAttachmentDraft(uri: string): ChatInputAttachmentDraft {
+export function createPastedImageAttachmentDraft(uri: string): ChatInputAttachmentSource {
   const pathname = new URL(uri).pathname;
   const fileName = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
 
@@ -84,7 +97,7 @@ type CameraPhotoInput = {
   uri: string;
 };
 
-export function createCameraAttachmentDraft(photo: CameraPhotoInput): ChatInputAttachmentDraft {
+export function createCameraAttachmentDraft(photo: CameraPhotoInput): ChatInputAttachmentSource {
   const uri = photo.uri.startsWith('file://') ? photo.uri : `file://${photo.uri}`;
 
   return {
@@ -98,7 +111,7 @@ export function createCameraAttachmentDraft(photo: CameraPhotoInput): ChatInputA
 
 export function createDocumentAttachmentDraft(
   asset: DocumentPickerAsset,
-): ChatInputAttachmentDraft {
+): ChatInputAttachmentSource {
   const mediaType = asset.mimeType ?? fallbackFileMediaType;
   const isImage = isChatInputImageMediaType(mediaType) || isChatInputImageFileName(asset.name);
 
@@ -122,7 +135,7 @@ export function getFileAttachmentId(uri: string) {
 
 export function createChatInputMessageParts(
   text: string,
-  attachments: readonly ChatInputAttachmentDraft[],
+  attachments: readonly ChatInputAttachmentReady[],
 ): CherryMessagePart[] {
   const trimmedText = text.trim();
   const parts: CherryMessagePart[] = trimmedText
@@ -136,14 +149,20 @@ export function createChatInputMessageParts(
       mediaType: attachment.mediaType,
       url: attachment.uri,
     } as Extract<CherryMessagePart, { type: 'file' }>;
-    parts.push(
-      attachment.fileEntryId
-        ? withCherryMeta(filePart, { fileEntryId: attachment.fileEntryId })
-        : filePart,
-    );
+    parts.push(withCherryMeta(filePart, { fileEntryId: attachment.fileEntryId }));
   }
 
   return parts;
+}
+
+export function isChatInputAttachmentReady(
+  attachment: ChatInputAttachmentDraft | ChatInputInitialAttachment,
+): attachment is ChatInputAttachmentReady {
+  return 'status' in attachment && attachment.status === 'ready';
+}
+
+export function hasImportingChatInputAttachments(attachments: readonly ChatInputAttachmentDraft[]) {
+  return attachments.some((attachment) => attachment.status === 'importing');
 }
 
 export function hasChatInputSendableContent(

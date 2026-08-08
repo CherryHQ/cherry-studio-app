@@ -3,39 +3,50 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import {
   appendChatInputAttachments,
   type ChatInputAttachmentDraft,
+  type ChatInputAttachmentReady,
+  type ChatInputAttachmentSource,
   createCameraAttachmentDraft,
   createChatInputMessageParts,
   createDocumentAttachmentDraft,
   createPastedImageAttachmentDraft,
   createPhotoAttachmentDraft,
   hasChatInputSendableContent,
+  hasImportingChatInputAttachments,
   isChatInputImageFileName,
   isChatInputImageMediaType,
   removeChatInputAttachment,
 } from '../chatInputAttachments';
 
-const fileAttachment: ChatInputAttachmentDraft = {
+const fileAttachment: ChatInputAttachmentReady = {
+  fileEntryId: '00000000-0000-7000-8000-000000000001',
   id: 'file:file-a.pdf',
   kind: 'file',
   mediaType: 'application/pdf',
   name: 'file-a.pdf',
+  status: 'ready',
   uri: 'file-a.pdf',
 };
+
+function asImporting(source: ChatInputAttachmentSource): ChatInputAttachmentDraft {
+  return { ...source, status: 'importing' };
+}
 
 describe('chat input attachments', () => {
   test('appends attachments while preserving existing items and dropping duplicates', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
+    const importingImage = asImporting(imageAttachment);
 
-    expect(
-      appendChatInputAttachments([imageAttachment], [fileAttachment, imageAttachment]),
-    ).toEqual([imageAttachment, fileAttachment]);
+    expect(appendChatInputAttachments([importingImage], [fileAttachment, importingImage])).toEqual([
+      importingImage,
+      fileAttachment,
+    ]);
   });
 
   test('removes an attachment by id', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 
     expect(
-      removeChatInputAttachment([imageAttachment, fileAttachment], imageAttachment.id),
+      removeChatInputAttachment([asImporting(imageAttachment), fileAttachment], imageAttachment.id),
     ).toEqual([fileAttachment]);
   });
 
@@ -136,6 +147,9 @@ describe('chat input attachments', () => {
       {
         filename: 'file-a.pdf',
         mediaType: 'application/pdf',
+        providerMetadata: {
+          cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' },
+        },
         type: 'file',
         url: 'file-a.pdf',
       },
@@ -147,6 +161,9 @@ describe('chat input attachments', () => {
       {
         filename: 'file-a.pdf',
         mediaType: 'application/pdf',
+        providerMetadata: {
+          cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' },
+        },
         type: 'file',
         url: 'file-a.pdf',
       },
@@ -154,9 +171,7 @@ describe('chat input attachments', () => {
   });
 
   test('preserves a managed file entry id in message part metadata', () => {
-    const parts = createChatInputMessageParts('', [
-      { ...fileAttachment, fileEntryId: '00000000-0000-7000-8000-000000000001' },
-    ]);
+    const parts = createChatInputMessageParts('', [fileAttachment]);
     const part = parts[0];
 
     expect(part.type).toBe('file');
@@ -172,5 +187,12 @@ describe('chat input attachments', () => {
     expect(hasChatInputSendableContent('  hi  ', [])).toBe(true);
     expect(hasChatInputSendableContent('   ', [fileAttachment])).toBe(true);
     expect(hasChatInputSendableContent('   ', [])).toBe(false);
+  });
+
+  test('detects attachments that are still importing', () => {
+    const source = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
+
+    expect(hasImportingChatInputAttachments([asImporting(source), fileAttachment])).toBe(true);
+    expect(hasImportingChatInputAttachments([fileAttachment])).toBe(false);
   });
 });

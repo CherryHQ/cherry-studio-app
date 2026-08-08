@@ -1,9 +1,18 @@
 import { CameraIcon, FileIcon, ImagesIcon, type PngIconProps, XIcon } from 'lucide-uniwind/png';
 import { type ComponentType, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type GestureResponderEvent, Pressable, ScrollView, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  type GestureResponderEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 
-import { FileTile, ImageTile } from '../../mediaTile';
+import { FilePreview } from '@/frontend/components/FilePreview';
+
+import { ImageTile } from '../../mediaTile';
 import type { ChatInputAttachmentDraft } from '../utils/chatInputAttachments';
 import { ChatInputAccessoryItem, ChatInputAccessorySection } from './ChatInputAccessory';
 
@@ -30,7 +39,6 @@ type ChatInputPhotoPreviewTileProps = Omit<PhotoPreviewTileProps, 'accessibility
 
 type ChatInputAttachmentPreviewStripProps = {
   attachments: readonly ChatInputAttachmentDraft[];
-  onAttachmentPreview: (attachment: ChatInputAttachmentDraft) => void;
   onAttachmentRemove: (attachmentId: string) => void;
 };
 
@@ -107,7 +115,6 @@ export function ChatInputPhotoPreviewTile({
 
 export function ChatInputAttachmentPreviewStrip({
   attachments,
-  onAttachmentPreview,
   onAttachmentRemove,
 }: ChatInputAttachmentPreviewStripProps) {
   const hasAttachments = attachments.length > 0;
@@ -118,22 +125,13 @@ export function ChatInputAttachmentPreviewStrip({
       pointerEvents={hasAttachments ? 'auto' : 'none'}
     >
       <ChatInputMediaStrip>
-        {attachments.map((attachment) =>
-          attachment.kind === 'image' ? (
-            <AttachmentImagePreviewTile
-              attachment={attachment}
-              key={attachment.id}
-              onPreview={() => onAttachmentPreview(attachment)}
-              onRemove={() => onAttachmentRemove(attachment.id)}
-            />
-          ) : (
-            <AttachmentFilePreviewTile
-              attachment={attachment}
-              key={attachment.id}
-              onRemove={() => onAttachmentRemove(attachment.id)}
-            />
-          ),
-        )}
+        {attachments.map((attachment) => (
+          <ChatInputAttachmentPreview
+            attachment={attachment}
+            key={attachment.id}
+            onRemove={() => onAttachmentRemove(attachment.id)}
+          />
+        ))}
       </ChatInputMediaStrip>
     </ChatInputAccessorySection>
   );
@@ -179,27 +177,7 @@ function PhotoPreviewTile({
   );
 }
 
-function AttachmentImagePreviewTile({
-  attachment,
-  onPreview,
-  onRemove,
-}: {
-  attachment: ChatInputAttachmentDraft;
-  onPreview: () => void;
-  onRemove: () => void;
-}) {
-  const { t } = useTranslation();
-  const accessibilityLabel = attachment.name || t('chat.attachments.image');
-
-  return (
-    <ChatInputAccessoryItem accessibilityLabel={accessibilityLabel}>
-      <ImageTile accessibilityLabel={accessibilityLabel} onPress={onPreview} uri={attachment.uri} />
-      <XBadge onPress={onRemove} />
-    </ChatInputAccessoryItem>
-  );
-}
-
-function AttachmentFilePreviewTile({
+function ChatInputAttachmentPreview({
   attachment,
   onRemove,
 }: {
@@ -208,9 +186,24 @@ function AttachmentFilePreviewTile({
 }) {
   return (
     <ChatInputAccessoryItem accessibilityLabel={attachment.name}>
-      <FileTile name={attachment.name} />
+      {attachment.status === 'ready' ? (
+        <FilePreview entryId={attachment.fileEntryId} />
+      ) : (
+        <AttachmentImportingPreview name={attachment.name} />
+      )}
       <XBadge onPress={onRemove} />
     </ChatInputAccessoryItem>
+  );
+}
+
+function AttachmentImportingPreview({ name }: { name: string }) {
+  return (
+    <View className="size-28 items-center justify-center gap-2 border border-border bg-secondary p-2">
+      <ActivityIndicator size="small" />
+      <Text className="text-center text-base text-muted-foreground" numberOfLines={2}>
+        {name}
+      </Text>
+    </View>
   );
 }
 

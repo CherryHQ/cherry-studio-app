@@ -71,6 +71,7 @@ jest.mock('../../utils/paintingOutputAttachment', () => ({
     kind: 'image',
     mediaType: 'image/png',
     name: 'generated.png',
+    status: 'ready',
     uri: output.uri,
   }),
 }));
@@ -131,6 +132,7 @@ describe('PaintingInput', () => {
           kind: 'image',
           mediaType: 'image/png',
           name: 'input.png',
+          status: 'ready',
           uri: 'file:///input.png',
         },
       ],
@@ -155,6 +157,7 @@ describe('PaintingInput', () => {
         kind: 'image',
         mediaType: 'image/png',
         name: 'generated.png',
+        status: 'ready',
         uri: generationResult.outputs[0].uri,
       },
     ]);
@@ -230,17 +233,21 @@ describe('PaintingInput', () => {
 
     const attachments: ChatInputSendPayload['attachments'] = [
       {
+        fileEntryId: '00000000-0000-7000-8000-000000000011',
         id: 'input-1',
         kind: 'image',
         mediaType: 'image/png',
         name: 'one.png',
+        status: 'ready',
         uri: 'file:///one.png',
       },
       {
+        fileEntryId: '00000000-0000-7000-8000-000000000012',
         id: 'input-2',
         kind: 'image',
         mediaType: 'image/png',
         name: 'two.png',
+        status: 'ready',
         uri: 'file:///two.png',
       },
     ];

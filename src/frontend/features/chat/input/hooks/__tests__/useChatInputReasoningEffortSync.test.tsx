@@ -14,6 +14,14 @@ jest.mock('../useChatInputPhotoPicker', () => ({
   useChatInputPhotoPicker: () => ({}),
 }));
 
+jest.mock('@/frontend/data', () => ({
+  useMutation: () => ({ trigger: jest.fn() }),
+}));
+
+jest.mock('heroui-native/toast', () => ({
+  useToast: () => ({ toast: { show: jest.fn() } }),
+}));
+
 type Snapshot = {
   isReasoningEffortSelected: boolean;
   reasoningEffort: ChatInputReasoningEffort;

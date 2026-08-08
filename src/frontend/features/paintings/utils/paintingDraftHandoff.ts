@@ -1,9 +1,9 @@
 import * as Crypto from 'expo-crypto';
 
-import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import type { ChatInputInitialAttachment } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 
 export type PaintingDraftHandoff = {
-  attachments: readonly ChatInputAttachmentDraft[];
+  attachments: readonly ChatInputInitialAttachment[];
   draft?: string;
 };
 

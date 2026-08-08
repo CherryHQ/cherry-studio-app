@@ -1,13 +1,15 @@
-import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+
+import type { ChatInputAttachmentReady } from '@/frontend/features/chat/input/utils/chatInputAttachments';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
 // Mirrors the draft shape produced by useResolvedPaintingFiles for inputs; the
 // fileEntryId lets usePaintingGeneration reference the stored file instead of
 // copying it into the managed directory again.
 export function createPaintingOutputAttachmentDraft(output: {
-  fileEntryId: string;
+  fileEntryId: FileEntryId;
   uri: string;
-}): ChatInputAttachmentDraft {
+}): ChatInputAttachmentReady {
   const fileName = output.uri.split('/').pop() || 'image';
   const dotIndex = fileName.lastIndexOf('.');
   const extension = dotIndex > 0 ? fileName.slice(dotIndex + 1) : null;
@@ -18,6 +20,7 @@ export function createPaintingOutputAttachmentDraft(output: {
     kind: 'image',
     mediaType: imageMediaTypeFromExtension(extension),
     name: fileName,
+    status: 'ready',
     uri: output.uri,
   };
 }

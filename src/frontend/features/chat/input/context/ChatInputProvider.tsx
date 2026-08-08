@@ -1,14 +1,20 @@
+import { useToast } from 'heroui-native/toast';
 import {
   createContext,
   type PropsWithChildren,
   type RefObject,
   use,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 import { type TextInput } from 'react-native';
+
+import { useMutation } from '@/frontend/data';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatInputPhotoPicker } from '../hooks/useChatInputPhotoPicker';
 import {
@@ -20,6 +26,10 @@ import {
 import {
   appendChatInputAttachments,
   type ChatInputAttachmentDraft,
+  type ChatInputAttachmentReady,
+  type ChatInputAttachmentSource,
+  type ChatInputInitialAttachment,
+  isChatInputAttachmentReady,
   removeChatInputAttachment,
 } from '../utils/chatInputAttachments';
 import {
@@ -40,7 +50,7 @@ type ChatInputStateContextValue = {
 };
 
 type ChatInputActionsContextValue = {
-  addAttachments: (attachments: ChatInputAttachmentDraft[]) => void;
+  addAttachments: (attachments: ChatInputAttachmentSource[]) => void;
   clearAttachments: () => void;
   clearReasoningEffort: () => void;
   clearSelectedTool: () => void;
@@ -50,7 +60,7 @@ type ChatInputActionsContextValue = {
   selectAction: (actionId: ChatInputActionId) => void;
   selectReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
   setSelectedTool: (actionId: ChatInputActionId | null) => void;
-  setAttachments: (attachments: ChatInputAttachmentDraft[]) => void;
+  setAttachments: (attachments: ChatInputAttachmentReady[]) => void;
   setDraft: (draft: string) => void;
   setInputFocused: (isFocused: boolean) => void;
   syncReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
@@ -68,16 +78,32 @@ const ChatInputMediaContext = createContext<ChatInputMediaContextValue | null>(n
 const ChatInputMetaContext = createContext<ChatInputMetaContextValue | null>(null);
 
 type ChatInputProviderProps = PropsWithChildren<{
-  initialAttachments?: readonly ChatInputAttachmentDraft[];
+  initialAttachments?: readonly ChatInputInitialAttachment[];
   initialDraft?: string;
 }>;
 
+const logger = loggerService.withContext('ChatInputProvider');
+const emptyInitialAttachments: readonly ChatInputInitialAttachment[] = [];
+
+type ImportResult = 'failed' | 'ignored' | 'ready';
+
 export function ChatInputProvider({
   children,
-  initialAttachments = [],
+  initialAttachments = emptyInitialAttachments,
   initialDraft = '',
 }: ChatInputProviderProps) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
+  const importFileMutation = useMutation('POST', '/files/import');
+  const discardFileMutation = useMutation('DELETE', '/files/:id');
+  const importFile = importFileMutation.trigger;
+  const discardFile = discardFileMutation.trigger;
   const inputRef = useRef<TextInput>(null);
+  const initialAttachmentsRef = useRef(initialAttachments);
+  const didImportInitialAttachmentsRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const importTokensRef = useRef(new Map<string, symbol>());
+  const cancelledImportTokensRef = useRef(new Set<symbol>());
   const [draft, setDraft] = useState(initialDraft);
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false);
   const [isInputFocused, setIsInputFocused] = useState(false);
@@ -85,13 +111,129 @@ export function ChatInputProvider({
   const [reasoningEffort, setReasoningEffort] = useState<ChatInputReasoningEffort>(
     CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   );
-  const [attachments, setAttachments] = useState<ChatInputAttachmentDraft[]>(() => [
-    ...initialAttachments,
-  ]);
+  const [attachments, setAttachmentState] = useState<ChatInputAttachmentDraft[]>(() =>
+    initialAttachments.map((attachment) =>
+      isChatInputAttachmentReady(attachment)
+        ? attachment
+        : { ...attachment, status: 'importing' as const },
+    ),
+  );
+  const attachmentsRef = useRef(attachments);
   const [selectedToolId, setSelectedToolId] = useState<ChatInputActionId | null>(null);
-  const addAttachments = useCallback((nextAttachments: ChatInputAttachmentDraft[]) => {
-    setAttachments((current) => appendChatInputAttachments(current, nextAttachments));
+
+  const commitAttachments = useCallback((nextAttachments: ChatInputAttachmentDraft[]) => {
+    attachmentsRef.current = nextAttachments;
+    setAttachmentState(nextAttachments);
   }, []);
+
+  const discardEntry = useCallback(
+    async (entryId: ChatInputAttachmentReady['fileEntryId']) => {
+      try {
+        await discardFile({ params: { id: entryId } });
+      } catch (error) {
+        logger.warn('Failed to discard an unreferenced attachment', toError(error), { entryId });
+      }
+    },
+    [discardFile],
+  );
+
+  const importAttachment = useCallback(
+    async (source: ChatInputAttachmentSource, token: symbol): Promise<ImportResult> => {
+      try {
+        const resolved = await importFile({ body: { name: source.name, uri: source.uri } });
+
+        if (cancelledImportTokensRef.current.delete(token)) {
+          await discardEntry(resolved.entry.id);
+          return 'ignored';
+        }
+        if (!isMountedRef.current) {
+          return 'ignored';
+        }
+        if (importTokensRef.current.get(source.id) !== token) {
+          await discardEntry(resolved.entry.id);
+          return 'ignored';
+        }
+
+        importTokensRef.current.delete(source.id);
+        commitAttachments(
+          attachmentsRef.current.map((attachment) =>
+            attachment.id === source.id && attachment.status === 'importing'
+              ? {
+                  ...source,
+                  fileEntryId: resolved.entry.id,
+                  size: resolved.entry.origin === 'internal' ? resolved.entry.size : source.size,
+                  status: 'ready' as const,
+                  uri: resolved.uri,
+                }
+              : attachment,
+          ),
+        );
+        return 'ready';
+      } catch (error) {
+        if (cancelledImportTokensRef.current.delete(token)) {
+          return 'ignored';
+        }
+        if (importTokensRef.current.get(source.id) !== token) {
+          return 'ignored';
+        }
+        if (!isMountedRef.current) {
+          return 'ignored';
+        }
+
+        importTokensRef.current.delete(source.id);
+        commitAttachments(removeChatInputAttachment(attachmentsRef.current, source.id));
+        logger.warn('Failed to import an attachment', toError(error), {
+          name: source.name,
+          uri: source.uri,
+        });
+        return 'failed';
+      }
+    },
+    [commitAttachments, discardEntry, importFile],
+  );
+
+  const importAttachments = useCallback(
+    async (sources: readonly ChatInputAttachmentSource[]) => {
+      const pending = sources.map((source) => {
+        const token = Symbol(source.id);
+        importTokensRef.current.set(source.id, token);
+        return importAttachment(source, token);
+      });
+      const results = await Promise.all(pending);
+      const failureCount = results.filter((result) => result === 'failed').length;
+
+      if (isMountedRef.current && failureCount > 0) {
+        toast.show({
+          label: t('chat.attachments.importFailed', { count: failureCount }),
+          variant: 'danger',
+        });
+      }
+    },
+    [importAttachment, t, toast],
+  );
+
+  const addAttachments = useCallback(
+    (sources: ChatInputAttachmentSource[]) => {
+      const seenIds = new Set(attachmentsRef.current.map((attachment) => attachment.id));
+      const acceptedSources = sources.filter((source) => {
+        if (seenIds.has(source.id)) {
+          return false;
+        }
+        seenIds.add(source.id);
+        return true;
+      });
+      if (acceptedSources.length === 0) {
+        return;
+      }
+
+      const importingAttachments = acceptedSources.map(
+        (source): ChatInputAttachmentDraft => ({ ...source, status: 'importing' }),
+      );
+      commitAttachments(appendChatInputAttachments(attachmentsRef.current, importingAttachments));
+      void importAttachments(acceptedSources);
+    },
+    [commitAttachments, importAttachments],
+  );
   const media = useChatInputPhotoPicker(isActionSheetOpen, addAttachments);
   const selectedTool = useMemo(() => getChatInputAction(selectedToolId), [selectedToolId]);
   // Collapse to a centered pill only when nothing requires the full surface.
@@ -132,13 +274,56 @@ export function ChatInputProvider({
     setSelectedToolId(null);
   }, []);
 
-  const removeAttachment = useCallback((attachmentId: string) => {
-    setAttachments((current) => removeChatInputAttachment(current, attachmentId));
-  }, []);
+  const removeAttachment = useCallback(
+    (attachmentId: string) => {
+      const attachment = attachmentsRef.current.find((item) => item.id === attachmentId);
+      if (!attachment) {
+        return;
+      }
+
+      const importToken = importTokensRef.current.get(attachmentId);
+      if (importToken) {
+        importTokensRef.current.delete(attachmentId);
+        cancelledImportTokensRef.current.add(importToken);
+      }
+      commitAttachments(removeChatInputAttachment(attachmentsRef.current, attachmentId));
+      if (attachment.status === 'ready') {
+        void discardEntry(attachment.fileEntryId);
+      }
+    },
+    [commitAttachments, discardEntry],
+  );
 
   const clearAttachments = useCallback(() => {
-    setAttachments([]);
-  }, []);
+    importTokensRef.current.clear();
+    commitAttachments([]);
+  }, [commitAttachments]);
+
+  const setAttachments = useCallback(
+    (nextAttachments: ChatInputAttachmentReady[]) => {
+      importTokensRef.current.clear();
+      commitAttachments([...nextAttachments]);
+    },
+    [commitAttachments],
+  );
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    if (!didImportInitialAttachmentsRef.current) {
+      didImportInitialAttachmentsRef.current = true;
+      const sources = initialAttachmentsRef.current.filter(
+        (attachment): attachment is ChatInputAttachmentSource =>
+          !isChatInputAttachmentReady(attachment),
+      );
+      if (sources.length > 0) {
+        void importAttachments(sources);
+      }
+    }
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, [importAttachments]);
 
   const stateValue = useMemo(
     () => ({
@@ -192,6 +377,7 @@ export function ChatInputProvider({
       removeAttachment,
       selectAction,
       selectReasoningEffort,
+      setAttachments,
       syncReasoningEffort,
     ],
   );
@@ -212,6 +398,10 @@ export function ChatInputProvider({
       </ChatInputActionsContext>
     </ChatInputStateContext>
   );
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 export function useChatInputState() {
