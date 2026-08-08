@@ -65,7 +65,9 @@
   "peerDependencies": {
     "@expo/ui": "*",
     "@swmansion/react-native-bottom-sheet": "*",
+    "expo-blur": "*",
     "expo-glass-effect": "*",
+    "expo-haptics": "*",
     "expo-linear-gradient": "*",
     "expo-paste-input": "*",
     "expo-screen-corner-radius": "*",
