@@ -75,7 +75,7 @@ export default function TabLayout() {
 function TabNavigator() {
   const { t } = useTranslation();
   const primaryColor = useThemeColor('primary');
-  const [tabBarColor] = useThemeColor(['background-secondary']);
+  const tabBarColor = useThemeColor('background-subtle');
   const isBottomTabBarHidden = useBottomTabBarHidden();
   const isNestedScreen = useNavigationState(selectIsNestedTabScreen);
   const setScope = useSetSearchScope();

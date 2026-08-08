@@ -18,11 +18,11 @@ jest.mock('react-native-chart-kit/v2', () => {
 jest.mock('@/frontend/hooks/useThemeColor', () => ({
   useThemeColor: (names: string | readonly string[]) => {
     const colors: Record<string, string> = {
-      'default-foreground': '#111111',
+      'border-strong': '#cccccc',
+      foreground: '#111111',
       info: '#0088ff',
       'muted-foreground': '#777777',
       primary: '#00aa66',
-      separator: '#cccccc',
       success: '#22aa44',
       warning: '#ff9900',
     };

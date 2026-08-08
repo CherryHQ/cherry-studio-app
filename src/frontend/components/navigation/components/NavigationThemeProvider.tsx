@@ -14,7 +14,7 @@ export function NavigationThemeProvider({ children }: NavigationThemeProviderPro
     'primary',
     'background',
     'foreground',
-    'separator',
+    'border-strong',
   ]);
 
   const navigationTheme = useMemo(

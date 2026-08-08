@@ -32,7 +32,7 @@ type ProfileStickyBarProps = {
  */
 export function ProfileStickyBar({ scrollY, topInset, userName }: ProfileStickyBarProps) {
   const { t } = useTranslation();
-  const separatorColor = useThemeColor('separator');
+  const separatorColor = useThemeColor('border-strong');
   // Mirror the hero's name slot: fall back to the set-profile prompt when empty.
   const title = userName.trim().length > 0 ? userName : t('settings.profile.setPrompt');
 

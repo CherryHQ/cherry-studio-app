@@ -60,9 +60,9 @@ export function AiUsageWeeklyChart({
     'info',
     'warning',
     'muted-foreground',
-    'separator',
+    'border-strong',
     'success',
-    'default-foreground',
+    'foreground',
   ]);
   const formatTokens = useMemo(() => createAiUsageTokenFormatter(locale), [locale]);
   const weekdayFormatter = useMemo(
