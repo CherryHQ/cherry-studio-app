@@ -126,24 +126,12 @@ export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
  */
 export const CHERRY_PRODUCT_COLOR_TOKENS = CHERRY_PRODUCT_VARIABLE_TOKENS
 
-/**
- * Frozen Tailwind compatibility surface for historical semantic utilities.
- * These lists are shrink-only: adding a foundation token must not expose a
- * new utility unless an existing compatibility consumer requires it.
- */
-export const COMPATIBILITY_SEMANTIC_COLOR_TOKENS = [
-  'destructive-hover',
-  'secondary-hover',
-  'secondary-active',
-  'ghost-active'
-] as const
-
-export const COMPATIBILITY_STATUS_COLOR_TOKENS = [] as const
-
-export const COMPATIBILITY_COLOR_TOKENS = [
-  ...COMPATIBILITY_SEMANTIC_COLOR_TOKENS,
-  ...COMPATIBILITY_STATUS_COLOR_TOKENS
-] as const
+/* `COMPATIBILITY_{SEMANTIC,STATUS,}_COLOR_TOKENS` stood here: a frozen,
+ * shrink-only surface of historical utilities — destructive-hover,
+ * secondary-hover, secondary-active, ghost-active, and an empty status list.
+ * Nothing read them, not even the generator or `check.ts`, so they froze
+ * nothing; three of the four names have no consumer left anywhere, and the
+ * fourth (`secondary-active`) is a live product token declared above. */
 
 export const CHERRY_PRODUCT_SURFACE_PAIRS = [
   ['success-subtle', 'success-subtle-foreground'],
