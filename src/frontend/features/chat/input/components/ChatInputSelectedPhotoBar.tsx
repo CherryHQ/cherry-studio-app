@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, Text } from 'react-native';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
 type ChatInputSelectedPhotoBarProps = {
   isLoading?: boolean;
   selectedPhotoCount: number;
@@ -13,6 +15,7 @@ export function ChatInputSelectedPhotoBar({
   onPress,
 }: ChatInputSelectedPhotoBarProps) {
   const { t } = useTranslation();
+  const constantWhite = useThemeColor('constant-white');
 
   if (selectedPhotoCount === 0) {
     return null;
@@ -22,16 +25,16 @@ export function ChatInputSelectedPhotoBar({
     <Pressable
       accessibilityLabel={t('chat.media.addSelectedPhoto', { count: selectedPhotoCount })}
       accessibilityRole="button"
-      className="h-[52px] min-w-[156px] max-w-[240px] items-center justify-center rounded-full bg-black px-6 active:opacity-80 disabled:opacity-60"
+      className="h-[52px] min-w-[156px] max-w-[240px] items-center justify-center rounded-full bg-constant-black px-6 active:opacity-80 disabled:opacity-60"
       disabled={isLoading}
       onPress={onPress}
     >
       {isLoading ? (
-        <ActivityIndicator color="#FFFFFF" />
+        <ActivityIndicator color={constantWhite} />
       ) : (
         <Text
           adjustsFontSizeToFit
-          className="font-semibold text-lg text-white"
+          className="font-semibold text-lg text-constant-white"
           minimumFontScale={0.8}
           numberOfLines={1}
         >

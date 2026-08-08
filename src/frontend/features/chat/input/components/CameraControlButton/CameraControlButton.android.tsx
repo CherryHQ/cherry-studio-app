@@ -14,11 +14,11 @@ export function CameraControlButton({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="size-12 items-center justify-center rounded-full bg-black/40 active:opacity-70"
+      className="size-12 items-center justify-center rounded-full bg-constant-black/40 active:opacity-70"
       disabled={disabled}
       onPress={onPress}
     >
-      <Icon className="size-6 text-white" strokeWidth={2} />
+      <Icon className="size-6 text-constant-white" strokeWidth={2} />
     </Pressable>
   );
 }

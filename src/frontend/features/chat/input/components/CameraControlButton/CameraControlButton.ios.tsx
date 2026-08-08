@@ -7,6 +7,8 @@ import {
   disabled as disabledModifier,
 } from '@expo/ui/swift-ui/modifiers';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
 import type { CameraControlButtonProps } from './CameraControlButton.types';
 
 /**
@@ -25,6 +27,8 @@ export function CameraControlButton({
   onPress,
   sfSymbol,
 }: CameraControlButtonProps) {
+  const constantWhite = useThemeColor('constant-white');
+
   return (
     <Host matchContents>
       <Button
@@ -37,7 +41,7 @@ export function CameraControlButton({
         ]}
         onPress={onPress}
       >
-        <Image color="#FFFFFF" systemName={sfSymbol} />
+        <Image color={constantWhite} systemName={sfSymbol} />
       </Button>
     </Host>
   );

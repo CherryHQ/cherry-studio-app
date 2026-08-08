@@ -335,7 +335,7 @@ function DrawingGridItem({
               <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
             </View>
           ) : (
-            <View className="size-6 rounded-full border-2 border-border-strong bg-black/30" />
+            <View className="size-6 rounded-full border-2 border-border-strong bg-constant-black/30" />
           )}
         </Animated.View>
       </Pressable>

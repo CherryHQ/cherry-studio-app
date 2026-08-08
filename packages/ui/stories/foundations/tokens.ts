@@ -114,6 +114,12 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
     variables: ['--code-block', '--inline-code', '--chat-user'],
   },
   {
+    title: '恒定黑白',
+    hint: '整份 token 里唯一不随主题翻转的一对。给压在照片、相机取景、全屏查看器之上的 chrome 用 —— 底下那层既不是浅色也不是深色表面，跟着主题翻就必然有一个主题下看不见。两个色卡在明暗两个主题里应当完全一样，不一样就说明有人给它加了 .dark 覆盖。',
+    kind: 'surface',
+    variables: ['--constant-black', '--constant-white'],
+  },
+  {
     title: '用量热力阶',
     hint: 'AI 用量日历的四档强度，同一个绿档按 25/50/75/100 调出；空白格用的是 --border，不在这里。',
     kind: 'surface',

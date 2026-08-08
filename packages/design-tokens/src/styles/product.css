@@ -81,6 +81,18 @@
   /* Stable product domain: user-message surface (UserMessageItem) */
   --chat-user: var(--gray-alpha-100);
 
+  /* 唯一一对「不随主题走」的颜色：`:root` 里写死，`.dark` 不覆盖。
+   *
+   * 别的角色都压在受主题控制的表面上，所以跟着主题翻；这两个是给压在**不受控**
+   * 内容之上的 chrome 用的 —— 照片、相机实时取景、全屏图片查看器。一张照片既不
+   * 是浅色也不是深色表面，跟着主题翻就意味着必然有一个主题下控件看不见。
+   *
+   * 按值命名而不是按落点命名（一度叫过 `--media-*`），因为「要一个恒定的黑/白」
+   * 这个需求不是媒体独有的，换个场景照样能用；两个方向都在用：查看器是黑底白图标，
+   * 缩略图角标是白圆片黑字形。 */
+  --constant-black: oklch(0 0 0);
+  --constant-white: oklch(1 0 0);
+
   /* Stable product domain: AI usage heat scale (AiUsageCalendar).
    * 四档由同一个绿档按 25/50/75/100 调出来，所以强度是均匀的、也不可能逐档跑偏；
    * 空白格直接用 --border。混的是 transparent 而不是某个表面色，因为这个日历有两

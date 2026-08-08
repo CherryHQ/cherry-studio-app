@@ -48,7 +48,12 @@ export default function RootLayout() {
 }
 
 function RootStack() {
-  const [backgroundColor, foregroundColor] = useThemeColor(['background', 'foreground']);
+  const [backgroundColor, foregroundColor, constantBlack, constantWhite] = useThemeColor([
+    'background',
+    'foreground',
+    'constant-black',
+    'constant-white',
+  ]);
 
   return (
     <Stack
@@ -82,8 +87,11 @@ function RootStack() {
       <Stack.Screen
         name="paintings/[paintingId]"
         options={{
-          contentStyle: { backgroundColor: '#000000' },
-          headerTintColor: '#ffffff',
+          // The viewer runs the image full-bleed, so its chrome sits on the
+          // photo rather than on a themed surface: black behind, white on top,
+          // in both themes. `PaintingViewerChrome` paints the same pair.
+          contentStyle: { backgroundColor: constantBlack },
+          headerTintColor: constantWhite,
           headerTransparent: true,
           title: '',
         }}
