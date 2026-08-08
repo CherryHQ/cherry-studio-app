@@ -17,14 +17,17 @@ const maxTextHeight = 120;
 // Symmetric on purpose: asymmetric padding would only trade the glyphs'
 // centering for the caret's. See `composerTextStyle.ios`.
 const textPaddingVertical = 4;
-// Lines the text's ink up with the icons' — their boxes are not the same thing,
-// since lucide draws its 24pt icons with ~4pt of margin inside the box. Aligning
-// the boxes instead leaves the toolbar looking indented from the text above it.
-const iconInkMargin = 4;
-export const textPaddingHorizontal = (composerActionSize - actionIconSize) / 2 + iconInkMargin;
 // The circle is well under the 44pt minimum on its own, so the rest of the
 // target comes from slop rather than from a bigger shape.
 export const actionHitSlop = (44 - composerActionSize) / 2;
+
+// Everything inside sits flush against the surface's own padding — one left edge
+// for the buttons, the field, and whatever rows a caller stacks above them. The
+// alternative is to indent the text to line its ink up with the icons' (lucide
+// draws its 24pt icons with ~4pt of margin inside the box), which is what this
+// did until the toolbar buttons grew visible tinted circles. A circle's edge is
+// what the eye lines up against, not the glyph inside it, and a row above the
+// field is as likely to be a filled pill as it is to be text.
 
 // Geometry lives in `style`, not className: GlassView doesn't take className, so
 // this is the only way both surface branches stay pixel-identical.
@@ -39,13 +42,9 @@ export const actionStyle = {
   justifyContent: 'center',
   width: composerActionSize,
 } as const;
-// Rows above the field line up with the text's ink by default. Callers that want
-// to bleed to the edge — a horizontally scrolling strip, say — override it.
-export const collapsibleStyle = { paddingHorizontal: textPaddingHorizontal } as const;
 export const thumbnailStyle = { height: thumbnailSize, width: thumbnailSize } as const;
 export const textInputBoxStyle = {
   maxHeight: maxTextHeight,
-  paddingHorizontal: textPaddingHorizontal,
   paddingVertical: textPaddingVertical,
 } as const;
 export const toolbarStyle = { marginTop: toolbarGap } as const;

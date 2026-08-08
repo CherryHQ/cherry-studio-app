@@ -103,9 +103,12 @@ That includes content alignment, which is why callers own it.
 
 The measured geometry lives in `composer.layout.ts` so the parts cannot drift apart. The toolbar's
 buttons are sized to their icons rather than to their reach — the circle is 32pt and the rest of the
-44pt target comes from slop. The text lines up with the icons' *ink*, not their boxes: lucide draws
-its 24pt icons with ~4pt of margin inside the box, and aligning the boxes leaves the toolbar looking
-indented from the text above it.
+44pt target comes from slop. Everything inside sits flush against the surface's own padding, so the
+buttons, the field, and any row stacked above them share one left edge. The alternative — indenting
+the text so its ink lines up with the icons', since lucide draws its 24pt icons with ~4pt of margin
+inside the box — is what this did while the buttons were bare glyphs. Once they grew visible tinted
+circles the circle's edge became what the eye lines up against, and a row above the field is as
+likely to be a filled pill as it is to be text.
 
 Every circular surface in here is tinted rather than left as plain glass. A `GlassView` renders
 nothing when it sits on another one — the material has nothing behind it to refract — so an untinted

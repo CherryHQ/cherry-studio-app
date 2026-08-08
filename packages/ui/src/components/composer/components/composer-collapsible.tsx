@@ -8,7 +8,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { collapsibleStyle } from '../composer.layout';
 import type { ComposerCollapsibleProps } from '../composer.types';
 
 // One duration for the swell/shrink so the fade and the height collapse stay in
@@ -94,11 +93,7 @@ export function ComposerCollapsible({ children, style, testID }: ComposerCollaps
           it is still zero. Measured in flow it never lays out at all — the
           parent starts collapsed, so `onLayout` never fires and the height it is
           waiting for never arrives. */}
-      <View
-        className="absolute top-0 right-0 left-0"
-        onLayout={handleLayout}
-        style={[collapsibleStyle, style]}
-      >
+      <View className="absolute top-0 right-0 left-0" onLayout={handleLayout} style={style}>
         {isOpen ? children : lastChildren.current}
       </View>
     </Animated.View>
