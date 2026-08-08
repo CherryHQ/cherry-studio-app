@@ -1,226 +1,206 @@
-# 设计规范
+# Design Spec
 
-这份文档管**视觉决策**：颜色从哪来、层次怎么建、什么时候可以加一条边框、什么时候不许写字面值。它不管交互组件的归属（见 [UI Components](docs/references/ui-components.md)）、导航与安全区（见 [Navigation And Insets](docs/references/navigation-and-insets.md)）、命名（见 [Naming Conventions](docs/references/naming-conventions.md)）。
+Rules for visual decisions: where colour comes from, how hierarchy is built, when a surface or border is allowed, and where literal values are still permitted.
 
-视觉语言采自 Vercel Brand Guidelines（Geist）。但 VBG 那份规范是给 web 报告站写的 —— 12 栏栅格、`.vbg-*` 类、图表即证据、报告外壳，这些在 React Native 里不存在，一条都没迁。迁进来的是它的**判断力**：先排版后表面、单色优先、颜色必须带信息、克制不等于寡淡。下面每条规则都对应本仓库真实存在的东西，不是转述。
+Interaction component ownership is in [UI Components](docs/references/ui-components.md). Router structure and safe areas are in [Navigation And Insets](docs/references/navigation-and-insets.md). Naming is in [Naming Conventions](docs/references/naming-conventions.md).
 
----
+## Priority Order
 
-## 冲突时的优先级
+When requirements conflict, protect in this order:
 
-需求打架时，按这个顺序保：
+1. **Readability and accessibility.** Failing contrast is a bug, not a style preference.
+2. **Contract integrity.** No bypassing the token layer, no literal colours.
+3. **Theme parity.** Whatever is readable in light must be readable in dark, and the reverse.
+4. **Hierarchy.** One primary object per screen; the eye knows where to start.
+5. **Consistency.** The same interaction looks the same everywhere.
+6. **Polish.** Motion, spacing refinements, platform differences.
 
-1. **可读性与无障碍**。对比度不达标就是 bug，不是风格偏好。
-2. **契约完整性**。不绕过 token 层，不写字面色。
-3. **两个主题等价**。浅色能读的，深色也要能读；反之亦然。
-4. **层次正确**。一屏之内有一个主对象，读者的眼睛知道先看哪。
-5. **与既有模式一致**。同类交互长得一样。
-6. **细节打磨**。动效、间距微调、平台差异。
+Earlier items do not yield to later ones.
 
-排在前面的不能为后面让路。「这样更好看但对比度掉到 3:1」——不行。
+## Colour
 
----
+### Single Source
 
-## 颜色
-
-### 唯一来源是契约
-
-`packages/design-tokens/` 是所有颜色的唯一出口。组件永远不写颜色字面值。
+`packages/design-tokens/` is the only origin of colour. Components never write colour literals.
 
 ```
-tokens/colors/vercel.css   VBG 调色板（background / gray / gray-alpha / blue / green / amber / red）
+tokens/colors/vercel.css   Palette (background / gray / gray-alpha / blue / green / amber / red)
         ↓
-shadcn.css                 32 个 shadcn 角色名
-product.css                38 个 Cherry 产品语义
+shadcn.css                 32 shadcn role names
+product.css                38 Cherry product semantics
         ↓
-native.css                 生成物，禁止手改
+native.css                 Generated. Never edit by hand.
         ↓
-组件                        className="bg-card text-foreground" 或 useThemeColor('brand')
+components                 className="bg-card text-foreground"  or  useThemeColor('brand')
 ```
 
-**两条取色路径，只有这两条：**
+Two ways to take a colour, and only two:
 
-- 能用 className 就用 className：`bg-card`、`text-muted-foreground`、`border-border-strong`、`bg-primary/10`
-- 需要把颜色当值传给原生 prop（`ActivityIndicator color`、Skia、`@expo/ui` 的 `Image color`、`Stack.Screen` 的 `screenOptions`）时用 hook：
+- Prefer `className`: `bg-card`, `text-muted-foreground`, `border-border-strong`, `bg-primary/10`.
+- Use the hook when a colour must be passed as a value to a native prop (`ActivityIndicator color`, Skia, `@expo/ui` `Image color`, `Stack.Screen` options):
 
 ```tsx
 const scrimColor = useThemeColor('scrim');
 const [accent, ring] = useThemeColor(['primary', 'constant-white']);
 ```
 
-`useThemeColor` 接契约名（不带 `--color-` 前缀），单个返回 `string`，数组返回等长元组。
+`useThemeColor` takes contract names without the `--color-` prefix. A string returns a string; an array returns a tuple of the same length.
 
-### 加一个 token 之前
+### Adding A Token
 
-先回答：**这个角色已经有名字了吗？** 38 个产品 token 里大概率已经有。真要加：
+First answer: **does this role already have a name?** Among the 38 product tokens it usually does. If it genuinely does not:
 
-1. 值写在 `product.css`，指向调色板档位（`var(--green-900)`），不写 oklch 字面量 —— 除非它必须不随主题变，见下。
-2. 名字加进 `scripts/theme-contract.ts` 的 `CHERRY_PRODUCT_VARIABLE_TOKENS`。
-3. 跑 `pnpm design:build` 重新生成 `native.css`，再跑 `pnpm design:check`。
-4. 如果它值得在 Storybook 里被看见，加进 `packages/ui/stories/foundations/tokens.ts`。
+1. Declare the value in `product.css`, pointing at a palette step (`var(--green-900)`), not an oklch literal — unless it must not follow the theme, see below.
+2. Add the name to `CHERRY_PRODUCT_VARIABLE_TOKENS` in `scripts/theme-contract.ts`.
+3. Run `pnpm design:build` to regenerate `native.css`, then `pnpm design:check`.
+4. If it is worth seeing, add it to `packages/ui/stories/foundations/tokens.ts`.
 
-`check.ts` 会断言：契约名单与生成物逐项按序一致、引用可解析、无循环、`@variant light` 与 `@variant dark` 的变量集合完全相等。漏写深色值会被挡下来。
+`check.ts` asserts that the contract list and the generated file agree item by item and in order, that every reference resolves, that there are no cycles, and that `@variant light` and `@variant dark` declare exactly the same variable set. A missing dark value is caught there.
 
-### 允许写字面色的四种情况
+### Literal Colours: Four Exemptions
 
-除此之外没有第五种。新增字面色必须在同一个 commit 里说明它属于哪一种。
+There is no fifth. A new literal must state in its commit which case it falls under.
 
-| 情况 | 例子 | 为什么 token 治不了 |
+| Case | Examples | Why a token cannot serve |
 |---|---|---|
-| **压在不受控内容上的 chrome** | 图片查看器、相机取景、缩略图角标 | 底下是照片，既不是浅色也不是深色表面。已有 `--constant-black` / `--constant-white` 兜住，**优先用它们，别再写新的** |
-| **美术资产** | `thinkingPalette.ts` 的 33 个着色器色、`logoPalette.ts` | 它们表达的是彼此之间的关系，不是角色。改一个就毁掉整张图 |
-| **token 的上游** | `brandAvatarStyles.ts` 按亮度算黑白 | 它的产出**是**颜色决策的输入，反过来读 token 就成环了 |
-| **不在渲染树里** | `LoggerService` 的 `%c` console 样式、构建脚本 | 根本不经过 uniwind |
+| **Chrome over uncontrolled content** | Image viewer, camera preview, thumbnail badges | The backdrop is a photo — neither a light nor a dark surface. `--constant-black` / `--constant-white` already cover this; **use them instead of adding more** |
+| **Artwork** | `thinkingPalette.ts` (33 shader colours), `logoPalette.ts` | These encode relationships between each other, not roles. Changing one breaks the image |
+| **Upstream of the tokens** | `brandAvatarStyles.ts`, which picks ink by luminance | Its output *is* the colour decision; reading a token back would be a cycle |
+| **Outside the render tree** | `LoggerService` `%c` console styles, build scripts | Never passes through uniwind |
 
-“这个颜色在系统里就该长这样”**不在**列内。字面色的典型下场是同一角色在不同文件里悄悄分叉：模态遮罩曾经一处 40%、另一处 20%，同一个应用里两种压暗程度，直到收敛成 `--scrim` 才被发现。
+"This colour is fixed by the platform" is **not** on the list. The failure mode of literals is silent divergence: the modal scrim was 40% in one place and 20% in another — two dim levels in one app — until it converged on `--scrim`.
 
-### 品牌色的两个名字
+### `--brand` vs `--primary`
 
-`--primary` 和 `--brand` 当前解析到同一个值，但含义不同：
+Both currently resolve to the same value, but they mean different things:
 
-- `--brand` = 「这里必须是产品的绿」。像素场旁边那个点用它。
-- `--primary` = 「这里是主色，将来若做主题色设置会跟着变」。选中态、主按钮用它。
+- `--brand` — "this must be the product's green."
+- `--primary` — "this is the accent, and would follow a theme-colour setting if one existed."
 
-判据一句话：**用户把主题色调成紫色之后，这里该不该变紫？**
+The test: **if the user set the accent to purple, should this turn purple?**
 
-> `--theme-primary` 那层运行时输入已删（`beccaa2e`）—— 移动端从来没有设置主题色的界面。偏好键 `ui.theme_user.color_primary` 保留在 `packages/universal`（持久化数据、与桌面共享）。真要做这个功能，是先做界面再把这层接回来。
+The `--theme-primary` runtime-input layer was removed (`beccaa2e`); mobile has never shipped a screen that writes an accent preference. The preference key stays in `packages/universal` because it is persisted data shared with desktop. Building the feature means adding the screen first, then reintroducing the pair.
 
-### 对比度
+### Contrast
 
-正文（`text-sm` / `text-base`，含 semibold）按 WCAG 要 **4.5:1**；图形与边框要 **3:1**。
+Body text (`text-sm` / `text-base`, including semibold) needs **4.5:1**. Graphics and borders need **3:1**.
 
-这不是纸面要求。`--brand` 从 `#00b96b` 换成 `green-900` 就是因为前者在白底上只有 2.58:1，而 `text-brand` 落在正文上。改颜色前先算，别先看。
+This is enforced, not aspirational. `--brand` moved off `#00b96b` because that measures 2.58:1 on white while `text-brand` lands on body copy. Compute before choosing.
 
-### 灰阶不是单调的
+### The Gray Ramp Is Not Monotonic
 
-Geist 的灰阶有意做了非单调，照名字顺序对齐分级角色会在浅色下反转层级：
+Geist's ramp is deliberately non-monotonic; aligning tiered roles by step number inverts the hierarchy in light mode:
 
-- 浅色：`gray-400` 比 `gray-300` **更浅**
-- 浅色：`gray-alpha-400`(.08) 比 `gray-alpha-300`(.1) **更淡**
-- 深色：`gray-alpha-800`(.47) 比 `gray-alpha-700`(.54) **更淡**
+- Light: `gray-400` is **lighter** than `gray-300`
+- Light: `gray-alpha-400` (.08) is **weaker** than `gray-alpha-300` (.1)
+- Dark: `gray-alpha-800` (.47) is **weaker** than `gray-alpha-700` (.54)
 
-所以四级边框跳过了 300/400 档，取 100/200/500/700。**按实测亮度挑档，永远不按编号。**
+The four border tiers therefore skip 300/400 and use 100/200/500/700. **Pick steps by measured luminance, never by number.**
 
-### 单色优先
+### Monochrome First
 
-默认用中性色。颜色只在它承载信息时出现 —— 状态（success/warning/error/info）、选中、品牌。不要因为「这个数字是好消息」就把它变绿，也不要用色块给版面分区。
+Neutral by default. Colour appears only when it carries information — status (success / warning / error / info), selection, brand. Do not turn a number green because it is good news, and do not use colour fields to partition a layout.
 
-同时给一个非颜色线索：色盲用户看不出红绿，图标形状、文案、位置得能独立说明问题。
+Always pair colour with a non-colour cue. Icon shape, wording, or position must convey the same thing on its own.
 
----
+## Typography
 
-## 排版
+The scale is `sizeSequence` in `src/frontend/utils/typographyScale.ts`, 13 steps. The first nine adopt VBG size/leading pairs verbatim:
 
-阶梯在 `src/frontend/utils/typographyScale.ts` 的 `sizeSequence`，13 档。前九档逐字采用 VBG 的 size/leading 配对：
-
-| 档 | 值 | VBG 角色 |
+| Step | Value | Role |
 |---|---|---|
-| `text-xs` | 13 / 18 | label、metadata |
-| `text-sm` | 14 / 20 | compact |
-| `text-base` | 16 / 24 | body |
-| `text-lg` | 18 / 28 | lede |
-| `text-xl` | 20 / 26 | subsection |
-| `text-2xl` | 24 / 32 | section |
-| `text-3xl` | 32 / 40 | title |
-| `text-4xl` | 40 / 48 | page-title |
-| `text-5xl` | 48 / 56 | display |
-| `6xl`–`9xl` | 60/72/96/128 | VBG 无对应角色，沿用原值 |
+| `text-xs` | 13 / 18 | Label, metadata |
+| `text-sm` | 14 / 20 | Compact |
+| `text-base` | 16 / 24 | Body |
+| `text-lg` | 18 / 28 | Lede |
+| `text-xl` | 20 / 26 | Subsection |
+| `text-2xl` | 24 / 32 | Section |
+| `text-3xl` | 32 / 40 | Title |
+| `text-4xl` | 40 / 48 | Page title |
+| `text-5xl` | 48 / 56 | Display |
+| `6xl`–`9xl` | 60 / 72 / 96 / 128 | No assigned role; original values kept |
 
-**这个数组同时是无障碍字号档位**：`resolveTypographyScale` 按索引平移实现 FontSizeStep 0/1/2，所以顺序必须单调递增，「+1 档」必须仍是「下一级」。改这里就是改无障碍行为。**改 CSS 无效，必须改这个数组。**
+**This array is also the accessibility ladder.** `resolveTypographyScale` implements FontSizeStep 0/1/2 by shifting the index, so the sequence must stay monotonically increasing and "+1 step" must remain "the next size up". Editing it changes accessibility behaviour. **Editing the CSS does nothing — edit the array.**
 
-字重只有三档：`font-normal`(400)、`font-medium`(500)、`font-semibold`(600)。`font-bold` 已重映射到 600，与 `font-semibold` 同重 —— VBG 最重的角色就是 semibold。不要写 `fontWeight` 数值。
+Three weights only: `font-normal` (400), `font-medium` (500), `font-semibold` (600). `font-bold` is remapped to 600 and is identical to `font-semibold`; semibold is the heaviest role in the system. Never write a numeric `fontWeight`.
 
-等宽只给 `font-mono`（Geist Mono），且只给代码、命令、路径、原始 token、时间戳、短标识符。**不要把整句或整张表设成等宽。**字体由 `app.json` 的 expo-font 插件在构建期嵌入 —— 改字体必须 `prebuild` + 重新编译，Metro reload 不生效。
+`font-mono` (Geist Mono) is for code, commands, paths, raw tokens, timestamps, and short identifiers. **Never set a full sentence or an entire table in mono.** The font is embedded at build time by the expo-font plugin in `app.json` — changing fonts requires a `prebuild` and a native rebuild; a Metro reload will not show it.
 
-层次先靠排版建立，再考虑间距，最后才是表面。同级元素共享 role、字号、字重、行高：**不要因为某个字符串更长或数值更大就单独改它。**
+Build hierarchy with typography first, then spacing, and only then surfaces. Peer elements share role, size, weight, and leading: **do not restyle one because its string is longer or its number is larger.**
 
----
+## Shape And Spacing
 
-## 形状与间距
+Radius has one source: `--radius` = 8px. `rounded-sm` through `rounded-4xl` are all derived in `build-native-css.ts` as `calc(var(--radius) * n)`. The four sub-pixel hairline steps (`rounded-4xs` … `rounded-xs`) are the exception — they are not on the scale and are authored individually.
 
-圆角只有一个源：`--radius` = 8px（VBG 的 `radius`）。`rounded-sm…4xl` 全部由 `build-native-css.ts` 按 `calc(var(--radius) * n)` 派生。四档亚像素发丝圆角（`rounded-4xs…xs`）是例外，不在 VBG 刻度上，逐个写死。
+**Never write a numeric `borderRadius`.** A new step means changing a multiplier, not bypassing the system in a component.
 
-**不要写 `borderRadius` 数值。** 需要新档位就改乘数，不要在组件里绕过。
+Spacing uses the default Tailwind scale, which already matches the intended 4/8/12/16/20/24/32/40/48/64 with no conversion.
 
-间距用 Tailwind 默认刻度，它与 VBG 的 4/8/12/16/20/24/32/40/48/64 完全一致，无需转换。
+Every gap has exactly one owner: if the container sets `gap`, children do not add their own margins. Fixing an awkward gap means changing the grouping or the owner, not adding a one-off margin.
 
-每个间隙只能有一个所有者：容器设 gap，子元素不要再叠自己的 margin。修一处别扭的间距，改的应该是分组或所有者，而不是加一个一次性的 margin。
+## Surfaces And Borders
 
----
+The interface is one continuous surface by default. **A surface or a border has to earn its place** — it must express selection, interactivity, a warning, or a real grouping that spacing cannot convey.
 
-## 表面与边框
+Reach for them in this order: spacing → alignment → typography → density → and only then borders and surfaces.
 
-界面默认是一块连续的面。**一个面或一条边框必须挣来它的存在** —— 它得表达选中、可交互、警告、或者间距表达不了的真实分组。
+Do not wrap every section in a card, and never nest cards. The four border tiers (`border-subtle` < `border` < `border-strong` < `border-selected`) are monotonic in both themes; choose by meaning, not by eye.
 
-顺序：间距 → 对齐 → 排版 → 密度变化 → 最后才是边框和面。
+When a screen feels cluttered, separate **volume** from **loudness**. Volume is fixed by removing, merging, or reordering content. Loudness is fixed by reducing competing colours, sizes, weights, borders, surfaces, and motion. Keep one deliberate anchor — restraint is not flattening everything into having no focus.
 
-不要每个区块都套卡片，不要卡片套卡片。四级边框（`border-subtle` < `border` < `border-strong` < `border-selected`）在两个主题里都单调，按语义挑，不按视觉试。
+## Motion
 
-觉得界面乱，先分清是**量**的问题还是**响度**的问题：量的问题删内容、合并、重排；响度的问题减少互相竞争的颜色、尺寸、字重、边框、面和动效。保留一个刻意的锚点 —— 克制不是把一切压平成没有重点。
+Still by default. Motion is justified in three cases: explaining a state change, preserving continuity, and confirming an action.
 
----
+No scroll-triggered reveals, no decorative pulsing, no parallax, no hover displacement. **The base experience must be complete with zero motion**, and `useReducedMotion` must actually be wired, not merely imported.
 
-## 动效
+Existing heavy animations (the thinking pixel field, the logo draw-on, the settings droplet collapse) are deliberate one-off investments. `useReducedMotion` is currently wired in `PrismSweep`, `PaintingSkeleton`, `SlotText`, and `EffortSlider` — follow those when adding anything at that scale, and first say what it explains.
 
-默认静止。动效只在三种时候加：解释状态变化、保持连续性、确认一个操作。
+## Icons
 
-不要滚动逐段揭示、不要装饰性脉冲、不要视差、不要 hover 位移。**基础体验在零动效下必须是完整的**，`useReducedMotion` 必须真的接线（不是接了就不管）。
+Icons come from `lucide-uniwind/png`. In `className`, `size-*` sets the dimensions and `text-*` sets the tint; explicit props win over `className`.
 
-已有的重型动效（思考像素场、logo 绘制、水滴收起）都是刻意的单点投入。`useReducedMotion` 目前接在 `PrismSweep`、`PaintingSkeleton`、`SlotText`、`EffortSlider` 上 —— 新增同量级动效时照这几处的写法接，并先问一句它解释了什么。
+⚠️ **`strokeWidth` is a no-op** — the stroke is baked into the PNG. It is accepted so call sites can mirror the lucide API, and it neither errors nor does anything. Do not use it to adjust weight.
 
----
+Icons are not decoration. Do not place them in coloured tiles and do not add them to fill space. Prefer words where words are clearer.
 
-## 图标与媒体
+## Rejected
 
-图标走 `lucide-uniwind/png`。`className` 的 `size-*` 决定尺寸、`text-*` 决定 tintColor，显式 props 优先于 className。
+None of the following is accepted:
 
-⚠️ **`strokeWidth` 是空操作** —— PNG 里已经烤死了描边。它被接受只是为了 call site 能照抄 lucide，传了不会报错也不会生效。别指望用它调粗细。
+- **Hardcoded colours**, unless the change falls under one of the four exemptions and says so in the commit.
+- **Ternaries whose branches are identical** — `isActive ? 'text-foreground' : 'text-foreground'`. Either make it differ or delete it along with the prop that feeds it.
+- **Shipping a visual change verified in one theme only.**
+- **Patching weak hierarchy with a border.** Unclear hierarchy is a typography and spacing problem; a border only hides it.
+- **Decorative gradients, glows, textures, faux depth, skeuomorphic paper.** A gradient is valid only as a labelled continuous data scale.
+- **The same role holding different values in different files.** On finding a divergence, converge on one token; do not copy one of them over the other.
+- **"Desktop has it" as a reason.** The test is whether the thing is serialized: serialized shapes (part JSON, DB schema, DTOs) must align; values, interaction, and visuals may diverge. State the real reason in the commit, and check whether the desktop code is dead before aligning to it. See [Universal Package](docs/references/universal-package.md).
+- **Working around `check.ts`.** What it blocks is a real problem, not noise.
 
-图标不是装饰。不要放进彩色方块里，不要为了填版面而加。文案能说清的地方优先用文案。
+## Gates
 
----
-
-## 明确拒绝
-
-以下在本仓库一律不接受：
-
-- **写死的颜色**，除非属于上面四种情况之一并在 commit 里说明
-- **两个分支相同的三元** —— `isActive ? 'text-foreground' : 'text-foreground'`。要么让它真的有差别，要么连同那个 prop 一起删
-- **只在一个主题下验证过**就提交视觉改动
-- **用边框修补弱层次** —— 层次不清是排版和间距的问题，加框只是把它藏起来
-- **装饰性渐变、光晕、纹理、假景深、拟纸**。渐变只在它是一条有标注的连续数据刻度时成立
-- **同一角色在不同文件里取不同值**。发现两处不一致时，正确动作是收敛成一个 token，不是挑一个抄过去
-- **给「桌面有」当理由**。判断标准是「这东西会不会被序列化」：会的（part JSON、DB schema、DTO）必须对齐，不会的（取值、交互、视觉）分叉是正常的。取值分叉时 commit 里写真实理由，对齐前先查桌面那段是不是死代码（见 [Universal Package](docs/references/universal-package.md)）
-- **绕过 `check.ts`**。它挡下来的是真问题，不是噪音
-
----
-
-## 改动前后要跑什么
-
-动 token：
+Token changes:
 
 ```bash
-pnpm design:build          # 重新生成 native.css
-pnpm design:check          # 契约 + 主题迁移 + 图标三项
+pnpm design:build          # regenerate native.css
+pnpm design:check          # contract + app theme + icons
 ```
 
-任何视觉改动：
+Any visual change:
 
 ```bash
 pnpm typecheck:app
-pnpm test:app -- <pattern>  # 只跑受影响的套件；全量留到开 PR 前
+pnpm test:app -- <pattern>  # affected suites only; run the full suite once before opening a PR
 pnpm lint
 pnpm format:check
 ```
 
-**外加：亮色和暗色各看一遍真机或模拟器。**结构上验证过不等于看过 —— 对比度、层次、以及颜色在真实内容上的观感，只有看才知道。
+**Plus: look at it in both light and dark on a device or simulator.** Structural verification is not the same as having seen it — contrast, hierarchy, and how a colour reads against real content only show up on screen.
 
-`pnpm design:sync` 只同步图标。`packages/design-tokens/src/styles/` 和 `scripts/theme-contract.ts` 是移动端自有的，**取值和名字都不从桌面镜像** —— 因为没有任何 token 名会在两端之间序列化传输，所以不存在需要对齐的契约，只有会分叉的表现层。反过来说：一次同步会把每个已删的名字重新装回来，所以别把它接回去。
+`pnpm design:sync` syncs icons only. `packages/design-tokens/src/styles/` and `scripts/theme-contract.ts` are mobile-owned in both names and values: no token name is ever serialized between the two apps, so there is no contract to align — only a presentation layer that would diverge. Restoring the sync would reinstate every deleted name.
 
----
+## Seeing The Current State
 
-## 想看现状
+The Storybook `Foundations/*` stories render the full palette, semantic groups, surface/foreground pairs, the type scale, weights, radii, and border tiers on device. After changing a token, look there rather than reading CSS.
 
-Storybook 的 `Foundations/*` 页在设备上渲染全部调色板、语义分组、表面/前景配对、字号阶梯、字重、圆角和边框层次。改 token 后在那里看比翻 CSS 快。
-
-`packages/ui/stories/foundations/tokens.ts` 是那些页面读的名单，`__tests__/tokens.test.ts` 会拿它和构建产物核对 —— 名字写错在运行时不报错，只是渲染成占位，那个测试是唯一能抓到的地方。
+`packages/ui/stories/foundations/tokens.ts` holds the list those stories read, and `__tests__/tokens.test.ts` checks it against the build output — a misspelled name does not throw at runtime, it just renders a placeholder, and that test is the only thing that catches it.
