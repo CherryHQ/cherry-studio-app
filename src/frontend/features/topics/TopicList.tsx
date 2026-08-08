@@ -448,7 +448,9 @@ const TopicRow = memo(function TopicRow({
                       : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
                   }
                 >
-                  {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
+                  {isSelected ? (
+                    <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+                  ) : null}
                 </View>
               </Animated.View>
             ) : null}
@@ -536,9 +538,9 @@ function TopicPinAction({ disabled, drag, isPinned, label, onPress }: TopicPinAc
         onPress={onPress}
       >
         {isPinned ? (
-          <PinOffIcon className="size-5 text-white" strokeWidth={2} />
+          <PinOffIcon className="size-5 text-primary-foreground" strokeWidth={2} />
         ) : (
-          <PinIcon className="size-5 text-white" strokeWidth={2} />
+          <PinIcon className="size-5 text-primary-foreground" strokeWidth={2} />
         )}
       </Pressable>
     </Animated.View>

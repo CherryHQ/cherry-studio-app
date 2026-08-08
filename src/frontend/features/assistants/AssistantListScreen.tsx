@@ -398,7 +398,9 @@ function AssistantListRow({
                       : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
                   }
                 >
-                  {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
+                  {isSelected ? (
+                    <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+                  ) : null}
                 </View>
               </Animated.View>
             ) : null}

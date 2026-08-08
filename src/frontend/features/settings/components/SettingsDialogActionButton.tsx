@@ -37,7 +37,9 @@ export function SettingsDialogActionButton({
         {isLoading ? <Spinner size="sm" /> : null}
         <Text
           className={
-            isPrimary ? 'font-medium text-sm text-white' : 'font-medium text-foreground text-sm'
+            isPrimary
+              ? 'font-medium text-primary-foreground text-sm'
+              : 'font-medium text-foreground text-sm'
           }
           numberOfLines={1}
         >
