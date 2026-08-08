@@ -58,20 +58,20 @@ export function Provider({ children }: { children: ReactNode }) {
   const isPresented = useSharedValue(false);
   const isPressed = useSharedValue(false);
   const isBackdropPressed = useSharedValue(false);
-  const expansionProgress = useDerivedValue(() =>
+  const expansionProgress = useDerivedValue<number>(() =>
     withTiming(isExpanded.get() ? 1 : 0, toastMorphMotion),
   );
-  const presentationProgress = useDerivedValue(() => {
+  const presentationProgress = useDerivedValue<number>(() => {
     const isPresentedValue = isPresented.get();
     return withTiming(
       isPresentedValue ? 1 : 0,
       isPresentedValue ? toastEnterMotion : toastExitMotion,
     );
   });
-  const pressProgress = useDerivedValue(() =>
+  const pressProgress = useDerivedValue<number>(() =>
     withTiming(isPressed.get() ? 1 : 0, toastPressMotion),
   );
-  const visibilityProgress = useDerivedValue(() =>
+  const visibilityProgress = useDerivedValue<number>(() =>
     withTiming(isPresented.get() ? 1 : 0, toastFadeMotion),
   );
   const contextValue = useMemo<DynamicToastContextValue>(

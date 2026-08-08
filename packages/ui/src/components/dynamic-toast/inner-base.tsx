@@ -1,11 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import Animated, {
-  createAnimatedComponent,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
+import { createAnimatedComponent, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
 import { toastFadeMotion } from './dynamic-toast.motion';
 import type { DynamicToastContentProps, DynamicToastContentVariant } from './inner.types';
