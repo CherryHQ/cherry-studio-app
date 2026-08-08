@@ -23,13 +23,14 @@ import { useResolveClassNames } from 'uniwind';
 
 import { Portal } from '../../../portal';
 import { Surface } from '../../../surface';
-import { composerActionSize, composerMenuRadius } from '../../composer.layout';
+import { composerActionSize } from '../../composer.layout';
 import { menuFadeMotion, menuOpenMotion, settleMotion } from '../../composer.motion';
 import type { MorphMenuItemProps, MorphMenuProps } from './morph-menu.types';
 
 // It sits in the composer's toolbar, so it defaults to the same circle as the
 // tools beside it.
 const defaultTriggerSize = composerActionSize;
+const openRadius = 20;
 // A floor, not a size: a menu of three short labels would otherwise hug them and
 // read as a tooltip. Content wider than this drives the panel instead.
 const defaultMinPanelWidth = 200;
@@ -84,7 +85,6 @@ export function useComposerMenu() {
 function MorphMenuRoot({
   accessibilityLabel,
   children,
-  contentStyle,
   onOpenChange,
   style,
   testID,
@@ -161,7 +161,7 @@ function MorphMenuRoot({
   const contextValue = useMemo(() => ({ close }), [close]);
 
   const containerStyle = useAnimatedStyle(() => ({
-    borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, composerMenuRadius]),
+    borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, openRadius]),
     height: interpolate(progress.value, [0, 1], [triggerSize, panelHeight.value]),
     width: interpolate(progress.value, [0, 1], [triggerSize, panelWidth.value]),
   }));
@@ -223,7 +223,7 @@ function MorphMenuRoot({
             them separately. */}
         <Surface
           className="bg-surface-secondary"
-          cornerRadius={composerMenuRadius}
+          cornerRadius={openRadius}
           style={fillStyle}
           tintColor={
             typeof material.backgroundColor === 'string' ? material.backgroundColor : undefined
@@ -232,7 +232,7 @@ function MorphMenuRoot({
           <Animated.View
             onLayout={handlePanelLayout}
             pointerEvents={isOpen ? 'auto' : 'none'}
-            style={[panelContentStyle, { minWidth: width }, contentStyle, panelStyle]}
+            style={[panelContentStyle, { minWidth: width }, panelStyle]}
             testID={testID ? `${testID}-panel` : undefined}
           >
             {children}

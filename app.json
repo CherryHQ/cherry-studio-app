@@ -92,13 +92,6 @@
       "expo-font",
       "expo-image",
       [
-        "expo-camera",
-        {
-          "cameraPermission": "Allow Cherry Studio to open the camera for chat messages.",
-          "recordAudioAndroid": false
-        }
-      ],
-      [
         "expo-image-picker",
         {
           "photosPermission": "Allow Cherry Studio to preview and select photos for chat messages.",

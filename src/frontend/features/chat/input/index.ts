@@ -2,10 +2,10 @@
 // paintings) compose the chat input through this module; deep imports of the
 // component/context modules below violate the module ownership boundary.
 //
-// Three pure-logic modules are additionally sanctioned for direct import so
+// Two pure-logic modules are additionally sanctioned for direct import so
 // logic-only consumers (and their node-env tests) don't have to load this
-// component barrel: ./chatInputLayout, ./utils/chatInputAttachments, and
-// ./hooks/useChatInputPhotoPicker. The ESLint boundary rules allowlist them.
+// component barrel: ./chatInputLayout and ./utils/chatInputAttachments. The
+// ESLint boundary rules allowlist them.
 export { ChatInput } from './ChatInput';
 export {
   ChatInputComposer,

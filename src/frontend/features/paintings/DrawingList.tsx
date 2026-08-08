@@ -27,10 +27,6 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
 import {
   CHAT_INPUT_PHOTO_SELECTION_LIMIT,
-  type ChatInputPhotoPreview,
-  loadPhotoPreviewPage,
-} from '@/frontend/features/chat/input/hooks/useChatInputPhotoPicker';
-import {
   type ChatInputAttachmentDraft,
   createPhotoAttachmentDraft,
 } from '@/frontend/features/chat/input/utils/chatInputAttachments';
@@ -47,6 +43,7 @@ import {
   createPaintingDraftHandoff,
   type PaintingDraftHandoff,
 } from './utils/paintingDraftHandoff';
+import { loadPhotoPreviewPage, type PhotoPreview } from './utils/photoLibrary';
 
 const recentPhotoLimit = 12;
 const galleryGap = 6;
@@ -104,7 +101,7 @@ export function DrawingList() {
     [openPainting],
   );
   const handleRecentPhotoPress = useCallback(
-    async (photo: ChatInputPhotoPreview) => {
+    async (photo: PhotoPreview) => {
       try {
         const uri = await new MediaLibrary.Asset(photo.id).getUri();
         openPaintingWithAttachments([createPhotoAttachmentDraft({ ...photo, uri })]);
@@ -359,7 +356,7 @@ function DrawingGridItem({
 
 function useRecentPaintingPhotos(enabled: boolean) {
   const [isLoading, setLoading] = useState(true);
-  const [photos, setPhotos] = useState<ChatInputPhotoPreview[]>([]);
+  const [photos, setPhotos] = useState<PhotoPreview[]>([]);
 
   useEffect(() => {
     if (!enabled) {

@@ -77,41 +77,21 @@ Two consequences to take seriously:
 
 ### The ＋ menu
 
-The panel grows out of the ＋ button itself, up and to the right. It has no fixed size — it is
-measured from whatever is inside it, so swapping its children **tweens** it to the new size rather
-than snapping. Three levels live inside it, tracked by `menuLevel` on the provider.
+The panel grows out of the ＋ button itself, up and to the right, and is measured from its own
+rows. It is a menu and nothing else: every row closes it and hands off to a system picker.
 
-- [ ] The first level is camera, photos, file, then the tools. `file` and the tools close the menu;
-      **camera** and **photos** swap the panel's children in place instead.
-- [ ] Choosing photos grows the panel to the room computed by `getChatInputMenuRoom` — the screen
-      minus the safe areas, the composer's own padding, and a margin. That arithmetic assumes the
-      keyboard is down, which is why opening the menu dismisses it.
-- [ ] Choosing camera grows it to `getChatInputCameraPanelSize` instead: about twice the first level
-      on each axis, clamped to the same room. It stays a panel — it does not go full screen.
-- [ ] Both media levels **bleed to the panel's edges** and round themselves to its corners. The
-      panel's own inset is for rows; a viewfinder or a grid that stopped short of it would read as a
-      panel inside a panel.
-- [ ] Their controls float **over** the media, positioned against the level's own box. They used to
-      be portalled to a window-sized overlay, which put them outside the panel entirely.
-- [ ] Photo permissions and previews load **only while the photo grid is on screen** — not when the
-      menu merely opens, and not on the camera level — and refresh when the app returns to the
-      foreground while it is showing.
-- [ ] A permissions failure is treated as no photo access, clearing previews and any selection.
-- [ ] Tapping a photo toggles it. Badges show one-based selection order, in the order selected.
-- [ ] At most `CHAT_INPUT_PHOTO_SELECTION_LIMIT` (9) photos can be selected at once.
-- [ ] Confirming adds the selected photos as attachments and closes the menu; a failure surfaces an
-      error rather than failing silently, and a second tap while one is in flight is ignored.
-- [ ] Backing out of the photo grid or the camera shrinks the panel back to the first level, and
-      backing out of the grid also clears the selection. There is no pan-down close — this is the
-      only way back.
-- [ ] Closing the menu returns it to the first level and clears the photo selection.
-- [ ] Choosing a tool toggles it and closes the menu. It does **not** touch the photo selection.
-- [ ] Choosing file closes the menu and opens the system picker; cancelling that picker adds nothing
-      and leaves the menu closed.
-- [ ] Capturing a photo adds it as an attachment and closes the menu.
-- [ ] The camera's permission prompt, its "camera unavailable" mount-error state, and its release on
-      backgrounding all still work inside the panel — the preview is torn down whenever the level is
-      not showing.
+- [ ] The rows are camera, photos, file, then the tools. All of them close the menu on tap.
+- [ ] Camera and photos go through `expo-image-picker`; file goes through `expo-document-picker`.
+      None of them is drawn here — see "Deliberately dropped".
+- [ ] Each picker asks for its own permission first and does nothing if refused. Limited photo
+      access needs no special handling: the picker runs out of process and returns what was chosen
+      in it, whether or not the app can see the rest of the library.
+- [ ] The photo picker takes at most `CHAT_INPUT_PHOTO_SELECTION_LIMIT` (9) images, in the order
+      they were selected.
+- [ ] Cancelling any picker adds nothing and leaves the menu closed.
+- [ ] A picker that fails to launch is logged. The menu has already closed by then, so without the
+      log the gesture just looks ignored.
+- [ ] Choosing a tool toggles it and closes the menu.
 
 ### Assistant, model, and web search
 
@@ -156,9 +136,14 @@ Do not restore these; their absence is the design, not a regression.
   there was a collapsed state to expand. With no collapsed state the gesture means nothing, so send
   is simply disabled.
 - **The bottom sheet.** The ＋ menu is inline now, growing out of the button. There is no sheet, so
-  no detents, no pan-down close, and no "restore the default detent on return" — and the old worry
-  about media controls being re-measured against the sheet's per-frame position is moot, because
-  nothing pans any more.
+  no detents, no pan-down close, and no "restore the default detent on return".
+- **The self-drawn camera and photo grid.** A viewfinder with its own shutter, a paged photo grid
+  with its own multi-select and permission states, and the library reader behind them are all gone;
+  the system pickers do it. What that removed is worth naming, because it is what a self-drawn one
+  costs: limited-access handling, foreground refresh, selection badges and their cap, a bitmap-stretch
+  constraint on how far the panel could morph, and `expo-camera` itself.
+  `loadPhotoPreviewPage` survives in `paintings/utils/photoLibrary.ts`, because the drawing list
+  shows recent photos inline and no picker will do that.
 - **`ReduceMotion.Never`.** The old motion config opted every animation out of the system setting.
   Reduced motion is now respected, via `Composer`'s own motion.
 
@@ -170,9 +155,10 @@ assistant on a non-default model the stops and the label come from two different
 
 ## Ownership
 
-- `ChatInputProvider` owns draft text, attachments, whether the photo grid is showing, the selected
-  tool, and the field ref. Whether the ＋ panel is open is `Composer.Menu`'s, not this directory's.
-- `useChatInputPhotoPicker` owns photo permissions, preview loading, and photo selection.
+- `ChatInputProvider` owns draft text, attachments, the selected tool, and the field ref. Whether
+  the ＋ panel is open is `Composer.Menu`'s, not this directory's.
+- `ChatInputMenu` owns the pickers: permission, launch, and turning what comes back into
+  attachments.
 - `effortSlider/` owns the reasoning-effort control, which lives in the model picker's footer — not
   in the input.
 - `ChatInput.tsx` owns everything that talks to assistants and models.

@@ -17,7 +17,6 @@
     04-provider-model-add.yaml
     05-provider-model-pull.yaml
     06-websearch-api-keys.yaml
-    07-chat-input-photos.yaml
 ```
 
 ## 运行方式

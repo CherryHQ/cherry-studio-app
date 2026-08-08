@@ -6,9 +6,6 @@ const actionIconSize = 24;
 /** The toolbar buttons: a circle sized to its icon rather than to its reach. */
 export const composerActionSize = actionIconSize + 8;
 export const surfaceRadius = 24;
-// The menu panel's radius. Exported because content that bleeds to the panel's
-// edges has to round itself to the same curve.
-export const composerMenuRadius = 20;
 // The toolbar's buttons carry their own surface, so the padding is measured to
 // their edge rather than to their icons' ink.
 const surfacePaddingHorizontal = 12;

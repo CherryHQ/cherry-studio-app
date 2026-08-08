@@ -10,10 +10,6 @@ import {
 import type { ChatInputReasoningEffort } from '../../utils/chatInputReasoning';
 import { useChatInputReasoningEffortSync } from '../useChatInputReasoningEffortSync';
 
-jest.mock('../useChatInputPhotoPicker', () => ({
-  useChatInputPhotoPicker: () => ({}),
-}));
-
 type Snapshot = {
   isReasoningEffortSelected: boolean;
   reasoningEffort: ChatInputReasoningEffort;

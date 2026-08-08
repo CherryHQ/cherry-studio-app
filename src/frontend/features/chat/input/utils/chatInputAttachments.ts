@@ -61,6 +61,10 @@ export function removeChatInputAttachment(
   return attachments.filter((attachment) => attachment.id !== attachmentId);
 }
 
+// What the system photo picker is capped at. Chat and the drawing list share it
+// so a batch that is valid in one is valid in the other.
+export const CHAT_INPUT_PHOTO_SELECTION_LIMIT = 9;
+
 export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ChatInputAttachmentDraft {
   const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();
 

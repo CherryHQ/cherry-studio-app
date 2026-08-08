@@ -1,4 +1,4 @@
-import { loadPhotoPreviewPage } from '../useChatInputPhotoPicker';
+import { loadPhotoPreviewPage } from '../photoLibrary';
 
 const mockQueryExe = jest.fn();
 const mockQueryExeForMetadata = jest.fn();
@@ -40,7 +40,7 @@ jest.mock('expo-media-library', () => ({
   },
 }));
 
-describe('useChatInputPhotoPicker media loading', () => {
+describe('photo library paging', () => {
   beforeEach(() => {
     mockQueryExe.mockReset();
     mockQueryExeForMetadata.mockReset();
