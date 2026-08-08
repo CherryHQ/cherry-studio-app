@@ -11,8 +11,8 @@ import {
 } from '@/frontend/components/modelPicker';
 import {
   ChatInputActionSheet,
+  ChatInputComposer,
   type ChatInputSendPayload,
-  ChatInputSurface,
   useChatInputActions,
   useChatInputState,
 } from '@/frontend/features/chat/input';
@@ -203,7 +203,7 @@ export function PaintingInput({
 
   return (
     <>
-      <ChatInputSurface
+      <ChatInputComposer
         allowEmptySend={resolvedMode?.definition.requirePrompt === false}
         getSendErrorLabel={getSendErrorLabel}
         isSendEnabled={

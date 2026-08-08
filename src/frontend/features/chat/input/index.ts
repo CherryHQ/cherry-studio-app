@@ -9,10 +9,10 @@
 export { ChatInput } from './ChatInput';
 export { ChatInputActionSheet } from './components/ChatInputActionSheet';
 export {
+  ChatInputComposer,
   type ChatInputModelSettings,
   type ChatInputSendPayload,
-  ChatInputSurface,
-} from './components/ChatInputSurface';
+} from './components/ChatInputComposer';
 export {
   ChatInputProvider,
   useChatInputActions,

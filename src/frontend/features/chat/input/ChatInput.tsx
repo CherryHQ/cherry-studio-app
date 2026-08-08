@@ -23,8 +23,8 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatTopic } from '../runtime';
 import { ChatInputActionSheet } from './components/ChatInputActionSheet';
+import { ChatInputComposer, type ChatInputSendPayload } from './components/ChatInputComposer';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
-import { type ChatInputSendPayload, ChatInputSurface } from './components/ChatInputSurface';
 import { useChatInputActions, useChatInputState } from './context/ChatInputProvider';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSync } from './hooks/useChatInputReasoningEffortSync';
@@ -272,7 +272,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
 
   return (
     <>
-      <ChatInputSurface
+      <ChatInputComposer
         dismissKeyboardOnSend={dismissKeyboardOnSend}
         isSendEnabled
         isStreaming={chatTopic.isBusy}

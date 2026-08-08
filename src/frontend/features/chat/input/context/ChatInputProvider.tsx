@@ -31,8 +31,6 @@ type ChatInputStateContextValue = {
   attachments: readonly ChatInputAttachmentDraft[];
   draft: string;
   isActionSheetOpen: boolean;
-  isComposerExpanded: boolean;
-  isInputFocused: boolean;
   isReasoningEffortSelected: boolean;
   reasoningEffort: ChatInputReasoningEffort;
   selectedTool?: ChatInputAction;
@@ -52,7 +50,6 @@ type ChatInputActionsContextValue = {
   setSelectedTool: (actionId: ChatInputActionId | null) => void;
   setAttachments: (attachments: ChatInputAttachmentDraft[]) => void;
   setDraft: (draft: string) => void;
-  setInputFocused: (isFocused: boolean) => void;
   syncReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
 };
 
@@ -80,7 +77,6 @@ export function ChatInputProvider({
   const inputRef = useRef<TextInput>(null);
   const [draft, setDraft] = useState(initialDraft);
   const [isActionSheetOpen, setIsActionSheetOpen] = useState(false);
-  const [isInputFocused, setIsInputFocused] = useState(false);
   const [isReasoningEffortSelected, setIsReasoningEffortSelected] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ChatInputReasoningEffort>(
     CHAT_INPUT_DEFAULT_REASONING_EFFORT,
@@ -94,11 +90,6 @@ export function ChatInputProvider({
   }, []);
   const media = useChatInputPhotoPicker(isActionSheetOpen, addAttachments);
   const selectedTool = useMemo(() => getChatInputAction(selectedToolId), [selectedToolId]);
-  // Collapse to a centered pill only when nothing requires the full surface.
-  // Reasoning effort no longer expands the surface: its control lives in the
-  // model picker sheet and the toolbar shows no reasoning tag.
-  const isComposerExpanded =
-    isInputFocused || draft.trim() !== '' || attachments.length > 0 || Boolean(selectedTool);
 
   const openActionSheet = useCallback(() => {
     // Don't blur/dismiss the keyboard: let iOS keep the input as first responder
@@ -145,8 +136,6 @@ export function ChatInputProvider({
       attachments,
       draft,
       isActionSheetOpen,
-      isComposerExpanded,
-      isInputFocused,
       isReasoningEffortSelected,
       reasoningEffort,
       selectedTool,
@@ -156,8 +145,6 @@ export function ChatInputProvider({
       attachments,
       draft,
       isActionSheetOpen,
-      isComposerExpanded,
-      isInputFocused,
       isReasoningEffortSelected,
       reasoningEffort,
       selectedTool,
@@ -179,7 +166,6 @@ export function ChatInputProvider({
       setSelectedTool: setSelectedToolId,
       setAttachments,
       setDraft,
-      setInputFocused: setIsInputFocused,
       syncReasoningEffort,
     }),
     [

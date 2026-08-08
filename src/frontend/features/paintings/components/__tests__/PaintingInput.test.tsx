@@ -9,7 +9,7 @@ import { PaintingInput } from '../PaintingInput';
 const mockSetAttachments = jest.fn();
 const mockOnGenerate = jest.fn();
 const mockOnGenerated = jest.fn();
-let mockSurfaceProps:
+let mockComposerProps:
   | {
       allowEmptySend?: boolean;
       getSendErrorLabel?: (error: unknown) => string | undefined;
@@ -56,8 +56,8 @@ jest.mock('@/frontend/hooks/chat', () => ({
 
 jest.mock('@/frontend/features/chat/input', () => ({
   ChatInputActionSheet: () => null,
-  ChatInputSurface: (props: typeof mockSurfaceProps) => {
-    mockSurfaceProps = props;
+  ChatInputComposer: (props: typeof mockComposerProps) => {
+    mockComposerProps = props;
     return null;
   },
   useChatInputActions: () => ({ setAttachments: mockSetAttachments }),
@@ -96,7 +96,7 @@ describe('PaintingInput', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockSurfaceProps = undefined;
+    mockComposerProps = undefined;
     mockSelectedModel = {
       id: 'provider::image-model',
       modelId: 'image-model',
@@ -138,7 +138,7 @@ describe('PaintingInput', () => {
     };
 
     await act(async () => {
-      await mockSurfaceProps?.onSendPress(payload);
+      await mockComposerProps?.onSendPress(payload);
     });
 
     expect(mockOnGenerate).toHaveBeenCalledWith({
@@ -189,14 +189,14 @@ describe('PaintingInput', () => {
       );
     });
 
-    expect(mockSurfaceProps?.allowEmptySend).toBe(true);
-    expect(mockSurfaceProps?.isSendEnabled).toBe(true);
-    expect(mockSurfaceProps?.modelSettings).toEqual(
+    expect(mockComposerProps?.allowEmptySend).toBe(true);
+    expect(mockComposerProps?.isSendEnabled).toBe(true);
+    expect(mockComposerProps?.modelSettings).toEqual(
       expect.objectContaining({ accessibilityLabel: 'painting.settings.open: 1024x1024' }),
     );
 
     await act(async () => {
-      await mockSurfaceProps?.onSendPress({ attachments: [], text: '' });
+      await mockComposerProps?.onSendPress({ attachments: [], text: '' });
     });
 
     expect(mockOnGenerate).toHaveBeenCalledWith({
@@ -247,12 +247,12 @@ describe('PaintingInput', () => {
 
     let error: unknown;
     try {
-      await mockSurfaceProps?.onSendPress({ attachments, text: 'edit' });
+      await mockComposerProps?.onSendPress({ attachments, text: 'edit' });
     } catch (caughtError) {
       error = caughtError;
     }
 
-    expect(mockSurfaceProps?.getSendErrorLabel?.(error)).toBe('painting.input.tooManyImages');
+    expect(mockComposerProps?.getSendErrorLabel?.(error)).toBe('painting.input.tooManyImages');
     expect(mockOnGenerate).not.toHaveBeenCalled();
   });
 
@@ -288,16 +288,16 @@ describe('PaintingInput', () => {
       );
     });
 
-    expect(mockSurfaceProps?.isSendEnabled).toBe(true);
+    expect(mockComposerProps?.isSendEnabled).toBe(true);
 
     let error: unknown;
     try {
-      await mockSurfaceProps?.onSendPress({ attachments: [], text: 'draw' });
+      await mockComposerProps?.onSendPress({ attachments: [], text: 'draw' });
     } catch (caughtError) {
       error = caughtError;
     }
 
-    expect(mockSurfaceProps?.getSendErrorLabel?.(error)).toBe('painting.input.invalidCustomSize');
+    expect(mockComposerProps?.getSendErrorLabel?.(error)).toBe('painting.input.invalidCustomSize');
     expect(mockOnGenerate).not.toHaveBeenCalled();
   });
 });
