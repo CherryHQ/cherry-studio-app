@@ -2,7 +2,7 @@ import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 
 import { useTopicListActions } from '../context/TopicListProvider';
 
@@ -14,11 +14,11 @@ type TopicActionAlerts = {
 export function useTopicActionAlerts(): TopicActionAlerts {
   const { t } = useTranslation();
   const { deleteTopic, renameTopic } = useTopicListActions();
-  const { showConfirmation, showMessage, showPrompt } = useAppAlert();
+  const { alert } = useAlert();
 
   const requestRename = useCallback(
     (topic: Topic) => {
-      showPrompt({
+      alert.prompt({
         confirmLabel: t('common.save'),
         input: {
           accessibilityLabel: t('topic.renameTitle'),
@@ -34,30 +34,30 @@ export function useTopicActionAlerts(): TopicActionAlerts {
           }
 
           void renameTopic(topic.id, trimmedName).catch(() => {
-            showMessage({ title: t('topic.rename.failed') });
+            alert.show({ title: t('topic.rename.failed') });
           });
         },
         title: t('topic.renameTitle'),
       });
     },
-    [renameTopic, showMessage, showPrompt, t],
+    [alert, renameTopic, t],
   );
 
   const requestDelete = useCallback(
     (topic: Topic) => {
-      showConfirmation({
+      alert.confirm({
         confirmLabel: t('common.delete'),
         description: t('topic.deleteMessage'),
         onConfirm: () => {
           void deleteTopic(topic.id).catch(() => {
-            showMessage({ title: t('topic.deleteFailed') });
+            alert.show({ title: t('topic.deleteFailed') });
           });
         },
         role: 'destructive',
         title: t('topic.deleteTitle'),
       });
     },
-    [deleteTopic, showConfirmation, showMessage, t],
+    [alert, deleteTopic, t],
   );
 
   return { requestDelete, requestRename };

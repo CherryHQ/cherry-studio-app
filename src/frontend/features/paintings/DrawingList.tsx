@@ -1,7 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { CheckIcon, ImageIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +14,7 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
   type ComposerAttachmentDraft,
@@ -51,7 +51,7 @@ const pageEdge = 16;
 
 export function DrawingList() {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const router = useRouter();
   const { scope } = useMessageScope();
   const { isEditing, selectedIds } = useMessageSelectionState();
@@ -106,13 +106,10 @@ export function DrawingList() {
         const uri = await new MediaLibrary.Asset(photo.id).getUri();
         openPaintingWithAttachments([createPhotoAttachmentDraft({ ...photo, uri })]);
       } catch (error) {
-        toast.show({
-          label: error instanceof Error ? error.message : String(error),
-          variant: 'danger',
-        });
+        alert.show({ title: error instanceof Error ? error.message : String(error) });
       }
     },
-    [openPaintingWithAttachments, toast],
+    [alert, openPaintingWithAttachments],
   );
   const handleViewAllPress = useCallback(async () => {
     try {
@@ -144,12 +141,9 @@ export function DrawingList() {
       });
       openPaintingWithAttachments(attachments);
     } catch (error) {
-      toast.show({
-        label: error instanceof Error ? error.message : String(error),
-        variant: 'danger',
-      });
+      alert.show({ title: error instanceof Error ? error.message : String(error) });
     }
-  }, [openPaintingWithAttachments, toast]);
+  }, [alert, openPaintingWithAttachments]);
 
   return (
     <ScrollView

@@ -14,8 +14,8 @@ type ProviderOverrides = Record<string, { apiKeys?: string[] } | undefined>;
 let mockProviderOverrides: ProviderOverrides;
 let mockKeyFormProps: KeyFormProps | undefined;
 const mockSetPreference = jest.fn();
-const mockShowConfirmation = jest.fn();
-const mockShowMessage = jest.fn();
+const mockAlertConfirm = jest.fn();
+const mockAlertShow = jest.fn();
 
 jest.mock('expo-router', () => ({
   Redirect: () => null,
@@ -27,10 +27,12 @@ jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({
-    showConfirmation: mockShowConfirmation,
-    showMessage: mockShowMessage,
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({
+    alert: {
+      confirm: mockAlertConfirm,
+      show: mockAlertShow,
+    },
   }),
 }));
 
@@ -139,7 +141,7 @@ describe('WebSearchApiKeySettingsScreen', () => {
     const keyId = keyForm().apiKeys[0].id;
 
     act(() => keyForm().onRemove(keyId));
-    act(() => mockShowConfirmation.mock.calls[0][0].onConfirm());
+    act(() => mockAlertConfirm.mock.calls[0][0].onConfirm());
     expect(keyForm().apiKeys).toEqual([]);
 
     saving.reject(new Error('save failed'));
@@ -149,7 +151,7 @@ describe('WebSearchApiKeySettingsScreen', () => {
     });
 
     expect(keyForm().apiKeys.map((entry) => entry.key)).toEqual(['key-a']);
-    expect(mockShowMessage).toHaveBeenCalledWith({
+    expect(mockAlertShow).toHaveBeenCalledWith({
       title: 'settings.websearch.provider.saveFailed',
     });
   });

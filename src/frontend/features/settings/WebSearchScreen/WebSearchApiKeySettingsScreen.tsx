@@ -8,7 +8,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
 
 import {
@@ -55,7 +55,7 @@ export default function WebSearchApiKeySettingsScreen() {
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
   const pendingApiKeyIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const { showConfirmation, showMessage } = useAppAlert();
+  const { alert } = useAlert();
 
   const closeSheet = useCallback(() => {
     router.back();
@@ -168,7 +168,7 @@ export default function WebSearchApiKeySettingsScreen() {
         return;
       }
 
-      showConfirmation({
+      alert.confirm({
         confirmLabel: t('common.remove'),
         description: t('settings.websearch.provider.removeApiKeyMessage'),
         onConfirm: () => {
@@ -181,7 +181,7 @@ export default function WebSearchApiKeySettingsScreen() {
 
             if (!didSave) {
               restoreApiKey(entry, entryIndex);
-              showMessage({ title: t('settings.websearch.provider.saveFailed') });
+              alert.show({ title: t('settings.websearch.provider.saveFailed') });
             }
           })();
         },
@@ -189,7 +189,7 @@ export default function WebSearchApiKeySettingsScreen() {
         title: t('settings.websearch.provider.removeApiKeyTitle'),
       });
     },
-    [entries, removeApiKey, restoreApiKey, saveEntries, showConfirmation, showMessage, t],
+    [alert, entries, removeApiKey, restoreApiKey, saveEntries, t],
   );
 
   if (!provider || !canManageApiKeys) {

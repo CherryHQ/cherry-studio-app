@@ -5,13 +5,13 @@ import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/comm
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
@@ -36,7 +36,7 @@ type CreateProviderFormValues = {
 export default function NewProviderScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const providers = useBackendModule('providers');
 
   const [name, setName] = useState('');
@@ -143,9 +143,10 @@ export default function NewProviderScreen() {
         });
       })
       .catch(() => {
-        toast.show({ label: t('settings.provider.add.error'), variant: 'danger' });
+        alert.show({ title: t('settings.provider.add.error') });
       });
   }, [
+    alert,
     anthropicUrl,
     apiKey,
     avatarDraftUri,
@@ -158,7 +159,6 @@ export default function NewProviderScreen() {
     router,
     submitProvider,
     t,
-    toast,
   ]);
 
   const rightActions = useMemo<HeaderToolbarAction[]>(

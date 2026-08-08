@@ -1,9 +1,9 @@
 import { Slider } from '@cherrystudio/ui/components';
-import { useToast } from 'heroui-native/toast';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
 import { MarkdownText } from '@/frontend/components/markdown';
 import { usePreference } from '@/frontend/data/hooks';
@@ -14,7 +14,7 @@ import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 
 export default function FontSizeSettingsScreen() {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const [storedStep, setStoredStep] = usePreference('ui.font_size_step');
   const [draftStep, setDraftStep] = useState(() => normalizeFontSizeStep(storedStep));
   const persistenceVersionRef = useRef(0);
@@ -34,7 +34,7 @@ export default function FontSizeSettingsScreen() {
       const restoredStep = normalizeFontSizeStep(storedStep);
       setDraftStep(restoredStep);
       applyFontSizeStepPreference(restoredStep);
-      toast.show({ label: t('settings.fontSize.saveFailed'), variant: 'danger' });
+      alert.show({ title: t('settings.fontSize.saveFailed') });
     });
   };
 

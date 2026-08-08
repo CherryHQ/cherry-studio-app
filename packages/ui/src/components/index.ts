@@ -2,6 +2,7 @@ export * from './alert';
 export * from './bottom-sheet';
 export * from './button';
 export * from './composer';
+export * from './dynamic-toast';
 export * from './input';
 export * from './menu';
 export * from './portal';

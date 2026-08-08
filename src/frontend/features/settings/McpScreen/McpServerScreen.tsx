@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
@@ -122,7 +122,7 @@ function McpServerEditor({
   const router = useRouter();
   const { toast } = useToast();
   const mcp = useBackendModule('mcp');
-  const { showConfirmation, showMessage } = useAppAlert();
+  const { alert } = useAlert();
 
   const isCreating = !serverId;
   const {
@@ -149,7 +149,7 @@ function McpServerEditor({
   const handleSave = useCallback(async () => {
     const dto = buildDto(form, t('settings.mcp.defaultName'));
     if (!dto.ok) {
-      toast.show({ label: t(dto.errorKey, dto.errorOptions), variant: 'danger' });
+      alert.show({ title: t(dto.errorKey, dto.errorOptions) });
       return;
     }
 
@@ -179,11 +179,11 @@ function McpServerEditor({
       }
     } catch (error) {
       logger.error('Failed to save MCP server', error as Error);
-      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+      alert.show({ title: t('settings.mcp.toast.saveFailed') });
     } finally {
       setIsSaving(false);
     }
-  }, [createServer, form, mcp, router, serverId, t, toast, updateServer]);
+  }, [alert, createServer, form, mcp, router, serverId, t, updateServer]);
 
   const handleToggleTool = useCallback(
     async (toolName: string, enabled: boolean, knownToolNames: string[]) => {
@@ -199,10 +199,10 @@ function McpServerEditor({
         await updateServer(serverId, { disabledTools: nextDisabled });
       } catch (error) {
         logger.error('Failed to toggle MCP tool', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.mcp.toast.saveFailed') });
       }
     },
-    [server, serverId, t, toast, updateServer],
+    [alert, server, serverId, t, updateServer],
   );
 
   const handleToggleAutoApprove = useCallback(
@@ -219,10 +219,10 @@ function McpServerEditor({
         await updateServer(serverId, { disabledAutoApproveTools: nextDisabled });
       } catch (error) {
         logger.error('Failed to toggle MCP tool auto-approve', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.mcp.toast.saveFailed') });
       }
     },
-    [server, serverId, t, toast, updateServer],
+    [alert, server, serverId, t, updateServer],
   );
 
   const handleToggleServer = useCallback(async () => {
@@ -235,9 +235,9 @@ function McpServerEditor({
       await updateServer(serverId, { isActive: nextIsActive });
     } catch (error) {
       logger.error('Failed to toggle MCP server', error as Error);
-      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+      alert.show({ title: t('settings.mcp.toast.saveFailed') });
     }
-  }, [server, serverId, t, toast, updateServer]);
+  }, [alert, server, serverId, t, updateServer]);
 
   const handleDelete = useCallback(() => {
     if (!serverId) {
@@ -252,23 +252,23 @@ function McpServerEditor({
       })
       .catch((error) => {
         logger.error('Failed to delete MCP server', error as Error);
-        showMessage({ title: t('settings.mcp.toast.deleteFailed') });
+        alert.show({ title: t('settings.mcp.toast.deleteFailed') });
       });
-  }, [deleteServer, router, serverId, showMessage, t, toast]);
+  }, [alert, deleteServer, router, serverId, t, toast]);
 
   const requestDelete = useCallback(() => {
     if (!serverId || !server) {
       return;
     }
 
-    showConfirmation({
+    alert.confirm({
       confirmLabel: t('common.delete'),
       description: t('settings.mcp.delete.message', { name: server.name }),
       onConfirm: handleDelete,
       role: 'destructive',
       title: t('settings.mcp.delete.title'),
     });
-  }, [handleDelete, server, serverId, showConfirmation, t]);
+  }, [alert, handleDelete, server, serverId, t]);
 
   const isBusy = isSaving || isCreateMutationPending || isUpdating;
   const saveActions = useMemo<HeaderToolbarAction[]>(

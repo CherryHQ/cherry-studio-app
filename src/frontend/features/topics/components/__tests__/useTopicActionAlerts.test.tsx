@@ -2,7 +2,7 @@ import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 
 import { useTopicListActions } from '../../context/TopicListProvider';
 import { useTopicActionAlerts } from '../useTopicActionAlerts';
@@ -11,20 +11,20 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: jest.fn(),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: jest.fn(),
 }));
 
 jest.mock('../../context/TopicListProvider', () => ({
   useTopicListActions: jest.fn(),
 }));
 
-const mockShowConfirmation = jest.fn();
-const mockShowMessage = jest.fn();
-const mockShowPrompt = jest.fn();
+const mockAlertConfirm = jest.fn();
+const mockAlertShow = jest.fn();
+const mockAlertPrompt = jest.fn();
 const mockDeleteTopic = jest.fn(async () => undefined);
 const mockRenameTopic = jest.fn(async () => undefined);
-const useAppAlertMock = useAppAlert as jest.MockedFunction<typeof useAppAlert>;
+const useAlertMock = useAlert as jest.MockedFunction<typeof useAlert>;
 const useTopicListActionsMock = useTopicListActions as jest.MockedFunction<
   typeof useTopicListActions
 >;
@@ -51,10 +51,12 @@ describe('useTopicActionAlerts', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     actions = undefined;
-    useAppAlertMock.mockReturnValue({
-      showConfirmation: mockShowConfirmation,
-      showMessage: mockShowMessage,
-      showPrompt: mockShowPrompt,
+    useAlertMock.mockReturnValue({
+      alert: {
+        confirm: mockAlertConfirm,
+        prompt: mockAlertPrompt,
+        show: mockAlertShow,
+      },
     });
     useTopicListActionsMock.mockReturnValue({
       deleteTopic: mockDeleteTopic,
@@ -78,7 +80,7 @@ describe('useTopicActionAlerts', () => {
   test('requests a native prompt and renames with its trimmed value', async () => {
     act(() => actions?.requestRename(topic));
 
-    expect(mockShowPrompt).toHaveBeenCalledWith(
+    expect(mockAlertPrompt).toHaveBeenCalledWith(
       expect.objectContaining({
         confirmLabel: 'common.save',
         input: {
@@ -92,7 +94,7 @@ describe('useTopicActionAlerts', () => {
       }),
     );
 
-    const prompt = mockShowPrompt.mock.calls[0][0];
+    const prompt = mockAlertPrompt.mock.calls[0][0];
     act(() => prompt.onConfirm('  Renamed topic  '));
     await act(async () => Promise.resolve());
     expect(mockRenameTopic).toHaveBeenCalledWith('topic-1', 'Renamed topic');
@@ -102,10 +104,10 @@ describe('useTopicActionAlerts', () => {
     mockRenameTopic.mockRejectedValueOnce(new Error('rename failed'));
     act(() => actions?.requestRename(topic));
 
-    const prompt = mockShowPrompt.mock.calls[0][0];
+    const prompt = mockAlertPrompt.mock.calls[0][0];
     act(() => prompt.onConfirm('Renamed topic'));
     await act(async () => Promise.resolve());
 
-    expect(mockShowMessage).toHaveBeenCalledWith({ title: 'topic.rename.failed' });
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'topic.rename.failed' });
   });
 });

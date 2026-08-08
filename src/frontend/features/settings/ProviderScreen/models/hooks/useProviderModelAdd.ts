@@ -4,6 +4,7 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { useMutation, useQuery } from '@/frontend/data';
 
 import {
@@ -27,6 +28,7 @@ type UseProviderModelAddOptions = {
 
 export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const { toast } = useToast();
   const modelsQuery = useQuery('/models', { query: { providerId: provider.id } });
   const addModelsMutation = useMutation('POST', '/models', { refresh: ['/models'] });
@@ -176,14 +178,12 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
     };
     return await submit()
       .catch(() => {
-        toast.show({
-          label: t('settings.provider.models.addFailed'),
-          variant: 'danger',
-        });
+        alert.show({ title: t('settings.provider.models.addFailed') });
         return false;
       })
       .finally(() => setIsSubmitting(false));
   }, [
+    alert,
     formState,
     addModels,
     existingModels,

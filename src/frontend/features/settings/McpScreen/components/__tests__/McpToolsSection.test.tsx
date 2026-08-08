@@ -11,7 +11,7 @@ import { McpToolsSection } from '../McpToolsSection';
 type ToolsQueryResult = { data?: { name: string }[]; isError: boolean };
 
 const mockRefetch = jest.fn<Promise<ToolsQueryResult>, []>();
-const mockToastShow = jest.fn();
+const mockAlertShow = jest.fn();
 const mockUseQuery = jest.fn((_options: unknown) => ({
   ...mockToolsQuery,
   refetch: mockRefetch,
@@ -41,8 +41,8 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('../../../components/SettingsDialogActionButton', () => {
@@ -229,9 +229,8 @@ describe('McpToolsSection auto-approve toggle', () => {
     await toggleFirstToolAutoApprove(true);
 
     expect(onToggleAutoApprove).not.toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.mcp.tools.refreshFailed',
-      variant: 'danger',
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'settings.mcp.tools.refreshFailed',
     });
   });
 

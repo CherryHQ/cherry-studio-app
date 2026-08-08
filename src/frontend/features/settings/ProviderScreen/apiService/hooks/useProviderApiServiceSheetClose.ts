@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 
 /** Confirms before leaving an edit screen that still holds uncommitted input. */
 export function useProviderApiServiceSheetClose({
@@ -16,7 +16,7 @@ export function useProviderApiServiceSheetClose({
 }) {
   const navigation = useNavigation();
   const { t } = useTranslation();
-  const { showConfirmation } = useAppAlert();
+  const { alert } = useAlert();
   const isConfirmedCloseRef = useRef(false);
 
   const closeWithoutPrompt = useCallback(() => {
@@ -27,7 +27,7 @@ export function useProviderApiServiceSheetClose({
   const confirmDiscard = useCallback(
     (onConfirm: () => void) => {
       Keyboard.dismiss();
-      showConfirmation({
+      alert.confirm({
         confirmLabel: t('common.discard'),
         description: t('settings.provider.apiService.discardMessage'),
         onConfirm,
@@ -35,7 +35,7 @@ export function useProviderApiServiceSheetClose({
         title: t('settings.provider.apiService.discardTitle'),
       });
     },
-    [showConfirmation, t],
+    [alert, t],
   );
 
   const requestClose = useCallback(() => {

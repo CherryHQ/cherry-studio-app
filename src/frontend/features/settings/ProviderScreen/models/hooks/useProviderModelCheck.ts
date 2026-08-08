@@ -5,7 +5,7 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 
 import {
@@ -42,7 +42,7 @@ export function useProviderModelCheck({
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { showMessage } = useAppAlert();
+  const { alert } = useAlert();
   const modelsBackend = useBackendModule('models');
   const queryClient = useQueryClient();
   const [checkState, setCheckState] = useState<ProviderModelCheckState>(() =>
@@ -149,7 +149,7 @@ export function useProviderModelCheck({
           variant: 'success',
         });
       } else {
-        showMessage({
+        alert.show({
           description: result.error || t('settings.provider.models.checkFailedStatus'),
           title: t('settings.provider.models.checkFailed'),
         });
@@ -165,7 +165,7 @@ export function useProviderModelCheck({
           },
           providerId,
         });
-        showMessage({
+        alert.show({
           description:
             error instanceof Error
               ? error.message
@@ -186,7 +186,7 @@ export function useProviderModelCheck({
     queryClient,
     selectedApiKey,
     selectedModel,
-    showMessage,
+    alert,
     t,
     toast,
   ]);

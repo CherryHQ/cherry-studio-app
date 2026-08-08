@@ -17,7 +17,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { type HeaderToolbarAction, TabRootHeader } from '@/frontend/components/headers';
 import {
   areAllSelected,
@@ -39,7 +39,7 @@ export default function AssistantListScreen() {
   const router = useRouter();
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant, deleteAssistants } = useAssistantMutations();
-  const { showConfirmation, showMessage } = useAppAlert();
+  const { alert } = useAlert();
   const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const setBottomTabBarHidden = useSetBottomTabBarHidden();
   const bottomInset = useMessageListBottomInset();
@@ -147,19 +147,19 @@ export default function AssistantListScreen() {
   );
   const requestDeleteAssistant = useCallback(
     (assistant: Assistant) => {
-      showConfirmation({
+      alert.confirm({
         confirmLabel: t('common.delete'),
         description: t('assistant.delete.message', { name: assistant.name }),
         role: 'destructive',
         title: t('assistant.delete.title'),
         onConfirm: () => {
           void deleteAssistant(assistant.id).catch(() => {
-            showMessage({ title: t('assistant.toast.deleteFailed') });
+            alert.show({ title: t('assistant.toast.deleteFailed') });
           });
         },
       });
     },
-    [deleteAssistant, showConfirmation, showMessage, t],
+    [alert, deleteAssistant, t],
   );
   const deleteSelectedAssistants = useCallback(async () => {
     const ids = [...selectedIds];
@@ -172,24 +172,24 @@ export default function AssistantListScreen() {
     try {
       await deleteAssistants(ids);
     } catch {
-      showMessage({ title: t('assistant.selection.deleteFailed') });
+      alert.show({ title: t('assistant.selection.deleteFailed') });
     } finally {
       setPendingDeletionIds(new Set());
     }
-  }, [deleteAssistants, exitEditing, selectedIds, showMessage, t]);
+  }, [alert, deleteAssistants, exitEditing, selectedIds, t]);
   const requestDeleteSelectedAssistants = useCallback(() => {
     if (selectedIds.size === 0) {
       return;
     }
 
-    showConfirmation({
+    alert.confirm({
       confirmLabel: t('common.delete'),
       description: t('assistant.selection.deleteMessage', { count: selectedIds.size }),
       onConfirm: deleteSelectedAssistants,
       role: 'destructive',
       title: t('assistant.selection.deleteTitle'),
     });
-  }, [deleteSelectedAssistants, selectedIds.size, showConfirmation, t]);
+  }, [alert, deleteSelectedAssistants, selectedIds.size, t]);
   const scrollContentStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
     [bottomInset],
