@@ -17,6 +17,7 @@ export function QuickLookPreview({
   uri: string;
 }) {
   const extension = fileEntryExtensionLabel(entry);
+  const thumbnailDisplaySize = Math.max(1, size - 24);
   const thumbnailUri = useQuickLookThumbnail({ entry, height: size, uri, width: size });
 
   if (!thumbnailUri) {
@@ -30,11 +31,11 @@ export function QuickLookPreview({
         contentFit="contain"
         recyclingKey={`${entry.id}:${entry.updatedAt}:${size}`}
         source={thumbnailUri}
-        style={{ height: size, width: size }}
+        style={{ height: thumbnailDisplaySize, width: thumbnailDisplaySize }}
       />
       {extension ? (
         <View pointerEvents="none" className="absolute right-0 bottom-2 left-0 items-center px-2">
-          <View className="max-w-full rounded-full border border-constant-white/10 bg-constant-black/65 px-2.5 py-1">
+          <View className="max-w-full rounded-full border border-constant-white/10 bg-constant-black/55 px-2 py-0.5">
             <Text className="text-base text-constant-white" numberOfLines={1}>
               {extension}
             </Text>
