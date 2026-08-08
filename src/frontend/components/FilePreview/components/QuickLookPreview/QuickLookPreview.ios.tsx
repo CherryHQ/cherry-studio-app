@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 
 import { Image } from '@/frontend/components/nativePrimitives';
 
-import { fileEntryDisplayName } from '../../utils/fileEntryPresentation';
+import { fileEntryExtensionLabel } from '../../utils/fileEntryPresentation';
 import { FallbackPreview } from '../FallbackPreview/FallbackPreview';
 import { useQuickLookThumbnail } from './useQuickLookThumbnail.ios';
 
@@ -16,7 +16,7 @@ export function QuickLookPreview({
   size: number;
   uri: string;
 }) {
-  const showFilename = size >= 96;
+  const extension = fileEntryExtensionLabel(entry);
   const thumbnailUri = useQuickLookThumbnail({ entry, height: size, uri, width: size });
 
   if (!thumbnailUri) {
@@ -32,11 +32,13 @@ export function QuickLookPreview({
         source={thumbnailUri}
         style={{ height: size, width: size }}
       />
-      {showFilename ? (
-        <View className="absolute right-0 bottom-0 left-0 justify-center bg-constant-black/65 px-2 py-1.5">
-          <Text className="text-base text-constant-white" numberOfLines={2}>
-            {fileEntryDisplayName(entry)}
-          </Text>
+      {extension ? (
+        <View pointerEvents="none" className="absolute right-0 bottom-2 left-0 items-center px-2">
+          <View className="max-w-full rounded-full border border-constant-white/10 bg-constant-black/65 px-2.5 py-1">
+            <Text className="text-base text-constant-white" numberOfLines={1}>
+              {extension}
+            </Text>
+          </View>
         </View>
       ) : null}
     </View>
