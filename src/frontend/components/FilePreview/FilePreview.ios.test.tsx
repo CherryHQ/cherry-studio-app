@@ -10,8 +10,8 @@ jest.mock('@magrinj/expo-quick-look', () => ({
   __esModule: true,
   default: { previewFile: (input: unknown) => mockPreviewFile(input) },
 }));
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('./hooks/useResolvedFile', () => ({

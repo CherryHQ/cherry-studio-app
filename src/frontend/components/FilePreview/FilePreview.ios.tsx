@@ -1,7 +1,7 @@
 import ExpoQuickLook from '@magrinj/expo-quick-look';
-import { useToast } from 'heroui-native/toast';
 import { useTranslation } from 'react-i18next';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { FallbackPreview } from './components/FallbackPreview/FallbackPreview';
@@ -20,7 +20,7 @@ const logger = loggerService.withContext('FilePreview');
 
 export function FilePreview({ entryId, size = defaultSize }: FilePreviewProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const { data, isLoading } = useResolvedFile(entryId);
   const resolvedSize = Math.max(1, size);
   const entry = data?.entry;
@@ -32,7 +32,7 @@ export function FilePreview({ entryId, size = defaultSize }: FilePreviewProps) {
     }
     void ExpoQuickLook.previewFile({ editingMode: 'disabled', uri: data.uri }).catch((error) => {
       logger.warn('Failed to open file preview', toError(error), { entryId });
-      toast.show({ label: t('filePreview.openFailed'), variant: 'danger' });
+      alert.show({ title: t('filePreview.openFailed') });
     });
   };
 

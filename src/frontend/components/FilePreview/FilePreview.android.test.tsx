@@ -4,7 +4,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { FilePreview } from './FilePreview.android';
 
 const mockPreviewFile = jest.fn();
-const mockToastShow = jest.fn();
 const mockUseResolvedFile = jest.fn();
 
 jest.mock('@magrinj/expo-quick-look', () => ({
@@ -12,7 +11,9 @@ jest.mock('@magrinj/expo-quick-look', () => ({
   default: { previewFile: (input: unknown) => mockPreviewFile(input) },
 }));
 
-jest.mock('heroui-native/toast', () => ({ useToast: () => ({ toast: { show: mockToastShow } }) }));
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: jest.fn() } }),
+}));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 jest.mock('./hooks/useResolvedFile', () => ({
   useResolvedFile: (entryId: string) => mockUseResolvedFile(entryId),
@@ -42,7 +43,6 @@ describe('FilePreview.android', () => {
   beforeEach(() => {
     mockPreviewFile.mockReset();
     mockPreviewFile.mockResolvedValue(undefined);
-    mockToastShow.mockReset();
     mockUseResolvedFile.mockReset();
   });
 
