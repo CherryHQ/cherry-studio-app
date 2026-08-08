@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Dimensions, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PaintingTemplateRow } from '../PaintingTemplateRow';
@@ -14,32 +14,13 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('@swmansion/react-native-bottom-sheet', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    ModalBottomSheet: (props: { children: ReactNode; surface?: ReactNode }) => {
-      mockBottomSheetProps = props;
-      return (
-        <MockView testID="modal-bottom-sheet">
-          {props.surface}
-          {props.children}
-        </MockView>
-      );
-    },
-  };
-});
-
-jest.mock('expo-glass-effect', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    GlassView: MockView,
-  };
-});
-
 jest.mock('@cherrystudio/ui/components', () => {
-  const { Pressable: MockPressable, Text: MockText } = jest.requireActual('react-native');
+  const React = jest.requireActual('react');
+  const {
+    Pressable: MockPressable,
+    Text: MockText,
+    View: MockView,
+  } = jest.requireActual('react-native');
 
   const MockButton = ({
     children,
@@ -58,7 +39,67 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
   MockButton.Label = MockButtonLabel;
 
-  return { Button: MockButton };
+  let requestClose: (reason?: string) => void = () => undefined;
+  function MockBottomSheet({
+    children,
+    onClose,
+    testID,
+    title,
+  }: {
+    children?: ReactNode;
+    onClose: (reason: string) => void;
+    testID?: string;
+    title?: ReactNode;
+  }) {
+    const [index, setIndex] = React.useState(1);
+    const reasonRef = React.useRef('dismiss');
+    const closedRef = React.useRef(false);
+    requestClose = (reason = 'dismiss') => {
+      reasonRef.current = reason;
+      setIndex(0);
+    };
+    mockBottomSheetProps = {
+      detents: [0, 'content'],
+      index,
+      onIndexChange: (nextIndex: number) => {
+        reasonRef.current = 'dismiss';
+        setIndex(nextIndex);
+      },
+      onSettle: (nextIndex: number) => {
+        if (nextIndex === 0 && !closedRef.current) {
+          closedRef.current = true;
+          onClose(reasonRef.current);
+        }
+      },
+    };
+
+    return (
+      <MockView testID={testID ? `${testID}-sheet` : undefined}>
+        <MockPressable
+          onPress={() => requestClose('dismiss')}
+          testID={testID ? `${testID}-close` : undefined}
+        />
+        {title}
+        {children}
+      </MockView>
+    );
+  }
+
+  return {
+    BottomSheet: MockBottomSheet,
+    Button: MockButton,
+    useBottomSheet: () => ({
+      geometry: {
+        bottomCornerRadius: 28,
+        insets: { bottom: 34, left: 0, right: 0, top: 59 },
+        outerInset: 4,
+        sheetWidth: 382,
+        topCornerRadius: 28,
+      },
+      isClosing: false,
+      requestClose,
+    }),
+  };
 });
 
 jest.mock('lucide-uniwind/png', () => {
@@ -72,11 +113,6 @@ jest.mock('@/frontend/components/nativePrimitives', () => {
 
   return { Image: MockView };
 });
-
-jest.mock('@/frontend/utils/constants', () => ({
-  bottomSheet: { cornerRadius: 28, headerHeight: 60, headerSideWidth: 44, outerInset: 4 },
-  isLiquidGlassAvailable: true,
-}));
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
@@ -126,52 +162,15 @@ describe('PaintingTemplateRow', () => {
 
     expect(mockBottomSheetProps.detents).toEqual([0, 'content']);
     expect(mockBottomSheetProps.index).toBe(1);
-    expect(mockBottomSheetProps.surface).toBeUndefined();
     expect(renderer?.root.findByProps({ testID: 'painting-template-author' }).props.children).toBe(
       '@0x00_Krypt',
     );
-    expect(
-      renderer?.root.findByProps({ testID: 'painting-template-header-right-slot' }).props
-        .accessibilityRole,
-    ).toBeUndefined();
     expect(renderer?.root.findByProps({ testID: 'painting-template-prompt' }).props.children).toBe(
       paintingTemplates[0].prompt,
     );
 
     expect(renderer?.root.findByProps({ testID: 'painting-template-close' })).toBeTruthy();
-    expect(renderer?.root.findByProps({ testID: 'painting-template-close-glass' })).toBeTruthy();
     expect(renderer?.root.findByProps({ testID: 'painting-template-try' })).toBeTruthy();
-
-    const surface = renderer?.root.findByProps({ testID: 'painting-template-sheet-surface' });
-    // No native screen radius under jest, so both corner pairs rest at 28 — the
-    // concentric bottom radius is covered in the BottomSheet suite itself.
-    expect(StyleSheet.flatten(surface?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 28,
-      borderBottomRightRadius: 28,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      bottom: 0,
-      left: 0,
-      right: 0,
-    });
-    const sheet = renderer?.root.findByProps({ testID: 'painting-template-sheet' });
-    expect(StyleSheet.flatten(sheet?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 28,
-      borderBottomRightRadius: 28,
-      borderTopLeftRadius: 28,
-      borderTopRightRadius: 28,
-      overflow: 'hidden',
-      width: Dimensions.get('window').width - 8,
-    });
-    const bottomGap = renderer?.root.findByProps({ testID: 'painting-template-sheet-bottom-gap' });
-    expect(StyleSheet.flatten(bottomGap?.props.style).height).toBe(4);
-
-    const header = renderer?.root.findByProps({ testID: 'painting-template-header' });
-    expect(StyleSheet.flatten(header?.props.style)).toMatchObject({
-      height: 60,
-      paddingHorizontal: 6,
-      paddingTop: 6,
-    });
   });
 
   test('truncates the prompt and keeps the button clear of the safe area', () => {

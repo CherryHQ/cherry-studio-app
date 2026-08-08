@@ -14,6 +14,7 @@ export type SurfaceProps = {
   /** iOS 26+ only: the glass swells and shimmers under touch. Ignored elsewhere. */
   interactive?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
   /** Tints the glass; on the fallback branch use a background color in `className`. */
   tintColor?: string;
 };

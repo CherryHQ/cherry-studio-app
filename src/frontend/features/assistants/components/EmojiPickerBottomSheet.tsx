@@ -1,9 +1,8 @@
+import { BottomSheet, useBottomSheet } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { EmojiPicker, type EmojiSelection } from 'rn-expo-emoji-picker/legend';
-
-import { BottomSheet, useBottomSheet } from '@/frontend/components/bottomSheet';
 
 // Fraction of the available height the emoji sheet fills (matches the model
 // picker) so the grid has room to scroll.

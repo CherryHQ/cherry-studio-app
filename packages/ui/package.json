@@ -64,13 +64,18 @@
   },
   "peerDependencies": {
     "@expo/ui": "*",
+    "@swmansion/react-native-bottom-sheet": "*",
     "expo-glass-effect": "*",
     "expo-linear-gradient": "*",
     "expo-paste-input": "*",
+    "expo-screen-corner-radius": "*",
     "heroui-native": "*",
+    "lucide-uniwind": "*",
     "react": "*",
     "react-native": "*",
     "react-native-reanimated": "*",
+    "react-native-safe-area-context": "*",
+    "react-native-worklets": "*",
     "uniwind": "*"
   }
 }

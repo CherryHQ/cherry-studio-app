@@ -30,8 +30,9 @@ HeroUI and Expo UI controls:
 
 - The app uses `heroui-native` controls for some settings and search-field surfaces.
 - The app uses `@expo/ui` community menus directly and platform controls for native-feeling
-  surfaces; bottom sheets use the app-owned `@/frontend/components/bottomSheet` wrapper over
-  `@swmansion/react-native-bottom-sheet`.
+  surfaces; bottom sheets use the package-owned `@cherrystudio/ui/components` wrapper over
+  `@swmansion/react-native-bottom-sheet`. Its `PageTransition` gives multi-level sheet content one
+  depth-aware push/pop motion while features retain their own navigation state.
 - These libraries are component choices, not replacements for Cherry-owned product interaction rules.
 
 Planned shared wrappers:

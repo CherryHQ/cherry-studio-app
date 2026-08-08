@@ -1,4 +1,5 @@
 export * from './alert';
+export * from './bottom-sheet';
 export * from './button';
 export * from './composer';
 export * from './input';

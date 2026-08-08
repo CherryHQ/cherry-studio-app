@@ -1,15 +1,14 @@
-import { Button } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  type BottomSheetCloseReason,
+  Button,
+  useBottomSheet,
+} from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
-import {
-  BottomSheet,
-  type BottomSheetCloseReason,
-  useBottomSheet,
-} from '@/frontend/components/bottomSheet';
 import { Image } from '@/frontend/components/nativePrimitives';
-import { bottomSheet } from '@/frontend/utils/constants';
 
 import type { PaintingTemplate } from './paintingTemplates';
 
@@ -43,14 +42,6 @@ export function PaintingTemplateBottomSheet({
   return (
     <BottomSheet
       closeAccessibilityLabel={t('painting.templates.close')}
-      headerRight={
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-          style={styles.headerSide}
-          testID="painting-template-header-right-slot"
-        />
-      }
       onClose={handleClose}
       testID="painting-template"
       title={
@@ -81,7 +72,7 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
   // bottom, minus the gap the card already leaves there.
   const bodyBottomPadding = Math.max(
     SHEET_CONTENT_INSET,
-    geometry.insets.bottom - bottomSheet.outerInset,
+    geometry.insets.bottom - geometry.outerInset,
   );
 
   return (
@@ -146,10 +137,6 @@ const styles = StyleSheet.create({
     gap: 24,
     paddingHorizontal: SHEET_CONTENT_INSET,
     paddingTop: 12,
-  },
-  headerSide: {
-    height: bottomSheet.headerSideWidth,
-    width: bottomSheet.headerSideWidth,
   },
   preview: {
     borderCurve: 'continuous',

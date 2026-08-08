@@ -30,6 +30,27 @@ Shared components with text must be content-driven: avoid fixed width or height,
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
 
+`BottomSheet` is the shared floating-card sheet over
+`@swmansion/react-native-bottom-sheet`. It owns card geometry, Liquid Glass fallback, scrim,
+safe-area information, close reasons, and nested-page header controls. The host app keeps one
+`BottomSheetProvider` at its root.
+
+Multi-level flows keep their business stack in the feature and pass only the current page identity
+and depth to the package transition:
+
+```tsx
+<BottomSheet title={current.title} onBack={stack.length > 1 ? pop : undefined} onClose={close}>
+  <BottomSheet.PageTransition depth={stack.length - 1} pageKey={current.key}>
+    {current.content}
+  </BottomSheet.PageTransition>
+</BottomSheet>
+```
+
+Increasing depth uses the package's forward push motion, decreasing depth reverses it, and a
+same-depth key change cross-fades in place. The transition keeps the outgoing page mounted only for
+its exit, disables its pointer/accessibility interaction immediately, and honors Reduce Motion.
+Its viewport must have a bounded height, normally supplied by the sheet's `height`.
+
 `Composer` is a shared input surface: a text field that grows with its content and, under it, a
 toolbar row. Nothing but the field is built in. It is fully controlled — the caller owns `value` —
 and carries no i18n, attachment handling, or picking logic, so the same component backs a chat

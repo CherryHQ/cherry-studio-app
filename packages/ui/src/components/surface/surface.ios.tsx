@@ -12,6 +12,7 @@ export function Surface({
   cornerRadius,
   interactive,
   style,
+  testID,
   tintColor,
 }: SurfaceProps) {
   // Alignment is deliberately not set here — callers own it via `style`, so the
@@ -24,6 +25,7 @@ export function Surface({
         glassEffectStyle="regular"
         isInteractive={interactive}
         style={[shape, style]}
+        testID={testID}
         tintColor={tintColor}
       >
         {children}
@@ -32,7 +34,7 @@ export function Surface({
   }
 
   return (
-    <View className={className} style={[shape, style]}>
+    <View className={className} style={[shape, style]} testID={testID}>
       {children}
     </View>
   );
