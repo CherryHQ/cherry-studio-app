@@ -30,6 +30,7 @@
     "skills:check": "tsx scripts/skills-check.ts",
     "docs:check-links": "tsx scripts/check-doc-links.ts",
     "test": "pnpm packages:build && pnpm test:packages && pnpm test:app",
+    "test:ai-contract": "jest src/backend/ai/__tests__/behavior --runInBand",
     "test:app": "jest",
     "test:packages": "pnpm test:ai-sdk-provider && pnpm test:ai-core",
     "test:ai-sdk-provider": "pnpm --filter @cherrystudio/ai-sdk-provider test",

@@ -1,0 +1,68 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AiService.generateImage AI SDK contract maps generation parameters into the image model call and records usage: generation call 1`] = `
+{
+  "headers": {
+    "user-agent": "ai/6.0.183",
+    "x-contract": "image",
+  },
+  "n": 2,
+  "prompt": "Draw two cherries.",
+  "providerOptions": {
+    "contract-provider": {
+      "background": "transparent",
+      "quality": "high",
+      "seed": 42,
+    },
+  },
+  "seed": 42,
+  "size": "1024x1024",
+}
+`;
+
+exports[`AiService.generateImage AI SDK contract maps generation parameters into the image model call and records usage: generation result 1`] = `
+{
+  "images": [
+    {
+      "base64": "iVBORw0KGgo=",
+      "mediaType": "image/png",
+    },
+    {
+      "base64": "iVBORw0KGgo=",
+      "mediaType": "image/png",
+    },
+  ],
+  "usage": {
+    "inputTokens": 3,
+    "outputTokens": 5,
+    "totalTokens": 8,
+  },
+}
+`;
+
+exports[`AiService.generateImage AI SDK contract maps input data URLs into image-edit files without using HTTP: image edit call 1`] = `
+{
+  "files": [
+    {
+      "data": [
+        137,
+        80,
+        78,
+        71,
+        13,
+        10,
+        26,
+        10,
+      ],
+      "mediaType": "image/png",
+      "type": "file",
+    },
+  ],
+  "headers": {
+    "user-agent": "ai/6.0.183",
+  },
+  "n": 1,
+  "prompt": "Add a leaf.",
+  "providerOptions": {},
+}
+`;
