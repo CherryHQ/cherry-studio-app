@@ -12,6 +12,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { getChatInputCameraPanelSize, getChatInputMenuRoom } from '../chatInputLayout';
 import {
+  type ChatInputMediaContextValue,
   useChatInputActions,
   useChatInputMedia,
   useChatInputState,
@@ -42,7 +43,22 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
   const window = useWindowDimensions();
   const { addAttachments, selectAction, setMenuLevel } = useChatInputActions();
   const { menuLevel, selectedToolId } = useChatInputState();
+  const media = useChatInputMedia();
   const room = getChatInputMenuRoom(window, insets);
+
+  // Everything the panel needs is read here and handed down as props. The panel
+  // is portalled, and this portal re-renders its children under the host rather
+  // than teleporting the node — so a hook called inside it looks for providers
+  // at the host, not at this call site, and finds none.
+  const showRoot = useCallback(() => setMenuLevel('root'), [setMenuLevel]);
+  const leavePhotos = useCallback(() => {
+    media.actions.clearSelectedPhotos();
+    setMenuLevel('root');
+  }, [media.actions, setMenuLevel]);
+  const addCameraPhoto = useCallback(
+    (uri: string) => addAttachments([createCameraAttachmentDraft({ uri })]),
+    [addAttachments],
+  );
 
   const handleOpenChange = useCallback(
     (isOpen: boolean) => {
@@ -90,10 +106,19 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
       testID="chat-input-menu"
     >
       {menuLevel === 'camera' ? (
-        <ChatInputCameraLevel {...getChatInputCameraPanelSize(room)} />
+        <ChatInputCameraLevel
+          {...getChatInputCameraPanelSize(room)}
+          onBack={showRoot}
+          onCapture={addCameraPhoto}
+        />
       ) : null}
       {menuLevel === 'photos' ? (
-        <ChatInputPhotoLevel maxHeight={room.maxHeight} width={room.maxWidth} />
+        <ChatInputPhotoLevel
+          maxHeight={room.maxHeight}
+          media={media}
+          onBack={leavePhotos}
+          width={room.maxWidth}
+        />
       ) : null}
       {menuLevel === 'root' ? (
         <>
@@ -151,31 +176,33 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
  * The photo grid, sized rather than flexed: it hangs off the bottom of a panel
  * that is measuring its content, so `flex-1` would resolve to nothing.
  */
-function ChatInputPhotoLevel({ maxHeight, width }: { maxHeight: number; width: number }) {
+function ChatInputPhotoLevel({
+  maxHeight,
+  media,
+  onBack,
+  width,
+}: {
+  maxHeight: number;
+  media: ChatInputMediaContextValue;
+  onBack: () => void;
+  width: number;
+}) {
   const { close } = useComposerMenu();
-  const { actions, state } = useChatInputMedia();
-  const { setMenuLevel } = useChatInputActions();
-  const { clearSelectedPhotos } = actions;
-
-  const handleBack = useCallback(() => {
-    clearSelectedPhotos();
-    setMenuLevel('root');
-  }, [clearSelectedPhotos, setMenuLevel]);
 
   return (
     <View style={{ height: maxHeight, width }}>
       <ChatInputPhotoGrid
-        actions={actions}
+        actions={media.actions}
         // The grid sits inside a rounded panel that already clears the home
         // indicator, so its floating controls need no safe-area inset of their
         // own — only enough air to look deliberate.
         bottomInset={0}
-        onBack={handleBack}
+        onBack={onBack}
         onConfirm={close}
         onError={(message) => {
           logger.warn(`photo grid error: ${message}`);
         }}
-        state={state}
+        state={media.state}
         width={width}
       />
     </View>
@@ -183,20 +210,27 @@ function ChatInputPhotoLevel({ maxHeight, width }: { maxHeight: number; width: n
 }
 
 /** The viewfinder, sized for the same reason the photo grid is. */
-function ChatInputCameraLevel({ height, width }: { height: number; width: number }) {
+function ChatInputCameraLevel({
+  height,
+  onBack,
+  onCapture,
+  width,
+}: {
+  height: number;
+  onBack: () => void;
+  onCapture: (uri: string) => void;
+  width: number;
+}) {
   const { close } = useComposerMenu();
-  const { addAttachments, setMenuLevel } = useChatInputActions();
-
-  const handleBack = useCallback(() => setMenuLevel('root'), [setMenuLevel]);
 
   return (
     <View style={{ height, width }}>
       <ChatInputCamera
         bottomInset={0}
         isActive
-        onBack={handleBack}
+        onBack={onBack}
         onCapture={(photo) => {
-          addAttachments([createCameraAttachmentDraft({ uri: photo.uri })]);
+          onCapture(photo.uri);
           close();
         }}
         onError={(message) => {

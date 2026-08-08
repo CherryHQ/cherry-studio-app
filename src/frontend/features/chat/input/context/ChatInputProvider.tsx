@@ -59,7 +59,7 @@ type ChatInputActionsContextValue = {
   syncReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
 };
 
-type ChatInputMediaContextValue = ReturnType<typeof useChatInputPhotoPicker>;
+export type ChatInputMediaContextValue = ReturnType<typeof useChatInputPhotoPicker>;
 
 type ChatInputMetaContextValue = {
   inputRef: RefObject<TextInput | null>;
