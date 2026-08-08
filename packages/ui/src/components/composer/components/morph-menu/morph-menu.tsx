@@ -13,7 +13,6 @@ import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react
 import Animated, {
   interpolate,
   runOnJS,
-  type SharedValue,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -74,13 +73,7 @@ export function useComposerMenu() {
  * The panel is always laid out at full size; the closed state is a clip window
  * over it. That keeps the children's layout pass off the animation's critical
  * path — animating the container's size would otherwise re-measure them on
- * every frame.
- *
- * Both of the panel's axes are measured and driven, so swapping the children of
- * an already-open menu grows it to the new content instead of snapping. That is
- * how a caller builds a second level: keep the menu open, render something else
- * inside it. The menu itself has no notion of levels, which is what keeps it
- * usable outside the one screen this was built for.
+ * every frame, and it is what lets both axes be measured before anything opens.
  */
 function MorphMenuRoot({
   accessibilityLabel,
@@ -98,9 +91,6 @@ function MorphMenuRoot({
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
   const isReducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
-  // Shared values rather than state: React state read inside `useAnimatedStyle`
-  // would recompute the size in one commit, so a content swap while open would
-  // jump. These are what let it tween.
   const panelHeight = useSharedValue(fallbackPanelHeight);
   const panelWidth = useSharedValue(width);
   const footprintRef = useRef<View>(null);
@@ -189,24 +179,19 @@ function MorphMenuRoot({
     ],
   }));
 
-  // Sub-pixel layout noise would otherwise restart the tween on every pass.
-  const settleTo = useCallback(
-    (axis: SharedValue<number>, next: number) => {
-      if (Math.abs(axis.value - next) <= 1) {
-        return;
-      }
-
-      // Nothing is on screen at the closed size, so a measurement taken while
-      // closed has no frames to animate through — only a swap under an open
-      // panel is a movement anyone can see.
-      axis.set(isOpen && !isReducedMotion ? withTiming(next, settleMotion) : next);
-    },
-    [isOpen, isReducedMotion],
-  );
-
+  // The panel lays out inline before it ever opens, so these land while nothing
+  // is on screen at that size and there are no frames to animate through. The
+  // guard is for sub-pixel layout noise on subsequent passes.
   const handlePanelLayout = (event: LayoutChangeEvent) => {
-    settleTo(panelHeight, Math.ceil(event.nativeEvent.layout.height));
-    settleTo(panelWidth, Math.ceil(event.nativeEvent.layout.width));
+    const { height, width } = event.nativeEvent.layout;
+
+    if (Math.abs(panelHeight.value - height) > 1) {
+      panelHeight.set(Math.ceil(height));
+    }
+
+    if (Math.abs(panelWidth.value - width) > 1) {
+      panelWidth.set(Math.ceil(width));
+    }
   };
 
   // The morphing container plus the trigger. Rendered inline while closed and
@@ -289,15 +274,7 @@ function MorphMenuRoot({
   );
 }
 
-function MorphMenuItem({
-  closeOnPress = true,
-  icon,
-  label,
-  onPress,
-  selected,
-  testID,
-  trailing,
-}: MorphMenuItemProps) {
+function MorphMenuItem({ icon, label, onPress, selected, testID, trailing }: MorphMenuItemProps) {
   const { close } = useComposerMenu();
 
   return (
@@ -307,10 +284,7 @@ function MorphMenuItem({
       accessibilityState={{ selected }}
       className="h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-surface-tertiary"
       onPress={() => {
-        if (closeOnPress) {
-          close();
-        }
-
+        close();
         onPress();
       }}
       testID={testID}

@@ -39,7 +39,10 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
+type SharedValueStub = { set: (next: number) => void; value: number };
+
 jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
 
   return {
@@ -51,21 +54,26 @@ jest.mock('react-native-reanimated', () => {
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
     useAnimatedStyle: (factory: () => object) => factory(),
     useReducedMotion: () => false,
-    useSharedValue: (initial: number) => ({
-      set(next: number) {
-        this.value = next;
-      },
-      value: initial,
-    }),
+    // Backed by a ref, like the real one: a shared value that reset itself on
+    // every render would make anything driven by one untestable.
+    useSharedValue: (initial: number) => {
+      const ref = React.useRef(null) as { current: SharedValueStub | null };
+
+      ref.current ??= {
+        set(next: number) {
+          this.value = next;
+        },
+        value: initial,
+      };
+
+      return ref.current;
+    },
     // Land the animation immediately so the portal teardown a close schedules
-    // runs within the same `act`. Spied so the tests can tell a tween from a
-    // snap — the returned value is identical either way.
-    withTiming: jest.fn(
-      (value: number, _config: unknown, callback?: (finished: boolean) => void) => {
-        callback?.(true);
-        return value;
-      },
-    ),
+    // runs within the same `act`.
+    withTiming: (value: number, _config: unknown, callback?: (finished: boolean) => void) => {
+      callback?.(true);
+      return value;
+    },
   };
 });
 
@@ -199,68 +207,36 @@ describe('MorphMenu', () => {
     expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
   });
 
-  it('grows to content that swaps in while it is open, instead of snapping', () => {
-    const { withTiming } = jest.requireMock('react-native-reanimated') as {
-      withTiming: jest.Mock;
-    };
+  it('opens to the size its panel measured, on both axes', () => {
+    const menu = () => (
+      <MorphMenu accessibilityLabel="Add" testID="menu">
+        <MorphMenu.Item label="Camera" onPress={jest.fn()} testID="menu-camera" />
+      </MorphMenu>
+    );
 
     act(() => {
-      renderer = create(
-        <MorphMenu accessibilityLabel="Add" testID="menu">
-          <MorphMenu.Item closeOnPress={false} label="Photos" onPress={jest.fn()} />
-        </MorphMenu>,
-      );
+      renderer = create(menu());
     });
 
     const tree = renderer!;
 
-    layout(tree, { height: 60, width: 200 });
-    // Closed, so there is nothing on screen to animate through.
-    expect(withTiming).not.toHaveBeenCalledWith(60, expect.anything());
-
-    press(tree, 'menu-trigger');
-    withTiming.mockClear();
-
-    // The second level: same open menu, different children, and the panel is
-    // now a different shape in both axes.
-    act(() => {
-      tree.update(
-        <MorphMenu accessibilityLabel="Add" testID="menu">
-          <Text>a photo grid</Text>
-        </MorphMenu>,
-      );
-    });
+    // The panel lays out inline, before anything opens — which is why the closed
+    // state can be a clip window over a full-size panel rather than a smaller
+    // version of it.
     layout(tree, { height: 420, width: 340 });
+    press(tree, 'menu-trigger');
+    // Opening moves a shared value, which does not re-render on its own; a
+    // commit is what recomputes the style this reads. It has to be a fresh
+    // element — React bails out on one it is already rendering.
+    act(() => tree.update(menu()));
 
-    expect(withTiming).toHaveBeenCalledWith(420, expect.anything());
-    expect(withTiming).toHaveBeenCalledWith(340, expect.anything());
-  });
+    const container = portal(tree).find((node) => {
+      const style = StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
 
-  it('keeps itself open for an item that leads further in', () => {
-    const onPress = jest.fn();
-    const onOpenChange = jest.fn();
-
-    act(() => {
-      renderer = create(
-        <MorphMenu accessibilityLabel="Add" onOpenChange={onOpenChange} testID="menu">
-          <MorphMenu.Item
-            closeOnPress={false}
-            label="Photos"
-            onPress={onPress}
-            testID="menu-photos"
-          />
-        </MorphMenu>,
-      );
+      return style?.height === 420;
     });
 
-    const tree = renderer!;
-
-    press(tree, 'menu-trigger');
-    press(tree, 'menu-photos');
-
-    expect(onPress).toHaveBeenCalledTimes(1);
-    expect(onOpenChange).toHaveBeenLastCalledWith(true);
-    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' }).length).toBeGreaterThan(0);
+    expect(StyleSheet.flatten(container.props.style as StyleProp<ViewStyle>).width).toBe(340);
   });
 
   it('rejects an item rendered outside a menu', () => {

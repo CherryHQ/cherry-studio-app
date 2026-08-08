@@ -283,68 +283,6 @@ export const StatusRow: Story = {
     )),
 };
 
-/**
- * The menu has no notion of levels — it only grows to whatever is inside it. A
- * second level is just an item that does not close, plus different children.
- */
-export const MenuSecondLevel: Story = {
-  render: (args) =>
-    bothThemes((theme) => (
-      <ThemePreview
-        args={args}
-        hint="Tap ＋ then Photos: the panel grows to the grid rather than snapping."
-        key={theme.value}
-        label={theme.label}
-        theme={theme.value}
-      >
-        {() => (
-          <>
-            <Composer.Input placeholder={args.placeholder} />
-            <Composer.Toolbar>
-              <MediaMenu />
-              <Composer.Send />
-            </Composer.Toolbar>
-          </>
-        )}
-      </ThemePreview>
-    )),
-};
-
-function MediaMenu() {
-  const [isBrowsing, setIsBrowsing] = useState(false);
-
-  return (
-    <Composer.Menu accessibilityLabel="Add attachment" onOpenChange={() => setIsBrowsing(false)}>
-      {isBrowsing ? (
-        <View className="w-64 flex-row flex-wrap gap-1.5 p-1">
-          {sampleAttachments.map((attachment) => (
-            <Image
-              className="size-20 rounded-lg"
-              key={attachment.id}
-              resizeMode="cover"
-              source={{ uri: attachment.uri }}
-            />
-          ))}
-        </View>
-      ) : (
-        <>
-          <Composer.Menu.Item
-            icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
-            label="Camera"
-            onPress={fn()}
-          />
-          <Composer.Menu.Item
-            closeOnPress={false}
-            icon={<ImagesIcon className="size-5 text-foreground" strokeWidth={2} />}
-            label="Photos"
-            onPress={() => setIsBrowsing(true)}
-          />
-        </>
-      )}
-    </Composer.Menu>
-  );
-}
-
 export const Streaming: Story = {
   args: { streaming: true, value: '' },
   render: (args) =>
