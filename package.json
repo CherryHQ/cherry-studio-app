@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "packages:build": "pnpm --filter @cherrystudio/ai-sdk-provider build && pnpm --filter @cherrystudio/ai-core build",
+    "eas-build-post-install": "pnpm packages:build",
     "dev": "pnpm packages:build && expo start --dev-client",
     "dev:clear": "pnpm packages:build && expo start --dev-client --clear",
     "start": "pnpm packages:build && expo start --dev-client",

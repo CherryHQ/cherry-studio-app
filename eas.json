@@ -19,7 +19,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "PROFILE": "preview"
+        "PROFILE": "preview",
+        "SHARP_IGNORE_GLOBAL_LIBVIPS": "1"
       },
       "android": {
         "buildType": "apk",
