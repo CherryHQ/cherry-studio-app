@@ -24,9 +24,9 @@ const mockImportFile = jest.fn(async ({ name }: { name: string; uri: string }) =
 }));
 const mockDiscardFile = jest.fn(async () => true);
 const mockFileModule = {
-  discardUnreferenced: mockDiscardFile,
-  import: mockImportFile,
-  resolveUri: jest.fn(),
+  createInternalEntry: mockImportFile,
+  deleteIfUnreferenced: mockDiscardFile,
+  getUri: jest.fn(),
 };
 
 jest.mock('@/frontend/data', () => ({

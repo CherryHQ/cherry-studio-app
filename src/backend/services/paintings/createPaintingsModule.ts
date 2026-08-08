@@ -38,7 +38,7 @@ type PaintingFileStorage = {
   createInternalEntry(input: CreateInternalEntryInput): Promise<InternalFileEntry>;
   discard(entries: readonly InternalFileEntry[]): Promise<void>;
   readDataUrl(uri: string, mediaType: string): Promise<string>;
-  resolveUri(entry: InternalFileEntry): string | undefined;
+  getUri(entry: InternalFileEntry): string | undefined;
 };
 
 type PaintingFileRepository = {
@@ -160,7 +160,7 @@ class PaintingGenerationSession implements PaintingGenerationSessionContract {
           if (!persistedOutputIds.has(entry.id)) {
             throw new Error('Generated painting has a missing output file');
           }
-          const uri = this.dependencies.storage.resolveUri(entry);
+          const uri = this.dependencies.storage.getUri(entry);
           if (!uri) {
             throw new Error(`Generated painting file is unavailable: ${entry.id}`);
           }

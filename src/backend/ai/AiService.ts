@@ -63,7 +63,7 @@ export interface AiImageResult {
 
 export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   fileContent: {
-    resolveRenderableUri(id: FileEntryId): Promise<string | undefined>;
+    getUri(id: FileEntryId): Promise<string | undefined>;
   };
 }
 
@@ -141,7 +141,7 @@ export class AiService {
         usageMessageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
       }),
       resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
-        this.services.fileContent.resolveRenderableUri(fileEntryId),
+        this.services.fileContent.getUri(fileEntryId),
       ),
     ]);
 

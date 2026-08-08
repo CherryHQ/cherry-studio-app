@@ -126,7 +126,7 @@ export function ChatInputProvider({
   const discardEntry = useCallback(
     async (entryId: ChatInputAttachmentReady['fileEntryId']) => {
       try {
-        await file.discardUnreferenced(entryId);
+        await file.deleteIfUnreferenced(entryId);
       } catch (error) {
         logger.warn('Failed to discard an unreferenced attachment', toError(error), { entryId });
       }
@@ -137,7 +137,10 @@ export function ChatInputProvider({
   const importAttachment = useCallback(
     async (source: ChatInputAttachmentSource, token: symbol): Promise<ImportResult> => {
       try {
-        const resolved = await file.import({ name: source.name, uri: source.uri });
+        const resolved = await file.createInternalEntry({
+          name: source.name,
+          uri: source.uri,
+        });
 
         if (cancelledImportTokensRef.current.delete(token)) {
           await discardEntry(resolved.entry.id);

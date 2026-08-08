@@ -8,17 +8,17 @@ import * as z from 'zod';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { FileRefService } from '@/backend/data/services/FileRefService';
 import {
-  createInternalEntry,
+  createInternalEntry as createStoredInternalEntry,
+  deleteInternalEntryIfUnreferenced,
   discardInternalEntries,
-  discardUnreferencedInternalEntry,
+  getFileUri,
   resolveFileEntry,
-  resolveRenderableFileUri,
 } from '@/backend/services/file/fileStorage';
 import { DevicePermissions } from '@/backend/services/permissions';
 
 export type PlatformAdapters = ReturnType<typeof createPlatformAdapters>;
 
-const importFileInputSchema = z.strictObject({
+const createInternalEntryInputSchema = z.strictObject({
   name: SafeNameSchema.optional(),
   uri: z.string().min(1),
 });
@@ -33,11 +33,9 @@ export function createPlatformAdapters({
   return {
     devicePermissions: new DevicePermissions(),
     fileContent: {
-      discardUnreferenced: (id: FileEntryId) =>
-        discardUnreferencedInternalEntry(fileEntry, fileRef, FileEntryIdSchema.parse(id)),
-      import: async (input: { name?: string; uri: string }) => {
-        const validated = importFileInputSchema.parse(input);
-        const entry = await createInternalEntry(fileEntry, {
+      createInternalEntry: async (input: { name?: string; uri: string }) => {
+        const validated = createInternalEntryInputSchema.parse(input);
+        const entry = await createStoredInternalEntry(fileEntry, {
           cleanupPolicy: 'delete_when_unreferenced',
           name: validated.name,
           source: 'uri',
@@ -46,13 +44,14 @@ export function createPlatformAdapters({
         const resolved = await resolveFileEntry(fileEntry, entry.id);
         if (!resolved) {
           await discardInternalEntries(fileEntry, [entry]);
-          throw new Error(`Imported file cannot be resolved: ${entry.id}`);
+          throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
         }
         return resolved;
       },
+      deleteIfUnreferenced: (id: FileEntryId) =>
+        deleteInternalEntryIfUnreferenced(fileEntry, fileRef, FileEntryIdSchema.parse(id)),
+      getUri: (id: FileEntryId) => getFileUri(fileEntry, FileEntryIdSchema.parse(id)),
       resolve: (id: FileEntryId) => resolveFileEntry(fileEntry, FileEntryIdSchema.parse(id)),
-      resolveRenderableUri: (id: FileEntryId) =>
-        resolveRenderableFileUri(fileEntry, FileEntryIdSchema.parse(id)),
     },
   };
 }

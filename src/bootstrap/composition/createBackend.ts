@@ -11,8 +11,8 @@ import {
   createInternalEntry,
   createMessageParts,
   discardInternalEntries,
+  getInternalFileUri,
   imageUriToDataUrl,
-  resolveInternalFileUri,
 } from '@/backend/services/file/fileStorage';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
@@ -112,7 +112,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       createInternalEntry: (input) => createInternalEntry(services.fileEntry, input),
       discard: (entries) => discardInternalEntries(services.fileEntry, entries),
       readDataUrl: imageUriToDataUrl,
-      resolveUri: resolveInternalFileUri,
+      getUri: getInternalFileUri,
     },
   });
   const mcp = createMcpModule({
@@ -165,9 +165,9 @@ export function createBackend(services: BackendServices): BackendComposition {
       chat,
       cherryin,
       file: {
-        discardUnreferenced: services.fileContent.discardUnreferenced,
-        import: services.fileContent.import,
-        resolveUri: services.fileContent.resolveRenderableUri,
+        createInternalEntry: services.fileContent.createInternalEntry,
+        deleteIfUnreferenced: services.fileContent.deleteIfUnreferenced,
+        getUri: services.fileContent.getUri,
       },
       mcp,
       models,

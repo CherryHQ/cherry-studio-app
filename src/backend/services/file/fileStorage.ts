@@ -193,7 +193,7 @@ export async function createMessageParts(
         uri: part.url,
       });
       createdEntries.push(entry);
-      const uri = resolveInternalFileUri(entry);
+      const uri = getInternalFileUri(entry);
       if (!uri) {
         throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
       }
@@ -226,7 +226,7 @@ export async function discardInternalEntries(
   }
 }
 
-export async function discardUnreferencedInternalEntry(
+export async function deleteInternalEntryIfUnreferenced(
   entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
   refs: Pick<FileRefService, 'countPersistentRefsByEntryIdTx'>,
   id: FileEntryId,
@@ -265,11 +265,11 @@ export async function resolveFileEntry(
   const entry = await entries.findById(id);
   // External rows are opaque desktop-compatibility data on mobile; never dereference externalPath.
   if (!entry || entry.origin !== 'internal') return null;
-  const uri = resolveInternalFileUri(entry);
+  const uri = getInternalFileUri(entry);
   return uri ? { entry, uri } : null;
 }
 
-export async function resolveRenderableFileUri(
+export async function getFileUri(
   entries: Pick<FileEntryService, 'findById'>,
   id: FileEntryId,
 ): Promise<string | undefined> {
@@ -323,7 +323,7 @@ export function deleteInternalFileUri(uri: string): void {
   }
 }
 
-export function resolveInternalFileUri(
+export function getInternalFileUri(
   entry: Pick<InternalFileEntry, 'ext' | 'id'>,
 ): string | undefined {
   const file = managedFile(entry.id, entry.ext);

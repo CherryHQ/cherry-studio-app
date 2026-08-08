@@ -16,9 +16,9 @@ jest.mock('../useChatInputPhotoPicker', () => ({
 
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({
-    discardUnreferenced: jest.fn(),
-    import: jest.fn(),
-    resolveUri: jest.fn(),
+    createInternalEntry: jest.fn(),
+    deleteIfUnreferenced: jest.fn(),
+    getUri: jest.fn(),
   }),
 }));
 

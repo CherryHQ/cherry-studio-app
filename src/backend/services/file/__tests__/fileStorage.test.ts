@@ -10,12 +10,12 @@ import {
   deleteInternalFile,
   deleteInternalFileUri,
   discardInternalEntries,
-  discardUnreferencedInternalEntry,
+  deleteInternalEntryIfUnreferenced,
+  getFileUri,
+  getInternalFileUri,
   imageUriToDataUrl,
   listInternalFiles,
   resolveFileEntry,
-  resolveInternalFileUri,
-  resolveRenderableFileUri,
 } from '../fileStorage';
 
 jest.mock('uuid', () => ({
@@ -234,7 +234,7 @@ describe('fileStorage', () => {
       'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
       10,
     );
-    expect(resolveInternalFileUri(entry)).toBe(
+    expect(getInternalFileUri(entry)).toBe(
       'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
     );
 
@@ -243,7 +243,7 @@ describe('fileStorage', () => {
       'file:///new-sandbox/Documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
       10,
     );
-    expect(resolveInternalFileUri(entry)).toBe(
+    expect(getInternalFileUri(entry)).toBe(
       'file:///new-sandbox/Documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
     );
   });
@@ -267,7 +267,7 @@ describe('fileStorage', () => {
     testState.files.set(uri, 10);
 
     await expect(resolveFileEntry(entries, entry.id)).resolves.toEqual({ entry, uri });
-    await expect(resolveRenderableFileUri(entries, entry.id)).resolves.toBe(uri);
+    await expect(getFileUri(entries, entry.id)).resolves.toBe(uri);
   });
 
   test('keeps external entries opaque instead of resolving their paths', async () => {
@@ -285,7 +285,7 @@ describe('fileStorage', () => {
     entries.stored.set(entry.id, entry);
 
     await expect(resolveFileEntry(entries, entry.id)).resolves.toBeNull();
-    await expect(resolveRenderableFileUri(entries, entry.id)).resolves.toBeUndefined();
+    await expect(getFileUri(entries, entry.id)).resolves.toBeUndefined();
   });
 
   test('removes every copied destination when a later copy fails partially', async () => {
@@ -393,7 +393,7 @@ describe('fileStorage', () => {
     const refs = { countPersistentRefsByEntryIdTx: jest.fn(async () => 0) };
 
     await expect(
-      discardUnreferencedInternalEntry(entries as never, refs as never, entry.id),
+      deleteInternalEntryIfUnreferenced(entries as never, refs as never, entry.id),
     ).resolves.toBe(true);
 
     expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
@@ -410,7 +410,7 @@ describe('fileStorage', () => {
     const refs = { countPersistentRefsByEntryIdTx: jest.fn(async () => 1) };
 
     await expect(
-      discardUnreferencedInternalEntry(entries as never, refs as never, entry.id),
+      deleteInternalEntryIfUnreferenced(entries as never, refs as never, entry.id),
     ).resolves.toBe(false);
     expect(entries.deleteTx).not.toHaveBeenCalled();
   });

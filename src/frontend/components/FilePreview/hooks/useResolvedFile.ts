@@ -11,7 +11,7 @@ export function useResolvedFile(entryId: FileEntryId) {
   });
   const uriQuery = useQuery({
     enabled: Boolean(entryQuery.data),
-    queryFn: () => file.resolveUri(entryId),
+    queryFn: () => file.getUri(entryId),
     queryKey: queryKeys.files.uri(entryId),
     retry: false,
   });
