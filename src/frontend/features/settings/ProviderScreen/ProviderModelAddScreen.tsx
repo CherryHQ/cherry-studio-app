@@ -22,7 +22,6 @@ const advancedSettingsScrollTopPadding = 16;
 const defaultKeyboardBottomOffset = 0;
 const advancedSettingsKeyboardBottomOffset = 180;
 const advancedSettingsKeyboardPadding = 220;
-const selectedEndpointTypeColor = '#00b96b';
 
 export default function ProviderModelAddScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
@@ -364,16 +363,14 @@ function EndpointTypeChip({
       accessibilityState={{ checked: isSelected, disabled: isDisabled }}
       className={cn(
         'h-8 flex-row items-center gap-1 rounded-full px-3 active:opacity-70 disabled:opacity-40',
-        isSelected ? null : 'border border-border bg-secondary',
+        isSelected ? 'bg-primary/10' : 'border border-border bg-secondary',
       )}
       disabled={isDisabled}
       onPress={onPress}
-      style={isSelected ? { backgroundColor: `${selectedEndpointTypeColor}20` } : undefined}
     >
       <Text
-        className="font-medium text-foreground text-sm"
+        className={cn('font-medium text-sm', isSelected ? 'text-primary' : 'text-foreground')}
         numberOfLines={1}
-        style={isSelected ? { color: selectedEndpointTypeColor } : undefined}
       >
         {label}
       </Text>

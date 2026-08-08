@@ -1,9 +1,14 @@
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { slotTextHighlightColor } from '@/frontend/utils/constants';
-
 import { SlotText } from '../SlotText';
+
+/** Echoed back by the mock below, so the highlight assertion has a name for it. */
+const highlightColor = 'resolved--color-primary';
+
+jest.mock('uniwind', () => ({
+  useCSSVariable: (names: string[]) => names.map((name) => `resolved${name}`),
+}));
 
 const mockCancelAnimation = jest.fn();
 const mockWithTiming = jest.fn(
@@ -272,7 +277,7 @@ describe('SlotText', () => {
 
     const highlighted = createdRenderer.root
       .findAllByType(Text)
-      .filter((node) => StyleSheet.flatten(node.props.style)?.color === slotTextHighlightColor);
+      .filter((node) => StyleSheet.flatten(node.props.style)?.color === highlightColor);
     expect(highlighted).toHaveLength(2);
   });
 

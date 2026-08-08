@@ -166,7 +166,7 @@ function PhotoPreviewTile({
     <ImageTile
       accessibilityLabel={accessibilityLabel}
       accessibilityState={isTileSelected === undefined ? undefined : { selected: isTileSelected }}
-      className={isTileSelected ? 'border-2 border-[#007AFF]' : undefined}
+      className={isTileSelected ? 'border-2 border-primary' : undefined}
       onPress={onPress}
       uri={uri}
     >

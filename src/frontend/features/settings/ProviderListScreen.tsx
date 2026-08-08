@@ -144,14 +144,10 @@ export default function ProviderSettingsScreen() {
                   showChevron
                   trailing={
                     item.statusLabel ? (
-                      <View
-                        className="h-5 items-center justify-center rounded-lg border px-1.5"
-                        style={{ backgroundColor: '#00b96b20', borderColor: '#00b96b66' }}
-                      >
+                      <View className="h-5 items-center justify-center rounded-lg border border-success-border bg-success-subtle px-1.5">
                         <Text
-                          className="font-medium text-xs"
+                          className="font-medium text-success-subtle-foreground text-xs"
                           numberOfLines={1}
-                          style={{ color: '#00b96b' }}
                         >
                           {item.statusLabel}
                         </Text>

@@ -33,10 +33,6 @@ export const bottomSheet = {
   headerSideWidth: 44, // close button + right-slot square size
 } as const;
 
-// Brand accent (ui.theme_user.color_primary default). SlotText tints freshly
-// landed glyphs with it before they fade to the regular text color.
-export const slotTextHighlightColor = '#00b96b';
-
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 
