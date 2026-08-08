@@ -5,6 +5,7 @@ export type {
   ComposerCollapsibleProps,
   ComposerInputProps,
   ComposerLabels,
+  ComposerPillProps,
   ComposerProps,
   ComposerSendProps,
   ComposerToolbarProps,

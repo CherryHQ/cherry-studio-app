@@ -12,6 +12,13 @@ const surfacePaddingHorizontal = 12;
 const surfacePaddingTop = 8;
 const surfacePaddingBottom = 8;
 const toolbarGap = 12;
+// A pill's text needs more air either side than a glyph does: the icon in a 32pt
+// circle already sits 4pt in from the edge, and matching that on a label reads as
+// cramped. 10 is what the model button this replaces has always shipped.
+const pillPaddingHorizontal = 10;
+// Narrower than the toolbar's own gap so an icon and its label read as one thing
+// rather than as two tools that happen to be adjacent.
+const pillGap = 6;
 const maxTextHeight = 120;
 // Symmetric on purpose: asymmetric padding would only trade the glyphs'
 // centering for the caret's. See `composerTextStyle.ios`.
@@ -40,6 +47,15 @@ export const actionStyle = {
   height: composerActionSize,
   justifyContent: 'center',
   width: composerActionSize,
+} as const;
+// Height, not size: a pill is as wide as what it carries. It shares the action's
+// height so a row of both reads as one band.
+export const pillStyle = {
+  alignItems: 'center',
+  flexDirection: 'row',
+  gap: pillGap,
+  height: composerActionSize,
+  paddingHorizontal: pillPaddingHorizontal,
 } as const;
 export const textInputBoxStyle = {
   maxHeight: maxTextHeight,

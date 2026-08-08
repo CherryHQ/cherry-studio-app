@@ -74,6 +74,12 @@ callers never need grouping views. `Composer.Action` is the button shell every t
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
 
+`Composer.Pill` is its wide sibling, for a tool that has to say what it is *set to* rather than only
+what it does — the model in use, a mode. Same height and material, but sized to its label, and it is
+the one thing in the row that can be arbitrarily wide, so it is also the one thing that gives: it
+shrinks before the toolbar does. Its `icon` is held out of that on purpose, so a long model name
+squeezes the text and not the logo.
+
 State reaches the parts through context, so `<Composer.Send />` takes nothing. That context is split
 in two — the state half changes on every keystroke, the actions half only when the caller's handlers
 do — so a tool that merely acts keeps its identity while the user types. Sendability defaults to

@@ -6,6 +6,7 @@ import {
   GlobeIcon,
   ImagesIcon,
   SlidersHorizontalIcon,
+  SparklesIcon,
   XIcon,
 } from 'lucide-uniwind/png';
 import { type ReactNode, useState } from 'react';
@@ -193,7 +194,7 @@ export const Composed: Story = {
     bothThemes((theme) => (
       <ThemePreview
         args={args}
-        hint="Tap ＋ to attach, the sliders for a plain tool, ↑ to send."
+        hint="＋ to attach, sliders for a plain tool, the pill for one that shows its setting."
         key={theme.value}
         label={theme.label}
         theme={theme.value}
@@ -227,6 +228,19 @@ export const Composed: Story = {
               <Composer.Action accessibilityLabel="Settings" onPress={fn()}>
                 <SlidersHorizontalIcon className="size-6 text-foreground" strokeWidth={2} />
               </Composer.Action>
+              <Composer.Pill
+                accessibilityLabel="Change model"
+                icon={<SparklesIcon className="size-4 text-foreground" strokeWidth={2} />}
+                onPress={fn()}
+              >
+                <Text
+                  className="min-w-0 shrink font-semibold text-foreground text-sm"
+                  numberOfLines={1}
+                >
+                  Claude Opus
+                </Text>
+                <Text className="shrink-0 text-muted-foreground text-sm">High</Text>
+              </Composer.Pill>
               <Composer.Send />
             </Composer.Toolbar>
           </>

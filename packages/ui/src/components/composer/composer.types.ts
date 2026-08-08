@@ -57,6 +57,23 @@ export type ComposerActionProps = {
   testID?: string;
 };
 
+export type ComposerPillProps = {
+  accessibilityLabel: string;
+  /**
+   * The label. Mark it `numberOfLines={1}` and let it shrink — the pill gives up
+   * width before the toolbar does, but only the caller can say how its text ends.
+   */
+  children: ReactNode;
+  /** The fill, and with it the glass tint. Same rule as `Composer.Action`. */
+  className?: string;
+  disabled?: boolean;
+  /** Held at its natural size, so a long label squeezes the text and not the icon. */
+  icon?: ReactNode;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+};
+
 export type ComposerCollapsibleProps = {
   /** Render `null` to collapse. The last non-empty frame stays up until the collapse lands. */
   children?: ReactNode;

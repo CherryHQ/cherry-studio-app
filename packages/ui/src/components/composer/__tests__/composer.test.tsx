@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Composer } from '../composer';
@@ -208,6 +208,33 @@ describe('Composer', () => {
 
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(button.props.accessibilityLabel).toBe('Attach');
+  });
+
+  it('carries an icon and a label in a pill without letting the icon shrink', () => {
+    const onPress = jest.fn();
+    const tree = render({
+      children: (
+        <Composer.Toolbar>
+          <Composer.Pill
+            accessibilityLabel="Change model"
+            icon={<View testID="pill-icon" />}
+            onPress={onPress}
+            testID="model-pill"
+          >
+            <Text testID="pill-label">Claude Opus</Text>
+          </Composer.Pill>
+        </Composer.Toolbar>
+      ),
+    });
+
+    const icon = tree.root.findByProps({ testID: 'pill-icon' });
+
+    expect(tree.root.findByProps({ testID: 'pill-label' }).props.children).toBe('Claude Opus');
+    // The pill gives up width before the toolbar does, so the icon has to be
+    // held out of that: a long model name must squeeze the text, not the logo.
+    expect(icon.parent?.props.className).toContain('shrink-0');
+    expect(press(tree, 'model-pill').props.accessibilityLabel).toBe('Change model');
+    expect(onPress).toHaveBeenCalledTimes(1);
   });
 
   it('rejects a part rendered outside a composer', () => {
