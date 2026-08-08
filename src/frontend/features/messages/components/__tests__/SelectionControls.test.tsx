@@ -17,10 +17,10 @@ type ConfirmationOptions = {
   onConfirm: () => void;
 };
 
-const mockShowConfirmation = jest.fn((options: ConfirmationOptions) => {
+const mockAlertConfirm = jest.fn((options: ConfirmationOptions) => {
   currentConfirmation = options;
 });
-const mockShowMessage = jest.fn();
+const mockAlertShow = jest.fn();
 let currentActions: ReturnType<typeof useMessageSelectionActions> | undefined;
 let currentConfirmation: ConfirmationOptions | undefined;
 let currentPendingIds: ReadonlySet<string> | undefined;
@@ -29,10 +29,12 @@ let deletion = deferred<void>();
 let mockDeleteSelected = jest.fn<Promise<void>, [readonly string[]]>(() => deletion.promise);
 let renderer: ReactTestRenderer | undefined;
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({
-    showConfirmation: mockShowConfirmation,
-    showMessage: mockShowMessage,
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({
+    alert: {
+      confirm: mockAlertConfirm,
+      show: mockAlertShow,
+    },
   }),
 }));
 
@@ -152,7 +154,7 @@ describe('SelectionControls', () => {
       await deletion.promise.catch(() => undefined);
     });
 
-    expect(mockShowMessage).toHaveBeenCalledWith({ title: 'delete.failed' });
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'delete.failed' });
     expect(currentState).toMatchObject({ isDeletionPending: false, isEditing: false });
     expect(currentPendingIds).toEqual(new Set());
   });

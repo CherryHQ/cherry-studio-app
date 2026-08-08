@@ -49,8 +49,8 @@ let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
 let mockSectionRenders: SectionProps[];
 const mockReplaceApiKeys = jest.fn(async () => undefined);
-const mockShowConfirmation = jest.fn();
-const mockShowMessage = jest.fn();
+const mockAlertConfirm = jest.fn();
+const mockAlertShow = jest.fn();
 let queryClient: QueryClient;
 
 const providersBackend = {
@@ -75,10 +75,12 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
 }));
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({
-    showConfirmation: mockShowConfirmation,
-    showMessage: mockShowMessage,
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({
+    alert: {
+      confirm: mockAlertConfirm,
+      show: mockAlertShow,
+    },
   }),
 }));
 

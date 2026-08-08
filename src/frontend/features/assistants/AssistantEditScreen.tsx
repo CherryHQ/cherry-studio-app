@@ -9,13 +9,13 @@ import {
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   ModelPickerBottomSheet,
@@ -87,7 +87,7 @@ function AssistantEditForm({
 }) {
   const { t } = useTranslation();
   const router = useRouter();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const isEditing = Boolean(assistantId);
   const { createAssistant, isCreating, isUpdating, updateAssistant } = useAssistantMutations();
   const modelPickerData = useModelPickerData();
@@ -174,7 +174,7 @@ function AssistantEditForm({
     const dto = buildAssistantDto(form, assistant?.settings);
 
     if (!dto.ok) {
-      toast.show({ label: t(dto.errorKey), variant: 'danger' });
+      alert.show({ title: t(dto.errorKey) });
       return;
     }
 
@@ -187,12 +187,9 @@ function AssistantEditForm({
 
       router.back();
     } catch {
-      toast.show({
-        label: t('assistant.toast.saveFailed'),
-        variant: 'danger',
-      });
+      alert.show({ title: t('assistant.toast.saveFailed') });
     }
-  }, [assistant?.settings, assistantId, createAssistant, form, router, t, toast, updateAssistant]);
+  }, [alert, assistant?.settings, assistantId, createAssistant, form, router, t, updateAssistant]);
   const title = isEditing ? t('assistant.edit.title') : t('assistant.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [

@@ -1,14 +1,14 @@
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { AppAlertProvider, useAppAlert } from '../AppAlertProvider';
+import { AlertProvider, useAlert } from '../AlertProvider';
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = require('react');
   const { View } = require('react-native');
 
   return {
-    Alert: (props: object) => React.createElement(View, { ...props, mockComponent: 'app-alert' }),
+    Alert: (props: object) => React.createElement(View, { ...props, mockComponent: 'alert' }),
   };
 });
 
@@ -16,17 +16,17 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-type AlertApi = ReturnType<typeof useAppAlert>;
+type AlertController = ReturnType<typeof useAlert>['alert'];
 
-let alertApi: AlertApi | undefined;
+let alertController: AlertController | undefined;
 let renderer: ReactTestRenderer | undefined;
 
 function Probe() {
-  const api = useAppAlert();
+  const { alert } = useAlert();
 
   useEffect(() => {
-    alertApi = api;
-  }, [api]);
+    alertController = alert;
+  }, [alert]);
 
   return null;
 }
@@ -37,14 +37,14 @@ async function flushEffects() {
   });
 }
 
-describe('AppAlertProvider', () => {
+describe('AlertProvider', () => {
   beforeEach(async () => {
-    alertApi = undefined;
+    alertController = undefined;
     await act(async () => {
       renderer = create(
-        <AppAlertProvider>
+        <AlertProvider>
           <Probe />
-        </AppAlertProvider>,
+        </AlertProvider>,
       );
     });
   });
@@ -58,7 +58,7 @@ describe('AppAlertProvider', () => {
     const confirmation = deferred<void>();
 
     act(() => {
-      alertApi?.showConfirmation({
+      alertController?.confirm({
         confirmLabel: 'Delete',
         onConfirm: () => confirmation.promise,
         role: 'destructive',
@@ -67,7 +67,7 @@ describe('AppAlertProvider', () => {
     });
     await flushEffects();
 
-    let alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    let alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.isOpen).toBe(true);
     expect(alert.props.actions.map((action: { label: string }) => action.label)).toEqual([
       'common.cancel',
@@ -80,7 +80,7 @@ describe('AppAlertProvider', () => {
     });
     await flushEffects();
 
-    alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.isOpen).toBe(false);
     confirmation.resolve();
     await confirmation.promise;
@@ -88,17 +88,17 @@ describe('AppAlertProvider', () => {
 
   it('presents queued messages in order after a closed confirmation', async () => {
     act(() => {
-      alertApi?.showConfirmation({
+      alertController?.confirm({
         confirmLabel: 'Delete',
         onConfirm: () => {
-          alertApi?.showMessage({ title: 'Delete failed' });
+          alertController?.show({ title: 'Delete failed' });
         },
         title: 'Delete item?',
       });
     });
     await flushEffects();
 
-    let alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    let alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     act(() => {
       alert.props.actions[1].onPress();
       alert.props.onOpenChange(false);
@@ -106,24 +106,24 @@ describe('AppAlertProvider', () => {
     await flushEffects();
     await flushEffects();
 
-    alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.isOpen).toBe(true);
     expect(alert.props.title).toBe('Delete failed');
     expect(alert.props.actions[0].label).toBe('common.ok');
   });
 
   it('keeps showing messages after the requesting consumer unmounts', async () => {
-    const persistentApi = alertApi;
+    const persistentAlert = alertController;
 
     await act(async () => {
-      renderer?.update(<AppAlertProvider />);
+      renderer?.update(<AlertProvider />);
     });
     act(() => {
-      persistentApi?.showMessage({ title: 'Background failure' });
+      persistentAlert?.show({ title: 'Background failure' });
     });
     await flushEffects();
 
-    const alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    const alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.isOpen).toBe(true);
     expect(alert.props.title).toBe('Background failure');
   });
@@ -132,7 +132,7 @@ describe('AppAlertProvider', () => {
     const onConfirm = jest.fn();
 
     act(() => {
-      alertApi?.showPrompt({
+      alertController?.prompt({
         confirmLabel: 'Save',
         input: {
           accessibilityLabel: 'Topic name',
@@ -147,7 +147,7 @@ describe('AppAlertProvider', () => {
     });
     await flushEffects();
 
-    let alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    let alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.input).toEqual(
       expect.objectContaining({
         accessibilityLabel: 'Topic name',
@@ -159,7 +159,7 @@ describe('AppAlertProvider', () => {
     );
 
     act(() => alert.props.input.onChangeText('Renamed topic'));
-    alert = renderer!.root.findByProps({ mockComponent: 'app-alert' });
+    alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.input.value).toBe('Renamed topic');
 
     act(() => {
@@ -168,7 +168,7 @@ describe('AppAlertProvider', () => {
     });
     expect(onConfirm).toHaveBeenCalledWith('Renamed topic');
     await flushEffects();
-    expect(renderer!.root.findByProps({ mockComponent: 'app-alert' }).props.isOpen).toBe(false);
+    expect(renderer!.root.findByProps({ mockComponent: 'alert' }).props.isOpen).toBe(false);
   });
 });
 

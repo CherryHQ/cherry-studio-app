@@ -52,8 +52,8 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 
 jest.mock('lucide-uniwind/png', () => ({

@@ -8,7 +8,7 @@ type HookResult = ReturnType<typeof useProviderApiServiceSheetClose>;
 const mockGoBack = jest.fn();
 const mockDispatch = jest.fn();
 const mockAddListener = jest.fn(() => jest.fn());
-const mockShowConfirmation = jest.fn();
+const mockAlertConfirm = jest.fn();
 
 jest.mock('expo-router', () => ({
   useNavigation: () => ({
@@ -22,8 +22,8 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({ showConfirmation: mockShowConfirmation }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { confirm: mockAlertConfirm } }),
 }));
 
 function HookHarness({
@@ -69,7 +69,7 @@ describe('useProviderApiServiceSheetClose', () => {
 
     act(() => hookResultRef.current?.requestClose());
 
-    expect(mockShowConfirmation).toHaveBeenCalledWith(
+    expect(mockAlertConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
         confirmLabel: 'common.discard',
         description: 'settings.provider.apiService.discardMessage',
@@ -83,7 +83,7 @@ describe('useProviderApiServiceSheetClose', () => {
     renderHook();
     act(() => hookResultRef.current?.requestClose());
 
-    act(() => mockShowConfirmation.mock.calls[0][0].onConfirm());
+    act(() => mockAlertConfirm.mock.calls[0][0].onConfirm());
 
     expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
@@ -94,6 +94,6 @@ describe('useProviderApiServiceSheetClose', () => {
     act(() => hookResultRef.current?.requestClose());
 
     expect(mockGoBack).toHaveBeenCalledTimes(1);
-    expect(mockShowConfirmation).not.toHaveBeenCalled();
+    expect(mockAlertConfirm).not.toHaveBeenCalled();
   });
 });

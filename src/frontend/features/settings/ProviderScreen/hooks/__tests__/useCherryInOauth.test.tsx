@@ -8,6 +8,7 @@ const mockPromptAsync = jest.fn();
 const mockCompleteAuthorization = jest.fn(async () => undefined);
 const mockLogout = jest.fn(async () => undefined);
 const mockGetBalance = jest.fn(async () => ({ balance: 42 }));
+const mockAlertShow = jest.fn();
 const mockAuthRequestConfig: { value: unknown } = { value: undefined };
 const mockRedirectParts: { value: unknown } = { value: undefined };
 
@@ -39,7 +40,9 @@ jest.mock('@/frontend/data', () => ({
   useQuery: () => ({ data: undefined, refetch: jest.fn(async () => undefined) }),
 }));
 
-jest.mock('heroui-native', () => ({ useToast: () => ({ toast: { show: jest.fn() } }) }));
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
+}));
 jest.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 import { useCherryInOauth, UserCancelledError } from '../useCherryInOauth';

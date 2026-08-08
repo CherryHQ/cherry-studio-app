@@ -1,13 +1,12 @@
 import { Button, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons/providers';
-import { useToast } from 'heroui-native/toast';
 import { LogInIcon, LogOutIcon, WalletIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
@@ -30,13 +29,12 @@ type CherryInOauthProps = {
 export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProps) {
   const { t } = useTranslation();
   const { theme } = useUniwind();
-  const { showConfirmation } = useAppAlert();
+  const { alert } = useAlert();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const providerIcon = resolveProviderIcon('cherryin');
-  const { toast } = useToast();
   const requestLogoutConfirmation = useCallback(
     ({ message, onConfirm, title }: { message: string; onConfirm: () => void; title: string }) => {
-      showConfirmation({
+      alert.confirm({
         confirmLabel: t('settings.provider.oauth.cherryIn.logout'),
         description: message,
         onConfirm,
@@ -44,7 +42,7 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
         title,
       });
     },
-    [showConfirmation, t],
+    [alert, t],
   );
 
   const {
@@ -74,13 +72,12 @@ export function CherryInOauth({ providerId, onOAuthComplete }: CherryInOauthProp
         return;
       }
       const message = error instanceof Error ? error.message : 'OAuth failed';
-      toast.show({
-        label: t('settings.provider.oauth.cherryIn.error'),
+      alert.show({
         description: message,
-        variant: 'danger',
+        title: t('settings.provider.oauth.cherryIn.error'),
       });
     }
-  }, [handleOAuthLogin, t, toast]);
+  }, [alert, handleOAuthLogin, t]);
 
   const handleTopup = useCallback(() => {
     void openExternalUrl(CHERRYIN_TOPUP_URL);

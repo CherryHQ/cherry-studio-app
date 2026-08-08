@@ -43,8 +43,8 @@ jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({ showConfirmation: jest.fn(), showMessage: jest.fn() }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { confirm: jest.fn(), show: jest.fn() } }),
 }));
 
 jest.mock('react-i18next', () => ({

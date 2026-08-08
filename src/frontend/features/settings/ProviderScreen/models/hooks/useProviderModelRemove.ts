@@ -1,8 +1,8 @@
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { useMutation } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -19,7 +19,7 @@ const emptyModelIdSet: ReadonlySet<UniqueModelId> = new Set();
  */
 export function useProviderModelRemove() {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const removeModelMutation = useMutation('DELETE', '/models/:uniqueModelId*', {
     refresh: ['/models'],
   });
@@ -37,7 +37,7 @@ export function useProviderModelRemove() {
       try {
         await deleteModel({ params: { uniqueModelId: model.id } });
       } catch {
-        toast.show({ label: t('settings.provider.models.removeFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.provider.models.removeFailed') });
       } finally {
         setRemovingIds((current) => {
           const next = new Set(current);
@@ -46,7 +46,7 @@ export function useProviderModelRemove() {
         });
       }
     },
-    [deleteModel, removingIds, t, toast],
+    [alert, deleteModel, removingIds, t],
   );
 
   return {
