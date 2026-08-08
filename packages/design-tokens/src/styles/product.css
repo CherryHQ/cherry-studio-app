@@ -68,13 +68,9 @@
   --inline-code: var(--gray-alpha-100);
   --inline-code-foreground: var(--red-900);
 
-  /* 产品自己的绿，不受主题色偏好影响。
-   *
-   * 与 `--primary` 是两个角色：后者是**用户的**颜色，
-   * `applyPrimaryColorPreference` 会在 `ui.theme_user.color_primary` 一变就重写
-   * 它背后的 `--theme-primary`。「用户选紫色时也必须还是绿的」东西归这里 ——
-   * 思考深度滑杆的顶档就是，因为旁边那片 Skia 像素场是固定的绿色美术资产，
-   * 上面顶一个紫点会读成缺陷。
+  /* 产品自己的绿。`--primary` 现在直接读它（见 shadcn.css），所以两者暂时是同一个
+   * 值 —— 但仍是两个名字：`--brand` 说「这里必须是产品的绿」，`--primary` 说「这里
+   * 是主色，将来可能由用户决定」。真做了主题色界面时，只有后者会开始变。
    *
    * 取值曾是 Cherry 的 #00b96b 字面量、两个主题同值。改成 VBG 的 green-900 之后
    * 它跟着主题走了，这是有意的：#00b96b 对白底只有 2.58:1，而 `text-brand` 用在

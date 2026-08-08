@@ -14,7 +14,6 @@ import {
 import {
   CHERRY_PRODUCT_COLOR_TOKENS,
   CHERRY_PRODUCT_VARIABLE_TOKENS,
-  RUNTIME_THEME_INPUT_TOKENS,
   SHADCN_COLOR_TOKENS,
   SHADCN_VARIABLE_TOKENS,
 } from './theme-contract';
@@ -47,7 +46,6 @@ export async function checkDesignTokens(): Promise<void> {
   ]);
   assertEqual('contract.css imports', extractImports(sources.contract), [
     './tokens.css',
-    './theme-input.css',
     './shadcn.css',
     './product.css',
   ]);
@@ -61,7 +59,6 @@ export async function checkDesignTokens(): Promise<void> {
   assertNoCycles('dark', darkResolved);
 
   const lightNames = new Set(lightDeclarations.keys());
-  assertRequired(lightNames, RUNTIME_THEME_INPUT_TOKENS, '--theme-');
   assertRequired(lightNames, SHADCN_VARIABLE_TOKENS, '--');
   assertRequired(lightNames, CHERRY_PRODUCT_VARIABLE_TOKENS, '--');
 

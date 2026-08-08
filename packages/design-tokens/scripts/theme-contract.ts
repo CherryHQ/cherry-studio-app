@@ -18,7 +18,12 @@
  * - Tailwind color variables are generated only for roles used as utilities.
  */
 
-export const RUNTIME_THEME_INPUT_TOKENS = ['primary', 'primary-foreground'] as const
+/* `RUNTIME_THEME_INPUT_TOKENS` stood here, naming the `--theme-primary` pair the
+ * app rewrote at startup from `ui.theme_user.color_primary`. Mobile has no UI
+ * that writes that preference — bootstrap read it and nothing else touched it —
+ * so the indirection made one unreachable setting configurable. `--primary` now
+ * reads `--brand` in shadcn.css. The preference key itself stays in
+ * packages/universal: it is persisted data shared with desktop. */
 
 export const SHADCN_COLOR_TOKENS = [
   'background',

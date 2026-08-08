@@ -1,12 +1,6 @@
 import { ThemeMode } from '@cherrystudio/universal/data/preference';
 
-import {
-  applyFontSizeStepPreference,
-  applyPrimaryColorPreference,
-  applyThemePreferences,
-  DEFAULT_PRIMARY_COLOR,
-  getPrimaryForeground,
-} from '../theme';
+import { applyFontSizeStepPreference, applyThemePreferences } from '../theme';
 
 const mockSetTheme = jest.fn();
 const mockUpdateCSSVariables = jest.fn();
@@ -34,47 +28,14 @@ describe('theme runtime', () => {
     mockCurrentTheme = 'light';
   });
 
-  test.each([
-    ['#ffffff', '#000000'],
-    ['#000000', '#ffffff'],
-    ['#00b96b', '#000000'],
-  ] as const)('uses a contrast-safe foreground for %s', (primary, foreground) => {
-    expect(getPrimaryForeground(primary)).toBe(foreground);
-  });
-
-  test('normalizes short hex and updates the active theme last', () => {
-    mockCurrentTheme = 'dark';
-
-    applyPrimaryColorPreference('#0b6');
-
-    const variables = {
-      '--theme-primary': '#00bb66',
-      '--theme-primary-foreground': '#000000',
-    };
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'light', variables);
-    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'dark', variables);
-  });
-
-  test('falls back for an invalid stored color', () => {
-    applyPrimaryColorPreference('not-a-color');
-
-    expect(mockUpdateCSSVariables).toHaveBeenLastCalledWith(
-      'light',
-      expect.objectContaining({ '--theme-primary': DEFAULT_PRIMARY_COLOR }),
-    );
-  });
-
   test('sets the requested mode before updating its variables', () => {
-    applyThemePreferences(ThemeMode.dark, '#000000', 0);
+    applyThemePreferences(ThemeMode.dark, 0);
 
     expect(mockSetTheme).toHaveBeenCalledWith('dark');
     expect(mockUpdateCSSVariables).toHaveBeenCalledTimes(2);
     expect(mockUpdateCSSVariables).toHaveBeenLastCalledWith(
       'dark',
-      expect.objectContaining({
-        '--theme-primary': '#000000',
-        '--ui-text-base': 16,
-      }),
+      expect.objectContaining({ '--ui-text-base': 16 }),
     );
   });
 

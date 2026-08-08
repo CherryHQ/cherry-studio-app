@@ -30,8 +30,17 @@
   --card-foreground: var(--gray-1000);
   --popover: var(--background-100);
   --popover-foreground: var(--gray-1000);
-  --primary: var(--theme-primary);
-  --primary-foreground: var(--theme-primary-foreground);
+  /* 直接就是 `--brand`。此前这两条读 `--theme-primary{,-foreground}`，一对由 app
+   * 在启动时按 `ui.theme_user.color_primary` 改写的运行时输入 —— 但移动端从来没有
+   * 过设置主题色的界面，那个 key 只在 bootstrap 被读一次、无人写入，所以整层间接
+   * 服务的是一个改不了的设置。偏好键本身留在 packages/universal（持久化数据、与桌
+   * 面共享），真做了主题色界面再把这层接回来。
+   *
+   * 前景取 `--background-100`（浅色白、深色黑）而不是某个固定值：`--brand` 现在是
+   * green-900，浅色下是深绿 #107d32、需要白字（5.25:1），深色下是亮绿 #00ca50、
+   * 需要黑字（9.56:1）—— 要的正好是「页面底色当墨水」，两个主题都过 AA。 */
+  --primary: var(--brand);
+  --primary-foreground: var(--background-100);
   --secondary: var(--gray-alpha-100);
   --secondary-foreground: var(--gray-1000);
   --muted: var(--gray-alpha-100);
