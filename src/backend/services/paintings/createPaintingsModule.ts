@@ -1,4 +1,3 @@
-import type { ResolvedFile } from '@cherrystudio/universal/data/api/schemas/files';
 import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
@@ -8,6 +7,7 @@ import type {
   PaintingGenerationResult,
   PaintingGenerationSession as PaintingGenerationSessionContract,
   PaintingsModule,
+  ResolvedFile,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
 

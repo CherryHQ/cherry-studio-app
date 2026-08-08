@@ -3,7 +3,6 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream } from 'ai';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
-import type { FileContentOperations } from '@/backend/data/api/handlers/files';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
@@ -37,7 +36,6 @@ import type { Backend } from '@/shared/contracts';
 export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
-    fileContent: FileContentOperations;
     mcpServerMutations: McpServerMutations;
   };
   dispose(): Promise<void>;
@@ -166,6 +164,11 @@ export function createBackend(services: BackendServices): BackendComposition {
     backend: {
       chat,
       cherryin,
+      file: {
+        discardUnreferenced: services.fileContent.discardUnreferenced,
+        import: services.fileContent.import,
+        resolveUri: services.fileContent.resolveRenderableUri,
+      },
       mcp,
       models,
       oauth,
@@ -176,7 +179,6 @@ export function createBackend(services: BackendServices): BackendComposition {
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
-      fileContent: services.fileContent,
       mcpServerMutations: mcp,
     },
     dispose: () => chat.dispose(),

@@ -9,13 +9,16 @@ import type {
 import { ChatInputProvider, useChatInputActions, useChatInputState } from '../ChatInputProvider';
 
 const mockImportFile = jest.fn();
-const mockDiscardFile = jest.fn(async () => ({ deleted: true }));
+const mockDiscardFile = jest.fn(async () => true);
 const mockToastShow = jest.fn();
+const mockFileModule = {
+  discardUnreferenced: mockDiscardFile,
+  import: mockImportFile,
+  resolveUri: jest.fn(),
+};
 
 jest.mock('@/frontend/data', () => ({
-  useMutation: (_method: string, path: string) => ({
-    trigger: path === '/files/import' ? mockImportFile : mockDiscardFile,
-  }),
+  useBackendModule: () => mockFileModule,
 }));
 
 jest.mock('heroui-native/toast', () => ({
@@ -55,8 +58,8 @@ describe('ChatInputProvider attachment imports', () => {
   it('preserves source order and keeps successful imports when one item fails', async () => {
     const first = deferred<ReturnType<typeof resolvedFile>>();
     const second = deferred<ReturnType<typeof resolvedFile>>();
-    mockImportFile.mockImplementation(({ body }: { body: { name: string } }) =>
-      body.name === 'first.pdf' ? first.promise : second.promise,
+    mockImportFile.mockImplementation(({ name }: { name: string }) =>
+      name === 'first.pdf' ? first.promise : second.promise,
     );
     await renderProvider();
 
@@ -114,9 +117,7 @@ describe('ChatInputProvider attachment imports', () => {
     });
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDiscardFile).toHaveBeenCalledWith({
-      params: { id: '00000000-0000-7000-8000-000000000003' },
-    });
+    expect(mockDiscardFile).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000003');
   });
 
   it('tries safe deletion when a ready attachment is removed', async () => {
@@ -128,7 +129,7 @@ describe('ChatInputProvider attachment imports', () => {
     });
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDiscardFile).toHaveBeenCalledWith({ params: { id: ready.fileEntryId } });
+    expect(mockDiscardFile).toHaveBeenCalledWith(ready.fileEntryId);
     expect(mockImportFile).not.toHaveBeenCalled();
   });
 

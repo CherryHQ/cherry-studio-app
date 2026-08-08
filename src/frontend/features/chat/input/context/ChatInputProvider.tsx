@@ -13,7 +13,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { type TextInput } from 'react-native';
 
-import { useMutation } from '@/frontend/data';
+import { useBackendModule } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatInputPhotoPicker } from '../hooks/useChatInputPhotoPicker';
@@ -94,10 +94,7 @@ export function ChatInputProvider({
 }: ChatInputProviderProps) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const importFileMutation = useMutation('POST', '/files/import');
-  const discardFileMutation = useMutation('DELETE', '/files/:id');
-  const importFile = importFileMutation.trigger;
-  const discardFile = discardFileMutation.trigger;
+  const file = useBackendModule('file');
   const inputRef = useRef<TextInput>(null);
   const initialAttachmentsRef = useRef(initialAttachments);
   const didImportInitialAttachmentsRef = useRef(false);
@@ -129,18 +126,18 @@ export function ChatInputProvider({
   const discardEntry = useCallback(
     async (entryId: ChatInputAttachmentReady['fileEntryId']) => {
       try {
-        await discardFile({ params: { id: entryId } });
+        await file.discardUnreferenced(entryId);
       } catch (error) {
         logger.warn('Failed to discard an unreferenced attachment', toError(error), { entryId });
       }
     },
-    [discardFile],
+    [file],
   );
 
   const importAttachment = useCallback(
     async (source: ChatInputAttachmentSource, token: symbol): Promise<ImportResult> => {
       try {
-        const resolved = await importFile({ body: { name: source.name, uri: source.uri } });
+        const resolved = await file.import({ name: source.name, uri: source.uri });
 
         if (cancelledImportTokensRef.current.delete(token)) {
           await discardEntry(resolved.entry.id);
@@ -189,7 +186,7 @@ export function ChatInputProvider({
         return 'failed';
       }
     },
-    [commitAttachments, discardEntry, importFile],
+    [commitAttachments, discardEntry, file],
   );
 
   const importAttachments = useCallback(

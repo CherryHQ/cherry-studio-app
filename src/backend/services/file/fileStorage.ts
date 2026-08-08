@@ -1,4 +1,3 @@
-import type { ResolvedFile } from '@cherrystudio/universal/data/api/schemas/files';
 import {
   type CleanupPolicy,
   type FileEntryId,
@@ -14,6 +13,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { FileRefService } from '@/backend/data/services/FileRefService';
+import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 

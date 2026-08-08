@@ -37,7 +37,7 @@ import { createAgentSessionHandlers } from './agentSessions';
 import { createAgentWorkspaceHandlers } from './agentWorkspaces';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';
-import { createFileHandlers, type FileContentOperations } from './files';
+import { createFileHandlers } from './files';
 import { createGroupHandlers } from './groups';
 import { createJobHandlers } from './jobs';
 import { createKnowledgeHandlers } from './knowledges';
@@ -69,7 +69,6 @@ export type DataApiDependencies = {
   assistants: AssistantService;
   contentSearch: ContentSearchService;
   entitySearch: EntitySearchService;
-  fileContent: FileContentOperations;
   files: FileEntryService;
   fileRefs: FileRefService;
   groups: GroupService;
@@ -102,7 +101,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createAgentWorkspaceHandlers(dependencies.agentWorkspaces, dependencies.agentSessions),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
     ...createAssistantHandlers(dependencies.assistants),
-    ...createFileHandlers(dependencies.files, dependencies.fileRefs, dependencies.fileContent),
+    ...createFileHandlers(dependencies.files, dependencies.fileRefs),
     ...createGroupHandlers(dependencies.groups),
     ...createJobHandlers(dependencies.jobs),
     ...createKnowledgeHandlers(dependencies.knowledgeBases, dependencies.knowledgeItems),

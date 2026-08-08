@@ -15,7 +15,11 @@ jest.mock('../useChatInputPhotoPicker', () => ({
 }));
 
 jest.mock('@/frontend/data', () => ({
-  useMutation: () => ({ trigger: jest.fn() }),
+  useBackendModule: () => ({
+    discardUnreferenced: jest.fn(),
+    import: jest.fn(),
+    resolveUri: jest.fn(),
+  }),
 }));
 
 jest.mock('heroui-native/toast', () => ({

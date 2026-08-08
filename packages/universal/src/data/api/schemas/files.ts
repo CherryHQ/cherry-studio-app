@@ -1,3 +1,9 @@
+/**
+ * Read-only, SQL-first File DataApi contract.
+ *
+ * Filesystem access, physical URI resolution, and mutations belong to the host
+ * platform file capability, matching Cherry Desktop's File IPC boundary.
+ */
 import type { CursorPaginationParams, CursorPaginationResponse } from '@shared/data/api/types';
 import type { FileEntry, FileEntryId, FileRef } from '@shared/data/types/file';
 import {
@@ -5,24 +11,8 @@ import {
   FileEntryIdSchema,
   FileEntryOriginSchema,
   FileRefSourceTypeSchema,
-  SafeNameSchema,
 } from '@shared/data/types/file';
 import * as z from 'zod';
-
-export type ResolvedFile = {
-  entry: FileEntry;
-  uri: string;
-};
-
-export const ImportFileBodySchema = z.strictObject({
-  name: SafeNameSchema.optional(),
-  uri: z.string().min(1),
-});
-export type ImportFileBody = z.input<typeof ImportFileBodySchema>;
-
-export interface DiscardFileResponse {
-  deleted: boolean;
-}
 
 export interface FileEntryRefCount {
   entryId: FileEntryId;
@@ -120,37 +110,6 @@ export type FileSchemas = {
     GET: {
       query: RefsBySourceQueryParams;
       response: FileRef[];
-    };
-  };
-
-  // Mobile compatibility routes. They expose the Expo URI adapter and remain
-  // separate from the desktop-aligned, SQL-only entry routes above.
-  '/files/:id': {
-    DELETE: {
-      params: { id: FileEntryId };
-      response: DiscardFileResponse;
-    };
-    GET: {
-      params: { id: FileEntryId };
-      response: FileEntry | null;
-    };
-  };
-  '/files/import': {
-    POST: {
-      body: ImportFileBody;
-      response: ResolvedFile;
-    };
-  };
-  '/files/:id/renderable-uri': {
-    GET: {
-      params: { id: FileEntryId };
-      response: string | null;
-    };
-  };
-  '/files/:id/resolved': {
-    GET: {
-      params: { id: FileEntryId };
-      response: ResolvedFile | null;
     };
   };
 };

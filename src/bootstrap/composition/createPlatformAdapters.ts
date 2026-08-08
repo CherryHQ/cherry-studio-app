@@ -1,4 +1,9 @@
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+import {
+  type FileEntryId,
+  FileEntryIdSchema,
+  SafeNameSchema,
+} from '@cherrystudio/universal/data/types/file';
+import * as z from 'zod';
 
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import type { FileRefService } from '@/backend/data/services/FileRefService';
@@ -13,6 +18,11 @@ import { DevicePermissions } from '@/backend/services/permissions';
 
 export type PlatformAdapters = ReturnType<typeof createPlatformAdapters>;
 
+const importFileInputSchema = z.strictObject({
+  name: SafeNameSchema.optional(),
+  uri: z.string().min(1),
+});
+
 export function createPlatformAdapters({
   fileEntry,
   fileRef,
@@ -24,13 +34,14 @@ export function createPlatformAdapters({
     devicePermissions: new DevicePermissions(),
     fileContent: {
       discardUnreferenced: (id: FileEntryId) =>
-        discardUnreferencedInternalEntry(fileEntry, fileRef, id),
+        discardUnreferencedInternalEntry(fileEntry, fileRef, FileEntryIdSchema.parse(id)),
       import: async (input: { name?: string; uri: string }) => {
+        const validated = importFileInputSchema.parse(input);
         const entry = await createInternalEntry(fileEntry, {
           cleanupPolicy: 'delete_when_unreferenced',
-          name: input.name,
+          name: validated.name,
           source: 'uri',
-          uri: input.uri,
+          uri: validated.uri,
         });
         const resolved = await resolveFileEntry(fileEntry, entry.id);
         if (!resolved) {
@@ -39,8 +50,9 @@ export function createPlatformAdapters({
         }
         return resolved;
       },
-      resolve: (id: FileEntryId) => resolveFileEntry(fileEntry, id),
-      resolveRenderableUri: (id: FileEntryId) => resolveRenderableFileUri(fileEntry, id),
+      resolve: (id: FileEntryId) => resolveFileEntry(fileEntry, FileEntryIdSchema.parse(id)),
+      resolveRenderableUri: (id: FileEntryId) =>
+        resolveRenderableFileUri(fileEntry, FileEntryIdSchema.parse(id)),
     },
   };
 }

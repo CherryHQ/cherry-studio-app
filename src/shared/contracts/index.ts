@@ -1,6 +1,7 @@
 export * from './backend';
 export * from './chat';
 export * from './cherryin';
+export * from './file';
 export * from './mcp';
 export * from './models';
 export * from './oauth';

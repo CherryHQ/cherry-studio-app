@@ -8,26 +8,29 @@ import type { ChatInputAttachmentReady } from '../../utils/chatInputAttachments'
 import { ChatInputSurface } from '../ChatInputSurface';
 
 const mockToastShow = jest.fn();
-const mockImportFile = jest.fn(async ({ body }: { body: { name: string; uri: string } }) => ({
+const mockImportFile = jest.fn(async ({ name }: { name: string; uri: string }) => ({
   entry: {
     cleanupPolicy: 'delete_when_unreferenced',
     contentHash: null,
     createdAt: '2026-08-08T00:00:00.000Z',
-    ext: body.name.split('.').pop()?.toLowerCase() ?? null,
+    ext: name.split('.').pop()?.toLowerCase() ?? null,
     id: '00000000-0000-7000-8000-000000000099',
-    name: body.name,
+    name,
     origin: 'internal',
     size: 42,
     updatedAt: '2026-08-08T00:00:00.000Z',
   },
-  uri: `file:///managed/${body.name}`,
+  uri: `file:///managed/${name}`,
 }));
-const mockDiscardFile = jest.fn(async () => ({ deleted: true }));
+const mockDiscardFile = jest.fn(async () => true);
+const mockFileModule = {
+  discardUnreferenced: mockDiscardFile,
+  import: mockImportFile,
+  resolveUri: jest.fn(),
+};
 
 jest.mock('@/frontend/data', () => ({
-  useMutation: (_method: string, path: string) => ({
-    trigger: path === '/files/import' ? mockImportFile : mockDiscardFile,
-  }),
+  useBackendModule: () => mockFileModule,
 }));
 
 jest.mock('@/frontend/components/FilePreview', () => {
@@ -435,10 +438,8 @@ describe('ChatInputSurface', () => {
     });
 
     expect(mockImportFile).toHaveBeenCalledWith({
-      body: {
-        name: 'Pasted Sticker.GIF',
-        uri: 'file:///tmp/Pasted%20Sticker.GIF',
-      },
+      name: 'Pasted Sticker.GIF',
+      uri: 'file:///tmp/Pasted%20Sticker.GIF',
     });
     expect(
       renderer.root.findAllByProps({
