@@ -3,12 +3,12 @@ import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/comm
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
 import { useBackendModule } from '@/frontend/data';
@@ -22,7 +22,7 @@ type AvatarSourceValue = 'camera' | 'photos';
 export default function ProfileSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const inputRef = useRef<TextInput>(null);
   const [userName, setUserName] = usePreference('app.user.name');
   const profile = useBackendModule('profile');
@@ -50,9 +50,9 @@ export default function ProfileSettingsScreen() {
   const reportAvatarSaveError = useCallback(
     (error: unknown) => {
       logger.error('Failed to save user avatar', error as Error);
-      toast.show({ label: t('settings.profile.avatarSaveError'), variant: 'danger' });
+      alert.show({ title: t('settings.profile.avatarSaveError') });
     },
-    [t, toast],
+    [alert, t],
   );
 
   const selectAvatarFromCamera = useCallback(async () => {

@@ -5,7 +5,7 @@ import WebSearchCheckScreen from '../WebSearchCheckScreen';
 const mockCheckProvider = jest.fn(
   async (): Promise<{ error?: string; valid: boolean }> => ({ valid: true }),
 );
-const mockShowMessage = jest.fn();
+const mockAlertShow = jest.fn();
 const mockToastShow = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -29,8 +29,8 @@ jest.mock('heroui-native/toast', () => ({
 }));
 
 jest.mock('@/frontend/components/headers', () => ({ BackHeader: () => null }));
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({ showMessage: mockShowMessage }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('@/frontend/components/selectionSheet', () => {
@@ -108,7 +108,7 @@ describe('WebSearchCheckScreen', () => {
 
     await act(async () => button.props.onPress());
 
-    expect(mockShowMessage).toHaveBeenCalledWith({
+    expect(mockAlertShow).toHaveBeenCalledWith({
       description: 'Invalid API key',
       title: 'settings.websearch.provider.checkFailed',
     });

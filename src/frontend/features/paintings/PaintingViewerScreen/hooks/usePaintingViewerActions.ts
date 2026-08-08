@@ -4,8 +4,9 @@ import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Linking } from 'react-native';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 
 import { useDeletePaintings } from '../../hooks/usePaintings';
 import { createPaintingDraftHandoff } from '../../utils/paintingDraftHandoff';
@@ -22,33 +23,73 @@ export function usePaintingViewerActions({
 }) {
   const { t } = useTranslation();
   const { toast } = useToast();
-  const { showMessage } = useAppAlert();
+  const { alert } = useAlert();
   const router = useRouter();
   const deletePaintings = useDeletePaintings();
+
+  const saveToPhotos = useCallback(async () => {
+    try {
+      await MediaLibrary.Asset.create(currentOutput.uri);
+      toast.show({ label: t('painting.viewer.saved'), variant: 'success' });
+    } catch {
+      alert.show({ title: t('painting.viewer.saveFailed') });
+    }
+  }, [alert, currentOutput, t, toast]);
+
+  const showOpenSettingsAlert = useCallback(() => {
+    alert.confirm({
+      confirmLabel: t('settings.permissions.openSystemSettings'),
+      description: t('painting.viewer.savePermissionDenied'),
+      onConfirm: () =>
+        Linking.openSettings().catch(() => {
+          alert.show({ title: t('painting.viewer.savePermissionDenied') });
+        }),
+      title: t('settings.permissions.accessRequired'),
+    });
+  }, [alert, t]);
+
+  const requestPhotoAccessAndSave = useCallback(async () => {
+    try {
+      const permission = await MediaLibrary.requestPermissionsAsync(true);
+      if (permission.granted) {
+        await saveToPhotos();
+      } else if (!permission.canAskAgain) {
+        showOpenSettingsAlert();
+      }
+    } catch {
+      alert.show({ title: t('painting.viewer.saveFailed') });
+    }
+  }, [alert, saveToPhotos, showOpenSettingsAlert, t]);
 
   const download = useCallback(async () => {
     try {
       // Write-only (add-only) access is enough to save; the legacy
       // saveToLibraryAsync throws in SDK 57, so use the class-based Asset.create.
-      const permission = await MediaLibrary.requestPermissionsAsync(true);
-      if (!permission.granted) {
-        toast.show({ label: t('painting.viewer.savePermissionDenied'), variant: 'danger' });
-        return;
+      const permission = await MediaLibrary.getPermissionsAsync(true);
+      if (permission.granted) {
+        await saveToPhotos();
+      } else if (permission.canAskAgain) {
+        alert.confirm({
+          confirmLabel: t('settings.permissions.writeAccess'),
+          description: t('painting.viewer.savePermissionDenied'),
+          onConfirm: requestPhotoAccessAndSave,
+          title: t('settings.permissions.accessRequired'),
+        });
+      } else {
+        showOpenSettingsAlert();
       }
-      await MediaLibrary.Asset.create(currentOutput.uri);
-      toast.show({ label: t('painting.viewer.saved'), variant: 'success' });
     } catch {
-      toast.show({ label: t('painting.viewer.saveFailed'), variant: 'danger' });
+      alert.show({ title: t('painting.viewer.saveFailed') });
     }
-  }, [currentOutput, t, toast]);
+  }, [alert, requestPhotoAccessAndSave, saveToPhotos, showOpenSettingsAlert, t]);
 
   const remove = useCallback(() => {
     const deletion = deletePaintings([painting.id]);
     router.back();
     void deletion.catch(() => {
-      showMessage({ title: t('painting.viewer.deleteFailed') });
+      alert.show({ title: t('painting.viewer.deleteFailed') });
     });
-  }, [deletePaintings, painting.id, router, showMessage, t]);
+  }, [alert, deletePaintings, painting.id, router, t]);
 
   // Both edit and resize reopen the composer seeded with the current output as an
   // input attachment; paintingId additionally preselects the painting's model.

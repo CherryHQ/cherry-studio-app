@@ -5,11 +5,11 @@ import {
 } from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQuery } from '@tanstack/react-query';
-import { useToast } from 'heroui-native/toast';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
@@ -33,7 +33,7 @@ export function McpToolsSection({
   server,
 }: McpToolsSectionProps) {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const mcp = useBackendModule('mcp');
   const isToggleInFlight = useRef(false);
   const [isTogglePending, setIsTogglePending] = useState(false);
@@ -75,13 +75,13 @@ export function McpToolsSection({
 
       const fresh = await toolsQuery.refetch();
       if (fresh.isError || !fresh.data) {
-        toast.show({ label: t('settings.mcp.tools.refreshFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.mcp.tools.refreshFailed') });
         return undefined;
       }
 
       return fresh.data.map((tool) => tool.name);
     },
-    [server, t, toast, toolsQuery],
+    [alert, server, t, toolsQuery],
   );
 
   const runToggle = useCallback(async (toggle: () => Promise<void>) => {

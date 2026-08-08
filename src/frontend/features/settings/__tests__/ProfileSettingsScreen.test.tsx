@@ -67,8 +67,8 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 
 jest.mock('lucide-uniwind/png', () => ({

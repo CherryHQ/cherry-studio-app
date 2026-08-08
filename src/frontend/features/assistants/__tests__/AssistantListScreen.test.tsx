@@ -11,10 +11,10 @@ const assistantB = { emoji: 'B', id: 'assistant-b', name: 'Assistant B' } as Ass
 const mockDeleteAssistant = jest.fn(async () => undefined);
 const mockPush = jest.fn();
 const mockSetBottomTabBarHidden = jest.fn();
-const mockShowConfirmation = jest.fn((options: ConfirmationOptions) => {
+const mockAlertConfirm = jest.fn((options: ConfirmationOptions) => {
   currentConfirmation = options;
 });
-const mockShowMessage = jest.fn();
+const mockAlertShow = jest.fn();
 let currentConfirmation: ConfirmationOptions | undefined;
 let deletion = deferred<void>();
 let mockAssistants: readonly Assistant[] = [assistantA, assistantB];
@@ -69,10 +69,12 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({
-    showConfirmation: mockShowConfirmation,
-    showMessage: mockShowMessage,
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({
+    alert: {
+      confirm: mockAlertConfirm,
+      show: mockAlertShow,
+    },
   }),
 }));
 
@@ -198,7 +200,7 @@ describe('AssistantListScreen batch deletion', () => {
       await deletion.promise.catch(() => undefined);
     });
 
-    expect(mockShowMessage).toHaveBeenCalledWith({ title: 'assistant.selection.deleteFailed' });
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'assistant.selection.deleteFailed' });
     expect(renderer?.root.findAllByProps({ accessibilityLabel: assistantA.name })).not.toHaveLength(
       0,
     );

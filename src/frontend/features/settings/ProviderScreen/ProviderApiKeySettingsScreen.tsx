@@ -4,7 +4,7 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
 
 import {
@@ -72,7 +72,7 @@ function ProviderApiKeySettingsForm({
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
   const pendingApiKeyIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const { showConfirmation, showMessage } = useAppAlert();
+  const { alert } = useAlert();
   const { addKey, entries, removeKey, restoreKey, updateKey, updateKeyEnabled } =
     useProviderApiServiceApiKeysDraft(apiKeys);
   const hasUnsavedChanges =
@@ -188,7 +188,7 @@ function ProviderApiKeySettingsForm({
         return;
       }
 
-      showConfirmation({
+      alert.confirm({
         confirmLabel: t('common.remove'),
         description: t('settings.provider.apiService.removeApiKeyMessage'),
         onConfirm: () => {
@@ -201,7 +201,7 @@ function ProviderApiKeySettingsForm({
 
             if (!didSave) {
               restoreKey(entry, entryIndex);
-              showMessage({ title: t('settings.provider.apiService.saveFailed') });
+              alert.show({ title: t('settings.provider.apiService.saveFailed') });
             }
           })();
         },
@@ -209,7 +209,7 @@ function ProviderApiKeySettingsForm({
         title: t('settings.provider.apiService.removeApiKeyTitle'),
       });
     },
-    [apiKeys, entries, removeKey, restoreKey, saveEntries, showConfirmation, showMessage, t],
+    [alert, apiKeys, entries, removeKey, restoreKey, saveEntries, t],
   );
 
   return (

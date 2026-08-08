@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import * as AuthSession from 'expo-auth-session';
-import { useToast } from 'heroui-native';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import type { CompleteOAuthAuthorizationInput } from '@/shared/contracts';
 import { resolveAuthorizeConfig } from '@/shared/oauth';
@@ -31,7 +31,7 @@ export interface UseCherryInOauthOptions {
 export function useCherryInOauth(options: UseCherryInOauthOptions) {
   const { providerId, requestConfirmation, onOAuthComplete } = options;
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const oauth = useBackendModule('oauth');
   const cherryin = useBackendModule('cherryin');
   const queryClient = useQueryClient();
@@ -120,17 +120,16 @@ export function useCherryInOauth(options: UseCherryInOauthOptions) {
           await authConfigQuery.refetch();
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
-          toast.show({
-            variant: 'warning',
-            label: t('settings.provider.oauth.cherryIn.logout_warning'),
+          alert.show({
             description: message,
+            title: t('settings.provider.oauth.cherryIn.logout_warning'),
           });
         }
 
         setIsLoggingOut(false);
       },
     });
-  }, [authConfigQuery, logoutMutation, requestConfirmation, t, toast]);
+  }, [alert, authConfigQuery, logoutMutation, requestConfirmation, t]);
 
   const handleOAuthLogin = useCallback(async () => {
     if (!request) {

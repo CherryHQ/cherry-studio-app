@@ -19,7 +19,7 @@ let mockResolvableModelIds: string[];
 let mockPickerSelectedModelIds: (UniqueModelId | null)[];
 const mockCreateAssistant = jest.fn();
 const mockRouterBack = jest.fn();
-const mockToastShow = jest.fn();
+const mockAlertShow = jest.fn();
 const mockUpdateAssistant = jest.fn();
 
 jest.mock('expo-router', () => ({
@@ -47,8 +47,8 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('lucide-uniwind/png', () => ({
@@ -173,7 +173,7 @@ describe('AssistantEditScreen', () => {
     mockCreateAssistant.mockReset();
     mockCreateAssistant.mockResolvedValue(undefined);
     mockRouterBack.mockReset();
-    mockToastShow.mockReset();
+    mockAlertShow.mockReset();
     mockUpdateAssistant.mockReset();
     mockUpdateAssistant.mockResolvedValue(undefined);
   });
@@ -337,10 +337,21 @@ describe('AssistantEditScreen', () => {
     await save();
 
     expect(mockUpdateAssistant).not.toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'assistant.form.maxToolCallsInvalid',
-      variant: 'danger',
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'assistant.form.maxToolCallsInvalid',
     });
+  });
+
+  it('shows an alert when saving fails', async () => {
+    mockAssistant = makeAssistant();
+    mockIsLoading = false;
+    mockUpdateAssistant.mockRejectedValueOnce(new Error('Save failed'));
+    render();
+
+    await save();
+
+    expect(mockRouterBack).not.toHaveBeenCalled();
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'assistant.toast.saveFailed' });
   });
 });
 

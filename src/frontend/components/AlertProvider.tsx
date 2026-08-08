@@ -16,13 +16,13 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 
-type MessageAlertOptions = {
+export type AlertShowOptions = {
   actionLabel?: string;
   description?: string;
   title: string;
 };
 
-type ConfirmationAlertOptions = {
+export type AlertConfirmOptions = {
   confirmLabel: string;
   description?: string;
   onConfirm: () => Promise<void> | void;
@@ -30,7 +30,7 @@ type ConfirmationAlertOptions = {
   title: string;
 };
 
-type PromptAlertOptions = {
+export type AlertPromptOptions = {
   confirmLabel: string;
   description?: string;
   input: Omit<AlertInput, 'onChangeText' | 'value'> & { initialValue: string };
@@ -48,34 +48,32 @@ type QueuedAlert = {
   title: string;
 };
 
-type AppAlertContextValue = {
-  showConfirmation: (options: ConfirmationAlertOptions) => void;
-  showMessage: (options: MessageAlertOptions) => void;
-  showPrompt: (options: PromptAlertOptions) => void;
+export type AlertController = {
+  confirm: (options: AlertConfirmOptions) => void;
+  prompt: (options: AlertPromptOptions) => void;
+  show: (options: AlertShowOptions) => void;
 };
 
-const AppAlertContext = createContext<AppAlertContextValue | null>(null);
+type AlertContextValue = {
+  alert: AlertController;
+};
 
-export function AppAlertProvider({ children }: PropsWithChildren) {
+const AlertContext = createContext<AlertContextValue | null>(null);
+
+export function AlertProvider({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const nextAlertIdRef = useRef(0);
   const [queue, setQueue] = useState<QueuedAlert[]>([]);
   const activeAlert = queue[0];
 
-  const enqueue = useCallback((alert: Omit<QueuedAlert, 'id'>) => {
+  const enqueue = useCallback((nextAlert: Omit<QueuedAlert, 'id'>) => {
     const id = nextAlertIdRef.current;
     nextAlertIdRef.current += 1;
-    setQueue((current) => [...current, { ...alert, id }]);
+    setQueue((current) => [...current, { ...nextAlert, id }]);
   }, []);
 
-  const showConfirmation = useCallback(
-    ({
-      confirmLabel,
-      description,
-      onConfirm,
-      role = 'default',
-      title,
-    }: ConfirmationAlertOptions) => {
+  const confirm = useCallback(
+    ({ confirmLabel, description, onConfirm, role = 'default', title }: AlertConfirmOptions) => {
       Keyboard.dismiss();
       enqueue({
         actions: [
@@ -95,15 +93,15 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
     [enqueue, t],
   );
 
-  const showMessage = useCallback(
-    ({ actionLabel = t('common.ok'), description, title }: MessageAlertOptions) => {
+  const show = useCallback(
+    ({ actionLabel = t('common.ok'), description, title }: AlertShowOptions) => {
       enqueue({ actions: [{ label: actionLabel }], description, title });
     },
     [enqueue, t],
   );
 
-  const showPrompt = useCallback(
-    ({ confirmLabel, description, input, onConfirm, title }: PromptAlertOptions) => {
+  const prompt = useCallback(
+    ({ confirmLabel, description, input, onConfirm, title }: AlertPromptOptions) => {
       Keyboard.dismiss();
       enqueue({
         actions: [
@@ -147,10 +145,11 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
-  const contextValue = useMemo(
-    () => ({ showConfirmation, showMessage, showPrompt }),
-    [showConfirmation, showMessage, showPrompt],
+  const alert = useMemo<AlertController>(
+    () => ({ confirm, prompt, show }),
+    [confirm, prompt, show],
   );
+  const contextValue = useMemo(() => ({ alert }), [alert]);
 
   const actions =
     activeAlert?.actions.map(({ onPress, ...action }) => ({
@@ -162,7 +161,7 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
     : undefined;
 
   return (
-    <AppAlertContext value={contextValue}>
+    <AlertContext value={contextValue}>
       {children}
       <Alert
         key={activeAlert?.id ?? 'empty'}
@@ -171,18 +170,18 @@ export function AppAlertProvider({ children }: PropsWithChildren) {
         input={input}
         isOpen={Boolean(activeAlert)}
         onOpenChange={handleOpenChange}
-        testID="app-alert"
+        testID="alert"
         title={activeAlert?.title ?? ''}
       />
-    </AppAlertContext>
+    </AlertContext>
   );
 }
 
-export function useAppAlert() {
-  const context = use(AppAlertContext);
+export function useAlert() {
+  const context = use(AlertContext);
 
   if (!context) {
-    throw new Error('useAppAlert must be used within AppAlertProvider');
+    throw new Error('useAlert must be used within AlertProvider');
   }
 
   return context;

@@ -36,8 +36,8 @@ let mockServerLoading = false;
 const mockCreateServer = jest.fn();
 const mockDeleteServer = jest.fn();
 const mockGetServerInfo = jest.fn();
-const mockShowConfirmation = jest.fn();
-const mockShowMessage = jest.fn();
+const mockAlertConfirm = jest.fn();
+const mockAlertShow = jest.fn();
 const mockRouterBack = jest.fn();
 const mockRouterReplace = jest.fn();
 const mockServerRefetch = jest.fn();
@@ -85,10 +85,12 @@ jest.mock('@/frontend/components/headers', () => ({
   },
 }));
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({
-    showConfirmation: mockShowConfirmation,
-    showMessage: mockShowMessage,
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({
+    alert: {
+      confirm: mockAlertConfirm,
+      show: mockAlertShow,
+    },
   }),
 }));
 
@@ -318,9 +320,8 @@ describe('McpServerScreen tabs', () => {
     });
 
     expect(mockGetServerInfo).not.toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.mcp.fields.baseUrlInvalid',
-      variant: 'danger',
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'settings.mcp.fields.baseUrlInvalid',
     });
   });
 
@@ -348,9 +349,8 @@ describe('McpServerScreen tabs', () => {
     });
 
     expect(mockGetServerInfo).not.toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.mcp.headers.invalidLine:2',
-      variant: 'danger',
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'settings.mcp.headers.invalidLine:2',
     });
   });
 
@@ -597,7 +597,7 @@ describe('McpServerScreen tabs', () => {
 
     chrome.props.onDelete();
 
-    expect(mockShowConfirmation).toHaveBeenCalledWith(
+    expect(mockAlertConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
         confirmLabel: 'common.delete',
         description: 'settings.mcp.delete.message',
@@ -607,7 +607,7 @@ describe('McpServerScreen tabs', () => {
     );
     mockDeleteServer.mockResolvedValue(undefined);
     await act(async () => {
-      await mockShowConfirmation.mock.calls[0][0].onConfirm();
+      await mockAlertConfirm.mock.calls[0][0].onConfirm();
     });
     expect(mockRouterBack).toHaveBeenCalled();
   });

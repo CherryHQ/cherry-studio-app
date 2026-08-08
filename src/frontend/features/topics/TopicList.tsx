@@ -1,7 +1,6 @@
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useToast } from 'heroui-native/toast';
 import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +18,7 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   useMessageListBottomInset,
   useMessagePendingDeletionIds,
@@ -99,7 +99,7 @@ function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yes
 
 const TopicListView = memo(function TopicListView() {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const bottomInset = useMessageListBottomInset();
   const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic, toggleTopicPin } = useTopicListActions();
@@ -141,10 +141,10 @@ const TopicListView = memo(function TopicListView() {
   const handleTogglePin = useCallback(
     (topicId: string) => {
       void toggleTopicPin(topicId).catch(() => {
-        toast.show({ label: t('topic.pin.failed'), variant: 'danger' });
+        alert.show({ title: t('topic.pin.failed') });
       });
     },
-    [t, toast, toggleTopicPin],
+    [alert, t, toggleTopicPin],
   );
 
   const renderItem = useCallback(

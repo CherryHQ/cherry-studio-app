@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   useMessageScope,
   useMessageSelectionActions,
@@ -12,7 +12,7 @@ import { SelectionToolbar } from '@/frontend/components/messageTabs/SelectionToo
 
 export function SelectionControls() {
   const { t } = useTranslation();
-  const { showConfirmation, showMessage } = useAppAlert();
+  const { alert } = useAlert();
   const { scope } = useMessageScope();
   const source = useMessageSelectionSource(scope);
   const { beginDeletion, finishDeletion, toggleAll } = useMessageSelectionActions();
@@ -29,7 +29,7 @@ export function SelectionControls() {
       return;
     }
 
-    showConfirmation({
+    alert.confirm({
       confirmLabel: t('common.delete'),
       description: t(source.copy.deleteMessage, { count: ids.length }),
       onConfirm: () => {
@@ -37,14 +37,14 @@ export function SelectionControls() {
         void source
           .deleteSelected(ids)
           .catch(() => {
-            showMessage({ title: t(source.copy.deleteFailed) });
+            alert.show({ title: t(source.copy.deleteFailed) });
           })
           .finally(() => finishDeletion(scope, ids));
       },
       role: 'destructive',
       title: t(source.copy.deleteTitle),
     });
-  }, [beginDeletion, finishDeletion, scope, selectedIds, showConfirmation, showMessage, source, t]);
+  }, [alert, beginDeletion, finishDeletion, scope, selectedIds, source, t]);
 
   return (
     <>

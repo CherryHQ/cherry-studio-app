@@ -6,7 +6,7 @@ import { useProviderModelCheck } from '../useProviderModelCheck';
 type ModelCheck = ReturnType<typeof useProviderModelCheck>;
 
 const mockCheckHealth = jest.fn();
-const mockShowMessage = jest.fn();
+const mockAlertShow = jest.fn();
 const mockToastShow = jest.fn();
 
 jest.mock('@tanstack/react-query', () => ({
@@ -21,8 +21,8 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/AppAlertProvider', () => ({
-  useAppAlert: () => ({ showMessage: mockShowMessage }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('@/frontend/data', () => ({
@@ -74,7 +74,7 @@ describe('useProviderModelCheck', () => {
 
     await act(async () => modelCheck?.startCheck());
 
-    expect(mockShowMessage).toHaveBeenCalledWith({
+    expect(mockAlertShow).toHaveBeenCalledWith({
       description: 'Unauthorized',
       title: 'settings.provider.models.checkFailed',
     });

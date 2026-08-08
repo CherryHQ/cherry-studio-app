@@ -8,7 +8,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { useAppAlert } from '@/frontend/components/AppAlertProvider';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import {
@@ -46,7 +46,7 @@ export default function ProviderDetailSettingsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { showConfirmation, showMessage } = useAppAlert();
+  const { alert } = useAlert();
   const providers = useBackendModule('providers');
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
@@ -135,10 +135,10 @@ export default function ProviderDetailSettingsScreen() {
       const nextApiKeys = buildApiKeyEntriesFromInput(input, apiKeys ?? []);
 
       void replaceApiKeysMutation.mutateAsync(nextApiKeys).catch(() => {
-        toast.show({ label: t('settings.provider.apiService.saveFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.provider.apiService.saveFailed') });
       });
     },
-    [apiKeys, replaceApiKeysMutation, t, toast],
+    [alert, apiKeys, replaceApiKeysMutation, t],
   );
   const openModelAddSettings = useCallback(() => {
     if (!providerId) {
@@ -250,22 +250,22 @@ export default function ProviderDetailSettingsScreen() {
         toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
       })
       .catch(() => {
-        showMessage({ title: t('settings.provider.toast.deleteFailed') });
+        alert.show({ title: t('settings.provider.toast.deleteFailed') });
       });
-  }, [deleteProviderMutation, providerId, router, showMessage, t, toast]);
+  }, [alert, deleteProviderMutation, providerId, router, t, toast]);
   const requestDeleteProvider = useCallback(() => {
     if (!provider || !providers.canRemove(provider)) {
       return;
     }
 
-    showConfirmation({
+    alert.confirm({
       confirmLabel: t('common.delete'),
       description: t('settings.provider.delete.message', { name: provider.name }),
       onConfirm: handleDeleteProvider,
       role: 'destructive',
       title: t('settings.provider.delete.title'),
     });
-  }, [handleDeleteProvider, provider, providers, showConfirmation, t]);
+  }, [alert, handleDeleteProvider, provider, providers, t]);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;

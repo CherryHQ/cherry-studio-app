@@ -3,8 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import FontSizeSettingsScreen from '../FontSizeSettingsScreen';
 
 const mockApplyFontSizeStep = jest.fn();
+const mockAlertShow = jest.fn();
 const mockSetStoredStep = jest.fn(async () => undefined);
-const mockToastShow = jest.fn();
 
 jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
@@ -34,8 +34,8 @@ jest.mock('@cherrystudio/ui/components', () => {
   return { Slider };
 });
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -82,9 +82,8 @@ describe('FontSizeSettingsScreen', () => {
 
     expect(mockApplyFontSizeStep).toHaveBeenLastCalledWith(0);
     expect(renderer?.root.findByType('MarkdownText').props.fontSizeStep).toBe(0);
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.fontSize.saveFailed',
-      variant: 'danger',
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'settings.fontSize.saveFailed',
     });
   });
 });
