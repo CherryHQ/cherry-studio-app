@@ -10,7 +10,6 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { useUniwind } from 'uniwind';
 
 import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/BrandAvatar';
-import { aiUsageCalendar } from '@/frontend/utils/constants';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
@@ -33,7 +32,7 @@ export function AiUsageSummaryCard() {
   const formattedCost = formatCostTotals(data?.costTotals ?? [], locale);
 
   return (
-    <View className="w-full rounded-2xl bg-grouped-surface p-4" style={styles.card}>
+    <View className="w-full rounded-2xl bg-grouped-surface p-4" style={styles.continuousCorners}>
       <View className="flex-row items-center justify-between gap-3">
         <View className="min-w-0 shrink flex-row items-center gap-2">
           <Text
@@ -158,10 +157,6 @@ export function AiUsageSummaryCard() {
 }
 
 const styles = StyleSheet.create({
-  card: {
-    borderCurve: 'continuous',
-    boxShadow: aiUsageCalendar.cardShadow,
-  },
   continuousCorners: {
     borderCurve: 'continuous',
   },

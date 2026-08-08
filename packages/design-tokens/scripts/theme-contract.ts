@@ -57,20 +57,6 @@ export const SHADCN_COLOR_TOKENS = [
 
 export const SHADCN_VARIABLE_TOKENS = [...SHADCN_COLOR_TOKENS, 'radius'] as const
 
-export const SHADCN_SURFACE_PAIRS = [
-  ['background', 'foreground'],
-  ['card', 'card-foreground'],
-  ['popover', 'popover-foreground'],
-  ['primary', 'primary-foreground'],
-  ['secondary', 'secondary-foreground'],
-  ['muted', 'muted-foreground'],
-  ['accent', 'accent-foreground'],
-  ['destructive', 'destructive-foreground'],
-  ['sidebar', 'sidebar-foreground'],
-  ['sidebar-primary', 'sidebar-primary-foreground'],
-  ['sidebar-accent', 'sidebar-accent-foreground']
-] as const
-
 export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   /* Shared product semantics */
   'brand',
@@ -112,6 +98,7 @@ export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   'chat-user',
   'constant-black',
   'constant-white',
+  'scrim',
   'grouped-background',
   'grouped-surface',
   'usage-level-1',
@@ -135,10 +122,10 @@ export const CHERRY_PRODUCT_COLOR_TOKENS = CHERRY_PRODUCT_VARIABLE_TOKENS
  * nothing; three of the four names have no consumer left anywhere, and the
  * fourth (`secondary-active`) is a live product token declared above. */
 
-export const CHERRY_PRODUCT_SURFACE_PAIRS = [
-  ['success-subtle', 'success-subtle-foreground'],
-  ['warning-subtle', 'warning-subtle-foreground'],
-  ['info-subtle', 'info-subtle-foreground'],
-  ['error-subtle', 'error-subtle-foreground'],
-  ['inline-code', 'inline-code-foreground']
-] as const
+/* `SHADCN_SURFACE_PAIRS` and `CHERRY_PRODUCT_SURFACE_PAIRS` stood here, listing
+ * which foreground belongs on which surface. Neither had a reader: `check.ts`
+ * and `build-native-css.ts` never imported them, and the Storybook page that
+ * renders the pairs keeps its own list in `packages/ui/stories/foundations/
+ * tokens.ts` — so these two copies could disagree with what is documented on
+ * screen and nothing would notice. If a pair ever needs enforcing, it belongs
+ * in `check.ts` as an assertion, not in a list no one reads. */

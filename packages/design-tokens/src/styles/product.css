@@ -93,6 +93,13 @@
   --constant-black: oklch(0 0 0);
   --constant-white: oklch(1 0 0);
 
+  /* 模态层背后的遮罩，两个主题同值 —— 压暗的是「下面那一层」，不管它自己是什么
+   * 颜色，所以基于 `--constant-black` 而不是 `--background`（深色下黑压黑等于没
+   * 压）。这条同时喂 app 自己的 ModalBottomSheet 和 heroui 的 `--backdrop`：此前
+   * 两者一个 40% 一个 20%，同一个应用里两种压暗程度。统一取 40%，是 sheet 一直
+   * 在用的那个值，也和 Material 的 dialog/sheet 同档做法一致。 */
+  --scrim: color-mix(in srgb, var(--constant-black) 40%, transparent);
+
   /* Stable product domain: AI usage heat scale (AiUsageCalendar).
    * 四档由同一个绿档按 25/50/75/100 调出来，所以强度是均匀的、也不可能逐档跑偏；
    * 空白格直接用 --border。混的是 transparent 而不是某个表面色，因为这个日历有两

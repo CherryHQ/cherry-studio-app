@@ -77,7 +77,7 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
   onToggle,
   selectionIndex,
 }: ChatInputPhotoCellProps) {
-  const accentColor = useThemeColor('primary');
+  const [accentColor, ringColor] = useThemeColor(['primary', 'constant-white']);
   const pressProgress = useSharedValue(1);
   const selectionProgress = useSharedValue(isSelected ? 1 : 0);
   const appliedSelectionRef = useRef(isSelected);
@@ -169,7 +169,13 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
         </Animated.View>
         <Animated.View
           pointerEvents="none"
-          style={[styles.selectionBadge, { backgroundColor: accentColor }, badgeStyle]}
+          // The ring is `constant-white`, not a themed border: it separates the
+          // badge from whatever photo is underneath, which is neither surface.
+          style={[
+            styles.selectionBadge,
+            { backgroundColor: accentColor, borderColor: ringColor },
+            badgeStyle,
+          ]}
         >
           <Text
             adjustsFontSizeToFit
@@ -450,9 +456,6 @@ const styles = StyleSheet.create({
   },
   selectionBadge: {
     alignItems: 'center',
-    // White ring, not a themed border: it separates the badge from whatever
-    // photo is underneath, which is neither light nor dark surface.
-    borderColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 2,
     height: 24,

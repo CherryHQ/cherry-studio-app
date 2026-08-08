@@ -8,10 +8,6 @@ export const isAndroid = process.env.EXPO_OS === 'android';
 export const isIOS = process.env.EXPO_OS === 'ios';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
-// Shared scrim (backdrop) color for every `ModalBottomSheet` so all sheets dim
-// the background behind them consistently. Single source of truth — tune here.
-export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
-
 // Geist Mono, embedded natively by the expo-font plugin (see app.json). This is
 // the font's PostScript name, which is also its filename, so iOS and Android
 // both resolve it from this single string. Components that style through
@@ -57,7 +53,6 @@ export const aiUsageCalendar = {
   cellRadius: 2,
   summaryCellGap: 2,
   summaryFallbackCellSize: 10,
-  cardShadow: '0px 0px 20px 0px rgba(0, 0, 0, 0.05)',
   dimmedOpacity: 0.35,
   sweepStepMs: 45, // per-diagonal delay of the bottom-left → top-right entrance wave
   enterSpring: { mass: 1.1, damping: 13, stiffness: 150, overshootClamping: false },

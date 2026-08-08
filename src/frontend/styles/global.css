@@ -126,7 +126,7 @@
       --surface-tertiary-foreground: var(--accent-foreground);
       --overlay: var(--popover);
       --overlay-foreground: var(--popover-foreground);
-      --backdrop: oklch(0 0 0 / 20%);
+      --backdrop: var(--scrim);
       --default: var(--secondary);
       --default-foreground: var(--secondary-foreground);
       --field-background: var(--card);
@@ -153,7 +153,7 @@
       --surface-tertiary-foreground: var(--accent-foreground);
       --overlay: var(--popover);
       --overlay-foreground: var(--popover-foreground);
-      --backdrop: oklch(0 0 0 / 20%);
+      --backdrop: var(--scrim);
       --default: var(--secondary);
       --default-foreground: var(--secondary-foreground);
       --field-background: var(--card);

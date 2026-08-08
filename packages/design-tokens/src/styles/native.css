@@ -78,6 +78,7 @@
   --color-chat-user: var(--chat-user);
   --color-constant-black: var(--constant-black);
   --color-constant-white: var(--constant-white);
+  --color-scrim: var(--scrim);
   --color-grouped-background: var(--grouped-background);
   --color-grouped-surface: var(--grouped-surface);
   --color-usage-level-1: var(--usage-level-1);
@@ -207,6 +208,7 @@
       --chat-user: var(--gray-alpha-100);
       --constant-black: oklch(0 0 0);
       --constant-white: oklch(1 0 0);
+      --scrim: color-mix(in srgb, var(--constant-black) 40%, transparent);
       --usage-level-1: color-mix(in srgb, var(--green-700) 25%, transparent);
       --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
       --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);
@@ -324,6 +326,7 @@
       --chat-user: var(--gray-alpha-100);
       --constant-black: oklch(0 0 0);
       --constant-white: oklch(1 0 0);
+      --scrim: color-mix(in srgb, var(--constant-black) 40%, transparent);
       --usage-level-1: color-mix(in srgb, var(--green-700) 25%, transparent);
       --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
       --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);

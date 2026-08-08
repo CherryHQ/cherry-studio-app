@@ -8,7 +8,8 @@ import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-n
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { isLiquidGlassAvailable, sheetScrimColor } from '@/frontend/utils/constants';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
@@ -54,6 +55,7 @@ export function ChatInputActionSheet({
   const { t } = useTranslation();
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const scrimColor = useThemeColor('scrim');
   const { addAttachments, closeActionSheet, selectAction } = useChatInputActions();
   const { isActionSheetOpen, selectedToolId } = useChatInputState();
   const { actions, state: mediaState } = useChatInputMedia();
@@ -137,7 +139,7 @@ export function ChatInputActionSheet({
           handleClose();
         }
       }}
-      scrimColor={sheetScrimColor}
+      scrimColor={scrimColor}
       surface={
         isLiquidGlassAvailable ? (
           <GlassView
