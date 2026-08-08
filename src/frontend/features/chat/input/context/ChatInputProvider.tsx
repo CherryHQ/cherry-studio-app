@@ -27,11 +27,18 @@ import {
   type ChatInputReasoningEffort,
 } from '../utils/chatInputReasoning';
 
+/**
+ * Which face the ＋ menu is showing. It lives here rather than in the menu
+ * because the photo picker's permissions and previews are gated on it, and that
+ * hook is owned by this provider.
+ */
+export type ChatInputMenuLevel = 'camera' | 'photos' | 'root';
+
 type ChatInputStateContextValue = {
   attachments: readonly ChatInputAttachmentDraft[];
   draft: string;
-  isActionSheetOpen: boolean;
   isReasoningEffortSelected: boolean;
+  menuLevel: ChatInputMenuLevel;
   reasoningEffort: ChatInputReasoningEffort;
   selectedTool?: ChatInputAction;
   selectedToolId: ChatInputActionId | null;
@@ -42,14 +49,13 @@ type ChatInputActionsContextValue = {
   clearAttachments: () => void;
   clearReasoningEffort: () => void;
   clearSelectedTool: () => void;
-  closeActionSheet: () => void;
-  openActionSheet: () => void;
   removeAttachment: (attachmentId: string) => void;
   selectAction: (actionId: ChatInputActionId) => void;
   selectReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
   setSelectedTool: (actionId: ChatInputActionId | null) => void;
   setAttachments: (attachments: ChatInputAttachmentDraft[]) => void;
   setDraft: (draft: string) => void;
+  setMenuLevel: (level: ChatInputMenuLevel) => void;
   syncReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
 };
 
@@ -76,7 +82,7 @@ export function ChatInputProvider({
 }: ChatInputProviderProps) {
   const inputRef = useRef<TextInput>(null);
   const [draft, setDraft] = useState(initialDraft);
-  const [isActionSheetOpen, setIsActionSheetOpen] = useState(false);
+  const [menuLevel, setMenuLevel] = useState<ChatInputMenuLevel>('root');
   const [isReasoningEffortSelected, setIsReasoningEffortSelected] = useState(false);
   const [reasoningEffort, setReasoningEffort] = useState<ChatInputReasoningEffort>(
     CHAT_INPUT_DEFAULT_REASONING_EFFORT,
@@ -88,18 +94,10 @@ export function ChatInputProvider({
   const addAttachments = useCallback((nextAttachments: ChatInputAttachmentDraft[]) => {
     setAttachments((current) => appendChatInputAttachments(current, nextAttachments));
   }, []);
-  const media = useChatInputPhotoPicker(isActionSheetOpen, addAttachments);
+  // Permissions and previews load only while the grid is actually on screen —
+  // tighter than the old sheet, which loaded them the moment ＋ was tapped.
+  const media = useChatInputPhotoPicker(menuLevel === 'photos', addAttachments);
   const selectedTool = useMemo(() => getChatInputAction(selectedToolId), [selectedToolId]);
-
-  const openActionSheet = useCallback(() => {
-    // Don't blur/dismiss the keyboard: let iOS keep the input as first responder
-    // and auto-restore it when the sheet dismisses (immediate, no manual refocus).
-    setIsActionSheetOpen(true);
-  }, []);
-
-  const closeActionSheet = useCallback(() => {
-    setIsActionSheetOpen(false);
-  }, []);
 
   const selectAction = useCallback((actionId: ChatInputActionId) => {
     setSelectedToolId((current) => toggleChatInputAction(current, actionId));
@@ -135,8 +133,8 @@ export function ChatInputProvider({
     () => ({
       attachments,
       draft,
-      isActionSheetOpen,
       isReasoningEffortSelected,
+      menuLevel,
       reasoningEffort,
       selectedTool,
       selectedToolId,
@@ -144,8 +142,8 @@ export function ChatInputProvider({
     [
       attachments,
       draft,
-      isActionSheetOpen,
       isReasoningEffortSelected,
+      menuLevel,
       reasoningEffort,
       selectedTool,
       selectedToolId,
@@ -158,14 +156,13 @@ export function ChatInputProvider({
       clearAttachments,
       clearReasoningEffort,
       clearSelectedTool,
-      closeActionSheet,
-      openActionSheet,
       removeAttachment,
       selectAction,
       selectReasoningEffort,
       setSelectedTool: setSelectedToolId,
       setAttachments,
       setDraft,
+      setMenuLevel,
       syncReasoningEffort,
     }),
     [
@@ -173,8 +170,6 @@ export function ChatInputProvider({
       clearAttachments,
       clearReasoningEffort,
       clearSelectedTool,
-      closeActionSheet,
-      openActionSheet,
       removeAttachment,
       selectAction,
       selectReasoningEffort,

@@ -33,5 +33,9 @@ export type MorphMenuItemProps = {
   label: string;
   /** The menu closes itself before this fires, so callers don't have to. */
   onPress: () => void;
+  /** Announced to assistive tech. What it looks like selected is the caller's, via `icon` and `trailing`. */
+  selected?: boolean;
   testID?: string;
+  /** Rendered after the label, pushed to the row's end — a checkmark, a value, a chevron. */
+  trailing?: ReactNode;
 };

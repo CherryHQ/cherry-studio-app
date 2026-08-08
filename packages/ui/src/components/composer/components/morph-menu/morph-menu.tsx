@@ -47,13 +47,19 @@ type MorphMenuContextValue = { close: () => void };
 
 const MorphMenuContext = createContext<MorphMenuContextValue | null>(null);
 
-function useMorphMenu() {
+/**
+ * The open menu's own controls, for content rendered inside it. Anything that
+ * finishes what the menu was opened for — a picker's confirm button, a second
+ * level's cancel — needs to close it, and only something inside the panel can
+ * be sure it is talking to the menu it lives in.
+ */
+export function useComposerMenu() {
   const context = use(MorphMenuContext);
 
   // Named for the composition surface, not the file: callers only ever see this
   // as `Composer.Menu`.
   if (!context) {
-    throw new Error('Composer.Menu.Item must be rendered inside a Composer.Menu');
+    throw new Error('useComposerMenu must be called inside a Composer.Menu');
   }
 
   return context;
@@ -283,13 +289,22 @@ function MorphMenuRoot({
   );
 }
 
-function MorphMenuItem({ closeOnPress = true, icon, label, onPress, testID }: MorphMenuItemProps) {
-  const { close } = useMorphMenu();
+function MorphMenuItem({
+  closeOnPress = true,
+  icon,
+  label,
+  onPress,
+  selected,
+  testID,
+  trailing,
+}: MorphMenuItemProps) {
+  const { close } = useComposerMenu();
 
   return (
     <Pressable
       accessibilityLabel={label}
       accessibilityRole="menuitem"
+      accessibilityState={{ selected }}
       className="h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-surface-tertiary"
       onPress={() => {
         if (closeOnPress) {
@@ -301,9 +316,10 @@ function MorphMenuItem({ closeOnPress = true, icon, label, onPress, testID }: Mo
       testID={testID}
     >
       {icon}
-      <Text className="text-base text-foreground" numberOfLines={1}>
+      <Text className="flex-1 text-base text-foreground" numberOfLines={1}>
         {label}
       </Text>
+      {trailing}
     </Pressable>
   );
 }

@@ -22,7 +22,6 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatTopic } from '../runtime';
-import { ChatInputActionSheet } from './components/ChatInputActionSheet';
 import { ChatInputComposer, type ChatInputSendPayload } from './components/ChatInputComposer';
 import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
 import { useChatInputActions, useChatInputState } from './context/ChatInputProvider';
@@ -99,8 +98,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
-  const { isActionSheetOpen, isReasoningEffortSelected, reasoningEffort, selectedToolId } =
-    useChatInputState();
+  const { isReasoningEffortSelected, reasoningEffort, selectedToolId } = useChatInputState();
   const { selectReasoningEffort, setSelectedTool } = useChatInputActions();
   const pendingWebSearch = useRef<PendingWebSearchState | undefined>(undefined);
   const syncedAssistantId = useRef<string | null>(null);
@@ -274,6 +272,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
     <>
       <ChatInputComposer
         dismissKeyboardOnSend={dismissKeyboardOnSend}
+        onActionPress={handleActionSelect}
         isSendEnabled
         isStreaming={chatTopic.isBusy}
         modelIcon={selectedModelIcon}
@@ -284,7 +283,6 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
         onToolClear={handleToolClear}
         reasoningEfforts={reasoningEfforts}
       />
-      {isActionSheetOpen ? <ChatInputActionSheet onActionPress={handleActionSelect} /> : null}
       {isModelPickerOpen ? (
         <ModelPickerBottomSheet
           footer={

@@ -3,7 +3,7 @@ import type { ViewProps } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ChatInputInlineCamera } from '../ChatInputInlineCamera';
+import { ChatInputCamera } from '../ChatInputCamera';
 import { ChatInputPhotoGrid } from '../ChatInputPhotoGrid';
 
 const mockIsCameraAvailable = jest.fn(async () => false);
@@ -220,7 +220,7 @@ describe('chat input media content', () => {
 
     await act(async () => {
       renderer = create(
-        <ChatInputInlineCamera
+        <ChatInputCamera
           bottomInset={0}
           isActive
           onBack={jest.fn()}
@@ -234,8 +234,8 @@ describe('chat input media content', () => {
   });
 
   test('anchors camera controls to the safe-area inset supplied above the sheet portal', async () => {
-    const Camera = ChatInputInlineCamera as ComponentType<
-      ComponentProps<typeof ChatInputInlineCamera> & { bottomInset: number }
+    const Camera = ChatInputCamera as ComponentType<
+      ComponentProps<typeof ChatInputCamera> & { bottomInset: number }
     >;
     let renderer: ReactTestRenderer | undefined;
 

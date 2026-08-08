@@ -5,9 +5,8 @@ tags: [chat, gesture]
 # 从消息 tab 的 header 菜单进入新会话
 - tapOn: "^New$|^新建$"
 - tapOn: "^New chat$|^新建聊天$"
-# 打开 Add to Chat sheet
-- tapOn: "Add"
-- assertVisible: "Add to Chat|添加到聊天"
+# 打开 ＋ 内联面板（不再是 sheet，所以没有标题可断言）
+- tapOn: "Attach|添加附件"
 - assertVisible: "Camera|相机"
 - assertVisible: "Photos|照片"
 - assertVisible: "File|文件"

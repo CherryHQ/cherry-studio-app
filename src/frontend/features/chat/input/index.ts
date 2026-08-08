@@ -7,7 +7,6 @@
 // component barrel: ./chatInputLayout, ./utils/chatInputAttachments, and
 // ./hooks/useChatInputPhotoPicker. The ESLint boundary rules allowlist them.
 export { ChatInput } from './ChatInput';
-export { ChatInputActionSheet } from './components/ChatInputActionSheet';
 export {
   ChatInputComposer,
   type ChatInputModelSettings,

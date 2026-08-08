@@ -55,13 +55,12 @@ jest.mock('@/frontend/hooks/chat', () => ({
 }));
 
 jest.mock('@/frontend/features/chat/input', () => ({
-  ChatInputActionSheet: () => null,
   ChatInputComposer: (props: typeof mockComposerProps) => {
     mockComposerProps = props;
     return null;
   },
   useChatInputActions: () => ({ setAttachments: mockSetAttachments }),
-  useChatInputState: () => ({ draft: 'refine this', isActionSheetOpen: false }),
+  useChatInputState: () => ({ draft: 'refine this' }),
 }));
 
 jest.mock('../../utils/paintingOutputAttachment', () => ({

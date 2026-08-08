@@ -58,8 +58,9 @@ Two consequences to take seriously:
 - [ ] Opening the model picker dismisses the keyboard, blurs the field, and clears the focused state
       **before** the picker opens.
 - [ ] The model-settings button (painting only) does the same.
-- [ ] Opening the ＋ menu does **not** manually blur. iOS restores first responder when an overlay
-      dismisses, and a manual blur is what breaks the instant refocus on close.
+- [ ] Opening the ＋ menu dismisses the keyboard but does **not** blur the field. The panel grows
+      upward into the space the keyboard occupies, so the keyboard has to go; leaving the field as
+      first responder is what makes iOS restore it the instant the menu closes.
 
 ### The model pill
 
@@ -76,20 +77,36 @@ Two consequences to take seriously:
 
 ### The ＋ menu
 
-- [ ] Photo permissions and previews load **only while the menu is open**, and refresh when the app
-      returns to the foreground while it is open.
+The panel grows out of the ＋ button itself, up and to the right. It has no fixed size — it is
+measured from whatever is inside it, so swapping its children **tweens** it to the new size rather
+than snapping. Three levels live inside it, tracked by `menuLevel` on the provider.
+
+- [ ] The first level is camera, photos, file, then the tools. `file` and the tools close the menu;
+      **camera** and **photos** swap the panel's children in place instead.
+- [ ] Choosing photos grows the panel to the room computed by `getChatInputMenuRoom` — the screen
+      minus the safe areas, the composer's own padding, and a margin. That arithmetic assumes the
+      keyboard is down, which is why opening the menu dismisses it.
+- [ ] Choosing camera grows it to `getChatInputCameraPanelSize` instead: about twice the first level
+      on each axis, clamped to the same room. It stays a panel — it does not go full screen.
+- [ ] Photo permissions and previews load **only while the photo grid is on screen** — not when the
+      menu merely opens, and not on the camera level — and refresh when the app returns to the
+      foreground while it is showing.
 - [ ] A permissions failure is treated as no photo access, clearing previews and any selection.
 - [ ] Tapping a photo toggles it. Badges show one-based selection order, in the order selected.
 - [ ] At most `CHAT_INPUT_PHOTO_SELECTION_LIMIT` (9) photos can be selected at once.
-- [ ] Confirming adds the selected photos as attachments; a failure surfaces an error rather than
-      failing silently, and a second tap while one is in flight is ignored.
-- [ ] Backing out of the photo grid clears the selection and returns the panel to its default size.
-- [ ] Closing the menu clears the selection.
+- [ ] Confirming adds the selected photos as attachments and closes the menu; a failure surfaces an
+      error rather than failing silently, and a second tap while one is in flight is ignored.
+- [ ] Backing out of the photo grid or the camera shrinks the panel back to the first level, and
+      backing out of the grid also clears the selection. There is no pan-down close — this is the
+      only way back.
+- [ ] Closing the menu returns it to the first level and clears the photo selection.
 - [ ] Choosing a tool toggles it and closes the menu. It does **not** touch the photo selection.
-- [ ] Cancelling the file picker changes nothing; picking files adds them and closes the menu.
-- [ ] Capturing a photo adds it and closes the menu.
-- [ ] Media controls are not driven by the panel's per-frame position — they are laid out by flex, so
-      dragging the panel does not re-measure them every frame.
+- [ ] Choosing file closes the menu and opens the system picker; cancelling that picker adds nothing
+      and leaves the menu closed.
+- [ ] Capturing a photo adds it as an attachment and closes the menu.
+- [ ] The camera's permission prompt, its "camera unavailable" mount-error state, and its release on
+      backgrounding all still work inside the panel — the preview is torn down whenever the level is
+      not showing.
 
 ### Assistant, model, and web search
 
@@ -134,7 +151,9 @@ Do not restore these; their absence is the design, not a regression.
   there was a collapsed state to expand. With no collapsed state the gesture means nothing, so send
   is simply disabled.
 - **The bottom sheet.** The ＋ menu is inline now, growing out of the button. There is no sheet, so
-  no detents and no pan-down close — backing out of the photo grid is the way back.
+  no detents, no pan-down close, and no "restore the default detent on return" — and the old worry
+  about media controls being re-measured against the sheet's per-frame position is moot, because
+  nothing pans any more.
 - **`ReduceMotion.Never`.** The old motion config opted every animation out of the system setting.
   Reduced motion is now respected, via `Composer`'s own motion.
 
@@ -146,8 +165,8 @@ assistant on a non-default model the stops and the label come from two different
 
 ## Ownership
 
-- `ChatInputProvider` owns draft text, attachments, focus state, menu open state, selected tool, and
-  the field ref.
+- `ChatInputProvider` owns draft text, attachments, whether the photo grid is showing, the selected
+  tool, and the field ref. Whether the ＋ panel is open is `Composer.Menu`'s, not this directory's.
 - `useChatInputPhotoPicker` owns photo permissions, preview loading, and photo selection.
 - `effortSlider/` owns the reasoning-effort control, which lives in the model picker's footer — not
   in the input.

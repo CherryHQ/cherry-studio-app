@@ -2,15 +2,7 @@ import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/reac
 import { ChevronLeftIcon, ImagesIcon, InfoIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Linking,
-  Pressable,
-  StyleSheet,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Extrapolation,
@@ -52,6 +44,8 @@ type ChatInputPhotoGridProps = {
   onConfirm: () => void;
   onError: (message: string) => void;
   state: ChatInputPhotoPickerState;
+  /** The grid's own width, which is no longer the window's — it lives in the ＋ menu. */
+  width: number;
 };
 
 type ChatInputPhotoGridExtraData = {
@@ -188,9 +182,9 @@ export function ChatInputPhotoGrid({
   onConfirm,
   onError,
   state,
+  width,
 }: ChatInputPhotoGridProps) {
   const { t } = useTranslation();
-  const { width: windowWidth } = useWindowDimensions();
   const didRequestPermissionRef = useRef(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const {
@@ -210,8 +204,10 @@ export function ChatInputPhotoGrid({
     selectedPhotoCount,
     selectedPhotoOrder,
   } = state;
+  // A bad estimate is what makes a long list jump as it scrolls, so this has to
+  // be the grid's real width rather than the window's.
   const estimatedItemSize =
-    (windowWidth - PHOTO_GRID_GAP * (PHOTO_GRID_COLUMN_COUNT - 1)) / PHOTO_GRID_COLUMN_COUNT +
+    (width - PHOTO_GRID_GAP * (PHOTO_GRID_COLUMN_COUNT - 1)) / PHOTO_GRID_COLUMN_COUNT +
     PHOTO_GRID_GAP;
   const controlsHeight = Math.max(bottomInset, 12) + 60;
 

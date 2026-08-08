@@ -10,7 +10,6 @@ import {
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
 import {
-  ChatInputActionSheet,
   ChatInputComposer,
   type ChatInputSendPayload,
   useChatInputActions,
@@ -61,7 +60,7 @@ export function PaintingInput({
     modelId: UniqueModelId;
     values: ImageParamDraft;
   } | null>(null);
-  const { attachments, draft, isActionSheetOpen } = useChatInputState();
+  const { attachments, draft } = useChatInputState();
   const { setAttachments } = useChatInputActions();
   const { model: selectedModel } = useModelById(selectedModelId);
   const { models: enabledImageModels } = useModels({
@@ -226,7 +225,6 @@ export function PaintingInput({
         onSendPress={handleSend}
         onStopPress={onCancel}
       />
-      {isActionSheetOpen ? <ChatInputActionSheet /> : null}
       {isSettingsOpen && resolvedMode ? (
         <PaintingSettingsBottomSheet
           onDismiss={closeSettings}

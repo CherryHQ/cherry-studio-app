@@ -4,7 +4,7 @@ import type { IconSource } from '@cherrystudio/ui/icons';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import type { PasteEventPayload } from 'expo-paste-input';
 import { useToast } from 'heroui-native/toast';
-import { PlusIcon, Settings2Icon } from 'lucide-uniwind/png';
+import { Settings2Icon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
@@ -20,6 +20,7 @@ import {
   useChatInputState,
 } from '../context/ChatInputProvider';
 import { thinkingAccentColor } from '../effortSlider';
+import type { ChatInputActionId } from '../utils/chatInputActions';
 import {
   type ChatInputAttachmentDraft,
   createPastedImageAttachmentDraft,
@@ -30,6 +31,7 @@ import {
   getChatInputReasoningEffortOption,
 } from '../utils/chatInputReasoning';
 import { ChatInputAttachmentStrip } from './ChatInputAttachmentStrip';
+import { ChatInputMenu } from './ChatInputMenu';
 import { ChatInputToolTag } from './ChatInputToolTag';
 
 const emptyReasoningEfforts: readonly ChatInputReasoningEffort[] = [];
@@ -46,6 +48,8 @@ type ChatInputComposerProps = {
   modelIcon?: IconSource;
   modelLabel?: string;
   modelSettings?: ChatInputModelSettings;
+  /** Omit to let the ＋ menu toggle the tool itself, without persisting anything. */
+  onActionPress?: (actionId: ChatInputActionId) => void;
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;
   onStopPress: () => void;
@@ -79,6 +83,7 @@ export function ChatInputComposer({
   modelIcon,
   modelLabel,
   modelSettings,
+  onActionPress,
   onModelPickerPress,
   onSendPress,
   onStopPress,
@@ -91,7 +96,6 @@ export function ChatInputComposer({
     addAttachments,
     clearAttachments,
     clearSelectedTool,
-    openActionSheet,
     removeAttachment,
     setAttachments,
     setDraft,
@@ -206,9 +210,7 @@ export function ChatInputComposer({
         ref={inputRef}
       />
       <Composer.Toolbar>
-        <Composer.Action accessibilityLabel="Add" onPress={openActionSheet}>
-          <PlusIcon className="size-5 text-foreground" strokeWidth={2} />
-        </Composer.Action>
+        <ChatInputMenu onActionPress={onActionPress} />
         {modelSettings ? (
           <Composer.Action
             accessibilityLabel={modelSettings.accessibilityLabel}

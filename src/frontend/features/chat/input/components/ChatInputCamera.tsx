@@ -22,10 +22,10 @@ import { CameraControlButton } from './CameraControlButton/CameraControlButton';
 import { CameraShutterButton } from './CameraShutterButton/CameraShutterButton';
 import { ChatInputMediaControlOverlay } from './ChatInputMediaControlOverlay';
 
-type ChatInputInlineCameraProps = {
+type ChatInputCameraProps = {
   bottomInset: number;
-  // Whether the host sheet currently shows the camera. The preview is removed
-  // while inactive so Android also releases the capture session.
+  // Whether the host currently shows the camera. The preview is removed while
+  // inactive so Android also releases the capture session.
   isActive: boolean;
   onBack: () => void;
   onCapture: (photo: CameraCapturedPicture) => void;
@@ -34,20 +34,23 @@ type ChatInputInlineCameraProps = {
 };
 
 /**
- * ChatGPT-style inline camera that lives INSIDE the "+" action sheet (mirrors
- * the inline photo picker): a full-bleed Expo Camera preview fills the entire
- * sheet, with self-drawn back / shutter / flip controls FLOATING on top of it
- * (transparent control bar, no black strip stealing preview space). Capture
+ * A full-bleed Expo Camera preview with self-drawn back / shutter / flip
+ * controls floating over it — no black strip stealing preview space. Capture
  * writes a JPEG to a temp path that the caller turns into an attachment draft.
+ *
+ * It fills whatever box the host gives it. Today that is a level of the ＋
+ * menu, sized at roughly twice the menu's first level — deliberately not the
+ * whole screen, because native previews bitmap-stretch and blur while they are
+ * scaled, and the panel morphs on the way open.
  */
-export function ChatInputInlineCamera({
+export function ChatInputCamera({
   bottomInset,
   isActive,
   onBack,
   onCapture,
   onError,
   style,
-}: ChatInputInlineCameraProps) {
+}: ChatInputCameraProps) {
   const { t } = useTranslation();
   const cameraRef = useRef<CameraView>(null);
   const didRequestPermissionRef = useRef(false);
@@ -115,7 +118,7 @@ export function ChatInputInlineCamera({
   return (
     <View className="flex-1 bg-black" style={style}>
       {shouldRenderCamera ? (
-        // Full-bleed preview: fills the whole sheet, controls float over it.
+        // Full-bleed preview: fills the screen, controls float over it.
         <CameraView
           ref={cameraRef}
           active={isActive && isForeground}
