@@ -6,7 +6,14 @@ export type MorphMenuProps = {
   children: ReactNode;
   /** Label of the closed trigger, and of the open panel for screen readers. */
   accessibilityLabel: string;
-  /** Panel width. Height is measured from the children so the item count drives it. */
+  /**
+   * Floor for the panel's width. Both axes are measured from the children, so
+   * content wider than this drives the panel — including content that swaps in
+   * while the menu is open, which the panel grows to rather than snapping to.
+   * The panel grows up and to the right out of the trigger, so anything near
+   * full-screen has to size itself against the window; the menu will not clamp
+   * it.
+   */
   width?: number;
   /** The closed circle, and the footprint it reserves in the parent's flow. Defaults to the toolbar's button size. */
   triggerSize?: number;
@@ -16,6 +23,11 @@ export type MorphMenuProps = {
 };
 
 export type MorphMenuItemProps = {
+  /**
+   * Set `false` for an item that leads somewhere inside the menu rather than out
+   * of it — the caller then swaps the children and the panel grows to fit.
+   */
+  closeOnPress?: boolean;
   /** Rendered before the label; size it via className on the icon itself. */
   icon?: ReactNode;
   label: string;

@@ -173,6 +173,15 @@ until the close animation lands, so the collapse does not play back under the ne
 the menu into the portal, since the portal re-renders its children under the host rather than
 teleporting the React node.
 
+Both of the panel's axes are measured and driven by shared values, which is what lets an open menu
+grow to children that swap in under it rather than snapping to them. React state read inside
+`useAnimatedStyle` cannot do this: the new size arrives in one commit, with no frames in between.
+That, plus `closeOnPress={false}` on the item that leads inward, is the whole of what a caller needs
+to build a second level — a media menu whose "Photos" row opens a grid in place. The menu itself has
+no notion of levels, and `width` is a floor rather than a size, so it stays usable outside the one
+screen this was built for. It also will not clamp: a panel grows up and to the right out of its
+trigger, so children that want most of the screen have to size themselves against the window.
+
 ## Motion
 
 Curves and durations are two axes, exported separately from `@cherrystudio/ui/motion`:

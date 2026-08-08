@@ -13,6 +13,7 @@ import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react
 import Animated, {
   interpolate,
   runOnJS,
+  type SharedValue,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -30,7 +31,10 @@ import type { MorphMenuItemProps, MorphMenuProps } from './morph-menu.types';
 // tools beside it.
 const defaultTriggerSize = composerActionSize;
 const openRadius = 20;
-const defaultPanelWidth = 200;
+// A floor, not a size: a menu of three short labels would otherwise hug them and
+// read as a tooltip. Content wider than this drives the panel instead.
+const defaultMinPanelWidth = 200;
+// Only ever on screen for the frame before the first measurement lands.
 const fallbackPanelHeight = 172;
 
 // How far the plus slides left and the panel slides in from the right. The two
@@ -65,6 +69,12 @@ function useMorphMenu() {
  * over it. That keeps the children's layout pass off the animation's critical
  * path — animating the container's size would otherwise re-measure them on
  * every frame.
+ *
+ * Both of the panel's axes are measured and driven, so swapping the children of
+ * an already-open menu grows it to the new content instead of snapping. That is
+ * how a caller builds a second level: keep the menu open, render something else
+ * inside it. The menu itself has no notion of levels, which is what keeps it
+ * usable outside the one screen this was built for.
  */
 function MorphMenuRoot({
   accessibilityLabel,
@@ -73,16 +83,20 @@ function MorphMenuRoot({
   style,
   testID,
   triggerSize = defaultTriggerSize,
-  width = defaultPanelWidth,
+  width = defaultMinPanelWidth,
 }: MorphMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   // Where the trigger sat when the menu opened. Non-null means the menu is
   // floating in the portal; it stays there until the close animation lands, so
   // the collapse doesn't play back under the composer.
   const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null);
-  const [panelHeight, setPanelHeight] = useState(fallbackPanelHeight);
   const isReducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
+  // Shared values rather than state: React state read inside `useAnimatedStyle`
+  // would recompute the size in one commit, so a content swap while open would
+  // jump. These are what let it tween.
+  const panelHeight = useSharedValue(fallbackPanelHeight);
+  const panelWidth = useSharedValue(width);
   const footprintRef = useRef<View>(null);
   const portalName = useId();
   // The same colour on both branches: `GlassView` ignores className, and an
@@ -142,8 +156,8 @@ function MorphMenuRoot({
 
   const containerStyle = useAnimatedStyle(() => ({
     borderRadius: interpolate(progress.value, [0, 1], [triggerSize / 2, openRadius]),
-    height: interpolate(progress.value, [0, 1], [triggerSize, panelHeight]),
-    width: interpolate(progress.value, [0, 1], [triggerSize, width]),
+    height: interpolate(progress.value, [0, 1], [triggerSize, panelHeight.value]),
+    width: interpolate(progress.value, [0, 1], [triggerSize, panelWidth.value]),
   }));
   // Fade out over the first 200/350 of the open so the plus is gone before the
   // panel is readable, rather than the two ghosting through each other.
@@ -169,10 +183,24 @@ function MorphMenuRoot({
     ],
   }));
 
-  const handlePanelLayout = (event: LayoutChangeEvent) => {
-    const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+  // Sub-pixel layout noise would otherwise restart the tween on every pass.
+  const settleTo = useCallback(
+    (axis: SharedValue<number>, next: number) => {
+      if (Math.abs(axis.value - next) <= 1) {
+        return;
+      }
 
-    setPanelHeight((current) => (Math.abs(current - nextHeight) <= 1 ? current : nextHeight));
+      // Nothing is on screen at the closed size, so a measurement taken while
+      // closed has no frames to animate through — only a swap under an open
+      // panel is a movement anyone can see.
+      axis.set(isOpen && !isReducedMotion ? withTiming(next, settleMotion) : next);
+    },
+    [isOpen, isReducedMotion],
+  );
+
+  const handlePanelLayout = (event: LayoutChangeEvent) => {
+    settleTo(panelHeight, Math.ceil(event.nativeEvent.layout.height));
+    settleTo(panelWidth, Math.ceil(event.nativeEvent.layout.width));
   };
 
   // The morphing container plus the trigger. Rendered inline while closed and
@@ -198,7 +226,7 @@ function MorphMenuRoot({
           <Animated.View
             onLayout={handlePanelLayout}
             pointerEvents={isOpen ? 'auto' : 'none'}
-            style={[panelContentStyle, { width }, panelStyle]}
+            style={[panelContentStyle, { minWidth: width }, panelStyle]}
             testID={testID ? `${testID}-panel` : undefined}
           >
             {children}
@@ -255,7 +283,7 @@ function MorphMenuRoot({
   );
 }
 
-function MorphMenuItem({ icon, label, onPress, testID }: MorphMenuItemProps) {
+function MorphMenuItem({ closeOnPress = true, icon, label, onPress, testID }: MorphMenuItemProps) {
   const { close } = useMorphMenu();
 
   return (
@@ -264,7 +292,10 @@ function MorphMenuItem({ icon, label, onPress, testID }: MorphMenuItemProps) {
       accessibilityRole="menuitem"
       className="h-11 flex-row items-center gap-3 rounded-xl px-3 active:bg-surface-tertiary"
       onPress={() => {
-        close();
+        if (closeOnPress) {
+          close();
+        }
+
         onPress();
       }}
       testID={testID}

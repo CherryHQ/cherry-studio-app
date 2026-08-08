@@ -58,11 +58,14 @@ jest.mock('react-native-reanimated', () => {
       value: initial,
     }),
     // Land the animation immediately so the portal teardown a close schedules
-    // runs within the same `act`.
-    withTiming: (value: number, _config: unknown, callback?: (finished: boolean) => void) => {
-      callback?.(true);
-      return value;
-    },
+    // runs within the same `act`. Spied so the tests can tell a tween from a
+    // snap — the returned value is identical either way.
+    withTiming: jest.fn(
+      (value: number, _config: unknown, callback?: (finished: boolean) => void) => {
+        callback?.(true);
+        return value;
+      },
+    ),
   };
 });
 
@@ -116,6 +119,16 @@ describe('MorphMenu', () => {
 
   function portal(tree: ReactTestRenderer) {
     return tree.root.findAllByProps({ mockComponent: 'hero-portal' })[0]!;
+  }
+
+  function layout(tree: ReactTestRenderer, size: { height: number; width: number }) {
+    const panel = tree.root.find(
+      (node) => node.props.testID === 'menu-panel' && typeof node.props.onLayout === 'function',
+    );
+
+    act(() => {
+      panel.props.onLayout({ nativeEvent: { layout: { ...size, x: 0, y: 0 } } });
+    });
   }
 
   it('keeps the menu inline and reports itself collapsed while closed', () => {
@@ -184,6 +197,70 @@ describe('MorphMenu', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onOpenChange).toHaveBeenLastCalledWith(false);
     expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+  });
+
+  it('grows to content that swaps in while it is open, instead of snapping', () => {
+    const { withTiming } = jest.requireMock('react-native-reanimated') as {
+      withTiming: jest.Mock;
+    };
+
+    act(() => {
+      renderer = create(
+        <MorphMenu accessibilityLabel="Add" testID="menu">
+          <MorphMenu.Item closeOnPress={false} label="Photos" onPress={jest.fn()} />
+        </MorphMenu>,
+      );
+    });
+
+    const tree = renderer!;
+
+    layout(tree, { height: 60, width: 200 });
+    // Closed, so there is nothing on screen to animate through.
+    expect(withTiming).not.toHaveBeenCalledWith(60, expect.anything());
+
+    press(tree, 'menu-trigger');
+    withTiming.mockClear();
+
+    // The second level: same open menu, different children, and the panel is
+    // now a different shape in both axes.
+    act(() => {
+      tree.update(
+        <MorphMenu accessibilityLabel="Add" testID="menu">
+          <Text>a photo grid</Text>
+        </MorphMenu>,
+      );
+    });
+    layout(tree, { height: 420, width: 340 });
+
+    expect(withTiming).toHaveBeenCalledWith(420, expect.anything());
+    expect(withTiming).toHaveBeenCalledWith(340, expect.anything());
+  });
+
+  it('keeps itself open for an item that leads further in', () => {
+    const onPress = jest.fn();
+    const onOpenChange = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <MorphMenu accessibilityLabel="Add" onOpenChange={onOpenChange} testID="menu">
+          <MorphMenu.Item
+            closeOnPress={false}
+            label="Photos"
+            onPress={onPress}
+            testID="menu-photos"
+          />
+        </MorphMenu>,
+      );
+    });
+
+    const tree = renderer!;
+
+    press(tree, 'menu-trigger');
+    press(tree, 'menu-photos');
+
+    expect(onPress).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' }).length).toBeGreaterThan(0);
   });
 
   it('rejects an item rendered outside a menu', () => {
