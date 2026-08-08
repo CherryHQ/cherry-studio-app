@@ -14,7 +14,6 @@ import {
   type ChatInputAction,
   type ChatInputActionId,
   getChatInputAction,
-  toggleChatInputAction,
 } from '../utils/chatInputActions';
 import {
   appendChatInputAttachments,
@@ -41,7 +40,6 @@ type ChatInputActionsContextValue = {
   clearReasoningEffort: () => void;
   clearSelectedTool: () => void;
   removeAttachment: (attachmentId: string) => void;
-  selectAction: (actionId: ChatInputActionId) => void;
   selectReasoningEffort: (reasoningEffort: ChatInputReasoningEffort) => void;
   setSelectedTool: (actionId: ChatInputActionId | null) => void;
   setAttachments: (attachments: ChatInputAttachmentDraft[]) => void;
@@ -81,10 +79,6 @@ export function ChatInputProvider({
     setAttachments((current) => appendChatInputAttachments(current, nextAttachments));
   }, []);
   const selectedTool = useMemo(() => getChatInputAction(selectedToolId), [selectedToolId]);
-
-  const selectAction = useCallback((actionId: ChatInputActionId) => {
-    setSelectedToolId((current) => toggleChatInputAction(current, actionId));
-  }, []);
 
   const selectReasoningEffort = useCallback((nextReasoningEffort: ChatInputReasoningEffort) => {
     setReasoningEffort(nextReasoningEffort);
@@ -131,7 +125,6 @@ export function ChatInputProvider({
       clearReasoningEffort,
       clearSelectedTool,
       removeAttachment,
-      selectAction,
       selectReasoningEffort,
       setSelectedTool: setSelectedToolId,
       setAttachments,
@@ -144,7 +137,6 @@ export function ChatInputProvider({
       clearReasoningEffort,
       clearSelectedTool,
       removeAttachment,
-      selectAction,
       selectReasoningEffort,
       syncReasoningEffort,
     ],

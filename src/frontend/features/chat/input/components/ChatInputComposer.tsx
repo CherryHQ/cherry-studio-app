@@ -48,7 +48,7 @@ type ChatInputComposerProps = {
   modelIcon?: IconSource;
   modelLabel?: string;
   modelSettings?: ChatInputModelSettings;
-  /** Omit to let the ＋ menu toggle the tool itself, without persisting anything. */
+  /** Omit to leave the tools out of the ＋ menu, as painting does. */
   onActionPress?: (actionId: ChatInputActionId) => void;
   onModelPickerPress: () => void;
   onSendPress: (payload: ChatInputSendPayload) => Promise<void>;

@@ -22,16 +22,22 @@ import {
 const logger = loggerService.withContext('ChatInputMenu');
 
 type ChatInputMenuProps = {
+  /**
+   * Omit to leave the tools out entirely. They are a chat concept — painting
+   * has nothing to do with web search or "create image" — and nothing here can
+   * act on one without a caller to persist it.
+   */
   onActionPress?: (actionId: ChatInputActionId) => void;
 };
 
 /**
- * The ＋ menu: camera, photos, files, then the tools. Every row closes the menu
- * and hands off to a system picker — none of the media is drawn here.
+ * The ＋ menu: camera, photos, files, and — for a caller that takes them — the
+ * tools. Every row closes the menu; the media rows hand off to a system picker
+ * rather than drawing anything here.
  */
 export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
   const { t } = useTranslation();
-  const { addAttachments, selectAction } = useChatInputActions();
+  const { addAttachments } = useChatInputActions();
   const { selectedToolId } = useChatInputState();
 
   const handleOpenChange = useCallback((isOpen: boolean) => {
@@ -108,17 +114,6 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
 
     addAttachments(result.assets.map(createDocumentAttachmentDraft));
   }, [addAttachments]);
-  const handleActionPress = useCallback(
-    (actionId: ChatInputActionId) => {
-      if (onActionPress) {
-        onActionPress(actionId);
-        return;
-      }
-
-      selectAction(actionId);
-    },
-    [onActionPress, selectAction],
-  );
   // A picker that fails to open leaves no trace otherwise: the menu has already
   // closed, so the gesture just looks ignored.
   const present = useCallback((label: string, open: () => Promise<void>) => {
@@ -148,29 +143,35 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
         label={t('chat.media.file')}
         onPress={() => present('document', openDocumentPicker)}
       />
-      <View className="my-1 h-px bg-border" />
-      {chatInputActions.map((action) => {
-        const Icon = action.icon;
-        const isSelected = action.id === selectedToolId;
+      {onActionPress ? (
+        <>
+          <View className="my-1 h-px bg-border" />
+          {chatInputActions.map((action) => {
+            const Icon = action.icon;
+            const isSelected = action.id === selectedToolId;
 
-        return (
-          <Composer.Menu.Item
-            icon={
-              <Icon
-                className={cn('size-5', isSelected ? 'text-primary' : 'text-foreground')}
-                strokeWidth={2}
+            return (
+              <Composer.Menu.Item
+                icon={
+                  <Icon
+                    className={cn('size-5', isSelected ? 'text-primary' : 'text-foreground')}
+                    strokeWidth={2}
+                  />
+                }
+                key={action.id}
+                label={t(action.titleKey)}
+                onPress={() => onActionPress(action.id)}
+                selected={isSelected}
+                trailing={
+                  isSelected ? (
+                    <CheckIcon className="size-5 text-primary" strokeWidth={2.25} />
+                  ) : null
+                }
               />
-            }
-            key={action.id}
-            label={t(action.titleKey)}
-            onPress={() => handleActionPress(action.id)}
-            selected={isSelected}
-            trailing={
-              isSelected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.25} /> : null
-            }
-          />
-        );
-      })}
+            );
+          })}
+        </>
+      ) : null}
     </Composer.Menu>
   );
 }

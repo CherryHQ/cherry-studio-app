@@ -81,6 +81,9 @@ The panel grows out of the ＋ button itself, up and to the right, and is measur
 rows. It is a menu and nothing else: every row closes it and hands off to a system picker.
 
 - [ ] The rows are camera, photos, file, then the tools. All of them close the menu on tap.
+- [ ] The tools appear only for a caller that passes `onActionPress`. Painting does not: web search
+      and "create image" are chat concepts, and nothing in the menu can act on one without a caller
+      to persist it.
 - [ ] Camera and photos go through `expo-image-picker`; file goes through `expo-document-picker`.
       None of them is drawn here — see "Deliberately dropped".
 - [ ] Each picker asks for its own permission first and does nothing if refused. Limited photo
@@ -91,7 +94,7 @@ rows. It is a menu and nothing else: every row closes it and hands off to a syst
 - [ ] Cancelling any picker adds nothing and leaves the menu closed.
 - [ ] A picker that fails to launch is logged. The menu has already closed by then, so without the
       log the gesture just looks ignored.
-- [ ] Choosing a tool toggles it and closes the menu.
+- [ ] Choosing a tool hands it to `onActionPress`, which toggles it, and closes the menu.
 
 ### Assistant, model, and web search
 
