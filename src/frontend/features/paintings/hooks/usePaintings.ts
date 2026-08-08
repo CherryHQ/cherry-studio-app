@@ -1,4 +1,5 @@
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
   type InfiniteData,
@@ -9,7 +10,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
 
-import type { ComposerAttachmentDraft } from '@/frontend/components/composer/utils/composerAttachments';
+import type { ComposerAttachmentReady } from '@/frontend/components/composer/utils/composerAttachments';
 import {
   queryKeys,
   useBackendModule,
@@ -30,13 +31,13 @@ type PaintingListData = InfiniteData<CursorPaginationResponse<Painting>, string 
 
 export type PaintingGalleryItem = {
   aspectRatio: number;
-  fileEntryId: string;
+  fileEntryId: FileEntryId;
   key: string;
   painting: Painting;
   uri: string;
 };
 
-export type ResolvedPaintingAttachment = ComposerAttachmentDraft & { fileEntryId: string };
+export type ResolvedPaintingAttachment = ComposerAttachmentReady;
 
 export type ResolvedPaintingFiles = {
   inputs: ResolvedPaintingAttachment[];
@@ -131,6 +132,7 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
           mediaType,
           name: entry.ext ? `${entry.name}.${entry.ext}` : entry.name,
           size: entry.origin === 'internal' ? entry.size : undefined,
+          status: 'ready' as const,
           uri,
         };
       };

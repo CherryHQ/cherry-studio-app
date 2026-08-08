@@ -1,10 +1,22 @@
 import { XIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { type GestureResponderEvent, Pressable, ScrollView, View } from 'react-native';
+import {
+  ActivityIndicator,
+  type GestureResponderEvent,
+  Pressable,
+  ScrollView,
+  Text,
+  View,
+} from 'react-native';
 
+import { FilePreview } from '@/frontend/components/FilePreview';
 import { FileTile, ImageTile } from '@/frontend/components/mediaTile';
 
-import type { ComposerAttachmentDraft } from '../utils/composerAttachments';
+import {
+  type ComposerAttachmentDraft,
+  type ComposerAttachmentImporting,
+  type ComposerAttachmentReady,
+} from '../utils/composerAttachments';
 
 type ComposerAttachmentStripProps = {
   attachments: readonly ComposerAttachmentDraft[];
@@ -31,7 +43,19 @@ export function ComposerAttachmentStrip({
       showsHorizontalScrollIndicator={false}
     >
       {attachments.map((attachment) =>
-        attachment.kind === 'image' ? (
+        attachment.status === 'ready' ? (
+          <ManagedAttachmentTile
+            attachment={attachment}
+            key={attachment.id}
+            onRemove={() => onAttachmentRemove(attachment.id)}
+          />
+        ) : attachment.status === 'importing' ? (
+          <ImportingAttachmentTile
+            attachment={attachment}
+            key={attachment.id}
+            onRemove={() => onAttachmentRemove(attachment.id)}
+          />
+        ) : attachment.kind === 'image' ? (
           <AttachmentImageTile
             attachment={attachment}
             key={attachment.id}
@@ -47,6 +71,41 @@ export function ComposerAttachmentStrip({
         ),
       )}
     </ScrollView>
+  );
+}
+
+function ManagedAttachmentTile({
+  attachment,
+  onRemove,
+}: {
+  attachment: ComposerAttachmentReady;
+  onRemove: () => void;
+}) {
+  return (
+    <View accessibilityLabel={attachment.name}>
+      <FilePreview entryId={attachment.fileEntryId} />
+      <RemoveBadge onPress={onRemove} />
+    </View>
+  );
+}
+
+function ImportingAttachmentTile({
+  attachment,
+  onRemove,
+}: {
+  attachment: ComposerAttachmentImporting;
+  onRemove: () => void;
+}) {
+  return (
+    <View accessibilityLabel={attachment.name}>
+      <View className="size-28 items-center justify-center gap-2 border border-border bg-secondary p-2">
+        <ActivityIndicator size="small" />
+        <Text className="text-center text-base text-muted-foreground" numberOfLines={2}>
+          {attachment.name}
+        </Text>
+      </View>
+      <RemoveBadge onPress={onRemove} />
+    </View>
   );
 }
 

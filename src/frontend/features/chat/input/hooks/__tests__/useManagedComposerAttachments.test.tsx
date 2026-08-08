@@ -1,0 +1,210 @@
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+import { useEffect } from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type {
+  ComposerAttachmentReady,
+  ComposerAttachmentSource,
+  ComposerInitialAttachment,
+} from '@/frontend/components/composer/utils/composerAttachments';
+
+import { useManagedComposerAttachments } from '../useManagedComposerAttachments';
+
+const mockCreateInternalEntry = jest.fn();
+const mockDeleteIfUnreferenced = jest.fn(async () => true);
+const mockAlertShow = jest.fn();
+const mockFileModule = {
+  createInternalEntry: mockCreateInternalEntry,
+  deleteIfUnreferenced: mockDeleteIfUnreferenced,
+  getUri: jest.fn(),
+};
+
+jest.mock('@/frontend/data', () => ({
+  useBackendModule: () => mockFileModule,
+}));
+
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, values?: { count?: number }) =>
+      values?.count === undefined ? key : `${key}:${values.count}`,
+  }),
+}));
+
+let renderer: ReactTestRenderer | undefined;
+let snapshot: ReturnType<typeof useManagedComposerAttachments> | undefined;
+
+describe('useManagedComposerAttachments', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    snapshot = undefined;
+  });
+
+  afterEach(async () => {
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+  });
+
+  it('preserves source order and keeps successful imports when one item fails', async () => {
+    const first = deferred<ReturnType<typeof resolvedFile>>();
+    const second = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry.mockImplementation(({ name }: { name: string }) =>
+      name === 'first.pdf' ? first.promise : second.promise,
+    );
+    await renderHook();
+
+    await act(async () => {
+      snapshot?.addAttachments([source('first.pdf'), source('second.pdf')]);
+    });
+    expect(snapshot?.attachments.map(({ name, status }) => ({ name, status }))).toEqual([
+      { name: 'first.pdf', status: 'importing' },
+      { name: 'second.pdf', status: 'importing' },
+    ]);
+
+    await act(async () => {
+      second.resolve(resolvedFile('00000000-0000-7000-8000-000000000002', 'second.pdf'));
+      await second.promise;
+    });
+    await act(async () => {
+      first.reject(new Error('copy failed'));
+      await flushPromises();
+    });
+
+    expect(snapshot?.attachments).toEqual([
+      expect.objectContaining({
+        fileEntryId: '00000000-0000-7000-8000-000000000002',
+        name: 'second.pdf',
+        status: 'ready',
+      }),
+    ]);
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'chat.attachments.importFailed:1',
+    });
+  });
+
+  it('deletes an import that finishes after its placeholder was removed', async () => {
+    const pending = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry.mockReturnValue(pending.promise);
+    await renderHook();
+
+    await act(async () => snapshot?.addAttachments([source('removed.pdf')]));
+    await act(async () => snapshot?.removeAttachment('source:removed.pdf'));
+    await act(async () => {
+      pending.resolve(resolvedFile('00000000-0000-7000-8000-000000000003', 'removed.pdf'));
+      await pending.promise;
+    });
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockDeleteIfUnreferenced).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000003');
+  });
+
+  it('safely deletes a ready attachment when the user removes it', async () => {
+    const ready = readyAttachment('00000000-0000-7000-8000-000000000004', 'ready.pdf');
+    await renderHook([ready]);
+
+    await act(async () => snapshot?.removeAttachment(ready.id));
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockDeleteIfUnreferenced).toHaveBeenCalledWith(ready.fileEntryId);
+    expect(mockCreateInternalEntry).not.toHaveBeenCalled();
+  });
+
+  it('hands attachments to the sender without deleting them when cleared', async () => {
+    const ready = readyAttachment('00000000-0000-7000-8000-000000000014', 'sent.pdf');
+    await renderHook([ready]);
+
+    await act(async () => snapshot?.clearAttachments());
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockDeleteIfUnreferenced).not.toHaveBeenCalled();
+  });
+
+  it('imports transient initial attachments but mounts managed ones as ready', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000005', 'source.pdf'),
+    );
+    const ready = readyAttachment('00000000-0000-7000-8000-000000000006', 'ready.pdf');
+
+    await renderHook([source('source.pdf'), ready]);
+    await act(flushPromises);
+
+    expect(mockCreateInternalEntry).toHaveBeenCalledTimes(1);
+    expect(snapshot?.attachments.map(({ name, status }) => ({ name, status }))).toEqual([
+      { name: 'source.pdf', status: 'ready' },
+      { name: 'ready.pdf', status: 'ready' },
+    ]);
+  });
+});
+
+function Probe({
+  initialAttachments,
+}: {
+  initialAttachments: readonly ComposerInitialAttachment[];
+}) {
+  const store = useManagedComposerAttachments(initialAttachments);
+
+  useEffect(() => {
+    snapshot = store;
+  }, [store]);
+  return null;
+}
+
+async function renderHook(initialAttachments: readonly ComposerInitialAttachment[] = []) {
+  await act(async () => {
+    renderer = create(<Probe initialAttachments={initialAttachments} />);
+  });
+}
+
+function source(name: string): ComposerAttachmentSource {
+  return {
+    id: `source:${name}`,
+    kind: 'file',
+    mediaType: 'application/pdf',
+    name,
+    uri: `file:///source/${name}`,
+  };
+}
+
+function readyAttachment(entryId: FileEntryId, name: string): ComposerAttachmentReady {
+  return {
+    ...source(name),
+    fileEntryId: entryId,
+    status: 'ready',
+    uri: `file:///managed/${name}`,
+  };
+}
+
+function resolvedFile(entryId: FileEntryId, name: string) {
+  return {
+    entry: {
+      cleanupPolicy: 'delete_when_unreferenced' as const,
+      contentHash: null,
+      createdAt: '2026-08-08T00:00:00.000Z',
+      ext: 'pdf',
+      id: entryId,
+      name,
+      origin: 'internal' as const,
+      size: 128,
+      updatedAt: '2026-08-08T00:00:00.000Z',
+    },
+    uri: `file:///managed/${name}`,
+  };
+}
+
+function deferred<TValue>() {
+  let resolve!: (value: TValue) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<TValue>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, reject, resolve };
+}
+
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+}

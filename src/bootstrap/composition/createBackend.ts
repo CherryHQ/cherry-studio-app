@@ -3,7 +3,6 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream } from 'ai';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
-import type { FileContentQueries } from '@/backend/data/api/handlers/files';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
@@ -12,8 +11,8 @@ import {
   createInternalEntry,
   createMessageParts,
   discardInternalEntries,
+  getInternalFileUri,
   imageUriToDataUrl,
-  resolveInternalFileUri,
 } from '@/backend/services/file/fileStorage';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
@@ -37,7 +36,6 @@ import type { Backend } from '@/shared/contracts';
 export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
-    fileContent: FileContentQueries;
     mcpServerMutations: McpServerMutations;
   };
   dispose(): Promise<void>;
@@ -114,7 +112,7 @@ export function createBackend(services: BackendServices): BackendComposition {
       createInternalEntry: (input) => createInternalEntry(services.fileEntry, input),
       discard: (entries) => discardInternalEntries(services.fileEntry, entries),
       readDataUrl: imageUriToDataUrl,
-      resolveUri: resolveInternalFileUri,
+      getUri: getInternalFileUri,
     },
   });
   const mcp = createMcpModule({
@@ -166,6 +164,11 @@ export function createBackend(services: BackendServices): BackendComposition {
     backend: {
       chat,
       cherryin,
+      file: {
+        createInternalEntry: services.fileContent.createInternalEntry,
+        deleteIfUnreferenced: services.fileContent.deleteIfUnreferenced,
+        getUri: services.fileContent.getUri,
+      },
       mcp,
       models,
       oauth,
@@ -176,7 +179,6 @@ export function createBackend(services: BackendServices): BackendComposition {
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
-      fileContent: services.fileContent,
       mcpServerMutations: mcp,
     },
     dispose: () => chat.dispose(),

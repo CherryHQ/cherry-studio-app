@@ -2,19 +2,22 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
 import {
   appendComposerAttachments,
-  type ComposerAttachmentDraft,
+  type ComposerAttachmentReady,
+  type ComposerAttachmentSource,
   createCameraAttachmentDraft,
   createComposerMessageParts,
   createDocumentAttachmentDraft,
   createPastedImageAttachmentDraft,
   createPhotoAttachmentDraft,
   hasComposerSendableContent,
+  hasImportingComposerAttachments,
+  isComposerAttachmentReady,
   isComposerImageFileName,
   isComposerImageMediaType,
   removeComposerAttachment,
 } from '../composerAttachments';
 
-const fileAttachment: ComposerAttachmentDraft = {
+const transientFileAttachment: ComposerAttachmentSource = {
   id: 'file:file-a.pdf',
   kind: 'file',
   mediaType: 'application/pdf',
@@ -22,21 +25,27 @@ const fileAttachment: ComposerAttachmentDraft = {
   uri: 'file-a.pdf',
 };
 
+const readyFileAttachment: ComposerAttachmentReady = {
+  ...transientFileAttachment,
+  fileEntryId: '00000000-0000-7000-8000-000000000001',
+  status: 'ready',
+};
+
 describe('composer attachments', () => {
   test('appends attachments while preserving existing items and dropping duplicates', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 
-    expect(appendComposerAttachments([imageAttachment], [fileAttachment, imageAttachment])).toEqual(
-      [imageAttachment, fileAttachment],
-    );
+    expect(
+      appendComposerAttachments([imageAttachment], [transientFileAttachment, imageAttachment]),
+    ).toEqual([imageAttachment, transientFileAttachment]);
   });
 
   test('removes an attachment by id', () => {
     const imageAttachment = createPhotoAttachmentDraft({ id: 'photo-a', uri: 'photo-a.jpg' });
 
-    expect(removeComposerAttachment([imageAttachment, fileAttachment], imageAttachment.id)).toEqual(
-      [fileAttachment],
-    );
+    expect(
+      removeComposerAttachment([imageAttachment, transientFileAttachment], imageAttachment.id),
+    ).toEqual([transientFileAttachment]);
   });
 
   test('classifies document picker images as image attachments', () => {
@@ -98,10 +107,7 @@ describe('composer attachments', () => {
         name: 'photo.webp',
         uri: 'file://photo.webp',
       }),
-    ).toMatchObject({
-      kind: 'image',
-      mediaType: 'image/*',
-    });
+    ).toMatchObject({ kind: 'image', mediaType: 'image/*' });
   });
 
   test('classifies non-image documents as file attachments', () => {
@@ -112,65 +118,59 @@ describe('composer attachments', () => {
         name: 'brief.pdf',
         uri: 'file://brief.pdf',
       }),
-    ).toMatchObject({
-      kind: 'file',
-      mediaType: 'application/pdf',
-    });
+    ).toMatchObject({ kind: 'file', mediaType: 'application/pdf' });
   });
 
-  test('detects image media types', () => {
+  test('detects image media types and file names', () => {
     expect(isComposerImageMediaType('image/jpeg')).toBe(true);
     expect(isComposerImageMediaType('application/pdf')).toBe(false);
     expect(isComposerImageMediaType(undefined)).toBe(false);
-  });
-
-  test('detects image file names', () => {
     expect(isComposerImageFileName('photo.HEIC')).toBe(true);
     expect(isComposerImageFileName('brief.pdf')).toBe(false);
     expect(isComposerImageFileName(undefined)).toBe(false);
   });
 
-  test('creates message parts with text before file attachments', () => {
-    expect(createComposerMessageParts('  summarize this  ', [fileAttachment])).toEqual([
-      { type: 'text', text: 'summarize this' },
-      {
-        filename: 'file-a.pdf',
-        mediaType: 'application/pdf',
-        type: 'file',
-        url: 'file-a.pdf',
-      },
-    ]);
-  });
+  test('creates managed message parts with text before file attachments', () => {
+    const parts = createComposerMessageParts('  summarize this  ', [readyFileAttachment]);
 
-  test('creates file-only message parts', () => {
-    expect(createComposerMessageParts('   ', [fileAttachment])).toEqual([
-      {
-        filename: 'file-a.pdf',
-        mediaType: 'application/pdf',
-        type: 'file',
-        url: 'file-a.pdf',
-      },
-    ]);
-  });
-
-  test('preserves a managed file entry id in message part metadata', () => {
-    const parts = createComposerMessageParts('', [
-      { ...fileAttachment, fileEntryId: '00000000-0000-7000-8000-000000000001' },
-    ]);
-    const part = parts[0];
-
-    expect(part.type).toBe('file');
-    if (part.type !== 'file') {
-      throw new Error('Expected a file part');
-    }
-    expect(readCherryMeta(part)).toEqual({
-      fileEntryId: '00000000-0000-7000-8000-000000000001',
+    expect(parts).toHaveLength(2);
+    expect(parts[0]).toEqual({ type: 'text', text: 'summarize this' });
+    expect(parts[1]).toMatchObject({
+      filename: 'file-a.pdf',
+      mediaType: 'application/pdf',
+      type: 'file',
+      url: 'file-a.pdf',
     });
+    expect(readCherryMeta(parts[1])).toEqual({
+      fileEntryId: readyFileAttachment.fileEntryId,
+    });
+  });
+
+  test('creates transient message parts without managed file metadata', () => {
+    const parts = createComposerMessageParts('', [transientFileAttachment]);
+
+    expect(parts).toEqual([
+      {
+        filename: 'file-a.pdf',
+        mediaType: 'application/pdf',
+        type: 'file',
+        url: 'file-a.pdf',
+      },
+    ]);
+  });
+
+  test('recognizes managed lifecycle states', () => {
+    const importing = { ...transientFileAttachment, status: 'importing' as const };
+
+    expect(isComposerAttachmentReady(readyFileAttachment)).toBe(true);
+    expect(isComposerAttachmentReady(importing)).toBe(false);
+    expect(hasImportingComposerAttachments([readyFileAttachment, importing])).toBe(true);
+    expect(hasImportingComposerAttachments([readyFileAttachment])).toBe(false);
   });
 
   test('detects sendable text or attachment content', () => {
     expect(hasComposerSendableContent('  hi  ', [])).toBe(true);
-    expect(hasComposerSendableContent('   ', [fileAttachment])).toBe(true);
+    expect(hasComposerSendableContent('   ', [transientFileAttachment])).toBe(true);
     expect(hasComposerSendableContent('   ', [])).toBe(false);
   });
 });

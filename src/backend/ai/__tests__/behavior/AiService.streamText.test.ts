@@ -151,7 +151,7 @@ describe('AiService.streamText AI SDK contract', () => {
     });
     await collectStreamContract(stream);
 
-    expect(fixture.spies.resolveRenderableUri).toHaveBeenCalledWith('file-entry-1');
+    expect(fixture.spies.getFileUri).toHaveBeenCalledWith('file-entry-1');
     expect(projectLanguageCall(languageModel.doStreamCalls[0])).toMatchSnapshot('rich model call');
     expect(languageModel.doStreamCalls[0]).toMatchObject({
       headers: { 'X-Contract': 'rich-input' },

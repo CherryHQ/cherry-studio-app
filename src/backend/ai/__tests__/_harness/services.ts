@@ -35,7 +35,7 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
     settings: { ...DEFAULT_ASSISTANT_SETTINGS, ...options.assistantSettings },
   });
   const recordInvocation = jest.fn(async () => undefined);
-  const resolveRenderableUri = jest.fn(async () => options.fileUri);
+  const getFileUri = jest.fn(async () => options.fileUri);
   const getToolEntriesForAssistant = jest.fn(async () => options.mcpEntries ?? []);
   const searchKeywords = jest.fn(async () => ({
     capability: 'searchKeywords' as const,
@@ -94,7 +94,7 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
   const services = {
     aiUsageRecord: { recordInvocation },
     assistant: { getById: jest.fn(async () => assistant) },
-    fileContent: { resolveRenderableUri },
+    fileContent: { getUri: getFileUri },
     model: { getById: jest.fn(async (id: Model['id']) => (id === model.id ? model : undefined)) },
     preference,
     provider: {
@@ -116,7 +116,7 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
       getToolEntriesForAssistant,
       recordInvocation,
       resolveApiKey,
-      resolveRenderableUri,
+      getFileUri,
       searchKeywords,
     },
   };

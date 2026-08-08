@@ -10,8 +10,14 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
+  useComposerState,
 } from '@/frontend/components/composer';
-import { createComposerMessageParts } from '@/frontend/components/composer/utils/composerAttachments';
+import {
+  createComposerMessageParts,
+  hasComposerSendableContent,
+  hasImportingComposerAttachments,
+  isComposerAttachmentReady,
+} from '@/frontend/components/composer/utils/composerAttachments';
 import {
   getNextModelSelection,
   ModelPickerBottomSheet,
@@ -66,6 +72,7 @@ type PendingWebSearchState = {
 const perfLog = loggerService.withContext('ChatPerf');
 
 export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatInputProps) {
+  const { attachments, draft } = useComposerState();
   const modelSettings = useModelSettingSelections();
   const rawDefaultModel = modelSettings.selections.default;
   const defaultModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
@@ -267,7 +274,11 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   );
   const handleSendPress = useCallback(
     (payload: ComposerSendPayload) => {
-      const parts = createComposerMessageParts(payload.text, payload.attachments);
+      const readyAttachments = payload.attachments.filter(isComposerAttachmentReady);
+      if (readyAttachments.length !== payload.attachments.length) {
+        throw new Error('Cannot send while attachments are importing');
+      }
+      const parts = createComposerMessageParts(payload.text, readyAttachments);
 
       return chatTopic.sendText({
         assistantId: selectedAssistantId,
@@ -296,6 +307,10 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   return (
     <>
       <ComposerSurface
+        canSend={
+          !hasImportingComposerAttachments(attachments) &&
+          hasComposerSendableContent(draft, attachments)
+        }
         dismissKeyboardOnSend={dismissKeyboardOnSend}
         onSend={handleSendPress}
         onStop={chatTopic.abort}
