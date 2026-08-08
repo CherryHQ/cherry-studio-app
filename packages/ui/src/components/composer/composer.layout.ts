@@ -12,6 +12,9 @@ const surfacePaddingHorizontal = 12;
 const surfacePaddingTop = 8;
 const surfacePaddingBottom = 8;
 const toolbarGap = 12;
+// Between the tools themselves. Narrower than the gap above the row: they are
+// one band, and the row is a separate thing from the field.
+const toolbarItemGap = 8;
 // A pill's text needs more air either side than a glyph does: the icon in a 32pt
 // circle already sits 4pt in from the edge, and matching that on a label reads as
 // cramped. 10 is what the model button this replaces has always shipped.
@@ -68,4 +71,4 @@ export const textInputBoxStyle = {
 // The paste wrapper shrink-wraps its child by default, which would pull the
 // field in from the surface's right edge and leave the caret short of it.
 export const pasteWrapperStyle = { alignSelf: 'stretch' } as const;
-export const toolbarStyle = { marginTop: toolbarGap } as const;
+export const toolbarStyle = { gap: toolbarItemGap, marginTop: toolbarGap } as const;
