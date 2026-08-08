@@ -1,4 +1,4 @@
-import { Composer, useComposerMenu } from '@cherrystudio/ui/components';
+import { Composer, composerMenuRadius, useComposerMenu } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import * as DocumentPicker from 'expo-document-picker';
 import { CameraIcon, CheckIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
@@ -102,6 +102,10 @@ export function ChatInputMenu({ onActionPress }: ChatInputMenuProps) {
   return (
     <Composer.Menu
       accessibilityLabel={t('chat.media.attach')}
+      // The media levels bring their own edges: a viewfinder or a photo grid
+      // that stops short of the panel's reads as a picture of a panel inside a
+      // panel. The rows above still need the inset.
+      contentStyle={menuLevel === 'root' ? undefined : bleedStyle}
       onOpenChange={handleOpenChange}
       testID="chat-input-menu"
     >
@@ -190,13 +194,9 @@ function ChatInputPhotoLevel({
   const { close } = useComposerMenu();
 
   return (
-    <View style={{ height: maxHeight, width }}>
+    <View style={[bleedStyle, { height: maxHeight, width }]}>
       <ChatInputPhotoGrid
         actions={media.actions}
-        // The grid sits inside a rounded panel that already clears the home
-        // indicator, so its floating controls need no safe-area inset of their
-        // own — only enough air to look deliberate.
-        bottomInset={0}
         onBack={onBack}
         onConfirm={close}
         onError={(message) => {
@@ -224,9 +224,8 @@ function ChatInputCameraLevel({
   const { close } = useComposerMenu();
 
   return (
-    <View style={{ height, width }}>
+    <View style={[bleedStyle, { height, width }]}>
       <ChatInputCamera
-        bottomInset={0}
         isActive
         onBack={onBack}
         onCapture={(photo) => {
@@ -240,3 +239,11 @@ function ChatInputCameraLevel({
     </View>
   );
 }
+
+// Bleeding to the panel's edges means rounding to its curve too, and clipping:
+// the corners are the panel's, and the content has to give them back.
+const bleedStyle = {
+  borderRadius: composerMenuRadius,
+  overflow: 'hidden',
+  padding: 0,
+} as const;

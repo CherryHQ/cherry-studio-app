@@ -15,6 +15,12 @@ export type MorphMenuProps = {
    * it.
    */
   width?: number;
+  /**
+   * Overrides the panel's own inset, which is there so rows don't touch the
+   * rounded edges. Content that provides its own — a picker, a preview — passes
+   * `{ padding: 0 }` and bleeds to them instead.
+   */
+  contentStyle?: StyleProp<ViewStyle>;
   /** The closed circle, and the footprint it reserves in the parent's flow. Defaults to the toolbar's button size. */
   triggerSize?: number;
   onOpenChange?: (isOpen: boolean) => void;

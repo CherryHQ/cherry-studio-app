@@ -1,4 +1,5 @@
 export { Composer } from './composer';
+export { composerMenuRadius } from './composer.layout';
 export { useComposerMenu } from './components/morph-menu';
 export type { MorphMenuItemProps, MorphMenuProps } from './components/morph-menu';
 export type {

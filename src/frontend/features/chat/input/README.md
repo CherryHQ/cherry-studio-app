@@ -88,6 +88,11 @@ than snapping. Three levels live inside it, tracked by `menuLevel` on the provid
       keyboard is down, which is why opening the menu dismisses it.
 - [ ] Choosing camera grows it to `getChatInputCameraPanelSize` instead: about twice the first level
       on each axis, clamped to the same room. It stays a panel — it does not go full screen.
+- [ ] Both media levels **bleed to the panel's edges** and round themselves to its corners. The
+      panel's own inset is for rows; a viewfinder or a grid that stopped short of it would read as a
+      panel inside a panel.
+- [ ] Their controls float **over** the media, positioned against the level's own box. They used to
+      be portalled to a window-sized overlay, which put them outside the panel entirely.
 - [ ] Photo permissions and previews load **only while the photo grid is on screen** — not when the
       menu merely opens, and not on the camera level — and refresh when the app returns to the
       foreground while it is showing.

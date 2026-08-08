@@ -20,10 +20,8 @@ import {
 
 import { CameraControlButton } from './CameraControlButton/CameraControlButton';
 import { CameraShutterButton } from './CameraShutterButton/CameraShutterButton';
-import { ChatInputMediaControlOverlay } from './ChatInputMediaControlOverlay';
 
 type ChatInputCameraProps = {
-  bottomInset: number;
   // Whether the host currently shows the camera. The preview is removed while
   // inactive so Android also releases the capture session.
   isActive: boolean;
@@ -35,8 +33,10 @@ type ChatInputCameraProps = {
 
 /**
  * A full-bleed Expo Camera preview with self-drawn back / shutter / flip
- * controls floating over it — no black strip stealing preview space. Capture
- * writes a JPEG to a temp path that the caller turns into an attachment draft.
+ * controls floating over it — no black strip stealing preview space. They are
+ * positioned against this component's own box, not the window, because the host
+ * is a menu panel. Capture writes a JPEG to a temp path that the caller turns
+ * into an attachment draft.
  *
  * It fills whatever box the host gives it. Today that is a level of the ＋
  * menu, sized at roughly twice the menu's first level — deliberately not the
@@ -44,7 +44,6 @@ type ChatInputCameraProps = {
  * scaled, and the panel morphs on the way open.
  */
 export function ChatInputCamera({
-  bottomInset,
   isActive,
   onBack,
   onCapture,
@@ -118,7 +117,7 @@ export function ChatInputCamera({
   return (
     <View className="flex-1 bg-black" style={style}>
       {shouldRenderCamera ? (
-        // Full-bleed preview: fills the screen, controls float over it.
+        // Full-bleed preview: fills the box the host gives it.
         <CameraView
           ref={cameraRef}
           active={isActive && isForeground}
@@ -162,44 +161,47 @@ export function ChatInputCamera({
         </View>
       )}
 
-      {/* Floating control bar: transparent, overlaid on the bottom of the
-          preview; buttons keep a translucent dark backing so they stay legible
-          over bright scenes. The bottom safe-area inset is applied here so the
-          preview itself still runs edge-to-edge under the home indicator. */}
-      <ChatInputMediaControlOverlay>
-        <View
-          className="absolute inset-x-0 flex-row items-center justify-between px-10"
-          style={[styles.controlBar, { bottom: Math.max(bottomInset, 16) }]}
-          testID="chat-input-camera-controls"
-        >
-          <CameraControlButton
-            accessibilityLabel={t('common.back')}
-            icon={ChevronLeftIcon}
-            onPress={onBack}
-            sfSymbol="chevron.left"
-          />
+      {/* Floating over the preview, and positioned against this box rather than
+          the window: the host is a menu panel, so anything pinned to the screen
+          lands outside it. */}
+      <View
+        className="flex-row items-center justify-between px-8"
+        style={styles.controlBar}
+        testID="chat-input-camera-controls"
+      >
+        <CameraControlButton
+          accessibilityLabel={t('common.back')}
+          icon={ChevronLeftIcon}
+          onPress={onBack}
+          sfSymbol="chevron.left"
+        />
 
-          <CameraShutterButton
-            accessibilityLabel={t('chat.media.takePhoto')}
-            disabled={!canCapture || isCapturing}
-            onPress={handleCapture}
-          />
+        <CameraShutterButton
+          accessibilityLabel={t('chat.media.takePhoto')}
+          disabled={!canCapture || isCapturing}
+          onPress={handleCapture}
+        />
 
-          <CameraControlButton
-            accessibilityLabel={t('chat.media.flipCamera')}
-            disabled={!shouldRenderCamera || isCapturing}
-            icon={SwitchCameraIcon}
-            onPress={handleFlip}
-            sfSymbol="camera.rotate"
-          />
-        </View>
-      </ChatInputMediaControlOverlay>
+        <CameraControlButton
+          accessibilityLabel={t('chat.media.flipCamera')}
+          disabled={!shouldRenderCamera || isCapturing}
+          icon={SwitchCameraIcon}
+          onPress={handleFlip}
+          sfSymbol="camera.rotate"
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  // Positioned here rather than by className so the geometry reads in one place
+  // — and so a test can assert it.
   controlBar: {
+    bottom: 0,
     height: 72,
+    left: 0,
+    position: 'absolute',
+    right: 0,
   },
 });

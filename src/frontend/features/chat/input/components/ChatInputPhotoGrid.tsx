@@ -22,12 +22,13 @@ import {
   type ChatInputPhotoPreview,
 } from '../hooks/useChatInputPhotoPicker';
 import { CameraControlButton } from './CameraControlButton/CameraControlButton';
-import { ChatInputMediaControlOverlay } from './ChatInputMediaControlOverlay';
 import { ChatInputSelectedPhotoBar } from './ChatInputSelectedPhotoBar';
 
 const PHOTO_GRID_COLUMN_COUNT = 3;
 const PHOTO_GRID_GAP = 2;
 const PHOTO_GRID_DRAW_DISTANCE = 360;
+// Tall enough for the floating controls, and what the grid pads its last row by.
+const CONTROL_BAR_HEIGHT = 72;
 const PHOTO_SELECTION_TIMING = { duration: 180 };
 
 function photoKeyExtractor(item: ChatInputPhotoPreview) {
@@ -39,7 +40,6 @@ const PHOTO_CELL_ACCESSIBILITY_ACTIONS = [{ name: 'activate' as const }];
 
 type ChatInputPhotoGridProps = {
   actions: ChatInputPhotoPickerActions;
-  bottomInset: number;
   onBack: () => void;
   onConfirm: () => void;
   onError: (message: string) => void;
@@ -177,7 +177,6 @@ const ChatInputPhotoCell = memo(function ChatInputPhotoCell({
 
 export function ChatInputPhotoGrid({
   actions,
-  bottomInset,
   onBack,
   onConfirm,
   onError,
@@ -209,7 +208,6 @@ export function ChatInputPhotoGrid({
   const estimatedItemSize =
     (width - PHOTO_GRID_GAP * (PHOTO_GRID_COLUMN_COUNT - 1)) / PHOTO_GRID_COLUMN_COUNT +
     PHOTO_GRID_GAP;
-  const controlsHeight = Math.max(bottomInset, 12) + 60;
 
   const handleBack = useCallback(() => {
     clearSelectedPhotos();
@@ -287,13 +285,6 @@ export function ChatInputPhotoGrid({
     [t, togglePhotoSelection],
   );
 
-  const listContentStyle = useMemo(
-    () => ({
-      paddingBottom: controlsHeight,
-    }),
-    [controlsHeight],
-  );
-
   const listFooter = useMemo(
     () =>
       isPhotoPageLoading && photoPreviews.length > 0 ? (
@@ -349,7 +340,6 @@ export function ChatInputPhotoGrid({
         <LegendList
           className="flex-1"
           columnWrapperStyle={styles.columnWrapper}
-          contentContainerStyle={listContentStyle}
           contentInsetAdjustmentBehavior="never"
           data={photoPreviews}
           drawDistance={PHOTO_GRID_DRAW_DISTANCE}
@@ -383,31 +373,29 @@ export function ChatInputPhotoGrid({
         </View>
       ) : null}
 
-      <ChatInputMediaControlOverlay>
-        <View
-          className="absolute inset-x-0 flex-row items-center justify-between px-10"
-          pointerEvents="box-none"
-          style={[styles.controlBar, { bottom: Math.max(bottomInset, 12) }]}
-          testID="chat-input-photo-controls"
-        >
-          <CameraControlButton
-            accessibilityLabel={t('common.back')}
-            icon={ChevronLeftIcon}
-            onPress={handleBack}
-            sfSymbol="chevron.left"
-          />
+      {/* Floating over the grid, and positioned against this box rather than
+          the window: the host is a menu panel, so anything pinned to the screen
+          lands outside it. */}
+      <View
+        className="flex-row items-center justify-between px-6"
+        style={styles.controlBar}
+        testID="chat-input-photo-controls"
+      >
+        <CameraControlButton
+          accessibilityLabel={t('common.back')}
+          icon={ChevronLeftIcon}
+          onPress={handleBack}
+          sfSymbol="chevron.left"
+        />
 
-          {selectedPhotoCount > 0 ? (
-            <ChatInputSelectedPhotoBar
-              isLoading={isConfirming}
-              selectedPhotoCount={selectedPhotoCount}
-              onPress={() => {
-                void handleConfirm();
-              }}
-            />
-          ) : null}
-        </View>
-      </ChatInputMediaControlOverlay>
+        <ChatInputSelectedPhotoBar
+          isLoading={isConfirming}
+          selectedPhotoCount={selectedPhotoCount}
+          onPress={() => {
+            void handleConfirm();
+          }}
+        />
+      </View>
     </View>
   );
 }
@@ -417,13 +405,22 @@ const styles = StyleSheet.create({
     columnGap: PHOTO_GRID_GAP,
     rowGap: PHOTO_GRID_GAP,
   },
+  // Positioned here rather than by className so the geometry reads in one place
+  // — and so a test can assert it.
   controlBar: {
-    height: 52,
+    bottom: 0,
+    height: CONTROL_BAR_HEIGHT,
+    left: 0,
+    position: 'absolute',
+    right: 0,
   },
   emptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: 220,
+  },
+  listContent: {
+    paddingBottom: CONTROL_BAR_HEIGHT,
   },
   listFooter: {
     alignItems: 'center',

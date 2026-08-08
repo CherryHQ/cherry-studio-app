@@ -1,4 +1,4 @@
-import type { ComponentProps, ComponentType, ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import type { ViewProps } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -100,9 +100,15 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-jest.mock('@cherrystudio/ui/components', () => ({
-  Portal: ({ children }: { children: ReactNode }) => children,
-}));
+// Marked rather than transparent: these two used to portal their controls to a
+// window-sized overlay, and the tests below pin that they no longer do.
+jest.mock('@cherrystudio/ui/components', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    Portal: ({ children }: { children: ReactNode }) => <View testID="ui-portal">{children}</View>,
+  };
+});
 
 describe('chat input media content', () => {
   beforeEach(() => {
@@ -131,7 +137,6 @@ describe('chat input media content', () => {
     };
     const PhotoGrid = ChatInputPhotoGrid as unknown as ComponentType<{
       actions: typeof mediaActions;
-      bottomInset: number;
       state: typeof mediaState;
       onBack: () => void;
       onConfirm: () => void;
@@ -143,7 +148,6 @@ describe('chat input media content', () => {
         create(
           <PhotoGrid
             actions={mediaActions}
-            bottomInset={0}
             state={mediaState}
             onBack={jest.fn()}
             onConfirm={jest.fn()}
@@ -154,7 +158,7 @@ describe('chat input media content', () => {
     }).not.toThrow();
   });
 
-  test('anchors the photo controls to the bottom inset and keeps back available', () => {
+  test('keeps the photo controls inside its own box and back available', () => {
     const onBack = jest.fn();
     const clearSelectedPhotos = jest.fn();
     const mediaActions = {
@@ -177,7 +181,6 @@ describe('chat input media content', () => {
     };
     const PhotoGrid = ChatInputPhotoGrid as unknown as ComponentType<{
       actions: typeof mediaActions;
-      bottomInset: number;
       state: typeof mediaState;
       onBack: () => void;
       onConfirm: () => void;
@@ -189,7 +192,6 @@ describe('chat input media content', () => {
       renderer = create(
         <PhotoGrid
           actions={mediaActions}
-          bottomInset={34}
           state={mediaState}
           onBack={onBack}
           onConfirm={jest.fn()}
@@ -199,13 +201,13 @@ describe('chat input media content', () => {
     });
 
     const controls = renderer?.root.findByProps({ testID: 'chat-input-photo-controls' });
-    const controlOverlay = renderer?.root.findByProps({
-      testID: 'chat-input-media-control-overlay',
-    });
     const backButton = controls?.findByProps({ accessibilityLabel: 'common.back' });
 
-    expect(controlOverlay?.findByProps({ testID: 'chat-input-photo-controls' })).toBe(controls);
-    expect(StyleSheet.flatten(controls?.props.style).bottom).toBe(34);
+    // Its host is a menu panel, so the controls have to be positioned against
+    // the grid's own box. Anything portalled to a window-sized overlay lands
+    // outside the panel entirely.
+    expect(renderer?.root.findAllByProps({ testID: 'ui-portal' })).toHaveLength(0);
+    expect(StyleSheet.flatten(controls?.props.style).bottom).toBe(0);
 
     act(() => {
       backButton?.props.onPress();
@@ -220,45 +222,27 @@ describe('chat input media content', () => {
 
     await act(async () => {
       renderer = create(
-        <ChatInputCamera
-          bottomInset={0}
-          isActive
-          onBack={jest.fn()}
-          onCapture={jest.fn()}
-          onError={jest.fn()}
-        />,
+        <ChatInputCamera isActive onBack={jest.fn()} onCapture={jest.fn()} onError={jest.fn()} />,
       );
     });
 
     expect(renderer?.root.findAllByProps({ testID: 'expo-camera-view' }).length).toBeGreaterThan(0);
   });
 
-  test('anchors camera controls to the safe-area inset supplied above the sheet portal', async () => {
-    const Camera = ChatInputCamera as ComponentType<
-      ComponentProps<typeof ChatInputCamera> & { bottomInset: number }
-    >;
+  test('keeps the camera controls inside its own box', async () => {
     let renderer: ReactTestRenderer | undefined;
 
     await act(async () => {
       renderer = create(
-        <Camera
-          bottomInset={34}
-          isActive
-          onBack={jest.fn()}
-          onCapture={jest.fn()}
-          onError={jest.fn()}
-        />,
+        <ChatInputCamera isActive onBack={jest.fn()} onCapture={jest.fn()} onError={jest.fn()} />,
       );
     });
 
     const controls = renderer?.root.findByProps({
       testID: 'chat-input-camera-controls',
     });
-    const controlOverlay = renderer?.root.findByProps({
-      testID: 'chat-input-media-control-overlay',
-    });
 
-    expect(controlOverlay?.findByProps({ testID: 'chat-input-camera-controls' })).toBe(controls);
-    expect(StyleSheet.flatten(controls?.props.style).bottom).toBe(34);
+    expect(renderer?.root.findAllByProps({ testID: 'ui-portal' })).toHaveLength(0);
+    expect(StyleSheet.flatten(controls?.props.style).bottom).toBe(0);
   });
 });
