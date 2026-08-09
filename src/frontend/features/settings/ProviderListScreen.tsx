@@ -10,26 +10,18 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { useQuery } from '@/frontend/data';
 import { hiddenProviderListIds, isIOS } from '@/frontend/utils/constants';
 
-import { ProviderAvatar } from './components/ProviderAvatar';
-import {
-  getProviderEndpoints,
-  ProviderEndpointSummary,
-} from './components/ProviderEndpointSummary';
-import { SettingsGroupedSurface } from './components/SettingsGroupedSurface';
-import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
+import { ProviderCard, type ProviderCardProps } from './components/ProviderCard';
 
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 const PROVIDER_CARD_GAP = 12;
-const PROVIDER_ROW_ESTIMATED_HEIGHT = 96;
+const PROVIDER_CARD_ESTIMATED_HEIGHT = 160;
+const PROVIDER_COLUMN_COUNT = 2;
 
-const keyExtractor = (item: SettingsServiceRowProps) => item.id;
-const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
-  <SettingsGroupedSurface isFirst isLast>
-    <SettingsServiceRow {...item} className="min-h-24 px-4 py-4" />
-  </SettingsGroupedSurface>
+const keyExtractor = (item: ProviderCardProps) => item.provider.id;
+const renderProviderCard = ({ item }: LegendListRenderItemProps<ProviderCardProps>) => (
+  <ProviderCard {...item} />
 );
-const ProviderCardSeparator = () => <View style={styles.cardSeparator} />;
 
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
@@ -50,53 +42,33 @@ export default function ProviderSettingsScreen() {
   const providersQuery = useQuery('/providers', {
     staleTime: providerListStaleTime,
   });
-  const providerItems = useMemo<SettingsServiceRowProps[]>(
+  const providerItems = useMemo<ProviderCardProps[]>(
     () =>
       (providersQuery.data ?? [])
         .filter((provider) => !hiddenProviderListIds.includes(provider.id))
         // Enabled providers float to the top; the sort is stable, so each group
         // keeps the `orderKey` order the service already applied.
         .sort((a, b) => Number(b.isEnabled) - Number(a.isEnabled))
-        .map((provider) => {
-          const endpoints = getProviderEndpoints(provider);
-
-          return {
-            avatar: (
-              <ProviderAvatar
-                presetProviderId={provider.presetProviderId}
-                providerId={provider.id}
-                providerName={provider.name}
-                size={40}
-              />
-            ),
-            details: <ProviderEndpointSummary endpoints={endpoints} />,
-            detailsAccessibilityLabel: endpoints
-              .map(({ accessibilityLabel }) => accessibilityLabel)
-              .join(', '),
-            id: provider.id,
-            isEnabled: provider.isEnabled,
-            name: provider.name,
-            nameClassName: 'text-lg font-semibold',
-            onPress: () => {
-              if (isNavigatingRef.current) {
-                return;
-              }
-              isNavigatingRef.current = true;
-              router.push({
-                pathname: '/settings/provider/[providerId]',
-                params: { providerId: provider.id, providerName: provider.name },
-              });
-            },
-            statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
-            statusTone: 'success' as const,
-          };
-        }),
+        .map((provider) => ({
+          provider,
+          onPress: () => {
+            if (isNavigatingRef.current) {
+              return;
+            }
+            isNavigatingRef.current = true;
+            router.push({
+              pathname: '/settings/provider/[providerId]',
+              params: { providerId: provider.id, providerName: provider.name },
+            });
+          },
+          statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
+        })),
     [providersQuery.data, router, t],
   );
   const filteredProviderItems = useMemo(() => {
     const query = searchText.trim().toLocaleLowerCase();
     const matches = query
-      ? providerItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
+      ? providerItems.filter((item) => item.provider.name.toLocaleLowerCase().includes(query))
       : providerItems;
 
     return matches;
@@ -110,8 +82,10 @@ export default function ProviderSettingsScreen() {
   const cardHeight =
     measuredList?.rowCount === filteredProviderItems.length
       ? measuredList.height
-      : filteredProviderItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT +
-        Math.max(0, filteredProviderItems.length - 1) * PROVIDER_CARD_GAP;
+      : Math.ceil(filteredProviderItems.length / PROVIDER_COLUMN_COUNT) *
+          PROVIDER_CARD_ESTIMATED_HEIGHT +
+        Math.max(0, Math.ceil(filteredProviderItems.length / PROVIDER_COLUMN_COUNT) - 1) *
+          PROVIDER_CARD_GAP;
   const openCreateProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
@@ -177,16 +151,17 @@ export default function ProviderSettingsScreen() {
                 contentContainerStyle={
                   usesNativeBottomSearch ? styles.listContentWithNativeBottomSearch : undefined
                 }
+                columnWrapperStyle={styles.cardGrid}
                 data={filteredProviderItems}
-                estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
-                ItemSeparatorComponent={ProviderCardSeparator}
+                estimatedItemSize={PROVIDER_CARD_ESTIMATED_HEIGHT}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
                 keyExtractor={keyExtractor}
                 maintainVisibleContentPosition={false}
+                numColumns={PROVIDER_COLUMN_COUNT}
                 onContentSizeChange={handleContentSizeChange}
                 recycleItems
-                renderItem={renderProviderRow}
+                renderItem={renderProviderCard}
                 showsVerticalScrollIndicator={false}
                 style={styles.list}
               />
@@ -209,8 +184,8 @@ export default function ProviderSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  cardSeparator: {
-    height: PROVIDER_CARD_GAP,
+  cardGrid: {
+    gap: PROVIDER_CARD_GAP,
   },
   list: {
     flex: 1,
