@@ -20,6 +20,13 @@ packageExtensions:
       '@react-navigation/native':
         optional: true
 
+peerDependencyRules:
+  # Zeego 3.0.6 still pins its pre-Expo 54 native peers. Upstream PR #191 updates them.
+  allowedVersions:
+    '@react-native-menu/menu': 2.0.0
+    react-native-ios-context-menu: 3.2.1
+    react-native-ios-utilities: 5.2.0
+
 overrides:
   '@storybook/react': 10.5.1
   '@storybook/react-native-theming': 10.5.1
@@ -64,7 +71,7 @@ patchedDependencies:
   ollama-ai-provider-v2@3.3.1: patches/ollama-ai-provider-v2@3.3.1.patch
   ai@6.0.183: patches/ai@6.0.183.patch
   react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
-  react-native-ios-utilities@5.1.2: patches/react-native-ios-utilities@5.1.2.patch
+  react-native-ios-utilities@5.2.0: patches/react-native-ios-utilities@5.2.0.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
