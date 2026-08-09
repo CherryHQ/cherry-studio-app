@@ -1,5 +1,5 @@
 import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
-import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
+import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import * as Crypto from 'expo-crypto';
@@ -17,11 +17,14 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
+import { ProviderDefaultEndpointControl } from './apiService';
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 import {
   buildCustomProviderCreationPayload,
   type CustomProviderEndpointUrls,
+  type CustomProviderTextEndpoint,
   findInvalidCustomProviderEndpointUrl,
+  isCustomProviderTextEndpointType,
 } from './apiService/utils/providerApiServiceEndpointRules';
 
 const avatarPreviewSize = 96;
@@ -29,6 +32,7 @@ const avatarPreviewSize = 96;
 type CreateProviderFormValues = {
   apiKey: string;
   avatarUri: string | null;
+  defaultChatEndpoint: CustomProviderTextEndpoint;
   endpointUrls: CustomProviderEndpointUrls;
   name: string;
 };
@@ -45,6 +49,9 @@ export default function NewProviderScreen() {
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [avatarDraftUri, setAvatarDraftUri] = useState<string | null>(null);
   const [anthropicUrl, setAnthropicUrl] = useState('');
+  const [defaultChatEndpoint, setDefaultChatEndpoint] = useState<CustomProviderTextEndpoint>(
+    ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+  );
   const [geminiUrl, setGeminiUrl] = useState('');
   const [imageEditUrl, setImageEditUrl] = useState('');
   const [imageGenerationUrl, setImageGenerationUrl] = useState('');
@@ -66,7 +73,7 @@ export default function NewProviderScreen() {
       const trimmedApiKey = values.apiKey.trim();
       const { defaultChatEndpoint, endpointConfigs } = buildCustomProviderCreationPayload({
         endpointUrls: values.endpointUrls,
-        preferredChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+        preferredChatEndpoint: values.defaultChatEndpoint,
       });
 
       const apiKeys: ApiKeyEntry[] | undefined = trimmedApiKey
@@ -101,6 +108,11 @@ export default function NewProviderScreen() {
   );
 
   const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0;
+  const handleDefaultChatEndpointChange = useCallback((endpoint: EndpointType) => {
+    if (isCustomProviderTextEndpointType(endpoint)) {
+      setDefaultChatEndpoint(endpoint);
+    }
+  }, []);
   const handleFinish = useCallback(() => {
     if (!canSubmit || isCreating) {
       return;
@@ -128,6 +140,7 @@ export default function NewProviderScreen() {
     void submitProvider({
       apiKey,
       avatarUri: avatarDraftUri,
+      defaultChatEndpoint,
       endpointUrls,
       name,
     })
@@ -151,6 +164,7 @@ export default function NewProviderScreen() {
     avatarDraftUri,
     baseUrl,
     canSubmit,
+    defaultChatEndpoint,
     geminiUrl,
     imageEditUrl,
     imageGenerationUrl,
@@ -207,7 +221,19 @@ export default function NewProviderScreen() {
             />
           </FormField>
 
-          <FormField label={t('settings.provider.apiService.baseUrl')} required>
+          <FormField
+            label={t('settings.provider.apiService.baseUrl')}
+            labelAccessory={
+              <ProviderDefaultEndpointControl
+                endpoint={ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS}
+                endpointLabel={t('settings.provider.apiService.baseUrl')}
+                isDefault={defaultChatEndpoint === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS}
+                isSelectable={Boolean(baseUrl.trim())}
+                onChange={handleDefaultChatEndpointChange}
+              />
+            }
+            required
+          >
             <Input
               accessibilityLabel={t('settings.provider.apiService.baseUrl')}
               autoCapitalize="none"
@@ -256,17 +282,26 @@ export default function NewProviderScreen() {
               {t('settings.provider.apiService.moreEndpoints')}
             </Text>
             <EndpointField
+              defaultChatEndpoint={defaultChatEndpoint}
+              endpoint={ENDPOINT_TYPE.ANTHROPIC_MESSAGES}
               label={t('settings.provider.add.endpoint.anthropic')}
+              onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
               onChangeText={setAnthropicUrl}
               value={anthropicUrl}
             />
             <EndpointField
+              defaultChatEndpoint={defaultChatEndpoint}
+              endpoint={ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT}
               label={t('settings.provider.add.endpoint.gemini')}
+              onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
               onChangeText={setGeminiUrl}
               value={geminiUrl}
             />
             <EndpointField
+              defaultChatEndpoint={defaultChatEndpoint}
+              endpoint={ENDPOINT_TYPE.OPENAI_RESPONSES}
               label={t('settings.provider.add.endpoint.openaiResponses')}
+              onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
               onChangeText={setOpenaiResponsesUrl}
               value={openaiResponsesUrl}
             />
@@ -407,32 +442,58 @@ function AvatarPreview({ name, size, uri }: { name: string; size: number; uri: s
 function FormField({
   children,
   label,
+  labelAccessory,
   required,
 }: {
   children: ReactNode;
   label: string;
+  labelAccessory?: ReactNode;
   required?: boolean;
 }) {
   return (
     <TextField isRequired={required}>
-      <Label>{label}</Label>
+      {labelAccessory ? (
+        <View className="h-9 flex-row items-center gap-2">
+          <Label className="min-w-0 flex-1">{label}</Label>
+          {labelAccessory}
+        </View>
+      ) : (
+        <Label>{label}</Label>
+      )}
       {children}
     </TextField>
   );
 }
 
 function EndpointField({
+  defaultChatEndpoint,
+  endpoint,
   label,
+  onDefaultChatEndpointChange,
   onChangeText,
   value,
 }: {
+  defaultChatEndpoint?: CustomProviderTextEndpoint;
+  endpoint?: CustomProviderTextEndpoint;
   label: string;
+  onDefaultChatEndpointChange?: (endpoint: EndpointType) => void;
   onChangeText: (value: string) => void;
   value: string;
 }) {
   return (
     <TextField>
-      <Label>{label}</Label>
+      <View className="h-9 flex-row items-center gap-2">
+        <Label className="min-w-0 flex-1">{label}</Label>
+        {endpoint && defaultChatEndpoint && onDefaultChatEndpointChange ? (
+          <ProviderDefaultEndpointControl
+            endpoint={endpoint}
+            endpointLabel={label}
+            isDefault={endpoint === defaultChatEndpoint && Boolean(value.trim())}
+            isSelectable={Boolean(value.trim())}
+            onChange={onDefaultChatEndpointChange}
+          />
+        ) : null}
+      </View>
       <Input
         accessibilityLabel={label}
         autoCapitalize="none"

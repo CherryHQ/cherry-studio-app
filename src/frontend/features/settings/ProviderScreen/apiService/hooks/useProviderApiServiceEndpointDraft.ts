@@ -28,8 +28,19 @@ export function useProviderApiServiceEndpointDraft(provider: Provider) {
     });
   }, []);
 
+  const updatePrimaryEndpoint = useCallback((endpoint: EndpointType) => {
+    setDraft((current) => {
+      if (current.primaryEndpoint === endpoint) {
+        return current;
+      }
+
+      return { ...current, primaryEndpoint: endpoint };
+    });
+  }, []);
+
   return {
     draft,
     updateBaseUrl,
+    updatePrimaryEndpoint,
   };
 }

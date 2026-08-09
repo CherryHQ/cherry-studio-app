@@ -6,13 +6,16 @@ import ProviderEndpointSettingsScreen from '../ProviderEndpointSettingsScreen';
 
 type EndpointFormProps = {
   baseUrlByEndpoint: Partial<Record<EndpointType, string>>;
+  defaultChatEndpoint: EndpointType;
   onBaseUrlCommit: (endpoint: EndpointType, value: string) => void;
+  onDefaultChatEndpointChange: (endpoint: EndpointType) => void;
 };
 
 const provider = {
   authType: 'api-key',
   defaultChatEndpoint: 'openai-chat-completions',
   endpointConfigs: {
+    'anthropic-messages': { baseUrl: 'https://anthropic.example.com' },
     'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
   },
   id: 'provider-1',
@@ -108,6 +111,37 @@ describe('ProviderEndpointSettingsScreen', () => {
       saving.resolve(undefined);
       await saving.promise;
     });
+  });
+
+  it('persists a configured endpoint as the provider default', async () => {
+    act(() => {
+      renderer = create(<ProviderEndpointSettingsScreen />);
+    });
+
+    await act(async () => {
+      endpointForm().onDefaultChatEndpointChange('anthropic-messages');
+      await Promise.resolve();
+    });
+
+    expect(mockSaveEndpointConfigs).toHaveBeenCalledWith({
+      defaultChatEndpoint: 'anthropic-messages',
+      endpointConfigs: provider.endpointConfigs,
+    });
+  });
+
+  it('restores the persisted default when saving the selection fails', async () => {
+    mockSaveEndpointConfigs.mockRejectedValueOnce(new Error('save failed'));
+    act(() => {
+      renderer = create(<ProviderEndpointSettingsScreen />);
+    });
+
+    await act(async () => {
+      endpointForm().onDefaultChatEndpointChange('anthropic-messages');
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(endpointForm().defaultChatEndpoint).toBe('openai-chat-completions');
   });
 });
 

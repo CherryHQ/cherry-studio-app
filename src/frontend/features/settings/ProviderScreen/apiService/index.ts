@@ -3,6 +3,7 @@ export {
   ProviderApiServiceApiKeysField,
 } from './components/ProviderApiServiceApiKeyFields';
 export {
+  ProviderDefaultEndpointControl,
   ProviderApiServiceEndpointField,
   ProviderApiServiceEndpointForm,
 } from './components/ProviderApiServiceEndpointFields';
@@ -28,5 +29,6 @@ export {
 } from './utils/providerApiServiceEndpointRules';
 export {
   buildProviderApiServiceEndpointUpdates,
+  buildProviderPrimaryBaseUrlUpdates,
   ProviderApiServiceSaveError,
 } from './utils/providerApiServiceSave';

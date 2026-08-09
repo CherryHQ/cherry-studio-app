@@ -20,6 +20,7 @@ import {
 } from '../apiService/utils/providerApiServiceEndpointRules';
 import {
   buildProviderApiServiceEndpointUpdates,
+  buildProviderPrimaryBaseUrlUpdates,
   ProviderApiServiceSaveError,
 } from '../apiService/utils/providerApiServiceSave';
 
@@ -248,6 +249,39 @@ describe('provider API service form helpers', () => {
     });
 
     expect(updates.defaultChatEndpoint).toBe('anthropic-messages');
+  });
+
+  it('updates only the primary Base URL and preserves endpoint metadata', () => {
+    expect(
+      buildProviderPrimaryBaseUrlUpdates({
+        baseUrl: ' https://next.example.com ',
+        provider: {
+          defaultChatEndpoint: 'openai-chat-completions',
+          endpointConfigs: {
+            'anthropic-messages': {
+              baseUrl: 'https://anthropic.example.com',
+              reasoningFormatType: 'anthropic',
+            },
+            'openai-chat-completions': {
+              baseUrl: 'https://chat.example.com',
+              reasoningFormatType: 'openai-chat',
+            },
+          },
+        } as never,
+      }),
+    ).toEqual({
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'anthropic-messages': {
+          baseUrl: 'https://anthropic.example.com',
+          reasoningFormatType: 'anthropic',
+        },
+        'openai-chat-completions': {
+          baseUrl: 'https://next.example.com',
+          reasoningFormatType: 'openai-chat',
+        },
+      },
+    });
   });
 
   it('normalizes API key entries before they reach the save call', () => {

@@ -20,6 +20,7 @@ type SectionProps = {
   apiKeysInput?: string;
   baseUrl?: string;
   onApiKeysCommit?: (value: string) => void;
+  onBaseUrlCommit?: (value: string) => Promise<boolean>;
   provider?: Provider;
   showApiKeys: boolean;
   showBaseUrl: boolean;
@@ -49,6 +50,7 @@ let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
 let mockSectionRenders: SectionProps[];
 const mockReplaceApiKeys = jest.fn(async () => undefined);
+const mockSaveProvider = jest.fn(async () => undefined);
 const mockAlertConfirm = jest.fn();
 const mockAlertShow = jest.fn();
 let queryClient: QueryClient;
@@ -114,12 +116,14 @@ jest.mock('../apiService', () => ({
   ...jest.requireActual('../apiService/utils/providerApiServiceApiKeys'),
   ...jest.requireActual('../apiService/utils/providerApiServiceAuth'),
   ...jest.requireActual('../apiService/utils/providerApiServiceEndpointRules'),
+  ...jest.requireActual('../apiService/utils/providerApiServiceSave'),
   useProviderApiServiceQueries: () => ({
     apiKeys: mockApiKeys,
     apiKeysQuery: mockApiKeysQuery,
     authConfig: mockAuthConfig,
     authConfigQuery: mockAuthConfigQuery,
     replaceApiKeysMutation: { mutateAsync: mockReplaceApiKeys },
+    saveProviderMutation: { mutateAsync: mockSaveProvider },
   }),
 }));
 
@@ -210,6 +214,7 @@ describe('ProviderDetailScreen', () => {
     mockChromeRenderCount = 0;
     mockSectionRenders = [];
     mockReplaceApiKeys.mockClear();
+    mockSaveProvider.mockClear();
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
 
@@ -295,6 +300,57 @@ describe('ProviderDetailScreen', () => {
       { id: 'key-a', isEnabled: true, key: 'next-a' },
       { id: 'key-b', isEnabled: false, key: 'next-b' },
     ]);
+  });
+
+  it('persists the primary Base URL without changing other endpoints', async () => {
+    loadEverything();
+    mockProvider = {
+      ...testProvider,
+      endpointConfigs: {
+        'anthropic-messages': {
+          baseUrl: 'https://anthropic.example.com',
+          reasoningFormatType: 'anthropic',
+        },
+        'openai-chat-completions': {
+          baseUrl: 'https://chat.example.com',
+          reasoningFormatType: 'openai-chat',
+        },
+      },
+    } as Provider;
+    render();
+
+    await act(async () => {
+      await mockSectionRenders[0]?.onBaseUrlCommit?.(' https://next.example.com ');
+    });
+
+    expect(mockSaveProvider).toHaveBeenCalledWith({
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'anthropic-messages': {
+          baseUrl: 'https://anthropic.example.com',
+          reasoningFormatType: 'anthropic',
+        },
+        'openai-chat-completions': {
+          baseUrl: 'https://next.example.com',
+          reasoningFormatType: 'openai-chat',
+        },
+      },
+    });
+  });
+
+  it('rejects an invalid primary Base URL before saving', async () => {
+    loadEverything();
+    render();
+
+    await act(async () => {
+      await mockSectionRenders[0]?.onBaseUrlCommit?.('not-a-url');
+    });
+
+    expect(mockSaveProvider).not.toHaveBeenCalled();
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      description: 'settings.provider.apiService.invalidBaseUrlMessage',
+      title: 'settings.provider.apiService.invalidBaseUrlTitle',
+    });
   });
 
   it('hides the API keys and base URL blocks for providers that use neither', () => {

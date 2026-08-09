@@ -35,6 +35,9 @@ export type CustomProviderCreationPayload = {
 
 const defaultChatEndpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
 const CONFIGURABLE_ENDPOINT_TYPE_SET = new Set<EndpointType>(CONFIGURABLE_ENDPOINT_TYPES);
+const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPE_SET = new Set<EndpointType>(
+  CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
+);
 const ENDPOINT_EDITABLE_AUTH_TYPES = new Set<AuthType>(['api-key', 'iam-azure']);
 
 export function getPrimaryEndpoint(provider?: Provider | null): EndpointType {
@@ -51,6 +54,12 @@ export function isConfigurableEndpointType(
   return (
     endpoint !== null && endpoint !== undefined && CONFIGURABLE_ENDPOINT_TYPE_SET.has(endpoint)
   );
+}
+
+export function isCustomProviderTextEndpointType(
+  endpoint: EndpointType,
+): endpoint is CustomProviderTextEndpoint {
+  return CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPE_SET.has(endpoint);
 }
 
 export function canEditProviderEndpoint(provider?: Provider | null): boolean {

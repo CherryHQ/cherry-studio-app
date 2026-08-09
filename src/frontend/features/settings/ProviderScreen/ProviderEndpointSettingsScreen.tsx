@@ -75,7 +75,8 @@ function ProviderEndpointSettingsForm({
   const [endpointErrors, setEndpointErrors] = useState<Partial<Record<EndpointType, string>>>({});
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
-  const { draft, updateBaseUrl } = useProviderApiServiceEndpointDraft(provider);
+  const { draft, updateBaseUrl, updatePrimaryEndpoint } =
+    useProviderApiServiceEndpointDraft(provider);
   const hasUnsavedChanges =
     Object.keys(endpointErrors).length > 0 ||
     getProviderApiServiceEndpointDirtyState({ draft, provider });
@@ -157,6 +158,23 @@ function ProviderEndpointSettingsForm({
     [draft, provider, saveEndpointDraft, updateBaseUrl],
   );
 
+  const handleDefaultChatEndpointChange = useCallback(
+    (endpoint: EndpointType) => {
+      if (endpoint === draft.primaryEndpoint) {
+        return;
+      }
+
+      const nextDraft = { ...draft, primaryEndpoint: endpoint };
+      updatePrimaryEndpoint(endpoint);
+      void saveEndpointDraft({ endpoint, nextDraft }).then((didSave) => {
+        if (!didSave) {
+          updatePrimaryEndpoint(draft.primaryEndpoint);
+        }
+      });
+    },
+    [draft, saveEndpointDraft, updatePrimaryEndpoint],
+  );
+
   return (
     <>
       <BackHeader title={t('settings.provider.apiService.manageEndpoints')} onBack={requestClose} />
@@ -172,10 +190,14 @@ function ProviderEndpointSettingsForm({
         <View className="px-4 py-5">
           <ProviderApiServiceEndpointForm
             baseUrlByEndpoint={draft.baseUrlByEndpoint}
+            configuredEndpointTypes={Object.keys(provider.endpointConfigs ?? {}) as EndpointType[]}
+            defaultChatEndpoint={draft.primaryEndpoint}
             endpointErrors={endpointErrors}
             endpointTypes={draft.visibleEndpointTypes}
+            isSaving={isSaving}
             onBaseUrlChange={handleBaseUrlChange}
             onBaseUrlCommit={handleBaseUrlCommit}
+            onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
           />
         </View>
       </ScrollView>

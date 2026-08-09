@@ -13,6 +13,7 @@ type ProviderApiManagementSectionProps = {
   onApiKeysCommit: (value: string) => void;
   onApiKeysManagePress: () => void;
   onApiKeysVisibleToggle: () => void;
+  onBaseUrlCommit: (value: string) => Promise<boolean>;
   onBaseUrlManagePress: () => void;
   provider?: Provider;
   showApiKeys: boolean;
@@ -26,6 +27,7 @@ export function ProviderApiManagementSection({
   onApiKeysCommit,
   onApiKeysManagePress,
   onApiKeysVisibleToggle,
+  onBaseUrlCommit,
   onBaseUrlManagePress,
   provider,
   showApiKeys,
@@ -40,7 +42,11 @@ export function ProviderApiManagementSection({
     <View className="gap-3">
       {showOAuthCard && provider?.id ? <CherryInOauth providerId={provider.id} /> : null}
       {showBaseUrl ? (
-        <ProviderApiServiceEndpointField baseUrl={baseUrl} onManagePress={onBaseUrlManagePress} />
+        <ProviderApiServiceEndpointField
+          baseUrl={baseUrl}
+          onCommit={onBaseUrlCommit}
+          onManagePress={onBaseUrlManagePress}
+        />
       ) : null}
       {showApiKeys ? (
         <ProviderApiServiceApiKeysField

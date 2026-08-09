@@ -2,7 +2,11 @@ import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { EndpointConfigs, Provider } from '@cherrystudio/universal/data/types/provider';
 
 import type { EndpointDraft } from './providerApiServiceEndpointDraft';
-import { isValidEndpointBaseUrl, mergeEndpointConfigs } from './providerApiServiceEndpointRules';
+import {
+  getPrimaryEndpoint,
+  isValidEndpointBaseUrl,
+  mergeEndpointConfigs,
+} from './providerApiServiceEndpointRules';
 
 export class ProviderApiServiceSaveError extends Error {
   constructor(readonly code: 'invalid-base-url') {
@@ -26,6 +30,32 @@ export function buildProviderApiServiceEndpointUpdates({
       draft.baseUrlByEndpoint,
       draft.visibleEndpointTypes,
     ),
+  };
+}
+
+export function buildProviderPrimaryBaseUrlUpdates({
+  baseUrl,
+  provider,
+}: {
+  baseUrl: string;
+  provider: Provider;
+}): { defaultChatEndpoint: EndpointType; endpointConfigs: EndpointConfigs } {
+  const trimmedBaseUrl = baseUrl.trim();
+  if (!isValidEndpointBaseUrl(trimmedBaseUrl)) {
+    throw new ProviderApiServiceSaveError('invalid-base-url');
+  }
+
+  const primaryEndpoint = getPrimaryEndpoint(provider);
+
+  return {
+    defaultChatEndpoint: primaryEndpoint,
+    endpointConfigs: {
+      ...provider.endpointConfigs,
+      [primaryEndpoint]: {
+        ...provider.endpointConfigs?.[primaryEndpoint],
+        baseUrl: trimmedBaseUrl,
+      },
+    },
   };
 }
 

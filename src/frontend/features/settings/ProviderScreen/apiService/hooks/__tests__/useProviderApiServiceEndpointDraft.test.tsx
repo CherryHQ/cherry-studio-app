@@ -99,6 +99,16 @@ describe('useProviderApiServiceEndpointDraft', () => {
     expect(current().draft).toBe(initialDraft);
   });
 
+  it('updates the selected primary endpoint without changing endpoint URLs', () => {
+    const initialBaseUrls = mount(persistedProvider).draft.baseUrlByEndpoint;
+
+    act(() => current().updatePrimaryEndpoint('anthropic-messages'));
+
+    expect(current().draft.primaryEndpoint).toBe('anthropic-messages');
+    expect(current().draft.baseUrlByEndpoint).toBe(initialBaseUrls);
+    expect(isDirty(persistedProvider)).toBe(true);
+  });
+
   it('settles clean once the saved provider comes back from the query', () => {
     mount(persistedProvider);
 
