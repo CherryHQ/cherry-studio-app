@@ -50,7 +50,7 @@ describe('ProviderAvatar', () => {
     expect(renderer?.root.findByType(View).props).toEqual(
       expect.objectContaining({
         className:
-          'items-center justify-center overflow-hidden border border-border-subtle border-continuous',
+          'items-center justify-center overflow-hidden border border-border border-continuous',
         style: { borderRadius: 6, height: 26, width: 26 },
       }),
     );

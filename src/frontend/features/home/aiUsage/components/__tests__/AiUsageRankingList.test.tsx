@@ -185,7 +185,7 @@ describe('AiUsageRankingList', () => {
       )
       .at(0);
     expect(frame?.props.className).toBe(
-      'items-center justify-center overflow-hidden border border-border-subtle border-continuous',
+      'items-center justify-center overflow-hidden border border-border border-continuous',
     );
     expect(frame?.props.style).toEqual({ borderRadius: 6, height: 32, width: 32 });
     expect(mockImage).toHaveBeenCalledWith(

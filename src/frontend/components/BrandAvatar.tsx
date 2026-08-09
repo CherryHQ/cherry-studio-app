@@ -14,7 +14,7 @@ const BRAND_AVATAR_SIZE = 26;
 const BRAND_AVATAR_FRAME_RADIUS = 6;
 const BRAND_AVATAR_INITIAL_FONT_SIZE = 14;
 const BRAND_AVATAR_FRAME_CLASS_NAME =
-  'items-center justify-center overflow-hidden border border-border-subtle border-continuous';
+  'items-center justify-center overflow-hidden border border-border border-continuous';
 
 const BrandAvatarSizeContext = createContext(BRAND_AVATAR_SIZE);
 
