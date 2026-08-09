@@ -1,4 +1,12 @@
-import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import {
+  Button,
+  Description,
+  FieldError,
+  Input,
+  Label,
+  TextField,
+} from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { SettingsIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
@@ -6,7 +14,20 @@ import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { StyleSheet, View } from 'react-native';
 
-import { getEndpointLabel } from '../utils/providerApiServiceEndpointRules';
+const ENDPOINT_LABEL_KEYS: Partial<Record<EndpointType, string>> = {
+  [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'settings.provider.add.endpoint.openaiChatCompletions',
+  [ENDPOINT_TYPE.OPENAI_RESPONSES]: 'settings.provider.add.endpoint.openaiResponses',
+  [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: 'settings.provider.add.endpoint.anthropic',
+  [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: 'settings.provider.add.endpoint.gemini',
+  [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: 'settings.provider.add.endpoint.imageGeneration',
+  [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: 'settings.provider.add.endpoint.imageEdit',
+};
+
+const ENDPOINT_HELP_KEYS: Partial<Record<EndpointType, string>> = {
+  [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]:
+    'settings.provider.apiService.imageGenerationBaseUrlHelp',
+  [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: 'settings.provider.apiService.imageEditBaseUrlHelp',
+};
 
 export function ProviderApiServiceEndpointField({
   baseUrl,
@@ -43,14 +64,12 @@ export function ProviderApiServiceEndpointForm({
   baseUrlByEndpoint,
   endpointErrors,
   endpointTypes,
-  pendingEndpoint,
   onBaseUrlChange,
   onBaseUrlCommit,
 }: {
   baseUrlByEndpoint: Partial<Record<EndpointType, string>>;
   endpointErrors?: Partial<Record<EndpointType, string>>;
   endpointTypes: EndpointType[];
-  pendingEndpoint?: EndpointType | null;
   onBaseUrlChange: (endpoint: EndpointType, value: string) => void;
   onBaseUrlCommit: (endpoint: EndpointType, value: string) => void;
 }) {
@@ -58,23 +77,26 @@ export function ProviderApiServiceEndpointForm({
 
   return (
     <View className="gap-3">
-      {endpointTypes.map((endpoint) => (
-        <TextField
-          key={endpoint}
-          isDisabled={pendingEndpoint === endpoint}
-          isInvalid={Boolean(endpointErrors?.[endpoint])}
-        >
-          <Label>{getEndpointLabel(endpoint)}</Label>
-          <EndpointBaseUrlInput
-            accessibilityLabel={getEndpointLabel(endpoint)}
-            placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-            value={baseUrlByEndpoint[endpoint] ?? ''}
-            onChangeText={(value) => onBaseUrlChange(endpoint, value)}
-            onCommit={(value) => onBaseUrlCommit(endpoint, value)}
-          />
-          <FieldError>{endpointErrors?.[endpoint]}</FieldError>
-        </TextField>
-      ))}
+      {endpointTypes.map((endpoint) => {
+        const labelKey = ENDPOINT_LABEL_KEYS[endpoint];
+        const helpKey = ENDPOINT_HELP_KEYS[endpoint];
+        const label = labelKey ? t(labelKey) : endpoint;
+
+        return (
+          <TextField key={endpoint} isInvalid={Boolean(endpointErrors?.[endpoint])}>
+            <Label>{label}</Label>
+            <EndpointBaseUrlInput
+              accessibilityLabel={label}
+              placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
+              value={baseUrlByEndpoint[endpoint] ?? ''}
+              onChangeText={(value) => onBaseUrlChange(endpoint, value)}
+              onCommit={(value) => onBaseUrlCommit(endpoint, value)}
+            />
+            {helpKey ? <Description hideOnInvalid>{t(helpKey)}</Description> : null}
+            <FieldError>{endpointErrors?.[endpoint]}</FieldError>
+          </TextField>
+        );
+      })}
     </View>
   );
 }
@@ -99,21 +121,16 @@ function EndpointBaseUrlInput({
     [onCommit],
   );
 
-  const handleCommitEvent = useCallback(() => {
-    onCommit(value);
-  }, [onCommit, value]);
-
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      onBlur={handleCommitEvent}
       onChangeText={onChangeText}
       onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
       placeholder={placeholder}
       returnKeyType="done"
+      submitBehavior="blurAndSubmit"
       style={styles.endpointInput}
       value={value}
     />

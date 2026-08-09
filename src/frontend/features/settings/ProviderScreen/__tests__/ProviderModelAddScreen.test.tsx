@@ -6,6 +6,7 @@ import ProviderModelAddScreen from '../ProviderModelAddScreen';
 
 const endpointTypeLabel = 'settings.provider.models.addEndpointTypeLabel';
 const modelIdLabel = 'settings.provider.models.addModelIdLabel';
+const purposeLabel = 'settings.provider.models.addPurposeLabel';
 
 const gatewayProvider = {
   defaultChatEndpoint: 'openai-chat-completions',
@@ -20,6 +21,12 @@ const plainProvider = {
   ...gatewayProvider,
   id: 'plain-1',
   presetProviderId: 'openai',
+} as Provider;
+
+const customProvider = {
+  ...gatewayProvider,
+  id: 'custom-1',
+  presetProviderId: undefined,
 } as Provider;
 
 let mockProviderId: string | undefined;
@@ -79,18 +86,22 @@ jest.mock('../detail', () => ({
 }));
 
 // The hook's own plumbing (toast, query client, data services) is not what this test is
-// about, but `showEndpointTypes` is — so the stub keeps the real provider-to-shape
+// about, but the model-add mode is — so the stub keeps the real provider-to-shape
 // derivation and records which provider it was handed on every form render.
 jest.mock('../models/hooks/useProviderModelAdd', () => {
-  const { isNewApiLikeProvider } = jest.requireActual('../models/utils/providerModelAdd');
+  const { getProviderChatEndpointTypes, getProviderModelAddMode, inferProviderModelPurpose } =
+    jest.requireActual('../models/utils/providerModelAdd');
   return {
     useProviderModelAdd: ({ provider }: { provider: Provider }) => {
       mockHookProviders.push(provider);
+      const chatEndpointTypes = getProviderChatEndpointTypes(provider);
+      const endpointTypes = [chatEndpointTypes[0] ?? 'openai-chat-completions'];
       return {
         canSubmit: false,
+        chatEndpointTypes,
         formState: {
           contextWindow: '',
-          endpointTypes: [],
+          endpointTypes,
           group: '',
           maxInputTokens: '',
           maxOutputTokens: '',
@@ -98,14 +109,17 @@ jest.mock('../models/hooks/useProviderModelAdd', () => {
           name: '',
         },
         isSubmitting: false,
-        showEndpointTypes: isNewApiLikeProvider(provider),
+        modelAddMode: getProviderModelAddMode(provider),
+        modelPurpose: inferProviderModelPurpose(endpointTypes),
         submitAddModel: jest.fn(),
+        updateChatEndpointType: jest.fn(),
         updateContextWindow: jest.fn(),
         updateEndpointTypes: jest.fn(),
         updateGroup: jest.fn(),
         updateMaxInputTokens: jest.fn(),
         updateMaxOutputTokens: jest.fn(),
         updateModelId: jest.fn(),
+        updateModelPurpose: jest.fn(),
         updateName: jest.fn(),
       };
     },
@@ -163,6 +177,7 @@ describe('ProviderModelAddScreen', () => {
 
     expect(mockHookProviders).toHaveLength(1);
     expect(renderedLabels()).toContain(endpointTypeLabel);
+    expect(renderedLabels()).toContain('endpoint_type.image-edit');
   });
 
   it('never hands the form hook a provider that has not loaded', () => {
@@ -201,6 +216,17 @@ describe('ProviderModelAddScreen', () => {
 
     expect(renderedLabels()).toContain(modelIdLabel);
     expect(renderedLabels()).not.toContain(endpointTypeLabel);
+    expect(renderedLabels()).not.toContain(purposeLabel);
+  });
+
+  it('uses model purpose choices for a custom provider', () => {
+    mockProvider = customProvider;
+    mockProviderQuery = { isError: false, isPending: false };
+    render();
+
+    expect(renderedLabels()).toContain(purposeLabel);
+    expect(renderedLabels()).toContain('settings.provider.models.addPurpose.imageGeneration');
+    expect(renderedLabels()).toContain('settings.provider.models.addPurpose.imageEdit');
   });
 
   it('redirects to the provider list when the route has no provider id', () => {

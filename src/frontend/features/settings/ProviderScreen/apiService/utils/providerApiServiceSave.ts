@@ -24,7 +24,6 @@ export function buildProviderApiServiceEndpointUpdates({
     endpointConfigs: mergeEndpointConfigs(
       provider.endpointConfigs,
       draft.baseUrlByEndpoint,
-      draft.primaryEndpoint,
       draft.visibleEndpointTypes,
     ),
   };

@@ -7,15 +7,35 @@ import type {
   Provider,
 } from '@cherrystudio/universal/data/types/provider';
 
-export const configurableEndpointTypes: EndpointType[] = [
+export const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
   ENDPOINT_TYPE.OPENAI_RESPONSES,
   ENDPOINT_TYPE.ANTHROPIC_MESSAGES,
   ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
-];
+] as const satisfies readonly EndpointType[];
+
+export const CUSTOM_PROVIDER_IMAGE_ENDPOINT_TYPES = [
+  ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION,
+  ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
+] as const satisfies readonly EndpointType[];
+
+export const CONFIGURABLE_ENDPOINT_TYPES = [
+  ...CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
+  ...CUSTOM_PROVIDER_IMAGE_ENDPOINT_TYPES,
+] as const satisfies readonly EndpointType[];
+
+export type CustomProviderTextEndpoint = (typeof CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES)[number];
+export type CustomProviderEndpoint = (typeof CONFIGURABLE_ENDPOINT_TYPES)[number];
+export type CustomProviderEndpointUrls = Partial<Record<CustomProviderEndpoint, string>>;
+
+export type CustomProviderCreationPayload = {
+  defaultChatEndpoint: CustomProviderTextEndpoint;
+  endpointConfigs: EndpointConfigs;
+};
 
 const defaultChatEndpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
-const endpointEditableAuthTypes: AuthType[] = ['api-key', 'iam-azure'];
+const CONFIGURABLE_ENDPOINT_TYPE_SET = new Set<EndpointType>(CONFIGURABLE_ENDPOINT_TYPES);
+const ENDPOINT_EDITABLE_AUTH_TYPES = new Set<AuthType>(['api-key', 'iam-azure']);
 
 export function getPrimaryEndpoint(provider?: Provider | null): EndpointType {
   return provider?.defaultChatEndpoint ?? defaultChatEndpoint;
@@ -29,7 +49,7 @@ export function isConfigurableEndpointType(
   endpoint: EndpointType | null | undefined,
 ): endpoint is EndpointType {
   return (
-    endpoint !== null && endpoint !== undefined && configurableEndpointTypes.includes(endpoint)
+    endpoint !== null && endpoint !== undefined && CONFIGURABLE_ENDPOINT_TYPE_SET.has(endpoint)
   );
 }
 
@@ -37,14 +57,14 @@ export function canEditProviderEndpoint(provider?: Provider | null): boolean {
   return (
     provider !== null &&
     provider !== undefined &&
-    endpointEditableAuthTypes.includes(provider.authType)
+    ENDPOINT_EDITABLE_AUTH_TYPES.has(provider.authType)
   );
 }
 
 export function getConfigurableEndpointTypesForProvider(
   provider?: Provider | null,
 ): EndpointType[] {
-  return canEditProviderEndpoint(provider) ? configurableEndpointTypes : [];
+  return canEditProviderEndpoint(provider) ? [...CONFIGURABLE_ENDPOINT_TYPES] : [];
 }
 
 export function resolveVisibleEndpointTypes(provider?: Provider | null): EndpointType[] {
@@ -70,13 +90,51 @@ export function isValidEndpointBaseUrl(value: string): boolean {
   }
 }
 
+export function buildCustomProviderCreationPayload({
+  endpointUrls,
+  preferredChatEndpoint,
+}: {
+  endpointUrls: CustomProviderEndpointUrls;
+  preferredChatEndpoint?: CustomProviderTextEndpoint;
+}): CustomProviderCreationPayload {
+  const endpointConfigs: EndpointConfigs = {};
+
+  for (const endpointType of CONFIGURABLE_ENDPOINT_TYPES) {
+    const baseUrl = endpointUrls[endpointType]?.trim();
+    if (baseUrl) {
+      endpointConfigs[endpointType] = { baseUrl };
+    }
+  }
+
+  const defaultChatEndpoint =
+    (preferredChatEndpoint && endpointUrls[preferredChatEndpoint]?.trim()
+      ? preferredChatEndpoint
+      : CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES.find((endpointType) =>
+          endpointUrls[endpointType]?.trim(),
+        )) ?? ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+
+  return { defaultChatEndpoint, endpointConfigs };
+}
+
+export function findInvalidCustomProviderEndpointUrl(
+  endpointUrls: CustomProviderEndpointUrls,
+): CustomProviderEndpoint | null {
+  for (const endpointType of CONFIGURABLE_ENDPOINT_TYPES) {
+    const value = endpointUrls[endpointType]?.trim();
+    if (value && !isValidEndpointBaseUrl(value)) {
+      return endpointType;
+    }
+  }
+
+  return null;
+}
+
 export function mergeEndpointConfigs(
   endpointConfigs: EndpointConfigs | undefined,
   baseUrlByEndpoint: Partial<Record<EndpointType, string>>,
-  primaryEndpoint: EndpointType,
   visibleEndpointTypes: readonly EndpointType[],
 ): EndpointConfigs {
-  const nextEndpointConfigs: EndpointConfigs = { ...(endpointConfigs ?? {}) };
+  const nextEndpointConfigs: EndpointConfigs = { ...endpointConfigs };
   const endpoints = new Set<EndpointType>([
     ...(Object.keys(endpointConfigs ?? {}) as EndpointType[]),
     ...visibleEndpointTypes,
@@ -92,39 +150,14 @@ export function mergeEndpointConfigs(
       continue;
     }
 
-    if (endpoint === primaryEndpoint) {
-      const currentConfig = { ...nextEndpointConfigs[endpoint] };
-      delete currentConfig.baseUrl;
-      if (Object.keys(currentConfig).length > 0) {
-        nextEndpointConfigs[endpoint] = currentConfig;
-      } else {
-        delete nextEndpointConfigs[endpoint];
-      }
+    const currentConfig = { ...nextEndpointConfigs[endpoint] };
+    delete currentConfig.baseUrl;
+    if (Object.keys(currentConfig).length > 0) {
+      nextEndpointConfigs[endpoint] = currentConfig;
     } else {
       delete nextEndpointConfigs[endpoint];
     }
   }
 
   return nextEndpointConfigs;
-}
-
-export function getEndpointLabel(endpoint: EndpointType): string {
-  switch (endpoint) {
-    case 'openai-chat-completions':
-      return 'OpenAI Chat Completions';
-    case 'openai-responses':
-      return 'OpenAI Responses';
-    case 'anthropic-messages':
-      return 'Anthropic Messages';
-    case 'google-generate-content':
-      return 'Google Gemini';
-    case 'ollama-chat':
-      return 'Ollama Chat';
-    case 'ollama-generate':
-      return 'Ollama Generate';
-    case 'openai-text-completions':
-      return 'OpenAI Text Completions';
-    default:
-      return endpoint;
-  }
 }

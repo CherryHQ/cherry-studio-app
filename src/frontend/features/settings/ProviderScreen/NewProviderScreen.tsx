@@ -1,6 +1,6 @@
-import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, Description, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -18,18 +18,18 @@ import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
 import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
+import {
+  buildCustomProviderCreationPayload,
+  type CustomProviderEndpointUrls,
+  findInvalidCustomProviderEndpointUrl,
+} from './apiService/utils/providerApiServiceEndpointRules';
 
 const avatarPreviewSize = 96;
 
 type CreateProviderFormValues = {
   apiKey: string;
   avatarUri: string | null;
-  endpoints: {
-    anthropic: string;
-    gemini: string;
-    openaiResponses: string;
-  };
-  baseUrl: string;
+  endpointUrls: CustomProviderEndpointUrls;
   name: string;
 };
 
@@ -46,6 +46,8 @@ export default function NewProviderScreen() {
   const [avatarDraftUri, setAvatarDraftUri] = useState<string | null>(null);
   const [anthropicUrl, setAnthropicUrl] = useState('');
   const [geminiUrl, setGeminiUrl] = useState('');
+  const [imageEditUrl, setImageEditUrl] = useState('');
+  const [imageGenerationUrl, setImageGenerationUrl] = useState('');
   const [openaiResponsesUrl, setOpenaiResponsesUrl] = useState('');
 
   const createProviderMutation = useMutation('POST', '/providers', {
@@ -62,25 +64,10 @@ export default function NewProviderScreen() {
     async (values: CreateProviderFormValues) => {
       const providerId = Crypto.randomUUID();
       const trimmedApiKey = values.apiKey.trim();
-
-      const endpointConfigs: EndpointConfigs = {
-        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: values.baseUrl.trim() },
-      };
-      if (values.endpoints.anthropic.trim()) {
-        endpointConfigs[ENDPOINT_TYPE.ANTHROPIC_MESSAGES] = {
-          baseUrl: values.endpoints.anthropic.trim(),
-        };
-      }
-      if (values.endpoints.gemini.trim()) {
-        endpointConfigs[ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT] = {
-          baseUrl: values.endpoints.gemini.trim(),
-        };
-      }
-      if (values.endpoints.openaiResponses.trim()) {
-        endpointConfigs[ENDPOINT_TYPE.OPENAI_RESPONSES] = {
-          baseUrl: values.endpoints.openaiResponses.trim(),
-        };
-      }
+      const { defaultChatEndpoint, endpointConfigs } = buildCustomProviderCreationPayload({
+        endpointUrls: values.endpointUrls,
+        preferredChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      });
 
       const apiKeys: ApiKeyEntry[] | undefined = trimmedApiKey
         ? [{ id: Crypto.randomUUID(), isEnabled: true, key: trimmedApiKey }]
@@ -90,7 +77,7 @@ export default function NewProviderScreen() {
         body: {
           apiKeys,
           authConfig: { type: 'api-key' },
-          defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+          defaultChatEndpoint,
           endpointConfigs,
           name: values.name.trim(),
           providerId,
@@ -118,18 +105,30 @@ export default function NewProviderScreen() {
     if (!canSubmit || isCreating) {
       return;
     }
+
+    const endpointUrls: CustomProviderEndpointUrls = {
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: baseUrl,
+      [ENDPOINT_TYPE.OPENAI_RESPONSES]: openaiResponsesUrl,
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: anthropicUrl,
+      [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: geminiUrl,
+      [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: imageGenerationUrl,
+      [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: imageEditUrl,
+    };
+    if (findInvalidCustomProviderEndpointUrl(endpointUrls)) {
+      alert.show({
+        description: t('settings.provider.apiService.invalidBaseUrlMessage'),
+        title: t('settings.provider.apiService.invalidBaseUrlTitle'),
+      });
+      return;
+    }
+
     Keyboard.dismiss();
 
     const trimmedName = name.trim();
     void submitProvider({
       apiKey,
       avatarUri: avatarDraftUri,
-      baseUrl,
-      endpoints: {
-        anthropic: anthropicUrl,
-        gemini: geminiUrl,
-        openaiResponses: openaiResponsesUrl,
-      },
+      endpointUrls,
       name,
     })
       .then((providerId) => {
@@ -153,6 +152,8 @@ export default function NewProviderScreen() {
     baseUrl,
     canSubmit,
     geminiUrl,
+    imageEditUrl,
+    imageGenerationUrl,
     isCreating,
     name,
     openaiResponsesUrl,
@@ -268,6 +269,18 @@ export default function NewProviderScreen() {
               label={t('settings.provider.add.endpoint.openaiResponses')}
               onChangeText={setOpenaiResponsesUrl}
               value={openaiResponsesUrl}
+            />
+            <EndpointField
+              description={t('settings.provider.apiService.imageGenerationBaseUrlHelp')}
+              label={t('settings.provider.add.endpoint.imageGeneration')}
+              onChangeText={setImageGenerationUrl}
+              value={imageGenerationUrl}
+            />
+            <EndpointField
+              description={t('settings.provider.apiService.imageEditBaseUrlHelp')}
+              label={t('settings.provider.add.endpoint.imageEdit')}
+              onChangeText={setImageEditUrl}
+              value={imageEditUrl}
             />
           </View>
         </View>
@@ -411,10 +424,12 @@ function FormField({
 }
 
 function EndpointField({
+  description,
   label,
   onChangeText,
   value,
 }: {
+  description?: string;
   label: string;
   onChangeText: (value: string) => void;
   value: string;
@@ -431,6 +446,7 @@ function EndpointField({
         placeholder="https://api.example.com"
         value={value}
       />
+      {description ? <Description>{description}</Description> : null}
     </TextField>
   );
 }

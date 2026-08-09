@@ -24,7 +24,6 @@ export type { EndpointDraft } from './utils/providerApiServiceEndpointDraft';
 export {
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
-  getEndpointLabel,
   getProviderPrimaryBaseUrl,
 } from './utils/providerApiServiceEndpointRules';
 export {

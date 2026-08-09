@@ -70,6 +70,8 @@ describe('useProviderApiServiceEndpointDraft', () => {
         'openai-responses',
         'anthropic-messages',
         'google-generate-content',
+        'openai-image-generation',
+        'openai-image-edit',
       ],
     });
     expect(isDirty(persistedProvider)).toBe(false);
@@ -87,6 +89,14 @@ describe('useProviderApiServiceEndpointDraft', () => {
     expect(
       isDirty(createProvider({ 'openai-chat-completions': { baseUrl: 'https://elsewhere.test' } })),
     ).toBe(true);
+  });
+
+  it('preserves the draft when an endpoint URL has not changed', () => {
+    const initialDraft = mount(persistedProvider).draft;
+
+    act(() => current().updateBaseUrl('openai-chat-completions', 'https://chat.example.com'));
+
+    expect(current().draft).toBe(initialDraft);
   });
 
   it('settles clean once the saved provider comes back from the query', () => {
@@ -121,6 +131,8 @@ describe('useProviderApiServiceEndpointDraft', () => {
       'openai-responses',
       'anthropic-messages',
       'google-generate-content',
+      'openai-image-generation',
+      'openai-image-edit',
     ]);
     expect(isDirty(persistedProvider)).toBe(false);
   });

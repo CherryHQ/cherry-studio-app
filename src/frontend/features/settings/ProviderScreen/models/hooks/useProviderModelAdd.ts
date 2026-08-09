@@ -1,7 +1,7 @@
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useToast } from 'heroui-native/toast';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
@@ -11,14 +11,20 @@ import {
   buildProviderModelAddInputs,
   createInitialProviderModelAddFormState,
   getDefaultProviderModelGroupName,
-  isNewApiLikeProvider,
+  getProviderChatEndpointTypes,
+  getProviderModelAddMode,
+  getProviderModelPurposeEndpointType,
+  inferProviderModelPurpose,
+  providerModelAddDefaultEndpointType,
   type ProviderModelAddFormState,
+  type ProviderModelChatEndpointType,
+  type ProviderModelPurpose,
   splitProviderModelIds,
 } from '../utils/providerModelAdd';
 
 /**
  * Add-model form state. Takes a loaded provider because the provider decides the form's
- * shape (`showEndpointTypes`) and the default group name — reading those off a provider
+ * shape (`modelAddMode`) and the default group name — reading those off a provider
  * that is still loading would render the form without its endpoint-type block and then
  * grow it a commit later, on top of computing the group name from `undefined`.
  */
@@ -35,16 +41,20 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
   const addModels = addModelsMutation.trigger;
   const existingModels = modelsQuery.data;
   const refetchModels = modelsQuery.refetch;
+  const modelAddMode = getProviderModelAddMode(provider);
+  const chatEndpointTypes = useMemo(() => getProviderChatEndpointTypes(provider), [provider]);
+  const defaultChatEndpoint = chatEndpointTypes[0] ?? providerModelAddDefaultEndpointType;
   const [formState, setFormState] = useState<ProviderModelAddFormState>(() =>
-    createInitialProviderModelAddFormState(),
+    createInitialProviderModelAddFormState(defaultChatEndpoint),
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [modelIdTouched, setModelIdTouched] = useState(false);
   const [endpointTypeTouched, setEndpointTypeTouched] = useState(false);
 
-  const showEndpointTypes = isNewApiLikeProvider(provider);
+  const modelPurpose = inferProviderModelPurpose(formState.endpointTypes);
   const isModelIdValid = splitProviderModelIds(formState.modelId).length > 0;
-  const isEndpointTypesValid = !showEndpointTypes || formState.endpointTypes.length > 0;
+  const isEndpointTypesValid =
+    modelAddMode !== 'endpoint-types' || formState.endpointTypes.length > 0;
   const canSubmit = isModelIdValid && isEndpointTypesValid;
   const modelIdError =
     modelIdTouched && !isModelIdValid
@@ -56,10 +66,10 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
       : undefined;
 
   const resetForm = useCallback(() => {
-    setFormState(createInitialProviderModelAddFormState());
+    setFormState(createInitialProviderModelAddFormState(defaultChatEndpoint));
     setModelIdTouched(false);
     setEndpointTypeTouched(false);
-  }, []);
+  }, [defaultChatEndpoint]);
 
   const updateFormField = useCallback(
     <TField extends keyof ProviderModelAddFormState>(
@@ -128,6 +138,20 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
       ...current,
       endpointTypes,
     }));
+  }, []);
+
+  const updateModelPurpose = useCallback(
+    (purpose: ProviderModelPurpose) => {
+      setFormState((current) => ({
+        ...current,
+        endpointTypes: [getProviderModelPurposeEndpointType(purpose, defaultChatEndpoint)],
+      }));
+    },
+    [defaultChatEndpoint],
+  );
+
+  const updateChatEndpointType = useCallback((endpointType: ProviderModelChatEndpointType) => {
+    setFormState((current) => ({ ...current, endpointTypes: [endpointType] }));
   }, []);
 
   const submitAddModel = useCallback(async () => {
@@ -199,18 +223,22 @@ export function useProviderModelAdd({ provider }: UseProviderModelAddOptions) {
 
   return {
     canSubmit,
+    chatEndpointTypes,
     endpointTypeError,
     formState,
     isSubmitting,
+    modelAddMode,
     modelIdError,
-    showEndpointTypes,
+    modelPurpose,
     submitAddModel,
+    updateChatEndpointType,
     updateContextWindow,
     updateEndpointTypes,
     updateGroup,
     updateMaxInputTokens,
     updateMaxOutputTokens,
     updateModelId,
+    updateModelPurpose,
     updateName,
   };
 }
