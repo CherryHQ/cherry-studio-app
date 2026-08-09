@@ -208,6 +208,8 @@
         "src/main/ai/agents/**",
         "src/main/ai/observability/adapters/claudeCode/**",
         "src/main/ai/runtime/claudeCode/**",
+        "src/main/ai/streamManager/__tests__/buildCompactReplay.test.ts",
+        "src/main/ai/streamManager/buildCompactReplay.ts",
         "src/main/ai/tools/adapters/claudeCode/**"
       ]
     },

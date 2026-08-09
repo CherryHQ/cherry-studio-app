@@ -216,7 +216,7 @@ function ApiKeyRow({
   const { t } = useTranslation();
 
   return (
-    <TextField isDisabled={isPending} isInvalid={Boolean(errorMessage)}>
+    <TextField isInvalid={Boolean(errorMessage)}>
       <Label>{t('settings.websearch.provider.apiKey')}</Label>
       <View className="flex-row items-center gap-2">
         <ApiKeyInput
@@ -266,22 +266,17 @@ function ApiKeyInput({
     [onCommit],
   );
 
-  const handleCommitEvent = useCallback(() => {
-    onCommit(value);
-  }, [onCommit, value]);
-
   return (
     <View className="min-w-0 flex-1">
       <Input
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        onBlur={handleCommitEvent}
         onChangeText={onChangeText}
         onEndEditing={handleEndEditing}
-        onSubmitEditing={handleCommitEvent}
         placeholder={t('settings.websearch.provider.apiKeyPlaceholder')}
         returnKeyType="done"
+        submitBehavior="blurAndSubmit"
         value={value}
       />
     </View>

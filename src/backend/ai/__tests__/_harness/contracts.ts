@@ -1,8 +1,4 @@
-import type {
-  EmbeddingModelV3CallOptions,
-  ImageModelV3CallOptions,
-  LanguageModelV3CallOptions,
-} from '@ai-sdk/provider';
+import type { ImageModelV3CallOptions, LanguageModelV3CallOptions } from '@ai-sdk/provider';
 import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 import { readUIMessageStream, type UIMessageChunk } from 'ai';
 
@@ -47,15 +43,6 @@ export function projectImageCall(call: ImageModelV3CallOptions) {
     providerOptions: call.providerOptions,
     seed: call.seed,
     size: call.size,
-  });
-}
-
-export function projectEmbeddingCall(call: EmbeddingModelV3CallOptions) {
-  return sanitize({
-    abortSignal: projectSignal(call.abortSignal),
-    headers: call.headers,
-    providerOptions: call.providerOptions,
-    values: call.values,
   });
 }
 

@@ -121,6 +121,67 @@ describe('DMXAPI effective endpoint and provider-options namespace', () => {
   });
 });
 
+describe('image endpoint resolution', () => {
+  const imageProvider = {
+    ...provider,
+    defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    endpointConfigs: {
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+        adapterFamily: 'openai-compatible',
+        baseUrl: 'https://chat.example.com/v1',
+      },
+      [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {
+        adapterFamily: 'openai-compatible',
+        baseUrl: 'https://generate.example.com/v1',
+      },
+      [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: {
+        adapterFamily: 'openai-compatible',
+        baseUrl: 'https://edit.example.com/v1',
+      },
+    },
+    id: 'custom-images',
+    name: 'Custom Images',
+    presetProviderId: undefined,
+  } as Provider;
+
+  it.each([
+    [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, 'https://generate.example.com/v1'],
+    [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT, 'https://edit.example.com/v1'],
+  ])('uses the independent %s Base URL selected by the model purpose', (endpointType, baseUrl) => {
+    const model = {
+      ...createModel('image-model'),
+      endpointTypes: [endpointType],
+      id: createUniqueModelId(imageProvider.id, 'image-model'),
+      providerId: imageProvider.id,
+    };
+
+    expect(resolveEffectiveEndpoint(imageProvider, model)).toEqual({
+      baseUrl,
+      endpointType,
+      providerOptionsKey: undefined,
+    });
+  });
+
+  it('falls back to the default chat Base URL when an image-specific URL is empty', () => {
+    const providerWithoutEditUrl = {
+      ...imageProvider,
+      endpointConfigs: {
+        ...imageProvider.endpointConfigs,
+        [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: { adapterFamily: 'openai-compatible' },
+      },
+    } as Provider;
+    const model = {
+      ...createModel('edit-model'),
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT],
+    };
+
+    expect(resolveEffectiveEndpoint(providerWithoutEditUrl, model)).toMatchObject({
+      baseUrl: 'https://chat.example.com/v1',
+      endpointType: ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
+    });
+  });
+});
+
 describe('native reasoning adapter resolution', () => {
   it.each([
     ['aws-bedrock', ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'bedrock', 'bedrock'],

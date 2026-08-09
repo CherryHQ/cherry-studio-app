@@ -198,7 +198,7 @@ describe('Button', () => {
     },
     {
       labelClassName: 'text-secondary-foreground',
-      rootClassNames: ['bg-secondary', 'shadow-none'],
+      rootClassNames: ['border', 'border-border', 'bg-field', 'shadow-none'],
       variant: 'secondary',
     },
   ])('renders the $variant variant', ({ labelClassName, rootClassNames, variant }) => {

@@ -1,5 +1,4 @@
 import type {
-  EmbeddingModelV3,
   ImageModelV3,
   LanguageModelV3,
   LanguageModelV3GenerateResult,
@@ -28,7 +27,6 @@ export const CONTRACT_USAGE: LanguageModelV3Usage = {
 };
 
 type ContractModels = {
-  embedding?: EmbeddingModelV3;
   image?: ImageModelV3;
   language?: LanguageModelV3;
 };
@@ -40,9 +38,6 @@ export function installMockProvider(models: ContractModels): () => void {
   const provider = new MockProviderV3({
     ...(models.language ? { languageModels: { [models.language.modelId]: models.language } } : {}),
     ...(models.image ? { imageModels: { [models.image.modelId]: models.image } } : {}),
-    ...(models.embedding
-      ? { embeddingModels: { [models.embedding.modelId]: models.embedding } }
-      : {}),
   });
 
   extensionRegistry.unregister(CONTRACT_ADAPTER_ID);

@@ -77,7 +77,7 @@ const variantStyles: Record<ButtonVariant, { label: string; root: string }> = {
   },
   secondary: {
     label: 'text-secondary-foreground',
-    root: 'bg-secondary shadow-none',
+    root: 'border border-border bg-field shadow-none',
   },
 };
 

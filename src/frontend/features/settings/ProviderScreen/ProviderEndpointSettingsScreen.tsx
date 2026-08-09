@@ -73,13 +73,13 @@ function ProviderEndpointSettingsForm({
 }) {
   const { t } = useTranslation();
   const [endpointErrors, setEndpointErrors] = useState<Partial<Record<EndpointType, string>>>({});
-  const [pendingEndpoint, setPendingEndpoint] = useState<EndpointType | null>(null);
-  const pendingEndpointRef = useRef<EndpointType | null>(null);
-  const { draft, updateBaseUrl } = useProviderApiServiceEndpointDraft(provider);
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
+  const { draft, updateBaseUrl, updatePrimaryEndpoint } =
+    useProviderApiServiceEndpointDraft(provider);
   const hasUnsavedChanges =
     Object.keys(endpointErrors).length > 0 ||
     getProviderApiServiceEndpointDirtyState({ draft, provider });
-  const isSaving = pendingEndpoint !== null;
   const { requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
@@ -104,12 +104,12 @@ function ProviderEndpointSettingsForm({
       endpoint: EndpointType;
       nextDraft: EndpointDraft;
     }): Promise<boolean> => {
-      if (pendingEndpointRef.current !== null) {
+      if (isSavingRef.current) {
         return false;
       }
 
-      pendingEndpointRef.current = endpoint;
-      setPendingEndpoint(endpoint);
+      isSavingRef.current = true;
+      setIsSaving(true);
 
       try {
         await onSave(buildProviderApiServiceEndpointUpdates({ draft: nextDraft, provider }));
@@ -122,8 +122,8 @@ function ProviderEndpointSettingsForm({
         }));
         return false;
       } finally {
-        pendingEndpointRef.current = null;
-        setPendingEndpoint(null);
+        isSavingRef.current = false;
+        setIsSaving(false);
       }
     },
     [getEndpointSaveError, onSave, provider],
@@ -149,9 +149,30 @@ function ProviderEndpointSettingsForm({
 
       updateBaseUrl(endpoint, value);
 
+      if (!getProviderApiServiceEndpointDirtyState({ draft: nextDraft, provider })) {
+        return;
+      }
+
       void saveEndpointDraft({ endpoint, nextDraft });
     },
-    [draft, saveEndpointDraft, updateBaseUrl],
+    [draft, provider, saveEndpointDraft, updateBaseUrl],
+  );
+
+  const handleDefaultChatEndpointChange = useCallback(
+    (endpoint: EndpointType) => {
+      if (endpoint === draft.primaryEndpoint) {
+        return;
+      }
+
+      const nextDraft = { ...draft, primaryEndpoint: endpoint };
+      updatePrimaryEndpoint(endpoint);
+      void saveEndpointDraft({ endpoint, nextDraft }).then((didSave) => {
+        if (!didSave) {
+          updatePrimaryEndpoint(draft.primaryEndpoint);
+        }
+      });
+    },
+    [draft, saveEndpointDraft, updatePrimaryEndpoint],
   );
 
   return (
@@ -169,11 +190,14 @@ function ProviderEndpointSettingsForm({
         <View className="px-4 py-5">
           <ProviderApiServiceEndpointForm
             baseUrlByEndpoint={draft.baseUrlByEndpoint}
+            configuredEndpointTypes={Object.keys(provider.endpointConfigs ?? {}) as EndpointType[]}
+            defaultChatEndpoint={draft.primaryEndpoint}
             endpointErrors={endpointErrors}
             endpointTypes={draft.visibleEndpointTypes}
-            pendingEndpoint={pendingEndpoint}
+            isSaving={isSaving}
             onBaseUrlChange={handleBaseUrlChange}
             onBaseUrlCommit={handleBaseUrlCommit}
+            onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
           />
         </View>
       </ScrollView>
