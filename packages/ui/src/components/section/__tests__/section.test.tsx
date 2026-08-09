@@ -69,7 +69,7 @@ describe('Section', () => {
       tree.root.findAll(
         (node) =>
           typeof node.props.className === 'string' &&
-          node.props.className.includes('min-h-10 flex-row items-center gap-3 px-3 py-2'),
+          node.props.className.includes('min-h-10 flex-row items-center gap-3 px-4 py-3'),
       ).length,
     ).toBeGreaterThan(0);
     expect(tree.root.findByProps({ children: 'General' }).props.className).toContain(
@@ -236,7 +236,7 @@ describe('Section', () => {
       (node) =>
         node.props.testID === 'custom-row' &&
         typeof node.props.className === 'string' &&
-        node.props.className.includes('px-3 py-2'),
+        node.props.className.includes('px-4 py-3'),
     );
     const contentContainer = tree.root.find(
       (node) =>
