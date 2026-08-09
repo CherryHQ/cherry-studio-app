@@ -84,8 +84,7 @@
     "react-native-reanimated": "*",
     "react-native-safe-area-context": "*",
     "react-native-worklets": "*",
-    "uniwind": "*",
-    "zeego": "*"
+    "uniwind": "*"
   },
   "devDependencies": {
     "nitrogen": "0.35.9",

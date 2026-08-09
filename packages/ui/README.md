@@ -30,6 +30,33 @@ Shared components with text must be content-driven: avoid fixed width or height,
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
 
+`Menu` is the shared native action menu. It accepts one trigger element and a flat, stable `items`
+array; the package owns Nitro wiring, native action dispatch, and platform gesture behavior:
+
+```tsx
+import { Menu, type MenuItem } from '@cherrystudio/ui/components';
+
+const items = [
+  { id: 'rename', label: 'Rename', onPress: rename, systemImage: 'pencil' },
+  { destructive: true, id: 'delete', label: 'Delete', onPress: remove, systemImage: 'trash' },
+] satisfies readonly MenuItem[];
+
+<Menu items={items} trigger="longPress">
+  <MessageRow />
+</Menu>;
+```
+
+Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
+action, while `false` and `true` create off and on check states. An empty array returns the child
+unchanged. iOS renders SF Symbols and destructive actions through `UIMenu` /
+`UIContextMenuInteraction`; Android v1 renders text actions through `PopupMenu` and keeps the system
+style for destructive items. `tap` is for button-like dropdowns, and `longPress` is for contextual
+actions without taking over the child's normal tap. Expo Router page previews remain owned by
+`Link.Preview` / `Link.Menu`, not this component.
+
+The native implementation is adapted from MIT-licensed Nitro menu projects. See
+[third-party-notices.md](third-party-notices.md) for the complete attribution and license text.
+
 `BottomSheet` is the shared floating-card sheet over
 `@swmansion/react-native-bottom-sheet`. It owns card geometry, Liquid Glass fallback, scrim,
 safe-area information, close reasons, and nested-page header controls. The host app keeps one

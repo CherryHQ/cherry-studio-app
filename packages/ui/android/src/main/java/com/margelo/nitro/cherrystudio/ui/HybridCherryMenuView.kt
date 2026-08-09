@@ -1,3 +1,5 @@
+// Native menu behavior adapted from react-native-nitro-contextmenu and
+// react-native-nitro-menu. See packages/ui/third-party-notices.md.
 package com.margelo.nitro.cherrystudio.ui
 
 import android.content.Context

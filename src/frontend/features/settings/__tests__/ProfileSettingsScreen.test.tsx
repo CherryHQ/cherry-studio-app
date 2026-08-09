@@ -46,10 +46,14 @@ jest.mock('@cherrystudio/ui/components', () => {
     TextInput: MockTextInput,
     View: MockView,
   } = jest.requireActual('react-native');
-  const component =
-    (type: string) =>
-    ({ children, ...props }: { children?: React.ReactNode }) =>
-      React.createElement(type, props, children);
+  const component = (type: string) => {
+    function MockComponent({ children, ...props }: { children?: React.ReactNode }) {
+      return React.createElement(type, props, children);
+    }
+
+    MockComponent.displayName = type;
+    return MockComponent;
+  };
 
   return {
     Menu: component('Menu'),
