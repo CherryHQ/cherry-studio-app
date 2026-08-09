@@ -1,0 +1,238 @@
+import type { ModelMessage, UIMessage } from 'ai';
+
+import {
+  coalesceConsecutiveSameRole,
+  ensureNonEmptyAssistantContent,
+  toModelMessages,
+} from '../messageRules';
+
+const ui = (role: UIMessage['role'], parts: UIMessage['parts'], id = 'm'): UIMessage => ({
+  id,
+  role,
+  parts,
+});
+
+// toModelMessages runs the exact Agent.stream order; these guard each step so
+// deleting one (ignoreIncompleteToolCalls, coalesce, the empty-content
+// placeholder) fails a test.
+describe('toModelMessages', () => {
+  it('rescues a data-error-only assistant turn (#16195)', async () => {
+    const model = await toModelMessages([
+      ui('user', [{ type: 'text', text: 'Q' }], 'u1'),
+      ui('assistant', [{ type: 'data-error', data: {} }], 'a1'),
+      ui('user', [{ type: 'text', text: '继续' }], 'u2'),
+    ]);
+    expect(model).toEqual([
+      { role: 'user', content: [{ type: 'text', text: 'Q' }] },
+      { role: 'assistant', content: [{ type: 'text', text: '...' }] },
+      { role: 'user', content: [{ type: 'text', text: '继续' }] },
+    ]);
+  });
+
+  it('drops an empty-parts assistant turn and coalesces the surrounding user turns', async () => {
+    const model = await toModelMessages([
+      ui('user', [{ type: 'text', text: 'Q' }], 'u1'),
+      ui('assistant', [], 'a1'),
+      ui('user', [{ type: 'text', text: '继续' }], 'u2'),
+    ]);
+    expect(model).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Q' },
+          { type: 'text', text: '继续' },
+        ],
+      },
+    ]);
+  });
+
+  it('drops an incomplete tool call (ignoreIncompleteToolCalls)', async () => {
+    const model = await toModelMessages([
+      ui('user', [{ type: 'text', text: 'Q' }], 'u1'),
+      ui(
+        'assistant',
+        [{ type: 'tool-test', toolCallId: '1', state: 'input-available', input: {} }],
+        'a1',
+      ),
+      ui('user', [{ type: 'text', text: '继续' }], 'u2'),
+    ]);
+    expect(model).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Q' },
+          { type: 'text', text: '继续' },
+        ],
+      },
+    ]);
+  });
+
+  it('strips media the model cannot accept before converting (caps)', async () => {
+    const model = await toModelMessages(
+      [
+        ui('user', [
+          { type: 'text', text: 'look' },
+          { type: 'file', mediaType: 'image/png', url: 'data:application/octet-stream;base64,AA' },
+        ]),
+      ],
+      { image: false, video: true, audio: true },
+    );
+    expect(model).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'look' },
+          { type: 'text', text: expect.stringContaining('image attachment omitted') },
+        ],
+      },
+    ]);
+  });
+
+  it('defaults to accepting all media when no caps are given', async () => {
+    const model = await toModelMessages([
+      ui('user', [
+        { type: 'file', mediaType: 'image/png', url: 'data:application/octet-stream;base64,AA' },
+      ]),
+    ]);
+    expect(model).toEqual([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'file',
+            mediaType: 'image/png',
+            data: 'data:application/octet-stream;base64,AA',
+            filename: undefined,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps PDF as an inline data file only when native PDF is supported', async () => {
+    const messages = [
+      ui('user', [
+        {
+          type: 'file',
+          filename: 'brief.pdf',
+          mediaType: 'application/pdf',
+          url: 'data:application/pdf;base64,AA',
+        },
+      ]),
+    ];
+
+    await expect(
+      toModelMessages(messages, { image: true, video: true, audio: true, pdf: true }),
+    ).resolves.toEqual([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'file',
+            data: 'data:application/pdf;base64,AA',
+            filename: 'brief.pdf',
+            mediaType: 'application/pdf',
+          },
+        ],
+      },
+    ]);
+    await expect(
+      toModelMessages(messages, { image: true, video: true, audio: true, pdf: false }),
+    ).resolves.toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: expect.stringContaining('pdf attachment omitted') }],
+      },
+    ]);
+  });
+
+  it('leaves Office and other serialized files unchanged', async () => {
+    const messages = [
+      ui('user', [
+        {
+          type: 'file',
+          filename: 'brief.docx',
+          mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          url: 'data:application/octet-stream;base64,AA',
+        },
+      ]),
+    ];
+
+    const result = await toModelMessages(messages, {
+      image: false,
+      video: false,
+      audio: false,
+      pdf: false,
+    });
+
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        role: 'user',
+        content: [expect.objectContaining({ type: 'file', filename: 'brief.docx' })],
+      }),
+    );
+  });
+});
+
+describe('ensureNonEmptyAssistantContent', () => {
+  it('replaces an assistant message with empty content with a placeholder', () => {
+    expect(ensureNonEmptyAssistantContent([{ role: 'assistant', content: [] }])).toEqual([
+      { role: 'assistant', content: [{ type: 'text', text: '...' }] },
+    ]);
+  });
+
+  it('leaves non-empty and non-assistant messages untouched (same reference)', () => {
+    const msgs = [
+      { role: 'user', content: [{ type: 'text', text: 'hi' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+    ] as ModelMessage[];
+    const out = ensureNonEmptyAssistantContent(msgs);
+    expect(out[0]).toBe(msgs[0]);
+    expect(out[1]).toBe(msgs[1]);
+  });
+});
+
+describe('coalesceConsecutiveSameRole', () => {
+  it('merges adjacent same-role messages by concatenating content', () => {
+    const out = coalesceConsecutiveSameRole([
+      { role: 'user', content: [{ type: 'text', text: 'a' }] },
+      { role: 'user', content: [{ type: 'text', text: 'b' }] },
+    ] as ModelMessage[]);
+    expect(out).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'a' },
+          { type: 'text', text: 'b' },
+        ],
+      },
+    ]);
+  });
+
+  it('does not merge across an intervening tool message', () => {
+    const msgs = [
+      { role: 'assistant', content: [{ type: 'text', text: 'x' }] },
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: '1',
+            toolName: 't',
+            output: { type: 'json', value: {} },
+          },
+        ],
+      },
+      { role: 'assistant', content: [{ type: 'text', text: 'y' }] },
+    ] as ModelMessage[];
+    expect(coalesceConsecutiveSameRole(msgs)).toHaveLength(3);
+  });
+
+  it('joins string content (e.g. consecutive system messages)', () => {
+    const out = coalesceConsecutiveSameRole([
+      { role: 'system', content: 'a' },
+      { role: 'system', content: 'b' },
+    ] as ModelMessage[]);
+    expect(out).toEqual([{ role: 'system', content: 'a\n\nb' }]);
+  });
+});
