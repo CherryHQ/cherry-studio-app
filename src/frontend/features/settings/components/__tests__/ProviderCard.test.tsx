@@ -38,7 +38,7 @@ describe('ProviderCard', () => {
     const card = renderer?.root.findByProps({ accessibilityRole: 'button' });
     const labels = renderer?.root.findAllByType(Text).map(({ props }) => props.children);
 
-    expect(card?.props.className).toContain('min-h-32 justify-between gap-3 p-4');
+    expect(card?.props.className).toContain('min-h-40 justify-between gap-4 p-4');
     expect(card?.props.accessibilityLabel).toBe(
       'Custom Provider, Enabled, Anthropic Messages, OpenAI Responses',
     );

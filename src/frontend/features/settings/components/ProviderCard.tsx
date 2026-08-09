@@ -36,27 +36,26 @@ export const ProviderCard = memo(function ProviderCard({
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        className="min-h-32 justify-between gap-3 p-4 active:bg-foreground/5"
+        className="min-h-40 justify-between gap-4 p-4 active:bg-foreground/5"
         onPress={onPress}
       >
-        <View className="flex-row items-center gap-2.5 pr-3">
+        <View className="flex-row items-start justify-between">
           <ProviderAvatar
             presetProviderId={provider.presetProviderId}
             providerId={provider.id}
             providerName={provider.name}
-            size={36}
+            size={48}
           />
-          <Text className="min-w-0 flex-1 font-semibold text-foreground text-lg" numberOfLines={2}>
+          {provider.isEnabled ? (
+            <View className="mt-1 size-2 rounded-full bg-success" testID="provider-enabled-dot" />
+          ) : null}
+        </View>
+        <View className="gap-1.5">
+          <Text className="font-semibold text-foreground text-lg" numberOfLines={2}>
             {provider.name}
           </Text>
+          <ProviderEndpointSummary endpoints={endpoints} />
         </View>
-        {provider.isEnabled ? (
-          <View
-            className="absolute right-4 top-4 size-2 rounded-full bg-success"
-            testID="provider-enabled-dot"
-          />
-        ) : null}
-        <ProviderEndpointSummary endpoints={endpoints} />
       </Pressable>
     </SettingsGroupedSurface>
   );
