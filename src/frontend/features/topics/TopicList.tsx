@@ -182,6 +182,7 @@ const TopicListView = memo(function TopicListView() {
         onEndReachedThreshold={0.7}
         recycleItems
         renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
       />
     </View>
   );

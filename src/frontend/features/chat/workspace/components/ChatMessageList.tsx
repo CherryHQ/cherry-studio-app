@@ -574,6 +574,7 @@ export function ChatMessageList({
         scrollEventThrottle={16}
         scrollsToTop
         sharedValues={sharedValues}
+        showsVerticalScrollIndicator={false}
         className="flex-1"
       />
     </ScrollShadow>

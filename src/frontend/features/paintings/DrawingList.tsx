@@ -160,6 +160,7 @@ export function DrawingList() {
         }
       }}
       scrollEventThrottle={160}
+      showsVerticalScrollIndicator={false}
       testID="drawing-home-scroll"
     >
       {isEditing ? null : (

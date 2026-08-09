@@ -21,6 +21,7 @@ const mockAssistant = {
 } as Assistant;
 let mockPinnedTopicIds: readonly string[] = [];
 let mockPendingDeletionIds: ReadonlySet<string> = new Set();
+let mockShowsVerticalScrollIndicator: boolean | undefined;
 
 jest.mock('@legendapp/list/react-native', () => {
   const React = jest.requireActual('react');
@@ -30,16 +31,21 @@ jest.mock('@legendapp/list/react-native', () => {
     LegendList: ({
       data,
       renderItem,
+      showsVerticalScrollIndicator,
     }: {
       data: readonly Topic[];
       renderItem: (info: { index: number; item: Topic }) => ReactNode;
-    }) => (
-      <MockView testID="topic-list">
-        {data.map((item, index) => (
-          <React.Fragment key={item.id}>{renderItem({ index, item })}</React.Fragment>
-        ))}
-      </MockView>
-    ),
+      showsVerticalScrollIndicator?: boolean;
+    }) => {
+      mockShowsVerticalScrollIndicator = showsVerticalScrollIndicator;
+      return (
+        <MockView testID="topic-list">
+          {data.map((item, index) => (
+            <React.Fragment key={item.id}>{renderItem({ index, item })}</React.Fragment>
+          ))}
+        </MockView>
+      );
+    },
   };
 });
 
@@ -137,6 +143,7 @@ describe('TopicList context actions', () => {
     jest.clearAllMocks();
     mockPendingDeletionIds = new Set();
     mockPinnedTopicIds = [];
+    mockShowsVerticalScrollIndicator = undefined;
   });
 
   afterEach(async () => {
@@ -222,6 +229,14 @@ describe('TopicList context actions', () => {
     );
 
     expect(divider?.length).toBeGreaterThan(0);
+  });
+
+  it('hides the vertical scroll indicator', async () => {
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    expect(mockShowsVerticalScrollIndicator).toBe(false);
   });
 
   it('hides a topic immediately while its deletion is pending', async () => {

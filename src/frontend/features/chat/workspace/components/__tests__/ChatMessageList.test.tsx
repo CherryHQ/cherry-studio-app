@@ -31,6 +31,7 @@ type MockLegendListProps = {
   onScrollEndDrag?: () => void;
   onTouchEnd?: () => void;
   onTouchStart?: () => void;
+  showsVerticalScrollIndicator?: boolean;
 };
 
 let mockLatestListProps: MockLegendListProps | undefined;
@@ -227,6 +228,7 @@ describe('ChatMessageList anchored tail following', () => {
     });
 
     expect(mockLatestListProps?.keyboardOffset).toBe(26);
+    expect(mockLatestListProps?.showsVerticalScrollIndicator).toBe(false);
     expect(mockLatestListProps?.contentContainerStyle).toEqual({
       paddingBottom: 80,
       paddingTop: 12,
