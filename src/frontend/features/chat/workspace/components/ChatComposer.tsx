@@ -1,6 +1,3 @@
-import type { RefObject } from 'react';
-import type { LayoutChangeEvent, View } from 'react-native';
-
 import { ComposerDock, ComposerProvider } from '@/frontend/components/composer';
 
 import { ChatInput } from '../../input';
@@ -9,10 +6,8 @@ import { useManagedComposerAttachments } from '../../input/hooks/useManagedCompo
 type ChatComposerProps = {
   /** Assistant to bind a newly created topic to; ignored once `topicId` exists. */
   assistantId?: string;
-  composerRef?: RefObject<View | null>;
   dismissKeyboardOnSend?: boolean;
   onHeightChange: (height: number) => void;
-  onComposerLayout?: (event: LayoutChangeEvent) => void;
   topicId?: string;
 };
 
@@ -24,21 +19,15 @@ type ChatComposerProps = {
  */
 export function ChatComposer({
   assistantId,
-  composerRef,
   dismissKeyboardOnSend,
   onHeightChange,
-  onComposerLayout,
   topicId,
 }: ChatComposerProps) {
   const attachmentStore = useManagedComposerAttachments();
 
   return (
     <ComposerProvider attachmentStore={attachmentStore}>
-      <ComposerDock
-        containerRef={composerRef}
-        onHeightChange={onHeightChange}
-        onLayout={onComposerLayout}
-      >
+      <ComposerDock onHeightChange={onHeightChange}>
         <ChatInput
           assistantId={assistantId}
           dismissKeyboardOnSend={dismissKeyboardOnSend}

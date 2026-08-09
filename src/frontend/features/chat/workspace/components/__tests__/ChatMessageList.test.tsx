@@ -17,7 +17,6 @@ type MockLegendListProps = {
   applyWorkaroundForContentInsetHitTestBug?: boolean;
   anchoredEndSpace?: AnchoredEndSpaceConfig;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
-  contentInsetEndAdjustment?: SharedValue<number>;
   freeze?: unknown;
   keyboardOffset?: number;
   maintainScrollAtEnd?: unknown;
@@ -122,12 +121,6 @@ const isAtBottom = {
   value: true,
 } as unknown as SharedValue<boolean>;
 
-const contentInsetEndAdjustment = {
-  get: () => 72,
-  set: jest.fn(),
-  value: 72,
-} as unknown as SharedValue<number>;
-
 function listProps(
   messages: readonly Message[],
   anchorIndex: number,
@@ -136,7 +129,6 @@ function listProps(
   return {
     anchorIndex,
     contentBottomInset: 80,
-    contentInsetEndAdjustment,
     contentTopInset: 44,
     isAtBottom,
     keyboardOffset: 26,
@@ -216,7 +208,7 @@ describe('ChatMessageList anchored tail following', () => {
     expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBeUndefined();
   });
 
-  test('attaches composer spacing after the list has a valid viewport', () => {
+  test('reserves the composer height in the scrollable message content', () => {
     const messages = [
       createMessage('user-1', 'user', [textPart('hello')]),
       createMessage('assistant-1', 'assistant'),
@@ -227,7 +219,6 @@ describe('ChatMessageList anchored tail following', () => {
     });
 
     expect(mockLatestListProps?.applyWorkaroundForContentInsetHitTestBug).toBe(true);
-    expect(mockLatestListProps?.contentInsetEndAdjustment).toBeUndefined();
 
     act(() => {
       mockLatestListProps?.onLayout?.({
@@ -235,10 +226,9 @@ describe('ChatMessageList anchored tail following', () => {
       } as LayoutChangeEvent);
     });
 
-    expect(mockLatestListProps?.contentInsetEndAdjustment).toBe(contentInsetEndAdjustment);
     expect(mockLatestListProps?.keyboardOffset).toBe(26);
     expect(mockLatestListProps?.contentContainerStyle).toEqual({
-      paddingBottom: 8,
+      paddingBottom: 80,
       paddingTop: 12,
     });
   });

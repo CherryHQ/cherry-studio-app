@@ -1,5 +1,4 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
-import { useKeyboardChatComposerInset } from '@legendapp/list/keyboard';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import * as Crypto from 'expo-crypto';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -94,16 +93,11 @@ function PaintingConversationWorkspace({
   const router = useRouter();
   const headerHeight = useHeaderHeight();
   const listRef = useRef<LegendListRef | null>(null);
-  const composerRef = useRef<View | null>(null);
   const isAtBottom = useSharedValue(true);
   const [pendingTurn, setPendingTurn] = useState<PendingTurn | null>(null);
-  const generation = usePaintingGeneration({ initialOutputs: [] });
+  const { cancel, generate, status } = usePaintingGeneration({ initialOutputs: [] });
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useComposerDockLayout();
-  const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
-    listRef,
-    composerRef,
-  );
   const messages = useMemo<Message[]>(
     () =>
       pendingTurn
@@ -125,13 +119,13 @@ function PaintingConversationWorkspace({
         userMessageId: Crypto.randomUUID(),
       });
       try {
-        return await generation.generate(input);
+        return await generate(input);
       } catch (error) {
         setPendingTurn(null);
         throw error;
       }
     },
-    [generation.generate],
+    [generate],
   );
   const handleGenerated = useCallback(
     (result: PaintingGenerationResult) => {
@@ -149,7 +143,6 @@ function PaintingConversationWorkspace({
       <ChatMessageList
         anchorIndex={0}
         contentBottomInset={contentBottomInset}
-        contentInsetEndAdjustment={contentInsetEndAdjustment}
         contentTopInset={isIOS ? headerHeight : 0}
         isAtBottom={isAtBottom}
         keyboardOffset={keyboardOffset}
@@ -157,17 +150,13 @@ function PaintingConversationWorkspace({
         messages={messages}
         onLoadOlder={handleLoadOlder}
       />
-      <ComposerDock
-        containerRef={composerRef}
-        onHeightChange={handleInputHeightChange}
-        onLayout={onComposerLayout}
-      >
+      <ComposerDock onHeightChange={handleInputHeightChange}>
         <PaintingInput
-          onCancel={generation.cancel}
+          onCancel={cancel}
           onGenerate={handleGenerate}
           onGenerated={handleGenerated}
           painting={painting}
-          status={generation.status}
+          status={status}
         />
       </ComposerDock>
       <ScrollToBottomButton

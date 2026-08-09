@@ -21,7 +21,6 @@ import {
 } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { composerContentGap } from '@/frontend/components/composer/utils/composerLayout';
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -59,10 +58,6 @@ const MAINTAIN_VISIBLE_CONTENT_POSITION = {
   shouldRestorePosition: shouldRestoreMessagePosition,
 };
 
-const MESSAGE_LIST_CONTENT_CONTAINER_STYLE = {
-  paddingBottom: composerContentGap,
-  paddingTop: 12,
-};
 const TAIL_FOLLOW_END_THRESHOLD = 20;
 
 type TailFollowPhase = 'anchoring' | 'following' | 'paused';
@@ -86,7 +81,6 @@ function resolveTailFollowState(
 type ChatMessageListProps = {
   anchorIndex: number;
   contentBottomInset: number;
-  contentInsetEndAdjustment: SharedValue<number>;
   contentTopInset: number;
   isAtBottom: SharedValue<boolean>;
   keyboardOffset: number;
@@ -121,7 +115,6 @@ function getMessageItemType(item: Message) {
 export function ChatMessageList({
   anchorIndex,
   contentBottomInset,
-  contentInsetEndAdjustment,
   contentTopInset,
   isAtBottom,
   keyboardOffset,
@@ -169,6 +162,10 @@ export function ChatMessageList({
   // 被锚定用户消息的固定落点：距内容区顶部（导航栏/安全区之下）ANCHOR_TOP_GAP。
   // anchoredEndSpace 与钉顶滚动共用同一偏移，保证「预留空白算出的位置」和「滚动落点」一致。
   const anchorOffset = contentTopInset + ANCHOR_TOP_GAP;
+  const contentContainerStyle = useMemo(
+    () => ({ paddingBottom: contentBottomInset, paddingTop: 12 }),
+    [contentBottomInset],
+  );
 
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;
@@ -403,10 +400,6 @@ export function ChatMessageList({
       ? false
       : undefined
     : MAINTAIN_VISIBLE_CONTENT_POSITION;
-  // 导航转场会短暂产生 0x0 ScrollView；此时接入 animated inset 会让 iOS 指示器收到 NaN。
-  const resolvedContentInsetEndAdjustment =
-    viewportHeight > 0 ? contentInsetEndAdjustment : undefined;
-
   // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
 
@@ -442,16 +435,19 @@ export function ChatMessageList({
     onReady?.();
   });
 
-  const handleContentSizeChange = useCallback((_width: number, height: number) => {
-    // ready=true 的 contentSize 变化 = 遮罩已撤/即将撤之后仍有高度修正 = 泄漏到可见区的跳动源。
-    // 冷首次进入 markdown 解析慢，末次修正可能迟到落在 ready 之后 → 复现「第一次进入才跳」。
-    scrollLog.debug('[SCROLL] contentSize', {
-      h: Math.round(height),
-      ready: didReportReadyRef.current,
-      t: Date.now(),
-    });
-    setContentBaseHeight(Math.max(0, height - composerContentGap));
-  }, []);
+  const handleContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      // ready=true 的 contentSize 变化 = 遮罩已撤/即将撤之后仍有高度修正 = 泄漏到可见区的跳动源。
+      // 冷首次进入 markdown 解析慢，末次修正可能迟到落在 ready 之后 → 复现「第一次进入才跳」。
+      scrollLog.debug('[SCROLL] contentSize', {
+        h: Math.round(height),
+        ready: didReportReadyRef.current,
+        t: Date.now(),
+      });
+      setContentBaseHeight(Math.max(0, height - contentBottomInset));
+    },
+    [contentBottomInset],
+  );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     setViewportHeight(event.nativeEvent.layout.height);
@@ -543,9 +539,8 @@ export function ChatMessageList({
         ref={listRef}
         applyWorkaroundForContentInsetHitTestBug
         anchoredEndSpace={anchoredEndSpace}
-        contentContainerStyle={MESSAGE_LIST_CONTENT_CONTAINER_STYLE}
+        contentContainerStyle={contentContainerStyle}
         contentInsetAdjustmentBehavior="never"
-        contentInsetEndAdjustment={resolvedContentInsetEndAdjustment}
         data={messages}
         drawDistance={80}
         estimatedItemSize={300}

@@ -15,14 +15,12 @@ type PaintingInputProps = {
 };
 
 type MessageListProps = {
-  contentInsetEndAdjustment: unknown;
+  contentBottomInset: number;
   keyboardOffset: number;
   messages: Message[];
 };
 
 const mockRouterReplace = jest.fn();
-const mockContentInsetEndAdjustment = { value: 88 };
-const mockOnComposerLayout = jest.fn();
 const mockGenerate = jest.fn<Promise<PaintingGenerationResult>, [PaintingGenerationInput]>();
 let mockPaintingInputProps: PaintingInputProps | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -85,13 +83,6 @@ jest.mock('expo-crypto', () => ({
   },
 }));
 
-jest.mock('@legendapp/list/keyboard', () => ({
-  useKeyboardChatComposerInset: () => ({
-    contentInsetEndAdjustment: mockContentInsetEndAdjustment,
-    onComposerLayout: mockOnComposerLayout,
-  }),
-}));
-
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -130,7 +121,7 @@ jest.mock('@/frontend/components/composer', () => ({
     return children;
   },
   useComposerDockLayout: () => ({
-    contentBottomInset: 0,
+    contentBottomInset: 88,
     handleInputHeightChange: jest.fn(),
     inputHeight: 88,
     inputHeightShared: { value: 0 },
@@ -244,7 +235,7 @@ describe('PaintingConversationScreen', () => {
       'assistant',
     ]);
     expect(mockMessageListProps?.messages[0].searchableText).toBe(mockPainting.prompt);
-    expect(mockMessageListProps?.contentInsetEndAdjustment).toBe(mockContentInsetEndAdjustment);
+    expect(mockMessageListProps?.contentBottomInset).toBe(88);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
   });
 });
