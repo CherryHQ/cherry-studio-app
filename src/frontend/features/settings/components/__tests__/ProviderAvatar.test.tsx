@@ -73,11 +73,18 @@ describe('ProviderAvatar', () => {
       renderer = create(<ProviderAvatar providerId="codex" providerName="codex" />);
     });
 
-    expect(renderer?.root.findByType(View).props.style).toEqual({
-      backgroundColor: '#46429b',
+    const views = renderer?.root.findAllByType(View) ?? [];
+
+    expect(views[0].props.style).toEqual({
       borderRadius: 6,
       height: 26,
       width: 26,
+    });
+    expect(views[1].props.style).toEqual({
+      backgroundColor: '#46429b',
+      borderRadius: 5,
+      height: 26 * 0.8125,
+      width: 26 * 0.8125,
     });
     expect(renderer?.root.findByType(Text).props).toEqual(
       expect.objectContaining({

@@ -41,6 +41,7 @@ export function BrandAvatar({
   testID,
 }: BrandAvatarProps) {
   const fallback = children === undefined ? getBrandAvatarFallback(label) : undefined;
+  const fallbackSize = size * DEFAULT_BRAND_ICON_SCALE;
 
   return (
     <BrandAvatarSizeContext value={size}>
@@ -50,17 +51,26 @@ export function BrandAvatar({
           borderRadius: BRAND_AVATAR_FRAME_RADIUS,
           height: size,
           width: size,
-          ...(fallback && { backgroundColor: fallback.backgroundColor }),
         }}
         testID={testID}
       >
         {fallback ? (
-          <Text
-            className="font-medium"
-            style={{ color: fallback.color, fontSize: BRAND_AVATAR_INITIAL_FONT_SIZE }}
+          <View
+            className="items-center justify-center"
+            style={{
+              backgroundColor: fallback.backgroundColor,
+              borderRadius: BRAND_AVATAR_FRAME_RADIUS - 1,
+              height: fallbackSize,
+              width: fallbackSize,
+            }}
           >
-            {fallback.initial}
-          </Text>
+            <Text
+              className="font-medium"
+              style={{ color: fallback.color, fontSize: BRAND_AVATAR_INITIAL_FONT_SIZE }}
+            >
+              {fallback.initial}
+            </Text>
+          </View>
         ) : (
           children
         )}
