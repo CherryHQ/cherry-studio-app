@@ -1,0 +1,12 @@
+{
+  "uiViewClassName": "CherryMenuView",
+  "supportsRawText": false,
+  "bubblingEventTypes": {},
+  "directEventTypes": {},
+  "validAttributes": {
+    "items": true,
+    "onAction": true,
+    "trigger": true,
+    "hybridRef": true
+  }
+}
