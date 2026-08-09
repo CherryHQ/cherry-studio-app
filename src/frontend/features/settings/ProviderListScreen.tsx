@@ -29,7 +29,7 @@ const renderProviderRow = ({ item }: { item: ProviderListRow }) => {
 };
 const renderProviderSectionHeader = ({ section }: { section: ProviderListSection }) => (
   <View className="h-12 justify-end px-4 pb-2">
-    <Text className="text-base text-foreground-tertiary">{section.title}</Text>
+    <Text className="font-medium text-foreground-tertiary text-sm">{section.title}</Text>
   </View>
 );
 
