@@ -70,7 +70,9 @@ export default function ProviderSettingsScreen() {
               />
             ),
             details: <ProviderEndpointSummary endpoints={endpoints} />,
-            detailsAccessibilityLabel: endpoints.map(({ label }) => label).join(', '),
+            detailsAccessibilityLabel: endpoints
+              .map(({ accessibilityLabel }) => accessibilityLabel)
+              .join(', '),
             id: provider.id,
             isEnabled: provider.isEnabled,
             name: provider.name,

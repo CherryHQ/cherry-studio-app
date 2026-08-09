@@ -14,17 +14,29 @@ describe('getProviderEndpoints', () => {
     };
 
     expect(getProviderEndpoints(provider)).toEqual([
-      { iconId: 'anthropic', label: 'Anthropic Messages', type: 'anthropic-messages' },
-      { iconId: 'gemini', label: 'Google Gemini', type: 'google-generate-content' },
-      { iconId: 'openai', label: 'OpenAI Responses', type: 'openai-responses' },
+      {
+        accessibilityLabel: 'Anthropic Messages',
+        shortLabel: 'Messages',
+        type: 'anthropic-messages',
+      },
+      {
+        accessibilityLabel: 'Google Gemini',
+        shortLabel: 'Generate Content',
+        type: 'google-generate-content',
+      },
+      {
+        accessibilityLabel: 'OpenAI Responses',
+        shortLabel: 'Responses',
+        type: 'openai-responses',
+      },
     ]);
   });
 
   it('shows the effective OpenAI endpoint when no explicit configuration exists', () => {
     expect(getProviderEndpoints({})).toEqual([
       {
-        iconId: 'openai',
-        label: 'OpenAI Chat Completions',
+        accessibilityLabel: 'OpenAI Chat Completions',
+        shortLabel: 'Chat Completions',
         type: 'openai-chat-completions',
       },
     ]);

@@ -1,10 +1,6 @@
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
-
-import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/BrandAvatar';
+import { Text } from 'react-native';
 
 import {
   getEndpointLabel,
@@ -12,65 +8,43 @@ import {
 } from '../ProviderScreen/apiService/utils/providerApiServiceEndpointRules';
 
 type ProviderEndpoint = {
-  iconId: string;
-  label: string;
+  accessibilityLabel: string;
+  shortLabel: string;
   type: EndpointType;
 };
 
-const endpointIconIds: Record<EndpointType, string> = {
-  'anthropic-messages': 'anthropic',
-  'google-generate-content': 'gemini',
-  'jina-rerank': 'jina',
-  'ollama-chat': 'ollama',
-  'ollama-generate': 'ollama',
-  'openai-audio-transcription': 'openai',
-  'openai-audio-translation': 'openai',
-  'openai-chat-completions': 'openai',
-  'openai-embeddings': 'openai',
-  'openai-image-edit': 'openai',
-  'openai-image-generation': 'openai',
-  'openai-responses': 'openai',
-  'openai-text-completions': 'openai',
-  'openai-text-to-speech': 'openai',
-  'openai-video-generation': 'openai',
+const endpointShortLabels: Record<EndpointType, string> = {
+  'anthropic-messages': 'Messages',
+  'google-generate-content': 'Generate Content',
+  'jina-rerank': 'Rerank',
+  'ollama-chat': 'Ollama Chat',
+  'ollama-generate': 'Ollama Generate',
+  'openai-audio-transcription': 'Transcription',
+  'openai-audio-translation': 'Translation',
+  'openai-chat-completions': 'Chat Completions',
+  'openai-embeddings': 'Embeddings',
+  'openai-image-edit': 'Image Edit',
+  'openai-image-generation': 'Image Generation',
+  'openai-responses': 'Responses',
+  'openai-text-completions': 'Text Completions',
+  'openai-text-to-speech': 'Text to Speech',
+  'openai-video-generation': 'Video Generation',
 };
 
 export function getProviderEndpoints(
   provider: Pick<Provider, 'defaultChatEndpoint' | 'endpointConfigs'>,
 ): ProviderEndpoint[] {
   return resolveVisibleEndpointTypes(provider).map((type) => ({
-    iconId: endpointIconIds[type],
-    label: getEndpointLabel(type),
+    accessibilityLabel: getEndpointLabel(type),
+    shortLabel: endpointShortLabels[type],
     type,
   }));
 }
 
 export function ProviderEndpointSummary({ endpoints }: { endpoints: readonly ProviderEndpoint[] }) {
-  const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
-
   return (
-    <View className="flex-row flex-wrap items-center gap-x-3 gap-y-1.5">
-      {endpoints.map((endpoint) => {
-        const iconSource = resolveProviderIcon(endpoint.iconId);
-
-        return (
-          <View className="flex-row items-center gap-1.5" key={endpoint.type}>
-            {iconSource ? (
-              <BrandAvatar label={endpoint.label} size={18}>
-                <BrandAvatarIcon
-                  iconId={endpoint.iconId}
-                  recyclingKey={endpoint.type}
-                  source={iconSource[iconTheme]}
-                />
-              </BrandAvatar>
-            ) : null}
-            <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-              {endpoint.label}
-            </Text>
-          </View>
-        );
-      })}
-    </View>
+    <Text className="text-foreground-tertiary text-sm">
+      {endpoints.map(({ shortLabel }) => shortLabel).join(' · ')}
+    </Text>
   );
 }
