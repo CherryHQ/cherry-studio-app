@@ -8,8 +8,8 @@ jest.mock('expo-router', () => {
   const { Pressable: MockPressable, View } = jest.requireActual('react-native');
 
   const Link = Object.assign(
-    ({ children, href }: { children: React.ReactNode; href: unknown }) =>
-      React.createElement(View, { href, testID: 'link' }, children),
+    ({ children, ...props }: { children: React.ReactNode; href: unknown }) =>
+      React.createElement(View, { ...props, testID: 'link' }, children),
     {
       Menu: ({ children }: { children: React.ReactNode }) =>
         React.createElement(View, { testID: 'link-menu' }, children),
@@ -61,6 +61,7 @@ describe('ContextMenuLink.ios', () => {
       pathname: '/topics',
       params: { topicId: 'topic-1' },
     });
+    expect(renderer!.root.findByProps({ testID: 'link' }).props.asChild).toBe(true);
     const preview = renderer!.root.findByProps({ testID: 'link-preview' });
     expect(preview.props.style.width).toBeGreaterThan(0);
     expect(preview.props.style.height).toBe(preview.props.style.width);

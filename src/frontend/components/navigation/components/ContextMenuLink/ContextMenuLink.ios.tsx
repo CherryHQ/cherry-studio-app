@@ -14,7 +14,7 @@ export function ContextMenuLink({ children, href, items, preview = true }: Conte
   );
 
   return (
-    <Link href={href}>
+    <Link asChild href={href}>
       <Link.Trigger>{children}</Link.Trigger>
       {preview ? <Link.Preview style={{ height: previewSize, width: previewSize }} /> : null}
       <Link.Menu>
