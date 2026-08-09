@@ -38,6 +38,7 @@ const logger = loggerService.withContext('ChatWorkspace');
 const gateLog = loggerService.withContext('ChatGate');
 
 type ChatWorkspaceProps = {
+  isPreview: boolean;
   messageWindow: Pick<
     MessagesViewModel,
     'isLoadingInitial' | 'isLoadingOlder' | 'loadOlder' | 'messages'
@@ -46,7 +47,12 @@ type ChatWorkspaceProps = {
   topicId: string;
 };
 
-export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWorkspaceProps) {
+export function ChatWorkspace({
+  isPreview,
+  messageWindow,
+  renderGateKey,
+  topicId,
+}: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
   const chatTopic = useChatTopic(topicId);
   const headerHeight = useHeaderHeight();
@@ -85,8 +91,9 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
     requiresInitialHistoryLayout,
   });
   const contentTopInset = isIOS ? headerHeight : 0;
-  const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
-    useComposerDockLayout();
+  const composerDockLayout = useComposerDockLayout();
+  const contentBottomInset = isPreview ? 12 : composerDockLayout.contentBottomInset;
+  const keyboardOffset = isPreview ? 0 : composerDockLayout.keyboardOffset;
 
   // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
   useEffect(() => {
@@ -117,17 +124,21 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
           pendingUserMessageId={chatTopic.pendingUserMessage?.id}
         />
       </MessageSlideInProvider>
-      <ChatComposer
-        dismissKeyboardOnSend={false}
-        onHeightChange={handleInputHeightChange}
-        topicId={topicId}
-      />
-      <ScrollToBottomButton
-        gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
-        inputHeight={inputHeightShared}
-        isAtBottom={isAtBottom}
-        onPress={handleScrollToEnd}
-      />
+      {isPreview ? null : (
+        <>
+          <ChatComposer
+            dismissKeyboardOnSend={false}
+            onHeightChange={composerDockLayout.handleInputHeightChange}
+            topicId={topicId}
+          />
+          <ScrollToBottomButton
+            gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
+            inputHeight={composerDockLayout.inputHeightShared}
+            isAtBottom={isAtBottom}
+            onPress={handleScrollToEnd}
+          />
+        </>
+      )}
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet
         approvals={pendingApprovals}

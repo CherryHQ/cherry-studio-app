@@ -362,7 +362,7 @@ function AssistantListRow({
   return isEditing ? (
     row
   ) : (
-    <ContextMenuLink href={href} items={menuItems}>
+    <ContextMenuLink href={href} items={menuItems} preview={false}>
       {row}
     </ContextMenuLink>
   );

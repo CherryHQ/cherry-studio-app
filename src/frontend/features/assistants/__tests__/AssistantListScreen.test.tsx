@@ -146,6 +146,7 @@ describe('AssistantListScreen batch deletion', () => {
       pathname: '/assistants/[assistantId]',
       params: { assistantId: 'assistant-a' },
     });
+    expect(link?.props.preview).toBe(false);
 
     const editAction = link?.props.items.find((item: { id: string }) => item.id === 'edit');
     const deleteAction = link?.props.items.find((item: { id: string }) => item.id === 'delete');

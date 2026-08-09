@@ -15,7 +15,8 @@ jest.mock('expo-router', () => {
         React.createElement(View, { testID: 'link-menu' }, children),
       MenuAction: ({ children, ...props }: { children: React.ReactNode }) =>
         React.createElement(MockPressable, { ...props, testID: `action-${children}` }, children),
-      Preview: () => React.createElement(View, { testID: 'link-preview' }),
+      Preview: (props: Record<string, unknown>) =>
+        React.createElement(View, { ...props, testID: 'link-preview' }),
       Trigger: ({ children }: { children: React.ReactNode }) =>
         React.createElement(View, { testID: 'link-trigger' }, children),
     },
@@ -60,7 +61,9 @@ describe('ContextMenuLink.ios', () => {
       pathname: '/topics',
       params: { topicId: 'topic-1' },
     });
-    expect(renderer!.root.findByProps({ testID: 'link-preview' })).toBeTruthy();
+    const preview = renderer!.root.findByProps({ testID: 'link-preview' });
+    expect(preview.props.style.width).toBeGreaterThan(0);
+    expect(preview.props.style.height).toBe(preview.props.style.width);
     expect(renderer!.root.findByProps({ testID: 'action-Delete' }).props).toMatchObject({
       destructive: true,
       icon: 'trash',
@@ -68,5 +71,20 @@ describe('ContextMenuLink.ios', () => {
 
     act(() => renderer!.root.findByProps({ testID: 'action-Delete' }).props.onPress());
     expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('can render a native context menu without a route preview', () => {
+    act(() => {
+      renderer = create(
+        <ContextMenuLink href="/assistants/assistant-1" items={[]} preview={false}>
+          <Pressable>
+            <Text>Assistant</Text>
+          </Pressable>
+        </ContextMenuLink>,
+      );
+    });
+
+    expect(renderer!.root.findByProps({ testID: 'link-menu' })).toBeTruthy();
+    expect(renderer!.root.findAllByProps({ testID: 'link-preview' })).toHaveLength(0);
   });
 });

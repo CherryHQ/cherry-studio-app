@@ -6,4 +6,5 @@ export type ContextMenuLinkProps = {
   children: ReactElement;
   href: Href;
   items: readonly MenuItem[];
+  preview?: boolean;
 };
