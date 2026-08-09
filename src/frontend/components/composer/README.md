@@ -79,8 +79,11 @@ walk to verify it.
 - `components/ComposerMenu.tsx`: the ＋ menu. Camera, photos and files hand off
   to the system pickers (`expo-image-picker`, `expo-document-picker`) rather
   than drawing anything in-app.
-- `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`,
-  on `@/frontend/components/mediaTile`.
+- `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`;
+  shows import progress, then delegates ready files to `FilePreview`.
+- `components/ManagedComposerProvider.tsx` and
+  `hooks/useManagedComposerAttachments.ts`: import transient picker results into
+  managed file entries before exposing them to Chat or Painting.
 - `components/ComposerDock.tsx` + `hooks/useComposerDockLayout.ts`: the docking
   geometry, split because one half is per-frame and the other is not.
 - `context/ComposerProvider.tsx`: draft, attachments, field ref — split into

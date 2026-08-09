@@ -105,7 +105,7 @@ jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
 
 jest.mock('@/frontend/components/composer', () => ({
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
-  ComposerProvider: ({
+  ManagedComposerProvider: ({
     children,
     initialAttachments,
   }: {

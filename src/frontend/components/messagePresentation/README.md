@@ -31,6 +31,11 @@ The latest user message is anchored below the content header. Text anchors use a
 cap; messages containing files use their full measured height. After reserved anchor space is
 exhausted, item-size changes follow the tail until touch, drag, or momentum pauses the behavior.
 
+User message rows visually separate managed file parts from the text bubble: a right-aligned,
+horizontally scrollable attachment strip sits above the optional bubble. This is a presentation
+projection only; files remain parts of the same message for model input, persistence, references,
+and anchoring.
+
 ## Organization
 
 - `components/MessageList.tsx` owns virtualization, anchoring, readiness, and list controls.

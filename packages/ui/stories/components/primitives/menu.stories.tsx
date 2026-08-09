@@ -1,6 +1,5 @@
-import { Menu } from '@cherrystudio/ui/components';
+import { DropdownMenu } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { EllipsisIcon, PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';
@@ -11,11 +10,6 @@ const themes = ['light', 'dark'] as const;
 
 const meta = {
   title: 'Components/Primitives/Menu',
-  component: Menu,
-  args: {
-    children: <View />,
-    items: [],
-  },
   decorators: [
     (Story) => (
       <ScrollView
@@ -27,7 +21,7 @@ const meta = {
       </ScrollView>
     ),
   ],
-} satisfies Meta<typeof Menu>;
+} satisfies Meta;
 
 export default meta;
 
@@ -42,33 +36,27 @@ export const Playground: Story = {
             <Text className="text-base font-semibold text-foreground">
               {theme === 'light' ? 'Light' : 'Dark'}
             </Text>
-            <Menu
-              items={[
-                {
-                  icon: <PencilIcon className="size-5 text-foreground" />,
-                  id: 'edit',
-                  label: 'Edit',
-                  onPress: onEdit,
-                  systemImage: 'pencil',
-                },
-                {
-                  icon: <Trash2Icon className="size-5 text-destructive" />,
-                  id: 'delete',
-                  label: 'Delete',
-                  onPress: onDelete,
-                  role: 'destructive',
-                  systemImage: 'trash',
-                },
-              ]}
-            >
-              <Pressable
-                accessibilityLabel="More actions"
-                accessibilityRole="button"
-                className="size-11 items-center justify-center rounded-full bg-field active:opacity-60"
-              >
-                <EllipsisIcon className="size-5 text-foreground" />
-              </Pressable>
-            </Menu>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <Pressable
+                  accessibilityLabel="More actions"
+                  accessibilityRole="button"
+                  className="size-11 items-center justify-center rounded-full bg-field active:opacity-60"
+                >
+                  <Text className="text-xl text-foreground">...</Text>
+                </Pressable>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content>
+                <DropdownMenu.Item key="edit" onSelect={onEdit}>
+                  <DropdownMenu.ItemIcon ios={{ name: 'pencil' }} />
+                  <DropdownMenu.ItemTitle>Edit</DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item key="delete" destructive onSelect={onDelete}>
+                  <DropdownMenu.ItemIcon ios={{ name: 'trash' }} />
+                  <DropdownMenu.ItemTitle>Delete</DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           </View>
         </ScopedTheme>
       ))}

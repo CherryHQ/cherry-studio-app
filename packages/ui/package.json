@@ -78,6 +78,7 @@
     "react-native-reanimated": "*",
     "react-native-safe-area-context": "*",
     "react-native-worklets": "*",
-    "uniwind": "*"
+    "uniwind": "*",
+    "zeego": "*"
   }
 }

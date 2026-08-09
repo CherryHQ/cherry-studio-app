@@ -5,11 +5,23 @@ import { ContextMenuLink } from '../ContextMenuLink.android';
 
 jest.mock('@cherrystudio/ui', () => {
   const React = jest.requireActual('react');
-  const { View } = jest.requireActual('react-native');
+  const component = (type: string) => {
+    function MockMenuComponent({ children, ...props }: { children?: React.ReactNode }) {
+      return React.createElement(type, props, children);
+    }
+
+    return MockMenuComponent;
+  };
 
   return {
-    Menu: ({ children, ...props }: { children: React.ReactNode }) =>
-      React.createElement(View, { ...props, testID: 'menu' }, children),
+    ContextMenu: {
+      CheckboxItem: component('ContextMenu.CheckboxItem'),
+      Content: component('ContextMenu.Content'),
+      Item: component('ContextMenu.Item'),
+      ItemTitle: component('ContextMenu.ItemTitle'),
+      Root: component('ContextMenu.Root'),
+      Trigger: component('ContextMenu.Trigger'),
+    },
   };
 });
 
@@ -30,7 +42,7 @@ describe('ContextMenuLink.android', () => {
     renderer = undefined;
   });
 
-  it('uses a normal link with a Cherry UI long-press menu', () => {
+  it('uses a normal link with a Zeego context menu', () => {
     const items = [{ id: 'delete', label: 'Delete', onPress: jest.fn() }];
 
     act(() => {
@@ -43,10 +55,7 @@ describe('ContextMenuLink.android', () => {
       );
     });
 
-    expect(renderer!.root.findByProps({ testID: 'menu' }).props).toMatchObject({
-      items,
-      shouldOpenOnLongPress: true,
-    });
+    expect(renderer!.root.findByType('ContextMenu.Trigger')).toBeDefined();
     expect(renderer!.root.findByProps({ testID: 'link' }).props).toMatchObject({
       asChild: true,
       href: '/topics',

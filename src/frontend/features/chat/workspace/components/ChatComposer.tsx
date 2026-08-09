@@ -1,7 +1,6 @@
-import { ComposerDock, ComposerProvider } from '@/frontend/components/composer';
+import { ComposerDock, ManagedComposerProvider } from '@/frontend/components/composer';
 
 import { ChatInput } from '../../input';
-import { useManagedComposerAttachments } from '../../input/hooks/useManagedComposerAttachments';
 
 type ChatComposerProps = {
   /** Assistant to bind a newly created topic to; ignored once `topicId` exists. */
@@ -12,8 +11,8 @@ type ChatComposerProps = {
 };
 
 /**
- * The docked chat input, wrapped in the shared ComposerProvider so every screen
- * that shows the input (chat + new-topic) gets the provider with it. The
+ * The docked chat input, wrapped in the managed Composer provider so every screen
+ * that shows the input (chat + new-topic) imports attachments before preview. The
  * reasoning-effort control lives inside the model picker sheet
  * (ChatInputReasoningSection), not as a separate floating panel.
  */
@@ -23,10 +22,8 @@ export function ChatComposer({
   onHeightChange,
   topicId,
 }: ChatComposerProps) {
-  const attachmentStore = useManagedComposerAttachments();
-
   return (
-    <ComposerProvider attachmentStore={attachmentStore}>
+    <ManagedComposerProvider>
       <ComposerDock onHeightChange={onHeightChange}>
         <ChatInput
           assistantId={assistantId}
@@ -34,6 +31,6 @@ export function ChatComposer({
           topicId={topicId}
         />
       </ComposerDock>
-    </ComposerProvider>
+    </ManagedComposerProvider>
   );
 }

@@ -7,7 +7,7 @@ import { ActivityIndicator, Text, View } from 'react-native';
 
 import {
   ComposerDock,
-  ComposerProvider,
+  ManagedComposerProvider,
   useComposerDockLayout,
 } from '@/frontend/components/composer';
 import { MessageList } from '@/frontend/components/messagePresentation';
@@ -65,9 +65,9 @@ export function PaintingConversationScreen() {
           </Text>
         </View>
       ) : (
-        <ComposerProvider key={painting.id}>
+        <ManagedComposerProvider key={painting.id}>
           <PaintingConversationWorkspace files={files} painting={painting} />
-        </ComposerProvider>
+        </ManagedComposerProvider>
       )}
     </View>
   );

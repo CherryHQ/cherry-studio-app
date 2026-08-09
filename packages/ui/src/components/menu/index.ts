@@ -1,2 +1,2 @@
-export * from './menu';
-export type { MenuItem, MenuProps } from './menu.types';
+export * as ContextMenu from 'zeego/context-menu';
+export * as DropdownMenu from 'zeego/dropdown-menu';

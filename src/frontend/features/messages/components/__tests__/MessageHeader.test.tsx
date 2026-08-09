@@ -9,14 +9,24 @@ let mockScopeTabsProps:
   | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => {
-  const Menu = ({ children }: { children: ReactNode }) => children;
+  const React = jest.requireActual('react');
+  const component =
+    (type: string) =>
+    ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement(type, props, children);
 
-  return { Menu };
+  return {
+    DropdownMenu: {
+      Content: component('DropdownMenu.Content'),
+      Item: component('DropdownMenu.Item'),
+      ItemTitle: component('DropdownMenu.ItemTitle'),
+      Root: component('DropdownMenu.Root'),
+      Trigger: component('DropdownMenu.Trigger'),
+    },
+  };
 });
 
 jest.mock('lucide-uniwind/png', () => ({
-  ImageIcon: () => null,
-  MessageCircleIcon: () => null,
   SquarePenIcon: () => null,
 }));
 

@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
-import type { ComposerAttachmentStore } from '@/frontend/components/composer';
+import { useBackendModule } from '@/frontend/data';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
+import type { ComposerAttachmentStore } from '../context/ComposerProvider';
 import {
   appendComposerAttachments,
   type ComposerAttachmentDraft,
@@ -11,9 +14,7 @@ import {
   type ComposerInitialAttachment,
   isComposerAttachmentReady,
   removeComposerAttachment,
-} from '@/frontend/components/composer/utils/composerAttachments';
-import { useBackendModule } from '@/frontend/data';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+} from '../utils/composerAttachments';
 
 const logger = loggerService.withContext('useManagedComposerAttachments');
 const emptyInitialAttachments: readonly ComposerInitialAttachment[] = [];

@@ -18,14 +18,6 @@ const backend = {
   },
 } as unknown as Backend;
 
-jest.mock('@expo/ui/community/menu', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    MenuView: ({ children }: { children: React.ReactNode }) => <MockView>{children}</MockView>,
-  };
-});
-
 jest.mock('@logger', () => ({
   loggerService: {
     withContext: () => ({ error: jest.fn() }),
@@ -54,8 +46,20 @@ jest.mock('@cherrystudio/ui/components', () => {
     TextInput: MockTextInput,
     View: MockView,
   } = jest.requireActual('react-native');
+  const component =
+    (type: string) =>
+    ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement(type, props, children);
 
   return {
+    DropdownMenu: {
+      Content: component('DropdownMenu.Content'),
+      Item: component('DropdownMenu.Item'),
+      ItemIcon: component('DropdownMenu.ItemIcon'),
+      ItemTitle: component('DropdownMenu.ItemTitle'),
+      Root: component('DropdownMenu.Root'),
+      Trigger: component('DropdownMenu.Trigger'),
+    },
     Input: React.forwardRef(function MockInput(
       props: React.ComponentProps<typeof MockTextInput>,
       ref: React.Ref<typeof MockTextInput>,

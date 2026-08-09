@@ -1,4 +1,3 @@
-import type { MenuItem } from '@cherrystudio/ui';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -16,7 +15,7 @@ import {
   useMessageSelectionState,
   useRegisterSelectionSource,
 } from '@/frontend/components/messageTabs';
-import { ContextMenuLink } from '@/frontend/components/navigation';
+import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 
 import { useTopicActionAlerts } from './components/useTopicActionAlerts';
@@ -276,7 +275,7 @@ const TopicRow = memo(function TopicRow({
     () => ({ pathname: '/topics' as const, params: { topicId: topic.id } }),
     [topic.id],
   );
-  const menuItems = useMemo<readonly MenuItem[]>(
+  const menuItems = useMemo<readonly ContextMenuLinkItem[]>(
     () => [
       {
         id: 'rename',

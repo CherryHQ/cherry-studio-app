@@ -1,4 +1,3 @@
-import type { MenuItem } from '@cherrystudio/ui';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Stack, useRouter } from 'expo-router';
 import { BotIcon, CheckIcon, PlusIcon } from 'lucide-uniwind/png';
@@ -15,7 +14,11 @@ import {
   useMessageListBottomInset,
 } from '@/frontend/components/messageTabs';
 import { SelectionToolbar } from '@/frontend/components/messageTabs/SelectionToolbar/SelectionToolbar';
-import { ContextMenuLink, useSetBottomTabBarHidden } from '@/frontend/components/navigation';
+import {
+  ContextMenuLink,
+  type ContextMenuLinkItem,
+  useSetBottomTabBarHidden,
+} from '@/frontend/components/navigation';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
 
 export default function AssistantListScreen() {
@@ -299,7 +302,7 @@ function AssistantListRow({
     }),
     [assistant.id],
   );
-  const menuItems = useMemo<readonly MenuItem[]>(
+  const menuItems = useMemo<readonly ContextMenuLinkItem[]>(
     () => [
       {
         id: 'edit',

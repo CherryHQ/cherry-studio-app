@@ -1,7 +1,6 @@
-import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
+import { DropdownMenu } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
 import { DownloadIcon, EllipsisIcon, PencilIcon, ProportionsIcon, XIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,8 +11,7 @@ import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 
 // Android has no native bottom-header slot, so the top row goes through the
 // transparent Stack header (headerLeft/headerRight) and the bottom actions are a
-// custom overlay bar, mirroring SelectionToolbar.android. Menus use the
-// platform MenuView, matching MainHeader.android.
+// custom overlay bar, mirroring SelectionToolbar.android.
 export function PaintingViewerChrome({
   aspectRatios,
   onClose,
@@ -25,44 +23,6 @@ export function PaintingViewerChrome({
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-
-  const moreActions = useMemo<MenuAction[]>(
-    () => [
-      {
-        id: 'view-conversation',
-        image: require('../../../../../../assets/navigation/messages.png'),
-        title: t('painting.viewer.viewConversation'),
-      },
-      {
-        attributes: { destructive: true },
-        id: 'delete',
-        image: 'trash',
-        title: t('painting.viewer.delete'),
-      },
-    ],
-    [t],
-  );
-  const handleMoreAction = useCallback(
-    (event: NativeActionEvent) => {
-      if (event.nativeEvent.event === 'view-conversation') {
-        onViewConversation();
-        return;
-      }
-      if (event.nativeEvent.event === 'delete') {
-        onDelete();
-      }
-    },
-    [onDelete, onViewConversation],
-  );
-
-  const resizeActions = useMemo<MenuAction[]>(
-    () => aspectRatios.map((ratio) => ({ id: ratio, title: ratio })),
-    [aspectRatios],
-  );
-  const handleResizeAction = useCallback(
-    (event: NativeActionEvent) => onResizeSelect(event.nativeEvent.event),
-    [onResizeSelect],
-  );
 
   return (
     <>
@@ -81,15 +41,27 @@ export function PaintingViewerChrome({
               >
                 <DownloadIcon className="size-6 text-constant-white" strokeWidth={2} />
               </HeaderIconButton>
-              <MenuView actions={moreActions} onPressAction={handleMoreAction}>
-                <View
-                  accessibilityLabel={t('painting.viewer.more')}
-                  accessibilityRole="button"
-                  className="size-9 items-center justify-center"
-                >
-                  <EllipsisIcon className="size-6 text-constant-white" strokeWidth={2} />
-                </View>
-              </MenuView>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <View
+                    accessibilityLabel={t('painting.viewer.more')}
+                    accessibilityRole="button"
+                    className="size-9 items-center justify-center"
+                  >
+                    <EllipsisIcon className="size-6 text-constant-white" strokeWidth={2} />
+                  </View>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                  <DropdownMenu.Item key="view-conversation" onSelect={onViewConversation}>
+                    <DropdownMenu.ItemTitle>
+                      {t('painting.viewer.viewConversation')}
+                    </DropdownMenu.ItemTitle>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item destructive key="delete" onSelect={onDelete}>
+                    <DropdownMenu.ItemTitle>{t('painting.viewer.delete')}</DropdownMenu.ItemTitle>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
             </View>
           ),
         }}
@@ -102,15 +74,24 @@ export function PaintingViewerChrome({
         <HeaderIconButton accessibilityLabel={t('painting.viewer.edit')} onPress={onEdit}>
           <PencilIcon className="size-6 text-constant-white" strokeWidth={2} />
         </HeaderIconButton>
-        <MenuView actions={resizeActions} onPressAction={handleResizeAction}>
-          <View
-            accessibilityLabel={t('painting.viewer.resize')}
-            accessibilityRole="button"
-            className="size-9 items-center justify-center"
-          >
-            <ProportionsIcon className="size-6 text-constant-white" strokeWidth={2} />
-          </View>
-        </MenuView>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            <View
+              accessibilityLabel={t('painting.viewer.resize')}
+              accessibilityRole="button"
+              className="size-9 items-center justify-center"
+            >
+              <ProportionsIcon className="size-6 text-constant-white" strokeWidth={2} />
+            </View>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content>
+            {aspectRatios.map((ratio) => (
+              <DropdownMenu.Item key={ratio} onSelect={() => onResizeSelect(ratio)}>
+                <DropdownMenu.ItemTitle>{ratio}</DropdownMenu.ItemTitle>
+              </DropdownMenu.Item>
+            ))}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       </View>
     </>
   );

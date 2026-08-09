@@ -1,6 +1,6 @@
 // Android-only: mirrors the native iOS messages-tab header actions.
-import { Menu } from '@cherrystudio/ui/components';
-import { ImageIcon, MessageCircleIcon, SquarePenIcon } from 'lucide-uniwind/png';
+import { DropdownMenu } from '@cherrystudio/ui/components';
+import { SquarePenIcon } from 'lucide-uniwind/png';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
@@ -58,36 +58,27 @@ export const MessageHeader = memo(function MessageHeader({
       <View className="w-[88px] items-end">
         {isEditing ? null : (
           <View className="flex-row rounded-3xl bg-field android:shadow-sm">
-            <Menu
-              items={[
-                {
-                  icon: <MessageCircleIcon className="size-5 text-foreground" strokeWidth={2} />,
-                  id: 'new-chat',
-                  label: t('navigation.newChat'),
-                  onPress: onNewTopicPress,
-                  systemImage: 'message',
-                  testID: 'topic-create-chat',
-                },
-                {
-                  icon: <ImageIcon className="size-5 text-foreground" strokeWidth={2} />,
-                  id: 'new-painting',
-                  label: t('navigation.newPainting'),
-                  onPress: onNewPaintingPress,
-                  systemImage: 'paintbrush',
-                  testID: 'topic-create-painting',
-                },
-              ]}
-            >
-              <Pressable
-                accessibilityLabel={t('navigation.new')}
-                accessibilityRole="button"
-                className="size-11 items-center justify-center rounded-3xl active:opacity-60"
-                hitSlop={8}
-                testID="topic-create-menu"
-              >
-                <SquarePenIcon className="size-5 text-foreground" strokeWidth={2} />
-              </Pressable>
-            </Menu>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <Pressable
+                  accessibilityLabel={t('navigation.new')}
+                  accessibilityRole="button"
+                  className="size-11 items-center justify-center rounded-3xl active:opacity-60"
+                  hitSlop={8}
+                  testID="topic-create-menu"
+                >
+                  <SquarePenIcon className="size-5 text-foreground" strokeWidth={2} />
+                </Pressable>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content>
+                <DropdownMenu.Item key="new-chat" onSelect={onNewTopicPress}>
+                  <DropdownMenu.ItemTitle>{t('navigation.newChat')}</DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item key="new-painting" onSelect={onNewPaintingPress}>
+                  <DropdownMenu.ItemTitle>{t('navigation.newPainting')}</DropdownMenu.ItemTitle>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           </View>
         )}
       </View>

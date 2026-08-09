@@ -1,14 +1,7 @@
 import { Composer } from '@cherrystudio/ui/components';
-import ExpoQuickLook from '@magrinj/expo-quick-look';
-import { useCallback } from 'react';
-
-import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useComposerActions, useComposerState } from '../context/ComposerProvider';
-import type { ComposerAttachmentDraft } from '../utils/composerAttachments';
 import { ComposerAttachmentStrip } from './ComposerAttachmentStrip';
-
-const logger = loggerService.withContext('ComposerAttachments');
 
 /**
  * The staged attachments, in a row that swells and shrinks with them.
@@ -21,23 +14,10 @@ export function ComposerAttachments() {
   const { attachments } = useComposerState();
   const { removeAttachment } = useComposerActions();
 
-  const handleAttachmentPreview = useCallback((attachment: ComposerAttachmentDraft) => {
-    void ExpoQuickLook.previewFile({
-      editingMode: 'disabled',
-      uri: attachment.uri,
-    }).catch((error) => {
-      logger.warn('Failed to preview attachment', error instanceof Error ? error : null);
-    });
-  }, []);
-
   return (
     <Composer.Collapsible style={attachmentRowStyle}>
       {attachments.length > 0 ? (
-        <ComposerAttachmentStrip
-          attachments={attachments}
-          onAttachmentPreview={handleAttachmentPreview}
-          onAttachmentRemove={removeAttachment}
-        />
+        <ComposerAttachmentStrip attachments={attachments} onAttachmentRemove={removeAttachment} />
       ) : null}
     </Composer.Collapsible>
   );
