@@ -17,12 +17,12 @@ import { SettingsServiceRow, type SettingsServiceRowProps } from './components/S
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 const PROVIDER_CARD_GAP = 12;
-const PROVIDER_ROW_ESTIMATED_HEIGHT = 44;
+const PROVIDER_ROW_ESTIMATED_HEIGHT = 64;
 
 const keyExtractor = (item: SettingsServiceRowProps) => item.id;
 const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
   <SettingsGroupedSurface isFirst isLast>
-    <SettingsServiceRow {...item} />
+    <SettingsServiceRow {...item} className="min-h-16 px-4 py-3" />
   </SettingsGroupedSurface>
 );
 const ProviderCardSeparator = () => <View style={styles.cardSeparator} />;
@@ -59,6 +59,7 @@ export default function ProviderSettingsScreen() {
               presetProviderId={provider.presetProviderId}
               providerId={provider.id}
               providerName={provider.name}
+              size={40}
             />
           ),
           id: provider.id,
