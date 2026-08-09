@@ -71,6 +71,18 @@ describe('SettingsServiceRow', () => {
     );
   });
 
+  it('applies custom row spacing', async () => {
+    await act(async () => {
+      renderer = create(
+        <SettingsServiceRow className="py-3" id="provider-1" name="Provider" onPress={jest.fn()} />,
+      );
+    });
+
+    expect(renderer?.root.findByProps({ accessibilityRole: 'button' }).props.className).toContain(
+      'py-3',
+    );
+  });
+
   it('keeps the separator in layout and makes it transparent while pressed', async () => {
     await act(async () => {
       renderer = create(

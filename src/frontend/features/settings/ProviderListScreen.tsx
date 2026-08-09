@@ -27,7 +27,7 @@ const renderProviderRow = ({ item }: { item: ProviderListRow }) => {
 
   return (
     <View className="overflow-hidden rounded-xl">
-      <SettingsServiceRow {...row} />
+      <SettingsServiceRow {...row} className="py-3" />
     </View>
   );
 };
