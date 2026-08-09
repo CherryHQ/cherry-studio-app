@@ -12,7 +12,6 @@ import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 export type SettingsServiceRowProps = {
   /** Custom leading visual; takes precedence over `imageSource` when provided. */
   avatar?: ReactNode;
-  className?: string;
   id: string;
   hideSeparator?: boolean;
   imageSource?: ImageSource | number;
@@ -28,7 +27,6 @@ export type SettingsServiceRowProps = {
 
 export const SettingsServiceRow = memo(function SettingsServiceRow({
   avatar,
-  className,
   hideSeparator = false,
   id,
   imageSource,
@@ -48,7 +46,6 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
       {showSeparator ? <SettingsGroupedSeparator hidden={hideSeparator || isPressed} /> : null}
       <Section.Item
         accessibilityLabel={accessibilityLabel}
-        className={className}
         description={
           subtitle ? (
             <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>

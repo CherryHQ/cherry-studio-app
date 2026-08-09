@@ -15,7 +15,7 @@ import { SettingsServiceRow, type SettingsServiceRowProps } from './components/S
 
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
-const PROVIDER_ROW_ESTIMATED_HEIGHT = 44;
+const PROVIDER_ROW_ESTIMATED_HEIGHT = 50;
 const PROVIDER_SECTION_HEADER_ESTIMATED_HEIGHT = 48;
 
 type ProviderListRow = SettingsServiceRowProps & { isEnabled: boolean };
@@ -25,14 +25,10 @@ const keyExtractor = (item: ProviderListRow) => item.id;
 const renderProviderRow = ({ item }: { item: ProviderListRow }) => {
   const { isEnabled: _isEnabled, ...row } = item;
 
-  return (
-    <View className="overflow-hidden rounded-xl">
-      <SettingsServiceRow {...row} className="py-3" />
-    </View>
-  );
+  return <SettingsServiceRow {...row} />;
 };
 const renderProviderSectionHeader = ({ section }: { section: ProviderListSection }) => (
-  <View className="h-12 justify-end px-1 pb-2">
+  <View className="h-12 justify-end px-4 pb-2">
     <Text className="text-foreground-tertiary text-sm">{section.title}</Text>
   </View>
 );
@@ -180,7 +176,7 @@ export default function ProviderSettingsScreen() {
           />
         )}
         {filteredProviderItems.length > 0 ? (
-          <View className="min-h-0 flex-1">
+          <View className="-mx-4 min-h-0 flex-1">
             <View style={{ height: cardHeight, maxHeight: '100%' }}>
               <SectionList
                 alwaysBounceVertical={false}
