@@ -1,4 +1,5 @@
 import type { ToolResultOutput } from '@ai-sdk/provider-utils';
+import { getRequestContext } from '@cherrystudio/ai-runtime/tools';
 import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 import type { JSONValue, Tool, ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
@@ -8,8 +9,7 @@ import type { DevicePermissions } from '@/backend/services/permissions';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { getRequestContext } from '../context';
-import type { ToolEntry } from '../types';
+import type { ToolEntry } from '../../../types';
 
 const logger = loggerService.withContext('DeviceTool');
 

@@ -15,7 +15,7 @@ import {
 } from '@/backend/ai/tools/webLookup';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
-import type { ToolEntry } from '../types';
+import type { ToolEntry } from '../../../types';
 
 export { WEB_FETCH_TOOL_NAME, webFetchInputSchema };
 

@@ -1,10 +1,11 @@
+import type { ToolEntry as RuntimeToolEntry } from '@cherrystudio/ai-runtime/tools';
+import type { RequestContext as RuntimeRequestContext } from '@cherrystudio/ai-runtime/tools';
 import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { Tool } from 'ai';
 
 import type { SystemPermissionState } from '@/backend/services/permissions';
 
-export type ToolDefer = 'never' | 'always' | 'auto';
+export type { ToolDefer } from '@cherrystudio/ai-runtime/tools';
 
 export type DeviceToolAccess = Readonly<
   Record<
@@ -22,19 +23,5 @@ export interface ToolApplyScope {
   readonly platform: string;
 }
 
-export interface ToolEntry {
-  readonly name: string;
-  readonly namespace: string;
-  readonly description: string;
-  readonly defer: ToolDefer;
-  readonly tool: Tool;
-  buildTool?(scope: ToolApplyScope): Tool;
-  applies?(scope: ToolApplyScope): boolean;
-}
-
-export interface RequestContext {
-  readonly requestId: string;
-  readonly chatId?: string;
-  readonly assistant?: Assistant;
-  readonly abortSignal?: AbortSignal;
-}
+export type ToolEntry = RuntimeToolEntry<ToolApplyScope>;
+export type RequestContext = RuntimeRequestContext<Assistant>;

@@ -7,6 +7,7 @@ import {
   resolveProviderOptionsKey,
 } from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, CallOverrides } from '@cherrystudio/ai-runtime/runtime';
+import { createAiRepair, TOOL_SEARCH_TOOL_NAME } from '@cherrystudio/ai-runtime/tools';
 import {
   addAnthropicHeaders,
   applyFastModeToProviderOptions,
@@ -48,9 +49,8 @@ import type { ProviderService } from '@/backend/data/services/ProviderService';
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolResolver } from '../../../tools';
-import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
-import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
-import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
+import { reportToolRuntimeDiagnostic } from '../../../tools/toolRuntimeDiagnostics';
+import type { RequestContext } from '../../../tools/types';
 import { replacePromptVariables } from '../../../utils/promptVariables';
 import type { AgentOptions } from '../Agent';
 import {
@@ -245,6 +245,7 @@ export async function buildAgentParams({
         : Crypto.randomUUID(),
   };
   const repairToolCall = createAiRepair({
+    diagnostics: reportToolRuntimeDiagnostic,
     modelId: model.apiModelId ?? model.modelId,
     providerId: sdkConfig.providerId,
     providerSettings: sdkConfig.providerSettings,

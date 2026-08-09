@@ -7,7 +7,7 @@ import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import type { AiServiceDependencies } from '@/backend/ai/AiService';
-import type { ToolEntry } from '@/backend/ai/tools/adapters/aiSdk/types';
+import type { ToolEntry } from '@/backend/ai/tools';
 import { ToolResolver } from '@/backend/ai/tools/ToolResolver';
 
 type ContractFixtureOptions = {
