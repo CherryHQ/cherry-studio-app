@@ -10,18 +10,22 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { useQuery } from '@/frontend/data';
 import { hiddenProviderListIds, isIOS } from '@/frontend/utils/constants';
 
-import { ProviderCard, type ProviderCardProps } from './components/ProviderCard';
+import { ProviderAvatar } from './components/ProviderAvatar';
+import { SettingsGroupedSurface } from './components/SettingsGroupedSurface';
+import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 const PROVIDER_CARD_GAP = 12;
-const PROVIDER_CARD_ESTIMATED_HEIGHT = 160;
-const PROVIDER_COLUMN_COUNT = 2;
+const PROVIDER_ROW_ESTIMATED_HEIGHT = 64;
 
-const keyExtractor = (item: ProviderCardProps) => item.provider.id;
-const renderProviderCard = ({ item }: LegendListRenderItemProps<ProviderCardProps>) => (
-  <ProviderCard {...item} />
+const keyExtractor = (item: SettingsServiceRowProps) => item.id;
+const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
+  <SettingsGroupedSurface isFirst isLast>
+    <SettingsServiceRow {...item} className="min-h-16 px-4 py-3" />
+  </SettingsGroupedSurface>
 );
+const ProviderCardSeparator = () => <View style={styles.cardSeparator} />;
 
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
@@ -42,7 +46,7 @@ export default function ProviderSettingsScreen() {
   const providersQuery = useQuery('/providers', {
     staleTime: providerListStaleTime,
   });
-  const providerItems = useMemo<ProviderCardProps[]>(
+  const providerItems = useMemo<SettingsServiceRowProps[]>(
     () =>
       (providersQuery.data ?? [])
         .filter((provider) => !hiddenProviderListIds.includes(provider.id))
@@ -50,7 +54,17 @@ export default function ProviderSettingsScreen() {
         // keeps the `orderKey` order the service already applied.
         .sort((a, b) => Number(b.isEnabled) - Number(a.isEnabled))
         .map((provider) => ({
-          provider,
+          avatar: (
+            <ProviderAvatar
+              presetProviderId={provider.presetProviderId}
+              providerId={provider.id}
+              providerName={provider.name}
+              size={40}
+            />
+          ),
+          id: provider.id,
+          isEnabled: provider.isEnabled,
+          name: provider.name,
           onPress: () => {
             if (isNavigatingRef.current) {
               return;
@@ -62,13 +76,14 @@ export default function ProviderSettingsScreen() {
             });
           },
           statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
+          statusTone: 'success',
         })),
     [providersQuery.data, router, t],
   );
   const filteredProviderItems = useMemo(() => {
     const query = searchText.trim().toLocaleLowerCase();
     const matches = query
-      ? providerItems.filter((item) => item.provider.name.toLocaleLowerCase().includes(query))
+      ? providerItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
       : providerItems;
 
     return matches;
@@ -82,10 +97,8 @@ export default function ProviderSettingsScreen() {
   const cardHeight =
     measuredList?.rowCount === filteredProviderItems.length
       ? measuredList.height
-      : Math.ceil(filteredProviderItems.length / PROVIDER_COLUMN_COUNT) *
-          PROVIDER_CARD_ESTIMATED_HEIGHT +
-        Math.max(0, Math.ceil(filteredProviderItems.length / PROVIDER_COLUMN_COUNT) - 1) *
-          PROVIDER_CARD_GAP;
+      : filteredProviderItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT +
+        Math.max(0, filteredProviderItems.length - 1) * PROVIDER_CARD_GAP;
   const openCreateProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
@@ -151,17 +164,16 @@ export default function ProviderSettingsScreen() {
                 contentContainerStyle={
                   usesNativeBottomSearch ? styles.listContentWithNativeBottomSearch : undefined
                 }
-                columnWrapperStyle={styles.cardGrid}
                 data={filteredProviderItems}
-                estimatedItemSize={PROVIDER_CARD_ESTIMATED_HEIGHT}
+                estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
+                ItemSeparatorComponent={ProviderCardSeparator}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
                 keyExtractor={keyExtractor}
                 maintainVisibleContentPosition={false}
-                numColumns={PROVIDER_COLUMN_COUNT}
                 onContentSizeChange={handleContentSizeChange}
                 recycleItems
-                renderItem={renderProviderCard}
+                renderItem={renderProviderRow}
                 showsVerticalScrollIndicator={false}
                 style={styles.list}
               />
@@ -184,8 +196,8 @@ export default function ProviderSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  cardGrid: {
-    gap: PROVIDER_CARD_GAP,
+  cardSeparator: {
+    height: PROVIDER_CARD_GAP,
   },
   list: {
     flex: 1,
