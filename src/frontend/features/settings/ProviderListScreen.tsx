@@ -15,7 +15,7 @@ import { ProviderCard, type ProviderCardProps } from './components/ProviderCard'
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 const PROVIDER_CARD_GAP = 12;
-const PROVIDER_CARD_ESTIMATED_HEIGHT = 160;
+const PROVIDER_CARD_ESTIMATED_HEIGHT = 128;
 const PROVIDER_COLUMN_COUNT = 2;
 
 const keyExtractor = (item: ProviderCardProps) => item.provider.id;
