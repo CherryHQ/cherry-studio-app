@@ -21,10 +21,12 @@ import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import {
   buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
+  buildProviderPrimaryBaseUrlUpdates,
   canEditProviderEndpoint,
   getEffectiveAuthConfig,
   getProviderPrimaryBaseUrl,
   normalizeApiKeyEntries,
+  ProviderApiServiceSaveError,
   shouldShowApiKeys,
   useProviderApiServiceQueries,
 } from './apiService';
@@ -73,8 +75,14 @@ export default function ProviderDetailSettingsScreen() {
     },
     refresh: ['/providers'],
   });
-  const { apiKeys, apiKeysQuery, authConfig, authConfigQuery, replaceApiKeysMutation } =
-    useProviderApiServiceQueries(providerId ?? '');
+  const {
+    apiKeys,
+    apiKeysQuery,
+    authConfig,
+    authConfigQuery,
+    replaceApiKeysMutation,
+    saveProviderMutation,
+  } = useProviderApiServiceQueries(providerId ?? '');
   const { isPreviewLoading: isModelPullLoading, loadPullPreview } = useProviderModelPull({
     onPreviewReady: (preview) => {
       if (!providerId) {
@@ -139,6 +147,38 @@ export default function ProviderDetailSettingsScreen() {
       });
     },
     [alert, apiKeys, replaceApiKeysMutation, t],
+  );
+  const commitBaseUrl = useCallback(
+    async (baseUrl: string): Promise<boolean> => {
+      if (!provider) {
+        return false;
+      }
+
+      try {
+        const updates = buildProviderPrimaryBaseUrlUpdates({ baseUrl, provider });
+        if (
+          updates.endpointConfigs[updates.defaultChatEndpoint]?.baseUrl ===
+          getProviderPrimaryBaseUrl(provider).trim()
+        ) {
+          return true;
+        }
+
+        await saveProviderMutation.mutateAsync(updates);
+        return true;
+      } catch (error) {
+        if (error instanceof ProviderApiServiceSaveError) {
+          alert.show({
+            description: t('settings.provider.apiService.invalidBaseUrlMessage'),
+            title: t('settings.provider.apiService.invalidBaseUrlTitle'),
+          });
+        } else {
+          alert.show({ title: t('settings.provider.apiService.saveFailed') });
+        }
+
+        return false;
+      }
+    },
+    [alert, provider, saveProviderMutation, t],
   );
   const openModelAddSettings = useCallback(() => {
     if (!providerId) {
@@ -312,6 +352,7 @@ export default function ProviderDetailSettingsScreen() {
               onApiKeysCommit={commitApiKeys}
               onApiKeysManagePress={openApiKeySettings}
               onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
+              onBaseUrlCommit={commitBaseUrl}
               onBaseUrlManagePress={openEndpointSettings}
             />
           )}

@@ -85,7 +85,7 @@ describe('Agent tool request wiring', () => {
     );
   });
 
-  test('routes a trusted terminal tool failure through onError', async () => {
+  test('surfaces a trusted terminal tool failure', async () => {
     const output = markTrustedLocalToolTerminalFailure({
       error: 'terminal failure',
       i18nKey: 'web_search_provider_unavailable',
@@ -100,10 +100,7 @@ describe('Agent tool request wiring', () => {
         usage: testUsage,
       })),
     });
-    const onError = jest.fn(() => 'abort' as const);
-    const onFinish = jest.fn();
     const agent = new Agent({
-      hookParts: [{ onError, onFinish }],
       modelId: 'test-model',
       providerId: 'openai-compatible',
       providerSettings: { apiKey: 'test', baseURL: 'https://example.com', name: 'test' },
@@ -114,8 +111,6 @@ describe('Agent tool request wiring', () => {
       message: 'Fix the configuration.',
       name: 'ToolLoopTerminalError',
     });
-    expect(onError).toHaveBeenCalledTimes(1);
-    expect(onFinish).not.toHaveBeenCalled();
   });
 
   test('turns a triggered tool-call cap into an error', async () => {

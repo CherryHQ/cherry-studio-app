@@ -1,33 +1,28 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import {
+  ENDPOINT_TYPE,
+  endpointImpliedCapability,
+  MODEL_CAPABILITY,
+} from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { isAnthropicModel, isFunctionCallingModel } from '@cherrystudio/universal/utils/model';
 import { type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import type {
-  AiUsageCaptureContext,
-  AiUsageRecordService,
-  MessageRef,
-} from '@/backend/data/services/AiUsageRecordService';
-import type { AssistantService } from '@/backend/data/services/AssistantService';
-import type { ModelService } from '@/backend/data/services/ModelService';
 import {
   projectRuntimeReasoning,
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 
-import { createAiUsagePlugin } from '../../../hooks/billingHook';
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import {
   resolveAiSdkProviderId,
@@ -61,7 +56,6 @@ import {
   resolveReasoningInvocation,
   type ResolvedReasoningInvocation,
 } from '../../../utils/reasoningSerializers';
-import { createAiUsageCaptureContext } from '../../../utils/usageCapture';
 import type { AgentOptions } from '../Agent';
 import {
   createToolCallLimitStopCondition,
@@ -75,30 +69,25 @@ import { resolveCapabilities } from './capabilities';
 import { type NativeFileSupport, resolveNativeFileSupport } from './nativeFileSupport';
 
 export interface BuildAgentParamsDependencies {
-  aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
-  assistant: Pick<AssistantService, 'getById'>;
-  model: Pick<ModelService, 'getById'>;
   preference: PreferenceService;
-  provider: Pick<
-    ProviderService,
-    'getAuthConfig' | 'getByProviderId' | 'getRotatedApiKey' | 'resolveApiKey'
-  >;
+  provider: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;
   tools: Pick<ToolResolver, 'resolveForRequest'>;
 }
 
 export interface BuildAgentParamsInput {
   request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string; messageId?: string };
   services: BuildAgentParamsDependencies;
+  provider: Provider;
+  model: Model;
+  assistant?: Assistant;
   shouldIncludeExternalTools?: boolean;
-  usageMessageRef?: MessageRef | null;
+  /** Late-bound usage middleware for nested tool-repair calls. */
+  getRepairUsagePlugins?: () => AiPlugin[];
 }
 
 export interface BuiltAgentParams {
   sdkConfig: ProviderConfig & { modelId: string };
-  provider: Provider;
-  model: Model;
   nativeFileSupport: NativeFileSupport;
-  assistant: Assistant | undefined;
   context: RequestContext;
   system: string | undefined;
   plugins: AiPlugin[];
@@ -106,17 +95,27 @@ export interface BuiltAgentParams {
   tools: ToolSet | undefined;
   options: AgentOptions;
   credentialReceipt: ServingCredentialReceipt;
-  usageCaptureContext: AiUsageCaptureContext;
 }
 
 export async function buildAgentParams({
   request,
   services,
+  provider,
+  model,
+  assistant,
   shouldIncludeExternalTools = false,
-  usageMessageRef = null,
+  getRepairUsagePlugins,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
-  const { provider, model, assistant } = await getProviderAndModel(request, services);
   const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
+  const impliedCapability = endpointImpliedCapability(resolvedEndpoint.endpointType);
+  if (
+    model.capabilities.includes(MODEL_CAPABILITY.EMBEDDING) ||
+    model.capabilities.includes(MODEL_CAPABILITY.RERANK) ||
+    impliedCapability === MODEL_CAPABILITY.EMBEDDING ||
+    impliedCapability === MODEL_CAPABILITY.RERANK
+  ) {
+    throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
+  }
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
     provider,
     model,
@@ -201,21 +200,6 @@ export async function buildAgentParams({
           }),
         }
       : undefined;
-  const usageCaptureContext = createAiUsageCaptureContext({
-    providerId: provider.id,
-    providerName: provider.name,
-    modelId: model.modelId,
-    modelName: model.name,
-    pricing: model.pricing,
-    trustProviderReportedCost: provider.apiFeatures.reportsActualCost,
-    reportedCostCurrency: provider.reportedCostCurrency,
-    credentialReceipt,
-    source: assistant
-      ? { type: 'assistant', id: assistant.id, name: assistant.name, icon: assistant.emoji }
-      : null,
-    messageRef: usageMessageRef,
-  });
-  const usagePlugin = createAiUsagePlugin(usageCaptureContext, services.aiUsageRecord);
   const shouldLoadTools = shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
   const resolvedTools = shouldLoadTools
     ? await services.tools.resolveForRequest({
@@ -224,21 +208,18 @@ export async function buildAgentParams({
         mcpToolIds: request.mcpToolIds,
       })
     : { deferredEntries: [], hasMcpTools: false, tools: undefined };
-  const plugins = [
-    ...buildAgentPlugins({
-      aiSdkProviderId: sdkConfig.providerId,
-      assistant,
-      endpointType,
-      hasMcpTools: resolvedTools.hasMcpTools,
-      hasReasoningSelectionSource: Boolean(assistant) || request.reasoningEffort !== undefined,
-      model,
-      provider,
-      reasoning,
-      streamOutput: capabilities?.streamOutput ?? true,
-      webSearchPluginConfig: capabilities?.webSearchPluginConfig,
-    }),
-    usagePlugin,
-  ];
+  const plugins = buildAgentPlugins({
+    aiSdkProviderId: sdkConfig.providerId,
+    assistant,
+    endpointType,
+    hasMcpTools: resolvedTools.hasMcpTools,
+    hasReasoningSelectionSource: Boolean(assistant) || request.reasoningEffort !== undefined,
+    model,
+    provider,
+    reasoning,
+    streamOutput: capabilities?.streamOutput ?? true,
+    webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+  });
   const tools = mergeToolSets(resolvedTools.tools, request.callOverrides?.tools);
   const baseSystem = assistant?.prompt
     ? await replacePromptVariables(assistant.prompt, model.name, services.preference)
@@ -268,10 +249,10 @@ export async function buildAgentParams({
         : Crypto.randomUUID(),
   };
   const repairToolCall = createAiRepair({
-    modelId: model.modelId,
+    modelId: model.apiModelId ?? model.modelId,
     providerId: sdkConfig.providerId,
     providerSettings: sdkConfig.providerSettings,
-    getUsagePlugins: () => [usagePlugin],
+    getUsagePlugins: getRepairUsagePlugins,
   });
   const overridden = applyCallOverrides(
     {
@@ -303,12 +284,8 @@ export async function buildAgentParams({
 
   return {
     credentialReceipt,
-    usageCaptureContext,
     sdkConfig: { ...sdkConfig, modelId: model.apiModelId ?? model.modelId },
-    provider,
-    model,
     nativeFileSupport,
-    assistant,
     context,
     system,
     plugins,
@@ -412,50 +389,4 @@ export function resolveReasoningMaxTokens(
   }
 
   return model.maxOutputTokens;
-}
-
-async function getProviderAndModel(
-  request: BuildAgentParamsInput['request'],
-  services: BuildAgentParamsDependencies,
-): Promise<{ provider: Provider; model: Model; assistant: Assistant | undefined }> {
-  let assistant: Assistant | undefined;
-  if (request.assistantId) {
-    assistant = await services.assistant.getById(request.assistantId);
-  }
-
-  let uniqueModelId: UniqueModelId | null | undefined;
-  if (request.uniqueModelId) {
-    uniqueModelId = request.uniqueModelId;
-  } else if (request.assistantId) {
-    if (!assistant?.modelId) {
-      throw new Error(`Assistant ${request.assistantId} has no model configured`);
-    }
-    uniqueModelId = assistant.modelId;
-  } else {
-    const defaultModelId = await services.preference.get('chat.default_model_id');
-    if (!defaultModelId) {
-      uniqueModelId = null;
-    } else if (!isUniqueModelId(defaultModelId)) {
-      throw new Error(
-        `Invalid default model configured for assistant-less topic: ${defaultModelId}`,
-      );
-    } else {
-      uniqueModelId = defaultModelId;
-    }
-  }
-
-  if (!uniqueModelId) {
-    throw new Error('No default model configured for assistant-less topic');
-  }
-
-  const { providerId, modelId } = parseUniqueModelId(uniqueModelId);
-  const [provider, model] = await Promise.all([
-    services.provider.getByProviderId(providerId),
-    services.model.getById(uniqueModelId),
-  ]);
-  if (!model) {
-    throw new Error(`Cannot resolve model: ${providerId}::${modelId}`);
-  }
-
-  return { provider, model, assistant };
 }

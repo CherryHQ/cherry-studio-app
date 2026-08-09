@@ -1804,7 +1804,13 @@ describe('ChatRuntime', () => {
     const nextRouteListener = jest.fn();
     const unsubscribeNextRoute = runtime.subscribe(nextRouteListener);
     expect(runtime.getTopicSnapshot('topic-1')).toEqual(
-      expect.objectContaining({ status: 'streaming' }),
+      expect.objectContaining({
+        overlayMessage: expect.objectContaining({
+          data: { parts: [{ type: 'text', text: 'streaming' }] },
+          id: 'assistant-1',
+        }),
+        status: 'streaming',
+      }),
     );
 
     streamGate.resolve();
@@ -1816,104 +1822,7 @@ describe('ChatRuntime', () => {
     unsubscribeNextRoute();
   });
 
-  test('replays compact raw chunks, continues live delivery, and expires terminal recovery', async () => {
-    const services = createServices();
-    configureDynamicReservation(services);
-    const source = createControllableChunkStream();
-    services.ai.streamText = jest.fn(async () => source.stream);
-    services.ai.readMessageStream = jest.fn(accumulateTextChunks);
-    const runtime = createRuntime({
-      config: { gracePeriodMs: 20 },
-      services,
-    });
-    const firstListener = jest.fn();
-
-    const send = runtime.sendText({ text: 'stream', topicId: 'topic-1' });
-    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
-    expect(runtime.attachStream({ topicId: 'topic-1' }, firstListener)).toEqual({
-      bufferedChunks: [],
-      status: 'attached',
-    });
-
-    source.push({ id: 'text-1', type: 'text-start' } as UIMessageChunk);
-    source.push({ delta: 'hel', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
-    source.push({ delta: 'lo', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
-    await waitUntil(() => firstListener.mock.calls.length === 3);
-    runtime.detachStream({ topicId: 'topic-1' }, firstListener);
-    source.push({ delta: '!', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
-    await delay(0);
-    expect(firstListener).toHaveBeenCalledTimes(3);
-
-    const secondListener = jest.fn();
-    expect(runtime.attachStream({ topicId: 'topic-1' }, secondListener)).toEqual({
-      status: 'attached',
-      bufferedChunks: [
-        expect.objectContaining({ chunk: { id: 'text-1', type: 'text-start' } }),
-        expect.objectContaining({
-          chunk: { delta: 'hello!', id: 'text-1', type: 'text-delta' },
-        }),
-      ],
-    });
-    source.push({ id: 'text-1', type: 'text-end' } as UIMessageChunk);
-    source.close();
-    await send;
-    expect(secondListener).toHaveBeenCalledWith({
-      payload: expect.objectContaining({
-        chunk: { id: 'text-1', type: 'text-end' },
-        executionId: 'provider::model',
-      }),
-      type: 'chunk',
-    });
-    expect(secondListener).toHaveBeenCalledWith({
-      payload: expect.objectContaining({ status: 'success' }),
-      type: 'done',
-    });
-
-    const terminal = runtime.attachStream({ topicId: 'topic-1' }, jest.fn());
-    expect(terminal).toEqual(
-      expect.objectContaining({
-        finalMessages: {
-          'provider::model': expect.objectContaining({
-            parts: [{ type: 'text', text: 'hello!' }],
-          }),
-        },
-        status: 'done',
-      }),
-    );
-    await delay(30);
-    expect(runtime.attachStream({ topicId: 'topic-1' }, jest.fn())).toEqual({
-      status: 'not-found',
-    });
-  });
-
-  test('caps each execution replay buffer independently', async () => {
-    const services = createServices();
-    configureDynamicReservation(services);
-    const source = createControllableChunkStream();
-    services.ai.streamText = jest.fn(async () => source.stream);
-    services.ai.readMessageStream = jest.fn(accumulateTextChunks);
-    const runtime = createRuntime({ config: { maxBufferChunks: 2 }, services });
-    const send = runtime.sendText({ text: 'stream', topicId: 'topic-1' });
-    await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
-
-    source.push({ id: 'text-1', type: 'text-start' } as UIMessageChunk);
-    source.push({ delta: 'answer', id: 'text-1', type: 'text-delta' } as UIMessageChunk);
-    source.push({ id: 'text-1', type: 'text-end' } as UIMessageChunk);
-    await delay(0);
-    const replay = runtime.attachStream({ topicId: 'topic-1' }, jest.fn());
-    expect(replay).toEqual({
-      status: 'attached',
-      bufferedChunks: [
-        expect.objectContaining({ chunk: { delta: 'answer', id: 'text-1', type: 'text-delta' } }),
-        expect.objectContaining({ chunk: { id: 'text-1', type: 'text-end' } }),
-      ],
-    });
-
-    source.close();
-    await send;
-  });
-
-  test('aborts and pauses an execution after its raw stream stays idle', async () => {
+  test('aborts and pauses an execution after its upstream stream stays idle', async () => {
     const services = createServices();
     let requestSignal: AbortSignal | undefined;
     services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
@@ -1939,7 +1848,7 @@ describe('ChatRuntime', () => {
     );
   });
 
-  test('extends the idle window while a raw tool approval is pending', async () => {
+  test('extends the idle window while an upstream tool approval is pending', async () => {
     const services = createServices();
     const source = createControllableChunkStream();
     let requestSignal: AbortSignal | undefined;

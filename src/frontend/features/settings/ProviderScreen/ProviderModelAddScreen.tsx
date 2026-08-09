@@ -16,7 +16,11 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';
-import { providerModelAddEndpointOptions } from './models/utils/providerModelAdd';
+import {
+  getProviderModelEndpointLabelKey,
+  providerModelAddEndpointOptions,
+  PROVIDER_MODEL_PURPOSE_OPTIONS,
+} from './models/utils/providerModelAdd';
 
 const advancedSettingsScrollTopPadding = 16;
 const defaultKeyboardBottomOffset = 0;
@@ -32,8 +36,8 @@ export default function ProviderModelAddScreen() {
     return <Redirect href="/settings/provider" />;
   }
 
-  // Mount the form only once the provider is loaded: it is what decides whether the
-  // endpoint-type block exists at all, and that block sits directly above the
+  // Mount the form only once the provider is loaded: it decides which model-routing
+  // controls exist, and that block sits directly above the
   // "More settings" control — growing it a commit later moves a live tap target.
   if (!provider) {
     return <BackHeader title={t('settings.provider.models.addTitle')} />;
@@ -47,18 +51,22 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
   const router = useRouter();
   const {
     canSubmit,
+    chatEndpointTypes,
     endpointTypeError,
     formState,
     isSubmitting,
+    modelAddMode,
     modelIdError,
-    showEndpointTypes,
+    modelPurpose,
     submitAddModel,
+    updateChatEndpointType,
     updateContextWindow,
     updateEndpointTypes,
     updateGroup,
     updateMaxInputTokens,
     updateMaxOutputTokens,
     updateModelId,
+    updateModelPurpose,
     updateName,
   } = useProviderModelAdd({ provider });
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
@@ -187,7 +195,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
             onChangeText={updateGroup}
           />
 
-          {showEndpointTypes ? (
+          {modelAddMode === 'endpoint-types' ? (
             <View className="gap-2">
               <Text className="font-medium text-foreground text-sm">
                 {t('settings.provider.models.addEndpointTypeLabel')}
@@ -200,11 +208,55 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
                     isSelected={selectedEndpointTypes.has(option.id)}
                     label={t(option.labelKey)}
                     onPress={() => toggleEndpointType(option.id)}
+                    selectionRole="checkbox"
                   />
                 ))}
               </View>
               {endpointTypeError ? (
                 <Text className="text-destructive text-xs">{endpointTypeError}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {modelAddMode === 'purpose' ? (
+            <View className="gap-2">
+              <Text className="font-medium text-foreground text-sm">
+                {t('settings.provider.models.addPurposeLabel')}
+              </Text>
+              <Text className="text-muted-foreground text-xs">
+                {t('settings.provider.models.addPurposeDescription')}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {PROVIDER_MODEL_PURPOSE_OPTIONS.map((option) => (
+                  <EndpointTypeChip
+                    key={option.id}
+                    isDisabled={isSubmitting}
+                    isSelected={modelPurpose === option.id}
+                    label={t(option.labelKey)}
+                    onPress={() => updateModelPurpose(option.id)}
+                    selectionRole="radio"
+                  />
+                ))}
+              </View>
+
+              {modelPurpose === 'chat' && chatEndpointTypes.length > 1 ? (
+                <View className="mt-2 gap-2">
+                  <Text className="font-medium text-foreground text-sm">
+                    {t('settings.provider.models.addChatEndpointLabel')}
+                  </Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {chatEndpointTypes.map((endpointType) => (
+                      <EndpointTypeChip
+                        key={endpointType}
+                        isDisabled={isSubmitting}
+                        isSelected={formState.endpointTypes[0] === endpointType}
+                        label={t(getProviderModelEndpointLabelKey(endpointType))}
+                        onPress={() => updateChatEndpointType(endpointType)}
+                        selectionRole="radio"
+                      />
+                    ))}
+                  </View>
+                </View>
               ) : null}
             </View>
           ) : null}
@@ -350,16 +402,18 @@ function EndpointTypeChip({
   isSelected,
   label,
   onPress,
+  selectionRole,
 }: {
   isDisabled: boolean;
   isSelected: boolean;
   label: string;
   onPress: () => void;
+  selectionRole: 'checkbox' | 'radio';
 }) {
   return (
     <Pressable
       accessibilityLabel={label}
-      accessibilityRole="checkbox"
+      accessibilityRole={selectionRole}
       accessibilityState={{ checked: isSelected, disabled: isDisabled }}
       className={cn(
         'h-8 flex-row items-center gap-1 rounded-full px-3 active:opacity-70 disabled:opacity-40',

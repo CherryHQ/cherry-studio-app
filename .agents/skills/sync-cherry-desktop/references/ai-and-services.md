@@ -16,13 +16,21 @@ Follow each ordinary chat request through shared assistant/provider/model/messag
 
 Require every desktop input and state transition to reach the mobile provider boundary, including reasoning effort, fast mode, selected MCP tools, call overrides, abort signals, and provider-specific options. Add contract tests for outputs, errors, ordering, retries, cancellation, tool termination, and stream lifecycle.
 
-Exclude only these application-level Agent paths declared by the Manifest:
+Exclude only these application-level paths declared by the Manifest:
 
 - `src/main/ai/agentSession/**`
 - `src/main/ai/agents/**`
 - `src/main/ai/observability/adapters/claudeCode/**`
 - `src/main/ai/runtime/claudeCode/**`
+- `src/main/ai/streamManager/__tests__/buildCompactReplay.test.ts`
+- `src/main/ai/streamManager/buildCompactReplay.ts`
 - `src/main/ai/tools/adapters/claudeCode/**`
+
+The compact-replay pair is an Electron transport adaptation rather than a chat behavior gap. Mobile
+publishes each accumulated assistant overlay through its in-process Topic snapshot, which remains
+available across route subscribers without buffering a second copy of every raw chunk. Keep the
+shared stream types for desktop alignment, and preserve cancellation, approval state, terminal
+message persistence, and snapshot ordering in mobile contract tests.
 
 The Manifest may also exclude shared contracts used only by those Agent surfaces, such as
 `src/shared/ai/agentSession*`, `src/shared/ai/claudecode/**`, Agent slash-command catalogs, and

@@ -29,7 +29,6 @@ export function getProviderApiServiceEndpointDirtyState({
       mergeEndpointConfigs(
         provider.endpointConfigs,
         draft.baseUrlByEndpoint,
-        draft.primaryEndpoint,
         getPersistableEndpointTypes(draft, provider),
       ),
     ) !== endpointConfigsSignature(provider.endpointConfigs)

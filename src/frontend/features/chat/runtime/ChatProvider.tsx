@@ -1,7 +1,4 @@
-import type {
-  AiStreamAttachResponse,
-  ComposerQueuedMessagePayload,
-} from '@cherrystudio/universal/ai/transport';
+import type { ComposerQueuedMessagePayload } from '@cherrystudio/universal/ai/transport';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'expo-router';
@@ -23,16 +20,13 @@ import type {
   ChatRegenerateInput,
   ChatSendNewTopicMultiModelTextInput,
   ChatSendNewTopicTextInput,
-  ChatStreamListener,
   ChatTopicSnapshot,
 } from '@/shared/contracts';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 
 type ChatTopicValue = ChatTopicSnapshot & {
   abort: () => void;
-  attachStream: (listener: ChatStreamListener) => AiStreamAttachResponse;
   cancelExecution: (executionId: UniqueModelId) => void;
-  detachStream: (listener: ChatStreamListener) => void;
   editAndResend: (input: Omit<ChatEditAndResendInput, 'topicId'>) => Promise<void>;
   isBusy: boolean;
   queueFollowUp: (payload: ComposerQueuedMessagePayload) => Promise<void>;
@@ -127,14 +121,6 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
     () => chat.getTopicSnapshot(runtimeTopicId),
   );
   const abort = useCallback(() => chat.abort(runtimeTopicId), [chat, runtimeTopicId]);
-  const attachStream = useCallback(
-    (listener: ChatStreamListener) => chat.attachStream({ topicId: runtimeTopicId }, listener),
-    [chat, runtimeTopicId],
-  );
-  const detachStream = useCallback(
-    (listener: ChatStreamListener) => chat.detachStream({ topicId: runtimeTopicId }, listener),
-    [chat, runtimeTopicId],
-  );
   const cancelExecution = useCallback(
     (executionId: UniqueModelId) => chat.cancelExecution({ executionId, topicId: runtimeTopicId }),
     [chat, runtimeTopicId],
@@ -202,9 +188,7 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
   return {
     ...snapshot,
     abort,
-    attachStream,
     cancelExecution,
-    detachStream,
     editAndResend,
     isBusy,
     queueFollowUp,

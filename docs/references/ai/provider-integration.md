@@ -25,13 +25,15 @@ signal to `AiService` internally.
 
 ## Model Resolution
 
-Model selection priority is:
+`ChatRuntime` resolves the model for a chat turn in this order:
 
-1. Explicit `uniqueModelId`.
+1. The model selected for the turn.
 2. `assistant.modelId`.
 3. `chat.default_model_id`.
 
-Assistant-less topics do not persist a default assistant id just to resolve a model. They read the default model preference at send time.
+It then passes the resolved model to `AiService` as `uniqueModelId`. Direct `AiService` callers must
+provide either `uniqueModelId` or an Assistant with `modelId`; `AiService` does not read the default
+model preference. Assistant-less topics do not persist a default Assistant solely to resolve a model.
 
 ## Provider And Model Records
 
