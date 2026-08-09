@@ -27,7 +27,7 @@ export function SourceUrlItem({ label, url, variant = 'card' }: SourceUrlItemPro
         <GlobeIcon className="size-3.5 text-foreground" strokeWidth={2} />
       </View>
       <View className="min-w-0 flex-1">
-        <Text className="font-medium text-foreground text-sm" numberOfLines={1} selectable>
+        <Text className="font-medium text-foreground text-base" numberOfLines={1} selectable>
           {label || url}
         </Text>
         <Text className="text-foreground-tertiary text-xs" numberOfLines={1} selectable>

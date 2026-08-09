@@ -42,11 +42,11 @@ export function PartPlaceholder({ description, icon, label, onPress }: PartPlace
     <>
       {iconElement}
       <View className="min-w-0 flex-1 gap-1">
-        <Text className="font-semibold text-foreground text-sm" selectable>
+        <Text className="font-semibold text-foreground text-base" selectable>
           {label}
         </Text>
         {description ? (
-          <Text className="text-foreground text-sm" selectable>
+          <Text className="text-foreground text-base" selectable>
             {description}
           </Text>
         ) : null}

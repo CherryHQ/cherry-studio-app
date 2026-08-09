@@ -40,7 +40,7 @@ export function FileTile({
       ) : (
         <View />
       )}
-      <Text className="text-foreground text-xs" numberOfLines={3}>
+      <Text className="text-foreground text-sm" numberOfLines={3}>
         {baseName}
       </Text>
     </>

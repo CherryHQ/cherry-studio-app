@@ -64,10 +64,10 @@ export function ToolPartTrigger({
         <Icon
           className={
             isDanger
-              ? 'size-4 text-destructive'
+              ? 'size-5 text-destructive'
               : isWarning
-                ? 'size-4 text-warning'
-                : 'size-4 text-foreground'
+                ? 'size-5 text-warning'
+                : 'size-5 text-foreground'
           }
           strokeWidth={2}
         />
@@ -75,10 +75,10 @@ export function ToolPartTrigger({
       <Text
         className={
           isDanger
-            ? 'min-w-0 flex-1 text-destructive text-sm'
+            ? 'min-w-0 flex-1 text-destructive text-base'
             : isWarning
-              ? 'min-w-0 flex-1 text-warning text-sm'
-              : 'min-w-0 flex-1 text-foreground text-sm'
+              ? 'min-w-0 flex-1 text-warning text-base'
+              : 'min-w-0 flex-1 text-foreground text-base'
         }
         numberOfLines={1}
       >
@@ -88,10 +88,10 @@ export function ToolPartTrigger({
         <Text
           className={
             isDanger
-              ? 'max-w-[38%] shrink-0 text-destructive text-sm'
+              ? 'max-w-[38%] shrink-0 text-destructive text-base'
               : isWarning
-                ? 'max-w-[38%] shrink-0 text-warning text-sm'
-                : 'max-w-[38%] shrink-0 text-foreground text-sm'
+                ? 'max-w-[38%] shrink-0 text-warning text-base'
+                : 'max-w-[38%] shrink-0 text-foreground text-base'
           }
           numberOfLines={1}
         >

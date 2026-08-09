@@ -16,11 +16,11 @@ export function ErrorPart({ part }: ErrorPartProps) {
     <View className="gap-1.5 rounded-lg border border-destructive bg-danger-soft p-3">
       <View className="flex-row items-center gap-2">
         <CircleAlertIcon className="size-4 text-destructive" strokeWidth={2} />
-        <Text className="flex-1 font-semibold text-destructive text-sm" selectable>
+        <Text className="flex-1 font-semibold text-destructive text-base" selectable>
           {title}
         </Text>
       </View>
-      <Text className="text-destructive text-sm" selectable>
+      <Text className="text-destructive text-base" selectable>
         {message}
       </Text>
     </View>
