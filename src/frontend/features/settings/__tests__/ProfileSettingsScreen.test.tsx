@@ -52,14 +52,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       React.createElement(type, props, children);
 
   return {
-    DropdownMenu: {
-      Content: component('DropdownMenu.Content'),
-      Item: component('DropdownMenu.Item'),
-      ItemIcon: component('DropdownMenu.ItemIcon'),
-      ItemTitle: component('DropdownMenu.ItemTitle'),
-      Root: component('DropdownMenu.Root'),
-      Trigger: component('DropdownMenu.Trigger'),
-    },
+    Menu: component('Menu'),
     Input: React.forwardRef(function MockInput(
       props: React.ComponentProps<typeof MockTextInput>,
       ref: React.Ref<typeof MockTextInput>,

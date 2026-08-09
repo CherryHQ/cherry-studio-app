@@ -45,7 +45,7 @@ describe('ContextMenuLink.ios', () => {
               id: 'delete',
               label: 'Delete',
               onPress: onDelete,
-              role: 'destructive',
+              destructive: true,
               systemImage: 'trash',
             },
           ]}

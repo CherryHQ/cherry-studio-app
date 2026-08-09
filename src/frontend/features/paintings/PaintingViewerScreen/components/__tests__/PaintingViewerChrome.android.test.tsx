@@ -4,19 +4,9 @@ import { PaintingViewerChrome } from '../PaintingViewerChrome.android';
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const component =
-    (type: string) =>
-    ({ children, ...props }: { children?: React.ReactNode }) =>
-      React.createElement(type, props, children);
-
   return {
-    DropdownMenu: {
-      Content: component('DropdownMenu.Content'),
-      Item: component('DropdownMenu.Item'),
-      ItemTitle: component('DropdownMenu.ItemTitle'),
-      Root: component('DropdownMenu.Root'),
-      Trigger: component('DropdownMenu.Trigger'),
-    },
+    Menu: ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement('Menu', props, children),
   };
 });
 
@@ -74,16 +64,16 @@ describe('PaintingViewerChrome.android', () => {
   });
 
   it('places view conversation before delete and dispatches both actions', () => {
-    const items = renderer!.root.findAllByType('DropdownMenu.Item');
-    const titles = renderer!.root.findAllByType('DropdownMenu.ItemTitle');
+    const items = renderer!.root.findAllByType('Menu')[0]?.props.items;
 
-    expect(titles.slice(0, 2).map((title) => title.props.children)).toEqual([
+    expect(items.map((item: { label: string }) => item.label)).toEqual([
       'painting.viewer.viewConversation',
       'painting.viewer.delete',
     ]);
+    expect(items[1].destructive).toBe(true);
 
-    items[0].props.onSelect();
-    items[1].props.onSelect();
+    items[0].onPress();
+    items[1].onPress();
 
     expect(onViewConversation).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledTimes(1);

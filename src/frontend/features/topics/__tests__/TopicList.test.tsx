@@ -194,7 +194,7 @@ describe('TopicList context actions', () => {
     const pinAction = renderer?.root
       .findByProps({ testID: 'topic-context-link' })
       .props.items.find((item: { id: string }) => item.id === 'toggle-pin');
-    expect(pinAction).toMatchObject({ isOn: true, label: 'Unpin topic' });
+    expect(pinAction).toMatchObject({ checked: true, label: 'Unpin topic' });
     const highlightedRows =
       renderer?.root.findAllByProps({
         className:

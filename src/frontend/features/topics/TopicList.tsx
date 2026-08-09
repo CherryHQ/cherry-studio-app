@@ -4,7 +4,8 @@ import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/reac
 import { CheckIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
+import { type AccessibilityActionEvent, Text, View } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
@@ -286,7 +287,7 @@ const TopicRow = memo(function TopicRow({
       {
         disabled: isPinActionDisabled,
         id: 'toggle-pin',
-        isOn: isPinned,
+        checked: isPinned,
         label: pinActionLabel,
         onPress: handlePinPress,
         systemImage: isPinned ? 'pin.slash' : 'pin',
@@ -295,7 +296,7 @@ const TopicRow = memo(function TopicRow({
         id: 'delete',
         label: t('common.delete'),
         onPress: handleDeletePress,
-        role: 'destructive',
+        destructive: true,
         systemImage: 'trash',
       },
     ],

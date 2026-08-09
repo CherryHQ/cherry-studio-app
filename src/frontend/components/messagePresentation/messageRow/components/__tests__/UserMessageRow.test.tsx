@@ -15,14 +15,7 @@ jest.mock('@cherrystudio/ui/components', () => {
       createElement(type, props, children);
 
   return {
-    ContextMenu: {
-      Content: component('ContextMenu.Content'),
-      Item: component('ContextMenu.Item'),
-      ItemIcon: component('ContextMenu.ItemIcon'),
-      ItemTitle: component('ContextMenu.ItemTitle'),
-      Root: component('ContextMenu.Root'),
-      Trigger: component('ContextMenu.Trigger'),
-    },
+    Menu: component('Menu'),
   };
 });
 
@@ -95,7 +88,10 @@ describe('UserMessageRow', () => {
     ]);
     const renderer = render(<UserMessageRow message={message} />);
 
-    expect(renderer.root.findByType('ContextMenu.Trigger')).toBeDefined();
+    expect(renderer.root.findByType('Menu').props.trigger).toBe('longPress');
+    expect(
+      renderer.root.findByType('Menu').props.items.map((item: { id: string }) => item.id),
+    ).toEqual(['copy-message', 'edit-message']);
     expect(renderer.root.findAllByType('FilePart')).toHaveLength(1);
     expect(renderer.root.findAllByType('MessageParts')).toHaveLength(0);
     expect(

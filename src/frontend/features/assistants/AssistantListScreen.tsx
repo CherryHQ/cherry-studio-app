@@ -4,6 +4,7 @@ import { BotIcon, CheckIcon, PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
@@ -311,10 +312,10 @@ function AssistantListRow({
         systemImage: 'pencil',
       },
       {
+        destructive: true,
         id: 'delete',
         label: t('common.delete'),
         onPress: handleDeletePress,
-        role: 'destructive',
         systemImage: 'trash',
       },
     ],
@@ -322,7 +323,7 @@ function AssistantListRow({
   );
 
   const row = (
-    <Pressable
+    <GesturePressable
       accessibilityActions={accessibilityActions}
       accessibilityLabel={assistant.name}
       accessibilityRole={isEditing ? 'checkbox' : 'link'}
@@ -359,7 +360,7 @@ function AssistantListRow({
           </View>
         </View>
       </View>
-    </Pressable>
+    </GesturePressable>
   );
 
   return isEditing ? (

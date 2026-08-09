@@ -1,11 +1,11 @@
-import { DropdownMenu, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
@@ -169,6 +169,24 @@ function MenuAvatarTrigger({
   photosLabel,
   size,
 }: MenuAvatarTriggerProps) {
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'camera',
+        label: cameraLabel,
+        onPress: () => void onSelectCamera(),
+        systemImage: 'camera',
+      },
+      {
+        id: 'photos',
+        label: photosLabel,
+        onPress: () => void onSelectPhotos(),
+        systemImage: 'photo',
+      },
+    ],
+    [cameraLabel, onSelectCamera, onSelectPhotos, photosLabel],
+  );
+
   return (
     <View
       onStartShouldSetResponderCapture={() => {
@@ -179,27 +197,15 @@ function MenuAvatarTrigger({
     >
       <ProfileAvatarImage size={size} />
       <View style={styles.avatarMenuTrigger}>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <View
-              accessibilityLabel={accessibilityLabel}
-              accessibilityRole="button"
-              style={{ height: size, width: size }}
-            >
-              <ProfileAvatarEditBadge icon="camera" size={size} />
-            </View>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            <DropdownMenu.Item key="camera" onSelect={() => void onSelectCamera()}>
-              {Platform.OS === 'ios' ? <DropdownMenu.ItemIcon ios={{ name: 'camera' }} /> : null}
-              <DropdownMenu.ItemTitle>{cameraLabel}</DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="photos" onSelect={() => void onSelectPhotos()}>
-              {Platform.OS === 'ios' ? <DropdownMenu.ItemIcon ios={{ name: 'photo' }} /> : null}
-              <DropdownMenu.ItemTitle>{photosLabel}</DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
+        <Menu items={menuItems} trigger="tap">
+          <View
+            accessibilityLabel={accessibilityLabel}
+            accessibilityRole="button"
+            style={{ height: size, width: size }}
+          >
+            <ProfileAvatarEditBadge icon="camera" size={size} />
+          </View>
+        </Menu>
       </View>
     </View>
   );

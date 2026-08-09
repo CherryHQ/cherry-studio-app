@@ -1,4 +1,4 @@
-import { Button, DropdownMenu, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Platform, Text, View } from 'react-native';
+import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
@@ -372,28 +372,33 @@ function NewProviderAvatarSection({
   }, [onAvatarChange]);
 
   const resetAvatar = useCallback(() => onAvatarChange(null), [onAvatarChange]);
+  const avatarMenuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'camera',
+        label: t('chat.media.camera'),
+        onPress: () => void selectAvatarFromCamera(),
+        systemImage: 'camera',
+      },
+      {
+        id: 'photos',
+        label: t('chat.media.photos'),
+        onPress: () => void selectAvatarFromPhotoLibrary(),
+        systemImage: 'photo',
+      },
+    ],
+    [selectAvatarFromCamera, selectAvatarFromPhotoLibrary, t],
+  );
 
   return (
     <View className="items-center gap-4">
       <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarUri} />
       <View className="flex-row items-center gap-3">
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <Button icon={<ImageUpIcon strokeWidth={2} />} variant="secondary">
-              {t('settings.provider.add.uploadImage')}
-            </Button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            <DropdownMenu.Item key="camera" onSelect={() => void selectAvatarFromCamera()}>
-              {Platform.OS === 'ios' ? <DropdownMenu.ItemIcon ios={{ name: 'camera' }} /> : null}
-              <DropdownMenu.ItemTitle>{t('chat.media.camera')}</DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item key="photos" onSelect={() => void selectAvatarFromPhotoLibrary()}>
-              {Platform.OS === 'ios' ? <DropdownMenu.ItemIcon ios={{ name: 'photo' }} /> : null}
-              <DropdownMenu.ItemTitle>{t('chat.media.photos')}</DropdownMenu.ItemTitle>
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
+        <Menu items={avatarMenuItems} trigger="tap">
+          <Button icon={<ImageUpIcon strokeWidth={2} />} variant="secondary">
+            {t('settings.provider.add.uploadImage')}
+          </Button>
+        </Menu>
         <Button
           disabled={!avatarUri}
           icon={<RotateCcwIcon strokeWidth={2} />}

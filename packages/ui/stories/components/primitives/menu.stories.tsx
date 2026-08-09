@@ -1,4 +1,4 @@
-import { DropdownMenu } from '@cherrystudio/ui/components';
+import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
@@ -7,6 +7,16 @@ import { ScopedTheme } from 'uniwind';
 const onEdit = fn();
 const onDelete = fn();
 const themes = ['light', 'dark'] as const;
+const menuItems = [
+  { id: 'edit', label: 'Edit', onPress: onEdit, systemImage: 'pencil' },
+  {
+    destructive: true,
+    id: 'delete',
+    label: 'Delete',
+    onPress: onDelete,
+    systemImage: 'trash',
+  },
+] satisfies readonly MenuItem[];
 
 const meta = {
   title: 'Components/Primitives/Menu',
@@ -36,27 +46,15 @@ export const Playground: Story = {
             <Text className="text-base font-semibold text-foreground">
               {theme === 'light' ? 'Light' : 'Dark'}
             </Text>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <Pressable
-                  accessibilityLabel="More actions"
-                  accessibilityRole="button"
-                  className="size-11 items-center justify-center rounded-full bg-field active:opacity-60"
-                >
-                  <Text className="text-xl text-foreground">...</Text>
-                </Pressable>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content>
-                <DropdownMenu.Item key="edit" onSelect={onEdit}>
-                  <DropdownMenu.ItemIcon ios={{ name: 'pencil' }} />
-                  <DropdownMenu.ItemTitle>Edit</DropdownMenu.ItemTitle>
-                </DropdownMenu.Item>
-                <DropdownMenu.Item key="delete" destructive onSelect={onDelete}>
-                  <DropdownMenu.ItemIcon ios={{ name: 'trash' }} />
-                  <DropdownMenu.ItemTitle>Delete</DropdownMenu.ItemTitle>
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
+            <Menu items={menuItems} trigger="tap">
+              <Pressable
+                accessibilityLabel="More actions"
+                accessibilityRole="button"
+                className="size-11 items-center justify-center rounded-full bg-field active:opacity-60"
+              >
+                <Text className="text-xl text-foreground">...</Text>
+              </Pressable>
+            </Menu>
           </View>
         </ScopedTheme>
       ))}

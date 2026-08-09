@@ -10,19 +10,9 @@ let mockScopeTabsProps:
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const component =
-    (type: string) =>
-    ({ children, ...props }: { children?: ReactNode }) =>
-      React.createElement(type, props, children);
-
   return {
-    DropdownMenu: {
-      Content: component('DropdownMenu.Content'),
-      Item: component('DropdownMenu.Item'),
-      ItemTitle: component('DropdownMenu.ItemTitle'),
-      Root: component('DropdownMenu.Root'),
-      Trigger: component('DropdownMenu.Trigger'),
-    },
+    Menu: ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement('Menu', props, children),
   };
 });
 
@@ -87,6 +77,17 @@ describe('MessageHeader', () => {
 
     expect(renderer.root.findByProps({ testID: 'header-scope-tabs' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'topic-create-menu' })).toBeTruthy();
+    const menu = renderer.root.findByType('Menu');
+    expect(menu.props.trigger).toBe('tap');
+    expect(menu.props.items.map((item: { label: string }) => item.label)).toEqual([
+      'New chat',
+      'New drawing',
+    ]);
+
+    menu.props.items[0].onPress();
+    menu.props.items[1].onPress();
+    expect(defaultProps.onNewTopicPress).toHaveBeenCalledTimes(1);
+    expect(defaultProps.onNewPaintingPress).toHaveBeenCalledTimes(1);
     expect(mockScopeTabsProps?.scope).toBe('conversations');
 
     mockScopeTabsProps?.onScopeChange('drawings');

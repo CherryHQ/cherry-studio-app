@@ -1,6 +1,7 @@
-import { DropdownMenu } from '@cherrystudio/ui/components';
+import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
 import { DownloadIcon, EllipsisIcon, PencilIcon, ProportionsIcon, XIcon } from 'lucide-uniwind/png';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +24,31 @@ export function PaintingViewerChrome({
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const overflowMenuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'view-conversation',
+        label: t('painting.viewer.viewConversation'),
+        onPress: onViewConversation,
+      },
+      {
+        destructive: true,
+        id: 'delete',
+        label: t('painting.viewer.delete'),
+        onPress: onDelete,
+      },
+    ],
+    [onDelete, onViewConversation, t],
+  );
+  const resizeMenuItems = useMemo<readonly MenuItem[]>(
+    () =>
+      aspectRatios.map((ratio) => ({
+        id: ratio,
+        label: ratio,
+        onPress: () => onResizeSelect(ratio),
+      })),
+    [aspectRatios, onResizeSelect],
+  );
 
   return (
     <>
@@ -41,27 +67,15 @@ export function PaintingViewerChrome({
               >
                 <DownloadIcon className="size-6 text-constant-white" strokeWidth={2} />
               </HeaderIconButton>
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger>
-                  <View
-                    accessibilityLabel={t('painting.viewer.more')}
-                    accessibilityRole="button"
-                    className="size-9 items-center justify-center"
-                  >
-                    <EllipsisIcon className="size-6 text-constant-white" strokeWidth={2} />
-                  </View>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Content>
-                  <DropdownMenu.Item key="view-conversation" onSelect={onViewConversation}>
-                    <DropdownMenu.ItemTitle>
-                      {t('painting.viewer.viewConversation')}
-                    </DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item destructive key="delete" onSelect={onDelete}>
-                    <DropdownMenu.ItemTitle>{t('painting.viewer.delete')}</DropdownMenu.ItemTitle>
-                  </DropdownMenu.Item>
-                </DropdownMenu.Content>
-              </DropdownMenu.Root>
+              <Menu items={overflowMenuItems} trigger="tap">
+                <View
+                  accessibilityLabel={t('painting.viewer.more')}
+                  accessibilityRole="button"
+                  className="size-9 items-center justify-center"
+                >
+                  <EllipsisIcon className="size-6 text-constant-white" strokeWidth={2} />
+                </View>
+              </Menu>
             </View>
           ),
         }}
@@ -74,24 +88,15 @@ export function PaintingViewerChrome({
         <HeaderIconButton accessibilityLabel={t('painting.viewer.edit')} onPress={onEdit}>
           <PencilIcon className="size-6 text-constant-white" strokeWidth={2} />
         </HeaderIconButton>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <View
-              accessibilityLabel={t('painting.viewer.resize')}
-              accessibilityRole="button"
-              className="size-9 items-center justify-center"
-            >
-              <ProportionsIcon className="size-6 text-constant-white" strokeWidth={2} />
-            </View>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            {aspectRatios.map((ratio) => (
-              <DropdownMenu.Item key={ratio} onSelect={() => onResizeSelect(ratio)}>
-                <DropdownMenu.ItemTitle>{ratio}</DropdownMenu.ItemTitle>
-              </DropdownMenu.Item>
-            ))}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
+        <Menu items={resizeMenuItems} trigger="tap">
+          <View
+            accessibilityLabel={t('painting.viewer.resize')}
+            accessibilityRole="button"
+            className="size-9 items-center justify-center"
+          >
+            <ProportionsIcon className="size-6 text-constant-white" strokeWidth={2} />
+          </View>
+        </Menu>
       </View>
     </>
   );

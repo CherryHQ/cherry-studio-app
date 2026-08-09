@@ -20,10 +20,10 @@ export function ContextMenuLink({ children, href, items, preview = true }: Conte
       <Link.Menu>
         {items.map((item) => (
           <Link.MenuAction
-            destructive={item.role === 'destructive'}
+            destructive={item.destructive}
             disabled={item.disabled}
             icon={item.systemImage}
-            isOn={item.isOn}
+            isOn={item.checked}
             key={item.id}
             onPress={item.onPress}
           >

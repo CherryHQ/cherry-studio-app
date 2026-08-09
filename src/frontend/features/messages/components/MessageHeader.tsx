@@ -1,7 +1,7 @@
 // Android-only: mirrors the native iOS messages-tab header actions.
-import { DropdownMenu } from '@cherrystudio/ui/components';
+import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 import { SquarePenIcon } from 'lucide-uniwind/png';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
@@ -29,6 +29,17 @@ export const MessageHeader = memo(function MessageHeader({
   scope,
 }: MessageHeaderProps) {
   const { t } = useTranslation();
+  const createMenuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      { id: 'new-chat', label: t('navigation.newChat'), onPress: onNewTopicPress },
+      {
+        id: 'new-painting',
+        label: t('navigation.newPainting'),
+        onPress: onNewPaintingPress,
+      },
+    ],
+    [onNewPaintingPress, onNewTopicPress, t],
+  );
 
   return (
     <View className="h-14 flex-row items-center px-2">
@@ -58,27 +69,17 @@ export const MessageHeader = memo(function MessageHeader({
       <View className="w-[88px] items-end">
         {isEditing ? null : (
           <View className="flex-row rounded-3xl bg-field android:shadow-sm">
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <Pressable
-                  accessibilityLabel={t('navigation.new')}
-                  accessibilityRole="button"
-                  className="size-11 items-center justify-center rounded-3xl active:opacity-60"
-                  hitSlop={8}
-                  testID="topic-create-menu"
-                >
-                  <SquarePenIcon className="size-5 text-foreground" strokeWidth={2} />
-                </Pressable>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content>
-                <DropdownMenu.Item key="new-chat" onSelect={onNewTopicPress}>
-                  <DropdownMenu.ItemTitle>{t('navigation.newChat')}</DropdownMenu.ItemTitle>
-                </DropdownMenu.Item>
-                <DropdownMenu.Item key="new-painting" onSelect={onNewPaintingPress}>
-                  <DropdownMenu.ItemTitle>{t('navigation.newPainting')}</DropdownMenu.ItemTitle>
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
+            <Menu items={createMenuItems} trigger="tap">
+              <Pressable
+                accessibilityLabel={t('navigation.new')}
+                accessibilityRole="button"
+                className="size-11 items-center justify-center rounded-3xl active:opacity-60"
+                hitSlop={8}
+                testID="topic-create-menu"
+              >
+                <SquarePenIcon className="size-5 text-foreground" strokeWidth={2} />
+              </Pressable>
+            </Menu>
           </View>
         )}
       </View>
