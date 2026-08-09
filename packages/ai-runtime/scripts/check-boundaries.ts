@@ -1,11 +1,16 @@
 import { readdir, readFile } from 'node:fs/promises';
+import { builtinModules } from 'node:module';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import ts from 'typescript';
 
-const PACKAGE_ROOT = path.resolve(__dirname, '..');
-const SOURCE_ROOT = path.join(PACKAGE_ROOT, 'src');
-const FORBIDDEN_IMPORTS = ['@/', '@shared/', '@logger', 'expo', 'react-native', 'node:'] as const;
+const DEFAULT_PACKAGE_ROOT = path.resolve(__dirname, '..');
+const FORBIDDEN_PREFIXES = ['@/', '@shared', '@logger'] as const;
+const FORBIDDEN_GLOBALS = new Set(['Buffer', '__dirname', '__filename', 'process']);
+const NODE_BUILTINS = new Set(
+  builtinModules.flatMap((specifier) => [specifier, specifier.replace(/^node:/, '')]),
+);
 const EXPECTED_EXPORTS = ['./messages', './provider', './runtime', './tools', './utils'];
 
 async function sourceFiles(directory: string): Promise<string[]> {
@@ -36,34 +41,72 @@ function importedSpecifiers(source: string, file: string): string[] {
   return imports;
 }
 
-async function main(): Promise<void> {
+function referencedForbiddenGlobals(source: string, file: string): string[] {
+  const parsed = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true);
+  const globals = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && FORBIDDEN_GLOBALS.has(node.text)) globals.add(node.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed);
+  return [...globals].sort();
+}
+
+function isForbiddenImport(specifier: string): boolean {
+  return (
+    FORBIDDEN_PREFIXES.some(
+      (prefix) =>
+        specifier === prefix || specifier.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`),
+    ) ||
+    specifier === 'expo' ||
+    specifier.startsWith('expo-') ||
+    specifier === 'react-native' ||
+    specifier.startsWith('react-native/') ||
+    specifier.startsWith('node:') ||
+    NODE_BUILTINS.has(specifier)
+  );
+}
+
+export async function collectBoundaryViolations(
+  packageRoot = DEFAULT_PACKAGE_ROOT,
+): Promise<string[]> {
   const packageJson = JSON.parse(
-    await readFile(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'),
+    await readFile(path.join(packageRoot, 'package.json'), 'utf8'),
   ) as {
     exports?: Record<string, unknown>;
   };
   const actualExports = Object.keys(packageJson.exports ?? {}).sort();
+  const violations: string[] = [];
   if (JSON.stringify(actualExports) !== JSON.stringify(EXPECTED_EXPORTS)) {
-    throw new Error(`Unexpected package exports: ${actualExports.join(', ')}`);
+    violations.push(`package.json exports: ${actualExports.join(', ')}`);
   }
 
-  const violations: string[] = [];
-  for (const file of await sourceFiles(SOURCE_ROOT)) {
+  const sourceRoot = path.join(packageRoot, 'src');
+  for (const file of await sourceFiles(sourceRoot)) {
     const source = await readFile(file, 'utf8');
+    const relativeFile = path.relative(packageRoot, file);
     for (const specifier of importedSpecifiers(source, file)) {
-      if (
-        FORBIDDEN_IMPORTS.some((prefix) => specifier === prefix || specifier.startsWith(prefix))
-      ) {
-        violations.push(`${path.relative(PACKAGE_ROOT, file)} -> ${specifier}`);
-      }
+      if (isForbiddenImport(specifier)) violations.push(`${relativeFile} -> ${specifier}`);
+    }
+    for (const global of referencedForbiddenGlobals(source, file)) {
+      violations.push(`${relativeFile} -> global:${global}`);
     }
   }
 
-  if (violations.length > 0) {
-    throw new Error(`Platform imports crossed the AI runtime seam:\n${violations.join('\n')}`);
-  }
+  return violations.sort();
+}
 
+export async function assertPackageBoundaries(packageRoot = DEFAULT_PACKAGE_ROOT): Promise<void> {
+  const violations = await collectBoundaryViolations(packageRoot);
+  if (violations.length > 0) {
+    throw new Error(`Platform imports crossed the AI runtime boundary:\n${violations.join('\n')}`);
+  }
+}
+
+async function main(): Promise<void> {
+  await assertPackageBoundaries();
   console.log('AI runtime package boundaries are valid.');
 }
 
-void main();
+const entrypoint = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : undefined;
+if (entrypoint === import.meta.url) void main();
