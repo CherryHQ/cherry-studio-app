@@ -2,11 +2,13 @@ import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
+import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from '../MainHeaderAssistantButton';
 
 const mockPush = jest.fn();
+const mockSetParams = jest.fn();
 let mockAssistant: Assistant | undefined;
 let mockAssistantId: string | undefined;
 let mockTopicAssistantId: string | undefined;
@@ -17,7 +19,7 @@ jest.mock('expo-router', () => ({
     assistantId: mockAssistantId,
     topicId: mockTopicId,
   }),
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, setParams: mockSetParams }),
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -35,6 +37,12 @@ function Harness() {
   return assistant ? (
     <MainHeaderAssistantButton assistant={assistant} onPress={openAssistant} />
   ) : null;
+}
+
+function NewTopicHarness() {
+  const { openNewTopic } = useMainHeaderAssistant();
+
+  return <Pressable onPress={openNewTopic} testID="new-topic-button" />;
 }
 
 function makeAssistant(): Assistant {
@@ -73,7 +81,7 @@ describe('MainHeaderAssistantButton', () => {
     renderer = undefined;
   });
 
-  it('opens the current assistant and carries the originating topic', async () => {
+  it('opens the current assistant editor', async () => {
     await act(async () => {
       renderer = create(<Harness />);
     });
@@ -83,11 +91,8 @@ describe('MainHeaderAssistantButton', () => {
 
     expect(button?.props.accessibilityLabel).toBe('Peanut');
     expect(mockPush).toHaveBeenCalledWith({
-      params: {
-        assistantId: 'assistant-1',
-        returnTopicId: 'topic-1',
-      },
-      pathname: '/assistants/[assistantId]',
+      params: { assistantId: 'assistant-1' },
+      pathname: '/assistants/[assistantId]/edit',
     });
   });
 
@@ -105,7 +110,21 @@ describe('MainHeaderAssistantButton', () => {
 
     expect(mockPush).toHaveBeenCalledWith({
       params: { assistantId: 'assistant-1' },
-      pathname: '/assistants/[assistantId]',
+      pathname: '/assistants/[assistantId]/edit',
+    });
+  });
+
+  it('starts a new topic with the current topic assistant', async () => {
+    await act(async () => {
+      renderer = create(<NewTopicHarness />);
+    });
+
+    const button = renderer?.root.findByProps({ testID: 'new-topic-button' });
+    await act(async () => button?.props.onPress());
+
+    expect(mockSetParams).toHaveBeenCalledWith({
+      assistantId: 'assistant-1',
+      topicId: undefined,
     });
   });
 });

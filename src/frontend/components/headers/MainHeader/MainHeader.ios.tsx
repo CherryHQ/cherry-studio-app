@@ -1,17 +1,11 @@
-import { Stack, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
 
 export function MainHeader() {
   const { t } = useTranslation();
-  const router = useRouter();
-  const { assistant, openAssistant } = useMainHeaderAssistant();
-
-  const openNewTopic = useCallback(() => {
-    router.setParams({ topicId: undefined });
-  }, [router]);
+  const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
 
   return (
     <>
