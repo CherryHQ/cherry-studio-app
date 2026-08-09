@@ -98,15 +98,11 @@ export function Tabs<TValue extends string>({
                 ) : (
                   <Text
                     adjustsFontSizeToFit
-                    className="font-medium"
+                    className="font-medium text-xs"
                     maxFontSizeMultiplier={1.2}
                     minimumFontScale={0.9}
                     numberOfLines={1}
-                    style={{
-                      color: PlatformColor(isSelected ? 'label' : 'secondaryLabel'),
-                      fontSize: 13,
-                      lineHeight: 16,
-                    }}
+                    style={{ color: PlatformColor(isSelected ? 'label' : 'secondaryLabel') }}
                   >
                     {item.label}
                   </Text>

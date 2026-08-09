@@ -28,10 +28,10 @@ function createMarkdownTypographyStyle(fontSizeStep: FontSizeStep): MarkdownStyl
 
   return {
     paragraph: scale.base,
-    h1: scale['3xl'],
-    h2: scale['2xl'],
-    h3: scale.xl,
-    h4: scale.lg,
+    h1: scale['2xl'],
+    h2: scale.xl,
+    h3: scale.lg,
+    h4: scale.base,
     h5: scale.base,
     h6: scale.sm,
     blockquote: scale.base,

@@ -93,6 +93,10 @@ describe('Tabs.android', () => {
       'Messages',
       'Settings',
     ]);
+    expect(renderer.root.findAllByType(Text).map((label) => label.props.sourceClassName)).toEqual([
+      'text-xs',
+      'text-xs',
+    ]);
 
     act(() => root.props.onValueChange('settings'));
     expect(onValueChange).toHaveBeenCalledWith('settings');

@@ -210,16 +210,15 @@ describe('TopicList pin action', () => {
     expect(highlightedRows.length).toBeGreaterThan(0);
   });
 
-  it('scales the emoji with the global typography scale without a fixed frame height', async () => {
+  it('keeps the assistant emoji at a fixed avatar size', async () => {
     await act(async () => {
       renderer = create(<TopicList />);
     });
 
     const emoji = renderer?.root.findAllByType(Text).find((node) => node.props.children === '🍒');
 
-    expect(emoji?.props.className).toContain('text-emoji-3xl');
-    expect(emoji?.props.className).not.toContain('h-12');
-    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.className).not.toContain('text-emoji-3xl');
+    expect(emoji?.props.style).toEqual({ fontSize: 32, lineHeight: 44 });
     expect(emoji?.props.allowFontScaling).not.toBe(false);
   });
 

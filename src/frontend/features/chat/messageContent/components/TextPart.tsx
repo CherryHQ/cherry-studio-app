@@ -20,9 +20,7 @@ export function TextPart({
 }: TextPartProps) {
   if (renderMode === 'plainText') {
     return (
-      <Text className="text-base leading-7 text-foreground">
-        {resolvedText?.plainText ?? part.text}
-      </Text>
+      <Text className="text-base text-foreground">{resolvedText?.plainText ?? part.text}</Text>
     );
   }
 
