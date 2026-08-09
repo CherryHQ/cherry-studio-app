@@ -3,5 +3,6 @@ export {
   useBottomTabBarHidden,
   useSetBottomTabBarHidden,
 } from './components/BottomTabBarVisibilityProvider';
+export { ContextMenuLink } from './components/ContextMenuLink';
 export { NavigationThemeProvider } from './components/NavigationThemeProvider';
 export { PaintingZoomLink, PaintingZoomTarget } from './components/PaintingZoomTransition';

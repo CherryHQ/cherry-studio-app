@@ -6,6 +6,7 @@ export type MenuItem = {
   disabled?: boolean;
   icon?: ReactNode;
   id: string;
+  isOn?: boolean;
   label: string;
   onPress: () => void;
   role?: 'default' | 'destructive';
@@ -16,6 +17,7 @@ export type MenuItem = {
 export type MenuProps = {
   children: ReactElement;
   items: readonly MenuItem[];
+  shouldOpenOnLongPress?: boolean;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };

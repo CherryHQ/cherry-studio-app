@@ -6,12 +6,9 @@ import { usePins, useTopics } from '@/frontend/hooks/chat';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
-const mockRouterPush = jest.fn();
 const mockInvalidateQueries = jest.fn();
 const mockCancelQueries = jest.fn(async () => undefined);
 const mockGetQueriesData = jest.fn();
-const mockPrefetch = jest.fn(async (_path: string, _options?: unknown) => undefined);
-const mockPrefetchInfinite = jest.fn(async (_path: string, _options?: unknown) => undefined);
 const mockRemoveQueries = jest.fn();
 const mockSetQueriesData = jest.fn();
 const mockSetQueryData = jest.fn();
@@ -23,21 +20,13 @@ const mockQueryClient = {
   setQueriesData: mockSetQueriesData,
   setQueryData: mockSetQueryData,
 };
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockRouterPush }),
-}));
-
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => mockQueryClient,
 }));
 
-// `usePrefetch`/`usePrefetchInfiniteQuery` stay mocked so the assertions below keep proving the
-// topic list warms no caches — opening a topic must stay a plain navigation.
 jest.mock('@/frontend/data', () => ({
   ...jest.requireActual('@/frontend/data'),
   useMutation: jest.fn(),
-  usePrefetch: () => mockPrefetch,
-  usePrefetchInfiniteQuery: () => mockPrefetchInfinite,
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -138,22 +127,6 @@ async function renderProvider(topics: readonly Topic[]) {
 }
 
 describe('TopicListProvider', () => {
-  test('pushes a selected topic without warming any cache', async () => {
-    const topics = Array.from({ length: 14 }, (_, index) => makeTopic(index + 1));
-    await renderProvider(topics);
-
-    await act(async () => {
-      currentActions?.openTopic('topic-13');
-    });
-
-    expect(mockRouterPush).toHaveBeenCalledWith({
-      params: { topicId: 'topic-13' },
-      pathname: '/topics',
-    });
-    expect(mockPrefetch).not.toHaveBeenCalled();
-    expect(mockPrefetchInfinite).not.toHaveBeenCalled();
-  });
-
   test('passes pagination through while preserving topic mutations', async () => {
     const observedQueries: string[] = [];
     useTopicsMock.mockImplementation(({ q }) => {

@@ -62,7 +62,6 @@ describe('useTopicActionAlerts', () => {
       deleteTopic: mockDeleteTopic,
       deleteTopics: jest.fn(),
       loadMoreTopics: jest.fn(),
-      openTopic: jest.fn(),
       renameTopic: mockRenameTopic,
       toggleTopicPin: jest.fn(),
     });

@@ -39,6 +39,15 @@ jest.mock('heroui-native/menu', () => {
   return { Menu: Root };
 });
 
+jest.mock('@expo/ui/community/menu', () => ({
+  MenuView: ({ children, ...props }: MockComponentProps) => {
+    const React = jest.requireActual('react');
+    const { View } = jest.requireActual('react-native');
+
+    return React.createElement(View, { ...props, mockComponent: 'expo-menu' }, children);
+  },
+}));
+
 describe('Menu.android', () => {
   let renderer: ReactTestRenderer | undefined;
 
@@ -98,6 +107,48 @@ describe('Menu.android', () => {
     ]);
 
     act(() => edit.props.onPress());
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the native menu for a long-press trigger', () => {
+    const onEdit = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <Menu
+          items={[
+            {
+              id: 'edit',
+              isOn: true,
+              label: 'Edit',
+              onPress: onEdit,
+              systemImage: 'pencil',
+            },
+          ]}
+          shouldOpenOnLongPress
+          testID="context-menu"
+        >
+          <Text>Open</Text>
+        </Menu>,
+      );
+    });
+
+    const menu = renderer!.root.findByProps({ mockComponent: 'expo-menu' });
+    expect(menu.props).toMatchObject({
+      actions: [
+        {
+          attributes: { destructive: false, disabled: undefined },
+          id: 'edit',
+          image: 'pencil',
+          state: 'on',
+          title: 'Edit',
+        },
+      ],
+      shouldOpenOnLongPress: true,
+      testID: 'context-menu',
+    });
+
+    act(() => menu.props.onPressAction({ nativeEvent: { event: 'edit' } }));
     expect(onEdit).toHaveBeenCalledTimes(1);
   });
 });

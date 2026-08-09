@@ -1,11 +1,16 @@
-import { Stack } from 'expo-router';
+import { Stack, useIsPreview } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
 
 export function MainHeader() {
+  const isPreview = useIsPreview();
   const { t } = useTranslation();
   const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
+
+  if (isPreview) {
+    return null;
+  }
 
   return (
     <>

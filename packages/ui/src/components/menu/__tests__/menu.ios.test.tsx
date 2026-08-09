@@ -39,6 +39,7 @@ describe('Menu.ios', () => {
             },
           ]}
           style={{ width: 44 }}
+          shouldOpenOnLongPress
           testID="actions-menu"
         >
           <Text>Open</Text>
@@ -49,18 +50,21 @@ describe('Menu.ios', () => {
     const menu = renderer!.root.findByProps({ mockComponent: 'expo-menu' });
 
     expect(menu.props.style).toEqual({ width: 44 });
+    expect(menu.props.shouldOpenOnLongPress).toBe(true);
     expect(menu.props.testID).toBe('actions-menu');
     expect(menu.props.actions).toEqual([
       {
         attributes: { destructive: false, disabled: undefined },
         id: 'edit',
         image: 'pencil',
+        state: undefined,
         title: 'Edit',
       },
       {
         attributes: { destructive: true, disabled: true },
         id: 'delete',
         image: 'trash',
+        state: undefined,
         title: 'Delete',
       },
     ]);

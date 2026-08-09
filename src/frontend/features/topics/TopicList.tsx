@@ -1,22 +1,12 @@
+import type { MenuItem } from '@cherrystudio/ui';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { CheckIcon } from 'lucide-uniwind/png';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, Text, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import ReanimatedSwipeable, {
-  type SwipeableMethods,
-} from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, {
-  FadeInLeft,
-  FadeOutLeft,
-  runOnJS,
-  type SharedValue,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
+import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import {
@@ -26,8 +16,8 @@ import {
   useMessageSelectionState,
   useRegisterSelectionSource,
 } from '@/frontend/components/messageTabs';
+import { ContextMenuLink } from '@/frontend/components/navigation';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
-import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
 
 import { useTopicActionAlerts } from './components/useTopicActionAlerts';
 import {
@@ -42,12 +32,8 @@ type TopicRowProps = {
   isEditing: boolean;
   isPinActionDisabled: boolean;
   isPinned: boolean;
-  isLast: boolean;
   isSelected: boolean;
-  notifyClose: (swipeable: SwipeableMethods) => void;
-  notifyWillOpen: (swipeable: SwipeableMethods) => void;
   onDelete: (topic: Topic) => void;
-  onPress: (topicId: string) => void;
   onRename: (topic: Topic) => void;
   onTogglePin: (topicId: string) => void;
   onToggle: (topicId: string) => void;
@@ -55,9 +41,6 @@ type TopicRowProps = {
 };
 
 const TOPIC_ITEM_ESTIMATED_HEIGHT = 60;
-const TOPIC_LEFT_ACTION_WIDTH = 64;
-const TOPIC_RIGHT_ACTIONS_WIDTH = 128;
-const TOPIC_ROW_MAX_TAP_DISTANCE = 8;
 
 function topicKeyExtractor(item: Topic) {
   return item.id;
@@ -102,7 +85,7 @@ const TopicListView = memo(function TopicListView() {
   const { alert } = useAlert();
   const bottomInset = useMessageListBottomInset();
   const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
-  const { loadMoreTopics, openTopic, toggleTopicPin } = useTopicListActions();
+  const { loadMoreTopics, toggleTopicPin } = useTopicListActions();
   const { assistants } = useAssistantsApi();
   const { toggleId } = useMessageSelectionActions();
   const { isEditing, selectedIds } = useMessageSelectionState();
@@ -110,12 +93,6 @@ const TopicListView = memo(function TopicListView() {
   const selectionSource = useTopicSelectionSource();
   useRegisterSelectionSource('conversations', selectionSource);
   const { requestDelete, requestRename } = useTopicActionAlerts();
-  const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
-  useEffect(() => {
-    if (isEditing) {
-      closeOpen();
-    }
-  }, [closeOpen, isEditing]);
   // Bottom inset is stable across the edit⇄done flip (see useMessageListBottomInset),
   // so this style reference stays put and the list never reflows on toggle.
   const contentContainerStyle = useMemo(
@@ -148,18 +125,14 @@ const TopicListView = memo(function TopicListView() {
   );
 
   const renderItem = useCallback(
-    ({ index, item }: LegendListRenderItemProps<Topic>) => (
+    ({ item }: LegendListRenderItemProps<Topic>) => (
       <TopicRow
         assistant={item.assistantId ? assistantsById.get(item.assistantId) : undefined}
         isEditing={isEditing}
         isPinActionDisabled={isPinActionDisabled}
         isPinned={pinnedTopicIdSet.has(item.id)}
-        isLast={index === visibleTopics.length - 1}
         isSelected={selectedIds.has(item.id)}
-        notifyClose={notifyClose}
-        notifyWillOpen={notifyWillOpen}
         onDelete={requestDelete}
-        onPress={openTopic}
         onRename={requestRename}
         onTogglePin={handleTogglePin}
         onToggle={toggleId}
@@ -171,15 +144,11 @@ const TopicListView = memo(function TopicListView() {
       handleTogglePin,
       isEditing,
       isPinActionDisabled,
-      notifyClose,
-      notifyWillOpen,
-      openTopic,
       pinnedTopicIdSet,
       requestDelete,
       requestRename,
       selectedIds,
       toggleId,
-      visibleTopics.length,
     ],
   );
 
@@ -237,41 +206,24 @@ const TopicRow = memo(function TopicRow({
   isEditing,
   isPinActionDisabled,
   isPinned,
-  isLast,
   isSelected,
-  notifyClose,
-  notifyWillOpen,
   onDelete,
-  onPress,
   onRename,
   onTogglePin,
   onToggle,
   topic,
 }: TopicRowProps) {
   const { i18n, t } = useTranslation();
-  const swipeableRef = useRef<SwipeableMethods>(null);
-  const isSwipeOpen = useSharedValue(0);
-  const pressProgress = useSharedValue(0);
   const updatedAtLabel = formatTopicUpdatedAt(
     topic.updatedAt,
     i18n.resolvedLanguage,
     t('topic.updatedAt.yesterday'),
   );
 
-  const handlePress = useCallback(() => {
-    if (isEditing) {
-      onToggle(topic.id);
-      return;
-    }
-
-    onPress(topic.id);
-  }, [isEditing, onPress, onToggle, topic.id]);
   const handleRenamePress = useCallback(() => {
-    swipeableRef.current?.close();
     onRename(topic);
   }, [onRename, topic]);
   const handleDeletePress = useCallback(() => {
-    swipeableRef.current?.close();
     onDelete(topic);
   }, [onDelete, topic]);
   const handlePinPress = useCallback(() => {
@@ -279,49 +231,8 @@ const TopicRow = memo(function TopicRow({
       return;
     }
 
-    swipeableRef.current?.close();
     onTogglePin(topic.id);
   }, [isPinActionDisabled, onTogglePin, topic.id]);
-  const handleSwipeableWillOpen = useCallback(() => {
-    isSwipeOpen.value = 1;
-  }, [isSwipeOpen]);
-  const handleSwipeableClose = useCallback(() => {
-    isSwipeOpen.value = 0;
-    if (swipeableRef.current) {
-      notifyClose(swipeableRef.current);
-    }
-  }, [isSwipeOpen, notifyClose]);
-  // Fires the instant a drag starts opening this row (before release), so the
-  // previously open row starts closing immediately instead of waiting for
-  // this swipe to finish settling.
-  const handleSwipeableOpenStartDrag = useCallback(() => {
-    if (swipeableRef.current) {
-      notifyWillOpen(swipeableRef.current);
-    }
-  }, [notifyWillOpen]);
-  const openTapGesture = useMemo(
-    () =>
-      Gesture.Tap()
-        .maxDistance(TOPIC_ROW_MAX_TAP_DISTANCE)
-        .onBegin(() => {
-          pressProgress.value = 1;
-        })
-        .onFinalize(() => {
-          pressProgress.value = 0;
-        })
-        .onEnd((_event, success) => {
-          if (success && isSwipeOpen.value === 0) {
-            runOnJS(handlePress)();
-          }
-        }),
-    [handlePress, isSwipeOpen, pressProgress],
-  );
-  const pressedBackgroundStyle = useAnimatedStyle(() => ({
-    opacity: pressProgress.value,
-  }));
-  const borderStyle = useAnimatedStyle(() => ({
-    opacity: 1 - pressProgress.value,
-  }));
   const pinActionLabel = t(isPinned ? 'topic.actions.unpin' : 'topic.actions.pin');
   const accessibilityActions = useMemo(() => {
     if (isEditing) {
@@ -329,7 +240,6 @@ const TopicRow = memo(function TopicRow({
     }
 
     const actions = [
-      { name: 'activate' as const },
       { label: t('common.rename'), name: 'rename' as const },
       { label: t('common.delete'), name: 'delete' as const },
     ];
@@ -341,7 +251,7 @@ const TopicRow = memo(function TopicRow({
   const handleAccessibilityAction = useCallback(
     (event: AccessibilityActionEvent) => {
       if (isEditing) {
-        handlePress();
+        onToggle(topic.id);
         return;
       }
 
@@ -356,195 +266,112 @@ const TopicRow = memo(function TopicRow({
           handleDeletePress();
           break;
         default:
-          handlePress();
+          break;
       }
     },
-    [handleDeletePress, handlePinPress, handlePress, handleRenamePress, isEditing],
+    [handleDeletePress, handlePinPress, handleRenamePress, isEditing, onToggle, topic.id],
   );
-  const renderLeftActions = useCallback(
-    (_progress: SharedValue<number>, drag: SharedValue<number>) => (
-      <TopicPinAction
-        disabled={isPinActionDisabled}
-        drag={drag}
-        isPinned={isPinned}
-        label={pinActionLabel}
-        onPress={handlePinPress}
-      />
-    ),
-    [handlePinPress, isPinActionDisabled, isPinned, pinActionLabel],
+  const href = useMemo(
+    () => ({ pathname: '/topics' as const, params: { topicId: topic.id } }),
+    [topic.id],
   );
-  const renderRightActions = useCallback(
-    (_progress: SharedValue<number>, drag: SharedValue<number>) => (
-      <TopicActions
-        deleteLabel={t('common.delete')}
-        drag={drag}
-        onDelete={handleDeletePress}
-        onRename={handleRenamePress}
-        renameLabel={t('common.rename')}
-      />
-    ),
-    [handleDeletePress, handleRenamePress, t],
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'rename',
+        label: t('common.rename'),
+        onPress: handleRenamePress,
+        systemImage: 'pencil',
+      },
+      {
+        disabled: isPinActionDisabled,
+        id: 'toggle-pin',
+        isOn: isPinned,
+        label: pinActionLabel,
+        onPress: handlePinPress,
+        systemImage: isPinned ? 'pin.slash' : 'pin',
+      },
+      {
+        id: 'delete',
+        label: t('common.delete'),
+        onPress: handleDeletePress,
+        role: 'destructive',
+        systemImage: 'trash',
+      },
+    ],
+    [
+      handleDeletePress,
+      handlePinPress,
+      handleRenamePress,
+      isPinActionDisabled,
+      isPinned,
+      pinActionLabel,
+      t,
+    ],
   );
 
-  return (
-    <ReanimatedSwipeable
-      enabled={!isEditing}
-      friction={2}
-      onSwipeableClose={handleSwipeableClose}
-      onSwipeableOpenStartDrag={handleSwipeableOpenStartDrag}
-      onSwipeableWillOpen={handleSwipeableWillOpen}
-      overshootLeft={false}
-      overshootRight={false}
-      ref={swipeableRef}
-      renderLeftActions={renderLeftActions}
-      renderRightActions={renderRightActions}
-      leftThreshold={TOPIC_LEFT_ACTION_WIDTH / 2}
-      rightThreshold={TOPIC_RIGHT_ACTIONS_WIDTH / 2}
-      simultaneousWithExternalGesture={openTapGesture}
+  const row = (
+    <Pressable
+      accessibilityActions={accessibilityActions}
+      accessibilityLabel={topic.name || t('navigation.newChat')}
+      accessibilityRole={isEditing ? 'checkbox' : 'link'}
+      accessibilityState={isEditing ? { checked: isSelected } : undefined}
+      className="w-full active:bg-secondary"
+      onAccessibilityAction={handleAccessibilityAction}
+      onPress={isEditing ? () => onToggle(topic.id) : undefined}
     >
-      <GestureDetector gesture={openTapGesture}>
-        <View
-          accessibilityActions={accessibilityActions}
-          accessibilityLabel={topic.name || t('navigation.newChat')}
-          accessibilityRole={isEditing ? 'checkbox' : 'button'}
-          accessibilityState={isEditing ? { checked: isSelected } : undefined}
-          accessible
-          onAccessibilityAction={handleAccessibilityAction}
-        >
-          <View
-            className={
-              isPinned
-                ? 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-secondary py-2 pl-2'
-                : 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-transparent py-2 pl-2'
-            }
-          >
-            <Animated.View
-              className="absolute inset-0 bg-secondary"
-              pointerEvents="none"
-              style={pressedBackgroundStyle}
-            />
-            <Animated.View
+      <View
+        className={
+          isPinned
+            ? 'relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b bg-secondary py-2 pl-2'
+            : 'relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b bg-transparent py-2 pl-2'
+        }
+      >
+        {isEditing ? (
+          <Animated.View entering={FadeInLeft.duration(160)} exiting={FadeOutLeft.duration(120)}>
+            <View
               className={
-                isLast
-                  ? isEditing
-                    ? 'absolute inset-y-0 right-0 left-22 border-border border-y'
-                    : 'absolute inset-y-0 right-0 left-14 border-border border-y'
-                  : isEditing
-                    ? 'absolute top-0 right-0 left-22 border-border border-t'
-                    : 'absolute top-0 right-0 left-14 border-border border-t'
+                isSelected
+                  ? 'size-6 items-center justify-center rounded-full bg-primary'
+                  : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
               }
-              pointerEvents="none"
-              style={borderStyle}
-            />
-            {isEditing ? (
-              <Animated.View
-                entering={FadeInLeft.duration(160)}
-                exiting={FadeOutLeft.duration(120)}
-              >
-                <View
-                  className={
-                    isSelected
-                      ? 'size-6 items-center justify-center rounded-full bg-primary'
-                      : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
-                  }
-                >
-                  {isSelected ? (
-                    <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
-                  ) : null}
-                </View>
-              </Animated.View>
-            ) : null}
-            <Text className="min-w-12 text-center" style={{ fontSize: 32, lineHeight: 44 }}>
-              {assistant?.emoji ?? '💬'}
-            </Text>
-            <View className="min-w-0 flex-1 pr-4">
-              <View className="gap-0.5">
-                <View className="min-w-0 flex-row items-center gap-2">
-                  <Text
-                    className="min-w-0 flex-1 font-semibold text-foreground text-base"
-                    numberOfLines={1}
-                  >
-                    {topic.name || t('navigation.newChat')}
-                  </Text>
-                  <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-                    {updatedAtLabel}
-                  </Text>
-                </View>
-                <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-                  {assistant?.modelName ?? t('assistant.model.none')}
-                </Text>
-              </View>
+            >
+              {isSelected ? (
+                <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+              ) : null}
             </View>
+          </Animated.View>
+        ) : null}
+        <Text className="min-w-12 text-center" style={{ fontSize: 32, lineHeight: 44 }}>
+          {assistant?.emoji ?? '💬'}
+        </Text>
+        <View className="min-w-0 flex-1 pr-4">
+          <View className="gap-0.5">
+            <View className="min-w-0 flex-row items-center gap-2">
+              <Text
+                className="min-w-0 flex-1 font-semibold text-foreground text-base"
+                numberOfLines={1}
+              >
+                {topic.name || t('navigation.newChat')}
+              </Text>
+              <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
+                {updatedAtLabel}
+              </Text>
+            </View>
+            <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
+              {assistant?.modelName ?? t('assistant.model.none')}
+            </Text>
           </View>
         </View>
-      </GestureDetector>
-    </ReanimatedSwipeable>
+      </View>
+    </Pressable>
+  );
+
+  return isEditing ? (
+    row
+  ) : (
+    <ContextMenuLink href={href} items={menuItems}>
+      {row}
+    </ContextMenuLink>
   );
 });
-
-type TopicActionsProps = {
-  deleteLabel: string;
-  drag: SharedValue<number>;
-  onDelete: () => void;
-  onRename: () => void;
-  renameLabel: string;
-};
-
-function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: TopicActionsProps) {
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: drag.value + TOPIC_RIGHT_ACTIONS_WIDTH }],
-  }));
-
-  return (
-    <Animated.View className="h-full w-32 flex-row" style={animatedStyle}>
-      <Pressable
-        accessibilityLabel={renameLabel}
-        accessibilityRole="button"
-        className="w-16 items-center justify-center bg-secondary active:opacity-80"
-        onPress={onRename}
-      >
-        <PencilIcon className="size-5 text-foreground" strokeWidth={2} />
-      </Pressable>
-      <Pressable
-        accessibilityLabel={deleteLabel}
-        accessibilityRole="button"
-        className="w-16 items-center justify-center bg-destructive active:opacity-80"
-        onPress={onDelete}
-      >
-        <Trash2Icon className="size-5 text-destructive-foreground" strokeWidth={2} />
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-type TopicPinActionProps = {
-  disabled: boolean;
-  drag: SharedValue<number>;
-  isPinned: boolean;
-  label: string;
-  onPress: () => void;
-};
-
-function TopicPinAction({ disabled, drag, isPinned, label, onPress }: TopicPinActionProps) {
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: drag.value - TOPIC_LEFT_ACTION_WIDTH }],
-  }));
-
-  return (
-    <Animated.View className="h-full w-16" style={animatedStyle}>
-      <Pressable
-        accessibilityLabel={label}
-        accessibilityRole="button"
-        className="h-full items-center justify-center bg-primary active:opacity-80 disabled:opacity-40"
-        disabled={disabled}
-        onPress={onPress}
-      >
-        {isPinned ? (
-          <PinOffIcon className="size-5 text-primary-foreground" strokeWidth={2} />
-        ) : (
-          <PinIcon className="size-5 text-primary-foreground" strokeWidth={2} />
-        )}
-      </Pressable>
-    </Animated.View>
-  );
-}

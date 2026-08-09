@@ -1,21 +1,11 @@
+import type { MenuItem } from '@cherrystudio/ui';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Stack, useRouter } from 'expo-router';
-import { BotIcon, CheckIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BotIcon, CheckIcon, PlusIcon } from 'lucide-uniwind/png';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import ReanimatedSwipeable, {
-  type SwipeableMethods,
-} from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, {
-  FadeInLeft,
-  FadeOutLeft,
-  runOnJS,
-  type SharedValue,
-  useAnimatedStyle,
-  useSharedValue,
-} from 'react-native-reanimated';
+import { type AccessibilityActionEvent, Pressable, ScrollView, Text, View } from 'react-native';
+import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { type HeaderToolbarAction, TabRootHeader } from '@/frontend/components/headers';
@@ -25,14 +15,8 @@ import {
   useMessageListBottomInset,
 } from '@/frontend/components/messageTabs';
 import { SelectionToolbar } from '@/frontend/components/messageTabs/SelectionToolbar/SelectionToolbar';
-import { useSetBottomTabBarHidden } from '@/frontend/components/navigation';
+import { ContextMenuLink, useSetBottomTabBarHidden } from '@/frontend/components/navigation';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
-import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
-
-// Width of the revealed swipe-to-delete panel; keep in sync with `w-16` below.
-const DELETE_ACTION_WIDTH = 64;
-const ASSISTANT_ROW_MAX_TAP_DISTANCE = 8;
-const ASSISTANT_ROW_ACCESSIBILITY_ACTIONS = [{ name: 'activate' as const }];
 
 export default function AssistantListScreen() {
   const { t } = useTranslation();
@@ -40,7 +24,6 @@ export default function AssistantListScreen() {
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant, deleteAssistants } = useAssistantMutations();
   const { alert } = useAlert();
-  const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const setBottomTabBarHidden = useSetBottomTabBarHidden();
   const bottomInset = useMessageListBottomInset();
   const [isEditing, setIsEditing] = useState(false);
@@ -85,13 +68,12 @@ export default function AssistantListScreen() {
       return;
     }
 
-    closeOpen();
     setSearchText('');
     setIsEditing(true);
     if (process.env.EXPO_OS === 'android') {
       setBottomTabBarHidden(true);
     }
-  }, [closeOpen, isBatchDeleting, setBottomTabBarHidden]);
+  }, [isBatchDeleting, setBottomTabBarHidden]);
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
@@ -136,10 +118,10 @@ export default function AssistantListScreen() {
     ],
     [enterEditing, exitEditing, isBatchDeleting, isEditing, t, visibleAssistants.length],
   );
-  const openAssistantDetail = useCallback(
+  const openAssistantEditor = useCallback(
     (assistantId: string) => {
       router.push({
-        pathname: '/assistants/[assistantId]',
+        pathname: '/assistants/[assistantId]/edit',
         params: { assistantId },
       });
     },
@@ -223,17 +205,14 @@ export default function AssistantListScreen() {
       >
         {filteredAssistants.length > 0 ? (
           <View>
-            {filteredAssistants.map((assistant, index) => (
+            {filteredAssistants.map((assistant) => (
               <AssistantListRow
                 key={assistant.id}
                 assistant={assistant}
                 isEditing={isEditing}
-                isLast={index === filteredAssistants.length - 1}
                 isSelected={selectedIds.has(assistant.id)}
-                notifyClose={notifyClose}
-                notifyWillOpen={notifyWillOpen}
                 onDelete={requestDeleteAssistant}
-                onOpen={openAssistantDetail}
+                onEdit={openAssistantEditor}
                 onToggle={toggleAssistant}
               />
             ))}
@@ -261,192 +240,131 @@ export default function AssistantListScreen() {
 type AssistantListRowProps = {
   assistant: Assistant;
   isEditing: boolean;
-  isLast: boolean;
   isSelected: boolean;
-  notifyClose: (swipeable: SwipeableMethods) => void;
-  notifyWillOpen: (swipeable: SwipeableMethods) => void;
   onDelete: (assistant: Assistant) => void;
-  onOpen: (assistantId: string) => void;
+  onEdit: (assistantId: string) => void;
   onToggle: (assistantId: string) => void;
 };
 
 function AssistantListRow({
   assistant,
   isEditing,
-  isLast,
   isSelected,
-  notifyClose,
-  notifyWillOpen,
   onDelete,
-  onOpen,
+  onEdit,
   onToggle,
 }: AssistantListRowProps) {
   const { t } = useTranslation();
-  const swipeableRef = useRef<SwipeableMethods>(null);
-  const isSwipeOpen = useSharedValue(0);
-  const pressProgress = useSharedValue(0);
 
   const handleDeletePress = useCallback(() => {
-    swipeableRef.current?.close();
     onDelete(assistant);
   }, [assistant, onDelete]);
-  const handlePress = useCallback(() => {
-    if (isEditing) {
-      onToggle(assistant.id);
-      return;
-    }
-
-    onOpen(assistant.id);
-  }, [assistant.id, isEditing, onOpen, onToggle]);
-  const handleSwipeableWillOpen = useCallback(() => {
-    isSwipeOpen.value = 1;
-  }, [isSwipeOpen]);
-  const handleSwipeableClose = useCallback(() => {
-    isSwipeOpen.value = 0;
-    if (swipeableRef.current) {
-      notifyClose(swipeableRef.current);
-    }
-  }, [isSwipeOpen, notifyClose]);
-  // Fires the instant a drag starts opening this row (before release), so the
-  // previously open row starts closing immediately instead of waiting for
-  // this swipe to finish settling.
-  const handleSwipeableOpenStartDrag = useCallback(() => {
-    if (swipeableRef.current) {
-      notifyWillOpen(swipeableRef.current);
-    }
-  }, [notifyWillOpen]);
-  const openTapGesture = useMemo(
+  const handleEditPress = useCallback(() => {
+    onEdit(assistant.id);
+  }, [assistant.id, onEdit]);
+  const accessibilityActions = useMemo(
     () =>
-      Gesture.Tap()
-        .maxDistance(ASSISTANT_ROW_MAX_TAP_DISTANCE)
-        .onBegin(() => {
-          pressProgress.value = 1;
-        })
-        .onFinalize(() => {
-          pressProgress.value = 0;
-        })
-        .onEnd((_event, success) => {
-          if (success && isSwipeOpen.value === 0) {
-            runOnJS(handlePress)();
-          }
-        }),
-    [handlePress, isSwipeOpen, pressProgress],
+      isEditing
+        ? [{ name: 'activate' as const }]
+        : [
+            { label: t('common.edit'), name: 'edit' as const },
+            { label: t('common.delete'), name: 'delete' as const },
+          ],
+    [isEditing, t],
   );
-  const pressedBackgroundStyle = useAnimatedStyle(() => ({
-    opacity: pressProgress.value,
-  }));
-  const borderStyle = useAnimatedStyle(() => ({
-    opacity: 1 - pressProgress.value,
-  }));
-  const renderRightActions = useCallback(
-    (_progress: SharedValue<number>, drag: SharedValue<number>) => (
-      <DeleteAction drag={drag} label={t('common.remove')} onPress={handleDeletePress} />
-    ),
-    [handleDeletePress, t],
+  const handleAccessibilityAction = useCallback(
+    (event: AccessibilityActionEvent) => {
+      if (isEditing) {
+        onToggle(assistant.id);
+        return;
+      }
+
+      switch (event.nativeEvent.actionName) {
+        case 'edit':
+          handleEditPress();
+          break;
+        case 'delete':
+          handleDeletePress();
+          break;
+        default:
+          break;
+      }
+    },
+    [assistant.id, handleDeletePress, handleEditPress, isEditing, onToggle],
+  );
+  const href = useMemo(
+    () => ({
+      pathname: '/assistants/[assistantId]' as const,
+      params: { assistantId: assistant.id },
+    }),
+    [assistant.id],
+  );
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'edit',
+        label: t('common.edit'),
+        onPress: handleEditPress,
+        systemImage: 'pencil',
+      },
+      {
+        id: 'delete',
+        label: t('common.delete'),
+        onPress: handleDeletePress,
+        role: 'destructive',
+        systemImage: 'trash',
+      },
+    ],
+    [handleDeletePress, handleEditPress, t],
   );
 
-  return (
-    <ReanimatedSwipeable
-      enabled={!isEditing}
-      friction={2}
-      onSwipeableClose={handleSwipeableClose}
-      onSwipeableOpenStartDrag={handleSwipeableOpenStartDrag}
-      onSwipeableWillOpen={handleSwipeableWillOpen}
-      overshootRight={false}
-      ref={swipeableRef}
-      renderRightActions={renderRightActions}
-      rightThreshold={40}
-      simultaneousWithExternalGesture={openTapGesture}
+  const row = (
+    <Pressable
+      accessibilityActions={accessibilityActions}
+      accessibilityLabel={assistant.name}
+      accessibilityRole={isEditing ? 'checkbox' : 'link'}
+      accessibilityState={isEditing ? { checked: isSelected } : undefined}
+      className="w-full active:bg-secondary"
+      onAccessibilityAction={handleAccessibilityAction}
+      onPress={isEditing ? () => onToggle(assistant.id) : undefined}
     >
-      <GestureDetector gesture={openTapGesture}>
-        <View
-          accessibilityActions={ASSISTANT_ROW_ACCESSIBILITY_ACTIONS}
-          accessibilityLabel={assistant.name}
-          accessibilityRole={isEditing ? 'checkbox' : 'button'}
-          accessibilityState={isEditing ? { checked: isSelected } : undefined}
-          accessible
-          onAccessibilityAction={handlePress}
-        >
-          <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
-            <Animated.View
-              className="absolute inset-0 bg-secondary"
-              pointerEvents="none"
-              style={pressedBackgroundStyle}
-            />
-            <Animated.View
+      <View className="relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b py-2 pl-2">
+        {isEditing ? (
+          <Animated.View entering={FadeInLeft.duration(160)} exiting={FadeOutLeft.duration(120)}>
+            <View
               className={
-                isLast
-                  ? isEditing
-                    ? 'absolute inset-y-0 right-0 left-24 border-border border-y'
-                    : 'absolute inset-y-0 right-0 left-16 border-border border-y'
-                  : isEditing
-                    ? 'absolute top-0 right-0 left-24 border-border border-t'
-                    : 'absolute top-0 right-0 left-16 border-border border-t'
+                isSelected
+                  ? 'size-6 items-center justify-center rounded-full bg-primary'
+                  : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
               }
-              pointerEvents="none"
-              style={borderStyle}
-            />
-            {isEditing ? (
-              <Animated.View
-                entering={FadeInLeft.duration(160)}
-                exiting={FadeOutLeft.duration(120)}
-              >
-                <View
-                  className={
-                    isSelected
-                      ? 'size-6 items-center justify-center rounded-full bg-primary'
-                      : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
-                  }
-                >
-                  {isSelected ? (
-                    <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
-                  ) : null}
-                </View>
-              </Animated.View>
-            ) : null}
-            <Text className="min-w-12 text-center text-emoji-3xl">{assistant.emoji}</Text>
-            <View className="min-w-0 flex-1 pr-4">
-              <View className="gap-0.5">
-                <Text className="font-semibold text-foreground text-base" numberOfLines={1}>
-                  {assistant.name}
-                </Text>
-                <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-                  {assistant.modelName ?? t('assistant.model.none')}
-                </Text>
-              </View>
+            >
+              {isSelected ? (
+                <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+              ) : null}
             </View>
+          </Animated.View>
+        ) : null}
+        <Text className="min-w-12 text-center text-emoji-3xl">{assistant.emoji}</Text>
+        <View className="min-w-0 flex-1 pr-4">
+          <View className="gap-0.5">
+            <Text className="font-semibold text-foreground text-base" numberOfLines={1}>
+              {assistant.name}
+            </Text>
+            <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
+              {assistant.modelName ?? t('assistant.model.none')}
+            </Text>
           </View>
         </View>
-      </GestureDetector>
-    </ReanimatedSwipeable>
+      </View>
+    </Pressable>
   );
-}
 
-type DeleteActionProps = {
-  drag: SharedValue<number>;
-  label: string;
-  onPress: () => void;
-};
-
-function DeleteAction({ drag, label, onPress }: DeleteActionProps) {
-  // Follow the drag so the button slides in with the finger: at rest `drag` is 0
-  // and the panel is pushed one width off-screen; fully open `drag` is
-  // `-deleteActionWidth`, landing it flush against the row (per the RNGH docs).
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: drag.value + DELETE_ACTION_WIDTH }],
-  }));
-
-  return (
-    <Animated.View className="h-full w-16" style={animatedStyle}>
-      <Pressable
-        accessibilityLabel={label}
-        accessibilityRole="button"
-        className="w-16 flex-1 items-center justify-center bg-destructive active:opacity-80"
-        onPress={onPress}
-      >
-        <Trash2Icon className="size-5 text-destructive-foreground" strokeWidth={2} />
-      </Pressable>
-    </Animated.View>
+  return isEditing ? (
+    row
+  ) : (
+    <ContextMenuLink href={href} items={menuItems}>
+      {row}
+    </ContextMenuLink>
   );
 }
 
