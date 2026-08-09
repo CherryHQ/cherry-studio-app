@@ -43,7 +43,7 @@ export function getProviderEndpoints(
 
 export function ProviderEndpointSummary({ endpoints }: { endpoints: readonly ProviderEndpoint[] }) {
   return (
-    <Text className="text-foreground-tertiary text-sm">
+    <Text className="text-foreground-tertiary text-xs">
       {endpoints.map(({ shortLabel }) => shortLabel).join(' · ')}
     </Text>
   );
