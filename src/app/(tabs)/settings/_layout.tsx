@@ -1,7 +1,6 @@
 import { Stack } from 'expo-router';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { isIOS } from '@/frontend/utils/constants';
 
 export default function SettingsStackLayout() {
   const [foregroundColor, groupedBackground] = useThemeColor(['foreground', 'grouped-background']);
@@ -20,7 +19,7 @@ export default function SettingsStackLayout() {
         // white would put a seam between a white bar and a gray page — iOS
         // Settings has no such seam, its bar matches the grouped background.
         headerStyle: { backgroundColor: groupedBackground },
-        headerShadowVisible: isIOS ? undefined : false,
+        headerShadowVisible: false,
         headerTransparent: false,
         headerTintColor: foregroundColor,
       }}

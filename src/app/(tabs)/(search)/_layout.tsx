@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { isIOS, isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 export default function SearchStackLayout() {
   const foregroundColor = useThemeColor('foreground');
@@ -9,7 +9,7 @@ export default function SearchStackLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: isIOS ? undefined : false,
+        headerShadowVisible: false,
         headerTransparent: isLiquidGlassAvailable,
         headerTintColor: foregroundColor,
       }}

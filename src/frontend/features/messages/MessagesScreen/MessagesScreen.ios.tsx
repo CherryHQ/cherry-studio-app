@@ -49,7 +49,6 @@ export function MessagesScreen() {
       <Stack.Screen
         options={{
           headerLargeTitle: false,
-          headerShadowVisible: false,
         }}
       />
       {isEditing ? (

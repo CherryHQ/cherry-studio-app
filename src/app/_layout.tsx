@@ -58,7 +58,7 @@ function RootStack() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: isIOS ? undefined : false,
+        headerShadowVisible: false,
         headerStyle: isIOS ? undefined : { backgroundColor },
         headerTransparent: isLiquidGlassAvailable,
         headerTintColor: foregroundColor,
