@@ -135,7 +135,7 @@ export default function ProviderSettingsScreen() {
       ) : null}
       <Pressable
         accessible={false}
-        className={usesNativeBottomSearch ? 'flex-1 gap-3 px-4 pb-24' : 'flex-1 gap-3 px-4 pb-5'}
+        className="flex-1 gap-3 px-4 pb-5"
         onPress={Keyboard.dismiss}
         style={{ paddingTop: isNativeSearchFocused ? 12 : 0 }}
       >
@@ -157,6 +157,9 @@ export default function ProviderSettingsScreen() {
             >
               <LegendList
                 alwaysBounceVertical={false}
+                contentContainerStyle={
+                  usesNativeBottomSearch ? styles.listContentWithNativeBottomSearch : undefined
+                }
                 data={filteredProviderItems}
                 estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
                 keyboardDismissMode="on-drag"
@@ -190,5 +193,8 @@ export default function ProviderSettingsScreen() {
 const styles = StyleSheet.create({
   list: {
     flex: 1,
+  },
+  listContentWithNativeBottomSearch: {
+    paddingBottom: 96,
   },
 });
