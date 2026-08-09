@@ -135,7 +135,7 @@ export default function ProviderSettingsScreen() {
       ) : null}
       <Pressable
         accessible={false}
-        className="flex-1 gap-3 px-4 pb-5"
+        className={usesNativeBottomSearch ? 'flex-1 gap-3 px-4 pb-24' : 'flex-1 gap-3 px-4 pb-5'}
         onPress={Keyboard.dismiss}
         style={{ paddingTop: isNativeSearchFocused ? 12 : 0 }}
       >
