@@ -1,6 +1,11 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import type { ProviderConfig } from '@cherrystudio/ai-runtime/provider';
+import {
+  type ProviderConfig,
+  resolveAiSdkProviderId,
+  resolveEffectiveEndpoint,
+  resolveProviderOptionsKey,
+} from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, CallOverrides } from '@cherrystudio/ai-runtime/runtime';
 import {
   ENDPOINT_TYPE,
@@ -26,11 +31,6 @@ import {
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
-import {
-  resolveAiSdkProviderId,
-  resolveEffectiveEndpoint,
-  resolveProviderOptionsKey,
-} from '../../../provider/endpoint';
 import type { ToolResolver } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';

@@ -12,7 +12,18 @@ import {
   type AppProviderId,
   type AppProviderSettingsMap,
   appProviderIds,
+  formatApiHost,
+  formatOllamaApiHost,
+  getExtraHeaders,
+  isVertexMaasModelId,
+  isWithTrailingSharp,
+  normalizeVertexCredentials,
   type ProviderConfig,
+  registerProviderExtensions,
+  resolveAiSdkProviderId,
+  type ResolvedEndpoint,
+  resolveEffectiveEndpoint,
+  routeToEndpoint,
 } from '@cherrystudio/ai-runtime/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
@@ -24,22 +35,8 @@ import { generateSignature } from '@/backend/ai/provider/cherryai';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
 
-import {
-  formatApiHost,
-  formatOllamaApiHost,
-  getExtraHeaders,
-  isWithTrailingSharp,
-  routeToEndpoint,
-} from '../utils/provider';
-import {
-  resolveAiSdkProviderId,
-  type ResolvedEndpoint,
-  resolveEffectiveEndpoint,
-} from './endpoint';
-import { isVertexMaasModelId, normalizeVertexCredentials } from './vertex';
-// Config dispatch reads the extension registry before Agent construction. Register app extensions
-// here explicitly instead of relying on an unrelated options-module import to initialize them.
-import './factory';
+// Config dispatch reads the extension registry before Agent construction.
+registerProviderExtensions();
 
 const appProviderIdMap = appProviderIds as Record<string, AppProviderId>;
 

@@ -5,6 +5,7 @@
  * Capability gating ported from desktop's `src/main/ai/utils/modelParameters.ts`.
  */
 
+import { isAwsBedrockProvider } from '@cherrystudio/ai-runtime/provider';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
@@ -24,7 +25,6 @@ import {
 } from '@cherrystudio/universal/utils/model';
 import { loggerService } from '@logger';
 
-import { isAwsBedrockProvider } from './provider';
 import type { ResolvedReasoningInvocation } from './reasoningSerializers';
 
 const logger = loggerService.withContext('utils:modelParameters');
