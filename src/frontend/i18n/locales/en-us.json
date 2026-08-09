@@ -414,8 +414,6 @@
   "settings.provider.apiService.endpointSection": "API service",
   "settings.provider.apiService.hideApiKeys": "Hide API keys",
   "settings.provider.apiService.hideSecret": "Hide secret",
-  "settings.provider.apiService.imageEditBaseUrlHelp": "Used for /images/edits. When empty, the default chat endpoint Base URL is used.",
-  "settings.provider.apiService.imageGenerationBaseUrlHelp": "Used for /images/generations. When empty, the default chat endpoint Base URL is used.",
   "settings.provider.apiService.invalidBaseUrlMessage": "Base URL must be a valid http(s) URL.",
   "settings.provider.apiService.invalidBaseUrlTitle": "Invalid Base URL",
   "settings.provider.apiService.invalidJsonMessage": "Credentials must be a valid JSON object.",

@@ -1,4 +1,4 @@
-import { Button, Description, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
@@ -271,13 +271,11 @@ export default function NewProviderScreen() {
               value={openaiResponsesUrl}
             />
             <EndpointField
-              description={t('settings.provider.apiService.imageGenerationBaseUrlHelp')}
               label={t('settings.provider.add.endpoint.imageGeneration')}
               onChangeText={setImageGenerationUrl}
               value={imageGenerationUrl}
             />
             <EndpointField
-              description={t('settings.provider.apiService.imageEditBaseUrlHelp')}
               label={t('settings.provider.add.endpoint.imageEdit')}
               onChangeText={setImageEditUrl}
               value={imageEditUrl}
@@ -424,12 +422,10 @@ function FormField({
 }
 
 function EndpointField({
-  description,
   label,
   onChangeText,
   value,
 }: {
-  description?: string;
   label: string;
   onChangeText: (value: string) => void;
   value: string;
@@ -446,7 +442,6 @@ function EndpointField({
         placeholder="https://api.example.com"
         value={value}
       />
-      {description ? <Description>{description}</Description> : null}
     </TextField>
   );
 }

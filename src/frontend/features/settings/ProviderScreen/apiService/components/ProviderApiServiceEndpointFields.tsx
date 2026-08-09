@@ -1,12 +1,5 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import {
-  Button,
-  Description,
-  FieldError,
-  Input,
-  Label,
-  TextField,
-} from '@cherrystudio/ui/components';
+import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { SettingsIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
@@ -21,12 +14,6 @@ const ENDPOINT_LABEL_KEYS: Partial<Record<EndpointType, string>> = {
   [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: 'settings.provider.add.endpoint.gemini',
   [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: 'settings.provider.add.endpoint.imageGeneration',
   [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: 'settings.provider.add.endpoint.imageEdit',
-};
-
-const ENDPOINT_HELP_KEYS: Partial<Record<EndpointType, string>> = {
-  [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]:
-    'settings.provider.apiService.imageGenerationBaseUrlHelp',
-  [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: 'settings.provider.apiService.imageEditBaseUrlHelp',
 };
 
 export function ProviderApiServiceEndpointField({
@@ -79,7 +66,6 @@ export function ProviderApiServiceEndpointForm({
     <View className="gap-3">
       {endpointTypes.map((endpoint) => {
         const labelKey = ENDPOINT_LABEL_KEYS[endpoint];
-        const helpKey = ENDPOINT_HELP_KEYS[endpoint];
         const label = labelKey ? t(labelKey) : endpoint;
 
         return (
@@ -92,7 +78,6 @@ export function ProviderApiServiceEndpointForm({
               onChangeText={(value) => onBaseUrlChange(endpoint, value)}
               onCommit={(value) => onBaseUrlCommit(endpoint, value)}
             />
-            {helpKey ? <Description hideOnInvalid>{t(helpKey)}</Description> : null}
             <FieldError>{endpointErrors?.[endpoint]}</FieldError>
           </TextField>
         );

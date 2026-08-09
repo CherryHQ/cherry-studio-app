@@ -414,8 +414,6 @@
   "settings.provider.apiService.endpointSection": "API 服务",
   "settings.provider.apiService.hideApiKeys": "隐藏 API Keys",
   "settings.provider.apiService.hideSecret": "隐藏密钥",
-  "settings.provider.apiService.imageEditBaseUrlHelp": "用于 /images/edits；留空时使用默认对话端点的 Base URL。",
-  "settings.provider.apiService.imageGenerationBaseUrlHelp": "用于 /images/generations；留空时使用默认对话端点的 Base URL。",
   "settings.provider.apiService.invalidBaseUrlMessage": "Base URL 必须是有效的 http(s) URL。",
   "settings.provider.apiService.invalidBaseUrlTitle": "Base URL 无效",
   "settings.provider.apiService.invalidJsonMessage": "Credentials 必须是有效的 JSON 对象。",
