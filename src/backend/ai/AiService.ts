@@ -10,6 +10,14 @@ import type {
   AiStreamRequest,
   ListModelsRequest,
 } from '@cherrystudio/ai-runtime/runtime';
+import {
+  buildImageProviderOptions,
+  createAiUsageCaptureContext,
+  extractAiSdkStandardParams,
+  getCustomParameters,
+  mergeImageProviderOptions,
+  splitImageParamValues,
+} from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
@@ -34,11 +42,6 @@ import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
-import { splitImageParamValues } from './utils/imageOptions';
-import { buildImageProviderOptions, mergeImageProviderOptions } from './utils/imageProviderOptions';
-import { extractAiSdkStandardParams } from './utils/options';
-import { getCustomParameters } from './utils/reasoning';
-import { createAiUsageCaptureContext } from './utils/usageCapture';
 
 // ── Request types ──────────────────────────────────────────────────
 

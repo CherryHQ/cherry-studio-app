@@ -14,13 +14,12 @@ import type {
   LanguageModelV3Message,
 } from '@ai-sdk/provider';
 import { definePlugin } from '@cherrystudio/ai-core';
+import { VOLATILE_PROMPT_VARIABLES } from '@cherrystudio/ai-runtime/utils';
 import { resolveAnthropicCacheSettings } from '@cherrystudio/universal/ai/anthropicCache';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { LanguageModelMiddleware } from 'ai';
 import { estimateTokenCount } from 'tokenx';
-
-import { VOLATILE_PROMPT_VARIABLES } from '../../../../utils/promptVariables';
 
 const MAX_CACHE_BREAKPOINTS = 4;
 const cacheProviderOptions = {

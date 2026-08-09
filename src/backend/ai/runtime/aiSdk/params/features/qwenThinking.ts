@@ -1,4 +1,5 @@
 import { definePlugin } from '@cherrystudio/ai-core';
+import type { ResolvedReasoningInvocation } from '@cherrystudio/ai-runtime/utils';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -7,8 +8,6 @@ import {
   isSupportedThinkingTokenQwenModel,
 } from '@cherrystudio/universal/utils/model';
 import type { LanguageModelMiddleware } from 'ai';
-
-import type { ResolvedReasoningInvocation } from '../../../../utils/reasoningSerializers';
 
 const QWEN_PROMPT_THINKING_PROVIDER_IDS = new Set(['ollama', 'lmstudio', 'nvidia', 'gpustack']);
 

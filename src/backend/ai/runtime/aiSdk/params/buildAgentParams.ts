@@ -8,6 +8,22 @@ import {
 } from '@cherrystudio/ai-runtime/provider';
 import type { AiBaseRequest, CallOverrides } from '@cherrystudio/ai-runtime/runtime';
 import {
+  addAnthropicHeaders,
+  applyFastModeToProviderOptions,
+  buildCapabilityProviderOptions,
+  buildResolvedReasoningProviderOptions,
+  extractAiSdkStandardParams,
+  filterStandardParams,
+  getCustomParameters,
+  getMaxTokens,
+  getTemperature,
+  getTimeout,
+  getTopP,
+  mergeCustomProviderParameters,
+  resolveReasoningInvocation,
+  type ResolvedReasoningInvocation,
+} from '@cherrystudio/ai-runtime/utils';
+import {
   ENDPOINT_TYPE,
   endpointImpliedCapability,
   MODEL_CAPABILITY,
@@ -35,27 +51,7 @@ import type { ToolResolver } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
 import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
-import { addAnthropicHeaders } from '../../../utils/anthropicHeaders';
-import {
-  filterStandardParams,
-  getMaxTokens,
-  getTemperature,
-  getTimeout,
-  getTopP,
-} from '../../../utils/modelParameters';
-import {
-  applyFastModeToProviderOptions,
-  buildCapabilityProviderOptions,
-  buildResolvedReasoningProviderOptions,
-  extractAiSdkStandardParams,
-  mergeCustomProviderParameters,
-} from '../../../utils/options';
 import { replacePromptVariables } from '../../../utils/promptVariables';
-import { getCustomParameters } from '../../../utils/reasoning';
-import {
-  resolveReasoningInvocation,
-  type ResolvedReasoningInvocation,
-} from '../../../utils/reasoningSerializers';
 import type { AgentOptions } from '../Agent';
 import {
   createToolCallLimitStopCondition,

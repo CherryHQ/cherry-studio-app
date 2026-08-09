@@ -1,6 +1,11 @@
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
 import type { AppProviderId } from '@cherrystudio/ai-runtime/provider';
+import {
+  buildProviderBuiltinWebSearchConfig,
+  type CherryWebSearchConfig,
+  SystemProviderIds,
+} from '@cherrystudio/ai-runtime/utils';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -14,12 +19,6 @@ import {
 } from '@cherrystudio/universal/utils/model';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-
-import { SystemProviderIds } from '../../../utils/providerIds';
-import {
-  buildProviderBuiltinWebSearchConfig,
-  type CherryWebSearchConfig,
-} from '../../../utils/websearch';
 
 export interface ResolvedCapabilities {
   enableReasoning: boolean;

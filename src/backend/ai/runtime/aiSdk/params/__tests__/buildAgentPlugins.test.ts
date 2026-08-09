@@ -1,10 +1,10 @@
+import type { ResolvedReasoningInvocation } from '@cherrystudio/ai-runtime/utils';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { LanguageModelMiddleware } from 'ai';
 
-import type { ResolvedReasoningInvocation } from '../../../../utils/reasoningSerializers';
 import { buildAgentPlugins } from '../buildAgentPlugins';
 
 describe('buildAgentPlugins reasoning features', () => {
