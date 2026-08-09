@@ -36,12 +36,10 @@ exhausted, item-size changes follow the tail until touch, drag, or momentum paus
 - `components/MessageList.tsx` owns virtualization, anchoring, readiness, and list controls.
 - `messageRow/` owns user and assistant row layouts plus the private slide-in provider.
 - `messageContent/` dispatches structured message parts and owns citation/file hooks.
-- `prismSweep/` provides the pending-assistant indicator.
 - `utils/` contains the private built-in tool presentation mapping.
 
 ## Motion
 
 Discrete state transitions use the shared `@cherrystudio/ui/motion` vocabulary. New-message entry
 and scroll-button visibility pair `duration.fast` with `easing.settle` at their owning components.
-`PrismSweep` intentionally remains linear because it represents continuous progress rather than a
-transition settling into a new state.
+Pending assistant and reasoning rows consume `PrismSweep` from the Cherry UI loading family.

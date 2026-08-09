@@ -1,4 +1,4 @@
-import { buildDiagonalSweepOrder } from '../diagonalSweepOrder';
+import { buildDiagonalSweepOrder } from '../diagonal-sweep-order';
 
 describe('buildDiagonalSweepOrder', () => {
   it('returns a permutation of 0..n-1 for a 5x5 grid', () => {

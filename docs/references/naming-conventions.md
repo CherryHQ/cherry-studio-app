@@ -330,7 +330,6 @@ src/frontend/components/messagePresentation/
 ├── components/           # virtualized MessageList and its private platform controls
 ├── messageContent/       # structured message part renderers and hooks
 ├── messageRow/           # user/assistant rows and entry animation
-├── prismSweep/           # pending-assistant indicator
 └── utils/                # private presentation mappings
 ```
 

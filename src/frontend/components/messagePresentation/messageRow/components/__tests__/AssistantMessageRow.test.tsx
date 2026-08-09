@@ -4,14 +4,14 @@ import type { MessagePresentationItem } from '../../../types';
 import { AssistantMessageRow } from '../AssistantMessageRow';
 
 const mockMessageParts = jest.fn((_props: { message: MessagePresentationItem }) => null);
-const mockPrismSweep = jest.fn((_props: { active: boolean; size: number }) => null);
+const mockPrismSweep = jest.fn((_props: { active: boolean }) => null);
 
 jest.mock('../../../messageContent', () => ({
   MessageParts: (props: { message: MessagePresentationItem }) => mockMessageParts(props),
 }));
 
-jest.mock('../../../prismSweep', () => ({
-  PrismSweep: (props: { active: boolean; size: number }) => mockPrismSweep(props),
+jest.mock('@cherrystudio/ui/components', () => ({
+  PrismSweep: (props: { active: boolean }) => mockPrismSweep(props),
 }));
 
 function createAssistantMessage(
@@ -42,7 +42,7 @@ describe('AssistantMessageRow', () => {
       renderer = create(<AssistantMessageRow message={createAssistantMessage('pending')} />);
     });
 
-    expect(mockPrismSweep).toHaveBeenCalledWith({ active: true, size: 16 });
+    expect(mockPrismSweep).toHaveBeenCalledWith({ active: true });
     expect(mockMessageParts).not.toHaveBeenCalled();
   });
 
