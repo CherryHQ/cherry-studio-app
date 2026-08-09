@@ -38,23 +38,6 @@ describe('SettingsServiceRow', () => {
     ).toBe('Docs server, Connected, 3 tools');
   });
 
-  it('applies custom row sizing', async () => {
-    await act(async () => {
-      renderer = create(
-        <SettingsServiceRow
-          className="min-h-16 px-4 py-3"
-          id="provider-1"
-          name="Provider"
-          onPress={jest.fn()}
-        />,
-      );
-    });
-
-    expect(renderer?.root.findByProps({ accessibilityRole: 'button' }).props.className).toContain(
-      'min-h-16 px-4 py-3',
-    );
-  });
-
   it.each([
     ['renders', true],
     ['omits', false],

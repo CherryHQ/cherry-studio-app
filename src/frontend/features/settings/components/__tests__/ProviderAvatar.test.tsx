@@ -43,12 +43,7 @@ describe('ProviderAvatar', () => {
 
     act(() => {
       renderer = create(
-        <ProviderAvatar
-          providerId="custom"
-          presetProviderId="cherryin"
-          providerName="CherryIN"
-          size={40}
-        />,
+        <ProviderAvatar providerId="custom" presetProviderId="cherryin" providerName="CherryIN" />,
       );
     });
 
@@ -56,7 +51,7 @@ describe('ProviderAvatar', () => {
       expect.objectContaining({
         className:
           'items-center justify-center overflow-hidden border border-border-subtle border-continuous',
-        style: { borderRadius: 6, height: 40, width: 40 },
+        style: { borderRadius: 6, height: 26, width: 26 },
       }),
     );
     expect(mockImage).toHaveBeenCalledWith(
@@ -64,8 +59,8 @@ describe('ProviderAvatar', () => {
         source: 'cherryin-dark',
         style: {
           borderRadius: 5,
-          height: 40 * (5 / 7),
-          width: 40 * (5 / 7),
+          height: 26 * (5 / 7),
+          width: 26 * (5 / 7),
         },
       }),
     );

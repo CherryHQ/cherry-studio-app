@@ -19,7 +19,6 @@ type ProviderAvatarProps = {
   presetProviderId?: string;
   providerId: string;
   providerName: string;
-  size?: number;
 };
 
 /**
@@ -31,7 +30,6 @@ export function ProviderAvatar({
   presetProviderId,
   providerId,
   providerName,
-  size,
 }: ProviderAvatarProps) {
   const { theme } = useUniwind();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
@@ -39,7 +37,7 @@ export function ProviderAvatar({
 
   if (avatarUri) {
     return (
-      <BrandAvatar label={providerName} size={size}>
+      <BrandAvatar label={providerName}>
         <BrandAvatarPhoto uri={avatarUri} />
       </BrandAvatar>
     );
@@ -50,7 +48,7 @@ export function ProviderAvatar({
 
   if (iconSource) {
     return (
-      <BrandAvatar label={providerName} size={size}>
+      <BrandAvatar label={providerName}>
         <BrandAvatarIcon
           iconId={displayIconId}
           recyclingKey={providerId}
@@ -60,5 +58,5 @@ export function ProviderAvatar({
     );
   }
 
-  return <BrandAvatar label={providerName} size={size} />;
+  return <BrandAvatar label={providerName} />;
 }
