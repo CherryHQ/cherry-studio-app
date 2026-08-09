@@ -3,11 +3,11 @@
  * `docs/references/ai/adapter-family.md` in desktop for design rationale.
  */
 
+import { type AppProviderId, appProviderIds } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import { type AppProviderId, appProviderIds } from '../types';
 import { getBaseUrl } from '../utils/provider';
 import { resolveGatewayRoute } from './gatewayRouting';
 

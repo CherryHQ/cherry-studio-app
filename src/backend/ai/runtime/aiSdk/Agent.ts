@@ -2,6 +2,9 @@ import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import { createAgent } from '@cherrystudio/ai-core';
 import type { StringKeys } from '@cherrystudio/ai-core/provider';
+import type { MediaCapabilities } from '@cherrystudio/ai-runtime/messages';
+import { toModelMessages } from '@cherrystudio/ai-runtime/messages';
+import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
 import type {
   LanguageModelUsage,
   ModelMessage,
@@ -17,11 +20,8 @@ import * as Crypto from 'expo-crypto';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { MediaCapabilities } from '../../messages/messageCapabilities';
-import { toModelMessages } from '../../messages/messageRules';
 import { withReasoningTimingMetadata } from '../../streamManager/withReasoningTimingMetadata';
 import type { RequestContext } from '../../tools';
-import type { AppProviderSettingsMap } from '../../types';
 import { safeCall, wrapForwardedHook, wrapToolsWithExecutionHooks } from './loop/hookRunner';
 import { resolveToolLoopTerminalError } from './loop/toolLoopTermination';
 import type { AgentLoopHooks, ToolExecutionHooks } from './loop/types';

@@ -1,8 +1,8 @@
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
+import type { AppProviderId } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import type { AppProviderId } from '../types';
 import { resolveAiSdkProviderId } from './endpoint';
 import { extensions } from './extensions';
 

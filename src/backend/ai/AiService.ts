@@ -4,6 +4,12 @@ import {
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
+import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import type {
+  AiBaseRequest,
+  AiStreamRequest,
+  ListModelsRequest,
+} from '@cherrystudio/ai-runtime/runtime';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
@@ -28,8 +34,6 @@ import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
-import type { AppProviderSettingsMap } from './types';
-import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { splitImageParamValues } from './utils/imageOptions';
 import { buildImageProviderOptions, mergeImageProviderOptions } from './utils/imageProviderOptions';
 import { extractAiSdkStandardParams } from './utils/options';

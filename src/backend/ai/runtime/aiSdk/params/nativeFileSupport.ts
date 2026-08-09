@@ -1,3 +1,4 @@
+import type { AppProviderId } from '@cherrystudio/ai-runtime/provider';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
@@ -8,8 +9,6 @@ import {
   isVideoModel,
   isVisionModel,
 } from '@cherrystudio/universal/utils/model';
-
-import type { AppProviderId } from '../../../types';
 
 export interface NativeFileSupport {
   readonly image: boolean;

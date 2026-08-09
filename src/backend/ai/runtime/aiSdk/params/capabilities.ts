@@ -1,5 +1,6 @@
 import type { WebSearchPluginConfig } from '@cherrystudio/ai-core/built-in/plugins';
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
+import type { AppProviderId } from '@cherrystudio/ai-runtime/provider';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -14,7 +15,6 @@ import {
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 
-import type { AppProviderId } from '../../../types';
 import { SystemProviderIds } from '../../../utils/providerIds';
 import {
   buildProviderBuiltinWebSearchConfig,

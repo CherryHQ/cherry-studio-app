@@ -1,8 +1,8 @@
+import type { AppProviderId } from '@cherrystudio/ai-runtime/provider';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import type { AppProviderId } from '../../../../types';
 import { resolveNativeFileSupport } from '../nativeFileSupport';
 
 describe('resolveNativeFileSupport', () => {

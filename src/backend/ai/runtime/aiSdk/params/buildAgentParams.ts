@@ -1,5 +1,7 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
+import type { ProviderConfig } from '@cherrystudio/ai-runtime/provider';
+import type { AiBaseRequest, CallOverrides } from '@cherrystudio/ai-runtime/runtime';
 import {
   ENDPOINT_TYPE,
   endpointImpliedCapability,
@@ -33,8 +35,6 @@ import type { ToolResolver } from '../../../tools';
 import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
 import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
 import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
-import type { ProviderConfig } from '../../../types';
-import type { AiBaseRequest, CallOverrides } from '../../../types/requests';
 import { addAnthropicHeaders } from '../../../utils/anthropicHeaders';
 import {
   filterStandardParams,

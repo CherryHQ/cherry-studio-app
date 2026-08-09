@@ -1,4 +1,5 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
+import type { AppProviderId, ProviderCapabilities } from '@cherrystudio/ai-runtime/provider';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
@@ -16,7 +17,6 @@ import {
 } from '@cherrystudio/universal/utils/model';
 import type { JSONValue } from 'ai';
 
-import type { AppProviderId, ProviderCapabilities } from '../types';
 import { addAnthropicHeaders } from './anthropicHeaders';
 import { buildGeminiGenerateImageParams } from './image';
 import { SystemProviderIds } from './providerIds';

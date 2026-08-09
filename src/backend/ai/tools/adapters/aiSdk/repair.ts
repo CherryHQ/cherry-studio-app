@@ -1,5 +1,6 @@
 import { type AiPlugin, generateText as aiCoreGenerateText } from '@cherrystudio/ai-core';
 import type { StringKeys } from '@cherrystudio/ai-core/provider';
+import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
 import {
   InvalidToolInputError,
   type JSONSchema7,
@@ -10,8 +11,6 @@ import {
 } from 'ai';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
-
-import type { AppProviderSettingsMap } from '../../../types';
 
 const logger = loggerService.withContext('ToolCallRepair');
 type AppProviderId = StringKeys<AppProviderSettingsMap>;
