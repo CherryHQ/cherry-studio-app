@@ -40,7 +40,7 @@ export function PrismSweepDot({
       return { opacity: IDLE_OPACITY };
     }
 
-    const localPhase = (((progress.value - orderFraction * SWEEP_SPAN) % 1) + 1) % 1;
+    const localPhase = (((progress.get() - orderFraction * SWEEP_SPAN) % 1) + 1) % 1;
     const opacity = interpolate(
       localPhase,
       [0, 0.05, 0.12, 0.22, FADE_SPAN, 1],

@@ -1,6 +1,7 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { MessageListProps } from '@/frontend/components/messagePresentation';
 
 import type {
   PaintingGenerationInput,
@@ -12,12 +13,6 @@ import { PaintingConversationScreen } from '../PaintingConversationScreen';
 type PaintingInputProps = {
   onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult>;
   onGenerated?: (result: PaintingGenerationResult) => void;
-};
-
-type MessageListProps = {
-  contentBottomInset: number;
-  keyboardOffset: number;
-  messages: Message[];
 };
 
 const mockRouterReplace = jest.fn();
@@ -129,13 +124,11 @@ jest.mock('@/frontend/components/composer', () => ({
   }),
 }));
 
-jest.mock('@/frontend/features/chat/workspace', () => ({
-  ChatMessageList: (props: MessageListProps) => {
+jest.mock('@/frontend/components/messagePresentation', () => ({
+  MessageList: (props: MessageListProps) => {
     mockMessageListProps = props;
     return null;
   },
-  ChatWorkspaceFrame: ({ children }: { children: React.ReactNode }) => children,
-  ScrollToBottomButton: () => null,
 }));
 
 jest.mock('@/frontend/features/paintings/components/PaintingInput', () => ({
@@ -209,8 +202,12 @@ describe('PaintingConversationScreen', () => {
       'user',
       'assistant',
     ]);
-    expect(mockMessageListProps?.messages[0].searchableText).toBe(input.prompt);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: input.prompt,
+      type: 'text',
+    });
     expect(mockMessageListProps?.messages[1].status).toBe('pending');
+    expect(mockMessageListProps?.enteringMessageId).toBe('00000000-0000-7000-8000-000000000002');
     expect(mockRouterReplace).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -225,7 +222,11 @@ describe('PaintingConversationScreen', () => {
       params: { paintingId: result.painting.id },
       pathname: '/paintings/[paintingId]/conversation',
     });
-    expect(mockMessageListProps?.messages[0].searchableText).toBe(mockPainting.prompt);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: mockPainting.prompt,
+      type: 'text',
+    });
+    expect(mockMessageListProps?.enteringMessageId).toBeUndefined();
   });
 
   it('shows persisted history without seeding the output as an input attachment', () => {
@@ -234,8 +235,12 @@ describe('PaintingConversationScreen', () => {
       'user',
       'assistant',
     ]);
-    expect(mockMessageListProps?.messages[0].searchableText).toBe(mockPainting.prompt);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: mockPainting.prompt,
+      type: 'text',
+    });
     expect(mockMessageListProps?.contentBottomInset).toBe(88);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
+    expect(mockMessageListProps?.bottomAccessoryHeight).toBeDefined();
   });
 });

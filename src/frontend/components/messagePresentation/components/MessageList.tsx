@@ -1,9 +1,7 @@
 import { ScrollShadow } from '@cherrystudio/ui/components';
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import {
-  type RefObject,
   useCallback,
   useEffect,
   useEffectEvent,
@@ -19,13 +17,15 @@ import {
   Platform,
   View,
 } from 'react-native';
-import type { SharedValue } from 'react-native-reanimated';
+import { useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { AssistantMessageItem, UserMessageItem } from '../../messageItem';
+import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
+import type { MessageListProps, MessagePresentationItem } from '../types';
+import { ScrollToBottomButton } from './ScrollToBottomButton';
 
 // 滚动/布局诊断埋点：记录会驱动列表位移的关键数值（scroll offset、内容高度、锚点就绪、
 // 翻页触发、钉顶滚动），用于把「界面跳动」量化成时间-位移轨迹。走 logger.debug → 仅 dev
@@ -35,6 +35,7 @@ const scrollLog = loggerService.withContext('ChatScroll');
 // 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
 const ANCHOR_TOP_GAP = 12;
 const ANCHOR_MAX_TEXT_LINES = 2;
+const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 5;
 const USER_MESSAGE_VERTICAL_PADDING = 32;
 // 撤遮罩（onReady）前要求内容高度保持「静默」的窗口：这段时间内没有任何 contentSize 变化才判定
 // settle 完成。用于覆盖**冷 markdown 解析**——首次进入 topic 时 streamdown/代码/数学的 tokenize
@@ -49,7 +50,7 @@ const READY_SETTLE_MS = 150;
 // 返回 false 把 pending 助手消息排除出 MVCP 的锚点候选，迫使它只锚定稳定项（上方的用户消息 /
 // 历史消息），钉顶的用户消息在整个流式过程中纹丝不动。历史消息为 success 态仍参与锚定，
 // 向上翻页加载旧消息的位置保持不受影响。
-function shouldRestoreMessagePosition(item: Message): boolean {
+function shouldRestoreMessagePosition(item: MessagePresentationItem): boolean {
   return !(item.role === 'assistant' && item.status === 'pending');
 }
 
@@ -78,28 +79,15 @@ function resolveTailFollowState(
   return state.anchorMessageId === anchorMessageId ? state : createTailFollowState(anchorMessageId);
 }
 
-type ChatMessageListProps = {
-  anchorIndex: number;
-  contentBottomInset: number;
-  contentTopInset: number;
-  isAtBottom: SharedValue<boolean>;
-  keyboardOffset: number;
-  listRef: RefObject<LegendListRef | null>;
-  messages: readonly Message[];
-  onLoadOlder: () => Promise<void>;
-  onReady?: () => void;
-  pendingUserMessageId?: string;
-};
-
-function renderMessageItem({ item }: LegendListRenderItemProps<Message>) {
+function renderMessageRow({ item }: LegendListRenderItemProps<MessagePresentationItem>) {
   return item.role === 'user' ? (
-    <UserMessageItem message={item} />
+    <UserMessageRow message={item} />
   ) : (
-    <AssistantMessageItem message={item} />
+    <AssistantMessageRow message={item} />
   );
 }
 
-function messageKeyExtractor(item: Message) {
+function messageKeyExtractor(item: MessagePresentationItem) {
   return item.id;
 }
 
@@ -108,22 +96,32 @@ function messageKeyExtractor(item: Message) {
 // LegendList 内部（react-native.mjs getItemSize）优先用「已测量的同类型行的真实均值 averageSizes[type].avg」
 // 估算未测量行，无则才退回 estimatedItemSize。按 role 分类后，向上翻页 prepend / 滚回历史时，新行用
 // 各自类型的真实均值定位 → MVCP/初始 bootstrap 的「估算→真实」修正幅度大幅收窄，减少可见跳动。
-function getMessageItemType(item: Message) {
+function getMessageRowType(item: MessagePresentationItem) {
   return item.role;
 }
 
-export function ChatMessageList({
-  anchorIndex,
+function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role === 'user') {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+export function MessageList({
+  bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
-  isAtBottom,
+  enteringMessageId,
   keyboardOffset,
-  listRef,
   messages,
   onLoadOlder,
   onReady,
-  pendingUserMessageId,
-}: ChatMessageListProps) {
+}: MessageListProps) {
+  const listRef = useRef<LegendListRef | null>(null);
+  const isAtBottom = useSharedValue(true);
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const [contentBaseHeight, setContentBaseHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -139,8 +137,13 @@ export function ChatMessageList({
   const isMomentumScrollingRef = useRef(false);
   const isUserInteractingRef = useRef(false);
   const lastMessageId = messages[messages.length - 1]?.id;
+  const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
   const handleStartReached = useCallback(() => {
+    if (!onLoadOlder) {
+      return;
+    }
+
     scrollLog.debug('[SCROLL] startReached', { t: Date.now() });
     void onLoadOlder();
   }, [onLoadOlder]);
@@ -281,16 +284,16 @@ export function ChatMessageList({
         anchorKey: info.anchorKey,
         t: Date.now(),
       });
-      const isPendingUserMessage = info.anchorKey === pendingUserMessageId;
-      const shouldAnimate = isPendingUserMessage && anchorIndex > 0;
+      const isEnteringMessage = info.anchorKey === enteringMessageId;
+      const shouldAnimate = isEnteringMessage && anchorIndex > 0;
       requestAnimationFrame(() => {
         void scrollMessageToEnd({
           animated: shouldAnimate,
-          closeKeyboard: isPendingUserMessage,
+          closeKeyboard: isEnteringMessage,
         });
       });
     },
-    [anchorIndex, pendingUserMessageId, scrollMessageToEnd],
+    [anchorIndex, enteringMessageId, scrollMessageToEnd],
   );
 
   const handleAnchoredEndSpaceSizeChanged = useCallback(
@@ -402,6 +405,9 @@ export function ChatMessageList({
     : MAINTAIN_VISIBLE_CONTENT_POSITION;
   // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
+  const handleScrollToEnd = useCallback(() => {
+    void listRef.current?.scrollToEnd({ animated: true });
+  }, []);
 
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -534,49 +540,61 @@ export function ChatMessageList({
   }, [cancelPendingInteractionEnd, cancelPendingReadyFrame, cancelPendingTailFollow]);
 
   return (
-    <ScrollShadow className="flex-1" visibility="bottom" size={80}>
-      <KeyboardAwareLegendList
-        ref={listRef}
-        applyWorkaroundForContentInsetHitTestBug
-        anchoredEndSpace={anchoredEndSpace}
-        contentContainerStyle={contentContainerStyle}
-        contentInsetAdjustmentBehavior="never"
-        data={messages}
-        drawDistance={80}
-        estimatedItemSize={300}
-        estimatedHeaderSize={contentTopInset}
-        freeze={freeze}
-        getItemType={getMessageItemType}
-        keyExtractor={messageKeyExtractor}
-        keyboardDismissMode="interactive"
-        keyboardLiftBehavior="whenAtEnd"
-        keyboardOffset={keyboardOffset}
-        keyboardShouldPersistTaps="handled"
-        ListHeaderComponent={listHeader}
-        initialScrollAtEnd
-        maintainVisibleContentPosition={maintainVisibleContentPosition}
-        onContentSizeChange={handleContentSizeChange}
-        onEndVisible={handleEndVisible}
-        onItemSizeChanged={handleItemSizeChanged}
-        onLayout={handleLayout}
-        onMomentumScrollBegin={handleMomentumScrollBegin}
-        onMomentumScrollEnd={handleMomentumScrollEnd}
-        onScroll={handleScroll}
-        onScrollBeginDrag={handleScrollBeginDrag}
-        onScrollEndDrag={handleScrollEndDrag}
-        onStartReached={handleStartReached}
-        onStartReachedThreshold={0.05}
-        onTouchCancel={handleTouchEnd}
-        onTouchEnd={handleTouchEnd}
-        onTouchStart={handleTouchStart}
-        recycleItems={false}
-        renderItem={renderMessageItem}
-        scrollEventThrottle={16}
-        scrollsToTop
-        sharedValues={sharedValues}
-        showsVerticalScrollIndicator={false}
-        className="flex-1"
-      />
-    </ScrollShadow>
+    <MessageSlideInProvider slideInMessageId={enteringMessageId}>
+      <View className="flex-1">
+        <ScrollShadow className="flex-1" visibility="bottom" size={80}>
+          <KeyboardAwareLegendList
+            ref={listRef}
+            applyWorkaroundForContentInsetHitTestBug
+            anchoredEndSpace={anchoredEndSpace}
+            contentContainerStyle={contentContainerStyle}
+            contentInsetAdjustmentBehavior="never"
+            data={messages}
+            drawDistance={80}
+            estimatedItemSize={300}
+            estimatedHeaderSize={contentTopInset}
+            freeze={freeze}
+            getItemType={getMessageRowType}
+            keyExtractor={messageKeyExtractor}
+            keyboardDismissMode="interactive"
+            keyboardLiftBehavior="whenAtEnd"
+            keyboardOffset={keyboardOffset}
+            keyboardShouldPersistTaps="handled"
+            ListHeaderComponent={listHeader}
+            initialScrollAtEnd
+            maintainVisibleContentPosition={maintainVisibleContentPosition}
+            onContentSizeChange={handleContentSizeChange}
+            onEndVisible={handleEndVisible}
+            onItemSizeChanged={handleItemSizeChanged}
+            onLayout={handleLayout}
+            onMomentumScrollBegin={handleMomentumScrollBegin}
+            onMomentumScrollEnd={handleMomentumScrollEnd}
+            onScroll={handleScroll}
+            onScrollBeginDrag={handleScrollBeginDrag}
+            onScrollEndDrag={handleScrollEndDrag}
+            onStartReached={onLoadOlder ? handleStartReached : undefined}
+            onStartReachedThreshold={0.05}
+            onTouchCancel={handleTouchEnd}
+            onTouchEnd={handleTouchEnd}
+            onTouchStart={handleTouchStart}
+            recycleItems={false}
+            renderItem={renderMessageRow}
+            scrollEventThrottle={16}
+            scrollsToTop
+            sharedValues={sharedValues}
+            showsVerticalScrollIndicator={false}
+            className="flex-1"
+          />
+        </ScrollShadow>
+        {bottomAccessoryHeight ? (
+          <ScrollToBottomButton
+            gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
+            inputHeight={bottomAccessoryHeight}
+            isAtBottom={isAtBottom}
+            onPress={handleScrollToEnd}
+          />
+        ) : null}
+      </View>
+    </MessageSlideInProvider>
   );
 }

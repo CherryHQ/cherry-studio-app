@@ -1,18 +1,17 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
-
+import type { MessagePresentationItem } from '../../types';
 import { resolveMessageCitationText } from '../citations';
 import { MessagePart } from './MessagePart';
 
 type MessagePartsProps = {
-  message: Message;
+  message: MessagePresentationItem;
   renderMode?: MessagePartRenderMode;
 };
 
 export type MessagePartRenderMode = 'markdown' | 'plainText';
 
 function getMessagePartKey(
-  message: Message,
-  part: NonNullable<Message['data']['parts']>[number],
+  message: MessagePresentationItem,
+  part: NonNullable<MessagePresentationItem['data']['parts']>[number],
   index: number,
 ) {
   return `${message.id}-${part.type}-${index}`;

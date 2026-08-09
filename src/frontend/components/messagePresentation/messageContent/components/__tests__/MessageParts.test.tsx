@@ -1,7 +1,8 @@
-import type { Message, MessageStatus } from '@cherrystudio/universal/data/types/message';
+import type { MessageStatus } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { MessagePresentationItem } from '../../../types';
 import { MessageParts } from '../MessageParts';
 
 jest.mock('../MessagePart', () => {
@@ -37,10 +38,11 @@ function render(element: ReactElement): ReactTestRenderer {
   return renderer;
 }
 
-function makeMessage(status: MessageStatus): Message {
+function makeMessage(status: MessageStatus): MessagePresentationItem {
   return {
     data: { parts: [{ text: 'Hello', type: 'text' }] },
     id: 'message-1',
+    role: 'assistant',
     status,
-  } as Message;
+  };
 }

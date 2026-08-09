@@ -1,6 +1,6 @@
 # Prism Sweep
 
-This ChatScreen-owned module provides an animated 5x5 dot-matrix indicator: a snake-style
+This internal message-presentation module provides an animated 5x5 dot-matrix indicator: a snake-style
 trail sweeps across alternating anti-diagonals, useful as a lightweight
 "working" indicator (e.g. a model thinking/streaming state).
 
@@ -8,7 +8,7 @@ This is an original Reanimated implementation inspired by the visual idea of
 a diagonal dot-matrix sweep. It does not reuse code from any third-party
 component library.
 
-## Public Interface
+## Internal Interface
 
 - `PrismSweep` renders the animated dot grid. Props: `active` (runs the sweep
   vs. settling to a dim static grid), `size`, `durationMs`, `dotClassName`

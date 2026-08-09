@@ -1,14 +1,14 @@
-import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
 import { createComposerMessageParts } from '@/frontend/components/composer/utils/composerAttachments';
+import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
 
 import type { PaintingGenerationInput } from '../../hooks/usePaintingGeneration';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
 
 type PendingPaintingTurn = {
   assistantMessageId: string;
-  createdAt: string;
   input: PaintingGenerationInput;
   userMessageId: string;
 };
@@ -16,7 +16,7 @@ type PendingPaintingTurn = {
 export function createPaintingConversationMessages(
   painting: Painting,
   files: ResolvedPaintingFiles,
-): Message[] {
+): MessagePresentationItem[] {
   const assistantMessageId = painting.files.output[0];
   if (!assistantMessageId) {
     throw new Error('Painting conversation requires an output file');
@@ -24,84 +24,49 @@ export function createPaintingConversationMessages(
 
   return [
     createMessage({
-      createdAt: painting.createdAt,
       id: painting.id,
-      modelId: null,
-      parentId: null,
       parts: createComposerMessageParts(painting.prompt, files.inputs),
       role: 'user',
-      searchableText: painting.prompt,
       status: 'success',
-      topicId: painting.id,
-      updatedAt: painting.updatedAt,
     }),
     createMessage({
-      createdAt: painting.updatedAt,
       id: assistantMessageId,
-      modelId: painting.modelId,
-      parentId: painting.id,
       parts: createComposerMessageParts('', files.outputs),
       role: 'assistant',
-      searchableText: '',
       status: 'success',
-      topicId: painting.id,
-      updatedAt: painting.updatedAt,
     }),
   ];
 }
 
-export function createPendingPaintingConversationMessages(turn: PendingPaintingTurn): Message[] {
+export function createPendingPaintingConversationMessages(
+  turn: PendingPaintingTurn,
+): MessagePresentationItem[] {
   return [
     createMessage({
-      createdAt: turn.createdAt,
       id: turn.userMessageId,
-      modelId: null,
-      parentId: null,
       parts: createComposerMessageParts(turn.input.prompt, turn.input.attachments),
       role: 'user',
-      searchableText: turn.input.prompt,
       status: 'success',
-      topicId: turn.userMessageId,
-      updatedAt: turn.createdAt,
     }),
     createMessage({
-      createdAt: turn.createdAt,
       id: turn.assistantMessageId,
-      modelId: turn.input.modelId,
-      parentId: turn.userMessageId,
       parts: [],
       role: 'assistant',
-      searchableText: '',
       status: 'pending',
-      topicId: turn.userMessageId,
-      updatedAt: turn.createdAt,
     }),
   ];
 }
 
 function createMessage(input: {
-  createdAt: string;
   id: string;
-  modelId: string | null;
-  parentId: string | null;
   parts: CherryMessagePart[];
   role: 'assistant' | 'user';
-  searchableText: string;
   status: 'pending' | 'success';
-  topicId: string;
-  updatedAt: string;
-}): Message {
+}): MessagePresentationItem {
   return {
-    createdAt: input.createdAt,
     data: { parts: input.parts },
     id: input.id,
-    modelId: input.modelId,
-    parentId: input.parentId,
     role: input.role,
-    searchableText: input.searchableText,
-    siblingsGroupId: 0,
     status: input.status,
-    topicId: input.topicId,
-    updatedAt: input.updatedAt,
   };
 }

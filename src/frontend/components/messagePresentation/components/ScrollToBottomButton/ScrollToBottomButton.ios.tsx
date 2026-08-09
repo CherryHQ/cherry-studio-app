@@ -1,3 +1,4 @@
+import { duration, easing } from '@cherrystudio/ui/motion';
 import { Button, Host, Image } from '@expo/ui/swift-ui';
 import { frame, glassEffect } from '@expo/ui/swift-ui/modifiers';
 import { PlatformColor, StyleSheet } from 'react-native';
@@ -6,6 +7,7 @@ import Animated, { useAnimatedProps, useAnimatedStyle, withTiming } from 'react-
 import type { ScrollToBottomButtonProps } from './types';
 
 const BUTTON_SIZE = 40;
+const visibilityMotion = { duration: duration.fast, easing: easing.settle } as const;
 
 // iOS：@expo/ui(SwiftUI)Button + 液态玻璃(glassEffect circle)做圆形「滚动到底部」按钮。
 // 显隐/定位均由 reanimated 共享值驱动，与 Android 实现保持一致的行为。
@@ -15,13 +17,13 @@ export function ScrollToBottomButton({
   isAtBottom,
   onPress,
 }: ScrollToBottomButtonProps) {
-  const wrapStyle = useAnimatedStyle(() => ({ bottom: inputHeight.value + gap }));
+  const wrapStyle = useAnimatedStyle(() => ({ bottom: inputHeight.get() + gap }));
   const containerStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(isAtBottom.value ? 0 : 1, { duration: 160 }),
-    transform: [{ scale: withTiming(isAtBottom.value ? 0.8 : 1, { duration: 160 }) }],
+    opacity: withTiming(isAtBottom.get() ? 0 : 1, visibilityMotion),
+    transform: [{ scale: withTiming(isAtBottom.get() ? 0.8 : 1, visibilityMotion) }],
   }));
   const containerProps = useAnimatedProps(() => ({
-    pointerEvents: (isAtBottom.value ? 'none' : 'auto') as 'auto' | 'none',
+    pointerEvents: (isAtBottom.get() ? 'none' : 'auto') as 'auto' | 'none',
   }));
 
   return (

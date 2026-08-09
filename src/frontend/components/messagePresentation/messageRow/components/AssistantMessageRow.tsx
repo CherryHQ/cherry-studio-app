@@ -1,14 +1,14 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import { View } from 'react-native';
 
 import { MessageParts } from '../../messageContent';
 import { PrismSweep } from '../../prismSweep';
+import type { MessagePresentationItem } from '../../types';
 
-type AssistantMessageItemProps = {
-  message: Message;
+type AssistantMessageRowProps = {
+  message: MessagePresentationItem;
 };
 
-export function AssistantMessageItem({ message }: AssistantMessageItemProps) {
+export function AssistantMessageRow({ message }: AssistantMessageRowProps) {
   const isPendingEmptyMessage = message.status === 'pending' && !message.data.parts?.length;
 
   return (

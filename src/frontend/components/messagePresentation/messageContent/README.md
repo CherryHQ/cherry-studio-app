@@ -2,9 +2,9 @@
 
 This module renders the structured parts inside a chat message.
 
-## Public Interface
+## Internal Interface
 
-- `MessageParts` is exported from `index.ts` and is the only component callers should import.
+- `MessageParts` is exported from the local `index.ts` for message rows inside this module.
 - Individual part renderers in `components/` are implementation details owned by this module.
 
 ## Organization

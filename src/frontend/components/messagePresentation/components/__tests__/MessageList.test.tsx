@@ -1,13 +1,15 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { LegendListRef } from '@legendapp/list/react-native';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { type LayoutChangeEvent, Platform } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ChatMessageList } from '../ChatMessageList';
+import type { MessageListProps, MessagePresentationItem } from '../../types';
+import { MessageList } from '../MessageList';
 
 type AnchoredEndSpaceConfig = {
+  anchorIndex?: number;
   anchorMaxSize?: number;
   onReady?: (info: { anchorKey: string | undefined }) => void;
   onSizeChanged?: (size: number) => void;
@@ -17,7 +19,9 @@ type MockLegendListProps = {
   applyWorkaroundForContentInsetHitTestBug?: boolean;
   anchoredEndSpace?: AnchoredEndSpaceConfig;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
+  data?: readonly MessagePresentationItem[];
   freeze?: unknown;
+  getItemType?: (item: MessagePresentationItem) => string;
   keyboardOffset?: number;
   maintainScrollAtEnd?: unknown;
   maintainScrollAtEndThreshold?: number;
@@ -29,8 +33,12 @@ type MockLegendListProps = {
   onMomentumScrollEnd?: () => void;
   onScrollBeginDrag?: () => void;
   onScrollEndDrag?: () => void;
+  onStartReached?: () => void;
   onTouchEnd?: () => void;
   onTouchStart?: () => void;
+  ref?: Ref<LegendListRef>;
+  renderItem?: (info: { index: number; item: MessagePresentationItem }) => ReactNode;
+  sharedValues?: { isAtEnd: SharedValue<boolean> };
   showsVerticalScrollIndicator?: boolean;
 };
 
@@ -38,23 +46,62 @@ let mockLatestListProps: MockLegendListProps | undefined;
 const mockFreeze = { get: jest.fn(), set: jest.fn(), value: false };
 const mockScrollMessageToEnd = jest.fn(async () => undefined);
 const mockListScrollToEnd = jest.fn();
+const mockListScrollToEndMethod = jest.fn(async () => undefined);
 let mockListMetrics = { contentLength: 500, scroll: 0, scrollLength: 500 };
-const listRef = {
-  current: {
-    getNativeScrollRef: () => ({ scrollToEnd: mockListScrollToEnd }),
-    getState: () => mockListMetrics,
-  } as unknown as LegendListRef,
-};
+const mockLegendListRef = {
+  getNativeScrollRef: () => ({ scrollToEnd: mockListScrollToEnd }),
+  getState: () => mockListMetrics,
+  scrollToEnd: mockListScrollToEndMethod,
+} as unknown as LegendListRef;
+const mockIsAtBottom = {
+  get: jest.fn(() => true),
+  set: jest.fn(),
+  value: true,
+} as unknown as SharedValue<boolean>;
+const mockAssistantMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
+const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
+let mockSlideInMessageId: string | undefined;
+let mockScrollButtonProps:
+  | {
+      inputHeight: SharedValue<number>;
+      isAtBottom: SharedValue<boolean>;
+      onPress: () => void;
+    }
+  | undefined;
 let mockFontSizeStep = 0;
 const originalPlatform = Platform.OS;
 
 jest.mock('@legendapp/list/keyboard', () => {
+  const { Fragment: MockFragment } = jest.requireActual('react');
   const { View: MockView } = jest.requireActual('react-native');
+  const { useLayoutEffect: useMockLayoutEffect } = jest.requireActual('react');
 
   return {
     KeyboardAwareLegendList: (props: MockLegendListProps) => {
       mockLatestListProps = props;
-      return <MockView testID="chat-message-list" />;
+      useMockLayoutEffect(() => {
+        if (typeof props.ref === 'function') {
+          props.ref(mockLegendListRef);
+        } else if (props.ref) {
+          props.ref.current = mockLegendListRef;
+        }
+
+        return () => {
+          if (typeof props.ref === 'function') {
+            props.ref(null);
+          } else if (props.ref) {
+            props.ref.current = null;
+          }
+        };
+      }, [props.ref]);
+
+      return (
+        <MockView testID="message-list">
+          {props.data?.map((item, index) => (
+            <MockFragment key={item.id}>{props.renderItem?.({ index, item })}</MockFragment>
+          ))}
+        </MockView>
+      );
     },
     useKeyboardScrollToEnd: () => ({
       freeze: mockFreeze,
@@ -77,29 +124,47 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
-jest.mock('../../../messageItem', () => ({
-  AssistantMessageItem: () => null,
-  UserMessageItem: () => null,
+jest.mock('react-native-reanimated', () => ({
+  useSharedValue: () => mockIsAtBottom,
 }));
 
-const now = '2026-08-06T00:00:00.000Z';
+jest.mock('../../messageRow', () => ({
+  AssistantMessageRow: (props: { message: MessagePresentationItem }) =>
+    mockAssistantMessageRow(props),
+  MessageSlideInProvider: ({
+    children,
+    slideInMessageId,
+  }: {
+    children: ReactNode;
+    slideInMessageId?: string;
+  }) => {
+    mockSlideInMessageId = slideInMessageId;
+    return children;
+  },
+  UserMessageRow: (props: { message: MessagePresentationItem }) => mockUserMessageRow(props),
+}));
+
+jest.mock('../ScrollToBottomButton', () => ({
+  ScrollToBottomButton: (props: {
+    inputHeight: SharedValue<number>;
+    isAtBottom: SharedValue<boolean>;
+    onPress: () => void;
+  }) => {
+    mockScrollButtonProps = props;
+    return null;
+  },
+}));
 
 function createMessage(
   id: string,
-  role: Message['role'],
+  role: MessagePresentationItem['role'],
   parts: Message['data']['parts'] = [],
-): Message {
+): MessagePresentationItem {
   return {
-    createdAt: now,
     data: { parts },
     id,
-    parentId: null,
     role,
-    searchableText: '',
-    siblingsGroupId: 0,
     status: role === 'assistant' ? 'pending' : 'success',
-    topicId: 'topic-1',
-    updatedAt: now,
   };
 }
 
@@ -116,32 +181,21 @@ function filePart(): NonNullable<Message['data']['parts']>[number] {
   };
 }
 
-const isAtBottom = {
-  get: () => true,
-  set: jest.fn(),
-  value: true,
-} as unknown as SharedValue<boolean>;
-
 function listProps(
-  messages: readonly Message[],
-  anchorIndex: number,
-  pendingUserMessageId?: string,
-) {
+  messages: readonly MessagePresentationItem[],
+  enteringMessageId?: string,
+): MessageListProps {
   return {
-    anchorIndex,
     contentBottomInset: 80,
     contentTopInset: 44,
-    isAtBottom,
+    ...(enteringMessageId ? { enteringMessageId } : {}),
     keyboardOffset: 26,
-    listRef,
     messages,
     onLoadOlder: jest.fn(async () => undefined),
-    onPrefetchOlder: jest.fn(),
-    pendingUserMessageId,
   };
 }
 
-describe('ChatMessageList anchored tail following', () => {
+describe('MessageList anchored tail following', () => {
   let renderer: ReactTestRenderer | undefined;
   let cancelAnimationFrameSpy: jest.SpyInstance;
   let frameCallbacks: Map<number, FrameRequestCallback>;
@@ -159,6 +213,8 @@ describe('ChatMessageList anchored tail following', () => {
     mockListMetrics = { contentLength: 500, scroll: 0, scrollLength: 500 };
     mockFontSizeStep = 0;
     mockLatestListProps = undefined;
+    mockScrollButtonProps = undefined;
+    mockSlideInMessageId = undefined;
     frameCallbacks = new Map();
     nextFrameId = 1;
     requestAnimationFrameSpy = jest
@@ -191,22 +247,106 @@ describe('ChatMessageList anchored tail following', () => {
     ];
 
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(textMessages, 0)} />);
+      renderer = create(<MessageList {...listProps(textMessages)} />);
     });
 
     expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(80);
 
     mockFontSizeStep = 2;
-    act(() => renderer?.update(<ChatMessageList {...listProps(textMessages, 0)} />));
+    act(() => renderer?.update(<MessageList {...listProps(textMessages)} />));
     expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBe(84);
 
     const fileMessages = [
       createMessage('user-1', 'user', [filePart()]),
       createMessage('assistant-1', 'assistant'),
     ];
-    act(() => renderer?.update(<ChatMessageList {...listProps(fileMessages, 0)} />));
+    act(() => renderer?.update(<MessageList {...listProps(fileMessages)} />));
 
     expect(mockLatestListProps?.anchoredEndSpace?.anchorMaxSize).toBeUndefined();
+  });
+
+  test('dispatches user and assistant rows with role-based recycling types', () => {
+    const userMessage = createMessage('user-1', 'user', [textPart('hello')]);
+    const pendingAssistantMessage = createMessage('assistant-1', 'assistant');
+
+    act(() => {
+      renderer = create(<MessageList {...listProps([userMessage, pendingAssistantMessage])} />);
+    });
+
+    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: userMessage });
+    expect(mockAssistantMessageRow).toHaveBeenCalledWith({ message: pendingAssistantMessage });
+    expect(mockLatestListProps?.getItemType?.(userMessage)).toBe('user');
+    expect(mockLatestListProps?.getItemType?.(pendingAssistantMessage)).toBe('assistant');
+  });
+
+  test('derives the anchor from the latest user message', () => {
+    const messages = [
+      createMessage('assistant-0', 'assistant'),
+      createMessage('user-1', 'user'),
+      createMessage('assistant-1', 'assistant'),
+      createMessage('user-2', 'user'),
+      createMessage('assistant-2', 'assistant'),
+    ];
+
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} />);
+    });
+
+    expect(mockLatestListProps?.anchoredEndSpace?.anchorIndex).toBe(3);
+
+    act(() => {
+      renderer?.update(<MessageList {...listProps([createMessage('assistant-3', 'assistant')])} />);
+    });
+
+    expect(mockLatestListProps?.anchoredEndSpace).toBeUndefined();
+  });
+
+  test('wires pagination only when an older-message loader is provided', () => {
+    const props = listProps([createMessage('user-1', 'user')]);
+    const onLoadOlder = props.onLoadOlder;
+
+    act(() => {
+      renderer = create(<MessageList {...props} />);
+    });
+    act(() => mockLatestListProps?.onStartReached?.());
+
+    expect(onLoadOlder).toHaveBeenCalledTimes(1);
+
+    const { onLoadOlder: _onLoadOlder, ...withoutPagination } = listProps([
+      createMessage('user-1', 'user'),
+    ]);
+    act(() => renderer?.update(<MessageList {...withoutPagination} />));
+
+    expect(mockLatestListProps?.onStartReached).toBeUndefined();
+  });
+
+  test('owns the entering-message provider and optional scroll button', () => {
+    const bottomAccessoryHeight = {
+      get: jest.fn(() => 88),
+      set: jest.fn(),
+      value: 88,
+    } as unknown as SharedValue<number>;
+    const props = {
+      ...listProps([createMessage('user-1', 'user')], 'user-1'),
+      bottomAccessoryHeight,
+    };
+
+    act(() => {
+      renderer = create(<MessageList {...props} />);
+    });
+
+    expect(mockSlideInMessageId).toBe('user-1');
+    expect(mockScrollButtonProps?.inputHeight).toBe(bottomAccessoryHeight);
+    expect(mockScrollButtonProps?.isAtBottom).toBe(mockLatestListProps?.sharedValues?.isAtEnd);
+
+    act(() => mockScrollButtonProps?.onPress());
+    expect(mockListScrollToEndMethod).toHaveBeenCalledWith({ animated: true });
+
+    mockScrollButtonProps = undefined;
+    act(() => renderer?.update(<MessageList {...listProps(props.messages)} />));
+
+    expect(mockScrollButtonProps).toBeUndefined();
+    expect(mockSlideInMessageId).toBeUndefined();
   });
 
   test('reserves the composer height in the scrollable message content', () => {
@@ -216,7 +356,7 @@ describe('ChatMessageList anchored tail following', () => {
     ];
 
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(messages, 0)} />);
+      renderer = create(<MessageList {...listProps(messages)} />);
     });
 
     expect(mockLatestListProps?.applyWorkaroundForContentInsetHitTestBug).toBe(true);
@@ -241,7 +381,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(messages, 0)} />);
+      renderer = create(<MessageList {...listProps(messages)} />);
     });
 
     expect(mockLatestListProps?.maintainScrollAtEnd).toBeUndefined();
@@ -286,7 +426,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(messages, 0)} />);
+      renderer = create(<MessageList {...listProps(messages)} />);
     });
     act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
 
@@ -306,7 +446,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(messages, 0)} />);
+      renderer = create(<MessageList {...listProps(messages)} />);
     });
     act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
     act(() => flushAnimationFrames());
@@ -342,7 +482,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(messages, 0)} />);
+      renderer = create(<MessageList {...listProps(messages)} />);
     });
 
     expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
@@ -356,12 +496,12 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(messages, 0)} />);
+      renderer = create(<MessageList {...listProps(messages)} />);
     });
     act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
 
     const prepended = [createMessage('older-1', 'assistant'), ...messages];
-    act(() => renderer?.update(<ChatMessageList {...listProps(prepended, 1)} />));
+    act(() => renderer?.update(<MessageList {...listProps(prepended)} />));
     expect(mockLatestListProps?.maintainVisibleContentPosition).toBeUndefined();
 
     const nextTurn = [
@@ -369,7 +509,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('user-2', 'user', [textPart('next')]),
       createMessage('assistant-2', 'assistant'),
     ];
-    act(() => renderer?.update(<ChatMessageList {...listProps(nextTurn, 3)} />));
+    act(() => renderer?.update(<MessageList {...listProps(nextTurn)} />));
     expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
   });
 
@@ -379,7 +519,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(<ChatMessageList {...listProps(firstTurn, 0, 'user-1')} />);
+      renderer = create(<MessageList {...listProps(firstTurn, 'user-1')} />);
     });
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
@@ -397,7 +537,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('user-2', 'user', [textPart('next')]),
       createMessage('assistant-2', 'assistant'),
     ];
-    act(() => renderer?.update(<ChatMessageList {...listProps(secondTurn, 2, 'user-2')} />));
+    act(() => renderer?.update(<MessageList {...listProps(secondTurn, 'user-2')} />));
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-2' }));
     act(() => flushAnimationFrames());
 
@@ -411,7 +551,7 @@ describe('ChatMessageList anchored tail following', () => {
       createMessage('user-3', 'user', [textPart('history')]),
       createMessage('assistant-3', 'assistant'),
     ];
-    act(() => renderer?.update(<ChatMessageList {...listProps(historicalTurn, 4)} />));
+    act(() => renderer?.update(<MessageList {...listProps(historicalTurn)} />));
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-3' }));
     act(() => flushAnimationFrames());
 

@@ -1,11 +1,11 @@
-# Message Item
+# Message Row
 
 This module renders role-level chat message rows.
 
-## Public Interface
+## Internal Interface
 
-- `AssistantMessageItem` and `UserMessageItem` are exported from `index.ts`.
-- Callers should import from the `messageItem` module root, not from files under `components/`.
+- `AssistantMessageRow`, `UserMessageRow`, and `MessageSlideInProvider` are exported from the local
+  `index.ts` only for `MessageList`.
 
 ## Organization
 

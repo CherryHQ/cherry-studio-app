@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { getBuiltInToolPresentation } from '@/frontend/components/messagePresentation/utils/builtInToolPresentation';
+
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
-import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 
 const ignoreClose = () => undefined;
 

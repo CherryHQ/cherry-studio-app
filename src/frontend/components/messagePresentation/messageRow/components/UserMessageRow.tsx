@@ -1,4 +1,3 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import { type MenuAction, MenuView } from '@expo/ui/community/menu';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,14 +5,15 @@ import { View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
 import { MessageParts } from '../../messageContent';
+import type { MessagePresentationItem } from '../../types';
 import { useUserMessageSlideInStyle } from '../slideIn/hooks/useUserMessageSlideInStyle';
 import { useShouldSlideIn } from '../slideIn/MessageSlideInProvider';
 
-type UserMessageItemProps = {
-  message: Message;
+type UserMessageRowProps = {
+  message: MessagePresentationItem;
 };
 
-export function UserMessageItem({ message }: UserMessageItemProps) {
+export function UserMessageRow({ message }: UserMessageRowProps) {
   const { t } = useTranslation();
   const shouldSlideIn = useShouldSlideIn(message.id);
   const slideInStyle = useUserMessageSlideInStyle(shouldSlideIn);
