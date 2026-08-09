@@ -17,7 +17,9 @@ export const configurableEndpointTypes: EndpointType[] = [
 const defaultChatEndpoint = ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
 const endpointEditableAuthTypes: AuthType[] = ['api-key', 'iam-azure'];
 
-export function getPrimaryEndpoint(provider?: Provider | null): EndpointType {
+export function getPrimaryEndpoint(
+  provider?: Pick<Provider, 'defaultChatEndpoint'> | null,
+): EndpointType {
   return provider?.defaultChatEndpoint ?? defaultChatEndpoint;
 }
 
@@ -47,7 +49,9 @@ export function getConfigurableEndpointTypesForProvider(
   return canEditProviderEndpoint(provider) ? configurableEndpointTypes : [];
 }
 
-export function resolveVisibleEndpointTypes(provider?: Provider | null): EndpointType[] {
+export function resolveVisibleEndpointTypes(
+  provider?: Pick<Provider, 'defaultChatEndpoint' | 'endpointConfigs'> | null,
+): EndpointType[] {
   const primaryEndpoint = getPrimaryEndpoint(provider);
   const configured = Object.keys(provider?.endpointConfigs ?? {}) as EndpointType[];
   const secondaryEndpoints = configured.filter((endpoint) => endpoint !== primaryEndpoint).sort();
@@ -118,12 +122,28 @@ export function getEndpointLabel(endpoint: EndpointType): string {
       return 'Anthropic Messages';
     case 'google-generate-content':
       return 'Google Gemini';
+    case 'jina-rerank':
+      return 'Jina Rerank';
     case 'ollama-chat':
       return 'Ollama Chat';
     case 'ollama-generate':
       return 'Ollama Generate';
+    case 'openai-audio-transcription':
+      return 'OpenAI Audio Transcription';
+    case 'openai-audio-translation':
+      return 'OpenAI Audio Translation';
+    case 'openai-embeddings':
+      return 'OpenAI Embeddings';
+    case 'openai-image-edit':
+      return 'OpenAI Image Edit';
+    case 'openai-image-generation':
+      return 'OpenAI Image Generation';
     case 'openai-text-completions':
       return 'OpenAI Text Completions';
+    case 'openai-text-to-speech':
+      return 'OpenAI Text to Speech';
+    case 'openai-video-generation':
+      return 'OpenAI Video Generation';
     default:
       return endpoint;
   }

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { SettingsServiceRow } from '../SettingsServiceRow';
@@ -53,6 +54,28 @@ describe('SettingsServiceRow', () => {
     expect(renderer?.root.findByProps({ accessibilityRole: 'button' }).props.className).toContain(
       'min-h-16 px-4 py-3',
     );
+  });
+
+  it('renders custom details and includes their label in accessibility output', async () => {
+    await act(async () => {
+      renderer = create(
+        <SettingsServiceRow
+          details={<Text testID="provider-endpoints">Endpoints</Text>}
+          detailsAccessibilityLabel="Anthropic Messages, OpenAI Responses"
+          id="provider-1"
+          name="Provider"
+          nameClassName="text-lg font-semibold"
+          onPress={jest.fn()}
+        />,
+      );
+    });
+
+    const row = renderer?.root.findByProps({ accessibilityRole: 'button' });
+    const name = renderer?.root.findByProps({ children: 'Provider' });
+
+    expect(row?.props.accessibilityLabel).toBe('Provider, Anthropic Messages, OpenAI Responses');
+    expect(name?.props.className).toContain('text-lg font-semibold');
+    expect(renderer?.root.findByProps({ testID: 'provider-endpoints' })).toBeDefined();
   });
 
   it.each([

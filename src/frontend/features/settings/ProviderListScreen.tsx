@@ -11,18 +11,22 @@ import { useQuery } from '@/frontend/data';
 import { hiddenProviderListIds, isIOS } from '@/frontend/utils/constants';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
+import {
+  getProviderEndpoints,
+  ProviderEndpointSummary,
+} from './components/ProviderEndpointSummary';
 import { SettingsGroupedSurface } from './components/SettingsGroupedSurface';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 const PROVIDER_CARD_GAP = 12;
-const PROVIDER_ROW_ESTIMATED_HEIGHT = 64;
+const PROVIDER_ROW_ESTIMATED_HEIGHT = 96;
 
 const keyExtractor = (item: SettingsServiceRowProps) => item.id;
 const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
   <SettingsGroupedSurface isFirst isLast>
-    <SettingsServiceRow {...item} className="min-h-16 px-4 py-3" />
+    <SettingsServiceRow {...item} className="min-h-24 px-4 py-4" />
   </SettingsGroupedSurface>
 );
 const ProviderCardSeparator = () => <View style={styles.cardSeparator} />;
@@ -53,31 +57,38 @@ export default function ProviderSettingsScreen() {
         // Enabled providers float to the top; the sort is stable, so each group
         // keeps the `orderKey` order the service already applied.
         .sort((a, b) => Number(b.isEnabled) - Number(a.isEnabled))
-        .map((provider) => ({
-          avatar: (
-            <ProviderAvatar
-              presetProviderId={provider.presetProviderId}
-              providerId={provider.id}
-              providerName={provider.name}
-              size={40}
-            />
-          ),
-          id: provider.id,
-          isEnabled: provider.isEnabled,
-          name: provider.name,
-          onPress: () => {
-            if (isNavigatingRef.current) {
-              return;
-            }
-            isNavigatingRef.current = true;
-            router.push({
-              pathname: '/settings/provider/[providerId]',
-              params: { providerId: provider.id, providerName: provider.name },
-            });
-          },
-          statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
-          statusTone: 'success',
-        })),
+        .map((provider) => {
+          const endpoints = getProviderEndpoints(provider);
+
+          return {
+            avatar: (
+              <ProviderAvatar
+                presetProviderId={provider.presetProviderId}
+                providerId={provider.id}
+                providerName={provider.name}
+                size={40}
+              />
+            ),
+            details: <ProviderEndpointSummary endpoints={endpoints} />,
+            detailsAccessibilityLabel: endpoints.map(({ label }) => label).join(', '),
+            id: provider.id,
+            isEnabled: provider.isEnabled,
+            name: provider.name,
+            nameClassName: 'text-lg font-semibold',
+            onPress: () => {
+              if (isNavigatingRef.current) {
+                return;
+              }
+              isNavigatingRef.current = true;
+              router.push({
+                pathname: '/settings/provider/[providerId]',
+                params: { providerId: provider.id, providerName: provider.name },
+              });
+            },
+            statusLabel: provider.isEnabled ? t('settings.provider.status.enabled') : undefined,
+            statusTone: 'success' as const,
+          };
+        }),
     [providersQuery.data, router, t],
   );
   const filteredProviderItems = useMemo(() => {

@@ -13,9 +13,12 @@ export type SettingsServiceRowProps = {
   /** Custom leading visual; takes precedence over `imageSource` when provided. */
   avatar?: ReactNode;
   className?: string;
+  details?: ReactNode;
+  detailsAccessibilityLabel?: string;
   id: string;
   hideSeparator?: boolean;
   imageSource?: ImageSource | number;
+  nameClassName?: string;
   name: string;
   onPress: () => void;
   onPressedChange?: (id: string, isPressed: boolean) => void;
@@ -29,9 +32,12 @@ export type SettingsServiceRowProps = {
 export const SettingsServiceRow = memo(function SettingsServiceRow({
   avatar,
   className,
+  details,
+  detailsAccessibilityLabel,
   hideSeparator = false,
   id,
   imageSource,
+  nameClassName,
   name,
   onPress,
   onPressedChange,
@@ -40,7 +46,9 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
   statusTone = 'default',
   subtitle,
 }: SettingsServiceRowProps) {
-  const accessibilityLabel = [name, statusLabel, subtitle].filter(Boolean).join(', ');
+  const accessibilityLabel = [name, statusLabel, detailsAccessibilityLabel ?? subtitle]
+    .filter(Boolean)
+    .join(', ');
   const [isPressed, setIsPressed] = useState(false);
 
   return (
@@ -50,14 +58,18 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
         accessibilityLabel={accessibilityLabel}
         className={className}
         description={
-          subtitle ? (
+          details ??
+          (subtitle ? (
             <Text className="text-foreground-tertiary text-sm" numberOfLines={1}>
               {subtitle}
             </Text>
-          ) : undefined
+          ) : undefined)
         }
         label={
-          <Text className="min-w-0 text-base text-foreground" numberOfLines={1}>
+          <Text
+            className={cn('min-w-0 text-base text-foreground', nameClassName)}
+            numberOfLines={1}
+          >
             {name}
           </Text>
         }
