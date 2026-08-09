@@ -58,7 +58,46 @@ describe('AI runtime desktop provenance', () => {
     const report = await auditDesktopSync(fixture);
 
     expect(report.ok).toBe(false);
-    expect(report.errors).toContain('unmapped mobile source: src/backend/ai/new.ts');
+    expect(report.errors).toContain('unmapped backend target: src/backend/ai/new.ts');
+  });
+
+  it('keeps migrated mobile sources anchored to the historical commit', async () => {
+    const fixture = await createFixture();
+    const record = fixture.map.mobile.files[0];
+    fixture.map.mobile.files[0] = {
+      classification: 'semantic-port',
+      desktopSource: fixture.map.desktop.files[0].source,
+      evidence: [`mobile:${record.source}`],
+      reason: 'fixture source moved into the portable package',
+      source: record.source,
+      sourceSha256: record.sourceSha256,
+    };
+    await writeMap(fixture);
+    await rm(path.join(fixture.mobileRoot, record.source));
+    commitAll(fixture.mobileRoot, 'move historical mobile source');
+
+    const report = await auditDesktopSync(fixture);
+
+    expect(report.ok).toBe(true);
+  });
+
+  it('accepts a classified backend adapter added after the mobile baseline', async () => {
+    const fixture = await createFixture();
+    const target = 'src/backend/ai/newAdapter.ts';
+    await writeFile(path.join(fixture.mobileRoot, target), 'export const adapter = 1;\n');
+    commitAll(fixture.mobileRoot, 'add backend adapter');
+    fixture.map.backendOwned.push({
+      classification: 'mobile-extension',
+      evidence: [`mobile:${target}`],
+      reason: 'fixture platform adapter',
+      target,
+      targetSha256: await hashFile(path.join(fixture.mobileRoot, target)),
+    });
+    await writeMap(fixture);
+
+    const report = await auditDesktopSync(fixture);
+
+    expect(report.ok).toBe(true);
   });
 
   it('rejects duplicate targets and missing evidence', async () => {
@@ -164,7 +203,8 @@ async function createFixture(): Promise<Fixture> {
   const mobileA = 'src/backend/ai/a.ts';
   const target = 'packages/ai-runtime/src/messages/a.ts';
   const map: DesktopSyncMap = {
-    schemaVersion: 1,
+    schemaVersion: 2,
+    backendOwned: [],
     desktop: {
       commit: git(desktopRoot, ['rev-parse', 'HEAD']),
       files: [
@@ -192,12 +232,13 @@ async function createFixture(): Promise<Fixture> {
       commit: git(mobileRoot, ['rev-parse', 'HEAD']),
       files: [
         {
-          classification: 'semantic-port',
-          desktopSource: desktopA,
-          evidence: [`mobile:${target}`],
-          reason: 'fixture delegation',
+          classification: 'mobile-extension',
+          evidence: [`mobile:${mobileA}`],
+          reason: 'fixture backend adapter',
           source: mobileA,
           sourceSha256: await hashFile(path.join(mobileRoot, mobileA)),
+          target: mobileA,
+          targetSha256: await hashFile(path.join(mobileRoot, mobileA)),
         },
       ],
       sourceRoot: 'src/backend/ai',

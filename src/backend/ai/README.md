@@ -1,47 +1,36 @@
-# Mobile AI Adapter
+# Mobile AI Adapters
 
-Mobile AI service layer migrated from the desktop `src/main/ai` shape. This directory adapts the
-desktop AI concepts to the in-process Expo app runtime.
+Portable AI behavior lives in the private source package `@cherrystudio/ai-runtime`. App code may
+use only its `messages`, `provider`, `runtime`, `tools`, and `utils` subpaths. This directory owns
+the mobile platform and application-service boundaries around that package.
 
-## Scope
+## Backend Ownership
 
-- `AiService.ts` is the AI entry point registered in the private backend service graph.
-- `mcp/` owns the mobile Streamable HTTP MCP runtime, tool policies, and AI SDK adaptation.
-- `provider/` converts stored provider and model settings into AI SDK provider config.
-- `runtime/aiSdk/Agent.ts` keeps the desktop agent filename while narrowing behavior to plain AI SDK
-  generate and stream calls.
-- `messages/` converts app messages into AI SDK message shapes.
-- `streamManager/` owns chat turns end to end: the app-owned `ChatRuntime` tracks per-Topic abort and
-  tool-approval state and persists assistant messages; `topicNaming`, `normalizeCitations`, and
-  `MessageRuntimeTimingCollector` handle the surrounding concerns.
-- `tools/ToolResolver.ts` selects built-in, MCP, and external web-search tools for each AI request.
-- `types/` and `utils/` hold request types, merged provider types, and provider option helpers.
+- `AiService.ts` is the private backend AI entry point and preserves its existing app contract.
+- `provider/` injects Expo environment values and app headers, then builds provider configuration
+  from mobile data services.
+- `runtime/aiSdk/` retains Agent construction and request parameter orchestration that needs Expo
+  Crypto, preferences, provider services, tools, and logging.
+- `streamManager/` owns chat lifecycle, persistence, topic naming, approval state, and snapshots.
+- `messages/` resolves managed and device-local attachments through Expo FileSystem.
+- `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, and runtime projection.
+- `tools/` owns the device scope, diagnostics adapter, ToolResolver, Web tools, and Calendar,
+  Health, Location, and Reminder implementations.
+- `hooks/` connects portable usage semantics to the mobile billing record service.
+- `utils/` contains only the Expo UUID and mobile prompt-environment adapters.
 
-## Mobile Notes
+Pure message rules, provider implementations, request types, parameter policies, tool registry and
+meta-tools, loop plugins and observers, prompts, and stream helpers must not be duplicated here.
 
-- File and directory names intentionally follow the desktop AI layer where practical.
-- This layer should call `packages/ai-core` instead of depending on desktop Electron services.
-- Streaming is available through `AiService.streamText()`.
-- Non-streaming generation is available through `AiService.generateText()`.
-- Embedding and Rerank models remain in synchronized data and provider catalogs, but mobile does not
-  expose or route their execution through `AiService`.
-- Desktop IPC handlers, local MCP transports, and full agent sessions are not part of the current
-  mobile slice.
-- `streamManager/` collapses desktop's split between the Main-process `AiStreamManager` and the
-  renderer's `Chat`/overlay: one app-owned runtime holds per-Topic turns, listener fan-out becomes
-  in-memory snapshots, and the ContextProvider strategies become methods. Persistence timing still
-  matches desktop — the assistant row is written only on a terminal state.
+## Sync Trust
 
-## Organization
+`packages/ai-runtime/desktop-sync-map.json` retains the complete desktop and historical mobile
+inventories. Run the package check with a clean desktop checkout before treating a port as trusted:
 
-```text
-AiService.ts
-mcp/            # Streamable HTTP MCP runtime and AI SDK tool adaptation
-messages/       # message and file-part conversion
-provider/       # provider config, endpoint, factory, extensions
-runtime/aiSdk/  # AI SDK agent adapter
-streamManager/  # app-owned chat runtime: turn orchestration, persistence, topic naming, timing
-tools/          # request-time tool resolution and AI SDK adapters
-types/          # request and provider type glue
-utils/          # provider/model option helpers
+```bash
+pnpm --filter @cherrystudio/ai-runtime check
+pnpm --filter @cherrystudio/ai-runtime ai-runtime:check --desktop-root <desktop-root>
 ```
+
+The implemented-port check passes independently while the broader desktop audit continues to report
+the classified blocked backlog. Do not convert an unexplained desktop gap into an exclusion.

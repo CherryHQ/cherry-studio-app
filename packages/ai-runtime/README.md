@@ -12,7 +12,7 @@ adapters.
 
 The delegated map records every desktop and mobile AI file, its source hash, classification,
 target, and evidence. At desktop commit `12498d68`, it tracks 608 desktop files, 183 mobile files
-(176 TypeScript), and 129 package source files. The current desktop backlog is 418 blocked files;
+(176 TypeScript), and 130 package source files. The current desktop backlog is 418 blocked files;
 blocked entries remain visible but do not fail the implemented-port gate.
 
 Run both checks before treating mapped code as trusted:

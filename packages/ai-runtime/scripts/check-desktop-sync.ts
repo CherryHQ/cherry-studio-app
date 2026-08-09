@@ -32,7 +32,7 @@ type MobileProvenanceRecord = ProvenanceRecord & {
   desktopSource?: string;
 };
 
-type PackageOwnedRecord = {
+type OwnedTargetRecord = {
   classification: 'mobile-extension';
   evidence: string[];
   reason: string;
@@ -41,7 +41,8 @@ type PackageOwnedRecord = {
 };
 
 export type DesktopSyncMap = {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  backendOwned: OwnedTargetRecord[];
   desktop: {
     commit: string;
     files: ProvenanceRecord[];
@@ -53,7 +54,7 @@ export type DesktopSyncMap = {
     files: MobileProvenanceRecord[];
     sourceRoot: 'src/backend/ai';
   };
-  packageOwned: PackageOwnedRecord[];
+  packageOwned: OwnedTargetRecord[];
 };
 
 export type DesktopSyncAudit = {
@@ -88,6 +89,21 @@ function git(root: string, args: string[]): string {
 function gitLines(root: string, args: string[]): string[] {
   const output = git(root, args);
   return output ? output.split('\n').filter(Boolean).sort() : [];
+}
+
+function gitFileSha256(root: string, commit: string, repoPath: string): string {
+  return sha256(execFileSync('git', ['-C', root, 'show', `${commit}:${repoPath}`]));
+}
+
+function gitPathExists(root: string, commit: string, repoPath: string): boolean {
+  try {
+    execFileSync('git', ['-C', root, 'cat-file', '-e', `${commit}:${repoPath}`], {
+      stdio: 'ignore',
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function assertRepository(root: string, expectedName: string): Promise<void> {
@@ -193,6 +209,7 @@ async function evidenceExists(
   reference: string,
   desktopRoot: string,
   mobileRoot: string,
+  mobileCommit: string,
 ): Promise<boolean> {
   const separator = reference.indexOf(':');
   const owner = reference.slice(0, separator);
@@ -202,7 +219,8 @@ async function evidenceExists(
     await access(path.join(owner === 'desktop' ? desktopRoot : mobileRoot, repoPath));
     return true;
   } catch {
-    return false;
+    if (owner !== 'mobile') return false;
+    return gitPathExists(mobileRoot, mobileCommit, repoPath);
   }
 }
 
@@ -219,7 +237,7 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
   if (desktopStatus) throw new Error('Desktop src/main/ai must be clean before provenance audit');
 
   const map = JSON.parse(await readFile(mapPath, 'utf8')) as DesktopSyncMap;
-  if (map.schemaVersion !== 1)
+  if (map.schemaVersion !== 2)
     throw new Error(`Unsupported provenance schema: ${map.schemaVersion}`);
 
   const errors: string[] = [];
@@ -230,7 +248,15 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
     '--',
     map.desktop.sourceRoot,
   ]);
-  const currentMobileSources = gitLines(mobileRoot, ['ls-files', '--', map.mobile.sourceRoot]);
+  const baselineMobileSources = gitLines(mobileRoot, [
+    'ls-tree',
+    '-r',
+    '--name-only',
+    map.mobile.commit,
+    '--',
+    map.mobile.sourceRoot,
+  ]);
+  const currentBackendFiles = gitLines(mobileRoot, ['ls-files', '--', map.mobile.sourceRoot]);
 
   for (const duplicate of duplicates(desktopSources))
     errors.push(`duplicate desktop source: ${duplicate}`);
@@ -242,11 +268,11 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
   for (const source of difference(desktopSources, currentDesktopSources)) {
     errors.push(`missing desktop source: ${source}`);
   }
-  for (const source of difference(currentMobileSources, mobileSources)) {
-    errors.push(`unmapped mobile source: ${source}`);
+  for (const source of difference(baselineMobileSources, mobileSources)) {
+    errors.push(`unmapped baseline mobile source: ${source}`);
   }
-  for (const source of difference(mobileSources, currentMobileSources)) {
-    errors.push(`missing mobile source: ${source}`);
+  for (const source of difference(mobileSources, baselineMobileSources)) {
+    errors.push(`missing baseline mobile source: ${source}`);
   }
 
   map.desktop.files.forEach((record, index) =>
@@ -276,21 +302,28 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
       errors.push(`mobile.files[${index}] delegates to desktop and also claims a target`);
     }
   });
-  map.packageOwned.forEach((record, index) => {
-    validateRepoPath(record.target, `packageOwned[${index}].target`, errors);
+  const validateOwnedTarget = (
+    record: OwnedTargetRecord,
+    owner: 'backendOwned' | 'packageOwned',
+    index: number,
+  ) => {
+    validateRepoPath(record.target, `${owner}[${index}].target`, errors);
     if (record.classification !== 'mobile-extension') {
-      errors.push(`packageOwned[${index}] must be a mobile-extension`);
+      errors.push(`${owner}[${index}] must be a mobile-extension`);
     }
-    if (!record.reason.trim()) errors.push(`packageOwned[${index}] has no reason`);
-    if (record.evidence.length === 0) errors.push(`packageOwned[${index}] has no evidence`);
+    if (!record.reason.trim()) errors.push(`${owner}[${index}] has no reason`);
+    if (record.evidence.length === 0) errors.push(`${owner}[${index}] has no evidence`);
     if (!/^[a-f0-9]{64}$/.test(record.targetSha256)) {
-      errors.push(`packageOwned[${index}] has an invalid target hash`);
+      errors.push(`${owner}[${index}] has an invalid target hash`);
     }
-  });
+  };
+  map.backendOwned.forEach((record, index) => validateOwnedTarget(record, 'backendOwned', index));
+  map.packageOwned.forEach((record, index) => validateOwnedTarget(record, 'packageOwned', index));
 
   const targets = [
     ...map.desktop.files.flatMap((record) => (record.target ? [record.target] : [])),
     ...map.mobile.files.flatMap((record) => (record.target ? [record.target] : [])),
+    ...map.backendOwned.map((record) => record.target),
     ...map.packageOwned.map((record) => record.target),
   ];
   for (const duplicate of duplicates(targets)) errors.push(`duplicate target: ${duplicate}`);
@@ -306,6 +339,15 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
   }
   for (const file of difference(mappedPackageFiles, currentPackageFiles)) {
     errors.push(`missing package target: ${file}`);
+  }
+  const mappedBackendFiles = targets.filter((target) =>
+    target.startsWith(`${map.mobile.sourceRoot}/`),
+  );
+  for (const file of difference(currentBackendFiles, mappedBackendFiles)) {
+    errors.push(`unmapped backend target: ${file}`);
+  }
+  for (const file of difference(mappedBackendFiles, currentBackendFiles)) {
+    errors.push(`missing backend target: ${file}`);
   }
 
   const sourceDrift: string[] = [];
@@ -323,7 +365,7 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
   }
   for (const record of map.mobile.files) {
     try {
-      if ((await fileSha256(path.join(mobileRoot, record.source))) === record.sourceSha256) {
+      if (gitFileSha256(mobileRoot, map.mobile.commit, record.source) === record.sourceSha256) {
         continue;
       }
     } catch {
@@ -340,6 +382,7 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
     ...map.mobile.files.flatMap((record) =>
       record.target ? [{ path: record.target, sha256: record.targetSha256 ?? '' }] : [],
     ),
+    ...map.backendOwned.map((record) => ({ path: record.target, sha256: record.targetSha256 })),
     ...map.packageOwned.map((record) => ({ path: record.target, sha256: record.targetSha256 })),
   ];
   for (const target of targetRecords) {
@@ -355,10 +398,11 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
   const evidence = new Set([
     ...map.desktop.files.flatMap((record) => record.evidence),
     ...map.mobile.files.flatMap((record) => record.evidence),
+    ...map.backendOwned.flatMap((record) => record.evidence),
     ...map.packageOwned.flatMap((record) => record.evidence),
   ]);
   for (const reference of [...evidence].sort()) {
-    if (!(await evidenceExists(reference, options.desktopRoot, mobileRoot))) {
+    if (!(await evidenceExists(reference, options.desktopRoot, mobileRoot, map.mobile.commit))) {
       errors.push(`missing evidence: ${reference}`);
     }
   }
@@ -379,6 +423,7 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
     ).length,
     mobileExtensions:
       map.mobile.files.filter((record) => record.classification === 'mobile-extension').length +
+      map.backendOwned.length +
       map.packageOwned.length,
     mobileFiles: map.mobile.files.length,
     packageFiles: currentPackageFiles.length,

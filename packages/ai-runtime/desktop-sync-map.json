@@ -1,21 +1,21 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "desktop": {
     "commit": "12498d68ecb4fb261670843ca7a8e4e64a37526a",
     "files": [
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/AiService.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/AiService.ts",
         "sourceSha256": "82589115d8eca855da3b258de2b6c521a7ca77e23389f23b77c09cf41554387c",
         "target": "src/backend/ai/AiService.ts",
-        "targetSha256": "17761fe78f93dc5c8404667799f66f9b03a497bd07d3c254b95df05ef5734e95"
+        "targetSha256": "ebe14fe315bb1facee1b7dcf97c07433778b9f2a45c6795d0ff3498bfa3eb39f"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/__tests__/AiService.test.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/__tests__/AiService.test.ts",
         "sourceSha256": "262f5b7d4091f4dd0ebbec61e6ce5030eb184274521ef456dd52c5c324363cab",
         "target": "src/backend/ai/__tests__/AiService.test.ts",
@@ -657,7 +657,7 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/hooks/__tests__/billingHook.test.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/hooks/__tests__/billingHook.test.ts",
         "sourceSha256": "dedfd9a6dd1bb547186986b92fbab15a4b1564942e35f8e12cb8f460a0b0787e",
         "target": "src/backend/ai/hooks/__tests__/billingHook.test.ts",
@@ -673,11 +673,11 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/hooks/billingHook.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/hooks/billingHook.ts",
         "sourceSha256": "d3f95e2ac4b0d984d98bf261c818886a2b94398c5a2233754f2197d164a86e40",
         "target": "src/backend/ai/hooks/billingHook.ts",
-        "targetSha256": "dbc83caf4d71ba2a408f241825874b00c99e9a77e993a1692d49dc99bfe88c65"
+        "targetSha256": "93a8963198e56a5dcaae83cf1129b0ceeeea94bbb25aef0400aa485cef926247"
       },
       {
         "classification": "blocked",
@@ -803,11 +803,11 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/mcp/McpRuntimeService.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/mcp/McpRuntimeService.ts",
         "sourceSha256": "aae2fd272c971b475b47de51d51a68cdc7515daa8a5c80ab2d1ab935f66d46d9",
         "target": "src/backend/ai/mcp/McpRuntimeService.ts",
-        "targetSha256": "66d7290105dde38df07736784af9b17b58fd9f8b8a9b654423a03937d9fbd9a1"
+        "targetSha256": "9ffe56b1b1c5bb35840c5cde68da2f1d348e3ced3396419428e6086788b816f9"
       },
       {
         "classification": "blocked",
@@ -833,7 +833,7 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/mcp/__tests__/McpRuntimeService.test.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/mcp/__tests__/McpRuntimeService.test.ts",
         "sourceSha256": "d98b9c43be3c19482f00566f1ece7853917c513509d987837e6e0d2282f3be1d",
         "target": "src/backend/ai/mcp/__tests__/McpRuntimeService.test.ts",
@@ -1401,7 +1401,7 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/messages/fileProcessor.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/messages/fileProcessor.ts",
         "sourceSha256": "7a8d7b776ba3ca316da73584f6567c678ea1103a1cee90a484a89ebaf03d1852",
         "target": "src/backend/ai/messages/fileProcessor.ts",
@@ -1654,7 +1654,7 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/provider/__tests__/config.test.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/provider/__tests__/config.test.ts",
         "sourceSha256": "db84d5b4a9c61c9693bb4e6b2478051a577a6f2fb899baebc93a392f271078be",
         "target": "src/backend/ai/provider/__tests__/config.test.ts",
@@ -1750,11 +1750,11 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/provider/config.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/provider/config.ts",
         "sourceSha256": "c68f0aa51b7b888e7d18c5827947f2b358165da3afac9a4f4ee6bdfd568e8d36",
         "target": "src/backend/ai/provider/config.ts",
-        "targetSha256": "b738aa9c9a063d4c615364d5093ca289c5081c703770567feee61cba7bd57275"
+        "targetSha256": "a68f7de41ec8b169b19a7554e92ce66b0fb397088ecb54721393c2dc53124c97"
       },
       {
         "classification": "blocked",
@@ -2574,16 +2574,16 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/runtime/aiSdk/Agent.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/Agent.ts",
         "sourceSha256": "7c0024a4f7f8985c8a60f759d8af3e7337d9fcc38d2a1fe0b7b129f199e02fc3",
         "target": "src/backend/ai/runtime/aiSdk/Agent.ts",
-        "targetSha256": "be012022d73ffe62ffd8cfe07d13253f5171bd3332fa6881276f3e480328fc44"
+        "targetSha256": "96e3632ecc5d80c17593c10b90e5301df896bb4937a6e7e1cf2a8c1ad8cbb5f8"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/runtime/aiSdk/index.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/index.ts",
         "sourceSha256": "74303d2527b8307b75ee84e9d0e7090d7daef127d0090ef96122dd34c27b7576",
         "target": "src/backend/ai/runtime/aiSdk/index.ts",
@@ -2705,11 +2705,11 @@
         "evidence": [
           "mobile:src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts"
         ],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
         "sourceSha256": "be731212fa494976f697112939c61ceaa8b5d66a66c330ec755b727bd5596939",
         "target": "src/backend/ai/runtime/aiSdk/params/__tests__/buildAgentParams.test.ts",
-        "targetSha256": "b0e539344b5831ed62476989762298c2c1ff00a033f9f670e14ef32b7da6da7f"
+        "targetSha256": "15b7d7eefdfc4c41a51039a4e5029658e249b589904ba5474191acd122097d60"
       },
       {
         "classification": "semantic-port",
@@ -2768,11 +2768,11 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/runtime/aiSdk/params/buildAgentParams.ts",
         "sourceSha256": "fb3df0bf6f17740fc7637b4609fdaabf6956e44e66ab7777325ce8512b3e6846",
         "target": "src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts",
-        "targetSha256": "9d3722ea57c351e2e790af484e3fad8115ebfbd60487210b3674cbefea60a0c6"
+        "targetSha256": "734c09614763e667114c73be3611936e9097e4715482c70a774847b9f32fe098"
       },
       {
         "classification": "blocked",
@@ -4047,20 +4047,20 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts",
         "sourceSha256": "cc200bae36acb0b9de5557ac11456de29f2a70e7b7279b111aeab5c9ec9bbba1",
         "target": "src/backend/ai/tools/adapters/aiSdk/builtin/WebFetchTool.ts",
-        "targetSha256": "b94954cf8512dfd7d38c000e85bcf2d70310ec03f2530ae474b31435f1ea298d"
+        "targetSha256": "dab9f75455cff03a78e53bbe713a3ae6ac1aed7735a0ce1227bbbdd64151e679"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts",
         "sourceSha256": "59c7c86e9a0782d6ad54ea11ad48d10d9ddbe4ca245697e8700feeea540e90ed",
         "target": "src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts",
-        "targetSha256": "0842572ed0f9fb75226046fe76a142b57a1734edc4a45aabea6fecd54a169d9d"
+        "targetSha256": "3087b0f2d2a66f380da27ee2317d89bd8f6636e0257c225987e78791329e41e5"
       },
       {
         "classification": "blocked",
@@ -4130,31 +4130,31 @@
         "evidence": [
           "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts"
         ],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts",
         "sourceSha256": "f78d7d32eaa2dd5fa38a9b739ac7f91e0c42871d0b71bd4fe0503a3a91ad8340",
         "target": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/WebSearchTool.test.ts",
-        "targetSha256": "488f41761382a3dc9b96199036e36da07f54d3d6e123469359cb3ea87ab823a4"
+        "targetSha256": "eb0dccc89271ca5ce4e228d6db276212e972ee653ce73b02edeaab5d18f5948a"
       },
       {
         "classification": "semantic-port",
         "evidence": [
           "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts"
         ],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts",
         "sourceSha256": "d03f7fb40cca5ebca853905f07facc00d6f56d13d586e145b8500c87e556438c",
         "target": "src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts",
-        "targetSha256": "5e79d4674bf677abbe5461c06900d8b8de7ebb9a616cddc7d7aa555710e47af4"
+        "targetSha256": "fc3b076e70b09c4606f0502424cbc20627b668c96081e4dbeb749a5b6654f8d4"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts",
         "sourceSha256": "f4ea6288e9a3ff469d1911bf3ae5b5d959048d1e9987dcd0ab8f8d9f1ae2ca35",
         "target": "src/backend/ai/tools/adapters/aiSdk/builtin/registerBuiltinTools.ts",
-        "targetSha256": "f415ab01683779cad91436b7f11cd605887c7a9668a33eaca92124a022898fa1"
+        "targetSha256": "41ec78dc3da17804acf2cd31c50012dd46ab1b8bda6965cfb43ef65367946afb"
       },
       {
         "classification": "semantic-port",
@@ -4510,7 +4510,7 @@
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/tools/webLookup.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
         "source": "src/main/ai/tools/webLookup.ts",
         "sourceSha256": "9ae0a49c63aff5f457b9df2a6e1ee80c7352ca4d6b0345a43228f1dce7e8ddaa",
         "target": "src/backend/ai/tools/webLookup.ts",
@@ -4622,11 +4622,11 @@
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:src/backend/ai/utils/__tests__/provider.test.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter until app migration is authorized.",
+        "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/provider.test.ts"],
+        "reason": "Portable provider header behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
         "source": "src/main/ai/utils/__tests__/provider.test.ts",
         "sourceSha256": "63ee804e0684ef6fda79d689709b820ec74f1473fc1c4ac87c9a2c2531c24ddc",
-        "target": "src/backend/ai/utils/__tests__/provider.test.ts",
+        "target": "packages/ai-runtime/src/utils/__tests__/provider.test.ts",
         "targetSha256": "d2c04491b86f40a0234910e77e02b296637e6b320cb2e1be0cbcabd3104f0ba9"
       },
       {
@@ -4823,7 +4823,7 @@
         "source": "src/backend/ai/README.md",
         "sourceSha256": "cd729d4624b906e0215330f5dd4233c36245552c68aed897df163fdf5e31bf68",
         "target": "src/backend/ai/README.md",
-        "targetSha256": "cd729d4624b906e0215330f5dd4233c36245552c68aed897df163fdf5e31bf68"
+        "targetSha256": "e253d398305d1d7de7a5f847c292a1e2bb595ae6e3835dfa476e53091bcd7ba9"
       },
       {
         "classification": "semantic-port",
@@ -4858,7 +4858,7 @@
         "source": "src/backend/ai/__tests__/_harness/services.ts",
         "sourceSha256": "e47026f29130b1827c46979f751cec32eb6faad122ff85f9cb6f6048ca2bf186",
         "target": "src/backend/ai/__tests__/_harness/services.ts",
-        "targetSha256": "e47026f29130b1827c46979f751cec32eb6faad122ff85f9cb6f6048ca2bf186"
+        "targetSha256": "21587802d018139404c574331b387c7464b32b622376e275e270f80321a7ed59"
       },
       {
         "classification": "mobile-extension",
@@ -4912,7 +4912,7 @@
         "source": "src/backend/ai/__tests__/behavior/AiService.tools.test.ts",
         "sourceSha256": "d9435d9a96b45860c984b2667bcaeb976a2a7b51d7a3ed3adba0258c2a8fa102",
         "target": "src/backend/ai/__tests__/behavior/AiService.tools.test.ts",
-        "targetSha256": "d9435d9a96b45860c984b2667bcaeb976a2a7b51d7a3ed3adba0258c2a8fa102"
+        "targetSha256": "0c19d3d793294505ebb36365f7c9f4a8f4bac659e9dde97bdafe2a34718663b3"
       },
       {
         "classification": "mobile-extension",
@@ -5089,12 +5089,12 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/messages/__tests__/messageConverter.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "evidence": ["mobile:src/backend/ai/messages/__tests__/attachmentRouting.test.ts"],
+        "reason": "Mobile Expo attachment routing remains backend-owned; unused UI message conversion was removed.",
         "source": "src/backend/ai/messages/__tests__/messageConverter.test.ts",
         "sourceSha256": "fee6b282ed1241b3f81ec1c1674c15d6399226c4be631f099ad2dc9fec8fecfe",
-        "target": "src/backend/ai/messages/__tests__/messageConverter.test.ts",
-        "targetSha256": "fee6b282ed1241b3f81ec1c1674c15d6399226c4be631f099ad2dc9fec8fecfe"
+        "target": "src/backend/ai/messages/__tests__/attachmentRouting.test.ts",
+        "targetSha256": "a1fd9d61d6419c58c289dafbd5451206df3d99aa028d1e9d48bebc79d58b348b"
       },
       {
         "classification": "semantic-port",
@@ -5124,12 +5124,12 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/messages/messageConverter.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "evidence": ["mobile:src/backend/ai/messages/__tests__/attachmentRouting.test.ts"],
+        "reason": "Mobile Expo attachment routing remains backend-owned; unused UI message conversion was removed.",
         "source": "src/backend/ai/messages/messageConverter.ts",
         "sourceSha256": "d501647194edcdce6c6dd57b48ab5ad8ea9172ecb52efc513c1dd38125a8356b",
-        "target": "src/backend/ai/messages/messageConverter.ts",
-        "targetSha256": "d501647194edcdce6c6dd57b48ab5ad8ea9172ecb52efc513c1dd38125a8356b"
+        "target": "src/backend/ai/messages/attachmentRouting.ts",
+        "targetSha256": "30964db02821ca1581439921164c91c4ff0bed6075e04f82b5a64cb2e045ac36"
       },
       {
         "classification": "semantic-port",
@@ -5141,12 +5141,12 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/cherryai.test.ts"],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "evidence": ["mobile:src/backend/ai/provider/__tests__/cherryai.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/provider/__tests__/cherryai.test.ts",
         "sourceSha256": "2615af7b04255066b82685f405a42215b9321844046cf22661fd58b37d824aed",
-        "target": "packages/ai-runtime/src/provider/__tests__/cherryai.test.ts",
-        "targetSha256": "5d5564ad947054e565af885bf7645d9f52e59e62d8bdd82e5663b311308f5600"
+        "target": "src/backend/ai/provider/__tests__/cherryai.test.ts",
+        "targetSha256": "0e5a6be4fcab8442794acd53003038401ccc39a0257ba04e581e7e0692f6bd66"
       },
       {
         "classification": "semantic-port",
@@ -5165,12 +5165,13 @@
         "sourceSha256": "37578d821d62725788a3ec9226479401d7e50ae395fc3f0f6eb711e63690bf01"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/provider/__tests__/listModels.test.ts",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/listModels.test.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "mobile-extension",
+        "evidence": ["mobile:src/backend/ai/provider/__tests__/listModels.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/provider/__tests__/listModels.test.ts",
-        "sourceSha256": "6ba1556f8f68b13334b9df6911d1e79e464d5a8053e024c3756a35364d2b791c"
+        "sourceSha256": "6ba1556f8f68b13334b9df6911d1e79e464d5a8053e024c3756a35364d2b791c",
+        "target": "src/backend/ai/provider/__tests__/listModels.test.ts",
+        "targetSha256": "935fb46264fe8e01553163411aa6faa9c6db2ef8684cc5d100a0934c5d4bc241"
       },
       {
         "classification": "mobile-extension",
@@ -5184,12 +5185,13 @@
         "targetSha256": "845005a96b0a735c5ff7acf41d93cd01c76c10935266f083040e120d3acbd999"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/provider/cherryai.ts",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/cherryai.test.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "mobile-extension",
+        "evidence": ["mobile:src/backend/ai/provider/__tests__/cherryai.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/provider/cherryai.ts",
-        "sourceSha256": "70e7ceb36979b3e81f0beba4dd472aa4e7020ea872e6c9e96e27e0a9aaef72c2"
+        "sourceSha256": "70e7ceb36979b3e81f0beba4dd472aa4e7020ea872e6c9e96e27e0a9aaef72c2",
+        "target": "src/backend/ai/provider/cherryai.ts",
+        "targetSha256": "aa6b7d6eee0d9dac96c64c27669878df3083ba0b959cee902c06a6d3f17e1e78"
       },
       {
         "classification": "semantic-port",
@@ -5307,12 +5309,13 @@
         "sourceSha256": "94830b1195970d6acc4ced9266eaace9a16ba1735d2caf030d45ce52cae000ad"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/provider/listModels.ts",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/listModels.test.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "mobile-extension",
+        "evidence": ["mobile:src/backend/ai/provider/__tests__/listModels.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/provider/listModels.ts",
-        "sourceSha256": "cb0a1d1a055e899a9c063ab07659460a2cc3b45dec1bfc2123b3f8e30b4b1392"
+        "sourceSha256": "cb0a1d1a055e899a9c063ab07659460a2cc3b45dec1bfc2123b3f8e30b4b1392",
+        "target": "src/backend/ai/provider/listModels.ts",
+        "targetSha256": "15f3c834fbd3f51561844a3a91ba68b26b2dfb4d75bd18ebbcf877e5b27bbaf8"
       },
       {
         "classification": "semantic-port",
@@ -5345,7 +5348,7 @@
         "source": "src/backend/ai/runtime/aiSdk/__tests__/Agent.test.ts",
         "sourceSha256": "4fd1716689a1f593e5f21dcf05ad2de89541089219a658e45a974b1ae6e5ea11",
         "target": "src/backend/ai/runtime/aiSdk/__tests__/Agent.test.ts",
-        "targetSha256": "4fd1716689a1f593e5f21dcf05ad2de89541089219a658e45a974b1ae6e5ea11"
+        "targetSha256": "1e0effb7549513c863872f1dbe1337dfe4e175b6e1e30ea836c818e4da64c73a"
       },
       {
         "classification": "semantic-port",
@@ -5714,7 +5717,7 @@
         "source": "src/backend/ai/streamManager/ChatRuntime.ts",
         "sourceSha256": "f6c471aad449511e493e72875bf1af32a4c03bbb28ce8188855aa943bb182315",
         "target": "src/backend/ai/streamManager/ChatRuntime.ts",
-        "targetSha256": "f6c471aad449511e493e72875bf1af32a4c03bbb28ce8188855aa943bb182315"
+        "targetSha256": "db0f95c709d3636020c454c9b6d5f0f762cca2d0b5d6fecbdad39055d06bfd82"
       },
       {
         "classification": "mobile-extension",
@@ -5854,7 +5857,7 @@
         "source": "src/backend/ai/tools/ToolResolver.ts",
         "sourceSha256": "ba05c1895d703be861e6d3ece6c167ee7d900012efef79df9187d26412ad8120",
         "target": "src/backend/ai/tools/ToolResolver.ts",
-        "targetSha256": "ba05c1895d703be861e6d3ece6c167ee7d900012efef79df9187d26412ad8120"
+        "targetSha256": "52198c68ce74a6f91854fdc58329c9d840fa34b6df04c2d8adcd5ed11f05c62e"
       },
       {
         "classification": "mobile-extension",
@@ -5863,7 +5866,7 @@
         "source": "src/backend/ai/tools/__tests__/ToolResolver.test.ts",
         "sourceSha256": "8006629e28399668b43215745cd48e9bea4eb13023e976722bc8c135026718aa",
         "target": "src/backend/ai/tools/__tests__/ToolResolver.test.ts",
-        "targetSha256": "8006629e28399668b43215745cd48e9bea4eb13023e976722bc8c135026718aa"
+        "targetSha256": "2810f9fda48dc2e0890d4a97ab15d5eaec8862e28c05f906e2bf3d13c2272af6"
       },
       {
         "classification": "semantic-port",
@@ -5969,7 +5972,7 @@
         "source": "src/backend/ai/tools/adapters/aiSdk/builtin/deviceToolSupport.ts",
         "sourceSha256": "41311a209148d7666255c28db07453291f3451fda6d93a4548146012e5f7519d",
         "target": "src/backend/ai/tools/adapters/aiSdk/builtin/deviceToolSupport.ts",
-        "targetSha256": "41311a209148d7666255c28db07453291f3451fda6d93a4548146012e5f7519d"
+        "targetSha256": "634db3369722d70dc62606db32492414e0eea6af741680ea26ff7d81a8726ef4"
       },
       {
         "classification": "mobile-extension",
@@ -6147,14 +6150,15 @@
         "sourceSha256": "d40f69e14c6640d84abe19632de446a7e7d6cae1fd15fa93e8b7dcb3ed8bde67"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/tools/adapters/aiSdk/types.ts",
+        "classification": "mobile-extension",
         "evidence": [
-          "mobile:packages/ai-runtime/src/tools/adapters/aiSdk/__tests__/registry.test.ts"
+          "mobile:src/backend/ai/tools/adapters/aiSdk/builtin/__tests__/registerBuiltinTools.test.ts"
         ],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/tools/adapters/aiSdk/types.ts",
-        "sourceSha256": "aa38a6610c89355f1fcd29573048bbbebd98a4bed20ef355fcbdab8333783447"
+        "sourceSha256": "aa38a6610c89355f1fcd29573048bbbebd98a4bed20ef355fcbdab8333783447",
+        "target": "src/backend/ai/tools/types.ts",
+        "targetSha256": "c765b6240979937572ddc52138cf6c2c32baa9e3b31f8479b7b7c292d3a1e749"
       },
       {
         "classification": "mobile-extension",
@@ -6194,14 +6198,12 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": [
-          "mobile:packages/ai-runtime/src/tools/adapters/aiSdk/__tests__/registry.test.ts"
-        ],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "evidence": ["mobile:src/backend/ai/tools/__tests__/ToolResolver.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/tools/index.ts",
         "sourceSha256": "05f044c0f6afcd388b038fb2882de1855c0f53428f12ea6c97f4c9d4a78ea90d",
-        "target": "packages/ai-runtime/src/tools/index.ts",
-        "targetSha256": "428f4b6513b80a69dd042ea2dd92704f053e93b55d853be9077d660bd1cdf21f"
+        "target": "src/backend/ai/tools/index.ts",
+        "targetSha256": "a0bf916077e32d2de28005108ee03a424c7cefd2078601c8eaf4e8bd63f47e6a"
       },
       {
         "classification": "semantic-port",
@@ -6260,12 +6262,13 @@
         "sourceSha256": "0509b3df06fe01d5e61dcb9f361e06612992025de7299261375f091fbd09cb10"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/utils/__tests__/citationIds.test.ts",
-        "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/citationIds.test.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "mobile-extension",
+        "evidence": ["mobile:src/backend/ai/utils/__tests__/citationIds.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/__tests__/citationIds.test.ts",
-        "sourceSha256": "0e3f5737ce462ba277622e6079b328b95b9ec6190636d17557afa37c2e69662b"
+        "sourceSha256": "0e3f5737ce462ba277622e6079b328b95b9ec6190636d17557afa37c2e69662b",
+        "target": "src/backend/ai/utils/__tests__/citationIds.test.ts",
+        "targetSha256": "0e3f5737ce462ba277622e6079b328b95b9ec6190636d17557afa37c2e69662b"
       },
       {
         "classification": "semantic-port",
@@ -6302,12 +6305,12 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts"],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "evidence": ["mobile:src/backend/ai/utils/__tests__/promptVariables.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/__tests__/promptVariables.test.ts",
         "sourceSha256": "fb7b253ce66ee9abf924ccc7b24b93bb1eab17cd80d8fe11d4470edca93f83cb",
-        "target": "packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts",
-        "targetSha256": "9347355e366a702e8c10a605107cabbdea8cbcaacdb90f5645224a833d10221b"
+        "target": "src/backend/ai/utils/__tests__/promptVariables.test.ts",
+        "targetSha256": "fb7b253ce66ee9abf924ccc7b24b93bb1eab17cd80d8fe11d4470edca93f83cb"
       },
       {
         "classification": "semantic-port",
@@ -6333,7 +6336,7 @@
         "source": "src/backend/ai/utils/__tests__/reasoningCatalog.test.ts",
         "sourceSha256": "26ac323f68b02a4fa5b0468b016c23b1b047ca563e2b1e7fb9d340a2a225f7bb",
         "target": "src/backend/ai/utils/__tests__/reasoningCatalog.test.ts",
-        "targetSha256": "26ac323f68b02a4fa5b0468b016c23b1b047ca563e2b1e7fb9d340a2a225f7bb"
+        "targetSha256": "66c937e745d51ffb60219de3be41f33031e359c53c1597497ae1d12ac40919c5"
       },
       {
         "classification": "semantic-port",
@@ -6385,12 +6388,13 @@
         "sourceSha256": "dd13299bc181866fd564e8d7860070214387428fcb7e2468db70e8ab72715ffc"
       },
       {
-        "classification": "semantic-port",
-        "desktopSource": "src/main/ai/utils/citationIds.ts",
-        "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/citationIds.test.ts"],
-        "reason": "Classified by the corresponding desktop provenance record.",
+        "classification": "mobile-extension",
+        "evidence": ["mobile:src/backend/ai/utils/__tests__/citationIds.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/citationIds.ts",
-        "sourceSha256": "d2a9bd00a70b41bf7ff1f5beb8517560a58143285c1baed35ef289937fa5ab41"
+        "sourceSha256": "d2a9bd00a70b41bf7ff1f5beb8517560a58143285c1baed35ef289937fa5ab41",
+        "target": "src/backend/ai/utils/citationIds.ts",
+        "targetSha256": "45a9f58260ebd8e7dd7c9b28a4bda93f81458ae9b6596ea82898c72e8b9bcfbf"
       },
       {
         "classification": "semantic-port",
@@ -6435,12 +6439,12 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts"],
-        "reason": "Mobile-owned contract or adapter behavior is hosted in the portable package without claiming desktop parity.",
+        "evidence": ["mobile:src/backend/ai/utils/__tests__/promptVariables.test.ts"],
+        "reason": "Historical mobile source now corresponds to a thin mobile adapter; portable behavior is owned by @cherrystudio/ai-runtime.",
         "source": "src/backend/ai/utils/promptVariables.ts",
         "sourceSha256": "ab9d3f3fba3495d90de37e4d909174022cf4164b4dddc66bac31672690ab1681",
-        "target": "packages/ai-runtime/src/utils/promptVariables.ts",
-        "targetSha256": "491945f2cb217430147e64e606d58c298b7ce6ad021e98cf0ed2940c55b78426"
+        "target": "src/backend/ai/utils/promptVariables.ts",
+        "targetSha256": "738fb1d426043e4912d8fc33c3e0ff41e63d8679f5812b7e0076e55e1be434ef"
       },
       {
         "classification": "semantic-port",
@@ -6512,6 +6516,13 @@
     },
     {
       "classification": "mobile-extension",
+      "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/cherryai.test.ts"],
+      "reason": "Package-owned injected-secret contract migrated from the historical mobile test.",
+      "target": "packages/ai-runtime/src/provider/__tests__/cherryai.test.ts",
+      "targetSha256": "5d5564ad947054e565af885bf7645d9f52e59e62d8bdd82e5663b311308f5600"
+    },
+    {
+      "classification": "mobile-extension",
       "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/factory.test.ts"],
       "reason": "Package-owned public entrypoint or contract test has no one-to-one mobile or reviewed desktop source.",
       "target": "packages/ai-runtime/src/provider/__tests__/factory.test.ts",
@@ -6551,10 +6562,42 @@
     },
     {
       "classification": "mobile-extension",
+      "evidence": [
+        "mobile:packages/ai-runtime/src/tools/adapters/aiSdk/__tests__/registry.test.ts"
+      ],
+      "reason": "Package public tools barrel has no one-to-one desktop source file.",
+      "target": "packages/ai-runtime/src/tools/index.ts",
+      "targetSha256": "428f4b6513b80a69dd042ea2dd92704f053e93b55d853be9077d660bd1cdf21f"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts"],
+      "reason": "Package-owned prompt environment contract migrated from the historical mobile test.",
+      "target": "packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts",
+      "targetSha256": "9347355e366a702e8c10a605107cabbdea8cbcaacdb90f5645224a833d10221b"
+    },
+    {
+      "classification": "mobile-extension",
       "evidence": ["mobile:packages/ai-runtime/src/utils/index.ts"],
       "reason": "Package-owned public entrypoint or contract test has no one-to-one mobile or reviewed desktop source.",
       "target": "packages/ai-runtime/src/utils/index.ts",
       "targetSha256": "a213bad8d59d992d49fffbf24fb301b57ac919142933962e023f2c8091356e29"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:packages/ai-runtime/src/utils/__tests__/promptVariables.test.ts"],
+      "reason": "Portable prompt substitution uses an injected environment and has no desktop AI source path.",
+      "target": "packages/ai-runtime/src/utils/promptVariables.ts",
+      "targetSha256": "491945f2cb217430147e64e606d58c298b7ce6ad021e98cf0ed2940c55b78426"
+    }
+  ],
+  "backendOwned": [
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/tools/__tests__/ToolResolver.test.ts"],
+      "reason": "Mobile logging adapts portable tool diagnostics without introducing an app dependency.",
+      "target": "src/backend/ai/tools/toolRuntimeDiagnostics.ts",
+      "targetSha256": "85275cf470c2e054baecb6755217e9bb404402f180d6423cf5944b68621aa26a"
     }
   ]
 }
