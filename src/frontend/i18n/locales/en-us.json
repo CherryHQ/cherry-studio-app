@@ -458,6 +458,8 @@
   "settings.provider.apiService.showSecret": "Show secret",
   "settings.provider.apiService.title": "API service",
   "settings.provider.loading": "Loading model services...",
+  "settings.provider.section.disabled": "Disabled ({{count}})",
+  "settings.provider.section.enabled": "Enabled ({{count}})",
   "settings.provider.models.activity": "Activity",
   "settings.provider.models.add": "Add",
   "settings.provider.models.addContextWindowLabel": "Context window",

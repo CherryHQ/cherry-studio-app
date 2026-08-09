@@ -61,6 +61,16 @@ describe('SettingsServiceRow', () => {
     expect(separators).toHaveLength(showSeparator ? 1 : 0);
   });
 
+  it('uses a gray foreground tint while pressed', async () => {
+    await act(async () => {
+      renderer = create(<SettingsServiceRow id="provider-1" name="Provider" onPress={jest.fn()} />);
+    });
+
+    expect(renderer?.root.findByProps({ accessibilityRole: 'button' }).props.className).toContain(
+      'active:bg-foreground/5',
+    );
+  });
+
   it('keeps the separator in layout and makes it transparent while pressed', async () => {
     await act(async () => {
       renderer = create(

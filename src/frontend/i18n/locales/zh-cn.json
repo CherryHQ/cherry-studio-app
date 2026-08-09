@@ -457,6 +457,8 @@
   "settings.provider.apiService.showSecret": "显示密钥",
   "settings.provider.apiService.title": "API 服务",
   "settings.provider.loading": "正在加载模型服务...",
+  "settings.provider.section.disabled": "未启用 ({{count}})",
+  "settings.provider.section.enabled": "已启用 ({{count}})",
   "settings.provider.models.activity": "活动",
   "settings.provider.models.add": "添加",
   "settings.provider.models.addContextWindowLabel": "上下文窗口",
