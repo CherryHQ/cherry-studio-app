@@ -15,7 +15,7 @@ type ProviderEndpoint = {
 
 const endpointShortLabels: Record<EndpointType, string> = {
   'anthropic-messages': 'Messages',
-  'google-generate-content': 'Generate Content',
+  'google-generate-content': 'Gemini',
   'jina-rerank': 'Rerank',
   'ollama-chat': 'Ollama Chat',
   'ollama-generate': 'Ollama Generate',

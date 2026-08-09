@@ -21,7 +21,7 @@ describe('getProviderEndpoints', () => {
       },
       {
         accessibilityLabel: 'Google Gemini',
-        shortLabel: 'Generate Content',
+        shortLabel: 'Gemini',
         type: 'google-generate-content',
       },
       {
