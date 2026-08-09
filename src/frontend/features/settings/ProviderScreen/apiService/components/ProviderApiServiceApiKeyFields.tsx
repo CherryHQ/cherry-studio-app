@@ -184,7 +184,7 @@ function ApiKeyRow({
   const { t } = useTranslation();
 
   return (
-    <TextField isDisabled={!apiKey.isEnabled || isPending} isInvalid={Boolean(errorMessage)}>
+    <TextField isDisabled={!apiKey.isEnabled} isInvalid={Boolean(errorMessage)}>
       <View className="min-h-8 flex-row items-center justify-between gap-3">
         <Label className="min-w-0 flex-1">{t('settings.provider.apiService.apiKey')}</Label>
         <Switch
@@ -244,10 +244,6 @@ function ApiKeyInput({
     [onCommit],
   );
 
-  const handleCommitEvent = useCallback(() => {
-    onCommit(normalizeApiKeySingleLine(value));
-  }, [onCommit, value]);
-
   const handleChangeText = useCallback(
     (nextValue: string) => {
       onChangeText(normalizeApiKeySingleLine(nextValue));
@@ -264,13 +260,12 @@ function ApiKeyInput({
       lineBreakModeIOS="clip"
       multiline={false}
       numberOfLines={1}
-      onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
       placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
       returnKeyType="done"
       selectTextOnFocus
+      submitBehavior="blurAndSubmit"
       value={normalizedValue}
     />
   );

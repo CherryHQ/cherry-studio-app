@@ -73,13 +73,12 @@ function ProviderEndpointSettingsForm({
 }) {
   const { t } = useTranslation();
   const [endpointErrors, setEndpointErrors] = useState<Partial<Record<EndpointType, string>>>({});
-  const [pendingEndpoint, setPendingEndpoint] = useState<EndpointType | null>(null);
-  const pendingEndpointRef = useRef<EndpointType | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
   const { draft, updateBaseUrl } = useProviderApiServiceEndpointDraft(provider);
   const hasUnsavedChanges =
     Object.keys(endpointErrors).length > 0 ||
     getProviderApiServiceEndpointDirtyState({ draft, provider });
-  const isSaving = pendingEndpoint !== null;
   const { requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
@@ -104,12 +103,12 @@ function ProviderEndpointSettingsForm({
       endpoint: EndpointType;
       nextDraft: EndpointDraft;
     }): Promise<boolean> => {
-      if (pendingEndpointRef.current !== null) {
+      if (isSavingRef.current) {
         return false;
       }
 
-      pendingEndpointRef.current = endpoint;
-      setPendingEndpoint(endpoint);
+      isSavingRef.current = true;
+      setIsSaving(true);
 
       try {
         await onSave(buildProviderApiServiceEndpointUpdates({ draft: nextDraft, provider }));
@@ -122,8 +121,8 @@ function ProviderEndpointSettingsForm({
         }));
         return false;
       } finally {
-        pendingEndpointRef.current = null;
-        setPendingEndpoint(null);
+        isSavingRef.current = false;
+        setIsSaving(false);
       }
     },
     [getEndpointSaveError, onSave, provider],
@@ -149,9 +148,13 @@ function ProviderEndpointSettingsForm({
 
       updateBaseUrl(endpoint, value);
 
+      if (!getProviderApiServiceEndpointDirtyState({ draft: nextDraft, provider })) {
+        return;
+      }
+
       void saveEndpointDraft({ endpoint, nextDraft });
     },
-    [draft, saveEndpointDraft, updateBaseUrl],
+    [draft, provider, saveEndpointDraft, updateBaseUrl],
   );
 
   return (
@@ -171,7 +174,6 @@ function ProviderEndpointSettingsForm({
             baseUrlByEndpoint={draft.baseUrlByEndpoint}
             endpointErrors={endpointErrors}
             endpointTypes={draft.visibleEndpointTypes}
-            pendingEndpoint={pendingEndpoint}
             onBaseUrlChange={handleBaseUrlChange}
             onBaseUrlCommit={handleBaseUrlCommit}
           />
