@@ -7,6 +7,7 @@
  * `tool()` wrapper.
  */
 
+import { markTrustedLocalToolTerminalFailure } from '@cherrystudio/ai-runtime/runtime';
 import {
   WEB_SEARCH_TOOL_NAME,
   webSearchInputSchema,
@@ -15,7 +16,6 @@ import {
 import { tool } from 'ai';
 import * as z from 'zod';
 
-import { markTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
 import {
   searchWeb,
   WEB_SEARCH_DESCRIPTION,

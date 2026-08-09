@@ -5,6 +5,19 @@ import type { StringKeys } from '@cherrystudio/ai-core/provider';
 import type { MediaCapabilities } from '@cherrystudio/ai-runtime/messages';
 import { toModelMessages } from '@cherrystudio/ai-runtime/messages';
 import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import {
+  type AgentLoopHooks,
+  composeHooks,
+  mergeUsage,
+  resolveToolLoopTerminalError,
+  safeCall,
+  toMessageMetadataPatch,
+  type ToolExecutionHooks,
+  withReasoningTimingMetadata,
+  wrapForwardedHook,
+  wrapToolsWithExecutionHooks,
+  ZERO_USAGE,
+} from '@cherrystudio/ai-runtime/runtime';
 import type {
   LanguageModelUsage,
   ModelMessage,
@@ -20,13 +33,7 @@ import * as Crypto from 'expo-crypto';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { withReasoningTimingMetadata } from '../../streamManager/withReasoningTimingMetadata';
 import type { RequestContext } from '../../tools';
-import { safeCall, wrapForwardedHook, wrapToolsWithExecutionHooks } from './loop/hookRunner';
-import { resolveToolLoopTerminalError } from './loop/toolLoopTermination';
-import type { AgentLoopHooks, ToolExecutionHooks } from './loop/types';
-import { mergeUsage, toMessageMetadataPatch, ZERO_USAGE } from './observers/usage';
-import { composeHooks } from './params/composeHooks';
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
 

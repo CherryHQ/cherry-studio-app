@@ -6,7 +6,19 @@ import {
   resolveEffectiveEndpoint,
   resolveProviderOptionsKey,
 } from '@cherrystudio/ai-runtime/provider';
-import type { AiBaseRequest, CallOverrides } from '@cherrystudio/ai-runtime/runtime';
+import {
+  buildAgentPlugins,
+  CITATIONS_SYSTEM_PROMPT,
+  createToolCallLimitStopCondition,
+  getDeferredToolsSystemPrompt,
+  type NativeFileSupport,
+  resolveCapabilities,
+  resolveNativeFileSupport,
+  stopOnTerminalToolFailure,
+  trackSteerYieldStopCondition,
+  type AiBaseRequest,
+  type CallOverrides,
+} from '@cherrystudio/ai-runtime/runtime';
 import { createAiRepair, TOOL_SEARCH_TOOL_NAME } from '@cherrystudio/ai-runtime/tools';
 import {
   addAnthropicHeaders,
@@ -53,16 +65,6 @@ import { reportToolRuntimeDiagnostic } from '../../../tools/toolRuntimeDiagnosti
 import type { RequestContext } from '../../../tools/types';
 import { replacePromptVariables } from '../../../utils/promptVariables';
 import type { AgentOptions } from '../Agent';
-import {
-  createToolCallLimitStopCondition,
-  stopOnTerminalToolFailure,
-  trackSteerYieldStopCondition,
-} from '../loop/toolLoopTermination';
-import { CITATIONS_SYSTEM_PROMPT } from '../prompts/citations';
-import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
-import { buildAgentPlugins } from './buildAgentPlugins';
-import { resolveCapabilities } from './capabilities';
-import { type NativeFileSupport, resolveNativeFileSupport } from './nativeFileSupport';
 
 export interface BuildAgentParamsDependencies {
   preference: PreferenceService;

@@ -1,5 +1,6 @@
 import type { ListToolsResult, MCPClient } from '@ai-sdk/mcp';
 import { createMCPClient } from '@ai-sdk/mcp';
+import { resolveServersForAssistant } from '@cherrystudio/ai-runtime/tools';
 import type { McpCallToolResult } from '@cherrystudio/universal/ai/tools/mcpResult';
 import { mcpResultToTextSummary } from '@cherrystudio/universal/ai/tools/mcpResult';
 import {
@@ -26,8 +27,6 @@ import type {
   McpToolSummary,
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-
-import { resolveServersForAssistant } from './resolveAssistantMcpServers';
 
 const logger = loggerService.withContext('McpRuntimeService');
 
