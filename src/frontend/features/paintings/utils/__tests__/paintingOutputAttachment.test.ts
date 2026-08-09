@@ -18,6 +18,7 @@ describe('createPaintingOutputAttachmentDraft', () => {
       kind: 'image',
       mediaType: 'image/png',
       name: 'abc.png',
+      status: 'ready',
       uri: 'file:///files/abc.png',
     });
   });

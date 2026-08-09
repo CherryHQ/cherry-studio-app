@@ -62,6 +62,7 @@ const request = {
       kind: 'image' as const,
       mediaType: 'image/png',
       name: 'input.png',
+      status: 'ready' as const,
       uri: 'file:///input.png',
     },
   ],

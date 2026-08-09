@@ -147,6 +147,7 @@ function addPainting(paintingId: string, fileEntryId: string) {
         kind: 'image',
         mediaType: 'image/png',
         name: `${fileEntryId}.png`,
+        status: 'ready',
         uri: `file:///${fileEntryId}.png`,
       },
     ],

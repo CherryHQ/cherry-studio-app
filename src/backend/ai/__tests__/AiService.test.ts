@@ -1010,7 +1010,7 @@ function createServices({
       getById: jest.fn(async () => assistant),
     },
     fileContent: {
-      resolveRenderableUri: jest.fn(async () => undefined),
+      getUri: jest.fn(async () => undefined),
     },
     model: {
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),

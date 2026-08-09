@@ -4,6 +4,7 @@ import type { LayoutChangeEvent, View } from 'react-native';
 import { ComposerDock, ComposerProvider } from '@/frontend/components/composer';
 
 import { ChatInput } from '../../input';
+import { useManagedComposerAttachments } from '../../input/hooks/useManagedComposerAttachments';
 
 type ChatComposerProps = {
   /** Assistant to bind a newly created topic to; ignored once `topicId` exists. */
@@ -29,8 +30,10 @@ export function ChatComposer({
   onComposerLayout,
   topicId,
 }: ChatComposerProps) {
+  const attachmentStore = useManagedComposerAttachments();
+
   return (
-    <ComposerProvider>
+    <ComposerProvider attachmentStore={attachmentStore}>
       <ComposerDock
         containerRef={composerRef}
         onHeightChange={onHeightChange}

@@ -23,6 +23,13 @@ jest.mock('../../hooks/useFilePartUri', () => ({
   useFilePartUri: (part: unknown) => mockUseFilePartUri(part),
 }));
 
+jest.mock('@/frontend/components/FilePreview', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    FilePreview: (props: object) => createElement('FilePreview', props),
+  };
+});
+
 jest.mock('@/frontend/components/mediaTile', () => {
   const { createElement } = jest.requireActual('react');
   return {
@@ -52,6 +59,21 @@ describe('FilePart', () => {
       editingMode: 'disabled',
       uri: 'file:///new-sandbox/files/image.png',
     });
+  });
+
+  test('delegates managed attachments to FilePreview without resolving a legacy URI', () => {
+    const part = {
+      ...filePart('application/pdf'),
+      providerMetadata: {
+        cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' },
+      },
+    };
+    const renderer = render(<FilePart part={part} />);
+
+    expect(renderer.root.findByType('FilePreview').props.entryId).toBe(
+      '00000000-0000-7000-8000-000000000001',
+    );
+    expect(mockUseFilePartUri).not.toHaveBeenCalled();
   });
 
   test('previews a non-image file with the same resolved URI', async () => {

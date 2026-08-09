@@ -1,4 +1,3 @@
-import type { ResolvedFile } from '@cherrystudio/universal/data/api/schemas/files';
 import {
   type CleanupPolicy,
   type FileEntryId,
@@ -13,6 +12,8 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import type { FileRefService } from '@/backend/data/services/FileRefService';
+import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
@@ -192,7 +193,7 @@ export async function createMessageParts(
         uri: part.url,
       });
       createdEntries.push(entry);
-      const uri = resolveInternalFileUri(entry);
+      const uri = getInternalFileUri(entry);
       if (!uri) {
         throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
       }
@@ -225,6 +226,38 @@ export async function discardInternalEntries(
   }
 }
 
+export async function deleteInternalEntryIfUnreferenced(
+  entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
+  refs: Pick<FileRefService, 'countPersistentRefsByEntryIdTx'>,
+  id: FileEntryId,
+): Promise<boolean> {
+  const deletedEntry = await entries.withWriteTx(async (tx) => {
+    const entry = await entries.findByIdTx(tx, id);
+    if (
+      !entry ||
+      entry.origin !== 'internal' ||
+      entry.cleanupPolicy !== 'delete_when_unreferenced' ||
+      (await refs.countPersistentRefsByEntryIdTx(tx, id)) > 0
+    ) {
+      return null;
+    }
+
+    await entries.deleteTx(tx, id);
+    return entry;
+  });
+
+  if (!deletedEntry) {
+    return false;
+  }
+
+  try {
+    deleteInternalFile(deletedEntry);
+  } catch (error) {
+    logger.warn('Failed to unlink a discarded internal file', error as Error, { id });
+  }
+  return true;
+}
+
 export async function resolveFileEntry(
   entries: Pick<FileEntryService, 'findById'>,
   id: FileEntryId,
@@ -232,11 +265,11 @@ export async function resolveFileEntry(
   const entry = await entries.findById(id);
   // External rows are opaque desktop-compatibility data on mobile; never dereference externalPath.
   if (!entry || entry.origin !== 'internal') return null;
-  const uri = resolveInternalFileUri(entry);
+  const uri = getInternalFileUri(entry);
   return uri ? { entry, uri } : null;
 }
 
-export async function resolveRenderableFileUri(
+export async function getFileUri(
   entries: Pick<FileEntryService, 'findById'>,
   id: FileEntryId,
 ): Promise<string | undefined> {
@@ -290,7 +323,7 @@ export function deleteInternalFileUri(uri: string): void {
   }
 }
 
-export function resolveInternalFileUri(
+export function getInternalFileUri(
   entry: Pick<InternalFileEntry, 'ext' | 'id'>,
 ): string | undefined {
   const file = managedFile(entry.id, entry.ext);

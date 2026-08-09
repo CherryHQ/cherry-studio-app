@@ -1,7 +1,10 @@
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useTranslation } from 'react-i18next';
 
+import { FilePreview } from '@/frontend/components/FilePreview';
 import { FileTile, ImageTile } from '@/frontend/components/mediaTile';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -14,6 +17,20 @@ type FilePartProps = {
 };
 
 export function FilePart({ part }: FilePartProps) {
+  const fileEntryId = readCherryMeta(part)?.fileEntryId as FileEntryId | undefined;
+
+  return fileEntryId ? (
+    <ManagedFilePart entryId={fileEntryId} />
+  ) : (
+    <HistoricalFilePart part={part} />
+  );
+}
+
+function ManagedFilePart({ entryId }: { entryId: FileEntryId }) {
+  return <FilePreview entryId={entryId} />;
+}
+
+function HistoricalFilePart({ part }: FilePartProps) {
   const { t } = useTranslation();
   const { isLoading, uri } = useFilePartUri(part);
   const name = part.filename ?? part.mediaType;

@@ -65,7 +65,7 @@ describe('DataApiService', () => {
     await expect(service.delete('/topics')).rejects.toMatchObject({
       code: ErrorCode.METHOD_NOT_ALLOWED,
     });
-    await expect(service.get('/files/missing/renderable-uri')).rejects.toMatchObject({
+    await expect(service.get('/unknown-route' as never)).rejects.toMatchObject({
       code: ErrorCode.NOT_FOUND,
     });
   });

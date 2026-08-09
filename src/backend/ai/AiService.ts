@@ -72,7 +72,7 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
   assistant: Pick<AssistantService, 'getById'>;
   fileContent: {
-    resolveRenderableUri(id: FileEntryId): Promise<string | undefined>;
+    getUri(id: FileEntryId): Promise<string | undefined>;
   };
   model: Pick<ModelService, 'getById'>;
   provider: BuildAgentParamsDependencies['provider'] &
@@ -173,7 +173,7 @@ export class AiService {
     const [built, preparedMessages] = await Promise.all([
       this.buildAgentParamsFor(request, true, () => repairUsagePlugins.current ?? []),
       resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
-        this.services.fileContent.resolveRenderableUri(fileEntryId),
+        this.services.fileContent.getUri(fileEntryId),
       ),
     ]);
     const {

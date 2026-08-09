@@ -1,3 +1,4 @@
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { DocumentPickerAsset } from 'expo-document-picker';
@@ -6,8 +7,7 @@ import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/util
 
 export type ComposerAttachmentKind = 'file' | 'image';
 
-export type ComposerAttachmentDraft = {
-  fileEntryId?: string;
+type ComposerAttachmentBase = {
   id: string;
   kind: ComposerAttachmentKind;
   mediaType: string;
@@ -15,6 +15,28 @@ export type ComposerAttachmentDraft = {
   size?: number;
   uri: string;
 };
+
+export type ComposerAttachmentSource = ComposerAttachmentBase & {
+  fileEntryId?: never;
+  status?: never;
+};
+
+export type ComposerAttachmentImporting = ComposerAttachmentBase & {
+  fileEntryId?: never;
+  status: 'importing';
+};
+
+export type ComposerAttachmentReady = ComposerAttachmentBase & {
+  fileEntryId: FileEntryId;
+  status: 'ready';
+};
+
+export type ComposerAttachmentDraft =
+  | ComposerAttachmentSource
+  | ComposerAttachmentImporting
+  | ComposerAttachmentReady;
+
+export type ComposerInitialAttachment = ComposerAttachmentSource | ComposerAttachmentReady;
 
 type PhotoAttachmentInput = {
   fileName?: string;
@@ -65,7 +87,7 @@ export function removeComposerAttachment(
 // so a batch that is valid in one is valid in the other.
 export const COMPOSER_PHOTO_SELECTION_LIMIT = 9;
 
-export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ComposerAttachmentDraft {
+export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): ComposerAttachmentSource {
   const extension = photo.fileName?.trim().split('.').pop()?.toLowerCase();
 
   return {
@@ -77,7 +99,7 @@ export function createPhotoAttachmentDraft(photo: PhotoAttachmentInput): Compose
   };
 }
 
-export function createPastedImageAttachmentDraft(uri: string): ComposerAttachmentDraft {
+export function createPastedImageAttachmentDraft(uri: string): ComposerAttachmentSource {
   const pathname = new URL(uri).pathname;
   const fileName = decodeURIComponent(pathname.slice(pathname.lastIndexOf('/') + 1));
 
@@ -88,7 +110,7 @@ type CameraPhotoInput = {
   uri: string;
 };
 
-export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAttachmentDraft {
+export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAttachmentSource {
   const uri = photo.uri.startsWith('file://') ? photo.uri : `file://${photo.uri}`;
 
   return {
@@ -100,7 +122,9 @@ export function createCameraAttachmentDraft(photo: CameraPhotoInput): ComposerAt
   };
 }
 
-export function createDocumentAttachmentDraft(asset: DocumentPickerAsset): ComposerAttachmentDraft {
+export function createDocumentAttachmentDraft(
+  asset: DocumentPickerAsset,
+): ComposerAttachmentSource {
   const mediaType = asset.mimeType ?? fallbackFileMediaType;
   const isImage = isComposerImageMediaType(mediaType) || isComposerImageFileName(asset.name);
 
@@ -139,13 +163,23 @@ export function createComposerMessageParts(
       url: attachment.uri,
     } as Extract<CherryMessagePart, { type: 'file' }>;
     parts.push(
-      attachment.fileEntryId
+      isComposerAttachmentReady(attachment)
         ? withCherryMeta(filePart, { fileEntryId: attachment.fileEntryId })
         : filePart,
     );
   }
 
   return parts;
+}
+
+export function isComposerAttachmentReady(
+  attachment: ComposerAttachmentDraft | ComposerInitialAttachment,
+): attachment is ComposerAttachmentReady {
+  return attachment.status === 'ready';
+}
+
+export function hasImportingComposerAttachments(attachments: readonly ComposerAttachmentDraft[]) {
+  return attachments.some((attachment) => attachment.status === 'importing');
 }
 
 export function hasComposerSendableContent(

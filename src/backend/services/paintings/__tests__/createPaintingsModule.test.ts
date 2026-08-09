@@ -60,7 +60,7 @@ function createSubject() {
       ),
       discard: jest.fn(async () => undefined),
       readDataUrl: jest.fn(async () => 'data:image/png;base64,aW1hZ2U='),
-      resolveUri: jest.fn((entry) =>
+      getUri: jest.fn((entry) =>
         entry.id === outputFileId ? 'file:///output.png' : 'file:///input.png',
       ),
     },
@@ -154,7 +154,7 @@ describe('createPaintingsModule', () => {
 
   it('keeps referenced outputs when their URI cannot be resolved', async () => {
     const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.storage.resolveUri).mockReturnValue(undefined);
+    jest.mocked(dependencies.storage.getUri).mockReturnValue(undefined);
     const session = backend.createGenerationSession();
 
     await expect(session.generate(generationInput)).rejects.toThrow(

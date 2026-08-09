@@ -2,7 +2,6 @@ import { createFileHandlers } from '../files';
 
 const entryId = '00000000-0000-7000-8000-000000000001';
 const missingId = '00000000-0000-7000-8000-000000000002';
-
 describe('file Data API handlers', () => {
   function createHandlers() {
     const entries = {
@@ -12,19 +11,14 @@ describe('file Data API handlers', () => {
       getStats: jest.fn(async () => ({ activeTotal: 0, extCounts: [], trashTotal: 0 })),
       listCursor: jest.fn(async () => ({ items: [], total: 0 })),
     };
-    const content = {
-      resolve: jest.fn(async () => null),
-      resolveRenderableUri: jest.fn(async () => undefined),
-    };
     const refs = {
       countByEntryIds: jest.fn(async () => new Map([[entryId, 2]])),
       findByEntryId: jest.fn(async () => []),
       findBySource: jest.fn(async () => []),
     };
     return {
-      content,
       entries,
-      handlers: createFileHandlers(entries as never, refs as never, content),
+      handlers: createFileHandlers(entries as never, refs as never),
       refs,
     };
   }
@@ -58,8 +52,8 @@ describe('file Data API handlers', () => {
     expect(refs.countByEntryIds).toHaveBeenCalledWith([entryId, missingId]);
   });
 
-  it('validates source refs and preserves mobile URI compatibility routes', async () => {
-    const { content, handlers, refs } = createHandlers();
+  it('validates source reference queries', async () => {
+    const { handlers, refs } = createHandlers();
 
     await handlers['/files/refs'].GET({
       query: { sourceId: 'provider', sourceType: 'provider_logo' },
@@ -73,10 +67,5 @@ describe('file Data API handlers', () => {
         query: { sourceId: 'source', sourceType: 'temp_session' as never },
       }),
     ).toThrow();
-
-    await handlers['/files/:id/renderable-uri'].GET({ params: { id: entryId } });
-    await handlers['/files/:id/resolved'].GET({ params: { id: entryId } });
-    expect(content.resolveRenderableUri).toHaveBeenCalledWith(entryId);
-    expect(content.resolve).toHaveBeenCalledWith(entryId);
   });
 });

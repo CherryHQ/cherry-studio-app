@@ -13,6 +13,11 @@ export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';
 export { ComposerSurface, type ComposerSendPayload } from './components/ComposerSurface';
-export { ComposerProvider, useComposerActions, useComposerState } from './context/ComposerProvider';
+export {
+  type ComposerAttachmentStore,
+  ComposerProvider,
+  useComposerActions,
+  useComposerState,
+} from './context/ComposerProvider';
 export { useComposerDockLayout } from './hooks/useComposerDockLayout';
 export { useComposerFieldDismiss } from './hooks/useComposerFieldDismiss';
