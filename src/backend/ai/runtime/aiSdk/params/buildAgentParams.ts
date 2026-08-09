@@ -1,6 +1,10 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import {
+  ENDPOINT_TYPE,
+  endpointImpliedCapability,
+  MODEL_CAPABILITY,
+} from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import {
   type Assistant,
@@ -103,6 +107,15 @@ export async function buildAgentParams({
   getRepairUsagePlugins,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
   const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
+  const impliedCapability = endpointImpliedCapability(resolvedEndpoint.endpointType);
+  if (
+    model.capabilities.includes(MODEL_CAPABILITY.EMBEDDING) ||
+    model.capabilities.includes(MODEL_CAPABILITY.RERANK) ||
+    impliedCapability === MODEL_CAPABILITY.EMBEDDING ||
+    impliedCapability === MODEL_CAPABILITY.RERANK
+  ) {
+    throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
+  }
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
     provider,
     model,

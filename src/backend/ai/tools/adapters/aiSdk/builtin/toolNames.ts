@@ -13,5 +13,3 @@ export const DEVICE_TOOL_NAMES = {
   reminderListItems: 'reminder_list_items',
   reminderUpdateItem: 'reminder_update_item',
 } as const;
-
-export type DeviceToolName = (typeof DEVICE_TOOL_NAMES)[keyof typeof DEVICE_TOOL_NAMES];

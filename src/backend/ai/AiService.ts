@@ -4,12 +4,7 @@ import {
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
-import {
-  endpointImpliedCapability,
-  type ImageGenerationMode,
-  MODEL_CAPABILITY,
-  type ParamValues,
-} from '@cherrystudio/provider-registry';
+import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
@@ -30,7 +25,6 @@ import type { ProviderService } from '@/backend/data/services/ProviderService';
 
 import { createAiUsagePlugin } from './hooks/billingHook';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
-import { resolveEffectiveEndpoint } from './provider/endpoint';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
@@ -445,17 +439,6 @@ export class AiService {
     getRepairUsagePlugins?: () => AiPlugin[],
   ) {
     const { provider, model, assistant } = await this.getProviderAndModel(request);
-    const impliedCapability = endpointImpliedCapability(
-      resolveEffectiveEndpoint(provider, model).endpointType,
-    );
-    if (
-      model.capabilities.includes(MODEL_CAPABILITY.EMBEDDING) ||
-      model.capabilities.includes(MODEL_CAPABILITY.RERANK) ||
-      impliedCapability === MODEL_CAPABILITY.EMBEDDING ||
-      impliedCapability === MODEL_CAPABILITY.RERANK
-    ) {
-      throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
-    }
     const built = await buildAgentParams({
       request,
       services: this.services,

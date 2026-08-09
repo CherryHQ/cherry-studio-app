@@ -33,11 +33,3 @@ export interface ProviderCapabilities {
   /** Whether the model should stream output (vs. a single simulated chunk). */
   streamOutput: boolean;
 }
-
-/**
- * Result of completions operation
- */
-export type CompletionsResult = {
-  getText: () => string;
-  usage?: any;
-};
