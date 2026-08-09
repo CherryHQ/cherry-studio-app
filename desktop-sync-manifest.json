@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "repository": "https://github.com/CherryHQ/cherry-studio.git",
   "delegatedManifests": {
+    "ai-runtime": "packages/ai-runtime/desktop-sync-map.json",
     "design": "packages/design-tokens/src/sync-manifest.json"
   },
   "domains": {
