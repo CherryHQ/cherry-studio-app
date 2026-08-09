@@ -18,6 +18,7 @@ module.exports = {
     '/ios/',
     '/android/',
     '/packages/ai-core/',
+    '/packages/ai-runtime/',
     '/packages/ai-sdk-provider/',
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
@@ -28,6 +29,7 @@ module.exports = {
     '^lucide-uniwind/png$': '<rootDir>/packages/lucide-uniwind/src/png-icons/index.ts',
     '^vitest$': '<rootDir>/packages/provider-registry/vitestJestShim.ts',
     '^@cherrystudio/universal/(.*)$': '<rootDir>/packages/universal/src/$1',
+    '^@cherrystudio/ai-runtime/(.*)$': '<rootDir>/packages/ai-runtime/src/$1/index.ts',
     '^@shared/(.*)$': '<rootDir>/packages/universal/src/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@logger$': '<rootDir>/src/shared/core/logger/LoggerService.ts',
