@@ -11,16 +11,21 @@ import { useQuery } from '@/frontend/data';
 import { hiddenProviderListIds, isIOS } from '@/frontend/utils/constants';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
+import { SettingsGroupedSurface } from './components/SettingsGroupedSurface';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
 
 const providerListStaleTime = 1000 * 60 * 5;
 const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
+const PROVIDER_CARD_GAP = 12;
 const PROVIDER_ROW_ESTIMATED_HEIGHT = 44;
 
 const keyExtractor = (item: SettingsServiceRowProps) => item.id;
 const renderProviderRow = ({ item }: LegendListRenderItemProps<SettingsServiceRowProps>) => (
-  <SettingsServiceRow {...item} />
+  <SettingsGroupedSurface isFirst isLast>
+    <SettingsServiceRow {...item} />
+  </SettingsGroupedSurface>
 );
+const ProviderCardSeparator = () => <View style={styles.cardSeparator} />;
 
 export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
@@ -80,7 +85,7 @@ export default function ProviderSettingsScreen() {
       ? providerItems.filter((item) => item.name.toLocaleLowerCase().includes(query))
       : providerItems;
 
-    return matches.map((item, index) => ({ ...item, showSeparator: index > 0 }));
+    return matches;
   }, [providerItems, searchText]);
   const [measuredList, setMeasuredList] = useState<{ height: number; rowCount: number }>();
   const handleContentSizeChange = useCallback(
@@ -91,7 +96,8 @@ export default function ProviderSettingsScreen() {
   const cardHeight =
     measuredList?.rowCount === filteredProviderItems.length
       ? measuredList.height
-      : filteredProviderItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT;
+      : filteredProviderItems.length * PROVIDER_ROW_ESTIMATED_HEIGHT +
+        Math.max(0, filteredProviderItems.length - 1) * PROVIDER_CARD_GAP;
   const openCreateProvider = useCallback(() => {
     router.push('/settings/provider/new');
   }, [router]);
@@ -151,10 +157,7 @@ export default function ProviderSettingsScreen() {
         )}
         {filteredProviderItems.length > 0 ? (
           <View className="min-h-0 flex-1">
-            <View
-              className="overflow-hidden rounded-2xl"
-              style={{ height: cardHeight, maxHeight: '100%' }}
-            >
+            <View style={{ height: cardHeight, maxHeight: '100%' }}>
               <LegendList
                 alwaysBounceVertical={false}
                 contentContainerStyle={
@@ -162,6 +165,7 @@ export default function ProviderSettingsScreen() {
                 }
                 data={filteredProviderItems}
                 estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
+                ItemSeparatorComponent={ProviderCardSeparator}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
                 keyExtractor={keyExtractor}
@@ -191,6 +195,9 @@ export default function ProviderSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  cardSeparator: {
+    height: PROVIDER_CARD_GAP,
+  },
   list: {
     flex: 1,
   },
