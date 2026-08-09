@@ -1,22 +1,6 @@
-/** `Message` -> AI SDK `UIMessage`. */
-
-import type {
-  CherryMessagePart,
-  CherryUIMessage,
-  Message,
-} from '@cherrystudio/universal/data/types/message';
 import type { UIMessage } from 'ai';
 
 import { type ResolveFileEntryUri, resolveFileUIPart } from './fileProcessor';
-
-export function toCherryUIMessage(message: Message): CherryUIMessage {
-  const parts: CherryMessagePart[] = message.data?.parts ?? [];
-  return {
-    id: message.id,
-    role: message.role,
-    parts,
-  } as CherryUIMessage;
-}
 
 /** Unresolvable file parts are dropped with a warning. */
 async function resolveMessageParts<T extends UIMessage>(

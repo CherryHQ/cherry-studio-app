@@ -1,6 +1,6 @@
 import type { UIMessage } from 'ai';
 
-import { resolveUIMessageFileUrls } from '../messageConverter';
+import { resolveUIMessageFileUrls } from '../attachmentRouting';
 
 jest.mock('expo-file-system', () => {
   const contents = new Map<string, { base64: string; type: string }>();

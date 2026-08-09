@@ -38,7 +38,7 @@ import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 
 import { createAiUsagePlugin } from './hooks/billingHook';
-import { resolveUIMessageFileUrls } from './messages/messageConverter';
+import { resolveUIMessageFileUrls } from './messages/attachmentRouting';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
