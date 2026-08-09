@@ -1,4 +1,4 @@
-import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
@@ -14,7 +14,6 @@ type ContractFixtureOptions = {
   assistantPrompt?: string;
   assistantSettings?: Partial<Assistant['settings']>;
   capabilities?: Model['capabilities'];
-  defaultModelId?: Model['id'] | null;
   fileUri?: string;
   mcpEntries?: ToolEntry[];
   modelId?: string;
@@ -66,7 +65,6 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
   }));
   const preference = {
     get: jest.fn(async (key: string) => {
-      if (key === 'chat.default_model_id') return options.defaultModelId ?? model.id;
       if (key.startsWith('permissions.')) return 'never';
       return null;
     }),
@@ -140,10 +138,6 @@ function createProvider(overrides: Partial<Provider> = {}): Provider {
         adapterFamily: 'openai-compatible',
         baseUrl: 'https://contract.invalid/v1',
       },
-      [ENDPOINT_TYPE.OPENAI_EMBEDDINGS]: {
-        adapterFamily: 'openai-compatible',
-        baseUrl: 'https://contract.invalid/v1',
-      },
       [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {
         adapterFamily: 'openai-compatible',
         baseUrl: 'https://contract.invalid/v1',
@@ -192,5 +186,3 @@ function createAssistant(modelId: Model['id'], overrides: Partial<Assistant> = {
     ...overrides,
   };
 }
-
-export { MODEL_CAPABILITY };

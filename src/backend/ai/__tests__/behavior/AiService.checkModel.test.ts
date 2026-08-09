@@ -1,11 +1,11 @@
 import type { LanguageModelV3CallOptions } from '@ai-sdk/provider';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { MockEmbeddingModelV3, MockLanguageModelV3 } from 'ai/test';
+import { MockLanguageModelV3 } from 'ai/test';
 import * as Crypto from 'expo-crypto';
 
 import { AiService } from '@/backend/ai/AiService';
 
-import { projectEmbeddingCall, projectLanguageCall } from '../_harness/contracts';
+import { projectLanguageCall } from '../_harness/contracts';
 import { installMockProvider, textGenerateResult } from '../_harness/mockProvider';
 import { createContractFixture } from '../_harness/services';
 
@@ -55,41 +55,37 @@ describe('AiService.checkModel AI SDK contract', () => {
     expect(result.latency).toBeGreaterThanOrEqual(0);
   });
 
-  test('probes embedding models with override context and records usage', async () => {
-    const fixture = embeddingFixture();
-    const embeddingModel = new MockEmbeddingModelV3({
-      doEmbed: {
-        embeddings: [[0.1, 0.2, 0.3]],
-        usage: { tokens: 4 },
-        warnings: [],
-      },
-      modelId: fixture.model.modelId,
-      provider: 'contract-provider',
-    });
-    restoreProvider = installMockProvider({ embedding: embeddingModel });
-
-    await new AiService(fixture.services).checkModel({
-      apiKeyOverride: 'override-key',
-      requestOptions: {
-        headers: { 'X-Check': 'embedding', 'X-Empty': undefined },
-        maxRetries: 3,
-      },
-      timeout: 1000,
-      uniqueModelId: fixture.model.id,
+  test.each([
+    {
+      capabilities: [MODEL_CAPABILITY.EMBEDDING],
+      endpointTypes: [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS],
+      kind: 'embedding capability',
+      providerDefaultEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    },
+    {
+      capabilities: [],
+      endpointTypes: [],
+      kind: 'rerank provider endpoint',
+      providerDefaultEndpoint: ENDPOINT_TYPE.JINA_RERANK,
+    },
+  ])('rejects unsupported $kind models before a provider call', async (modelType) => {
+    const fixture = createContractFixture({
+      capabilities: modelType.capabilities,
+      modelId: `contract-${modelType.kind.replaceAll(' ', '-')}`,
+      modelOverrides: { endpointTypes: modelType.endpointTypes },
+      providerOverrides: { defaultChatEndpoint: modelType.providerDefaultEndpoint },
     });
 
-    expect(embeddingModel.doEmbedCalls).toHaveLength(1);
-    expect(projectEmbeddingCall(embeddingModel.doEmbedCalls[0])).toMatchSnapshot(
-      'embedding probe call',
-    );
-    expect(fixture.spies.resolveApiKey).toHaveBeenCalledWith(fixture.provider.id, 'override-key');
-    expect(fixture.spies.recordInvocation).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({ messageRef: null, modelId: fixture.model.modelId }),
-        modality: 'embedding',
-        usage: { inputTokens: 4, totalTokens: 4 },
+    await expect(
+      new AiService(fixture.services).checkModel({
+        timeout: 1000,
+        uniqueModelId: fixture.model.id,
       }),
+    ).rejects.toThrow(
+      `Mobile AI runtime does not support embedding or rerank models: ${fixture.model.id}`,
     );
+    expect(fixture.spies.resolveApiKey).not.toHaveBeenCalled();
+    expect(fixture.spies.recordInvocation).not.toHaveBeenCalled();
   });
 
   test('propagates caller aborts into the active language probe', async () => {
@@ -144,14 +140,6 @@ describe('AiService.checkModel AI SDK contract', () => {
     expect(call.abortSignal?.reason).toMatchObject({ message: 'Check model timeout' });
   });
 });
-
-function embeddingFixture() {
-  return createContractFixture({
-    capabilities: [MODEL_CAPABILITY.EMBEDDING],
-    modelId: 'contract-embedding',
-    modelOverrides: { endpointTypes: [ENDPOINT_TYPE.OPENAI_EMBEDDINGS] },
-  });
-}
 
 function abortableGenerate() {
   let notifyStarted!: (options: LanguageModelV3CallOptions) => void;

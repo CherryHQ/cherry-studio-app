@@ -1,20 +1,5 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
-exports[`AiService.checkModel AI SDK contract probes embedding models with override context and records usage: embedding probe call 1`] = `
-{
-  "abortSignal": {
-    "aborted": false,
-  },
-  "headers": {
-    "user-agent": "ai/6.0.183",
-    "x-check": "embedding",
-  },
-  "values": [
-    "test",
-  ],
-}
-`;
-
 exports[`AiService.checkModel AI SDK contract probes language models through generateText: language probe call 1`] = `
 {
   "abortSignal": {

@@ -23,6 +23,8 @@ desktop AI concepts to the in-process Expo app runtime.
 - This layer should call `packages/ai-core` instead of depending on desktop Electron services.
 - Streaming is available through `AiService.streamText()`.
 - Non-streaming generation is available through `AiService.generateText()`.
+- Embedding and Rerank models remain in synchronized data and provider catalogs, but mobile does not
+  expose or route their execution through `AiService`.
 - Desktop IPC handlers, local MCP transports, and full agent sessions are not part of the current
   mobile slice.
 - `streamManager/` collapses desktop's split between the Main-process `AiStreamManager` and the
