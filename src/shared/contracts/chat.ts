@@ -1,11 +1,5 @@
 import type {
-  AiStreamAttachRequest,
-  AiStreamAttachResponse,
-  AiStreamDetachRequest,
   ComposerQueuedMessagePayload,
-  StreamChunkPayload,
-  StreamDonePayload,
-  StreamErrorPayload,
   TopicStatusSnapshotEntry,
 } from '@cherrystudio/universal/ai/transport';
 import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
@@ -95,18 +89,9 @@ export type ChatEvent =
 
 export type ChatListener = (event: ChatEvent) => Promise<void> | void;
 
-export type ChatStreamEvent =
-  | { payload: StreamChunkPayload; type: 'chunk' }
-  | { payload: StreamDonePayload; type: 'done' }
-  | { payload: StreamErrorPayload; type: 'error' };
-
-export type ChatStreamListener = (event: ChatStreamEvent) => void;
-
 export interface ChatModule {
   abort(topicId: string): void;
-  attachStream(input: AiStreamAttachRequest, listener: ChatStreamListener): AiStreamAttachResponse;
   cancelExecution(input: ChatCancelExecutionInput): void;
-  detachStream(input: AiStreamDetachRequest, listener: ChatStreamListener): void;
   editAndResend(input: ChatEditAndResendInput): Promise<void>;
   getTopicSnapshot(topicId: string): ChatTopicSnapshot;
   queueFollowUp(input: ChatFollowUpInput): Promise<void>;

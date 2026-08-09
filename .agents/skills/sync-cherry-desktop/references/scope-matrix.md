@@ -46,7 +46,15 @@ Exclude only the paths in the Manifest:
 - `src/main/ai/agents/**`
 - `src/main/ai/observability/adapters/claudeCode/**`
 - `src/main/ai/runtime/claudeCode/**`
+- `src/main/ai/streamManager/__tests__/buildCompactReplay.test.ts`
+- `src/main/ai/streamManager/buildCompactReplay.ts`
 - `src/main/ai/tools/adapters/claudeCode/**`
+
+Desktop compact replay exists so an Electron renderer can reattach to a Main-owned chunk stream.
+Mobile keeps generation and UI state in one process, and route remounts recover the current overlay
+from `ChatRuntime`'s Topic snapshot, so porting the chunk buffer and replay helper would duplicate the
+mobile source of truth. This exclusion does not cover stream accumulation, terminal persistence, or
+any shared Message/Topic data contract.
 
 Do not exclude Agent database tables. Do not exclude ordinary chat `src/main/ai/runtime/aiSdk/Agent.ts` or `packages/aiCore/**/agents/createAgent.ts`. Require evidence and a Manifest change before adding an exclusion.
 
