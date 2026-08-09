@@ -1,0 +1,66 @@
+{
+  "name": "@cherrystudio/ai-runtime",
+  "version": "0.0.1-alpha.1",
+  "description": "Portable AI runtime behavior for Cherry Studio mobile",
+  "private": true,
+  "sideEffects": false,
+  "scripts": {
+    "check": "pnpm typecheck && pnpm test && pnpm check:boundaries",
+    "check:boundaries": "tsx scripts/check-boundaries.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./messages": {
+      "types": "./src/messages/index.ts",
+      "react-native": "./src/messages/index.ts",
+      "import": "./src/messages/index.ts",
+      "default": "./src/messages/index.ts"
+    },
+    "./provider": {
+      "types": "./src/provider/index.ts",
+      "react-native": "./src/provider/index.ts",
+      "import": "./src/provider/index.ts",
+      "default": "./src/provider/index.ts"
+    },
+    "./runtime": {
+      "types": "./src/runtime/index.ts",
+      "react-native": "./src/runtime/index.ts",
+      "import": "./src/runtime/index.ts",
+      "default": "./src/runtime/index.ts"
+    },
+    "./tools": {
+      "types": "./src/tools/index.ts",
+      "react-native": "./src/tools/index.ts",
+      "import": "./src/tools/index.ts",
+      "default": "./src/tools/index.ts"
+    },
+    "./utils": {
+      "types": "./src/utils/index.ts",
+      "react-native": "./src/utils/index.ts",
+      "import": "./src/utils/index.ts",
+      "default": "./src/utils/index.ts"
+    }
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.79",
+    "@ai-sdk/google": "^3.0.64",
+    "@ai-sdk/openai": "^3.0.53",
+    "@ai-sdk/openai-compatible": "2.0.62",
+    "@ai-sdk/provider": "^3.0.14",
+    "@ai-sdk/provider-utils": "4.0.40",
+    "@cherrystudio/ai-core": "workspace:*",
+    "@cherrystudio/provider-registry": "workspace:*",
+    "@cherrystudio/universal": "workspace:*",
+    "ai": "^6.0.143",
+    "crypto-es": "^3.1.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.7.0",
+    "tsx": "^4.20.6",
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.7"
+  }
+}
