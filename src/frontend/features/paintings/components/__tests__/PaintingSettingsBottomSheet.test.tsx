@@ -74,7 +74,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     Input: MockTextInput,
     Label: MockText,
     Section: MockSection,
-    Slider: (props: Record<string, unknown>) => <MockView {...props} />,
+    Slider: (props: Record<string, unknown>) => <MockView {...props} testID="mock-slider" />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
     TextField: MockView,
     useBottomSheet: () => ({
@@ -290,5 +290,29 @@ describe('PaintingSettingsBottomSheet', () => {
         .findAllByType(TextInput)
         .filter((input) => input.props.accessibilityLabel === 'painting.settings.width'),
     ).toHaveLength(0);
+  });
+
+  it('does not mount a native slider for a fixed range', () => {
+    const fixedRangeMode = {
+      definition: {
+        supports: {
+          numImages: { default: 1, max: 1, min: 1, type: 'range' },
+        },
+      },
+      mode: 'generate',
+    } satisfies ResolvedImageGenerationMode;
+
+    act(() => {
+      renderer = create(
+        <PaintingSettingsBottomSheet
+          onDismiss={jest.fn()}
+          onValueChange={jest.fn()}
+          resolvedMode={fixedRangeMode}
+          values={{ numImages: 1 }}
+        />,
+      );
+    });
+
+    expect(renderer?.root.findAllByProps({ testID: 'mock-slider' })).toHaveLength(0);
   });
 });
