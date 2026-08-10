@@ -21,6 +21,7 @@ afterEach(() => {
 
 describe('PkceOAuthClient', () => {
   it('posts the authorization_code grant and parses the token response', async () => {
+    const controller = new AbortController();
     const fetchMock = mockFetchOnce({
       json: async () => ({
         access_token: 'tok',
@@ -32,7 +33,12 @@ describe('PkceOAuthClient', () => {
     });
 
     await expect(
-      client.exchangeCode('the-code', 'the-verifier', 'cherrystudio://oauth/callback'),
+      client.exchangeCode(
+        'the-code',
+        'the-verifier',
+        'cherrystudio://oauth/callback',
+        controller.signal,
+      ),
     ).resolves.toEqual({
       access_token: 'tok',
       expires_in: 3600,
@@ -45,6 +51,7 @@ describe('PkceOAuthClient', () => {
       expect.objectContaining({
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         method: 'POST',
+        signal: controller.signal,
       }),
     );
 

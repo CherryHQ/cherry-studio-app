@@ -14,7 +14,7 @@ import {
   type Model,
   type UniqueModelId,
 } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import type { AuthConfig, Provider } from '@cherrystudio/universal/data/types/provider';
 import { InvalidToolInputError, type ToolSet } from 'ai';
 
 import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
@@ -50,6 +50,79 @@ jest.mock('@/backend/ai/runtime/aiSdk/Agent', () => ({
 
 const generateImageMock = aiCoreGenerateImage as jest.MockedFunction<typeof aiCoreGenerateImage>;
 const generateTextMock = aiCoreGenerateText as jest.MockedFunction<typeof aiCoreGenerateText>;
+
+describe('AiService.listModels authentication adapters', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('passes the Copilot serving-token adapter to model listing', async () => {
+    const provider = createProvider({
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'github-copilot-openai-compatible',
+          baseUrl: 'https://api.githubcopilot.com',
+        },
+      },
+      id: 'copilot',
+      presetProviderId: 'copilot',
+    });
+    const services = createServices({ provider });
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+
+    await new AiService(services).listModels({ providerId: provider.id, throwOnError: true });
+
+    expect(services.oauth.getCopilotServingToken).toHaveBeenCalledWith(
+      expect.objectContaining({ 'Editor-Plugin-Version': expect.any(String) }),
+      undefined,
+    );
+  });
+
+  it('passes the Vertex service-account adapter to model listing', async () => {
+    const provider = createProvider({
+      authType: 'iam-gcp',
+      defaultChatEndpoint: ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: {
+          adapterFamily: 'google-vertex',
+          baseUrl: 'https://us-central1-aiplatform.googleapis.com',
+        },
+      },
+      id: 'vertexai',
+      presetProviderId: 'vertexai',
+    });
+    const privateKey = '-----BEGIN PRIVATE KEY-----\nMIIabc\n-----END PRIVATE KEY-----';
+    const authConfig: AuthConfig = {
+      credentials: {
+        client_email: 'svc@example.com',
+        private_key: privateKey,
+      },
+      location: 'us-central1',
+      project: 'project-id',
+      type: 'iam-gcp',
+    };
+    const services = createServices({ authConfig, provider });
+    jest.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ publisherModels: [] }), {
+          status: 200,
+        }),
+    );
+
+    await new AiService(services).listModels({ providerId: provider.id, throwOnError: true });
+
+    expect(services.vertexAuth.getAuthorizationHeaders).toHaveBeenCalledWith({
+      projectId: 'project-id',
+      serviceAccount: {
+        clientEmail: 'svc@example.com',
+        privateKey,
+      },
+    });
+  });
+});
 
 describe('AiService.generateImage', () => {
   beforeEach(() => {
@@ -933,9 +1006,16 @@ describe('AiService MCP tool injection', () => {
   });
 });
 
-type TestAiServices = Omit<AiServiceDependencies, 'tools'> & {
+type TestAiServices = Omit<AiServiceDependencies, 'oauth' | 'tools' | 'vertexAuth'> & {
+  oauth: {
+    authenticatedFetch: jest.Mock;
+    getCopilotServingToken: jest.Mock;
+  };
   tools: {
     resolveForRequest: jest.Mock;
+  };
+  vertexAuth: {
+    getAuthorizationHeaders: jest.Mock;
   };
   webSearch: {
     searchKeywords: jest.Mock;
@@ -943,6 +1023,7 @@ type TestAiServices = Omit<AiServiceDependencies, 'tools'> & {
 };
 
 function createServices({
+  authConfig = null,
   assistant,
   builtInTools,
   mcpTools,
@@ -955,6 +1036,7 @@ function createServices({
     'chat.web_search.exclude_domains': [],
   },
 }: {
+  authConfig?: AuthConfig | null;
   assistant?: Assistant;
   builtInTools?: ToolSet;
   mcpTools?: ToolSet;
@@ -1015,12 +1097,16 @@ function createServices({
     model: {
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),
     },
+    oauth: {
+      authenticatedFetch: jest.fn(),
+      getCopilotServingToken: jest.fn(async () => 'copilot-serving-token'),
+    },
     preference: {
       get: jest.fn(async () => webSearchProviderId),
       getMultipleRawCached: jest.fn(() => webSearchPreferences),
     },
     provider: {
-      getAuthConfig: jest.fn(async () => null),
+      getAuthConfig: jest.fn(async () => authConfig),
       getByProviderId: jest.fn(async () => provider),
       getRotatedApiKey: jest.fn(async () => 'rotated-key'),
       resolveApiKey: jest.fn(async (_providerId: string, override?: string) => ({
@@ -1031,6 +1117,9 @@ function createServices({
       })),
     },
     tools,
+    vertexAuth: {
+      getAuthorizationHeaders: jest.fn(async () => ({ Authorization: 'Bearer vertex-token' })),
+    },
     webSearch,
   } as unknown as TestAiServices;
 }

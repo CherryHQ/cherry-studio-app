@@ -44,21 +44,33 @@ describe('MobileRegistryLoader', () => {
     });
   });
 
-  it('omits desktop-only CLI providers and their model overrides', () => {
+  it('retains OAuth providers whose desktop-only login flow is blocked by the app', () => {
     const loader = new MobileRegistryLoader();
-    const providers = loader.loadProviders();
     const overrides = loader.loadProviderModels();
 
-    expect(providers.map((provider) => provider.id)).toContain('grok');
-    expect(loader.findProvider('grok-cli')).toBeNull();
-    expect(loader.findProvider('openai-codex')).toBeNull();
-    expect(loader.isProviderExcluded('grok-cli')).toBe(true);
-    expect(loader.isProviderExcluded('openai-codex')).toBe(true);
-    expect(loader.isProviderExcluded('grok')).toBe(false);
-    expect(loader.isProviderExcluded('cherryai')).toBe(false);
-    expect(overrides.some((override) => override.providerId === 'grok-cli')).toBe(false);
-    expect(overrides.some((override) => override.providerId === 'openai-codex')).toBe(false);
-    expect(loader.getOverridesForProvider('grok-cli')).toEqual([]);
-    expect(loader.getOverridesForProvider('openai-codex')).toEqual([]);
+    for (const providerId of ['grok-cli', 'openai-codex']) {
+      expect(loader.findProvider(providerId)).toMatchObject({ authMethods: ['oauth'] });
+      expect(loader.isProviderExcluded(providerId)).toBe(false);
+      expect(overrides.some((override) => override.providerId === providerId)).toBe(true);
+      expect(loader.getOverridesForProvider(providerId).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('publishes OAuth capability metadata for every registered flow adapter', () => {
+    const loader = new MobileRegistryLoader();
+
+    for (const providerId of [
+      '302ai',
+      'aihubmix',
+      'aionly',
+      'cherryin',
+      'copilot',
+      'grok-cli',
+      'openai-codex',
+      'ppio',
+      'silicon',
+    ]) {
+      expect(loader.findProvider(providerId)?.authMethods).toContain('oauth');
+    }
   });
 });

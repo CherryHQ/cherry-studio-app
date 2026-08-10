@@ -67,6 +67,14 @@ function RootStack() {
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen
+        name="oauth/authorize"
+        options={{
+          headerStyle: { backgroundColor },
+          headerTransparent: false,
+          presentation: 'modal',
+        }}
+      />
+      <Stack.Screen
         name="topics"
         options={{
           contentStyle: { backgroundColor: 'transparent' },

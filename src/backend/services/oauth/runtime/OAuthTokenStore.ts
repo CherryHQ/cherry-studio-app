@@ -1,6 +1,6 @@
 import type { AuthConfig } from '@cherrystudio/universal/data/types/provider';
 
-import type { OAuthTokenStore, OAuthTokenStoreData } from '@/shared/oauth';
+import type { OAuthTokenStore, OAuthTokenStoreData } from './types';
 
 type OAuthAuthConfig = Extract<AuthConfig, { type: 'oauth' }>;
 

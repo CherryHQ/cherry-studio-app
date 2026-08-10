@@ -10,6 +10,7 @@ const deepSeekThinkingWire = modeWire('extra_body.thinking.type', {
 const deepSeekModels = ['deepseek-chat', 'deepseek-reasoner', 'deepseek-v3-1', 'deepseek-v3-2'];
 
 export default defineProvider({
+  authMethods: ['api-key', 'oauth'],
   id: 'cherryin',
   name: 'CherryIN',
   defaultChatEndpoint: 'openai-chat-completions',

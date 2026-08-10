@@ -58,6 +58,7 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import type { OAuthAuthenticatedFetch } from '@/backend/services/oauth/runtime/types';
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolResolver } from '../../../tools';
@@ -67,6 +68,10 @@ import { replacePromptVariables } from '../../../utils/promptVariables';
 import type { AgentOptions } from '../Agent';
 
 export interface BuildAgentParamsDependencies {
+  oauth: {
+    authenticatedFetch: OAuthAuthenticatedFetch;
+    getCopilotServingToken(headers: Record<string, string>, signal?: AbortSignal): Promise<string>;
+  };
   preference: PreferenceService;
   provider: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;
   tools: Pick<ToolResolver, 'resolveForRequest'>;
@@ -118,7 +123,10 @@ export async function buildAgentParams({
     provider,
     model,
     {
+      authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
+        services.oauth.authenticatedFetch(providerId, buildRequest, doFetch, options),
       getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
+      getCopilotToken: (headers, signal) => services.oauth.getCopilotServingToken(headers, signal),
       resolveApiKey: (providerId, override) =>
         services.provider.resolveApiKey(providerId, override),
     },

@@ -76,6 +76,7 @@ export function openaiCompatible(
      * Exact provider-model exceptions belong in endpoint-keyed `reasoningContracts`.
      */
     reasoningFormat?: ProviderReasoningFormat;
+    authMethods?: ProviderConfig['authMethods'];
     authOptional?: ProviderConfig['authOptional'];
   } & GenFields,
 ): Provider {
@@ -95,6 +96,7 @@ export function openaiCompatible(
     endpointConfigs,
     metadata: { website: p.website },
     ...(p.apiFeatures ? { apiFeatures: p.apiFeatures } : {}),
+    ...(p.authMethods ? { authMethods: p.authMethods } : {}),
     ...(p.authOptional ? { authOptional: p.authOptional } : {}),
     ...(p.presetProviderId ? { presetProviderId: p.presetProviderId } : {}),
     ...(p.modelsDevProvider ? { modelsDevProvider: p.modelsDevProvider } : {}),

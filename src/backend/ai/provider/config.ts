@@ -11,9 +11,16 @@ import {
 import {
   type AppProviderId,
   type AppProviderSettingsMap,
+  appendDashScopeWebExtractor,
   appProviderIds,
+  buildCodexRequestHeaders,
+  buildGrokCliRequestHeaders,
+  coerceCodexRequestBody,
+  COPILOT_DEFAULT_HEADERS,
+  dmxapiUsesCustomTransport,
   formatApiHost,
   formatOllamaApiHost,
+  getBaseUrl,
   getExtraHeaders,
   isVertexMaasModelId,
   isWithTrailingSharp,
@@ -24,9 +31,13 @@ import {
   type ResolvedEndpoint,
   resolveEffectiveEndpoint,
   routeToEndpoint,
+  rewriteGrokCliResponsesBody,
+  stripArkUnsupportedIncludes,
+  transformZhipuRequestBody,
+  withoutTrailingApiVersion,
 } from '@cherrystudio/ai-runtime/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
 import type { AuthConfig, Provider } from '@cherrystudio/universal/data/types/provider';
@@ -46,7 +57,18 @@ interface BaseConfig {
 }
 
 interface ProviderConfigRuntime {
+  authenticatedFetch?: (
+    providerId: string,
+    buildRequest: (credentials: { accessToken: string; accountId?: string | null }) => {
+      init: RequestInit;
+      input: RequestInfo | URL;
+    },
+    doFetch: (input: RequestInfo | URL, init: RequestInit) => Promise<Response>,
+    options?: { notSignedInMessage?: string },
+  ) => Promise<Response>;
+  fetch?: typeof globalThis.fetch;
   getAuthConfig(providerId: string): Promise<AuthConfig | null>;
+  getCopilotToken?: (headers: Record<string, string>, signal?: AbortSignal) => Promise<string>;
   resolveApiKey(providerId: string, override?: string): Promise<ResolvedProviderApiKey>;
 }
 
@@ -59,6 +81,7 @@ interface BuilderContext {
   aiSdkProviderId: StringKeys<AppProviderSettingsMap>;
   apiKeyOverride?: string;
   runtime: ProviderConfigRuntime;
+  sessionId?: string;
 }
 
 type ApiKeyBuilderContext = BuilderContext & {
@@ -68,6 +91,7 @@ type ApiKeyBuilderContext = BuilderContext & {
 interface ProviderToAiSdkConfigOptions {
   apiKeyOverride?: string;
   resolvedEndpoint?: ResolvedEndpoint;
+  sessionId?: string;
 }
 
 export interface ResolvedProviderAiSdkConfig {
@@ -99,6 +123,7 @@ function formatBaseURL(baseURL: string, provider: Provider, endpointType?: Endpo
   // Providers that don't append API version
   const noVersionProviders = [
     'github',
+    'copilot',
     'cherryai',
     'perplexity',
     'newapi',
@@ -148,6 +173,16 @@ function withSelectedApiKey(build: ProviderConfigBuilder): ConfigBuilderEntry['b
   };
 }
 
+function withProviderAuth(
+  method: Extract<ServingCredentialReceipt, { attribution: 'auth' }>['method'],
+  build: ProviderConfigBuilder,
+): ConfigBuilderEntry['build'] {
+  return async (ctx) => ({
+    config: await build(ctx),
+    credentialReceipt: { attribution: 'auth', method },
+  });
+}
+
 /** Endpoint priority: `model.endpointTypes[0]` > `provider.defaultChatEndpoint` > fallback. */
 export async function providerToAiSdkConfig(
   provider: Provider,
@@ -183,14 +218,112 @@ export async function resolveProviderAiSdkConfig(
     endpointType,
     aiSdkProviderId,
     runtime,
+    sessionId: options?.sessionId,
   };
 
   const builders: ConfigBuilderEntry[] = [
+    {
+      match: (p) => isPreset(p, 'copilot'),
+      build: withProviderAuth('oauth', buildCopilotConfig),
+    },
+    { match: (p) => isPreset(p, 'opencode'), build: withSelectedApiKey(buildOpenCodeConfig) },
+    {
+      match: (p) => isPreset(p, 'openai-codex'),
+      build: withProviderAuth('oauth', buildCodexConfig),
+    },
+    {
+      match: (p) => isPreset(p, 'grok-cli'),
+      build: withProviderAuth('oauth', buildGrokCliConfig),
+    },
     { match: (p) => isCherryAIProvider(p), build: withSelectedApiKey(buildCherryAIConfig) },
     { match: (p) => isOllamaProvider(p), build: withSelectedApiKey(buildOllamaConfig) },
     { match: (p) => isAzureOpenAIProvider(p), build: withSelectedApiKey(buildAzureConfig) },
-    { match: (_, id) => id === 'cherryin', build: withSelectedApiKey(buildRoutedGatewayConfig) },
-    { match: (_, id) => id === 'newapi', build: withSelectedApiKey(buildRoutedGatewayConfig) },
+    {
+      match: (p, id) => isPreset(p, 'dashscope') && id === 'openai-compatible',
+      build: withSelectedApiKey(buildDashScopeConfig),
+    },
+    {
+      match: (p, id) => isPreset(p, 'zhipu') && id === 'openai-compatible',
+      build: withSelectedApiKey((builderContext) => {
+        const config = buildOpenAICompatibleConfig(builderContext);
+        config.providerSettings.transformRequestBody = transformZhipuRequestBody;
+        return config;
+      }),
+    },
+    {
+      match: (p, id) => isPreset(p, 'moonshot') && id === 'openai-compatible',
+      build: withSelectedApiKey((builderContext) => ({
+        providerId: 'moonshot',
+        endpoint: builderContext.endpoint,
+        providerSettings: {
+          ...builderContext.baseConfig,
+          ...buildCommonOptions(builderContext),
+          includeUsage: builderContext.actualProvider.apiFeatures.streamOptions,
+        },
+      })),
+    },
+    {
+      match: (p, id) => isPreset(p, 'doubao') && id === 'openai',
+      build: withSelectedApiKey((builderContext) => {
+        const config = buildGenericProviderConfig(builderContext);
+        config.providerSettings.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
+          (builderContext.runtime.fetch ?? globalThis.fetch)(input, {
+            ...init,
+            body: stripArkUnsupportedIncludes(init?.body),
+          });
+        return config;
+      }),
+    },
+    {
+      match: (p, id) => isPreset(p, 'dashscope') && id === 'openai',
+      build: withSelectedApiKey((builderContext) => {
+        const config = buildGenericProviderConfig(builderContext);
+        config.providerSettings.fetch = (input: RequestInfo | URL, init?: RequestInit) =>
+          (builderContext.runtime.fetch ?? globalThis.fetch)(input, {
+            ...init,
+            body: appendDashScopeWebExtractor(init?.body),
+          });
+        return config;
+      }),
+    },
+    {
+      match: (p, id) =>
+        id === 'openai-compatible' &&
+        isImageGenerationModel(model) &&
+        (['modelscope', 'ppio', 'silicon', 'doubao', 'ovms'].some((providerId) =>
+          isPreset(p, providerId),
+        ) ||
+          (isPreset(p, 'dmxapi') && dmxapiUsesCustomTransport(model.apiModelId ?? model.id))),
+      build: withSelectedApiKey((builderContext) => ({
+        providerId: (builderContext.actualProvider.presetProviderId ??
+          builderContext.actualProvider.id) as
+          | 'modelscope'
+          | 'ppio'
+          | 'silicon'
+          | 'doubao'
+          | 'ovms'
+          | 'dmxapi',
+        endpoint: builderContext.endpoint,
+        providerSettings: {
+          ...builderContext.baseConfig,
+          headers: { ...defaultAppHeaders(), ...getExtraHeaders(builderContext.actualProvider) },
+        },
+      })),
+    },
+    {
+      match: (p, id) =>
+        id === 'openai-compatible' && isImageGenerationModel(model) && isPreset(p, 'minimax'),
+      build: withSelectedApiKey((builderContext) => ({
+        providerId: 'minimax',
+        endpoint: builderContext.endpoint,
+        providerSettings: {
+          ...builderContext.baseConfig,
+          headers: { ...defaultAppHeaders(), ...getExtraHeaders(builderContext.actualProvider) },
+        },
+      })),
+    },
+    { match: (p) => isPreset(p, 'cherryin'), build: withSelectedApiKey(buildCherryInConfig) },
+    { match: (_, id) => id === 'newapi', build: withSelectedApiKey(buildNewApiConfig) },
     { match: (_, id) => id === 'aihubmix', build: withSelectedApiKey(buildAiHubMixConfig) },
     { match: (_, id) => id === 'dmxapi', build: withSelectedApiKey(buildDmxapiConfig) },
     { match: (_, id) => id === 'gateway', build: withSelectedApiKey(buildGenericProviderConfig) },
@@ -203,17 +336,145 @@ export async function resolveProviderAiSdkConfig(
   ];
 
   const builder = builders.find((b) => b.match(provider, aiSdkProviderId));
+  let resolved: ResolvedProviderConfigBuild;
   if (builder) {
-    return builder.build(ctx);
+    resolved = await builder.build(ctx);
+  } else if (hasProviderConfig(aiSdkProviderId) && aiSdkProviderId !== 'openai-compatible') {
+    resolved = await withSelectedApiKey(buildGenericProviderConfig)(ctx);
+  } else {
+    resolved = await withSelectedApiKey(buildOpenAICompatibleConfig)(ctx);
   }
 
-  if (hasProviderConfig(aiSdkProviderId) && aiSdkProviderId !== 'openai-compatible') {
-    return withSelectedApiKey(buildGenericProviderConfig)(ctx);
-  }
-  return withSelectedApiKey(buildOpenAICompatibleConfig)(ctx);
+  resolved.config.providerSettings.fetch ??= runtime.fetch;
+  return resolved;
 }
 
 // ── Config Builders ──
+
+async function buildCopilotConfig(
+  ctx: BuilderContext,
+): Promise<ProviderConfig<'github-copilot-openai-compatible'>> {
+  if (!ctx.runtime.getCopilotToken) {
+    throw new Error('GitHub Copilot requires the mobile Copilot token adapter.');
+  }
+  const headers = { ...COPILOT_DEFAULT_HEADERS, ...getExtraHeaders(ctx.actualProvider) };
+  const token = await ctx.runtime.getCopilotToken(headers);
+
+  return {
+    providerId: 'github-copilot-openai-compatible',
+    endpoint: ctx.endpoint,
+    providerSettings: {
+      ...ctx.baseConfig,
+      apiKey: token,
+      headers,
+      name: ctx.actualProvider.id,
+    },
+  };
+}
+
+function buildOpenCodeConfig(ctx: BuilderContext): ProviderConfig {
+  const config =
+    ctx.aiSdkProviderId === 'openai-compatible'
+      ? buildOpenAICompatibleConfig(ctx)
+      : buildGenericProviderConfig(ctx);
+  const settings = config.providerSettings as { headers?: Record<string, string | undefined> };
+  const hasExplicitSession = Object.keys(settings.headers ?? {}).some(
+    (name) => name.toLowerCase() === 'x-opencode-session',
+  );
+  if (ctx.sessionId && !hasExplicitSession) {
+    settings.headers = { 'x-opencode-session': ctx.sessionId, ...settings.headers };
+  }
+  return config;
+}
+
+function requireAuthenticatedFetch(ctx: BuilderContext) {
+  if (!ctx.runtime.authenticatedFetch) {
+    throw new Error(`OAuth runtime is unavailable for ${ctx.actualProvider.id}.`);
+  }
+  return ctx.runtime.authenticatedFetch;
+}
+
+function buildCodexConfig(ctx: BuilderContext): ProviderConfig<'openai'> {
+  const baseURL = (
+    getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.OPENAI_RESPONSES) ||
+    'https://chatgpt.com/backend-api/codex'
+  ).replace(/\/+$/, '');
+
+  return {
+    providerId: 'openai',
+    endpoint: ctx.endpoint,
+    providerSettings: {
+      ...ctx.baseConfig,
+      apiKey: 'codex-oauth',
+      baseURL,
+      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) =>
+        requireAuthenticatedFetch(ctx)(
+          'openai-codex',
+          (credentials) => ({
+            input,
+            init: {
+              ...init,
+              body: coerceCodexRequestBody(init?.body),
+              headers: buildCodexRequestHeaders(init?.headers, {
+                ...credentials,
+                accountId: credentials.accountId ?? null,
+              }),
+            },
+          }),
+          ctx.runtime.fetch ?? globalThis.fetch,
+          { notSignedInMessage: 'OpenAI Codex OAuth is not available on mobile.' },
+        ),
+    },
+  };
+}
+
+function buildGrokCliConfig(ctx: BuilderContext): ProviderConfig<'openai'> {
+  const baseURL = (
+    getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.OPENAI_RESPONSES) ||
+    'https://cli-chat-proxy.grok.com/v1'
+  ).replace(/\/+$/, '');
+
+  return {
+    providerId: 'openai',
+    endpoint: ctx.endpoint,
+    providerSettings: {
+      ...ctx.baseConfig,
+      apiKey: 'grok-cli-oauth',
+      baseURL,
+      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        let body = init?.body;
+        let modelId = '';
+        if (typeof body === 'string') {
+          try {
+            const parsed = JSON.parse(body) as Record<string, unknown>;
+            modelId = typeof parsed.model === 'string' ? parsed.model : '';
+            body = JSON.stringify(rewriteGrokCliResponsesBody(parsed));
+          } catch {
+            // Preserve a non-JSON body so the upstream request reports it.
+          }
+        }
+        return requireAuthenticatedFetch(ctx)(
+          'grok-cli',
+          (credentials) => ({
+            input,
+            init: {
+              ...init,
+              body,
+              headers: buildGrokCliRequestHeaders(init?.headers, {
+                accessToken: credentials.accessToken,
+                modelId,
+              }),
+            },
+          }),
+          ctx.runtime.fetch ?? globalThis.fetch,
+          { notSignedInMessage: 'Grok CLI OAuth is not available on mobile.' },
+        );
+      },
+    },
+  };
+}
 
 function buildCommonOptions(ctx: BuilderContext) {
   const options: Record<string, any> = {
@@ -252,18 +513,6 @@ function mapGatewayEndpointType(
   }
 }
 
-function buildRoutedGatewayConfig(ctx: BuilderContext): ProviderConfig {
-  return {
-    providerId: ctx.aiSdkProviderId,
-    endpoint: ctx.endpoint,
-    providerSettings: {
-      ...ctx.baseConfig,
-      endpointType: mapGatewayEndpointType(ctx.endpointType ?? ctx.model.endpointTypes?.[0]),
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
-    },
-  };
-}
-
 function buildCherryAIConfig(ctx: BuilderContext): ProviderConfig<'openai-compatible'> {
   return {
     providerId: 'openai-compatible',
@@ -280,7 +529,10 @@ function buildCherryAIConfig(ctx: BuilderContext): ProviderConfig<'openai-compat
           query: '',
           body: getJsonBody(init?.body),
         });
-        return fetch(input, { ...init, headers: { ...init?.headers, ...signature } });
+        return (ctx.runtime.fetch ?? globalThis.fetch)(input, {
+          ...init,
+          headers: { ...init?.headers, ...signature },
+        });
       },
     },
   };
@@ -530,6 +782,66 @@ function buildDmxapiConfig(ctx: BuilderContext): ProviderConfig<'dmxapi'> {
   };
 }
 
+function buildDashScopeConfig(ctx: BuilderContext): ProviderConfig<'dashscope'> {
+  return {
+    providerId: 'dashscope',
+    endpoint: ctx.endpoint,
+    providerSettings: {
+      ...ctx.baseConfig,
+      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+      includeUsage: ctx.actualProvider.apiFeatures.streamOptions,
+    },
+  };
+}
+
+function buildCherryInConfig(ctx: BuilderContext): ProviderConfig {
+  const anthropicBaseURL = formatApiHost(
+    getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.ANTHROPIC_MESSAGES),
+  );
+  const geminiBaseURL = formatApiHost(
+    getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT),
+    true,
+    'v1beta',
+  );
+
+  return {
+    providerId: ctx.aiSdkProviderId,
+    endpoint: ctx.endpoint,
+    providerSettings: {
+      ...ctx.baseConfig,
+      anthropicBaseURL,
+      endpointType: mapGatewayEndpointType(ctx.endpointType),
+      geminiBaseURL,
+      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+    },
+  };
+}
+
+function formatNewApiBaseURL(baseURL: string, endpointType: EndpointType | undefined): string {
+  const host = withoutTrailingApiVersion(baseURL);
+  return endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT
+    ? formatApiHost(host, true, 'v1beta')
+    : formatApiHost(host, true);
+}
+
+function buildNewApiConfig(ctx: BuilderContext): ProviderConfig<'newapi'> {
+  const rawBaseURL =
+    ctx.endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES
+      ? getBaseUrl(ctx.actualProvider, ctx.endpointType) || ctx.baseConfig.baseURL
+      : ctx.baseConfig.baseURL;
+
+  return {
+    providerId: 'newapi',
+    endpoint: ctx.endpoint,
+    providerSettings: {
+      ...ctx.baseConfig,
+      baseURL: formatNewApiBaseURL(rawBaseURL, ctx.endpointType),
+      endpointType: mapGatewayEndpointType(ctx.endpointType),
+      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
+    },
+  };
+}
+
 function isPreset(provider: Provider, presetId: string): boolean {
   return provider.id === presetId || provider.presetProviderId === presetId;
 }
@@ -544,6 +856,10 @@ function isGeminiProvider(provider: Provider): boolean {
 
 function isCherryAIProvider(provider: Provider): boolean {
   return isPreset(provider, 'cherryai');
+}
+
+function isImageGenerationModel(model: Model): boolean {
+  return model.capabilities.includes(MODEL_CAPABILITY.IMAGE_GENERATION);
 }
 
 function isAzureOpenAIProvider(provider: Provider): boolean {
