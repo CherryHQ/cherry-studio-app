@@ -15,6 +15,7 @@ module.exports = {
   // otherwise collect (hundreds of failing foreign suites drowning real results).
   testPathIgnorePatterns: [
     '/node_modules/',
+    // Conductor review artifacts live here and are not repository test suites.
     '/.context/',
     '/ios/',
     '/android/',
