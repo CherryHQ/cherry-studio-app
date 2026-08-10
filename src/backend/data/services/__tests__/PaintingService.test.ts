@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
@@ -14,6 +15,7 @@ jest.mock('uuid', () => ({
 }));
 
 jest.mock('../utils/orderKey', () => ({
+  computeNewOrderKey: jest.fn(async () => 'Zz'),
   insertWithOrderKey: jest.fn(),
 }));
 
@@ -22,12 +24,13 @@ type MigrationJournal = { entries: { tag: string }[] };
 describe('PaintingService integration', () => {
   let sqlite: DatabaseSync;
   let service: PaintingService;
+  let database: Database;
 
   beforeEach(() => {
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
-    const database = drizzle(
+    database = drizzle(
       async (sql, params, method) => {
         const statement = sqlite.prepare(sql);
         if (method === 'run') {
@@ -63,18 +66,23 @@ describe('PaintingService integration', () => {
 
   afterEach(() => sqlite.close());
 
-  it('pages newest output receipts first and filters receipts without outputs', async () => {
+  it('pages newest receipts first and keeps output-less ones so the gallery can show them', async () => {
     insertPainting(sqlite, 'painting-new', 'a0', 3);
-    insertPainting(sqlite, 'painting-empty', 'a1', 2);
+    insertPainting(sqlite, 'painting-pending', 'a1', 2);
     insertPainting(sqlite, 'painting-old', 'a2', 1);
     insertFileAndRef(sqlite, 'new-output', 'painting-new', 'output', 3);
+    insertFileAndRef(sqlite, 'pending-input', 'painting-pending', 'input', 2);
     insertFileAndRef(sqlite, 'old-input', 'painting-old', 'input', 1);
     insertFileAndRef(sqlite, 'old-output', 'painting-old', 'output', 1);
 
-    const firstPage = await service.listByCursor({ limit: 1 });
-    const secondPage = await service.listByCursor({ cursor: firstPage.nextCursor, limit: 1 });
+    const firstPage = await service.listByCursor({ limit: 2 });
+    const secondPage = await service.listByCursor({ cursor: firstPage.nextCursor, limit: 2 });
 
-    expect(firstPage.items.map((painting) => painting.id)).toEqual(['painting-new']);
+    expect(firstPage.items.map((painting) => painting.id)).toEqual([
+      'painting-new',
+      'painting-pending',
+    ]);
+    expect(firstPage.items[1].files).toEqual({ input: ['pending-input'], output: [] });
     expect(firstPage.nextCursor).toBeDefined();
     expect(secondPage.items.map((painting) => painting.id)).toEqual(['painting-old']);
     expect(secondPage.items[0].files).toEqual({ input: ['old-input'], output: ['old-output'] });
@@ -149,15 +157,57 @@ describe('PaintingService integration', () => {
     expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting').get()).toEqual({ count: 1 });
   });
 
-  it('lists all painting ids with outputs in gallery order', async () => {
+  it('lists every painting id in gallery order so select-all matches what is on screen', async () => {
     insertPainting(sqlite, 'painting-first', 'a0', 3);
-    insertPainting(sqlite, 'painting-empty', 'a1', 2);
+    insertPainting(sqlite, 'painting-pending', 'a1', 2);
     insertPainting(sqlite, 'painting-last', 'a2', 1);
     insertFileAndRef(sqlite, 'first-output', 'painting-first', 'output', 3);
-    insertFileAndRef(sqlite, 'empty-input', 'painting-empty', 'input', 2);
+    insertFileAndRef(sqlite, 'pending-input', 'painting-pending', 'input', 2);
     insertFileAndRef(sqlite, 'last-output', 'painting-last', 'output', 1);
 
-    await expect(service.listAllIds()).resolves.toEqual(['painting-first', 'painting-last']);
+    await expect(service.listAllIds()).resolves.toEqual([
+      'painting-first',
+      'painting-pending',
+      'painting-last',
+    ]);
+  });
+
+  it('reuses an interrupted receipt: keeps its id, swaps inputs, moves it to the head', async () => {
+    insertPainting(sqlite, 'painting-retry', 'a5', 1);
+    insertFileAndRef(sqlite, 'stale-input', 'painting-retry', 'input', 1);
+    insertFile(sqlite, 'fresh-input', 2);
+
+    const retried = await service.resetForRetryTx(database, 'painting-retry', {
+      inputFileIds: ['fresh-input' as FileEntryId],
+      modelId: 'model-2',
+      prompt: 'retry prompt',
+      providerId: 'provider',
+    });
+
+    expect(retried).toMatchObject({
+      files: { input: ['fresh-input'], output: [] },
+      id: 'painting-retry',
+      modelId: 'provider::model-2',
+      orderKey: 'Zz',
+      prompt: 'retry prompt',
+    });
+    expect(sqlite.prepare('SELECT file_entry_id FROM painting_file_ref').all()).toEqual([
+      { file_entry_id: 'fresh-input' },
+    ]);
+  });
+
+  it('refuses to reuse a receipt that already holds outputs', async () => {
+    insertPainting(sqlite, 'painting-done', 'a0', 1);
+    insertFileAndRef(sqlite, 'done-output', 'painting-done', 'output', 1);
+
+    await expect(
+      service.resetForRetryTx(database, 'painting-done', {
+        inputFileIds: [],
+        modelId: 'model-2',
+        prompt: 'retry prompt',
+        providerId: 'provider',
+      }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
   });
 });
 

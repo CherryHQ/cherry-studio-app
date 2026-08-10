@@ -17,6 +17,12 @@ export type PaintingGenerationInput = {
   images: readonly PaintingSourceImage[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
+  /**
+   * Retry an interrupted receipt in place rather than minting a new one. The
+   * receipt must have no outputs — passing a finished painting is rejected,
+   * since reusing it would delete the images it already holds.
+   */
+  paintingId?: string;
   paramValues: ParamValues;
   prompt: string;
 };
@@ -38,6 +44,12 @@ export type ResolvedPaintingFiles = {
 
 export type PaintingGenerationStart = {
   jobId: string;
+  /**
+   * The receipt this job writes into — the caller has no other way to learn it
+   * for a fresh generation, and it is what makes the screen restorable (the
+   * job is found again by painting, not by the id it happened to be handed).
+   */
+  paintingId: string;
 };
 
 export interface PaintingsModule {

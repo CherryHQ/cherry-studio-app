@@ -54,6 +54,7 @@ function createSubject() {
     },
     paintings: {
       createTx: jest.fn(async () => painting('painting-1')),
+      resetForRetryTx: jest.fn(async (_tx: Database, id: string) => painting(id)),
     },
     storage: {
       createInternalEntry: jest.fn(async () => internalEntry(inputFileId)),
@@ -79,19 +80,27 @@ const generationInput = {
   prompt: ' draw ',
 };
 
-const expectedSignature = JSON.stringify({
-  images: ['draft-1:file:///picked.png'],
-  mode: 'generate',
-  modelId,
-  paramValues: {},
-  prompt: 'draw',
-});
+function signatureFor(paintingId: string | null = null) {
+  return JSON.stringify({
+    images: ['draft-1:file:///picked.png'],
+    mode: 'generate',
+    modelId,
+    paintingId,
+    paramValues: {},
+    prompt: 'draw',
+  });
+}
+
+const expectedSignature = signatureFor();
 
 describe('createPaintingsModule', () => {
   it('creates the receipt and enqueues the job atomically inside one transaction', async () => {
     const { backend, dependencies } = createSubject();
 
-    await expect(backend.startGeneration(generationInput)).resolves.toEqual({ jobId: 'job-1' });
+    await expect(backend.startGeneration(generationInput)).resolves.toEqual({
+      jobId: 'job-1',
+      paintingId: 'painting-1',
+    });
 
     expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -146,9 +155,14 @@ describe('createPaintingsModule', () => {
 
   it('returns the active job on an idempotency hit and discards its fresh inputs', async () => {
     const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.jobs.findActiveGenerateTx).mockResolvedValue({ id: 'job-9' });
+    jest
+      .mocked(dependencies.jobs.findActiveGenerateTx)
+      .mockResolvedValue({ id: 'job-9', input: { paintingId: 'painting-9' } });
 
-    await expect(backend.startGeneration(generationInput)).resolves.toEqual({ jobId: 'job-9' });
+    await expect(backend.startGeneration(generationInput)).resolves.toEqual({
+      jobId: 'job-9',
+      paintingId: 'painting-9',
+    });
 
     expect(dependencies.jobs.findActiveGenerateTx).toHaveBeenCalledWith(tx, expectedSignature);
     expect(dependencies.paintings.createTx).not.toHaveBeenCalled();
@@ -156,6 +170,39 @@ describe('createPaintingsModule', () => {
     expect(dependencies.storage.discard).toHaveBeenCalledWith([
       expect.objectContaining({ id: inputFileId }),
     ]);
+  });
+
+  it('reuses the interrupted receipt when a paintingId is supplied instead of minting a new one', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await expect(
+      backend.startGeneration({ ...generationInput, paintingId: 'painting-7' }),
+    ).resolves.toEqual({ jobId: 'job-1', paintingId: 'painting-7' });
+
+    expect(dependencies.paintings.createTx).not.toHaveBeenCalled();
+    expect(dependencies.paintings.resetForRetryTx).toHaveBeenCalledWith(tx, 'painting-7', {
+      inputFileIds: [inputFileId],
+      modelId,
+      prompt: 'draw',
+      providerId: 'openai',
+    });
+    expect(dependencies.jobs.enqueueGenerateTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ paintingId: 'painting-7' }),
+      { idempotencyKey: signatureFor('painting-7') },
+    );
+  });
+
+  it('keeps a retry and a fresh generation on distinct idempotency keys', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await backend.startGeneration(generationInput);
+    await backend.startGeneration({ ...generationInput, paintingId: 'painting-7' });
+
+    const keys = jest
+      .mocked(dependencies.jobs.findActiveGenerateTx)
+      .mock.calls.map(([, idempotencyKey]) => idempotencyKey);
+    expect(new Set(keys).size).toBe(2);
   });
 
   it('discards created inputs when receipt persistence fails', async () => {

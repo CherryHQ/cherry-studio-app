@@ -17,16 +17,16 @@ import type {
   PaintingGenerateJobInput,
 } from './tasks/paintingGenerateJobHandler';
 
+type PaintingReceiptInput = {
+  inputFileIds: readonly FileEntryId[];
+  modelId: string;
+  prompt: string;
+  providerId: string;
+};
+
 type PaintingGenerationPersistence = {
-  createTx(
-    tx: Database,
-    input: {
-      inputFileIds: readonly FileEntryId[];
-      modelId: string;
-      prompt: string;
-      providerId: string;
-    },
-  ): Promise<Painting>;
+  createTx(tx: Database, input: PaintingReceiptInput): Promise<Painting>;
+  resetForRetryTx(tx: Database, id: string, input: PaintingReceiptInput): Promise<Painting>;
 };
 
 type PaintingFileRepository = {
@@ -44,7 +44,10 @@ type PaintingJobsPort = {
     input: PaintingGenerateJobInput,
     opts: { idempotencyKey: string },
   ): Promise<{ id: string }>;
-  findActiveGenerateTx(tx: Database, idempotencyKey: string): Promise<{ id: string } | null>;
+  findActiveGenerateTx(
+    tx: Database,
+    idempotencyKey: string,
+  ): Promise<{ id: string; input: unknown } | null>;
 };
 
 export type PaintingsModuleDependencies = {
@@ -105,14 +108,21 @@ async function startGeneration(
     const result = await dependencies.db.withWriteTx(async (tx) => {
       const existing = await dependencies.jobs.findActiveGenerateTx(tx, signature);
       if (existing) {
-        return { jobId: existing.id, reusedActive: true };
+        return {
+          jobId: existing.id,
+          paintingId: activeJobPaintingId(existing.input),
+          reusedActive: true,
+        };
       }
-      const receipt = await dependencies.paintings.createTx(tx, {
+      const receiptInput = {
         inputFileIds: images.map((image) => image.fileEntryId),
         modelId: input.modelId,
         prompt,
         providerId,
-      });
+      };
+      const receipt = input.paintingId
+        ? await dependencies.paintings.resetForRetryTx(tx, input.paintingId, receiptInput)
+        : await dependencies.paintings.createTx(tx, receiptInput);
       const handle = await dependencies.jobs.enqueueGenerateTx(
         tx,
         {
@@ -125,7 +135,7 @@ async function startGeneration(
         },
         { idempotencyKey: signature },
       );
-      return { jobId: handle.id, reusedActive: false };
+      return { jobId: handle.id, paintingId: receipt.id, reusedActive: false };
     });
 
     if (result.reusedActive) {
@@ -133,7 +143,7 @@ async function startGeneration(
       await dependencies.storage.discard(createdInputs);
     }
     createdInputsSettled = true;
-    return { jobId: result.jobId };
+    return { jobId: result.jobId, paintingId: result.paintingId };
   } finally {
     if (!createdInputsSettled) {
       await dependencies.storage.discard(createdInputs);
@@ -146,11 +156,31 @@ async function resolveFileEntries(files: PaintingFileRepository, ids: readonly F
   return entries.filter((entry) => entry !== null);
 }
 
+/**
+ * The active job carries the receipt it writes into; an enqueued
+ * `painting.generate` always has one, so a missing id means the ledger row was
+ * written by something other than {@link startGeneration}.
+ */
+function activeJobPaintingId(jobInput: unknown): string {
+  const paintingId = (jobInput as Partial<PaintingGenerateJobInput> | null)?.paintingId;
+  if (typeof paintingId !== 'string' || paintingId.length === 0) {
+    throw new Error('Active painting.generate job has no paintingId in its input');
+  }
+  return paintingId;
+}
+
+/**
+ * `paintingId` participates so that retrying an interrupted receipt does not
+ * collide with generating the very same prompt as a brand-new painting — same
+ * inputs, different intent, and the idempotency hit would silently hand the
+ * caller back the wrong receipt.
+ */
 function generationSignature(input: PaintingGenerationInput): string {
   return JSON.stringify({
     images: input.images.map((image) => image.fileEntryId ?? `${image.id}:${image.uri}`),
     mode: input.mode,
     modelId: input.modelId,
+    paintingId: input.paintingId ?? null,
     paramValues: sortRecord(input.paramValues),
     prompt: input.prompt,
   });
