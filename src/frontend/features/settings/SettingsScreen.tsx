@@ -20,6 +20,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -27,6 +28,7 @@ import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './prof
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
@@ -52,6 +54,12 @@ export default function SettingsScreen() {
   // animation depends on. No top padding: the hero box is pinned to content y=0
   // and draws under the status bar, exactly like the reference header.
   const contentContainerStyle = useMemo(() => ({ paddingBottom: tabBarHeight }), [tabBarHeight]);
+
+  const setBackgroundReplyPreference = (enabled: boolean) => {
+    void setBackgroundReplyEnabled(enabled).catch(() => {
+      alert.show({ title: t('settings.backgroundReply.saveFailed') });
+    });
+  };
 
   return (
     <View className="flex-1 bg-grouped-background">
@@ -84,11 +92,11 @@ export default function SettingsScreen() {
                 accessibilityState={{ checked: backgroundReplyEnabled }}
                 label={t('settings.items.backgroundReply')}
                 leading={<RadioIcon className="size-5 text-foreground" strokeWidth={2} />}
-                onPress={() => void setBackgroundReplyEnabled(!backgroundReplyEnabled)}
+                onPress={() => setBackgroundReplyPreference(!backgroundReplyEnabled)}
                 trailing={
                   <Switch
                     accessibilityLabel={t('settings.items.backgroundReply')}
-                    onValueChange={(enabled) => void setBackgroundReplyEnabled(enabled)}
+                    onValueChange={setBackgroundReplyPreference}
                     value={backgroundReplyEnabled}
                   />
                 }
