@@ -1,9 +1,8 @@
 import { Button } from '@cherrystudio/ui/components';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { WalletIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Text } from 'react-native';
 
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
@@ -23,36 +22,19 @@ export function CherryInOauth({ provider }: { provider: Provider }) {
   const handleTopup = useCallback(() => void openExternalUrl(CHERRYIN_TOPUP_URL), []);
 
   const authenticatedContent = (
-    <View className="flex-row flex-wrap gap-2">
-      <Button
-        disabled={oauth.isLoadingData}
-        onPress={() => void oauth.fetchData()}
-        size="sm"
-        variant="ghost"
-      >
-        <Button.Label>
-          {`${t('settings.provider.oauth.cherryIn.balance')}: ${formatCurrency(oauth.balance)}`}
-        </Button.Label>
-      </Button>
-      <Button icon={<WalletIcon />} onPress={handleTopup} size="sm">
-        {t('settings.provider.oauth.cherryIn.topup')}
-      </Button>
-    </View>
+    <Button onPress={handleTopup} size="sm">
+      {t('settings.provider.oauth.cherryIn.topup')}
+    </Button>
   );
-  const footer = (
-    <Text
-      accessibilityRole="link"
-      className="px-3 text-foreground-tertiary text-xs underline"
-      onPress={() => void openExternalUrl('https://open.cherryin.ai')}
-    >
-      {t('settings.provider.oauth.cherryIn.service_attribution')}
+  const identityDetail = (
+    <Text className="text-sm text-secondary-foreground">
+      {`${t('settings.provider.oauth.cherryIn.balance')}: ${formatCurrency(oauth.balance)}`}
     </Text>
   );
-
   return (
     <ProviderOauthSectionView
       authenticatedContent={authenticatedContent}
-      footer={footer}
+      identityDetail={identityDetail}
       oauth={oauth}
       provider={provider}
     />

@@ -1,15 +1,26 @@
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { ReactNode } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { CherryInOauth } from '../CherryInOauth';
+import { ProviderOauthSectionView } from '../ProviderOauthSection';
+
+const mockUseCherryInOauth = jest.fn();
+
 jest.mock('@cherrystudio/ui/components', () => {
-  const React = require('react');
-  const { Pressable, Text, View } = require('react-native');
-  function MockSection({ children, footer }: { children?: ReactNode; footer?: ReactNode }) {
-    return React.createElement(View, null, children, footer);
+  const React = jest.requireActual<typeof import('react')>('react');
+  function MockSection({
+    children,
+    ...props
+  }: {
+    children?: ReactNode;
+    contentClassName?: string;
+  }) {
+    return React.createElement('Section', props, children);
   }
   function MockSectionItem({ children }: { children?: ReactNode }) {
-    return React.createElement(View, null, children);
+    return React.createElement('SectionItem', null, children);
   }
   function MockButton({
     children,
@@ -19,7 +30,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     children?: ReactNode;
     icon?: ReactNode;
   }) {
-    return React.createElement(Pressable, props, React.createElement(Text, null, children));
+    return React.createElement('Button', { ...props, hasIcon: _icon !== undefined }, children);
   }
   const Section = Object.assign(MockSection, { Item: MockSectionItem });
   return {
@@ -41,7 +52,10 @@ jest.mock('lucide-uniwind/png', () => ({
   XIcon: () => null,
 }));
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ i18n: { language: 'en-US' }, t: (key: string) => key }),
+  useTranslation: () => ({
+    i18n: { language: 'en-US' },
+    t: (key: string) => (key === 'settings.provider.oauth.login' ? 'Sign in' : key),
+  }),
 }));
 jest.mock('uniwind', () => ({
   useResolveClassNames: () => ({}),
@@ -56,8 +70,9 @@ jest.mock('../../hooks/useProviderOauth', () => ({
   UserCancelledError: class UserCancelledError extends Error {},
   useProviderOauth: jest.fn(),
 }));
-
-import { ProviderOauthSectionView } from '../ProviderOauthSection';
+jest.mock('../../hooks/useCherryInOauth', () => ({
+  useCherryInOauth: (...args: unknown[]) => mockUseCherryInOauth(...args),
+}));
 
 const provider = {
   id: 'openai-codex',
@@ -138,22 +153,99 @@ describe('ProviderOauthSectionView', () => {
     expect(renderedText(renderer)).toContain('settings.provider.oauth.openAuthorization');
   });
 
-  it('uses an OAuth-only description when manual API keys are unavailable', () => {
+  it('matches the secondary button surface and foreground tokens', () => {
+    act(() => {
+      renderer = create(<ProviderOauthSectionView oauth={controller()} provider={provider} />);
+    });
+
+    expect(renderer!.root.findByProps({ contentClassName: 'bg-field' })).toBeDefined();
+    expect(renderedText(renderer)).toContain('text-secondary-foreground');
+    expect(renderedText(renderer)).toContain('text-base');
+    expect(renderedText(renderer)).not.toContain('text-foreground-secondary');
+    expect(renderedText(renderer)).not.toContain('openai.com/codex');
+  });
+
+  it('places a small text-only login action beside the provider identity', () => {
     act(() => {
       renderer = create(
         <ProviderOauthSectionView
+          authenticatedContent={<Text>Top up</Text>}
+          identityDetail={<Text>Balance: $10.22</Text>}
           oauth={controller()}
-          provider={{
-            ...provider,
-            authMethods: ['oauth'],
-            id: 'copilot',
-            name: 'GitHub Copilot',
-          }}
+          provider={provider}
         />,
       );
     });
 
-    expect(renderedText(renderer)).toContain('settings.provider.oauth.descriptionOAuthOnly');
+    const loginButton = renderer!.root.findByProps({ hasIcon: false });
+    expect(loginButton.props.size).toBe('sm');
+    expect(loginButton.props.variant).toBeUndefined();
+    const output = renderedText(renderer);
+    expect(output).toContain('Sign in');
+    expect(output).not.toContain('Balance: $10.22');
+    expect(output).not.toContain('Top up');
+  });
+
+  it('places a small text-only logout action beside the provider identity', () => {
+    act(() => {
+      renderer = create(
+        <ProviderOauthSectionView
+          authenticatedContent={<Text>Top up</Text>}
+          identityDetail={<Text>Balance: $10.22</Text>}
+          oauth={controller({
+            status: {
+              accountId: null,
+              flowType: 'pkce-session',
+              isAuthenticated: true,
+              isConfigured: true,
+              providerId: provider.id,
+            },
+          })}
+          provider={provider}
+        />,
+      );
+    });
+
+    const logoutButton = renderer!.root.findByProps({ hasIcon: false, size: 'sm' });
+    expect(logoutButton.props.variant).toBe('secondary');
+    const output = renderedText(renderer);
+    expect(output).toContain('settings.provider.oauth.logout');
+    expect(output.indexOf(provider.name)).toBeLessThan(output.indexOf('Balance: $10.22'));
+    expect(output.indexOf('Balance: $10.22')).toBeLessThan(output.indexOf('Top up'));
+    expect(output.indexOf('Top up')).toBeLessThan(output.indexOf('settings.provider.oauth.logout'));
+  });
+
+  it('shows CherryIN balance with text-only top-up and logout actions after login', () => {
+    mockUseCherryInOauth.mockReturnValue({
+      ...(controller({
+        status: {
+          accountId: null,
+          flowType: 'pkce-session',
+          isAuthenticated: true,
+          isConfigured: true,
+          providerId: 'cherryin',
+        },
+      }) as unknown as object),
+      balance: 10.22,
+    });
+
+    act(() => {
+      renderer = create(
+        <CherryInOauth provider={{ ...provider, id: 'cherryin', name: 'CherryIN' } as Provider} />,
+      );
+    });
+
+    expect(renderedText(renderer)).toContain('text-sm text-secondary-foreground');
+    expect(renderedText(renderer)).toContain('settings.provider.oauth.cherryIn.balance: $10.22');
+    const actionButtons = renderer!.root.findAllByType('Button');
+    expect(actionButtons).toHaveLength(2);
+    expect(actionButtons[0].props).toMatchObject({ hasIcon: false, size: 'sm' });
+    expect(actionButtons[0].props.variant).toBeUndefined();
+    expect(actionButtons[1].props).toMatchObject({
+      hasIcon: false,
+      size: 'sm',
+      variant: 'secondary',
+    });
   });
 
   it('keeps hosted-provider billing actions after OAuth adds a key', () => {

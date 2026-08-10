@@ -7,8 +7,6 @@ import {
   CircleDollarSignIcon,
   CopyIcon,
   ExternalLinkIcon,
-  LogInIcon,
-  LogOutIcon,
   ReceiptTextIcon,
   XIcon,
 } from 'lucide-uniwind/png';
@@ -64,13 +62,13 @@ export function ProviderOauthSection({ provider }: ProviderOauthSectionProps) {
 
 type ProviderOauthSectionViewProps = ProviderOauthSectionProps & {
   authenticatedContent?: ReactNode;
-  footer?: ReactNode;
+  identityDetail?: ReactNode;
   oauth: ProviderOauthController;
 };
 
 export function ProviderOauthSectionView({
   authenticatedContent,
-  footer,
+  identityDetail,
   oauth,
   provider,
 }: ProviderOauthSectionViewProps) {
@@ -111,7 +109,7 @@ export function ProviderOauthSectionView({
 
   if (oauth.statusQuery.isPending) {
     return (
-      <Section>
+      <Section contentClassName="bg-field">
         <Section.Item>
           <View className="gap-2 py-1">
             <View className="h-5 w-40 rounded bg-secondary" />
@@ -132,13 +130,13 @@ export function ProviderOauthSectionView({
         ? t('settings.provider.oauth.blockedMobile')
         : t(`settings.provider.oauth.configuration.${oauth.status.configurationIssue}`);
     return (
-      <Section>
+      <Section contentClassName="bg-field">
         <Section.Item>
           <View className="flex-row items-start gap-3 py-1">
             <CircleAlertIcon />
             <View className="min-w-0 flex-1 gap-1">
-              <Text className="font-medium text-foreground">{provider.name}</Text>
-              <Text selectable className="text-foreground-secondary text-sm">
+              <Text className="font-medium text-secondary-foreground">{provider.name}</Text>
+              <Text selectable className="text-secondary-foreground text-sm">
                 {message}
               </Text>
             </View>
@@ -150,17 +148,17 @@ export function ProviderOauthSectionView({
 
   if (oauth.deviceAuthorization) {
     return (
-      <Section>
+      <Section contentClassName="bg-field">
         <Section.Item>
           <View className="gap-3">
             <ProviderIdentity iconSource={iconSource} provider={provider} />
-            <Text className="text-foreground-secondary text-sm">
+            <Text className="text-secondary-foreground text-sm">
               {t('settings.provider.oauth.deviceCodeDescription')}
             </Text>
             <View className="flex-row items-center gap-2 rounded-lg bg-secondary px-3 py-2">
               <Text
                 selectable
-                className="min-w-0 flex-1 font-semibold text-foreground text-lg"
+                className="min-w-0 flex-1 font-semibold text-secondary-foreground text-lg"
                 style={{ fontVariant: ['tabular-nums'] }}
               >
                 {oauth.deviceAuthorization.userCode}
@@ -202,26 +200,18 @@ export function ProviderOauthSectionView({
 
   if (!oauth.status.isAuthenticated) {
     return (
-      <Section>
+      <Section contentClassName="bg-field">
         <Section.Item>
-          <View className="gap-3">
+          <View className="flex-row items-center gap-3">
             <ProviderIdentity iconSource={iconSource} provider={provider} />
-            <Text className="text-foreground-secondary text-sm">
-              {t(
-                provider.authMethods?.includes('api-key')
-                  ? 'settings.provider.oauth.description'
-                  : 'settings.provider.oauth.descriptionOAuthOnly',
-                { provider: provider.name },
-              )}
-            </Text>
+            <View className="flex-1" />
             <Button
-              className="w-full"
               disabled={oauth.isLoggingIn}
-              icon={<LogInIcon />}
               loading={oauth.isLoggingIn}
               onPress={() => void handleLogin()}
+              size="sm"
             >
-              {t('settings.provider.oauth.login', { provider: provider.name })}
+              {t('settings.provider.oauth.login')}
             </Button>
           </View>
         </Section.Item>
@@ -230,28 +220,29 @@ export function ProviderOauthSectionView({
   }
 
   return (
-    <Section footer={footer}>
+    <Section contentClassName="bg-field">
       <Section.Item>
         <View className="gap-3">
           <View className="flex-row items-center gap-3">
-            <ProviderIdentity iconSource={iconSource} provider={provider} />
+            <ProviderIdentity detail={identityDetail} iconSource={iconSource} provider={provider} />
             <View className="flex-1" />
+            {authenticatedContent}
             <Button
               accessibilityLabel={t('settings.provider.oauth.logout')}
-              className="h-9 w-9 min-w-0 bg-transparent p-0"
               disabled={oauth.isLoggingOut}
-              icon={<LogOutIcon />}
               loading={oauth.isLoggingOut}
               onPress={requestLogout}
-              variant="ghost"
-            />
+              size="sm"
+              variant="secondary"
+            >
+              {t('settings.provider.oauth.logout')}
+            </Button>
           </View>
           {oauth.status.accountId ? (
-            <Text selectable className="text-foreground-secondary text-sm">
+            <Text selectable className="text-secondary-foreground text-sm">
               {oauth.status.accountId}
             </Text>
           ) : null}
-          {authenticatedContent}
           {accountLinks ? (
             <View className="flex-row gap-2">
               <Button
@@ -296,9 +287,11 @@ function resolveProviderAccountLinks(
 }
 
 function ProviderIdentity({
+  detail,
   iconSource,
   provider,
 }: {
+  detail?: ReactNode;
   iconSource: ReturnType<typeof resolveProviderIcon> extends infer T
     ? T extends Record<string, infer TSource>
       ? TSource | undefined
@@ -307,20 +300,19 @@ function ProviderIdentity({
   provider: Provider;
 }) {
   return (
-    <View className="min-w-0 flex-row items-center gap-3">
+    <View className="min-w-0 shrink flex-row items-center gap-3">
       {iconSource ? (
         <Image className="h-10 w-10 rounded-lg" source={iconSource} />
       ) : (
         <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-          <Text className="font-semibold text-foreground">{provider.name[0]}</Text>
+          <Text className="font-semibold text-secondary-foreground">{provider.name[0]}</Text>
         </View>
       )}
-      <View className="min-w-0">
-        <Text className="font-medium text-foreground">{provider.name}</Text>
-        <Text className="text-foreground-secondary text-xs">
-          {provider.websites?.official?.replace(/^https?:\/\//, '').replace(/\/.*$/, '') ??
-            provider.name}
+      <View className="min-w-0 shrink">
+        <Text className="text-base font-medium text-secondary-foreground" numberOfLines={1}>
+          {provider.name}
         </Text>
+        {detail}
       </View>
     </View>
   );
