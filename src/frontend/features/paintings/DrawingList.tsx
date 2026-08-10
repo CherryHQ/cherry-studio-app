@@ -17,7 +17,7 @@ import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
-  type ComposerAttachmentDraft,
+  type ComposerInitialAttachment,
   createPhotoAttachmentDraft,
 } from '@/frontend/components/composer/utils/composerAttachments';
 import {
@@ -86,7 +86,7 @@ export function DrawingList() {
     [router],
   );
   const openPaintingWithAttachments = useCallback(
-    (attachments: readonly ComposerAttachmentDraft[]) => {
+    (attachments: readonly ComposerInitialAttachment[]) => {
       openPainting({ attachments });
     },
     [openPainting],
@@ -160,6 +160,7 @@ export function DrawingList() {
         }
       }}
       scrollEventThrottle={160}
+      showsVerticalScrollIndicator={false}
       testID="drawing-home-scroll"
     >
       {isEditing ? null : (

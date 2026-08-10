@@ -1,6 +1,42 @@
 import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import {
+  type ProviderConfig,
+  resolveAiSdkProviderId,
+  resolveEffectiveEndpoint,
+  resolveProviderOptionsKey,
+} from '@cherrystudio/ai-runtime/provider';
+import {
+  buildAgentPlugins,
+  CITATIONS_SYSTEM_PROMPT,
+  createToolCallLimitStopCondition,
+  getDeferredToolsSystemPrompt,
+  type NativeFileSupport,
+  resolveCapabilities,
+  resolveNativeFileSupport,
+  stopOnTerminalToolFailure,
+  trackSteerYieldStopCondition,
+  type AiBaseRequest,
+  type CallOverrides,
+} from '@cherrystudio/ai-runtime/runtime';
+import { createAiRepair, TOOL_SEARCH_TOOL_NAME } from '@cherrystudio/ai-runtime/tools';
+import {
+  addAnthropicHeaders,
+  applyFastModeToProviderOptions,
+  buildCapabilityProviderOptions,
+  buildResolvedReasoningProviderOptions,
+  extractAiSdkStandardParams,
+  filterStandardParams,
+  getCustomParameters,
+  getMaxTokens,
+  getTemperature,
+  getTimeout,
+  getTopP,
+  mergeCustomProviderParameters,
+  resolveReasoningInvocation,
+  type ResolvedReasoningInvocation,
+} from '@cherrystudio/ai-runtime/utils';
+import {
   ENDPOINT_TYPE,
   endpointImpliedCapability,
   MODEL_CAPABILITY,
@@ -22,53 +58,20 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import type { OAuthAuthenticatedFetch } from '@/backend/services/oauth/runtime/types';
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
-import {
-  resolveAiSdkProviderId,
-  resolveEffectiveEndpoint,
-  resolveProviderOptionsKey,
-} from '../../../provider/endpoint';
 import type { ToolResolver } from '../../../tools';
-import { TOOL_SEARCH_TOOL_NAME } from '../../../tools/adapters/aiSdk/meta/toolSearch';
-import { createAiRepair } from '../../../tools/adapters/aiSdk/repair';
-import type { RequestContext } from '../../../tools/adapters/aiSdk/types';
-import type { ProviderConfig } from '../../../types';
-import type { AiBaseRequest, CallOverrides } from '../../../types/requests';
-import { addAnthropicHeaders } from '../../../utils/anthropicHeaders';
-import {
-  filterStandardParams,
-  getMaxTokens,
-  getTemperature,
-  getTimeout,
-  getTopP,
-} from '../../../utils/modelParameters';
-import {
-  applyFastModeToProviderOptions,
-  buildCapabilityProviderOptions,
-  buildResolvedReasoningProviderOptions,
-  extractAiSdkStandardParams,
-  mergeCustomProviderParameters,
-} from '../../../utils/options';
+import { reportToolRuntimeDiagnostic } from '../../../tools/toolRuntimeDiagnostics';
+import type { RequestContext } from '../../../tools/types';
 import { replacePromptVariables } from '../../../utils/promptVariables';
-import { getCustomParameters } from '../../../utils/reasoning';
-import {
-  resolveReasoningInvocation,
-  type ResolvedReasoningInvocation,
-} from '../../../utils/reasoningSerializers';
 import type { AgentOptions } from '../Agent';
-import {
-  createToolCallLimitStopCondition,
-  stopOnTerminalToolFailure,
-  trackSteerYieldStopCondition,
-} from '../loop/toolLoopTermination';
-import { CITATIONS_SYSTEM_PROMPT } from '../prompts/citations';
-import { getDeferredToolsSystemPrompt } from '../prompts/deferredTools';
-import { buildAgentPlugins } from './buildAgentPlugins';
-import { resolveCapabilities } from './capabilities';
-import { type NativeFileSupport, resolveNativeFileSupport } from './nativeFileSupport';
 
 export interface BuildAgentParamsDependencies {
+  oauth: {
+    authenticatedFetch: OAuthAuthenticatedFetch;
+    getCopilotServingToken(headers: Record<string, string>, signal?: AbortSignal): Promise<string>;
+  };
   preference: PreferenceService;
   provider: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;
   tools: Pick<ToolResolver, 'resolveForRequest'>;
@@ -120,7 +123,10 @@ export async function buildAgentParams({
     provider,
     model,
     {
+      authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
+        services.oauth.authenticatedFetch(providerId, buildRequest, doFetch, options),
       getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
+      getCopilotToken: (headers, signal) => services.oauth.getCopilotServingToken(headers, signal),
       resolveApiKey: (providerId, override) =>
         services.provider.resolveApiKey(providerId, override),
     },
@@ -249,6 +255,7 @@ export async function buildAgentParams({
         : Crypto.randomUUID(),
   };
   const repairToolCall = createAiRepair({
+    diagnostics: reportToolRuntimeDiagnostic,
     modelId: model.apiModelId ?? model.modelId,
     providerId: sdkConfig.providerId,
     providerSettings: sdkConfig.providerSettings,

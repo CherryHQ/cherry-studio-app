@@ -1,9 +1,9 @@
 import * as Crypto from 'expo-crypto';
 
-import type { ComposerAttachmentDraft } from '@/frontend/components/composer/utils/composerAttachments';
+import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
 
 export type PaintingDraftHandoff = {
-  attachments: readonly ComposerAttachmentDraft[];
+  attachments: readonly ComposerInitialAttachment[];
   draft?: string;
 };
 

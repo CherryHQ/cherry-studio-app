@@ -19,11 +19,85 @@ jest.mock('../utils/orderKey', () => ({
 jest.mock('../ProviderRegistryService', () => ({
   providerRegistryService: {
     getProviderDisplayMetadata: jest.fn(() => ({})),
+    isProviderExcluded: jest.fn(() => false),
     isRegistryProvider: jest.fn(() => false),
   },
 }));
 
 describe('ProviderService', () => {
+  test('projects unsupported preset providers out while retaining custom providers', async () => {
+    const rows = [
+      createProviderRow(
+        {},
+        { name: 'OpenRouter', presetProviderId: 'openrouter', providerId: 'openrouter' },
+      ),
+      createProviderRow(
+        {},
+        { name: 'OpenAI Codex', presetProviderId: 'openai-codex', providerId: 'openai-codex' },
+      ),
+      createProviderRow(
+        {},
+        { name: 'Grok CLI', presetProviderId: 'grok-cli', providerId: 'grok-cli' },
+      ),
+      createProviderRow(
+        {},
+        { name: 'CherryAI', presetProviderId: 'cherryai', providerId: 'cherryai' },
+      ),
+      createProviderRow({}, { name: 'Custom provider', providerId: 'custom-provider' }),
+    ];
+    jest
+      .mocked(providerRegistryService.isProviderExcluded)
+      .mockImplementation((providerId) => ['grok-cli', 'openai-codex'].includes(providerId));
+    const service = new ProviderService(
+      {
+        getDb: () => ({
+          select: () => ({
+            from: () => ({ orderBy: async () => rows }),
+          }),
+        }),
+      } as unknown as DbService,
+      createPinServiceStub(),
+      createCacheService(),
+    );
+
+    await expect(service.list()).resolves.toEqual([
+      expect.objectContaining({ id: 'openrouter' }),
+      expect.objectContaining({ id: 'cherryai' }),
+      expect.objectContaining({ id: 'custom-provider' }),
+    ]);
+    expect(rows.map((row) => row.providerId)).toEqual([
+      'openrouter',
+      'openai-codex',
+      'grok-cli',
+      'cherryai',
+      'custom-provider',
+    ]);
+  });
+
+  test('blocks direct access to a retained unsupported preset provider row', async () => {
+    const row = createProviderRow(
+      {},
+      { name: 'OpenAI Codex', presetProviderId: 'openai-codex', providerId: 'openai-codex' },
+    );
+    jest.mocked(providerRegistryService.isProviderExcluded).mockReturnValue(true);
+    const service = new ProviderService(
+      {
+        getDb: () => ({
+          select: () => ({
+            from: () => ({ where: () => ({ limit: async () => [row] }) }),
+          }),
+        }),
+      } as unknown as DbService,
+      createPinServiceStub(),
+      createCacheService(),
+    );
+
+    await expect(service.getByProviderId(row.providerId)).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    await expect(service.getRowByProviderId(row.providerId)).resolves.toBe(row);
+  });
+
   test('includes registry API feature baselines in runtime providers', async () => {
     jest.mocked(providerRegistryService.getProviderDisplayMetadata).mockReturnValueOnce({
       apiFeatures: {
@@ -374,7 +448,10 @@ function createDeleteTransaction(input: {
   };
 }
 
-function createProviderRow(providerSettings: ProviderSettings): UserProviderRow {
+function createProviderRow(
+  providerSettings: ProviderSettings,
+  overrides: Partial<UserProviderRow> = {},
+): UserProviderRow {
   return {
     apiFeatures: null,
     apiKeys: [],
@@ -390,5 +467,6 @@ function createProviderRow(providerSettings: ProviderSettings): UserProviderRow 
     providerId: 'custom-provider',
     providerSettings,
     updatedAt: 1_767_225_600_000,
+    ...overrides,
   };
 }

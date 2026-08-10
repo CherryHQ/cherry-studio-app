@@ -1,6 +1,5 @@
-import { Menu } from '@cherrystudio/ui/components';
+import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { EllipsisIcon, PencilIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';
@@ -8,14 +7,19 @@ import { ScopedTheme } from 'uniwind';
 const onEdit = fn();
 const onDelete = fn();
 const themes = ['light', 'dark'] as const;
+const menuItems = [
+  { id: 'edit', label: 'Edit', onPress: onEdit, systemImage: 'pencil' },
+  {
+    destructive: true,
+    id: 'delete',
+    label: 'Delete',
+    onPress: onDelete,
+    systemImage: 'trash',
+  },
+] satisfies readonly MenuItem[];
 
 const meta = {
   title: 'Components/Primitives/Menu',
-  component: Menu,
-  args: {
-    children: <View />,
-    items: [],
-  },
   decorators: [
     (Story) => (
       <ScrollView
@@ -27,7 +31,7 @@ const meta = {
       </ScrollView>
     ),
   ],
-} satisfies Meta<typeof Menu>;
+} satisfies Meta;
 
 export default meta;
 
@@ -42,31 +46,13 @@ export const Playground: Story = {
             <Text className="text-base font-semibold text-foreground">
               {theme === 'light' ? 'Light' : 'Dark'}
             </Text>
-            <Menu
-              items={[
-                {
-                  icon: <PencilIcon className="size-5 text-foreground" />,
-                  id: 'edit',
-                  label: 'Edit',
-                  onPress: onEdit,
-                  systemImage: 'pencil',
-                },
-                {
-                  icon: <Trash2Icon className="size-5 text-destructive" />,
-                  id: 'delete',
-                  label: 'Delete',
-                  onPress: onDelete,
-                  role: 'destructive',
-                  systemImage: 'trash',
-                },
-              ]}
-            >
+            <Menu items={menuItems} trigger="tap">
               <Pressable
                 accessibilityLabel="More actions"
                 accessibilityRole="button"
                 className="size-11 items-center justify-center rounded-full bg-field active:opacity-60"
               >
-                <EllipsisIcon className="size-5 text-foreground" />
+                <Text className="text-xl text-foreground">...</Text>
               </Pressable>
             </Menu>
           </View>

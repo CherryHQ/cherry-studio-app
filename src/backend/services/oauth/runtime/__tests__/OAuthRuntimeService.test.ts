@@ -1,10 +1,19 @@
 import type { ApiKeyEntry, AuthConfig } from '@cherrystudio/universal/data/types/provider';
 
 import { OAuthTransientError } from '@/shared/oauth';
-import type { OAuthProviderDefinition } from '@/shared/oauth';
 
 const mockExchangeCode = jest.fn();
 const mockRefresh = jest.fn();
+
+jest.mock('expo-crypto', () => {
+  let uuid = 0;
+  return {
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+    CryptoEncoding: { BASE64: 'base64' },
+    digestStringAsync: jest.fn(async () => 'Y2hhbGxlbmdl'),
+    randomUUID: jest.fn(() => `00000000-0000-4000-8000-${String(++uuid).padStart(12, '0')}`),
+  };
+});
 
 // Keep OAuthHttpError real — the terminal/retriable grading is an instanceof
 // check on it, so a mocked class would silently make every failure retriable.
@@ -19,12 +28,14 @@ jest.mock('../PkceOAuthClient', () => ({
 import { OAuthRuntimeService } from '../OAuthRuntimeService';
 import { ProviderAuthConfigOAuthTokenStore } from '../OAuthTokenStore';
 import { OAuthHttpError } from '../PkceOAuthClient';
+import type { OAuthRuntimeProviderDefinition } from '../types';
 
 const mockAfterPersist = jest.fn();
+const services: OAuthRuntimeService[] = [];
 
 // codex = OAuth-only (clear disables); cherryin = has a manual API-key fallback
 // (clear must NOT disable) and mints API keys after the exchange.
-const definitions: Record<string, OAuthProviderDefinition> = {
+const definitions: Record<string, OAuthRuntimeProviderDefinition> = {
   cherryin: {
     afterPersistTokens: (tokenData, context) => mockAfterPersist(tokenData, context),
     clientId: 'cherryin-client',
@@ -78,6 +89,7 @@ function createSubject() {
     providers,
     tokenStore: new ProviderAuthConfigOAuthTokenStore(providers),
   });
+  services.push(service);
 
   const seed = (providerId: string, authConfig: Record<string, unknown>) => {
     rows.set(providerId, {
@@ -96,6 +108,21 @@ beforeEach(() => {
   mockExchangeCode.mockReset();
   mockAfterPersist.mockReset();
 });
+
+afterEach(() => {
+  for (const service of services.splice(0)) {
+    service.dispose();
+  }
+});
+
+async function completeCherryInAuthorization(service: OAuthRuntimeService): Promise<void> {
+  await service.completeAuthorization({
+    code: 'code',
+    codeVerifier: 'verifier',
+    providerId: 'cherryin',
+    redirectUri: 'cherrystudio://oauth/callback',
+  });
+}
 
 describe('OAuthRuntimeService', () => {
   it('returns a still-valid token without refreshing', async () => {
@@ -376,12 +403,7 @@ describe('OAuthRuntimeService', () => {
       });
       mockAfterPersist.mockResolvedValue({ apiKeys: 'key-a,key-b' });
 
-      await service.completeAuthorization({
-        code: 'code',
-        codeVerifier: 'verifier',
-        providerId: 'cherryin',
-        redirectUri: 'cherrystudio://oauth/callback',
-      });
+      await completeCherryInAuthorization(service);
 
       expect(rows.get('cherryin')?.authConfig).toMatchObject({
         accessToken: 'tok',
@@ -397,14 +419,7 @@ describe('OAuthRuntimeService', () => {
       mockExchangeCode.mockResolvedValue({ access_token: 'tok', refresh_token: 'r' });
       mockAfterPersist.mockRejectedValue(new Error('key fetch failed'));
 
-      await expect(
-        service.completeAuthorization({
-          code: 'code',
-          codeVerifier: 'verifier',
-          providerId: 'cherryin',
-          redirectUri: 'cherrystudio://oauth/callback',
-        }),
-      ).rejects.toMatchObject({
+      await expect(completeCherryInAuthorization(service)).rejects.toMatchObject({
         cause: expect.objectContaining({ message: 'key fetch failed' }),
         name: 'OAuthServiceError',
       });
@@ -421,12 +436,7 @@ describe('OAuthRuntimeService', () => {
       mockExchangeCode.mockResolvedValue({ access_token: 'tok', refresh_token: 'r' });
       mockAfterPersist.mockResolvedValue({ apiKeys: 'minted-key' });
 
-      await service.completeAuthorization({
-        code: 'code',
-        codeVerifier: 'verifier',
-        providerId: 'cherryin',
-        redirectUri: 'cherrystudio://oauth/callback',
-      });
+      await completeCherryInAuthorization(service);
 
       expect(rows.get('cherryin')?.apiKeys.map((entry) => entry.key)).toEqual([
         'manual-key',

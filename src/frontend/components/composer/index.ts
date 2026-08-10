@@ -13,6 +13,7 @@ export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';
 export { ComposerSurface, type ComposerSendPayload } from './components/ComposerSurface';
+export { ManagedComposerProvider } from './components/ManagedComposerProvider';
 export {
   type ComposerAttachmentStore,
   ComposerProvider,

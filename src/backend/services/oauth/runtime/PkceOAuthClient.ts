@@ -17,6 +17,7 @@ export type OAuthTokenResponse = z.infer<typeof OAuthTokenResponseSchema>;
 
 export interface PkceOAuthClientConfig {
   clientId: string;
+  fetch?: typeof globalThis.fetch;
   /** Full token endpoint URL, used for both code exchange and refresh. */
   tokenUrl: string;
 }
@@ -42,10 +43,10 @@ export class OAuthHttpError extends Error {
  * The token half of an Authorization Code + PKCE flow: it turns a `code` into
  * tokens and exchanges refresh tokens.
  *
- * The authorization half — PKCE generation, the authorize URL, the browser
- * round-trip and `state` verification — belongs to `expo-auth-session` in the
- * frontend, so this deliberately has no `createAuthorizationRequest`. Token
- * persistence and post-auth side effects stay with the caller.
+ * The authorization half — PKCE generation, authorize URL, browser round-trip,
+ * and `state` verification — belongs to the flow adapter, so this deliberately
+ * has no `createAuthorizationRequest`. Token persistence and post-auth side
+ * effects stay with the caller.
  */
 export class PkceOAuthClient {
   constructor(private readonly config: PkceOAuthClientConfig) {}
@@ -62,6 +63,7 @@ export class PkceOAuthClient {
     code: string,
     codeVerifier: string,
     redirectUri: string,
+    signal?: AbortSignal,
   ): Promise<OAuthTokenResponse> {
     return this.postToken(
       {
@@ -72,6 +74,7 @@ export class PkceOAuthClient {
         redirect_uri: redirectUri,
       },
       'Failed to exchange code for token',
+      signal,
     );
   }
 
@@ -90,11 +93,13 @@ export class PkceOAuthClient {
   private async postToken(
     params: Record<string, string>,
     errorPrefix: string,
+    signal?: AbortSignal,
   ): Promise<OAuthTokenResponse> {
-    const response = await fetch(this.config.tokenUrl, {
+    const response = await (this.config.fetch ?? globalThis.fetch)(this.config.tokenUrl, {
       body: new URLSearchParams(params).toString(),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       method: 'POST',
+      signal,
     });
 
     if (!response.ok) {

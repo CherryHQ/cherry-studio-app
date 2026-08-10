@@ -45,7 +45,7 @@ export function Tabs<TValue extends string>({
               ) : (
                 <HeroTabs.Label
                   adjustsFontSizeToFit
-                  className="text-[13px]"
+                  className="text-xs"
                   maxFontSizeMultiplier={1.2}
                   minimumFontScale={0.9}
                   numberOfLines={1}

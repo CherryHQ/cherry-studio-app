@@ -10,29 +10,24 @@ import {
 } from 'react-native';
 
 import { FilePreview } from '@/frontend/components/FilePreview';
-import { FileTile, ImageTile } from '@/frontend/components/mediaTile';
 
 import {
   type ComposerAttachmentDraft,
-  type ComposerAttachmentImporting,
   type ComposerAttachmentReady,
 } from '../utils/composerAttachments';
 
 type ComposerAttachmentStripProps = {
   attachments: readonly ComposerAttachmentDraft[];
-  onAttachmentPreview: (attachment: ComposerAttachmentDraft) => void;
   onAttachmentRemove: (attachmentId: string) => void;
 };
 
 /**
- * The row of pending attachments. Two tile shapes, scrolling sideways, tapping
- * an image to preview it — which is why `Composer` ships no strip of its own and
- * this is written here, inside a `Composer.Collapsible` that owns the swell and
- * shrink.
+ * The row of pending attachments. Sources show import progress until they have
+ * a managed file entry; ready files then delegate all presentation and opening
+ * behavior to FilePreview.
  */
 export function ComposerAttachmentStrip({
   attachments,
-  onAttachmentPreview,
   onAttachmentRemove,
 }: ComposerAttachmentStripProps) {
   return (
@@ -49,21 +44,8 @@ export function ComposerAttachmentStrip({
             key={attachment.id}
             onRemove={() => onAttachmentRemove(attachment.id)}
           />
-        ) : attachment.status === 'importing' ? (
-          <ImportingAttachmentTile
-            attachment={attachment}
-            key={attachment.id}
-            onRemove={() => onAttachmentRemove(attachment.id)}
-          />
-        ) : attachment.kind === 'image' ? (
-          <AttachmentImageTile
-            attachment={attachment}
-            key={attachment.id}
-            onPreview={() => onAttachmentPreview(attachment)}
-            onRemove={() => onAttachmentRemove(attachment.id)}
-          />
         ) : (
-          <AttachmentFileTile
+          <ImportingAttachmentTile
             attachment={attachment}
             key={attachment.id}
             onRemove={() => onAttachmentRemove(attachment.id)}
@@ -93,52 +75,17 @@ function ImportingAttachmentTile({
   attachment,
   onRemove,
 }: {
-  attachment: ComposerAttachmentImporting;
+  attachment: ComposerAttachmentDraft;
   onRemove: () => void;
 }) {
   return (
     <View accessibilityLabel={attachment.name}>
-      <View className="size-28 items-center justify-center gap-2 border border-border bg-secondary p-2">
+      <View className="size-28 items-center justify-center gap-2 overflow-hidden rounded-2xl border border-border bg-secondary p-2">
         <ActivityIndicator size="small" />
         <Text className="text-center text-base text-muted-foreground" numberOfLines={2}>
           {attachment.name}
         </Text>
       </View>
-      <RemoveBadge onPress={onRemove} />
-    </View>
-  );
-}
-
-function AttachmentImageTile({
-  attachment,
-  onPreview,
-  onRemove,
-}: {
-  attachment: ComposerAttachmentDraft;
-  onPreview: () => void;
-  onRemove: () => void;
-}) {
-  const { t } = useTranslation();
-  const accessibilityLabel = attachment.name || t('chat.attachments.image');
-
-  return (
-    <View accessibilityLabel={accessibilityLabel}>
-      <ImageTile accessibilityLabel={accessibilityLabel} onPress={onPreview} uri={attachment.uri} />
-      <RemoveBadge onPress={onRemove} />
-    </View>
-  );
-}
-
-function AttachmentFileTile({
-  attachment,
-  onRemove,
-}: {
-  attachment: ComposerAttachmentDraft;
-  onRemove: () => void;
-}) {
-  return (
-    <View accessibilityLabel={attachment.name}>
-      <FileTile name={attachment.name} />
       <RemoveBadge onPress={onRemove} />
     </View>
   );

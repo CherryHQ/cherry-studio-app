@@ -1,9 +1,11 @@
 import { createAgent } from '@cherrystudio/ai-core';
+import {
+  createToolCallLimitStopCondition,
+  markTrustedLocalToolTerminalFailure,
+} from '@cherrystudio/ai-runtime/runtime';
 import type { UIMessageChunk } from 'ai';
 
 import { Agent } from '../Agent';
-import { markTrustedLocalToolTerminalFailure } from '../loop/localToolTerminalOutcome';
-import { createToolCallLimitStopCondition } from '../loop/toolLoopTermination';
 
 const mockGenerate = jest.fn(async () => ({ text: 'ok', usage: undefined }));
 const testUsage = {

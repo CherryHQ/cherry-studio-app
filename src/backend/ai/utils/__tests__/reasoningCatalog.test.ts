@@ -1,4 +1,8 @@
 import {
+  encodeReasoningInvocation,
+  resolveReasoningInvocation,
+} from '@cherrystudio/ai-runtime/utils';
+import {
   type EndpointType,
   type ProtoReasoningSupport,
   REASONING_FORMAT_PROFILES,
@@ -14,8 +18,6 @@ import {
   providerRegistryService,
   resolveReasoningProfileFromRegistry,
 } from '@/backend/data/services/ProviderRegistryService';
-
-import { encodeReasoningInvocation, resolveReasoningInvocation } from '../reasoningSerializers';
 
 type WireLeaf = string | number | boolean;
 type FlatWire = Record<string, WireLeaf>;

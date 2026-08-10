@@ -128,7 +128,7 @@ jest.mock('react-native-mmkv', () => {
 // Gesture.* 返回任意链式调用都指向自身的构建器。
 jest.mock('react-native-gesture-handler', () => {
   const react = require('react');
-  const { View } = require('react-native');
+  const { Pressable, View } = require('react-native');
   const createChainableGesture = (): unknown => {
     const gesture: object = new Proxy(
       {},
@@ -147,5 +147,6 @@ jest.mock('react-native-gesture-handler', () => {
     GestureDetector: ({ children }: { children?: unknown }) => children,
     GestureHandlerRootView: ({ children, ...props }: { children?: unknown }) =>
       react.createElement(View, props, children),
+    Pressable,
   };
 });

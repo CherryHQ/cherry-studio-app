@@ -10,6 +10,7 @@ import { useComposerActions, useComposerState } from '../context/ComposerProvide
 import {
   type ComposerAttachmentDraft,
   hasComposerSendableContent,
+  hasImportingComposerAttachments,
 } from '../utils/composerAttachments';
 
 const logger = loggerService.withContext('ComposerSurface');
@@ -92,7 +93,10 @@ export function ComposerSurface({
 
   return (
     <Composer
-      canSend={canSend ?? hasComposerSendableContent(draft, attachments)}
+      canSend={
+        !hasImportingComposerAttachments(attachments) &&
+        (canSend ?? hasComposerSendableContent(draft, attachments))
+      }
       labels={{
         send: t('chat.input.action.sendMessage'),
         stop: t('chat.input.action.stopGenerating'),

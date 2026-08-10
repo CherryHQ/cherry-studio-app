@@ -1,10 +1,13 @@
 import * as z from 'zod';
 
+import {
+  CHERRYIN_PROVIDER_ID,
+  resolveCherryInContext,
+} from '@/backend/services/oauth/CherryInOAuthConfig';
+import type { OAuthAuthenticatedFetch } from '@/backend/services/oauth/runtime/types';
 import type { CherryInAccount, CherryInModule, CherryInProfile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { OAuthServiceError } from '@/shared/oauth';
-import type { OAuthProviderContext, OAuthTokenCredentials } from '@/shared/oauth';
-import { CHERRYIN_PROVIDER_ID, resolveCherryInContext } from '@/shared/oauth/providers/cherryin';
 
 const logger = loggerService.withContext('CherryInClient');
 
@@ -43,15 +46,7 @@ const UserSelfResponseSchema = z
   });
 
 type CherryInOAuthRuntime = {
-  authenticatedFetch(
-    providerId: string,
-    buildRequest: (credentials: OAuthTokenCredentials) => {
-      init: RequestInit;
-      input: RequestInfo | URL;
-    },
-    doFetch: (input: RequestInfo | URL, init: RequestInit) => Promise<Response>,
-    options?: { context?: OAuthProviderContext },
-  ): Promise<Response>;
+  authenticatedFetch: OAuthAuthenticatedFetch;
   hasToken(providerId: string): Promise<boolean>;
 };
 

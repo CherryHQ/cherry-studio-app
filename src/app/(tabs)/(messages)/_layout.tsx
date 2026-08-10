@@ -9,7 +9,7 @@ export default function MessagesStackLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: isIOS ? undefined : false,
+        headerShadowVisible: false,
         headerShown: isIOS,
         headerTransparent: false,
         headerTintColor: foregroundColor,

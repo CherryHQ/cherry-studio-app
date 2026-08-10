@@ -42,7 +42,7 @@ export default function ProviderApiKeySettingsScreen() {
     return <BackHeader title={t('settings.provider.apiService.manageApiKeys')} />;
   }
 
-  if (!shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type)) {
+  if (!shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type, provider)) {
     return (
       <Redirect
         href={{

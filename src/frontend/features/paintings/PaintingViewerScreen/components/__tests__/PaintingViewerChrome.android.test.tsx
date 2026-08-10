@@ -2,19 +2,13 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { PaintingViewerChrome } from '../PaintingViewerChrome.android';
 
-type MenuProps = {
-  actions: { id: string; image?: unknown; title: string }[];
-  onPressAction: (event: { nativeEvent: { event: string } }) => void;
-};
-
-const mockMenus: MenuProps[] = [];
-
-jest.mock('@expo/ui/community/menu', () => ({
-  MenuView: (props: MenuProps) => {
-    mockMenus.push(props);
-    return null;
-  },
-}));
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+  return {
+    Menu: ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement('Menu', props, children),
+  };
+});
 
 jest.mock('expo-router', () => ({
   Stack: {
@@ -50,7 +44,6 @@ describe('PaintingViewerChrome.android', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockMenus.length = 0;
     await act(async () => {
       renderer = create(
         <PaintingViewerChrome
@@ -71,13 +64,16 @@ describe('PaintingViewerChrome.android', () => {
   });
 
   it('places view conversation before delete and dispatches both actions', () => {
-    const moreMenu = mockMenus[0];
+    const items = renderer!.root.findAllByType('Menu')[0]?.props.items;
 
-    expect(moreMenu.actions.map((action) => action.id)).toEqual(['view-conversation', 'delete']);
-    expect(moreMenu.actions[0].image).toBeTruthy();
+    expect(items.map((item: { label: string }) => item.label)).toEqual([
+      'painting.viewer.viewConversation',
+      'painting.viewer.delete',
+    ]);
+    expect(items[1].destructive).toBe(true);
 
-    moreMenu.onPressAction({ nativeEvent: { event: 'view-conversation' } });
-    moreMenu.onPressAction({ nativeEvent: { event: 'delete' } });
+    items[0].onPress();
+    items[1].onPress();
 
     expect(onViewConversation).toHaveBeenCalledTimes(1);
     expect(onDelete).toHaveBeenCalledTimes(1);

@@ -94,7 +94,10 @@ export default function ProviderDetailSettingsScreen() {
     providerId: providerId ?? '',
   });
   const canEditEndpoint = canEditProviderEndpoint(provider);
-  const showApiKeys = shouldShowApiKeys(getEffectiveAuthConfig(authConfig, provider).type);
+  const showApiKeys = shouldShowApiKeys(
+    getEffectiveAuthConfig(authConfig, provider).type,
+    provider,
+  );
   const apiKeysInput = useMemo(
     () => buildApiKeysInputFromEntries(normalizeApiKeyEntries(apiKeys ?? [])),
     [apiKeys],

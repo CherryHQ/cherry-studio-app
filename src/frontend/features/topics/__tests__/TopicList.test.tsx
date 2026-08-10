@@ -21,6 +21,7 @@ const mockAssistant = {
 } as Assistant;
 let mockPinnedTopicIds: readonly string[] = [];
 let mockPendingDeletionIds: ReadonlySet<string> = new Set();
+let mockShowsVerticalScrollIndicator: boolean | undefined;
 
 jest.mock('@legendapp/list/react-native', () => {
   const React = jest.requireActual('react');
@@ -30,26 +31,25 @@ jest.mock('@legendapp/list/react-native', () => {
     LegendList: ({
       data,
       renderItem,
+      showsVerticalScrollIndicator,
     }: {
       data: readonly Topic[];
       renderItem: (info: { index: number; item: Topic }) => ReactNode;
-    }) => (
-      <MockView testID="topic-list">
-        {data.map((item, index) => (
-          <React.Fragment key={item.id}>{renderItem({ index, item })}</React.Fragment>
-        ))}
-      </MockView>
-    ),
+      showsVerticalScrollIndicator?: boolean;
+    }) => {
+      mockShowsVerticalScrollIndicator = showsVerticalScrollIndicator;
+      return (
+        <MockView testID="topic-list">
+          {data.map((item, index) => (
+            <React.Fragment key={item.id}>{renderItem({ index, item })}</React.Fragment>
+          ))}
+        </MockView>
+      );
+    },
   };
 });
 
-jest.mock('lucide-uniwind/png', () => ({
-  CheckIcon: () => null,
-  PencilIcon: () => null,
-  PinIcon: () => null,
-  PinOffIcon: () => null,
-  Trash2Icon: () => null,
-}));
+jest.mock('lucide-uniwind/png', () => ({ CheckIcon: () => null }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -68,26 +68,6 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('react-native-gesture-handler/ReanimatedSwipeable', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    __esModule: true,
-    default: ({
-      children,
-      renderLeftActions,
-    }: {
-      children: ReactNode;
-      renderLeftActions: (progress: { value: number }, drag: { value: number }) => ReactNode;
-    }) => (
-      <MockView>
-        {renderLeftActions({ value: 1 }, { value: 64 })}
-        {children}
-      </MockView>
-    ),
-  };
-});
-
 jest.mock('react-native-reanimated', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
@@ -96,9 +76,6 @@ jest.mock('react-native-reanimated', () => {
     default: { View: MockView },
     FadeInLeft: { duration: () => undefined },
     FadeOutLeft: { duration: () => undefined },
-    runOnJS: (callback: (...args: unknown[]) => unknown) => callback,
-    useAnimatedStyle: (factory: () => unknown) => factory(),
-    useSharedValue: (value: number) => ({ value }),
   };
 });
 
@@ -114,15 +91,22 @@ jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
-jest.mock('@/frontend/hooks/useExclusiveSwipeable', () => ({
-  useExclusiveSwipeable: () => ({ notifyClose: jest.fn(), notifyWillOpen: jest.fn() }),
-}));
+jest.mock('@/frontend/components/navigation', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return {
+    ContextMenuLink: ({ children, ...props }: { children: ReactNode }) => (
+      <MockView {...props} testID="topic-context-link">
+        {children}
+      </MockView>
+    ),
+  };
+});
 
 jest.mock('../context/TopicListProvider', () => ({
   TopicListProvider: ({ children }: { children: ReactNode }) => children,
   useTopicListActions: () => ({
     loadMoreTopics: jest.fn(),
-    openTopic: jest.fn(),
     toggleTopicPin: mockToggleTopicPin,
   }),
   useTopicListTopics: () => ({
@@ -152,28 +136,32 @@ jest.mock('../components/useTopicActionAlerts', () => ({
   }),
 }));
 
-describe('TopicList pin action', () => {
+describe('TopicList context actions', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockPendingDeletionIds = new Set();
     mockPinnedTopicIds = [];
+    mockShowsVerticalScrollIndicator = undefined;
   });
 
   afterEach(async () => {
     await act(async () => renderer?.unmount());
   });
 
-  it('reveals the pin action on the left and toggles the topic', async () => {
+  it('links to the topic and toggles pinning from the context menu', async () => {
     await act(async () => {
       renderer = create(<TopicList />);
     });
 
-    const pinButton = renderer?.root.findByProps({ accessibilityLabel: 'Pin topic' });
+    const link = renderer?.root.findByProps({ testID: 'topic-context-link' });
+    const pinAction = link?.props.items.find((item: { id: string }) => item.id === 'toggle-pin');
+
+    expect(link?.props.href).toEqual({ pathname: '/topics', params: { topicId: 'topic-1' } });
 
     await act(async () => {
-      pinButton?.props.onPress();
+      pinAction?.onPress();
     });
 
     expect(mockToggleTopicPin).toHaveBeenCalledWith('topic-1');
@@ -186,10 +174,11 @@ describe('TopicList pin action', () => {
       renderer = create(<TopicList />);
     });
 
-    const pinButton = renderer?.root.findByProps({ accessibilityLabel: 'Pin topic' });
+    const link = renderer?.root.findByProps({ testID: 'topic-context-link' });
+    const pinAction = link?.props.items.find((item: { id: string }) => item.id === 'toggle-pin');
 
     await act(async () => {
-      pinButton?.props.onPress();
+      pinAction?.onPress();
     });
 
     expect(mockAlertShow).toHaveBeenCalledWith({ title: 'Failed to update pin state' });
@@ -202,25 +191,52 @@ describe('TopicList pin action', () => {
       renderer = create(<TopicList />);
     });
 
-    expect(renderer?.root.findByProps({ accessibilityLabel: 'Unpin topic' })).toBeTruthy();
+    const pinAction = renderer?.root
+      .findByProps({ testID: 'topic-context-link' })
+      .props.items.find((item: { id: string }) => item.id === 'toggle-pin');
+    expect(pinAction).toMatchObject({ checked: true, label: 'Unpin topic' });
     const highlightedRows =
       renderer?.root.findAllByProps({
-        className: 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-secondary py-2 pl-2',
+        className:
+          'relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b bg-secondary py-2 pl-2',
       }) ?? [];
     expect(highlightedRows.length).toBeGreaterThan(0);
   });
 
-  it('scales the emoji with the global typography scale without a fixed frame height', async () => {
+  it('keeps the assistant emoji at a fixed avatar size', async () => {
     await act(async () => {
       renderer = create(<TopicList />);
     });
 
     const emoji = renderer?.root.findAllByType(Text).find((node) => node.props.children === '🍒');
 
-    expect(emoji?.props.className).toContain('text-emoji-3xl');
-    expect(emoji?.props.className).not.toContain('h-12');
-    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.className).not.toContain('text-emoji-3xl');
+    expect(emoji?.props.style).toEqual({ fontSize: 32, lineHeight: 44 });
     expect(emoji?.props.allowFontScaling).not.toBe(false);
+  });
+
+  it('keeps a divider between topic rows', async () => {
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    const row = renderer?.root.findByProps({ accessibilityLabel: 'Pinned topic' });
+    const divider = row?.findAll(
+      (node) =>
+        typeof node.props.className === 'string' &&
+        node.props.className.includes('border-b') &&
+        node.props.className.includes('border-border'),
+    );
+
+    expect(divider?.length).toBeGreaterThan(0);
+  });
+
+  it('hides the vertical scroll indicator', async () => {
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    expect(mockShowsVerticalScrollIndicator).toBe(false);
   });
 
   it('hides a topic immediately while its deletion is pending', async () => {

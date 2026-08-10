@@ -5,8 +5,8 @@ import {
 import { tool } from 'ai';
 import * as z from 'zod';
 
-import type { ToolEntry } from '../adapters/aiSdk/types';
 import { ToolResolver } from '../ToolResolver';
+import type { ToolEntry } from '../types';
 
 describe('ToolResolver', () => {
   test('merges active built-ins, web search, and assistant MCP entries', async () => {

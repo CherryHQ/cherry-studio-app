@@ -1,6 +1,6 @@
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
-import { Text } from 'react-native';
+import { ScrollView, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { PendingToolApproval } from '../../runtime/chatRuntimeProjection';
@@ -113,6 +113,12 @@ describe('ToolApprovalSheet', () => {
     render();
 
     expect(renderer.root.findByType(BottomSheet).props.isCloseDisabled).toBe(true);
+  });
+
+  test('hides the arguments preview scroll indicator', () => {
+    render();
+
+    expect(renderer.root.findByType(ScrollView).props.showsVerticalScrollIndicator).toBe(false);
   });
 
   test('denies the call the sheet is showing', async () => {

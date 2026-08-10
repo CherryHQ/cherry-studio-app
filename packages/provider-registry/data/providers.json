@@ -1,6 +1,7 @@
 {
   "providers": [
     {
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "CherryIN - AI model provider",
       "endpointConfigs": {
@@ -52,6 +53,7 @@
       "name": "AMD GPU Cloud"
     },
     {
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "Silicon - AI model provider",
       "endpointConfigs": {
@@ -79,6 +81,7 @@
       "name": "Silicon"
     },
     {
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "AiHubMix - AI model provider",
       "endpointConfigs": {
@@ -332,6 +335,7 @@
       "name": "DMXAPI"
     },
     {
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "AIOnly - AI model provider",
       "endpointConfigs": {
@@ -372,6 +376,7 @@
       "name": "BurnCloud"
     },
     {
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "302.AI - AI model provider",
       "endpointConfigs": {
@@ -456,6 +461,7 @@
       "name": "SophNet"
     },
     {
+      "authMethods": ["api-key", "oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "PPIO - AI model provider",
       "endpointConfigs": {
@@ -888,6 +894,7 @@
       "name": "Github Models"
     },
     {
+      "authMethods": ["oauth"],
       "defaultChatEndpoint": "openai-chat-completions",
       "description": "Github Copilot - AI model provider",
       "endpointConfigs": {
@@ -1898,5 +1905,5 @@
       "presetProviderId": "minimax"
     }
   ],
-  "version": "645f9b9b0f0ff508"
+  "version": "94468af9e56a8bbe"
 }

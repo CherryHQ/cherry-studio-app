@@ -23,6 +23,17 @@ const ORDINARY_AGENT_SOURCES = [
   'packages/aiCore/src/core/agents/createAgent.ts',
   'src/main/ai/runtime/aiSdk/Agent.ts',
 ] as const;
+const DELEGATED_AI_RUNTIME_CLASSIFICATIONS = [
+  'semantic-port',
+  'explicit-exclusion',
+  'blocked',
+] as const;
+const DELEGATED_OAUTH_CLASSIFICATIONS = [
+  'semantic-port',
+  'mobile-extension',
+  'explicit-exclusion',
+  'blocked',
+] as const;
 
 type DomainStrategy = (typeof DOMAIN_STRATEGIES)[number];
 type BaselineStatus = (typeof BASELINE_STATUSES)[number];
@@ -408,11 +419,20 @@ export function validateManifest(value: unknown): DesktopSyncManifest {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([id, domain]) => [id, validateDomain(id, domain)]),
   );
+  const delegatedManifests = value.delegatedManifests;
+  if (
+    delegatedManifests !== undefined &&
+    (!isRecord(delegatedManifests) ||
+      !Object.values(delegatedManifests).every((entry) => typeof entry === 'string'))
+  ) {
+    throw new Error('[desktop-sync-audit] delegatedManifests must be a string map');
+  }
+  for (const [id, delegatedManifest] of Object.entries(delegatedManifests ?? {})) {
+    assertRelativeRepoPath(delegatedManifest as string, `delegatedManifests.${id}`);
+  }
 
   return {
-    delegatedManifests: isRecord(value.delegatedManifests)
-      ? (value.delegatedManifests as Record<string, string>)
-      : undefined,
+    delegatedManifests: delegatedManifests as Record<string, string> | undefined,
     domains,
     repository: value.repository,
     schemaVersion: value.schemaVersion,
@@ -847,6 +867,206 @@ function classifyFileComparison(
   return result;
 }
 
+async function loadDelegatedAiRuntimeClassifications(
+  desktopRoot: string,
+  mobileRoot: string,
+  delegatedManifest: string,
+  sourceFiles: string[],
+  explicitExclusions: string[],
+): Promise<Record<Classification, string[]>> {
+  const value = await readJson(path.join(mobileRoot, delegatedManifest));
+  if (!isRecord(value) || value.schemaVersion !== 2 || !isRecord(value.desktop)) {
+    throw new Error('[desktop-sync-audit] invalid delegated AI runtime manifest');
+  }
+  if (value.desktop.sourceRoot !== 'src/main/ai' || !Array.isArray(value.desktop.files)) {
+    throw new Error('[desktop-sync-audit] invalid delegated AI runtime desktop records');
+  }
+
+  const records = value.desktop.files.map((record, index) => {
+    if (
+      !isRecord(record) ||
+      typeof record.source !== 'string' ||
+      typeof record.sourceSha256 !== 'string' ||
+      !DELEGATED_AI_RUNTIME_CLASSIFICATIONS.includes(
+        record.classification as (typeof DELEGATED_AI_RUNTIME_CLASSIFICATIONS)[number],
+      )
+    ) {
+      throw new Error(
+        `[desktop-sync-audit] invalid delegated AI runtime desktop record at index ${index}`,
+      );
+    }
+    assertRelativeRepoPath(record.source, `delegated AI runtime desktop.files[${index}].source`);
+    if (!/^[a-f0-9]{64}$/.test(record.sourceSha256)) {
+      throw new Error(
+        `[desktop-sync-audit] invalid delegated AI runtime source hash: ${record.source}`,
+      );
+    }
+    return {
+      classification:
+        record.classification as (typeof DELEGATED_AI_RUNTIME_CLASSIFICATIONS)[number],
+      source: record.source,
+      sourceSha256: record.sourceSha256,
+    };
+  });
+
+  const delegatedSources = records.map(({ source }) => source);
+  if (new Set(delegatedSources).size !== delegatedSources.length) {
+    throw new Error('[desktop-sync-audit] delegated AI runtime sources must be unique');
+  }
+  const delegatedSourceSet = new Set(delegatedSources);
+  const sourceFileSet = new Set(sourceFiles);
+  const unclassified = sourceFiles.filter((source) => !delegatedSourceSet.has(source));
+  const stale = delegatedSources.filter((source) => !sourceFileSet.has(source));
+  if (unclassified.length > 0 || stale.length > 0) {
+    throw new Error(
+      `[desktop-sync-audit] delegated AI runtime manifest does not cover the desktop source set: ${[
+        ...unclassified.map((source) => `unclassified:${source}`),
+        ...stale.map((source) => `stale:${source}`),
+      ]
+        .sort()
+        .join(', ')}`,
+    );
+  }
+
+  for (const { classification, source } of records) {
+    const excluded = explicitExclusions.some((glob) => pathMatchesGlob(source, glob));
+    if ((classification === 'explicit-exclusion') !== excluded) {
+      throw new Error(
+        `[desktop-sync-audit] delegated AI runtime exclusion disagrees with the root manifest: ${source}`,
+      );
+    }
+  }
+
+  const sourceDrift = (
+    await Promise.all(
+      records.map(async ({ source, sourceSha256 }) => ({
+        drifted:
+          createHash('sha256')
+            .update(await readFile(path.join(desktopRoot, source)))
+            .digest('hex') !== sourceSha256,
+        source,
+      })),
+    )
+  )
+    .filter(({ drifted }) => drifted)
+    .map(({ source }) => source)
+    .sort();
+  if (sourceDrift.length > 0) {
+    throw new Error(
+      `[desktop-sync-audit] delegated AI runtime source hash drift: ${sourceDrift.join(', ')}`,
+    );
+  }
+
+  const classifications = emptyClassifications();
+  for (const { classification, source } of records) {
+    classifications[classification].push(source);
+  }
+  return classifications;
+}
+
+async function loadDelegatedOAuthClassifications(
+  desktopRoot: string,
+  mobileRoot: string,
+  delegatedManifest: string,
+  serviceSourceFiles: string[],
+  explicitExclusions: string[],
+): Promise<Record<Classification, string[]>> {
+  const value = await readJson(path.join(mobileRoot, delegatedManifest));
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.desktop)) {
+    throw new Error('[desktop-sync-audit] invalid delegated OAuth manifest');
+  }
+  if (!Array.isArray(value.desktop.sourcePaths) || !Array.isArray(value.desktop.files)) {
+    throw new Error('[desktop-sync-audit] invalid delegated OAuth desktop records');
+  }
+  const sourcePaths = value.desktop.sourcePaths.map((sourcePath, index) => {
+    if (typeof sourcePath !== 'string') {
+      throw new Error(`[desktop-sync-audit] invalid delegated OAuth source path at index ${index}`);
+    }
+    assertRelativeRepoPath(sourcePath, `delegated OAuth desktop.sourcePaths[${index}]`);
+    return sourcePath;
+  });
+  const records = value.desktop.files.map((record, index) => {
+    if (
+      !isRecord(record) ||
+      typeof record.source !== 'string' ||
+      typeof record.sourceSha256 !== 'string' ||
+      !DELEGATED_OAUTH_CLASSIFICATIONS.includes(
+        record.classification as (typeof DELEGATED_OAUTH_CLASSIFICATIONS)[number],
+      )
+    ) {
+      throw new Error(
+        `[desktop-sync-audit] invalid delegated OAuth desktop record at index ${index}`,
+      );
+    }
+    assertRelativeRepoPath(record.source, `delegated OAuth desktop.files[${index}].source`);
+    if (!/^[a-f0-9]{64}$/.test(record.sourceSha256)) {
+      throw new Error(`[desktop-sync-audit] invalid delegated OAuth source hash: ${record.source}`);
+    }
+    return {
+      classification: record.classification as (typeof DELEGATED_OAUTH_CLASSIFICATIONS)[number],
+      source: record.source,
+      sourceSha256: record.sourceSha256,
+    };
+  });
+
+  const delegatedSources = records.map(({ source }) => source);
+  if (new Set(delegatedSources).size !== delegatedSources.length) {
+    throw new Error('[desktop-sync-audit] delegated OAuth sources must be unique');
+  }
+  const currentOAuthSources = trackedFiles(desktopRoot, sourcePaths);
+  const delegatedSourceSet = new Set(delegatedSources);
+  const currentOAuthSourceSet = new Set(currentOAuthSources);
+  const unclassified = currentOAuthSources.filter((source) => !delegatedSourceSet.has(source));
+  const stale = delegatedSources.filter((source) => !currentOAuthSourceSet.has(source));
+  if (unclassified.length > 0 || stale.length > 0) {
+    throw new Error(
+      `[desktop-sync-audit] delegated OAuth manifest does not cover its desktop source set: ${[
+        ...unclassified.map((source) => `unclassified:${source}`),
+        ...stale.map((source) => `stale:${source}`),
+      ]
+        .sort()
+        .join(', ')}`,
+    );
+  }
+
+  for (const { classification, source } of records) {
+    if (!serviceSourceFiles.includes(source)) continue;
+    const excluded = explicitExclusions.some((glob) => pathMatchesGlob(source, glob));
+    if ((classification === 'explicit-exclusion') !== excluded) {
+      throw new Error(
+        `[desktop-sync-audit] delegated OAuth exclusion disagrees with the root manifest: ${source}`,
+      );
+    }
+  }
+
+  const sourceDrift = (
+    await Promise.all(
+      records.map(async ({ source, sourceSha256 }) => ({
+        drifted:
+          createHash('sha256')
+            .update(await readFile(path.join(desktopRoot, source)))
+            .digest('hex') !== sourceSha256,
+        source,
+      })),
+    )
+  )
+    .filter(({ drifted }) => drifted)
+    .map(({ source }) => source)
+    .sort();
+  if (sourceDrift.length > 0) {
+    throw new Error(
+      `[desktop-sync-audit] delegated OAuth source hash drift: ${sourceDrift.join(', ')}`,
+    );
+  }
+
+  const serviceSourceSet = new Set(serviceSourceFiles);
+  const classifications = emptyClassifications();
+  for (const { classification, source } of records) {
+    if (serviceSourceSet.has(source)) classifications[classification].push(source);
+  }
+  return classifications;
+}
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (!isRecord(value)) return value;
@@ -1185,6 +1405,7 @@ async function auditDomain(
   desktopRoot: string,
   mobileRoot: string,
   invariants: Invariant[],
+  delegatedManifest?: string,
 ): Promise<DomainAudit> {
   const sourceFiles = trackedFiles(desktopRoot, domain.sourcePaths);
   const currentSourceSha256 = await hashTrackedFiles(desktopRoot, sourceFiles);
@@ -1199,7 +1420,42 @@ async function auditDomain(
           targetOnly: [],
         }
       : await compareDomainFiles(desktopRoot, mobileRoot, domain);
-  const classifications = classifyFileComparison(domain.strategy, comparison);
+  let classifications = classifyFileComparison(domain.strategy, comparison);
+  if (id === 'ai-runtime' && delegatedManifest) {
+    const mobileExtensions = classifications['mobile-extension'];
+    classifications = await loadDelegatedAiRuntimeClassifications(
+      desktopRoot,
+      mobileRoot,
+      delegatedManifest,
+      sourceFiles,
+      domain.explicitExclusions ?? [],
+    );
+    classifications['mobile-extension'] = mobileExtensions;
+  }
+  if (id === 'services' && delegatedManifest) {
+    const delegated = await loadDelegatedOAuthClassifications(
+      desktopRoot,
+      mobileRoot,
+      delegatedManifest,
+      sourceFiles,
+      domain.explicitExclusions ?? [],
+    );
+    const delegatedSources = Object.values(delegated).flat();
+    const delegatedComparisonKeys = new Set([
+      ...delegatedSources,
+      ...delegatedSources.flatMap((source) =>
+        domain.sourcePaths
+          .filter((sourcePath) => source.startsWith(`${sourcePath}/`))
+          .map((sourcePath) => source.slice(sourcePath.length + 1)),
+      ),
+    ]);
+    for (const classification of CLASSIFICATIONS) {
+      classifications[classification] = classifications[classification].filter(
+        (source) => !delegatedComparisonKeys.has(source),
+      );
+      addClassification(classifications, classification, delegated[classification]);
+    }
+  }
   const issues: string[] = [];
   const blockers = [...classifications.blocked];
   let details: unknown;
@@ -1342,7 +1598,7 @@ async function auditDomain(
     });
     if (classifications.blocked.length > 0) {
       blockers.push(
-        `${classifications.blocked.length} non-excluded desktop AI files lack a same-path mobile implementation or explicit equivalence mapping.`,
+        `${classifications.blocked.length} desktop AI files remain blocked by the delegated provenance audit.`,
       );
     }
   }
@@ -1431,7 +1687,17 @@ export async function auditRepositories(
   const invariants: Invariant[] = [];
   const domains: DomainAudit[] = [];
   for (const [id, domain] of selectedDomains) {
-    domains.push(await auditDomain(id, domain, desktopRoot, mobileRoot, invariants));
+    domains.push(
+      await auditDomain(
+        id,
+        domain,
+        desktopRoot,
+        mobileRoot,
+        invariants,
+        manifest.delegatedManifests?.[id] ??
+          (id === 'services' ? manifest.delegatedManifests?.['services:oauth'] : undefined),
+      ),
+    );
   }
 
   const sortedInvariants = invariants.sort((left, right) => left.id.localeCompare(right.id));

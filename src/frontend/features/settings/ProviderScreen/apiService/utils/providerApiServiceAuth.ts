@@ -24,6 +24,10 @@ export function getEffectiveAuthConfig(
   return authConfig ?? emptyAuthConfigFor(provider?.authType ?? 'api-key');
 }
 
-export function shouldShowApiKeys(authType: AuthConfig['type']): boolean {
+export function shouldShowApiKeys(
+  authType: AuthConfig['type'],
+  provider?: Pick<Provider, 'authMethods'> | null,
+): boolean {
+  if (provider?.authMethods?.length && !provider.authMethods.includes('api-key')) return false;
   return authType === 'api-key' || authType === 'api-key-aws' || authType === 'oauth';
 }

@@ -45,7 +45,7 @@ workflow interface and observable results.
   backend code.
 
 New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts`; render dispatch belongs in
-`src/frontend/features/chat/messageContent`. A new JSON part does not require a table migration, but
+`src/frontend/components/messagePresentation/messageContent`. A new JSON part does not require a table migration, but
 FTS indexes only text parts.
 
 ## Add AI Or Backend Service Behavior

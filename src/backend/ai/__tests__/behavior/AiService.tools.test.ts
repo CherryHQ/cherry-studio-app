@@ -6,7 +6,7 @@ import * as Crypto from 'expo-crypto';
 import * as z from 'zod';
 
 import { AiService } from '@/backend/ai/AiService';
-import type { ToolEntry } from '@/backend/ai/tools/adapters/aiSdk/types';
+import type { ToolEntry } from '@/backend/ai/tools';
 
 import {
   collectStreamContract,

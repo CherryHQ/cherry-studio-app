@@ -186,6 +186,9 @@ describe('DrawingList', () => {
   it('links every drawing to the viewer alongside photos and templates by default', async () => {
     const tree = await render();
 
+    expect(findHostsByTestID(tree, 'drawing-home-scroll')[0]?.props).toMatchObject({
+      showsVerticalScrollIndicator: false,
+    });
     expect(findHostsByTestID(tree, 'painting-photos-view-all')).toHaveLength(1);
     expect(findHostsByTestID(tree, 'painting-template-row')).toHaveLength(1);
     expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(mockGalleryItems.length);

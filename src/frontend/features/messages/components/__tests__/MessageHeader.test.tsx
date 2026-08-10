@@ -9,14 +9,14 @@ let mockScopeTabsProps:
   | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => {
-  const Menu = ({ children }: { children: ReactNode }) => children;
-
-  return { Menu };
+  const React = jest.requireActual('react');
+  return {
+    Menu: ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement('Menu', props, children),
+  };
 });
 
 jest.mock('lucide-uniwind/png', () => ({
-  ImageIcon: () => null,
-  MessageCircleIcon: () => null,
   SquarePenIcon: () => null,
 }));
 
@@ -77,6 +77,17 @@ describe('MessageHeader', () => {
 
     expect(renderer.root.findByProps({ testID: 'header-scope-tabs' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'topic-create-menu' })).toBeTruthy();
+    const menu = renderer.root.findByType('Menu');
+    expect(menu.props.trigger).toBe('tap');
+    expect(menu.props.items.map((item: { label: string }) => item.label)).toEqual([
+      'New chat',
+      'New drawing',
+    ]);
+
+    menu.props.items[0].onPress();
+    menu.props.items[1].onPress();
+    expect(defaultProps.onNewTopicPress).toHaveBeenCalledTimes(1);
+    expect(defaultProps.onNewPaintingPress).toHaveBeenCalledTimes(1);
     expect(mockScopeTabsProps?.scope).toBe('conversations');
 
     mockScopeTabsProps?.onScopeChange('drawings');

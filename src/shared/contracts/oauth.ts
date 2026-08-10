@@ -1,27 +1,31 @@
-import type { OAuthProviderContext } from '@/shared/oauth';
+import type {
+  OAuthFlowCompletionInput,
+  OAuthFlowCompletionResult,
+  OAuthFlowPresentation,
+  OAuthProviderContext,
+  OAuthProviderStatus,
+} from '@/shared/oauth';
 
-export type CompleteOAuthAuthorizationInput = {
-  code: string;
-  codeVerifier: string;
+export type StartOAuthAuthorizationInput = {
   context?: OAuthProviderContext;
+  language?: string;
   providerId: string;
-  /**
-   * The redirect URI the frontend authorized against. It travels with the
-   * request because `expo-auth-session` resolves a different one under a dev
-   * client than in a standalone build, and the exchange must echo it exactly.
-   */
-  redirectUri: string;
+  redirectUri?: string;
 };
 
 /**
- * Provider-generic OAuth surface. Every method is keyed by `providerId`, so
- * registering a provider in `@/shared/oauth` is enough to make it work here.
+ * Provider-generic OAuth surface. Every method is keyed by `providerId`; the
+ * backend registry owns which providers and flow adapters are available.
  *
  * Narrower than `OAuthRuntimeService`: session queries (`hasToken`,
  * `getAccount`) stay internal until a frontend owner actually needs them. The
  * settings screen reads sign-in state from the provider's auth config query.
  */
 export interface OAuthModule {
-  completeAuthorization(input: CompleteOAuthAuthorizationInput): Promise<void>;
+  cancelAuthorization(flowId: string): Promise<void>;
+  completeAuthorization(input: OAuthFlowCompletionInput): Promise<OAuthFlowCompletionResult>;
+  getAuthorization(flowId: string): Promise<OAuthFlowPresentation>;
+  getStatus(providerId: string): Promise<OAuthProviderStatus>;
   logout(providerId: string, context?: OAuthProviderContext): Promise<void>;
+  startAuthorization(input: StartOAuthAuthorizationInput): Promise<OAuthFlowPresentation>;
 }

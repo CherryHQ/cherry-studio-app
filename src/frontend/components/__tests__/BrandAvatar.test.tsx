@@ -24,11 +24,12 @@ describe('BrandAvatar', () => {
   it('falls back to the generated initial when given no content', () => {
     render(<BrandAvatar label="codex" />);
 
-    expect(frame().props.style).toEqual({
+    expect(frame().props.style).toEqual({ borderRadius: 6, height: 26, width: 26 });
+    expect(renderer?.root.findAllByType(View)[1].props.style).toEqual({
       backgroundColor: '#46429b',
-      borderRadius: 6,
-      height: 26,
-      width: 26,
+      borderRadius: 5,
+      height: 26 * 0.8125,
+      width: 26 * 0.8125,
     });
     expect(renderer?.root.findByType(Text).props.children).toBe('c');
   });

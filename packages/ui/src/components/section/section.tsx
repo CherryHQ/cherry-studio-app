@@ -65,7 +65,7 @@ function SectionItem({
     disabled: disabled || accessibilityState?.disabled,
   };
   const rowClassName = cn(
-    'min-h-10 flex-row items-center gap-3 px-3 py-2',
+    'min-h-10 flex-row items-center gap-3 px-4 py-3',
     disabled && 'opacity-40',
     className,
   );

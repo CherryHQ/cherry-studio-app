@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 
 import { useComposerDockLayout } from '@/frontend/components/composer';
 
-import { ChatComposer, ChatWorkspaceFrame } from './workspace';
+import { ChatComposer } from './workspace';
 
 /** `assistantId` binds the topic this screen creates to that assistant. */
 export function NewTopicScreen({ assistantId }: { assistantId?: string }) {
@@ -11,7 +11,7 @@ export function NewTopicScreen({ assistantId }: { assistantId?: string }) {
   const { contentBottomInset, handleInputHeightChange } = useComposerDockLayout();
 
   return (
-    <ChatWorkspaceFrame>
+    <View className="flex-1 bg-background">
       <View
         className="flex-1 items-center justify-center px-8"
         style={{ paddingBottom: contentBottomInset }}
@@ -24,6 +24,6 @@ export function NewTopicScreen({ assistantId }: { assistantId?: string }) {
         </Text>
       </View>
       <ChatComposer assistantId={assistantId} onHeightChange={handleInputHeightChange} />
-    </ChatWorkspaceFrame>
+    </View>
   );
 }

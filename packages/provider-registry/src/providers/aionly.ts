@@ -1,6 +1,7 @@
 import { openaiCompatible } from './types';
 
 export default openaiCompatible({
+  authMethods: ['api-key', 'oauth'],
   id: 'aionly',
   name: 'AIOnly',
   baseUrl: 'https://api.aiionly.com',

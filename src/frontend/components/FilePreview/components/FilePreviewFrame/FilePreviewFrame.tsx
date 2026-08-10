@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Pressable } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 
 type FilePreviewFrameProps = {
   accessibilityLabel: string;

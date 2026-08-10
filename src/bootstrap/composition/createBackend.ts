@@ -17,8 +17,6 @@ import {
 } from '@/backend/services/file/fileStorage';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
-import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
-import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
 import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
 import { createProfileModule } from '@/backend/services/profile/createProfileModule';
@@ -50,22 +48,11 @@ export function createBackend(
   services: BackendServices,
   dependencies: BackendCompositionDependencies,
 ): BackendComposition {
-  const oauth = new OAuthRuntimeService({
-    providers: {
-      listApiKeys: (providerId) => services.provider.listApiKeys(providerId),
-      replaceApiKeys: (providerId, keys) => services.provider.replaceApiKeys(providerId, keys),
-      update: (providerId, input) => services.provider.update(providerId, input),
-    },
-    tokenStore: new ProviderAuthConfigOAuthTokenStore({
-      getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
-      update: (providerId, input) => services.provider.update(providerId, input),
-    }),
-  });
   const cherryin = new CherryInClient({
     oauth: {
       authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
-        oauth.authenticatedFetch(providerId, buildRequest, doFetch, options),
-      hasToken: (providerId) => oauth.hasToken(providerId),
+        services.oauthSession.authenticatedFetch(providerId, buildRequest, doFetch, options),
+      hasToken: (providerId) => services.oauthSession.hasToken(providerId),
     },
   });
   const chat = new ChatRuntime({
@@ -183,7 +170,7 @@ export function createBackend(
       },
       mcp,
       models,
-      oauth,
+      oauth: services.oauth,
       paintings,
       permissions,
       profile,
@@ -193,7 +180,11 @@ export function createBackend(
     dataApiDependencies: {
       mcpServerMutations: mcp,
     },
-    dispose: () => chat.dispose(),
+    dispose: async () => {
+      services.oauth.dispose();
+      services.oauthSession.dispose();
+      await chat.dispose();
+    },
   };
 }
 

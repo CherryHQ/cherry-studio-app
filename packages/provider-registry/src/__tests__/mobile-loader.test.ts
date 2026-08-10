@@ -43,4 +43,34 @@ describe('MobileRegistryLoader', () => {
       name: 'TokenHub',
     });
   });
+
+  it('retains OAuth providers whose desktop-only login flow is blocked by the app', () => {
+    const loader = new MobileRegistryLoader();
+    const overrides = loader.loadProviderModels();
+
+    for (const providerId of ['grok-cli', 'openai-codex']) {
+      expect(loader.findProvider(providerId)).toMatchObject({ authMethods: ['oauth'] });
+      expect(loader.isProviderExcluded(providerId)).toBe(false);
+      expect(overrides.some((override) => override.providerId === providerId)).toBe(true);
+      expect(loader.getOverridesForProvider(providerId).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('publishes OAuth capability metadata for every registered flow adapter', () => {
+    const loader = new MobileRegistryLoader();
+
+    for (const providerId of [
+      '302ai',
+      'aihubmix',
+      'aionly',
+      'cherryin',
+      'copilot',
+      'grok-cli',
+      'openai-codex',
+      'ppio',
+      'silicon',
+    ]) {
+      expect(loader.findProvider(providerId)?.authMethods).toContain('oauth');
+    }
+  });
 });

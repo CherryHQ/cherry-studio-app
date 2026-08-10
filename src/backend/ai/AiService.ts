@@ -4,6 +4,20 @@ import {
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
+import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
+import type {
+  AiBaseRequest,
+  AiStreamRequest,
+  ListModelsRequest,
+} from '@cherrystudio/ai-runtime/runtime';
+import {
+  buildImageProviderOptions,
+  createAiUsageCaptureContext,
+  extractAiSdkStandardParams,
+  getCustomParameters,
+  mergeImageProviderOptions,
+  splitImageParamValues,
+} from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
@@ -24,17 +38,11 @@ import type { ModelService } from '@/backend/data/services/ModelService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 
 import { createAiUsagePlugin } from './hooks/billingHook';
-import { resolveUIMessageFileUrls } from './messages/messageConverter';
+import { resolveUIMessageFileUrls } from './messages/attachmentRouting';
 import { listModels as listProviderModels } from './provider/listModels';
+import type { VertexAuthClient } from './provider/VertexAuthClient';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
-import type { AppProviderSettingsMap } from './types';
-import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
-import { splitImageParamValues } from './utils/imageOptions';
-import { buildImageProviderOptions, mergeImageProviderOptions } from './utils/imageProviderOptions';
-import { extractAiSdkStandardParams } from './utils/options';
-import { getCustomParameters } from './utils/reasoning';
-import { createAiUsageCaptureContext } from './utils/usageCapture';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -77,6 +85,7 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   model: Pick<ModelService, 'getById'>;
   provider: BuildAgentParamsDependencies['provider'] &
     Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
+  vertexAuth: Pick<VertexAuthClient, 'getAuthorizationHeaders'>;
 }
 
 /** `auto` is the picker's "let the model decide" sentinel, not a wire value. */
@@ -285,7 +294,12 @@ export class AiService {
     return listProviderModels(
       provider,
       {
+        getAuthConfig: async (providerId) =>
+          (await this.services.provider.getAuthConfig(providerId)) ?? undefined,
+        getCopilotToken: (headers, signal) =>
+          this.services.oauth.getCopilotServingToken(headers, signal),
         getRotatedApiKey: (providerId) => this.services.provider.getRotatedApiKey(providerId),
+        getVertexAuthHeaders: (input) => this.services.vertexAuth.getAuthorizationHeaders(input),
       },
       request.requestOptions?.signal,
       { throwOnError: request.throwOnError },

@@ -151,7 +151,7 @@ Decision:
 - Keep `Benchmark Complex 1000` as the stress fixture for future comparisons.
 - If this is revisited, start behind a feature flag and use the secondary runtime only for read-only heavy message rendering first.
 - Do not use click-time prewarm as the first optimization; it was too late to hide startup cost. If prewarm is revisited, trigger it earlier, such as focused topic candidate or `onPressIn` (the drawer-open trigger suggested at the time no longer exists after the bottom-tabs migration), and cap retained runtimes to avoid memory growth.
-- Future work must measure streaming updates, JSON serialization cost, fallback behavior, memory, native rebuild complexity, and real message interactions before replacing the default `ChatMessageList`.
+- Future work must measure streaming updates, JSON serialization cost, fallback behavior, memory, native rebuild complexity, and real message interactions before replacing the default `MessageList`.
 
 Notes:
 - React DevTools saw both runtimes after the POC (`Apps: 2 connected`). Exporting profile data from the secondary runtime triggered a DevTools warning overlay (`getProfilingData() called before any profiling data was recorded`), so the reported table uses bounded `profile slow` and `profile timeline` output rather than exported-profile automation.

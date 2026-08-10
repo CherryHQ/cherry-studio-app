@@ -5,6 +5,7 @@ import { openaiCompatible } from './types';
 const editAndGenerate = (mode: ImageModeDef) => ({ edit: mode, generate: mode });
 
 export default openaiCompatible({
+  authMethods: ['api-key', 'oauth'],
   id: 'ppio',
   name: 'PPIO',
   baseUrl: 'https://api.ppinfra.com/v3/openai/',

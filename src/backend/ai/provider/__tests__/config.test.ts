@@ -193,6 +193,94 @@ describe('providerToAiSdkConfig', () => {
     expect(runtime.resolveApiKey).toHaveBeenCalledWith(provider.id, 'override-key');
   });
 
+  it('gets a serving token from the injected Copilot adapter', async () => {
+    const provider = createProvider({
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+          adapterFamily: 'github-copilot-openai-compatible',
+          baseUrl: 'https://api.githubcopilot.com',
+        },
+      },
+      id: 'copilot',
+      presetProviderId: 'copilot',
+    });
+    const getCopilotToken = jest.fn(async () => 'copilot-serving-token');
+    const runtime = { ...createRuntime(), getCopilotToken };
+
+    const resolved = await resolveProviderAiSdkConfig(
+      provider,
+      createModel(provider.id, 'gpt-4o'),
+      runtime,
+    );
+
+    expect(getCopilotToken).toHaveBeenCalledWith(
+      expect.objectContaining({ 'Editor-Plugin-Version': expect.any(String) }),
+    );
+    expect(resolved).toMatchObject({
+      config: {
+        providerId: 'github-copilot-openai-compatible',
+        providerSettings: { apiKey: 'copilot-serving-token' },
+      },
+      credentialReceipt: { attribution: 'auth', method: 'oauth' },
+    });
+    expect(runtime.resolveApiKey).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['openai-codex', 'https://chatgpt.com/backend-api/codex', 'gpt-5.4'],
+    ['grok-cli', 'https://cli-chat-proxy.grok.com/v1', 'grok-4.5'],
+  ])(
+    'routes %s requests through the injected authenticated fetch',
+    async (providerId, baseUrl, modelId) => {
+      const provider = createProvider({
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: { adapterFamily: 'openai', baseUrl },
+        },
+        id: providerId,
+        presetProviderId: providerId,
+      });
+      const fetch = jest.fn(
+        async (_input: RequestInfo | URL, _init?: RequestInit) =>
+          new Response(null, { status: 204 }),
+      ) as jest.MockedFunction<typeof globalThis.fetch>;
+      const authenticatedFetch = jest.fn(
+        async (
+          _authenticatedProviderId: string,
+          buildRequest: (credentials: { accessToken: string; accountId?: string | null }) => {
+            init: RequestInit;
+            input: RequestInfo | URL;
+          },
+          doFetch: (input: RequestInfo | URL, init: RequestInit) => Promise<Response>,
+        ) => {
+          const request = buildRequest({ accessToken: 'oauth-token', accountId: 'account-id' });
+          return doFetch(request.input, request.init);
+        },
+      );
+      const runtime = { ...createRuntime(), authenticatedFetch, fetch };
+      const config = await providerToAiSdkConfig(
+        provider,
+        createModel(provider.id, modelId),
+        runtime,
+      );
+
+      await config.providerSettings.fetch?.(`${baseUrl}/responses`, {
+        body: JSON.stringify({ input: [], model: modelId }),
+        method: 'POST',
+      });
+
+      expect(authenticatedFetch).toHaveBeenCalledWith(
+        providerId,
+        expect.any(Function),
+        fetch,
+        expect.objectContaining({ notSignedInMessage: expect.any(String) }),
+      );
+      expect(fetch).toHaveBeenCalledTimes(1);
+      expect(runtime.resolveApiKey).not.toHaveBeenCalled();
+    },
+  );
+
   it('builds native Ollama config without appending an OpenAI API version', async () => {
     const provider = createProvider({
       defaultChatEndpoint: ENDPOINT_TYPE.OLLAMA_CHAT,

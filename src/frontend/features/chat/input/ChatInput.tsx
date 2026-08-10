@@ -10,12 +10,9 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
-  useComposerState,
 } from '@/frontend/components/composer';
 import {
   createComposerMessageParts,
-  hasComposerSendableContent,
-  hasImportingComposerAttachments,
   isComposerAttachmentReady,
 } from '@/frontend/components/composer/utils/composerAttachments';
 import {
@@ -72,7 +69,6 @@ type PendingWebSearchState = {
 const perfLog = loggerService.withContext('ChatPerf');
 
 export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatInputProps) {
-  const { attachments, draft } = useComposerState();
   const modelSettings = useModelSettingSelections();
   const rawDefaultModel = modelSettings.selections.default;
   const defaultModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
@@ -307,10 +303,6 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   return (
     <>
       <ComposerSurface
-        canSend={
-          !hasImportingComposerAttachments(attachments) &&
-          hasComposerSendableContent(draft, attachments)
-        }
         dismissKeyboardOnSend={dismissKeyboardOnSend}
         onSend={handleSendPress}
         onStop={chatTopic.abort}

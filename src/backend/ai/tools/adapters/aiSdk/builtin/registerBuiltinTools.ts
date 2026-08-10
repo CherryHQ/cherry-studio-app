@@ -1,6 +1,8 @@
+import type { ToolRegistry } from '@cherrystudio/ai-runtime/tools';
+
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
-import type { ToolRegistry } from '../registry';
+import type { ToolApplyScope } from '../../../types';
 import { createCalendarToolEntries, createReminderToolEntries } from './calendarTools';
 import type { DeviceToolDependencies } from './deviceToolSupport';
 import { createHealthToolEntries } from './healthTools';
@@ -9,7 +11,7 @@ import { createWebFetchToolEntry } from './WebFetchTool';
 import { createWebSearchToolEntry } from './WebSearchTool';
 
 export function registerBuiltinTools(
-  registry: ToolRegistry,
+  registry: ToolRegistry<ToolApplyScope>,
   deps: DeviceToolDependencies & { webSearch: WebSearchService },
 ): void {
   registry.register(createLocationToolEntry(deps));
