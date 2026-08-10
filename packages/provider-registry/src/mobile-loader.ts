@@ -15,6 +15,12 @@ type RegistryBundle = {
   providers: { version: string; providers: ProviderConfig[] };
 };
 
+const MOBILE_EXCLUDED_PROVIDER_IDS = new Set(['grok-cli', 'openai-codex']);
+
+function isMobileExcludedProviderId(providerId: string): boolean {
+  return MOBILE_EXCLUDED_PROVIDER_IDS.has(providerId);
+}
+
 let parsedBundle: RegistryBundle | null = null;
 
 function loadBundle(): RegistryBundle {
@@ -47,13 +53,21 @@ export class MobileRegistryLoader {
   }
 
   loadProviders(): ProviderConfig[] {
-    return loadBundle().providers.providers ?? [];
+    return (loadBundle().providers.providers ?? []).filter(
+      (provider) => !isMobileExcludedProviderId(provider.id),
+    );
   }
 
   loadProviderModels(): ProviderModelOverride[] {
-    const overrides = loadBundle().providerModels.overrides ?? [];
+    const overrides = (loadBundle().providerModels.overrides ?? []).filter(
+      (override) => !isMobileExcludedProviderId(override.providerId),
+    );
     this.buildOverrideIndex(overrides);
     return overrides;
+  }
+
+  isProviderExcluded(providerId: string): boolean {
+    return isMobileExcludedProviderId(providerId);
   }
 
   getModelsVersion(): string {

@@ -252,6 +252,13 @@ function rowToProvider(row: UserProviderRow): Provider {
   };
 }
 
+function isMobileSupportedProviderRow(row: Pick<UserProviderRow, 'presetProviderId'>): boolean {
+  return (
+    row.presetProviderId === null ||
+    !providerRegistryService.isProviderExcluded(row.presetProviderId)
+  );
+}
+
 function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
   return {
     apiFeatures: input.apiFeatures ?? null,
@@ -290,7 +297,7 @@ export class ProviderService {
             .where(eq(userProviderTable.isEnabled, query.enabled))
             .orderBy(asc(userProviderTable.orderKey));
 
-    return rows.map(rowToProvider);
+    return rows.filter(isMobileSupportedProviderRow).map(rowToProvider);
   }
 
   async getByProviderId(providerId: string): Promise<Provider> {
@@ -300,7 +307,7 @@ export class ProviderService {
       .where(eq(userProviderTable.providerId, providerId))
       .limit(1);
 
-    if (!row) {
+    if (!row || !isMobileSupportedProviderRow(row)) {
       throw DataApiErrorFactory.notFound('Provider', providerId);
     }
 

@@ -43,4 +43,22 @@ describe('MobileRegistryLoader', () => {
       name: 'TokenHub',
     });
   });
+
+  it('omits desktop-only CLI providers and their model overrides', () => {
+    const loader = new MobileRegistryLoader();
+    const providers = loader.loadProviders();
+    const overrides = loader.loadProviderModels();
+
+    expect(providers.map((provider) => provider.id)).toContain('grok');
+    expect(loader.findProvider('grok-cli')).toBeNull();
+    expect(loader.findProvider('openai-codex')).toBeNull();
+    expect(loader.isProviderExcluded('grok-cli')).toBe(true);
+    expect(loader.isProviderExcluded('openai-codex')).toBe(true);
+    expect(loader.isProviderExcluded('grok')).toBe(false);
+    expect(loader.isProviderExcluded('cherryai')).toBe(false);
+    expect(overrides.some((override) => override.providerId === 'grok-cli')).toBe(false);
+    expect(overrides.some((override) => override.providerId === 'openai-codex')).toBe(false);
+    expect(loader.getOverridesForProvider('grok-cli')).toEqual([]);
+    expect(loader.getOverridesForProvider('openai-codex')).toEqual([]);
+  });
 });
