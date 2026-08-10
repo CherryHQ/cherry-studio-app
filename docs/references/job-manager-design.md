@@ -1,7 +1,8 @@
 # Mobile Job Manager Design
 
-> Updated: 2026-08-03
-> Status: design proposal (runtime not yet built)
+> Updated: 2026-08-10
+> Status: Phase 1 landed and wired — `painting.generate` runs on the job ledger; see
+> [Phase 1 As-Built](#phase-1-as-built)
 > Desktop source: `CherryHQ/cherry-studio@d498753ecfd0f2572612456281ec222563ce7bf3`
 > Mobile baseline: post `v0.2` merge (`fd1552c6` desktop-sync) — the job **ledger scaffolding
 > already exists**; see [What Already Landed](#what-already-landed)
@@ -33,7 +34,9 @@ Data API. What remains is the active half, shipped deliberately small:
 
 What we do not build: desktop's pause/drain write-quiesce (no mobile backup-restore consumer;
 roughly a third of desktop `JobManager.ts` complexity), croner-armed cron timers as a correctness
-mechanism, silent-audio keep-alive, or any promise that a local job runs while the app is dead.
+mechanism, or any promise that a local job runs while the app is dead. (Silent-audio keep-alive
+was on this list; PR #473 changed the evidence — see the
+[KeepAliveCoordinator appendix](#appendix-keepalivecoordinator-design-draft).)
 
 ## What Already Landed
 
@@ -47,15 +50,77 @@ The v0.2 merge (desktop-sync `fd1552c6`) brought in, all desktop-verbatim:
 | Read repository | `src/backend/data/services/JobService.ts` | `list` / `getById` / bare `create`; `rowToSnapshot` maps timestamps to ISO strings (matches desktop's string-typed snapshot) |
 | GET-only Data API | `src/backend/data/api/handlers/jobs.ts`, aggregated in `apiHandlers.ts`, `JobService` constructed in `createBackendServices` | `/jobs` and `/jobs/:id` reads work today |
 
-Missing — the subject of this design: the runtime (claim/dispatch/fencing/retry/cancel/recovery/
-GC), the handler registry and contract, business handlers, bootstrap ownership of the pump, and
-every platform adapter.
+Since then the active half has landed too: the runtime (claim/dispatch/fencing/retry/cancel/
+recovery/GC), the handler registry and contract, the first business handler, and bootstrap
+ownership of the pump — see [Phase 1 As-Built](#phase-1-as-built). Platform adapters (Phase 2+)
+remain unbuilt.
 
 One structural consequence: `src/backend/data/db/schemas/job.ts` and the universal `jobs.ts` are
 **desktop mirrors under the `$sync-cherry-desktop` audit**. Mobile-only state must not be patched
 into them, or every future sync becomes a merge conflict and the schema-AST audit reports drift.
 The design below therefore adds **no schema at all**: everything mobile-only is derived from the
-handler registry, carried in `metadata`, or expressed as a runtime invariant.
+handler registry, carried in `metadata`, or expressed as a runtime invariant. (One as-built
+deviation exists outside the mirrors: `job_file_ref` — see
+[Phase 1 As-Built](#phase-1-as-built).)
+
+## Phase 1 As-Built
+
+> Landed 2026-08-10. This section records where the implementation deviates from the design text
+> and which gaps are deliberate; the design sections themselves are left as written.
+
+**Wired surface.** `createBackend` (`src/bootstrap/composition/createBackend.ts`) constructs the
+runtime via `createJobRuntime({ dbService, jobService, handlers })` with the frozen handler array
+and chains `await jobRuntime.dispose()` ahead of `chat.dispose()`; `runPostReadyTasks` fires
+`pump({ reason: 'cold-start' })`, whose first pass lazily runs startup recovery and GC. The first
+consumer is `painting.generate`
+(`src/backend/services/paintings/tasks/paintingGenerateJobHandler.ts`): the paintings module
+creates the receipt and enqueues in one `withWriteTx` (with an idempotency pre-check so a
+duplicate signature joins the active job instead of orphaning a fresh receipt), and
+`usePaintingGeneration` observes the ledger by polling `GET /jobs/:id` (1 s while active, stop on
+terminal) and adopts a still-active job on mount via `GET /jobs`. Because `DbService.withWriteTx`
+is not reentrant, the in-transaction path is built entirely from `*Tx` variants
+(`PaintingService.createTx`, `JobRuntime.enqueueTx`, `JobService.findActiveByIdempotencyKeyTx`).
+
+**As-built deviations from the design text:**
+
+- **`job_file_ref` exists but Phase 1 does not write it.** The table
+  (`src/backend/data/db/schemas/fileRelations.ts:88`, migration 0007) landed ahead of this
+  design — a deviation from "no schema at all", though it touches file relations, not the `job`
+  mirror. Phase 1 leaves it empty on purpose: the painting receipt's `painting_file_ref` rows
+  already pin the input files, created in the same transaction as the enqueue, so a job-level ref
+  would be redundant. It waits for a consumer whose files have no domain receipt of their own.
+- **Handler input carries internal URIs alongside IDs.** As-built input is
+  `{ images: { fileEntryId, mediaType, uri }[], mode, modelId, paintingId, paramValues, prompt }`.
+  Draft picker images are materialized into durable internal file entries *before* enqueue; the
+  `uri` riding along is the internal-storage path (never an ephemeral picker URI), which the
+  handler reads data URLs from directly.
+- **`startGeneration` returns `{ jobId }`**, not `{ paintingId, jobId }`; the receipt reaches the
+  frontend through the completed job's output and the painting query sync.
+- **`internal.echo` was not built.** The jest harness
+  (`src/backend/services/jobs/__tests__/_helpers.ts`) registers inline test handlers, which serve
+  the proof role without needing a production-registry exclusion mechanism.
+- **No `AppState` pump listener yet** (Ownership item 4). Phase 1's dispatch triggers are
+  enqueue, the delayed-retry timer, and cold start; with only `foreground-only` handlers, an
+  enqueue can only happen in the foreground, so the listener adds nothing until delayed retries
+  can span a backgrounding or a Phase 2 window exists. Add it with Phase 2.
+- **Dangling receipts are kept.** A failed/cancelled/abandoned generation leaves a painting row
+  with no outputs — invisible to the list (it filters on having output), matching the old session
+  behavior. A future file-orphan-cleanup job is the designated collector; the "interrupted, tap
+  to retry" UI remains an open question.
+
+**Deliberate gaps** (settled in the 2026-08 design review, recorded so they read as decisions):
+
+- **Chat stays out of the job system** (see [First handlers](#first-handlers)): a job is a fixed
+  serializable input awaiting a result; a chat turn is an interactive stream with approvals.
+  Background continuation for both comes from a shared keep-alive primitive instead — see the
+  [KeepAliveCoordinator appendix](#appendix-keepalivecoordinator-design-draft).
+- **Pause/drain write-quiesce is not ported.** Port it together with the backup feature — its
+  only desktop consumer — using the desktop contract as the reference.
+- **No push surface for progress.** Polling only, per Deviation 7; a CacheService-backed push
+  face waits for a handler with high-frequency progress.
+- **Schedules stay dormant** (Phase 4): `job_schedule` is written and read by nothing on mobile;
+  desktop's `AgentTaskService` semantics occupy the table's shape, awaiting a mobile executor and
+  a product feature that needs one.
 
 ## Desktop: What We Port And What We Don't
 
@@ -90,16 +155,17 @@ Follows the standard "new backend module" drop points; read-path files already e
 ```text
 packages/universal/src/data/api/schemas/jobs.ts   # landed — desktop mirror, do not fork
 src/backend/data/db/schemas/job.ts                # landed — desktop mirror, do not fork
-src/backend/data/services/JobService.ts           # landed reads; ADD claim/terminal/retry writers
+src/backend/data/services/JobService.ts           # landed — reads + claim/terminal/retry writers
 src/backend/data/api/handlers/jobs.ts             # landed — GET-only, stays read-only
-src/backend/services/jobs/JobRuntime.ts           # NEW: orchestrator (enqueue/cancel/pump)
-src/backend/services/jobs/jobRegistry.ts          # NEW: declaration-merging JobRegistry
-src/backend/services/jobs/types.ts                # NEW: JobHandler / JobContext / EnqueueOptions
-src/backend/services/jobs/runtime/backoff.ts      # NEW: ported pure functions + their tests
+src/backend/services/jobs/JobRuntime.ts           # landed — orchestrator (enqueue/cancel/pump)
+src/backend/services/jobs/jobRegistry.ts          # landed — declaration-merging JobRegistry
+src/backend/services/jobs/types.ts                # landed — JobHandler / JobContext / EnqueueOptions
+src/backend/services/jobs/runtime/backoff.ts      # landed — ported pure functions + their tests
 src/backend/services/jobs/runtime/catchUp.ts
 src/backend/services/jobs/runtime/recovery.ts
 src/backend/services/jobs/adapters/               # Phase 2+: wake & lease platform seams
 src/backend/services/<domain>/tasks/<Name>JobHandler.ts   # handlers live with their domain
+src/backend/services/paintings/tasks/paintingGenerateJobHandler.ts   # landed — first handler
 ```
 
 Handler runtime types (`JobHandler`, `JobContext`) stay app-side, exactly as desktop keeps them
@@ -125,7 +191,8 @@ runtime files carry the repo's alignment-comment convention
    whole design: *cold start is the only reliable "no writer is streaming into this" signal,
    because the OS suspends rather than kills a backgrounded app*.
 4. A single `AppState` listener (inside the runtime, not in React) pumps on `active`. Frontend
-   never imports the runtime; routes and hooks never own dispatch.
+   never imports the runtime; routes and hooks never own dispatch. *(The listener is deferred to
+   Phase 2 — see [Phase 1 As-Built](#phase-1-as-built).)*
 
 React routes, `ChatSessionProvider`, and hooks must not own the job dispatcher. This is the
 navigation-ownership fix that PR #473 could not deliver.
@@ -333,20 +400,25 @@ go/no-go checklist enforced at review time.
 
 - The receipt (`PaintingRepository.create`) is already the durable destination, created before
   generation — today's session logic ports almost directly into a handler.
-- Input: `{ paintingId, prompt, modelId, mode, paramValues, inputFileIds }` — file-entry IDs, not
-  ephemeral URIs; the handler re-reads data URLs from storage.
+- Input (as built): `{ images: { fileEntryId, mediaType, uri }[], mode, modelId, paintingId,
+  paramValues, prompt }` — draft picker images are materialized into durable internal file
+  entries before enqueue, so the URIs are internal-storage paths, never ephemeral picker URIs;
+  the handler reads data URLs from them.
 - `executionClass: 'foreground-only'`, `recovery: 'abandon'`, `maxAttempts: 1`, queue
   `'painting'`, concurrency 1. Mobile `generateImage` is a single un-resumable provider call with
   no task ID; process death mid-call is an ambiguous external outcome, so recovery must not
   resubmit. Idempotency key: reuse the session's existing `generationSignature` so double-taps
   join the active job instead of double-charging.
-- `PaintingsBackend` gains `startGeneration(input) → { paintingId, jobId }` and cancel;
-  `usePaintingGeneration` drops its AbortController ownership, awaits `finished` while mounted,
-  and re-attaches via the paintings query + `GET /jobs/:id` after navigation. This delivers the
-  actual product ask — generation survives leaving the screen — with zero OS background APIs.
+- `PaintingsModule` gains `startGeneration(input) → { jobId }` (receipt + `enqueueTx` atomically
+  in one `withWriteTx`, with an idempotency pre-check so a duplicate signature joins the active
+  job instead of orphaning a fresh receipt) and `cancelGeneration(jobId)`;
+  `usePaintingGeneration` drops its AbortController ownership, polls `GET /jobs/:id` while a job
+  is active, and adopts a still-active job on mount via `GET /jobs`. This delivers the actual
+  product ask — generation survives leaving the screen — with zero OS background APIs.
 
 **`internal.echo`** — dev/test-only proof handler (desktop `dummy.echo` precedent), excluded from
-the production registry; drives the jest suite and the device sanity pass.
+the production registry; drives the jest suite and the device sanity pass. *(Not built: the jest
+harness registers inline test handlers instead — see [Phase 1 As-Built](#phase-1-as-built).)*
 
 **Deliberately not chat.** `ChatSession` stays route-owned for now; an agent turn is a workflow
 with approvals and tool calls, not a replayable job, and no provider recovery contract exists.
@@ -394,7 +466,9 @@ type JobExecutionLease = {
   `modules/pdf-text-extractor` + `scripts/with-health-connect.js`) for iOS 26
   `BGContinuedProcessingTask` and an honestly-typed Android foreground service. iOS 17–25 gets
   `beginBackgroundTask` checkpoint grace only — the product copy must not promise long
-  continuation there, and silent audio is not a fallback.
+  continuation there. *(The first draft added "silent audio is not a fallback"; PR #473 revised
+  that on evidence — see the
+  [KeepAliveCoordinator appendix](#appendix-keepalivecoordinator-design-draft).)*
 - **Transfers**: system-owned engines (background `URLSession`, Android UIDT/WorkManager) behind a
   separate transfer adapter; a JS handler loop never owns bytes.
 
@@ -491,8 +565,6 @@ readers know they are decisions, not oversights:
 
 ## Open Questions
 
-- **`useJob` polling cadence**: Phase 1 re-attach uses query + `GET /jobs/:id`; pick a bounded
-  `refetchInterval` for active jobs (only while an active job exists) and stop conditions.
 - **Painting UX copy**: force-quit mid-generation now surfaces an honest failed/abandoned receipt
   instead of silently vanishing work — needs a small UI state for "interrupted, tap to retry".
 - **Sync-audit registration**: confirm with the `$sync-cherry-desktop` skill that the jobs mirror
@@ -500,5 +572,56 @@ readers know they are decisions, not oversights:
   `*Tx`-only surface) read as `semantic-port` rather than drift.
 
 Resolved since the first draft: the drizzle partial unique index generates correctly (verified in
-`0006_*.sql`), and snapshot timestamps follow desktop's ISO-string convention via the landed
-`rowToSnapshot`.
+`0006_*.sql`); snapshot timestamps follow desktop's ISO-string convention via the landed
+`rowToSnapshot`; and the `useJob` polling cadence is settled as-built (1 s `refetchInterval`
+while a job is active, stop on terminal snapshots, restore-on-mount via `GET /jobs` filtered by
+type + active statuses).
+
+## Appendix: KeepAliveCoordinator (design draft)
+
+> Status: design only — implementation is blocked on PR #473 merging. Do not build before then.
+
+Phase 1 ships `painting.generate` as `foreground-only`: backgrounding the app mid-generation
+suspends the JS runtime, and the job settles only on resume (or is abandoned by the next
+cold-start recovery). PR #473's `BackgroundReplyService`
+(`src/backend/services/backgroundReply/BackgroundReplyService.ts` on that branch) proves the
+missing capability for chat: a silent audio session keeps Hermes scheduled while a reply streams
+in the background — the OpenMinis approach, already shipped on the App Store. The mechanism is
+not chat-specific; only its packaging is. The first draft of this document ruled silent audio
+out; that ruling is revised on this evidence.
+
+**What #473 does that the extraction must preserve:**
+
+- iOS-only and preference-gated (`chat.background_reply.enabled`); the service no-ops elsewhere.
+- expo-audio session: `setAudioModeAsync({ shouldPlayInBackground: true, playsInSilentMode:
+  true, interruptionMode: 'mixWithOthers' })`, looping `assets/audio/silence.m4a` at volume
+  `0.001`.
+- `reconcileAudio()` is reference counting in disguise: audio plays iff at least one turn is in
+  a generating phase and stops when none is. Every async start/stop rides a serial operation
+  queue (`operationTail`), so transitions cannot interleave.
+- The Live Activity half (expo-widgets, 1 s-throttled updates, ended on foregrounding, orphan
+  cleanup at construction) is a separate concern that merely shares the service today.
+
+**Extraction shape** — split #473's service along that seam:
+
+```ts
+type KeepAliveCoordinator = {
+  /** 0→1 starts the silent audio session; idempotent per holder. */
+  acquire(tag: string): KeepAliveLease;
+};
+type KeepAliveLease = { release(): void }; // 1→0 stops the session; idempotent
+```
+
+- Owned by composition alongside `JobRuntime`; disposed with it; keeps #473's serial operation
+  queue and preference gate inside the coordinator.
+- Consumer 1 — chat: `BackgroundReplyService` keeps its turns and the Live Activity, and its
+  `reconcileAudio` collapses into acquire-on-generating / release-on-settle.
+- Consumer 2 — jobs: a handler opts in declaratively (a keep-alive flag derived from its
+  execution class); the dispatch loop wraps `execute` in acquire/release, so the coordinator
+  never observes job state and the runtime never owns audio.
+- `painting.generate` then moves `executionClass` to `'user-continued'`: the class states the
+  product promise ("keeps running while you do something else"), and keep-alive is the mechanism
+  honoring it on iOS today — Phase 3's honest leases (iOS 26 Continued Processing, Android FGS)
+  can replace the mechanism later without touching the class.
+
+Android is out of scope for the extraction (it would be FGS + WakeLock, a Phase 3 concern).

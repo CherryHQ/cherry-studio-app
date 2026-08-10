@@ -109,23 +109,25 @@ export class PaintingService {
   }
 
   async create(input: CreatePaintingInput): Promise<Painting> {
-    const inputFileIds = [...(input.inputFileIds ?? [])];
-    const row = (await this.dbService.withWriteTx(async (tx) => {
-      const inserted = (await insertWithOrderKey(
-        tx,
-        paintingTable,
-        {
-          modelId: normalizeModelId(input.providerId, input.modelId),
-          prompt: input.prompt,
-          providerId: input.providerId,
-        },
-        { pkColumn: paintingTable.id, position: 'first' },
-      )) as PaintingRow;
-      await insertFileRefsTx(tx, inserted.id, 'input', inputFileIds);
-      return inserted;
-    })) as PaintingRow;
+    return this.dbService.withWriteTx((tx) => this.createTx(tx, input));
+  }
 
-    return rowToPainting(row, { input: inputFileIds, output: [] });
+  /** Rides the caller's write transaction (`withWriteTx` is not reentrant). */
+  async createTx(tx: Database, input: CreatePaintingInput): Promise<Painting> {
+    const inputFileIds = [...(input.inputFileIds ?? [])];
+    const inserted = (await insertWithOrderKey(
+      tx,
+      paintingTable,
+      {
+        modelId: normalizeModelId(input.providerId, input.modelId),
+        prompt: input.prompt,
+        providerId: input.providerId,
+      },
+      { pkColumn: paintingTable.id, position: 'first' },
+    )) as PaintingRow;
+    await insertFileRefsTx(tx, inserted.id, 'input', inputFileIds);
+
+    return rowToPainting(inserted, { input: inputFileIds, output: [] });
   }
 
   async replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting> {

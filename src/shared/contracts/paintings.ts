@@ -36,13 +36,18 @@ export type ResolvedPaintingFiles = {
   outputs: ResolvedFile[];
 };
 
-export interface PaintingGenerationSession {
-  cancel(): void;
-  dispose(): void;
-  generate(input: PaintingGenerationInput): Promise<PaintingGenerationResult>;
-}
+export type PaintingGenerationStart = {
+  jobId: string;
+};
 
 export interface PaintingsModule {
-  createGenerationSession(): PaintingGenerationSession;
+  cancelGeneration(jobId: string): Promise<void>;
   resolveFiles(painting: Painting): Promise<ResolvedPaintingFiles>;
+  /**
+   * Creates the painting receipt and enqueues a `painting.generate` job
+   * atomically. The generation outlives the calling screen; observe the job's
+   * ledger row (`GET /jobs/:id`) for progress and the terminal
+   * {@link PaintingGenerationResult} in its output.
+   */
+  startGeneration(input: PaintingGenerationInput): Promise<PaintingGenerationStart>;
 }

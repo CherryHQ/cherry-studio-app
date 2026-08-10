@@ -1,6 +1,7 @@
 import { aiUsageRecordQueryKeys } from './aiUsageRecords';
 import { assistantQueryKeys } from './assistants';
 import { fileQueryKeys } from './files';
+import { jobQueryKeys } from './jobs';
 import { mcpServerQueryKeys } from './mcpServers';
 import { messageQueryKeys } from './messages';
 import { modelQueryKeys } from './models';
@@ -13,6 +14,7 @@ export const queryKeys = {
   aiUsageRecords: aiUsageRecordQueryKeys,
   assistants: assistantQueryKeys,
   files: fileQueryKeys,
+  jobs: jobQueryKeys,
   mcpServers: mcpServerQueryKeys,
   messages: messageQueryKeys,
   models: modelQueryKeys,

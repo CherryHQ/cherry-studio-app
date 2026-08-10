@@ -2,59 +2,62 @@ import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/dat
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
+import type { Database } from '@/backend/data/db/DbService';
 import type {
   PaintingGenerationInput,
-  PaintingGenerationResult,
-  PaintingGenerationSession as PaintingGenerationSessionContract,
+  PaintingGenerationStart,
   PaintingsModule,
   ResolvedFile,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
 
-import type { CreateInternalEntryInput } from '../file/fileStorage';
+import type {
+  PaintingFileStorage,
+  PaintingGenerateJobImage,
+  PaintingGenerateJobInput,
+} from './tasks/paintingGenerateJobHandler';
 
 type PaintingGenerationPersistence = {
-  create(input: {
-    inputFileIds: readonly FileEntryId[];
-    modelId: string;
-    prompt: string;
-    providerId: string;
-  }): Promise<Painting>;
-  replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting>;
-};
-
-type PaintingAi = {
-  generateImage(input: {
-    inputImages: string[];
-    mode: PaintingGenerationInput['mode'];
-    paramValues: PaintingGenerationInput['paramValues'];
-    prompt: string;
-    requestOptions: { signal: AbortSignal };
-    uniqueModelId: PaintingGenerationInput['modelId'];
-  }): Promise<{ images: { base64: string; mediaType: string }[] }>;
-};
-
-type PaintingFileStorage = {
-  createInternalEntry(input: CreateInternalEntryInput): Promise<InternalFileEntry>;
-  discard(entries: readonly InternalFileEntry[]): Promise<void>;
-  readDataUrl(uri: string, mediaType: string): Promise<string>;
-  getUri(entry: InternalFileEntry): string | undefined;
+  createTx(
+    tx: Database,
+    input: {
+      inputFileIds: readonly FileEntryId[];
+      modelId: string;
+      prompt: string;
+      providerId: string;
+    },
+  ): Promise<Painting>;
 };
 
 type PaintingFileRepository = {
   resolve(id: FileEntryId): Promise<ResolvedFile | null>;
 };
 
+/**
+ * Painting-scoped slice of the job runtime, closed over the concrete type in
+ * composition so the module never touches the runtime or JobService directly.
+ */
+type PaintingJobsPort = {
+  cancelGenerate(jobId: string): Promise<void>;
+  enqueueGenerateTx(
+    tx: Database,
+    input: PaintingGenerateJobInput,
+    opts: { idempotencyKey: string },
+  ): Promise<{ id: string }>;
+  findActiveGenerateTx(tx: Database, idempotencyKey: string): Promise<{ id: string } | null>;
+};
+
 export type PaintingsModuleDependencies = {
-  ai: PaintingAi;
+  db: { withWriteTx<TValue>(fn: (tx: Database) => Promise<TValue>): Promise<TValue> };
   files: PaintingFileRepository;
+  jobs: PaintingJobsPort;
   paintings: PaintingGenerationPersistence;
-  storage: PaintingFileStorage;
+  storage: Pick<PaintingFileStorage, 'createInternalEntry' | 'discard'>;
 };
 
 export function createPaintingsModule(dependencies: PaintingsModuleDependencies): PaintingsModule {
   return {
-    createGenerationSession: () => new PaintingGenerationSession(dependencies),
+    cancelGeneration: (jobId) => dependencies.jobs.cancelGenerate(jobId),
     resolveFiles: async (painting: Painting): Promise<ResolvedPaintingFiles> => {
       const [inputs, outputs] = await Promise.all([
         resolveFileEntries(dependencies.files, painting.files.input),
@@ -62,164 +65,78 @@ export function createPaintingsModule(dependencies: PaintingsModuleDependencies)
       ]);
       return { inputs, outputs };
     },
+    startGeneration: (input) => startGeneration(dependencies, input),
   };
 }
 
-type IncompleteReceipt = {
-  id: string;
-  signature: string;
-};
-
-class PaintingGenerationSession implements PaintingGenerationSessionContract {
-  private activeController: AbortController | undefined;
-  private disposed = false;
-  private incompleteReceipt: IncompleteReceipt | undefined;
-
-  constructor(private readonly dependencies: PaintingsModuleDependencies) {}
-
-  cancel(): void {
-    this.activeController?.abort(new Error('Painting generation cancelled'));
-  }
-
-  dispose(): void {
-    if (this.disposed) {
-      return;
-    }
-
-    this.disposed = true;
-    this.activeController?.abort(new Error('Painting generation session is disposed'));
-    this.incompleteReceipt = undefined;
-  }
-
-  async generate(input: PaintingGenerationInput): Promise<PaintingGenerationResult> {
-    if (this.disposed) {
-      throw new Error('Painting generation session is disposed');
-    }
-    if (this.activeController) {
-      throw new Error('Painting generation is already in progress');
-    }
-
-    const controller = new AbortController();
-    const { signal } = controller;
-    this.activeController = controller;
-    try {
-      const prompt = input.prompt.trim();
-      const signature = generationSignature({ ...input, prompt });
-      let receiptId =
-        this.incompleteReceipt?.signature === signature ? this.incompleteReceipt.id : undefined;
-
-      if (!receiptId) {
-        receiptId = await this.createReceipt({ ...input, prompt }, signal);
-        if (!this.disposed) {
-          this.incompleteReceipt = { id: receiptId, signature };
-        }
-        throwIfAborted(signal);
-      }
-
-      const inputImages = await Promise.all(
-        input.images.map((image) =>
-          this.dependencies.storage.readDataUrl(image.uri, image.mediaType),
-        ),
-      );
-      throwIfAborted(signal);
-      const result = await this.dependencies.ai.generateImage({
-        inputImages,
-        mode: input.mode,
-        paramValues: input.paramValues,
-        prompt,
-        requestOptions: { signal },
-        uniqueModelId: input.modelId,
-      });
-      throwIfAborted(signal);
-
-      if (result.images.length === 0) {
-        throw new Error('Image provider returned no image');
-      }
-
-      const createdOutputs: InternalFileEntry[] = [];
-      let outputRefsCommitted = false;
-      try {
-        for (const image of result.images) {
-          createdOutputs.push(
-            await this.dependencies.storage.createInternalEntry({
-              cleanupPolicy: 'delete_when_unreferenced',
-              data: image.base64,
-              mediaType: image.mediaType,
-              source: 'base64',
-            }),
-          );
-        }
-        const painting = await this.dependencies.paintings.replaceOutputs(
-          receiptId,
-          createdOutputs.map((entry) => entry.id),
-        );
-        outputRefsCommitted = true;
-        throwIfAborted(signal);
-        const persistedOutputIds = new Set(painting.files.output);
-        const outputs = createdOutputs.map((entry) => {
-          if (!persistedOutputIds.has(entry.id)) {
-            throw new Error('Generated painting has a missing output file');
-          }
-          const uri = this.dependencies.storage.getUri(entry);
-          if (!uri) {
-            throw new Error(`Generated painting file is unavailable: ${entry.id}`);
-          }
-          return { fileEntryId: entry.id, uri };
+/**
+ * Creates the receipt and enqueues the `painting.generate` job in one write
+ * transaction — on rollback neither exists. Draft-only images are materialized
+ * into internal entries first (file IO cannot ride the transaction); the
+ * receipt's input refs pin them, and any entry left unreferenced on failure or
+ * on an idempotency hit is discarded before returning.
+ */
+async function startGeneration(
+  dependencies: PaintingsModuleDependencies,
+  input: PaintingGenerationInput,
+): Promise<PaintingGenerationStart> {
+  const prompt = input.prompt.trim();
+  const signature = generationSignature({ ...input, prompt });
+  const createdInputs: InternalFileEntry[] = [];
+  let createdInputsSettled = false;
+  try {
+    const images: PaintingGenerateJobImage[] = [];
+    for (const image of input.images) {
+      if (image.fileEntryId) {
+        images.push({ fileEntryId: image.fileEntryId, mediaType: image.mediaType, uri: image.uri });
+      } else {
+        const entry = await dependencies.storage.createInternalEntry({
+          cleanupPolicy: 'delete_when_unreferenced',
+          name: image.name,
+          source: 'uri',
+          uri: image.uri,
         });
-
-        this.incompleteReceipt = undefined;
-        return { outputs, painting };
-      } catch (error) {
-        if (!outputRefsCommitted) {
-          await this.dependencies.storage.discard(createdOutputs);
-        }
-        throw error;
-      }
-    } finally {
-      if (this.activeController === controller) {
-        this.activeController = undefined;
+        createdInputs.push(entry);
+        images.push({ fileEntryId: entry.id, mediaType: image.mediaType, uri: image.uri });
       }
     }
-  }
 
-  private async createReceipt(
-    input: PaintingGenerationInput,
-    signal: AbortSignal,
-  ): Promise<string> {
-    const createdInputs: InternalFileEntry[] = [];
-    let inputRefsCommitted = false;
-    try {
-      for (const image of input.images) {
-        if (!image.fileEntryId) {
-          throwIfAborted(signal);
-          createdInputs.push(
-            await this.dependencies.storage.createInternalEntry({
-              cleanupPolicy: 'delete_when_unreferenced',
-              name: image.name,
-              source: 'uri',
-              uri: image.uri,
-            }),
-          );
-        }
+    const { providerId } = parseUniqueModelId(input.modelId);
+    const result = await dependencies.db.withWriteTx(async (tx) => {
+      const existing = await dependencies.jobs.findActiveGenerateTx(tx, signature);
+      if (existing) {
+        return { jobId: existing.id, reusedActive: true };
       }
-      throwIfAborted(signal);
-      const { providerId } = parseUniqueModelId(input.modelId);
-      const receipt = await this.dependencies.paintings.create({
-        inputFileIds: [
-          ...input.images.flatMap((image) => (image.fileEntryId ? [image.fileEntryId] : [])),
-          ...createdInputs.map((entry) => entry.id),
-        ],
+      const receipt = await dependencies.paintings.createTx(tx, {
+        inputFileIds: images.map((image) => image.fileEntryId),
         modelId: input.modelId,
-        prompt: input.prompt,
+        prompt,
         providerId,
       });
-      inputRefsCommitted = true;
-      return receipt.id;
-    } catch (error) {
-      if (!inputRefsCommitted) {
-        await this.dependencies.storage.discard(createdInputs);
-      }
-      throw error;
+      const handle = await dependencies.jobs.enqueueGenerateTx(
+        tx,
+        {
+          images,
+          mode: input.mode,
+          modelId: input.modelId,
+          paintingId: receipt.id,
+          paramValues: input.paramValues,
+          prompt,
+        },
+        { idempotencyKey: signature },
+      );
+      return { jobId: handle.id, reusedActive: false };
+    });
+
+    if (result.reusedActive) {
+      // The active job's own receipt already pins its copies of these inputs.
+      await dependencies.storage.discard(createdInputs);
+    }
+    createdInputsSettled = true;
+    return { jobId: result.jobId };
+  } finally {
+    if (!createdInputsSettled) {
+      await dependencies.storage.discard(createdInputs);
     }
   }
 }
@@ -243,10 +160,4 @@ function sortRecord(values: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(values).sort(([left], [right]) => left.localeCompare(right)),
   );
-}
-
-function throwIfAborted(signal: AbortSignal): void {
-  if (signal.aborted) {
-    throw signal.reason ?? new Error('Painting generation aborted');
-  }
 }

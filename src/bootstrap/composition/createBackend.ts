@@ -4,6 +4,7 @@ import { readUIMessageStream } from 'ai';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
+import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
@@ -14,9 +15,15 @@ import {
   getInternalFileUri,
   imageUriToDataUrl,
 } from '@/backend/services/file/fileStorage';
+import {
+  createJobRuntime,
+  jobHandlerEntry,
+  type JobRuntime,
+} from '@/backend/services/jobs/JobRuntime';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
+import { createPaintingGenerateJobHandler } from '@/backend/services/paintings/tasks/paintingGenerateJobHandler';
 import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
 import { createProfileModule } from '@/backend/services/profile/createProfileModule';
 import {
@@ -36,10 +43,15 @@ export type BackendComposition = {
   dataApiDependencies: {
     mcpServerMutations: McpServerMutations;
   };
+  jobRuntime: JobRuntime;
   dispose(): Promise<void>;
 };
 
-export function createBackend(services: BackendServices): BackendComposition {
+export function createBackend(
+  services: BackendServices,
+  infrastructure: { dbService: DbService },
+): BackendComposition {
+  const { dbService } = infrastructure;
   const cherryin = new CherryInClient({
     oauth: {
       authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
@@ -91,16 +103,42 @@ export function createBackend(services: BackendServices): BackendComposition {
       update: (id, input) => services.provider.update(id, input),
     },
   });
+  const paintingStorage = {
+    createInternalEntry: (input: Parameters<typeof createInternalEntry>[1]) =>
+      createInternalEntry(services.fileEntry, input),
+    discard: (entries: Parameters<typeof discardInternalEntries>[1]) =>
+      discardInternalEntries(services.fileEntry, entries),
+    readDataUrl: imageUriToDataUrl,
+    getUri: getInternalFileUri,
+  };
+  const jobRuntime = createJobRuntime({
+    dbService,
+    handlers: [
+      jobHandlerEntry(
+        'painting.generate',
+        createPaintingGenerateJobHandler({
+          ai: services.ai,
+          paintings: services.painting,
+          storage: paintingStorage,
+        }),
+      ),
+    ],
+    jobService: services.job,
+  });
   const paintings = createPaintingsModule({
-    ai: services.ai,
+    db: { withWriteTx: (fn) => dbService.withWriteTx(fn) },
     files: services.fileContent,
-    paintings: services.painting,
-    storage: {
-      createInternalEntry: (input) => createInternalEntry(services.fileEntry, input),
-      discard: (entries) => discardInternalEntries(services.fileEntry, entries),
-      readDataUrl: imageUriToDataUrl,
-      getUri: getInternalFileUri,
+    jobs: {
+      cancelGenerate: async (jobId) => {
+        await jobRuntime.cancel(jobId);
+      },
+      enqueueGenerateTx: (tx, input, opts) =>
+        jobRuntime.enqueueTx(tx, 'painting.generate', input, opts),
+      findActiveGenerateTx: (tx, idempotencyKey) =>
+        services.job.findActiveByIdempotencyKeyTx(tx, idempotencyKey),
     },
+    paintings: services.painting,
+    storage: paintingStorage,
   });
   const mcp = createMcpModule({
     runtime: {
@@ -168,7 +206,12 @@ export function createBackend(services: BackendServices): BackendComposition {
     dataApiDependencies: {
       mcpServerMutations: mcp,
     },
+    jobRuntime,
     dispose: async () => {
+      // Jobs first: the drain gives in-flight handlers a bounded chance to land
+      // their terminal rows before the caller closes SQLite, and it keeps the
+      // oauth session alive for any authenticated request still in flight.
+      await jobRuntime.dispose();
       services.oauth.dispose();
       services.oauthSession.dispose();
       await chat.dispose();

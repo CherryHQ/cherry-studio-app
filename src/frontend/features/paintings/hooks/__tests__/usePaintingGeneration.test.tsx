@@ -1,9 +1,13 @@
+import type { JobSnapshot } from '@cherrystudio/universal/data/api/schemas/jobs';
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
-import type { Backend, PaintingGenerationSession } from '@/shared/contracts';
+import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import type { Backend } from '@/shared/contracts';
 
 import { usePaintingGeneration } from '../usePaintingGeneration';
 
@@ -21,22 +25,58 @@ const painting: Painting = {
   providerId: 'provider',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
-const mockGenerate = jest.fn<
-  ReturnType<PaintingGenerationSession['generate']>,
-  Parameters<PaintingGenerationSession['generate']>
->();
-const mockCancel = jest.fn();
-const mockDispose = jest.fn();
-const session: PaintingGenerationSession = {
-  cancel: mockCancel,
-  dispose: mockDispose,
-  generate: mockGenerate,
-};
-const mockCreateGenerationSession = jest.fn(() => session);
+
+function jobSnapshot(overrides: Partial<JobSnapshot>): JobSnapshot {
+  return {
+    attempt: 1,
+    cancelRequested: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    error: null,
+    finishedAt: null,
+    id: 'job-1',
+    idempotencyKey: null,
+    input: null,
+    maxAttempts: 1,
+    metadata: {},
+    output: null,
+    parentId: null,
+    priority: 0,
+    queue: 'painting',
+    scheduledAt: '2026-01-01T00:00:00.000Z',
+    scheduleId: null,
+    startedAt: '2026-01-01T00:00:00.000Z',
+    status: 'running',
+    timeoutMs: null,
+    type: 'painting.generate',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+const mockStartGeneration = jest.fn(async () => ({ jobId: 'job-1' }));
+const mockCancelGeneration = jest.fn(async () => undefined);
 const backend = {
-  paintings: { createGenerationSession: mockCreateGenerationSession },
+  paintings: { cancelGeneration: mockCancelGeneration, startGeneration: mockStartGeneration },
 } as unknown as Backend;
 const mockSyncPaintingQueries = jest.fn(async () => undefined);
+
+/** Per-test ledger state served by the mocked Data API. */
+let activeJobs: JobSnapshot[] = [];
+let jobById = new Map<string, JobSnapshot>();
+
+const dataApi = {
+  delete: jest.fn(),
+  get: jest.fn(async (path: string) => {
+    if (path === '/jobs') return activeJobs;
+    const jobId = path.replace('/jobs/', '');
+    const job = jobById.get(jobId);
+    if (!job) throw new Error(`Job not found: ${jobId}`);
+    return job;
+  }),
+  patch: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+} as unknown as jest.Mocked<ApiClient>;
 
 jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
   useSyncPaintingQueries: () => mockSyncPaintingQueries,
@@ -45,6 +85,7 @@ jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
 type GenerationApi = ReturnType<typeof usePaintingGeneration>;
 let api: GenerationApi | undefined;
 let renderer: ReactTestRenderer | undefined;
+let queryClient: QueryClient;
 
 function Probe() {
   const generation = usePaintingGeneration({ initialOutputs: [] });
@@ -52,6 +93,37 @@ function Probe() {
     api = generation;
   }, [generation]);
   return null;
+}
+
+async function mountProbe() {
+  await act(async () => {
+    renderer = create(
+      <QueryClientProvider client={queryClient}>
+        <DataApiProvider dataApi={dataApi}>
+          <BackendProvider backend={backend}>
+            <Probe />
+          </BackendProvider>
+        </DataApiProvider>
+      </QueryClientProvider>,
+    );
+  });
+}
+
+/** Flush act passes until the condition holds. Each pass yields a macrotask:
+ * react-query batches observer notifications through `setTimeout(0)`, so
+ * microtask-only passes would race the commit and flake. */
+async function waitForCondition(predicate: () => boolean) {
+  for (let index = 0; index < 20; index += 1) {
+    if (predicate()) {
+      return;
+    }
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+    });
+  }
+  throw new Error('Timed out waiting for condition');
 }
 
 const request = {
@@ -72,31 +144,36 @@ const request = {
   prompt: 'draw a cherry',
 };
 
-beforeEach(async () => {
+beforeEach(() => {
   jest.clearAllMocks();
   api = undefined;
-  mockGenerate.mockResolvedValue({ outputs: [output], painting });
-  await act(async () => {
-    renderer = create(
-      <BackendProvider backend={backend}>
-        <Probe />
-      </BackendProvider>,
-    );
+  activeJobs = [];
+  jobById = new Map();
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { gcTime: Infinity, retry: false } },
   });
 });
 
 afterEach(async () => {
   await act(async () => renderer?.unmount());
+  renderer = undefined;
+  queryClient.clear();
 });
 
 describe('usePaintingGeneration', () => {
-  it('maps image drafts into a backend session and reveals persisted outputs', async () => {
+  it('enqueues via the backend and reveals the outputs from the terminal job', async () => {
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await mountProbe();
+
     let result: Awaited<ReturnType<GenerationApi['generate']>> | undefined;
     await act(async () => {
       result = await api?.generate(request);
     });
 
-    expect(mockGenerate).toHaveBeenCalledWith({
+    expect(mockStartGeneration).toHaveBeenCalledWith({
       images: [
         {
           fileEntryId: request.attachments[0].fileEntryId,
@@ -117,49 +194,111 @@ describe('usePaintingGeneration', () => {
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
   });
 
-  it('keeps workflow failure as frontend error state and reuses the same session', async () => {
-    mockGenerate.mockRejectedValueOnce(new Error('network failed'));
+  it('surfaces a failed job as frontend error state and allows a retry', async () => {
+    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-fail' });
+    jobById.set(
+      'job-fail',
+      jobSnapshot({
+        error: { code: 'JOB_HANDLER_THREW', message: 'network failed', retryable: true },
+        id: 'job-fail',
+        status: 'failed',
+      }),
+    );
+    await mountProbe();
 
+    let settled: unknown;
     await act(async () => {
-      await expect(api?.generate(request)).rejects.toThrow('network failed');
+      settled = await api?.generate(request).catch((error: unknown) => error);
     });
+    expect(settled).toEqual(new Error('network failed'));
     expect(api?.error).toEqual(new Error('network failed'));
     expect(api?.status).toBe('idle');
 
-    await act(async () => {
-      await api?.generate(request);
-    });
-    expect(mockCreateGenerationSession).toHaveBeenCalledTimes(1);
-    expect(mockGenerate).toHaveBeenCalledTimes(2);
-  });
-
-  it('cancels the active backend session and disposes it on unmount', async () => {
-    let rejectGeneration: (error: Error) => void = () => undefined;
-    mockGenerate.mockImplementationOnce(
-      () =>
-        new Promise((_resolve, reject) => {
-          rejectGeneration = reject;
-        }),
+    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-2' });
+    jobById.set(
+      'job-2',
+      jobSnapshot({ id: 'job-2', output: { outputs: [output], painting }, status: 'completed' }),
     );
-    mockCancel.mockImplementationOnce(() => {
-      rejectGeneration(new Error('Painting generation cancelled'));
-    });
-
-    let result: Promise<unknown> | undefined;
+    // Two act passes: the first lets `startGeneration` resolve and exits so act
+    // flushes the enqueue render (the poll query only subscribes then); awaiting
+    // the result inside that same act would deadlock on its own flush.
+    let retry: Promise<unknown> | undefined;
     await act(async () => {
-      result = api?.generate(request).catch((error) => error);
+      retry = api?.generate(request);
       await Promise.resolve();
     });
     await act(async () => {
+      await retry;
+    });
+    expect(api?.status).toBe('revealing');
+    expect(mockStartGeneration).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects the enqueue failure without touching the ledger', async () => {
+    mockStartGeneration.mockRejectedValueOnce(new Error('validation failed'));
+    await mountProbe();
+
+    let settled: unknown;
+    await act(async () => {
+      settled = await api?.generate(request).catch((error: unknown) => error);
+    });
+    expect(settled).toEqual(new Error('validation failed'));
+    expect(api?.error).toEqual(new Error('validation failed'));
+    expect(api?.status).toBe('idle');
+  });
+
+  it('cancels through the backend and settles when the job reports cancelled', async () => {
+    jobById.set('job-1', jobSnapshot({ status: 'running' }));
+    await mountProbe();
+
+    let settled: Promise<unknown> | undefined;
+    await act(async () => {
+      settled = api?.generate(request).catch((error) => error);
+      await Promise.resolve();
+    });
+    expect(api?.status).toBe('generating');
+
+    jobById.set(
+      'job-1',
+      jobSnapshot({
+        error: { code: 'JOB_CANCELLED', message: 'Cancelled by user', retryable: false },
+        status: 'cancelled',
+      }),
+    );
+    await act(async () => {
       api?.cancel();
-      await result;
+      await queryClient.refetchQueries();
+      await settled;
     });
 
-    expect(mockCancel).toHaveBeenCalledTimes(1);
-    expect(api?.error).toEqual(new Error('Painting generation cancelled'));
+    expect(mockCancelGeneration).toHaveBeenCalledWith('job-1');
+    expect(api?.error).toEqual(new Error('Cancelled by user'));
+    expect(api?.status).toBe('idle');
+  });
 
-    await act(async () => renderer?.unmount());
-    renderer = undefined;
-    expect(mockDispose).toHaveBeenCalledTimes(1);
+  it('adopts a still-active generation on mount and reveals its result', async () => {
+    activeJobs = [jobSnapshot({ status: 'running' })];
+    jobById.set('job-1', jobSnapshot({ status: 'running' }));
+    await mountProbe();
+    await waitForCondition(() => api?.status === 'generating');
+
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await waitForCondition(() => api?.status === 'revealing');
+
+    expect(api?.outputs).toEqual([output]);
+    expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
+  });
+
+  it('does not adopt anything when the ledger has no active generation', async () => {
+    await mountProbe();
+
+    expect(api?.status).toBe('idle');
+    expect(dataApi.get).toHaveBeenCalledWith('/jobs', expect.anything());
   });
 });
