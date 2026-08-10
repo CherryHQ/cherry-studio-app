@@ -24,6 +24,7 @@ module.exports = {
     '/__tests__/_',
   ],
   moduleNameMapper: {
+    '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
     '^lucide-uniwind/png/generated/(.*)$':
       '<rootDir>/packages/lucide-uniwind/src/png-icons/generated/$1',
     '^lucide-uniwind/png$': '<rootDir>/packages/lucide-uniwind/src/png-icons/index.ts',
@@ -43,7 +44,7 @@ module.exports = {
   transformIgnorePatterns: [
     // `fractional-indexing` is ESM-only (`"type": "module"`, no CJS build), so it
     // needs transforming for any suite that imports it directly.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing)))',
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing|voyage-ai-provider|@opeoginni)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

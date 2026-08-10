@@ -1,15 +1,32 @@
-import { extensionRegistry } from '@cherrystudio/ai-core/provider';
+import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
+import { describe, expect, it } from 'vitest';
 
-import { extensions } from '../extensions';
-import { registerProviderExtensions } from '../factory';
+import { getAiSdkProviderId } from '../factory';
+import { makeModel, makeProvider } from './fixtures';
 
-describe('registerProviderExtensions', () => {
-  it('registers every portable extension and remains idempotent', () => {
-    registerProviderExtensions();
-    registerProviderExtensions();
+describe('getAiSdkProviderId — resolves from the model active endpoint (#B3)', () => {
+  const provider = makeProvider({
+    id: 'silicon',
+    defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+    endpointConfigs: {
+      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
+        baseUrl: 'https://api.siliconflow.cn/v1',
+        adapterFamily: 'openai-compatible',
+      },
+      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {
+        baseUrl: 'https://api.siliconflow.cn',
+        adapterFamily: 'anthropic',
+      },
+    },
+  });
 
-    for (const extension of extensions) {
-      expect(extensionRegistry.has(extension.config.name)).toBe(true);
-    }
+  it('uses the model active endpoint adapterFamily, not the provider default', () => {
+    const model = makeModel({ endpointTypes: [ENDPOINT_TYPE.ANTHROPIC_MESSAGES] });
+    expect(getAiSdkProviderId(provider, model)).toBe('anthropic');
+  });
+
+  it('falls back to the provider default endpoint when the model declares none', () => {
+    const model = makeModel({ endpointTypes: undefined });
+    expect(getAiSdkProviderId(provider, model)).toBe('openai-compatible');
   });
 });

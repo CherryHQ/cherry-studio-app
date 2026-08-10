@@ -117,6 +117,13 @@ export function formatOllamaApiHost(baseURL = ''): string {
   return normalized ? `${normalized}/api` : '';
 }
 
+export function withoutTrailingApiVersion(baseURL = ''): string {
+  return baseURL
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/v\d+(?:alpha|beta)?$/i, '');
+}
+
 function hasApiVersion(value: string): boolean {
   const versionPattern = /\/v\d+(?:alpha|beta)?(?:\/|$)/i;
   try {

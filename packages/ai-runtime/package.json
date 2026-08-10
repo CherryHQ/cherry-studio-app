@@ -47,6 +47,7 @@
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "^4.0.96",
     "@ai-sdk/anthropic": "^3.0.79",
+    "@ai-sdk/bytedance": "1.0.29",
     "@ai-sdk/cerebras": "^2.0.54",
     "@ai-sdk/gateway": "^3.0.121",
     "@ai-sdk/google": "^3.0.64",
@@ -63,10 +64,12 @@
     "@cherrystudio/ai-core": "workspace:*",
     "@cherrystudio/provider-registry": "workspace:*",
     "@cherrystudio/universal": "workspace:*",
+    "@opeoginni/github-copilot-openai-compatible": "1.0.0",
     "ai": "^6.0.143",
     "crypto-es": "^3.1.3",
     "ollama-ai-provider-v2": "3.3.1",
     "tokenx": "^1.1.0",
+    "voyage-ai-provider": "3.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

@@ -48,11 +48,11 @@ describe('DMXAPI chat provider', () => {
     });
   });
 
-  test('does not expose image generation', () => {
+  test('exposes the migrated image-generation transport', () => {
     const provider = createProvider(vi.fn() as never);
 
-    expect(provider.imageModel).toBeUndefined();
-    expect(DmxapiExtension.config.supportsImageGeneration).toBe(false);
+    expect(provider.imageModel).toBeTypeOf('function');
+    expect(DmxapiExtension.config.supportsImageGeneration).toBe(true);
   });
 });
 

@@ -1,3 +1,17 @@
+/**
+ * NewAPI Provider
+ *
+ * Multi-backend API gateway (One API / New API) that routes models by endpoint_type:
+ * - anthropic -> Anthropic SDK
+ * - gemini -> Google SDK
+ * - openai-response -> OpenAI Responses SDK
+ * - openai / image-generation -> OpenAI Chat SDK
+ * - embedding -> OpenAI Compatible Embedding SDK
+ * - jina-rerank -> OpenAI Compatible Reranking SDK
+ * - fallback -> OpenAI Compatible SDK
+ *
+ * The endpointType is set per-request via provider settings, based on the model's endpoint_type field.
+ */
 import { AnthropicMessagesLanguageModel } from '@ai-sdk/anthropic/internal';
 import { GoogleGenerativeAILanguageModel } from '@ai-sdk/google/internal';
 import {
@@ -6,9 +20,16 @@ import {
   OpenAICompatibleImageModel,
 } from '@ai-sdk/openai-compatible';
 import { OpenAIResponsesLanguageModel } from '@ai-sdk/openai/internal';
-import type { EmbeddingModelV3, ImageModelV3, LanguageModelV3, ProviderV3 } from '@ai-sdk/provider';
+import type {
+  EmbeddingModelV3,
+  ImageModelV3,
+  LanguageModelV3,
+  ProviderV3,
+  RerankingModelV3,
+} from '@ai-sdk/provider';
 import type { FetchFunction } from '@ai-sdk/provider-utils';
 import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
+import { OpenAICompatibleRerankingModel } from '@cherrystudio/ai-sdk-provider';
 
 export const NEWAPI_PROVIDER_NAME = 'newapi' as const;
 
@@ -18,7 +39,8 @@ export type NewApiEndpointType =
   | 'anthropic'
   | 'gemini'
   | 'image-generation'
-  | 'jina-rerank';
+  | 'jina-rerank'
+  | 'embedding';
 
 export interface NewApiProviderSettings {
   apiKey?: string;
@@ -33,6 +55,7 @@ export interface NewApiProvider extends ProviderV3 {
   languageModel(modelId: string): LanguageModelV3;
   embeddingModel(modelId: string): EmbeddingModelV3;
   imageModel(modelId: string): ImageModelV3;
+  rerankingModel(modelId: string): RerankingModelV3;
 }
 
 export function createNewApi(options: NewApiProviderSettings = {}): NewApiProvider {
@@ -45,6 +68,11 @@ export function createNewApi(options: NewApiProviderSettings = {}): NewApiProvid
       description: 'NewAPI',
     });
 
+  // Note: Do not hard-code `Content-Type: application/json` here. `postJsonToApi`
+  // already defaults it for JSON endpoints, while `postFormDataToApi` (used by
+  // `OpenAICompatibleImageModel` for `/images/edits`) relies on fetch to set
+  // `multipart/form-data; boundary=...` automatically — forcing JSON here breaks
+  // image edits with "invalid character '-' in numeric literal" on the server.
   const authHeaders = (): Record<string, string> => ({
     Authorization: `Bearer ${resolveApiKey()}`,
     ...options.headers,
@@ -61,6 +89,11 @@ export function createNewApi(options: NewApiProviderSettings = {}): NewApiProvid
       headers: () => ({ ...headers, 'x-api-key': resolveApiKey() }),
       fetch: customFetch,
       supportedUrls: () => ({ 'image/*': [/^https?:\/\/.*$/] }),
+      // NewAPI may route Claude models to Vertex/Bedrock backends, which reject the
+      // `structured-outputs-2025-11-13` beta header added by @ai-sdk/anthropic for
+      // claude-opus-4-6 / claude-sonnet-4-6 / claude-*-4-5 / claude-opus-4-1. Falling
+      // back to function-tool-based structured outputs keeps tool use (incl. MCP) working
+      // across all downstream backends. See issue #14375.
       supportsNativeStructuredOutput: false,
     });
   };
@@ -101,29 +134,46 @@ export function createNewApi(options: NewApiProviderSettings = {}): NewApiProvid
         return createGeminiModel(modelId);
       case 'openai-response':
         return createResponsesModel(modelId);
+      case 'openai':
+      case 'image-generation':
+        return createCompatibleModel(modelId);
+      case 'embedding':
+        throw new Error('Use embeddingModel() for embedding endpoint type');
+      case 'jina-rerank':
+        throw new Error('Use rerankingModel() for jina-rerank endpoint type');
       default:
         return createCompatibleModel(modelId);
     }
   };
 
-  const provider = Object.assign((modelId: string) => createChatModel(modelId), {
-    specificationVersion: 'v3' as const,
-    languageModel: createChatModel,
-    embeddingModel: (modelId: string) =>
-      new OpenAICompatibleEmbeddingModel(modelId, {
-        provider: `${NEWAPI_PROVIDER_NAME}.embedding`,
-        url,
-        headers: authHeaders,
-        fetch: customFetch,
-      }),
-    imageModel: (modelId: string) =>
-      new OpenAICompatibleImageModel(modelId, {
-        provider: `${NEWAPI_PROVIDER_NAME}.image`,
-        url,
-        headers: authHeaders,
-        fetch: customFetch,
-      }),
-  }) as NewApiProvider;
+  const provider = (modelId: string) => createChatModel(modelId);
+  provider.specificationVersion = 'v3' as const;
 
-  return provider;
+  provider.languageModel = createChatModel;
+
+  provider.embeddingModel = (modelId: string) =>
+    new OpenAICompatibleEmbeddingModel(modelId, {
+      provider: `${NEWAPI_PROVIDER_NAME}.embedding`,
+      url,
+      headers: authHeaders,
+      fetch: customFetch,
+    });
+
+  provider.imageModel = (modelId: string) =>
+    new OpenAICompatibleImageModel(modelId, {
+      provider: `${NEWAPI_PROVIDER_NAME}.image`,
+      url,
+      headers: authHeaders,
+      fetch: customFetch,
+    });
+
+  provider.rerankingModel = (modelId: string) =>
+    new OpenAICompatibleRerankingModel(modelId, {
+      provider: `${NEWAPI_PROVIDER_NAME}.rerank`,
+      url,
+      headers: authHeaders,
+      fetch: customFetch,
+    });
+
+  return provider as NewApiProvider;
 }

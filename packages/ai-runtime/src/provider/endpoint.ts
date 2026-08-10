@@ -1,10 +1,10 @@
 /**
  * Endpoint + AI SDK provider id resolution. See
- * `docs/references/ai/adapter-family.md` in desktop for design rationale.
+ * `docs/references/ai/adapter-family.md` for design rationale.
  */
 
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { type AppProviderId, appProviderIds } from '../types';
@@ -22,9 +22,33 @@ export interface ResolvedEndpoint {
   providerOptionsKey?: string;
 }
 
+function getRawModelId(model: Model): string {
+  if (model.apiModelId) return model.apiModelId;
+  const separator = model.id.indexOf('::');
+  return separator >= 0 ? model.id.slice(separator + 2) : model.id;
+}
+
 /**
- * Priority: `model.endpointTypes[0]` -> gateway per-model route ->
- * `provider.defaultChatEndpoint` -> `undefined`.
+ * The model id as it must appear on the wire.
+ *
+ * Gemini's `/models` listing names models `models/<id>`; the prefix is stripped at
+ * ingestion today, but rows synced before that still carry it. Both forms build the
+ * same request URL, so the difference is invisible — except that `@ai-sdk/google`
+ * matches its feature allowlists (googleSearch, urlContext, code execution, …)
+ * against the id EXACTLY, so a prefixed id silently drops those tools from the
+ * request. Normalise once here rather than teaching every consumer about it.
+ */
+export function resolveWireModelId(model: Model, endpointType: EndpointType | undefined): string {
+  const rawId = getRawModelId(model);
+  return endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT
+    ? rawId.replace(/^models\//, '')
+    : rawId;
+}
+
+/**
+ * Priority: `model.endpointTypes[0]` → gateway per-model route → `provider.defaultChatEndpoint` →
+ * `undefined`. The gateway step resolves the wire endpoint from the model id for multi-backend
+ * gateways (AiHubMix, …) whose models carry no explicit `endpointTypes` (see `gatewayRouting`).
  * `getBaseUrl` applies its own fallback among `endpointConfigs`.
  */
 export function resolveEffectiveEndpoint(provider: Provider, model: Model): ResolvedEndpoint {
@@ -38,7 +62,7 @@ export function resolveEffectiveEndpoint(provider: Provider, model: Model): Reso
   return { endpointType, baseUrl: getBaseUrl(provider, endpointType), providerOptionsKey };
 }
 
-/** Maps base id -> variant id (`openai` + `openai-chat-completions` -> `openai-chat`). No-op when no variant exists. */
+/** Maps base id → variant id (`openai` + `openai-chat-completions` → `openai-chat`). No-op when no variant exists. */
 export function resolveProviderVariant(
   baseProviderId: AppProviderId,
   endpointType: EndpointType | undefined,
@@ -61,14 +85,6 @@ export function resolveProviderVariant(
   return baseProviderId;
 }
 
-function resolveKnownProviderId(id: string | undefined): AppProviderId | undefined {
-  if (!id || !(id in appProviderIdMap)) {
-    return undefined;
-  }
-
-  return appProviderIdMap[id];
-}
-
 export function resolveAiSdkProviderId(
   provider: Provider,
   endpointType: EndpointType | undefined,
@@ -76,15 +92,16 @@ export function resolveAiSdkProviderId(
   const adapterFamily = endpointType
     ? provider.endpointConfigs?.[endpointType]?.adapterFamily
     : undefined;
-  const adapterProviderId = resolveKnownProviderId(adapterFamily);
-  if (adapterProviderId) {
-    return resolveProviderVariant(adapterProviderId, endpointType);
+  if (adapterFamily && adapterFamily in appProviderIdMap) {
+    return resolveProviderVariant(appProviderIdMap[adapterFamily], endpointType);
   }
-
   return appProviderIdMap['openai-compatible'];
 }
 
-/** Maps the runtime adapter id to the namespace its AI SDK model reads. */
+/**
+ * Maps the registered runtime provider id to the namespace its AI SDK model
+ * reads from `providerOptions`.
+ */
 export function resolveProviderOptionsKey(
   providerId: AppProviderId,
   context?: {

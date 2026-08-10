@@ -1,9 +1,9 @@
 import { extensionRegistry } from '@cherrystudio/ai-core/provider';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { ENDPOINT_TYPE, type Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import type { AppProviderId } from '../types';
-import { resolveAiSdkProviderId } from './endpoint';
+import { resolveAiSdkProviderId, resolveEffectiveEndpoint } from './endpoint';
 import { extensions } from './extensions';
 
 export function registerProviderExtensions(): void {
@@ -14,9 +14,15 @@ export function registerProviderExtensions(): void {
   }
 }
 
-export function getAiSdkProviderId(provider: Provider): AppProviderId {
-  return resolveAiSdkProviderId(
-    provider,
-    provider.defaultChatEndpoint ?? ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  );
+registerProviderExtensions();
+
+/**
+ * Resolve the `@ai-sdk` provider id (adapter family) for the model's **active** endpoint
+ * (`model.endpointTypes[0]`, falling back to `provider.defaultChatEndpoint`, then
+ * `OPENAI_CHAT_COMPLETIONS`), so per-model routing matches the endpoint the request uses.
+ */
+export function getAiSdkProviderId(provider: Provider, model: Model): AppProviderId {
+  const endpointType =
+    resolveEffectiveEndpoint(provider, model).endpointType ?? ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS;
+  return resolveAiSdkProviderId(provider, endpointType);
 }

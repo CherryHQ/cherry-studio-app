@@ -52,3 +52,6 @@ export function splitImageParamValues(paramValues: Record<string, unknown>): Spl
     vendorBag,
   };
 }
+
+/** Desktop-compatible name retained for provider wire ports. */
+export const splitParamValues = splitImageParamValues;
