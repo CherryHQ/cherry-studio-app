@@ -47,13 +47,12 @@ describe('AI runtime desktop provenance', () => {
     expect(report.errors).toContain('unmapped desktop source: src/main/ai/new.ts');
   });
 
-  it('rejects a newly tracked mobile file with no classification', async () => {
+  it('rejects a new mobile file with no classification before it is committed', async () => {
     const fixture = await createFixture();
     await writeFile(
       path.join(fixture.mobileRoot, 'src/backend/ai/new.ts'),
       'export const added = 1;\n',
     );
-    commitAll(fixture.mobileRoot, 'add mobile source');
 
     const report = await auditDesktopSync(fixture);
 
@@ -85,7 +84,6 @@ describe('AI runtime desktop provenance', () => {
     const fixture = await createFixture();
     const target = 'src/backend/ai/newAdapter.ts';
     await writeFile(path.join(fixture.mobileRoot, target), 'export const adapter = 1;\n');
-    commitAll(fixture.mobileRoot, 'add backend adapter');
     fixture.map.backendOwned.push({
       classification: 'mobile-extension',
       evidence: [`mobile:${target}`],

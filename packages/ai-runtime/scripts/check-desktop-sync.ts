@@ -256,7 +256,9 @@ export async function auditDesktopSync(options: AuditOptions): Promise<DesktopSy
     '--',
     map.mobile.sourceRoot,
   ]);
-  const currentBackendFiles = gitLines(mobileRoot, ['ls-files', '--', map.mobile.sourceRoot]);
+  const currentBackendFiles = (await filesBelow(path.join(mobileRoot, map.mobile.sourceRoot))).map(
+    (file) => `${map.mobile.sourceRoot}/${file}`,
+  );
 
   for (const duplicate of duplicates(desktopSources))
     errors.push(`duplicate desktop source: ${duplicate}`);

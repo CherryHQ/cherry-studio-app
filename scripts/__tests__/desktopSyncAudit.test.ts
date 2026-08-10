@@ -104,6 +104,34 @@ function delegatedAiRuntimeMap(
   )}\n`;
 }
 
+function delegatedOAuthMap(
+  files: Array<{
+    classification: 'blocked' | 'explicit-exclusion' | 'mobile-extension' | 'semantic-port';
+    contents: string;
+    source: string;
+  }>,
+) {
+  return `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      desktop: {
+        sourcePaths: [
+          'src/main/services/oauth',
+          'src/main/services/CopilotService.ts',
+          'src/renderer/services/oauth.ts',
+        ],
+        files: files.map(({ classification, contents, source }) => ({
+          classification,
+          source,
+          sourceSha256: createHash('sha256').update(contents).digest('hex'),
+        })),
+      },
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 afterAll(() => {
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true });
@@ -521,6 +549,78 @@ describe('auditRepositories', () => {
     await expect(
       auditRepositories({ desktopRoot, domains: ['ai-runtime'], manifest, mobileRoot }),
     ).rejects.toThrow(/does not cover.*unclassified:src\/main\/ai\/unmapped\.ts/);
+  });
+
+  test('overlays delegated OAuth classifications without hiding unrelated service blockers', async () => {
+    const runtime = 'export const runtime = true;\n';
+    const copilot = 'export const copilot = true;\n';
+    const codex = 'export const codex = true;\n';
+    const renderer = 'export const rendererOauth = true;\n';
+    const unrelated = 'export const unrelated = true;\n';
+    const desktopRoot = createRepository('CherryStudio', {
+      ...sharedPackageFiles('desktop'),
+      'src/main/services/CopilotService.ts': copilot,
+      'src/main/services/UnrelatedService.ts': unrelated,
+      'src/main/services/oauth/runtime/OAuthRuntimeService.ts': runtime,
+      'src/main/services/oauth/runtime/providers/codex.ts': codex,
+      'src/renderer/services/oauth.ts': renderer,
+    });
+    const mobileRoot = createRepository('cherry-studio-app', {
+      ...sharedPackageFiles('mobile'),
+      'src/backend/services/oauth/desktop-sync-map.json': delegatedOAuthMap([
+        {
+          classification: 'semantic-port',
+          contents: copilot,
+          source: 'src/main/services/CopilotService.ts',
+        },
+        {
+          classification: 'semantic-port',
+          contents: runtime,
+          source: 'src/main/services/oauth/runtime/OAuthRuntimeService.ts',
+        },
+        {
+          classification: 'blocked',
+          contents: codex,
+          source: 'src/main/services/oauth/runtime/providers/codex.ts',
+        },
+        {
+          classification: 'semantic-port',
+          contents: renderer,
+          source: 'src/renderer/services/oauth.ts',
+        },
+      ]),
+      'src/backend/services/oauth/runtime/OAuthRuntimeService.ts': runtime,
+    });
+    const manifest = manifestWithDomains({
+      services: {
+        sourceCommit: null,
+        sourcePaths: ['src/main/services'],
+        sourceSha256: null,
+        status: 'unbaselined',
+        strategy: 'semantic-port',
+        targetPaths: ['src/backend/services'],
+      },
+    });
+    manifest.delegatedManifests = {
+      'services:oauth': 'src/backend/services/oauth/desktop-sync-map.json',
+    };
+
+    const report = await auditRepositories({
+      desktopRoot,
+      domains: ['services'],
+      manifest,
+      mobileRoot,
+    });
+    const domain = report.domains[0];
+
+    expect(domain.classifications['semantic-port']).toEqual([
+      'src/main/services/CopilotService.ts',
+      'src/main/services/oauth/runtime/OAuthRuntimeService.ts',
+    ]);
+    expect(domain.classifications.blocked).toEqual([
+      'UnrelatedService.ts',
+      'src/main/services/oauth/runtime/providers/codex.ts',
+    ]);
   });
 });
 

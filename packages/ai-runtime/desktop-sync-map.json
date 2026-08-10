@@ -10,7 +10,7 @@
         "source": "src/main/ai/AiService.ts",
         "sourceSha256": "82589115d8eca855da3b258de2b6c521a7ca77e23389f23b77c09cf41554387c",
         "target": "src/backend/ai/AiService.ts",
-        "targetSha256": "ebe14fe315bb1facee1b7dcf97c07433778b9f2a45c6795d0ff3498bfa3eb39f"
+        "targetSha256": "c38a8394475ec01384516446067bb4c436b2faf4174784f998d2c83d6a35cd61"
       },
       {
         "classification": "semantic-port",
@@ -19,7 +19,7 @@
         "source": "src/main/ai/__tests__/AiService.test.ts",
         "sourceSha256": "262f5b7d4091f4dd0ebbec61e6ce5030eb184274521ef456dd52c5c324363cab",
         "target": "src/backend/ai/__tests__/AiService.test.ts",
-        "targetSha256": "75f3b078f0251ab7d1a3ea312d6ff8eae37bc311167e0dcc73efa2c412115d40"
+        "targetSha256": "a5b747e0188bf4c3f68d4c526aaf167283d614303956c45f05385dafa144c404"
       },
       {
         "classification": "blocked",
@@ -573,7 +573,7 @@
         "source": "src/main/ai/constants.ts",
         "sourceSha256": "bd5336b39c46bde582faa10db951ff134577e95917090f4b2befb1561cbde81a",
         "target": "packages/ai-runtime/src/constants.ts",
-        "targetSha256": "785ad225bc82b91676a5a326a7ea2476866e3e5518d97178c3d1605953c8575b"
+        "targetSha256": "63e5cfd7dc7b76ef22c3fcacee07edd2dca5398fee1cb1c9c93237dcea1ddee5"
       },
       {
         "classification": "blocked",
@@ -1624,952 +1624,1208 @@
         "sourceSha256": "240a0767bce911c6b20ab259d70a31a3afe4f061e391f8b9266be14c59ba69d4"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/BedrockExtension.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/BedrockExtension.test.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/BedrockExtension.test.ts",
-        "sourceSha256": "decc0e6c463915c8c036a8cd623e99ddd1eb84b36af29700e01bdc0479095f90"
+        "sourceSha256": "decc0e6c463915c8c036a8cd623e99ddd1eb84b36af29700e01bdc0479095f90",
+        "target": "packages/ai-runtime/src/provider/__tests__/BedrockExtension.test.ts",
+        "targetSha256": "232393c409cd3c03410de11355a0b1d2f97822ae3c0509a60d8a902658afeb28"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/aiSdkToolMetadata.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/aiSdkToolMetadata.test.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/aiSdkToolMetadata.test.ts",
-        "sourceSha256": "a9c9abe0f5eeec37cc5b642a66f31779aa56be9a35f3f0a2c988e6d8fc8a7a11"
+        "sourceSha256": "a9c9abe0f5eeec37cc5b642a66f31779aa56be9a35f3f0a2c988e6d8fc8a7a11",
+        "target": "packages/ai-runtime/src/provider/__tests__/aiSdkToolMetadata.test.ts",
+        "targetSha256": "1420fa665bdc2257a3b447bc862ce58d242f5287b72e62046b3b328e63988a6b"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/ark.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/ark.test.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/ark.test.ts",
-        "sourceSha256": "fd005ffcd6a865866b317f087b19a5ad3f4eda07679d689a10f5da23c1acd258"
+        "sourceSha256": "fd005ffcd6a865866b317f087b19a5ad3f4eda07679d689a10f5da23c1acd258",
+        "target": "packages/ai-runtime/src/provider/__tests__/ark.test.ts",
+        "targetSha256": "19aa48f8c07610a17741aae817d1867628bb7b52363a564e56ece8bf1c1a6daa"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/codex.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/codex.test.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/codex.test.ts",
-        "sourceSha256": "fac96d1b24d802e4c92d5f9e0132c815e2719600e0a1d7dedcaa60c97a7fe12a"
+        "sourceSha256": "fac96d1b24d802e4c92d5f9e0132c815e2719600e0a1d7dedcaa60c97a7fe12a",
+        "target": "packages/ai-runtime/src/provider/__tests__/codex.test.ts",
+        "targetSha256": "6d1a4603f36b129558224b3bdbd4bab3ed56d959c239ed20e4fe4ac29b5c0993"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/provider/__tests__/config.test.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "reason": "Mobile credential, fetch, application-header, and lifecycle dependencies remain behind the backend provider adapter.",
         "source": "src/main/ai/provider/__tests__/config.test.ts",
         "sourceSha256": "db84d5b4a9c61c9693bb4e6b2478051a577a6f2fb899baebc93a392f271078be",
         "target": "src/backend/ai/provider/__tests__/config.test.ts",
-        "targetSha256": "f8d86c1bbcfb02970be1fa31c37457ae8a9b0388dffba6c0ab9cc49bb1f35ea5"
+        "targetSha256": "fbd0a04e3a0c415618a983d2c9dee03194c2348c4f2f0973a5215ac163e1a8d4"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/endpoint.test.ts",
         "sourceSha256": "dbb2577cf4a31b334db5a50728fcd9a2d0e4feca81fa251fd935199107a18004",
         "target": "packages/ai-runtime/src/provider/__tests__/endpoint.test.ts",
-        "targetSha256": "37578d821d62725788a3ec9226479401d7e50ae395fc3f0f6eb711e63690bf01"
+        "targetSha256": "2497b89f908a7ff60736495c7e7663431906cdfb50a67ef3d0010d0c391fb825"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/factory.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/factory.test.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/factory.test.ts",
-        "sourceSha256": "1328e793845e881094b47501e045a2616b9a8b14b60b28161ce6ae5f7e710145"
+        "sourceSha256": "1328e793845e881094b47501e045a2616b9a8b14b60b28161ce6ae5f7e710145",
+        "target": "packages/ai-runtime/src/provider/__tests__/factory.test.ts",
+        "targetSha256": "1dbee7aea5cc97a0aa81e32ca3b47b9d7b5d5fcc38f7c40d3dcb222a2702dcc5"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/grokCli.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/grokCli.test.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/grokCli.test.ts",
-        "sourceSha256": "897b25e808a7c43ae4f611055fadad651ed2e11e2e0464651a6df96471fd6293"
+        "sourceSha256": "897b25e808a7c43ae4f611055fadad651ed2e11e2e0464651a6df96471fd6293",
+        "target": "packages/ai-runtime/src/provider/__tests__/grokCli.test.ts",
+        "targetSha256": "bda14ccdc895058d712fff00a3578abb99c1ba41145e37837305a8fa173f330e"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/listModels.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/__tests__/listModels.test.ts",
         "sourceSha256": "006541a235777fa3dac4557c7f9b6d2b995b414050eaa982234e93cd137009e0",
         "target": "packages/ai-runtime/src/provider/__tests__/listModels.test.ts",
-        "targetSha256": "8e5e989382090830f02d45da86224b01604852c7d285654983f673bce8f1552b"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/__tests__/openaiCompatibleEmbeddingPatch.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/__tests__/openaiCompatibleEmbeddingPatch.test.ts",
-        "sourceSha256": "7418e8f111995bfb50346aabc9b31f92b014eae180c8d626c772901cfbf88a9c"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/__tests__/openaiResponsesReasoningPatch.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/__tests__/openaiResponsesReasoningPatch.test.ts",
-        "sourceSha256": "35b98e8697f161de790c96a9ef1ee782d31bb4918688b35045f10dd88c9ff6ce"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/serverToolDelivery.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/__tests__/serverToolDelivery.test.ts",
-        "sourceSha256": "afdc79458c981b5ca0646d85e4a795e03e80937d65654aaf4cddb96867ffb951"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/__tests__/zhipuWebSearch.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/__tests__/zhipuWebSearch.test.ts",
-        "sourceSha256": "6c95ae5d9145ad04ef036eb1f7e190fd9c1dc2a03d54b60b782b3771ad971f7b"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/ark.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/ark.ts",
-        "sourceSha256": "91a1cc370f8693162eacc298ad027e5f7fc4d7644dee476a4f62ce74e8da8c88"
+        "targetSha256": "64ec6408ec696bb8b41ae17173c71572567f90323f073c6090dcfe2b5259c70a"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/cherryai.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/__tests__/openaiCompatibleEmbeddingPatch.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/__tests__/openaiCompatibleEmbeddingPatch.test.ts",
+        "sourceSha256": "7418e8f111995bfb50346aabc9b31f92b014eae180c8d626c772901cfbf88a9c",
+        "target": "packages/ai-runtime/src/provider/__tests__/openaiCompatibleEmbeddingPatch.test.ts",
+        "targetSha256": "35132c8131c4ce7d77e9e12cbc125c96d9d0c20a372e8744228823d1ff753560"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/__tests__/openaiResponsesReasoningPatch.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/__tests__/openaiResponsesReasoningPatch.test.ts",
+        "sourceSha256": "35b98e8697f161de790c96a9ef1ee782d31bb4918688b35045f10dd88c9ff6ce",
+        "target": "packages/ai-runtime/src/provider/__tests__/openaiResponsesReasoningPatch.test.ts",
+        "targetSha256": "dac9d476c0884447c4bc095473a942797706029afc01f2f8fc714711595dd9ff"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/__tests__/serverToolDelivery.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/__tests__/serverToolDelivery.test.ts",
+        "sourceSha256": "afdc79458c981b5ca0646d85e4a795e03e80937d65654aaf4cddb96867ffb951",
+        "target": "packages/ai-runtime/src/provider/__tests__/serverToolDelivery.test.ts",
+        "targetSha256": "d839a33ae27a88302c468403696359388aa2d0a8bad9c109e672097ff74000ce"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/zhipuWebSearch.test.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/__tests__/zhipuWebSearch.test.ts",
+        "sourceSha256": "6c95ae5d9145ad04ef036eb1f7e190fd9c1dc2a03d54b60b782b3771ad971f7b",
+        "target": "packages/ai-runtime/src/provider/__tests__/zhipuWebSearch.test.ts",
+        "targetSha256": "894873edd48cab430936e2c9fd0230d9d24a295b4f31b6385d7ebce8ded9965d"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/ark.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/ark.ts",
+        "sourceSha256": "91a1cc370f8693162eacc298ad027e5f7fc4d7644dee476a4f62ce74e8da8c88",
+        "target": "packages/ai-runtime/src/provider/ark.ts",
+        "targetSha256": "2389e7624e985fd2b44ad5cf3365c06ac8078b5da3a23276be6f56cfc3fd93c7"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/cherryai.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/cherryai.ts",
         "sourceSha256": "85c93d350aa0f4795eb686e5804e8f5066429e1f0c9bbffabfa55c6551d734b9",
         "target": "packages/ai-runtime/src/provider/cherryai.ts",
         "targetSha256": "c454c8ee18e80452fccd7b5ddbe7d2645555246fb24233a212f24109bbeb9abe"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/codex.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/codex.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/codex.ts",
-        "sourceSha256": "a847ce079c6f519eaaa0318e2c1cd843594973191f205299e079c51cbc760604"
+        "sourceSha256": "a847ce079c6f519eaaa0318e2c1cd843594973191f205299e079c51cbc760604",
+        "target": "packages/ai-runtime/src/provider/codex.ts",
+        "targetSha256": "b2aa7f9845a3b2dcebb1365efa3ebe0c5ffcf1368c10f8b0865304d07dce4e82"
       },
       {
         "classification": "semantic-port",
         "evidence": ["mobile:src/backend/ai/provider/config.ts"],
-        "reason": "Platform-coupled semantic behavior remains in the mobile backend adapter; portable dependencies use declared package subpaths.",
+        "reason": "Mobile credential, fetch, application-header, and lifecycle dependencies remain behind the backend provider adapter.",
         "source": "src/main/ai/provider/config.ts",
         "sourceSha256": "c68f0aa51b7b888e7d18c5827947f2b358165da3afac9a4f4ee6bdfd568e8d36",
         "target": "src/backend/ai/provider/config.ts",
-        "targetSha256": "a68f7de41ec8b169b19a7554e92ce66b0fb397088ecb54721393c2dc53124c97"
+        "targetSha256": "81708c7e166191c88e6ab7cb91885260db19bec5b7e744e4ff6bb9242e7cea64"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/constants.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/constants.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/constants.ts",
-        "sourceSha256": "5946fb5297f91386bc591170949bae0dde75e15dc8e5397f11725deba927ced4"
+        "sourceSha256": "5946fb5297f91386bc591170949bae0dde75e15dc8e5397f11725deba927ced4",
+        "target": "packages/ai-runtime/src/provider/constants.ts",
+        "targetSha256": "3936dd9f42b8007fdbbefd1b31a5920dd4e0ae89c230bf054ae20513fbaf9422"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/credential.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/credential.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/credential.ts",
-        "sourceSha256": "4c7cb44a0b35ad3e7d7057fd93fc5e150011fd0d9dd631ca7f2fefaa65b108ea"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/aihubmixFlux.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/aihubmixFlux.test.ts",
-        "sourceSha256": "0ca9e77f9467922774b431a51eab7635d890b44faac31a0dfb72fcce9d583dbc"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/aihubmixImageModel.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/aihubmixImageModel.test.ts",
-        "sourceSha256": "654cf595f2635b09236629845ce9b9a727d4bd85d1dac1679b59915e1f7ee9cb"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/aihubmixProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/aihubmixProvider.test.ts",
-        "sourceSha256": "b48eda4a563995d862d76039f6a617b5338d50180272fe53bdf1edf1be4a3a35"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/aihubmixRouting.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/aihubmixRouting.test.ts",
-        "sourceSha256": "e4ea9278503387954005398d74ca0b2d49dd1cd146b0dc7cc0afb5826cc74d12"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/aihubmix.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/aihubmix.boundary.test.ts.snap",
-        "sourceSha256": "d21160a0388e2c09aa84ef82ca7cbcd0a7d898822c2174b2ecd299593cb3b957"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/aihubmix.response.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/aihubmix.response.test.ts.snap",
-        "sourceSha256": "b9db0094e6634c6ab665287168cd296d7e351773b64f717f52812ccd6801ece5"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dashscope.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dashscope.boundary.test.ts.snap",
-        "sourceSha256": "e33f6d344ea659b65c3ed99615ed106e903acf56d0719bcb6e130437157d7afb"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dmxapi.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dmxapi.boundary.test.ts.snap",
-        "sourceSha256": "c33d138b3e1da4a107ca3459b4d6b7552b2410f3c7f710dcbbc6eba21e1f837e"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dmxapi.response.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dmxapi.response.test.ts.snap",
-        "sourceSha256": "b9bc58b623b038384fcbdf0d7088879dde0b2ea0364f65eb57b6d278030811f2"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/doubao.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/doubao.boundary.test.ts.snap",
-        "sourceSha256": "b330bafc12e21de3b4db1cf35b4c838b1f97ab301ae09877ede616da149371ee"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/modelscope.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/modelscope.boundary.test.ts.snap",
-        "sourceSha256": "75c5d3749d81f3ad54f21708b4e0b1cd7555496e4be669babb14b003c7656859"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ovms.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ovms.boundary.test.ts.snap",
-        "sourceSha256": "e19abe8acbf87574c8b44b5b5d25d3a5e22ef8ed319175ad9bf725835cb48e2a"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ovms.response.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ovms.response.test.ts.snap",
-        "sourceSha256": "429f89636308e42cd0a0c9f363ef53061f6f60e0adbff827e61fbef192faf3ea"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ppio.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ppio.boundary.test.ts.snap",
-        "sourceSha256": "c9acc6c94a3edac0ef9af99f49c2575027f8fe439b35e7693eb2db4efba90012"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/silicon.boundary.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/silicon.boundary.test.ts.snap",
-        "sourceSha256": "e5982533637e8b96f0a72f4df0723d2aabca0b521ef1ec2a2e1905ddf331ff2e"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/__snapshots__/silicon.response.test.ts.snap"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/silicon.response.test.ts.snap",
-        "sourceSha256": "e863a860a2dff8cea64b3cb2d855476fdfbcb81701750aecd9ea1a900097eb1f"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/aihubmix.anthropicTools.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.anthropicTools.test.ts",
-        "sourceSha256": "0b06025e2555c93c465bb8f6aead1c809fad88a1bfef65a1fa60b7ed62b98704"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/aihubmix.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.boundary.test.ts",
-        "sourceSha256": "1f20c846da4b6cbe7fd0823a6883c0835405f9e73d9b45ca034cb12f4a695500"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/aihubmix.chatReasoning.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.chatReasoning.test.ts",
-        "sourceSha256": "8bee8e00bc1305f53ed10285c3610a6dbea4c45160d0f66c51e2561180ee2499"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/aihubmix.response.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.response.test.ts",
-        "sourceSha256": "ff88e602c2064eb729a0a3be913a372221c877e1aa1b87971bba180f11da8fc5"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/anthropic.maxOutputTokens.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/anthropic.maxOutputTokens.test.ts",
-        "sourceSha256": "211afbebf7c84f93bacac626d286ecc09c13e5cf50478a746baa2e85ea44fca2"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/boundary/captureRequest.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/captureRequest.ts",
-        "sourceSha256": "df5a883fd1d7ec25c8f06c42e69d031b71dca7f24f141c9b229bec64eb824929"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/dashscope.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/dashscope.boundary.test.ts",
-        "sourceSha256": "d8b3af2c71b221432576444603d63d84bf45c6d154bbb96421a321aef61aa2f7"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/dmxapi.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/dmxapi.boundary.test.ts",
-        "sourceSha256": "525fa845cb9abd51e1d2ac833e36ef9ec77b8caaafa4078c1abe7cd9ea64740f"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/dmxapi.chatReasoning.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/dmxapi.chatReasoning.test.ts",
-        "sourceSha256": "2eaf3d4e130c7dba057b49456cef9b7107b1e15ce3f01a06b8b66698b17acdfd"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/dmxapi.response.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/dmxapi.response.test.ts",
-        "sourceSha256": "3f3f8fdf43a52e123fd3c47cfaf0e03d9e0f24cfd12ea8b7516e6cc188e7099b"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/doubao.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/doubao.boundary.test.ts",
-        "sourceSha256": "a847d128b3b5b7253e2d0c0d88579a5429fd22f1f16f46aeb994cfca3f0f26e2"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/modelscope.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/modelscope.boundary.test.ts",
-        "sourceSha256": "80dcb72d940d7a40ee7dfeddfe1f8146c500f70ba03b533d1fe6b30e1b6ddf77"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/ovms.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/ovms.boundary.test.ts",
-        "sourceSha256": "fdea4b5415fba0766bfa81ef3cd771925c9c08d0b7fbce617d1030500d00e59b"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/ovms.response.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/ovms.response.test.ts",
-        "sourceSha256": "631dade0b84c449232d35ed23479d11e5fa60732007a25a4050c5dee59f312e9"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/ppio.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/ppio.boundary.test.ts",
-        "sourceSha256": "8fd42c538267e42494e2760d0f3b6c56e5ccaf45875608ae9a9f4be957775ebc"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/silicon.boundary.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/silicon.boundary.test.ts",
-        "sourceSha256": "f164f314530ecb7786e5e035c2d55d32551d143d02fc3762b20dbcf15204a558"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/boundary/silicon.response.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/boundary/silicon.response.test.ts",
-        "sourceSha256": "d8b797cd22153a0d54307f04f400a2a116c1216aa1c0a2ad87692ec60a751387"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/dmxapiProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/dmxapiProvider.test.ts",
-        "sourceSha256": "295b4548e8f11933664410c2ce282addc47d6b2bf8d0302f7a2e359c1d5ccf0f"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/dmxapiRouting.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/dmxapiRouting.test.ts",
-        "sourceSha256": "8f404a8f3c20df0ce7500a66ed9c8aae970070ab8804c527f5922002d34dae2d"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/dmxapiTransport.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/dmxapiTransport.test.ts",
-        "sourceSha256": "a9facca8549227de5e5a8e992938f19a41489aff673c7c66683a5c289f4215c5"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/gatewayImageModel.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/gatewayImageModel.test.ts",
-        "sourceSha256": "1f0b0a04ce98aaff9c0cc13083d1f2e627fdef464a999aa5cb28d8a96ba61e02"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/imageGenerationModel.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/imageGenerationModel.test.ts",
-        "sourceSha256": "b0540cbf703632ff21b820b0b703b07cf38390d46e74066326183fb3531abde5"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/__tests__/imageTransportRegistry.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/imageTransportRegistry.test.ts",
-        "sourceSha256": "4eef46eb8937a2bf799c0004ac453c0cb2fe571ce9e0c73a8391cf122c3cdb07"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/minimaxProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/minimaxProvider.test.ts",
-        "sourceSha256": "62c13a6937c166ff0ffc210d221ca192ad5a414f950041642b384d69ba5590d6"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/moonshotProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/moonshotProvider.test.ts",
-        "sourceSha256": "0e7004662271aca0e53e071a769b9fa8572010f4be0b42aa36772b1dec6562ae"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/ollamaProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/ollamaProvider.test.ts",
-        "sourceSha256": "6133075ce669f8d1825750fd78aeffd11ffb9c4b28ab17ca0dcdb6a8a1692c3a"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/ollamaTransport.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/ollamaTransport.test.ts",
-        "sourceSha256": "708738f86b206c438a1ed3c1e6c6220b0d52bb6aeefaccd010e9566934af818f"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/ovmsProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/ovmsProvider.test.ts",
-        "sourceSha256": "49bcd5a909387d7dd1c78bae9eb0ba1d265795a02b8480f9bd05911dbc814efc"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/ovmsTransport.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/ovmsTransport.test.ts",
-        "sourceSha256": "28dae70d83a1e6fe8b1c3a1fa01bebf67cd291a2b0ff3d863e3836d94db2131f"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/ppioProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/ppioProvider.test.ts",
-        "sourceSha256": "11bfc616dff1138ded92723ebb03174bffd62aca63d20423843a1cb8b727d51d"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/ppioTransport.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/ppioTransport.test.ts",
-        "sourceSha256": "b9a416448f44073ab2aeae914fe8e6bd32c7a80008b3d6ea6b6d72ca149b3fb1"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/siliconProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/siliconProvider.test.ts",
-        "sourceSha256": "3287ae70dbcf7ed2bdbf1a1f899556b76f390dab6edcf920f02c5a95379f562c"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/transportUtils.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/transportUtils.test.ts",
-        "sourceSha256": "71b2a3bb994f4e0d7f8b747d7a41afff0f57e28b944d1d3296a6e2258576294f"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/__tests__/zhipuProvider.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/__tests__/zhipuProvider.test.ts",
-        "sourceSha256": "8c26d7e4f9576f6cc4fe05ad1b72a68e6f919691f37a2150641cd9ecaf5861ab"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/aihubmix/aihubmixFlux.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/aihubmix/aihubmixFlux.ts",
-        "sourceSha256": "2f5dc4976c6d8b2fe1193f239dd2dc334dafecb9fd6157e68d96e3ed92420468"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/aihubmix/aihubmixImageModel.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/aihubmix/aihubmixImageModel.ts",
-        "sourceSha256": "a1033512ccdcaedca0137530c757d662404c1bb83fe48b37d3674f40dba82721"
+        "sourceSha256": "4c7cb44a0b35ad3e7d7057fd93fc5e150011fd0d9dd631ca7f2fefaa65b108ea",
+        "target": "packages/ai-runtime/src/provider/credential.ts",
+        "targetSha256": "8b95248b5ed699b87a303461be3659cdd99bfb1374c420bd08d27c5c3623a3e2"
       },
       {
         "classification": "semantic-port",
         "evidence": [
-          "mobile:packages/ai-runtime/src/provider/custom/aihubmix/aihubmixProvider.test.ts"
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/aihubmixFlux.test.ts"
         ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/aihubmixFlux.test.ts",
+        "sourceSha256": "0ca9e77f9467922774b431a51eab7635d890b44faac31a0dfb72fcce9d583dbc",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/aihubmixFlux.test.ts",
+        "targetSha256": "4d09febae724d49f823074ab6af0043a88e1842dc714a232d181f038dbf343f3"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/aihubmixImageModel.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/aihubmixImageModel.test.ts",
+        "sourceSha256": "654cf595f2635b09236629845ce9b9a727d4bd85d1dac1679b59915e1f7ee9cb",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/aihubmixImageModel.test.ts",
+        "targetSha256": "018fc0b2b4680ae83e6a5faccf743a72a50653684092c8c63fecc552c5b2fe8f"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/aihubmixProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/aihubmixProvider.test.ts",
+        "sourceSha256": "b48eda4a563995d862d76039f6a617b5338d50180272fe53bdf1edf1be4a3a35",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/aihubmixProvider.test.ts",
+        "targetSha256": "ce98084ef69cc22e11488bb2a77b86be968202a5b5e780fbdbcb648b0723b84f"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/aihubmixRouting.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/aihubmixRouting.test.ts",
+        "sourceSha256": "e4ea9278503387954005398d74ca0b2d49dd1cd146b0dc7cc0afb5826cc74d12",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/aihubmixRouting.test.ts",
+        "targetSha256": "cd691c4646a2199aeac740273e0742f9428f7599bb256ecbf0d9466879043d0e"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/aihubmix.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/aihubmix.boundary.test.ts.snap",
+        "sourceSha256": "d21160a0388e2c09aa84ef82ca7cbcd0a7d898822c2174b2ecd299593cb3b957",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/aihubmix.boundary.test.ts.snap",
+        "targetSha256": "d21160a0388e2c09aa84ef82ca7cbcd0a7d898822c2174b2ecd299593cb3b957"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/aihubmix.response.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/aihubmix.response.test.ts.snap",
+        "sourceSha256": "b9db0094e6634c6ab665287168cd296d7e351773b64f717f52812ccd6801ece5",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/aihubmix.response.test.ts.snap",
+        "targetSha256": "b9db0094e6634c6ab665287168cd296d7e351773b64f717f52812ccd6801ece5"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/dashscope.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dashscope.boundary.test.ts.snap",
+        "sourceSha256": "e33f6d344ea659b65c3ed99615ed106e903acf56d0719bcb6e130437157d7afb",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/dashscope.boundary.test.ts.snap",
+        "targetSha256": "e33f6d344ea659b65c3ed99615ed106e903acf56d0719bcb6e130437157d7afb"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/dmxapi.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dmxapi.boundary.test.ts.snap",
+        "sourceSha256": "c33d138b3e1da4a107ca3459b4d6b7552b2410f3c7f710dcbbc6eba21e1f837e",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/dmxapi.boundary.test.ts.snap",
+        "targetSha256": "c33d138b3e1da4a107ca3459b4d6b7552b2410f3c7f710dcbbc6eba21e1f837e"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/dmxapi.response.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/dmxapi.response.test.ts.snap",
+        "sourceSha256": "b9bc58b623b038384fcbdf0d7088879dde0b2ea0364f65eb57b6d278030811f2",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/dmxapi.response.test.ts.snap",
+        "targetSha256": "b9bc58b623b038384fcbdf0d7088879dde0b2ea0364f65eb57b6d278030811f2"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/doubao.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/doubao.boundary.test.ts.snap",
+        "sourceSha256": "b330bafc12e21de3b4db1cf35b4c838b1f97ab301ae09877ede616da149371ee",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/doubao.boundary.test.ts.snap",
+        "targetSha256": "b330bafc12e21de3b4db1cf35b4c838b1f97ab301ae09877ede616da149371ee"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/modelscope.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/modelscope.boundary.test.ts.snap",
+        "sourceSha256": "75c5d3749d81f3ad54f21708b4e0b1cd7555496e4be669babb14b003c7656859",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/modelscope.boundary.test.ts.snap",
+        "targetSha256": "75c5d3749d81f3ad54f21708b4e0b1cd7555496e4be669babb14b003c7656859"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/ovms.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ovms.boundary.test.ts.snap",
+        "sourceSha256": "e19abe8acbf87574c8b44b5b5d25d3a5e22ef8ed319175ad9bf725835cb48e2a",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/ovms.boundary.test.ts.snap",
+        "targetSha256": "e19abe8acbf87574c8b44b5b5d25d3a5e22ef8ed319175ad9bf725835cb48e2a"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/ovms.response.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ovms.response.test.ts.snap",
+        "sourceSha256": "429f89636308e42cd0a0c9f363ef53061f6f60e0adbff827e61fbef192faf3ea",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/ovms.response.test.ts.snap",
+        "targetSha256": "429f89636308e42cd0a0c9f363ef53061f6f60e0adbff827e61fbef192faf3ea"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/ppio.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/ppio.boundary.test.ts.snap",
+        "sourceSha256": "c9acc6c94a3edac0ef9af99f49c2575027f8fe439b35e7693eb2db4efba90012",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/ppio.boundary.test.ts.snap",
+        "targetSha256": "c9acc6c94a3edac0ef9af99f49c2575027f8fe439b35e7693eb2db4efba90012"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/silicon.boundary.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/silicon.boundary.test.ts.snap",
+        "sourceSha256": "e5982533637e8b96f0a72f4df0723d2aabca0b521ef1ec2a2e1905ddf331ff2e",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/silicon.boundary.test.ts.snap",
+        "targetSha256": "e5982533637e8b96f0a72f4df0723d2aabca0b521ef1ec2a2e1905ddf331ff2e"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/silicon.response.test.ts.snap"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/__snapshots__/silicon.response.test.ts.snap",
+        "sourceSha256": "e863a860a2dff8cea64b3cb2d855476fdfbcb81701750aecd9ea1a900097eb1f",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/__snapshots__/silicon.response.test.ts.snap",
+        "targetSha256": "e863a860a2dff8cea64b3cb2d855476fdfbcb81701750aecd9ea1a900097eb1f"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.anthropicTools.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.anthropicTools.test.ts",
+        "sourceSha256": "0b06025e2555c93c465bb8f6aead1c809fad88a1bfef65a1fa60b7ed62b98704",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.anthropicTools.test.ts",
+        "targetSha256": "3a22961f2fbc57bc25638a06b91bf02d4b32933e6932c15273ad58331a306656"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.boundary.test.ts",
+        "sourceSha256": "1f20c846da4b6cbe7fd0823a6883c0835405f9e73d9b45ca034cb12f4a695500",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.boundary.test.ts",
+        "targetSha256": "b5df204936eaf45e5a1340c5e83933f76d2b3776be062e04dc6f77640dc47d47"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.chatReasoning.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.chatReasoning.test.ts",
+        "sourceSha256": "8bee8e00bc1305f53ed10285c3610a6dbea4c45160d0f66c51e2561180ee2499",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.chatReasoning.test.ts",
+        "targetSha256": "e0fc1791a69be165bf7cbaa64e0e45f948e7f3e8f00f8035fcab1e97f32b3cf6"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.response.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/aihubmix.response.test.ts",
+        "sourceSha256": "ff88e602c2064eb729a0a3be913a372221c877e1aa1b87971bba180f11da8fc5",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/aihubmix.response.test.ts",
+        "targetSha256": "29ccc722a93e97a2f005cf6dfc2b5e11368ba931838f40f24b0c9dc7f759d5fa"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/anthropic.maxOutputTokens.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/anthropic.maxOutputTokens.test.ts",
+        "sourceSha256": "211afbebf7c84f93bacac626d286ecc09c13e5cf50478a746baa2e85ea44fca2",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/anthropic.maxOutputTokens.test.ts",
+        "targetSha256": "2f8d4c1d288f57e4911668299152b402d4c8360a7c83487ad32d6595391bd368"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/captureRequest.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/captureRequest.ts",
+        "sourceSha256": "df5a883fd1d7ec25c8f06c42e69d031b71dca7f24f141c9b229bec64eb824929",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/captureRequest.ts",
+        "targetSha256": "0e2b5204dc909d37ffa8b9ac61b3fff375ca2d1290b42ba9d2c7b8da8234cdef"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/dashscope.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/dashscope.boundary.test.ts",
+        "sourceSha256": "d8b3af2c71b221432576444603d63d84bf45c6d154bbb96421a321aef61aa2f7",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/dashscope.boundary.test.ts",
+        "targetSha256": "1d5463870775fa2c037401fa256ab2e6ace7ec822810213601516ee742474c52"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/dmxapi.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/dmxapi.boundary.test.ts",
+        "sourceSha256": "525fa845cb9abd51e1d2ac833e36ef9ec77b8caaafa4078c1abe7cd9ea64740f",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/dmxapi.boundary.test.ts",
+        "targetSha256": "085dc1840db46a372c8ca9fc00513f40a93bd62c0ffebe1adfa0d3f5028a08b4"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/dmxapi.chatReasoning.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/dmxapi.chatReasoning.test.ts",
+        "sourceSha256": "2eaf3d4e130c7dba057b49456cef9b7107b1e15ce3f01a06b8b66698b17acdfd",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/dmxapi.chatReasoning.test.ts",
+        "targetSha256": "38925ea99718c07f17e250f5ffe7bbeeba06785d3c838d0680535fc0c842a5fc"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/dmxapi.response.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/dmxapi.response.test.ts",
+        "sourceSha256": "3f3f8fdf43a52e123fd3c47cfaf0e03d9e0f24cfd12ea8b7516e6cc188e7099b",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/dmxapi.response.test.ts",
+        "targetSha256": "d228fd85742bc7996dd201f869c230ad51f6ed9bd7a795d08fc8ebf65f106705"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/doubao.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/doubao.boundary.test.ts",
+        "sourceSha256": "a847d128b3b5b7253e2d0c0d88579a5429fd22f1f16f46aeb994cfca3f0f26e2",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/doubao.boundary.test.ts",
+        "targetSha256": "08fa05cb1392dbc1266c770037ee68c60eb8944a8630f92449b1027692f63ce6"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/modelscope.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/modelscope.boundary.test.ts",
+        "sourceSha256": "80dcb72d940d7a40ee7dfeddfe1f8146c500f70ba03b533d1fe6b30e1b6ddf77",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/modelscope.boundary.test.ts",
+        "targetSha256": "11aeba323952de2482df29d4084c67464c1d32cc61646340acfbfc6735084999"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/ovms.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/ovms.boundary.test.ts",
+        "sourceSha256": "fdea4b5415fba0766bfa81ef3cd771925c9c08d0b7fbce617d1030500d00e59b",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/ovms.boundary.test.ts",
+        "targetSha256": "38e226aee90d2c701423e77ce945ccdf12dfcb3889fab5c07129e19738deffb2"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/ovms.response.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/ovms.response.test.ts",
+        "sourceSha256": "631dade0b84c449232d35ed23479d11e5fa60732007a25a4050c5dee59f312e9",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/ovms.response.test.ts",
+        "targetSha256": "18c65dce5e6028267c2086691e4addf1790ee3549431339487c94cd8e1c93b8e"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/ppio.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/ppio.boundary.test.ts",
+        "sourceSha256": "8fd42c538267e42494e2760d0f3b6c56e5ccaf45875608ae9a9f4be957775ebc",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/ppio.boundary.test.ts",
+        "targetSha256": "72f9ee8bd9e9da445580ec5ea900e4390ff79a199cb3ebab709cabae967f9758"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/silicon.boundary.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/silicon.boundary.test.ts",
+        "sourceSha256": "f164f314530ecb7786e5e035c2d55d32551d143d02fc3762b20dbcf15204a558",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/silicon.boundary.test.ts",
+        "targetSha256": "2ac645dfe94edd0c603cb3f31773ecbef8d7f9bf0b15e2852e747b08e6c6fc07"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/boundary/silicon.response.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/boundary/silicon.response.test.ts",
+        "sourceSha256": "d8b797cd22153a0d54307f04f400a2a116c1216aa1c0a2ad87692ec60a751387",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/boundary/silicon.response.test.ts",
+        "targetSha256": "c68d581453daaba882068cfa24d8e8900034c7464c7e7e0d1b90ce5728cbf7e8"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/dmxapiProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/dmxapiProvider.test.ts",
+        "sourceSha256": "295b4548e8f11933664410c2ce282addc47d6b2bf8d0302f7a2e359c1d5ccf0f",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/dmxapiProvider.test.ts",
+        "targetSha256": "c50030f11dd7cf5825b09ffa7e17cd57a2709c85c053ea4cd501562642685ff1"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/dmxapiRouting.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/dmxapiRouting.test.ts",
+        "sourceSha256": "8f404a8f3c20df0ce7500a66ed9c8aae970070ab8804c527f5922002d34dae2d",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/dmxapiRouting.test.ts",
+        "targetSha256": "6078b91712fb6c915fa39001246dab679864f8a339e536d9aa954bc6c2124530"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/dmxapiTransport.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/dmxapiTransport.test.ts",
+        "sourceSha256": "a9facca8549227de5e5a8e992938f19a41489aff673c7c66683a5c289f4215c5",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/dmxapiTransport.test.ts",
+        "targetSha256": "953ac4e091277e31d5eaaa08d0a71540703a9fe589902660989ee8c36ec8d8eb"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/gatewayImageModel.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/gatewayImageModel.test.ts",
+        "sourceSha256": "1f0b0a04ce98aaff9c0cc13083d1f2e627fdef464a999aa5cb28d8a96ba61e02",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/gatewayImageModel.test.ts",
+        "targetSha256": "fbca4ab42299bf0f523bf3e814d47be9fc558e7a780d910cffb304329e89c088"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/imageGenerationModel.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/imageGenerationModel.test.ts",
+        "sourceSha256": "b0540cbf703632ff21b820b0b703b07cf38390d46e74066326183fb3531abde5",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/imageGenerationModel.test.ts",
+        "targetSha256": "3443749635f32e4766f9281d24c5020f44c5749543c548368474bc789cb3ff19"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/imageTransportRegistry.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/imageTransportRegistry.test.ts",
+        "sourceSha256": "4eef46eb8937a2bf799c0004ac453c0cb2fe571ce9e0c73a8391cf122c3cdb07",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/imageTransportRegistry.test.ts",
+        "targetSha256": "d1eaf9e08a4465f45afce9d900b3314fd6003d0b50d933075fe0291b9cf60ef7"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/minimaxProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/minimaxProvider.test.ts",
+        "sourceSha256": "62c13a6937c166ff0ffc210d221ca192ad5a414f950041642b384d69ba5590d6",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/minimaxProvider.test.ts",
+        "targetSha256": "f9897288fdfe0932f5d45f8605b20bd922f0f45534f843d7076875a336527dc3"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/moonshotProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/moonshotProvider.test.ts",
+        "sourceSha256": "0e7004662271aca0e53e071a769b9fa8572010f4be0b42aa36772b1dec6562ae",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/moonshotProvider.test.ts",
+        "targetSha256": "6badb99865da6e8f1706734db375fcd9e9fc5f4793b0a3ed32c3abaec679b84d"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/ollamaProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/ollamaProvider.test.ts",
+        "sourceSha256": "6133075ce669f8d1825750fd78aeffd11ffb9c4b28ab17ca0dcdb6a8a1692c3a",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/ollamaProvider.test.ts",
+        "targetSha256": "68355a8f491cb625fd10b60cbfae1edf727ac53136bccced56cdeda805d642b5"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/ollamaTransport.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/ollamaTransport.test.ts",
+        "sourceSha256": "708738f86b206c438a1ed3c1e6c6220b0d52bb6aeefaccd010e9566934af818f",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/ollamaTransport.test.ts",
+        "targetSha256": "64c974f23e85619145d995806267614ee2e460b2bc02d63237ad7dd2690410c9"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/ovmsProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/ovmsProvider.test.ts",
+        "sourceSha256": "49bcd5a909387d7dd1c78bae9eb0ba1d265795a02b8480f9bd05911dbc814efc",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/ovmsProvider.test.ts",
+        "targetSha256": "f3bb0fd8479fb4c6221200c7a2b6708ecb046440fb567a45e7829c1d72ce1115"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/ovmsTransport.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/ovmsTransport.test.ts",
+        "sourceSha256": "28dae70d83a1e6fe8b1c3a1fa01bebf67cd291a2b0ff3d863e3836d94db2131f",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/ovmsTransport.test.ts",
+        "targetSha256": "ca4b95d095c1657b0e3b27b435832bbcbfd3b802113e79cefdb2e6ab0ea28c5d"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/ppioProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/ppioProvider.test.ts",
+        "sourceSha256": "11bfc616dff1138ded92723ebb03174bffd62aca63d20423843a1cb8b727d51d",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/ppioProvider.test.ts",
+        "targetSha256": "181d76223569f722d75fda08c8a5f8411efdcecb72fe2d103e4088dcaeb0bbc5"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/ppioTransport.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/ppioTransport.test.ts",
+        "sourceSha256": "b9a416448f44073ab2aeae914fe8e6bd32c7a80008b3d6ea6b6d72ca149b3fb1",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/ppioTransport.test.ts",
+        "targetSha256": "261acf68c89379fc49fbf151ae02c865f2095585ae680ef018f56f71d0d27da0"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/siliconProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/siliconProvider.test.ts",
+        "sourceSha256": "3287ae70dbcf7ed2bdbf1a1f899556b76f390dab6edcf920f02c5a95379f562c",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/siliconProvider.test.ts",
+        "targetSha256": "bd13bca92e6126aa3bb6e982f57d4d75215e20ae1e62abedf2afc57b37bdd823"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/transportUtils.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/transportUtils.test.ts",
+        "sourceSha256": "71b2a3bb994f4e0d7f8b747d7a41afff0f57e28b944d1d3296a6e2258576294f",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/transportUtils.test.ts",
+        "targetSha256": "de83f05a20c9a0b850996760338e550beab33736c5628625d57f6ccf20c01d6b"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/__tests__/zhipuProvider.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/__tests__/zhipuProvider.test.ts",
+        "sourceSha256": "8c26d7e4f9576f6cc4fe05ad1b72a68e6f919691f37a2150641cd9ecaf5861ab",
+        "target": "packages/ai-runtime/src/provider/custom/__tests__/zhipuProvider.test.ts",
+        "targetSha256": "c8690c7e7c71ff9aeac6a8c7ba61962387bbf0aa678151b044a44438ab55f7d9"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/aihubmix/aihubmixFlux.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/aihubmix/aihubmixFlux.ts",
+        "sourceSha256": "2f5dc4976c6d8b2fe1193f239dd2dc334dafecb9fd6157e68d96e3ed92420468",
+        "target": "packages/ai-runtime/src/provider/custom/aihubmix/aihubmixFlux.ts",
+        "targetSha256": "d16836ebab6df66ec5ce509216bd4d4229358eaecd007b53095c2c319eefde8b"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/aihubmix/aihubmixImageModel.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/aihubmix/aihubmixImageModel.ts",
+        "sourceSha256": "a1033512ccdcaedca0137530c757d662404c1bb83fe48b37d3674f40dba82721",
+        "target": "packages/ai-runtime/src/provider/custom/aihubmix/aihubmixImageModel.ts",
+        "targetSha256": "29757a3977ae55a9f723f702567636b064b65007508900bff1c50c5fe4d9dd50"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/aihubmix/aihubmixProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/aihubmix/aihubmixProvider.ts",
         "sourceSha256": "0b3cc366a2cad89469375a3ab8729d3e0cd9a7fd8617db1a6719a4c7caecf141",
         "target": "packages/ai-runtime/src/provider/custom/aihubmix/aihubmixProvider.ts",
-        "targetSha256": "825034d8c7dc9b92ee304b4d0294179a2480bf9ec847f46446851e4796aca9c3"
+        "targetSha256": "3e745929b0820c10fafca9541fde1020dc94772fff9aef5be7a31c9b978c24a3"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/aihubmix/aihubmixRouting.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/aihubmix/aihubmixRouting.ts",
         "sourceSha256": "01a4f904a838ddb9a1d0088299acfa7194f19939633d214504833a0818807506",
         "target": "packages/ai-runtime/src/provider/custom/aihubmix/aihubmixRouting.ts",
-        "targetSha256": "a9e17273ac03729e876ad8a66a8d83298ced7de772ee347517118dd4e5f3f016"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/dashscope/__tests__/dashscopeWebExtractor.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/dashscope/__tests__/dashscopeWebExtractor.test.ts",
-        "sourceSha256": "741d168f0d00aa651e0d383e1f803b128a6f82a48eb379a78a4b3cd09d28d28d"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/dashscope/dashscopeProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/dashscope/dashscopeProvider.ts",
-        "sourceSha256": "de8c87326eae1c4f5f47df368b6e39dc6feb58db2cdc06ce7cfefa72f141516e"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/dashscope/dashscopeTransport.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/dashscope/dashscopeTransport.ts",
-        "sourceSha256": "ef3aa45d310e477f5caec5f34ef476b394fc428c1d29b92df732631f71923d21"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/dashscope/dashscopeWebExtractor.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/dashscope/dashscopeWebExtractor.ts",
-        "sourceSha256": "3d447a645db202ea2cd7c58d87bd0bfbef7020e439d39818e1fe38afca518d63"
+        "targetSha256": "763fbe7a3379bc7520b46ffb6f9cd1b7ee2c8c820b2ad00eb769f81a5307de78"
       },
       {
         "classification": "semantic-port",
         "evidence": [
-          "mobile:packages/ai-runtime/src/provider/custom/dmxapi/dmxapiProvider.test.ts"
+          "mobile:packages/ai-runtime/src/provider/custom/dashscope/__tests__/dashscopeWebExtractor.test.ts"
         ],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/dashscope/__tests__/dashscopeWebExtractor.test.ts",
+        "sourceSha256": "741d168f0d00aa651e0d383e1f803b128a6f82a48eb379a78a4b3cd09d28d28d",
+        "target": "packages/ai-runtime/src/provider/custom/dashscope/__tests__/dashscopeWebExtractor.test.ts",
+        "targetSha256": "0588d37c77eeaddbbb4e7aa9c1ade1993a6792263498337c185036ef1e3eb4aa"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/dashscope/dashscopeProvider.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/dashscope/dashscopeProvider.ts",
+        "sourceSha256": "de8c87326eae1c4f5f47df368b6e39dc6feb58db2cdc06ce7cfefa72f141516e",
+        "target": "packages/ai-runtime/src/provider/custom/dashscope/dashscopeProvider.ts",
+        "targetSha256": "6370d2773c43e3e5be148e7e57474dfc2362cd8cfb3fda3a150c5acbfc19d676"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/dashscope/dashscopeTransport.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/dashscope/dashscopeTransport.ts",
+        "sourceSha256": "ef3aa45d310e477f5caec5f34ef476b394fc428c1d29b92df732631f71923d21",
+        "target": "packages/ai-runtime/src/provider/custom/dashscope/dashscopeTransport.ts",
+        "targetSha256": "7526ba731a0344e6a828bb1a6794ee1ddcbe41c4a0ff6f90256d058d9a12d19b"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/dashscope/dashscopeWebExtractor.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/dashscope/dashscopeWebExtractor.ts",
+        "sourceSha256": "3d447a645db202ea2cd7c58d87bd0bfbef7020e439d39818e1fe38afca518d63",
+        "target": "packages/ai-runtime/src/provider/custom/dashscope/dashscopeWebExtractor.ts",
+        "targetSha256": "b8cf1c5dac2be2ad47440ed82956da9efa580c7ad5ed9b2d6f2c1e74e09fa099"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/dmxapi/dmxapiProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/dmxapi/dmxapiProvider.ts",
         "sourceSha256": "2b243b924ba4c31f96c397007bb8a501899da4a7a6d95e4c80733bce6c5d46f5",
         "target": "packages/ai-runtime/src/provider/custom/dmxapi/dmxapiProvider.ts",
-        "targetSha256": "6f5371a2860f7957c6a38f2ad3e5dbcb360b5898609184e1c02e74ca580e0547"
+        "targetSha256": "cfda84d61b23990017eb6dcfdb41b25dfaeb76c9534a250ea0325cbd47e3f8d0"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/dmxapi/dmxapiRouting.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/dmxapi/dmxapiRouting.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/dmxapi/dmxapiRouting.ts",
         "sourceSha256": "f5b8cac9a5bf3e58aa0092ba9ea2cc8e5dfcbb91063c294bffe4b890520d7b70",
         "target": "packages/ai-runtime/src/provider/custom/dmxapi/dmxapiRouting.ts",
-        "targetSha256": "4ee858cf6265e683103135f17b2573532b136718ffc305435c648948cf5c99cf"
+        "targetSha256": "14fc6dee715b3e7ffe2836f22eb851990a8d880933edee0bb1e828a37ab29198"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/dmxapi/dmxapiTransport.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/dmxapi/dmxapiTransport.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/dmxapi/dmxapiTransport.ts",
-        "sourceSha256": "aac92447b03c314889d7f793bf93aae87c46e44ddc73448540c8cd6dd5f1ceea"
+        "sourceSha256": "aac92447b03c314889d7f793bf93aae87c46e44ddc73448540c8cd6dd5f1ceea",
+        "target": "packages/ai-runtime/src/provider/custom/dmxapi/dmxapiTransport.ts",
+        "targetSha256": "7eeccd48165d5ba35852a9b5a5de130f1028b9c6faf473e57d175dd33f282054"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/gateway/gatewayImageModel.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/gateway/gatewayImageModel.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/gateway/gatewayImageModel.ts",
-        "sourceSha256": "01f379f0eaa996d759d833c0bbbf8be3c192b48b292fc5855b7a38a3ce02e13d"
+        "sourceSha256": "01f379f0eaa996d759d833c0bbbf8be3c192b48b292fc5855b7a38a3ce02e13d",
+        "target": "packages/ai-runtime/src/provider/custom/gateway/gatewayImageModel.ts",
+        "targetSha256": "d649d597c574382ab5b02bc6fdc696cea4eb5480b9615937ef0fbefc8e17fa0d"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/gateway/gatewayProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/gateway/gatewayProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/gateway/gatewayProvider.ts",
-        "sourceSha256": "505621e75b7b89d687c6cadffe8934a2bde9253a21b5dced8efcdbadcf424c9b"
+        "sourceSha256": "505621e75b7b89d687c6cadffe8934a2bde9253a21b5dced8efcdbadcf424c9b",
+        "target": "packages/ai-runtime/src/provider/custom/gateway/gatewayProvider.ts",
+        "targetSha256": "1738374ce0c07fd7a484577b28b13ff567c2f31ba919cefa9004ded276b57554"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/imageGenerationModel.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/imageGenerationModel.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/imageGenerationModel.ts",
-        "sourceSha256": "1a8ef0f2698e2a603497f1abcb3871872a5a79037f732ba4f33f9e879adf3834"
+        "sourceSha256": "1a8ef0f2698e2a603497f1abcb3871872a5a79037f732ba4f33f9e879adf3834",
+        "target": "packages/ai-runtime/src/provider/custom/imageGenerationModel.ts",
+        "targetSha256": "6cc731414946e2674c84479031bc912d999792f98aa31cd1ce57212b8a13c0be"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/imageTransportRegistry.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/imageTransportRegistry.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/imageTransportRegistry.ts",
-        "sourceSha256": "02c262c0b07511edda1e91b62aa34c994733d01c517de58eac9bbac0841a6b5f"
+        "sourceSha256": "02c262c0b07511edda1e91b62aa34c994733d01c517de58eac9bbac0841a6b5f",
+        "target": "packages/ai-runtime/src/provider/custom/imageTransportRegistry.ts",
+        "targetSha256": "b08f47e8d508999016e227cdab149507606c91dbdba3fd79063e1a5e3c488109"
       },
       {
         "classification": "blocked",
         "evidence": [
           "desktop:src/main/ai/provider/custom/localEmbedding/localEmbeddingProvider.ts"
         ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "reason": "Desktop local embedding depends on Node-native inference and model storage that are unavailable in the Expo runtime.",
         "source": "src/main/ai/provider/custom/localEmbedding/localEmbeddingProvider.ts",
         "sourceSha256": "886c87f0597c64256d6b30e268de3fd35d927fe6ff80a5ea1e42eadb48a325d8"
       },
       {
         "classification": "blocked",
         "evidence": ["desktop:src/main/ai/provider/custom/localEmbedding/localEmbeddingRuntime.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "reason": "Desktop local embedding depends on Node-native inference and model storage that are unavailable in the Expo runtime.",
         "source": "src/main/ai/provider/custom/localEmbedding/localEmbeddingRuntime.ts",
         "sourceSha256": "c954e4c0e8eff4c553cd83498f627418fdbb06be150ff0c37c06a00fb6f50bfb"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/minimax/minimaxImageModel.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/minimax/minimaxImageModel.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/minimax/minimaxImageModel.ts",
-        "sourceSha256": "4754f463ab631758cbcc63b82581c7286bfd50c1de9bdd246b5bca9a1518f05e"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/minimax/minimaxProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/minimax/minimaxProvider.ts",
-        "sourceSha256": "f9501c949c4d4fe6d905d2bdeb8ee929c86ce7c34dfe985197522e3aea0eb6d2"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/modelscope/modelscopeProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/modelscope/modelscopeProvider.ts",
-        "sourceSha256": "531c3df57d5c5c411cd883fc88e37c99a370b8e5ed43a856980e9cf044d79932"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/modelscope/modelscopeTransport.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/modelscope/modelscopeTransport.ts",
-        "sourceSha256": "77c3937f0d283a570e08169dcc8c056afd61b193d488c28ebff62c897cecb7c2"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/moonshotProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/moonshotProvider.ts",
-        "sourceSha256": "e37f76c2419d4ad993b45d65b1ffa921bba01211b12dcb713adc338353dede54"
+        "sourceSha256": "4754f463ab631758cbcc63b82581c7286bfd50c1de9bdd246b5bca9a1518f05e",
+        "target": "packages/ai-runtime/src/provider/custom/minimax/minimaxImageModel.ts",
+        "targetSha256": "0f36d5459c8bb015e91ae7545a528f20a155478ce73a27b63f56454f10aac9ea"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/minimax/minimaxProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/minimax/minimaxProvider.ts",
+        "sourceSha256": "f9501c949c4d4fe6d905d2bdeb8ee929c86ce7c34dfe985197522e3aea0eb6d2",
+        "target": "packages/ai-runtime/src/provider/custom/minimax/minimaxProvider.ts",
+        "targetSha256": "801570b4ae4e4e6fb381b06f97efdfe515f0de67a035083bd7565f39126ce7f5"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/modelscope/modelscopeProvider.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/modelscope/modelscopeProvider.ts",
+        "sourceSha256": "531c3df57d5c5c411cd883fc88e37c99a370b8e5ed43a856980e9cf044d79932",
+        "target": "packages/ai-runtime/src/provider/custom/modelscope/modelscopeProvider.ts",
+        "targetSha256": "1c489e15641237020d375e33826a8ad19c4372b5dd2f41c9bfd0df77b5bf37e5"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/modelscope/modelscopeTransport.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/modelscope/modelscopeTransport.ts",
+        "sourceSha256": "77c3937f0d283a570e08169dcc8c056afd61b193d488c28ebff62c897cecb7c2",
+        "target": "packages/ai-runtime/src/provider/custom/modelscope/modelscopeTransport.ts",
+        "targetSha256": "13785f1810c76a80dbd54682429b1158650774741de5b8c0f68ebc7ec81bd68d"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/moonshotProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/moonshotProvider.ts",
+        "sourceSha256": "e37f76c2419d4ad993b45d65b1ffa921bba01211b12dcb713adc338353dede54",
+        "target": "packages/ai-runtime/src/provider/custom/moonshotProvider.ts",
+        "targetSha256": "6cc4ea135cb9fc84699706c44d6ff1214380fffdf40285b58df3ecb55b87365e"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/newapiProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/custom/newapiProvider.ts",
         "sourceSha256": "85d86f2944f2415eafb749b9879e6d1903e118f1bb8e6ab391f513e3646ec8ca",
         "target": "packages/ai-runtime/src/provider/custom/newapiProvider.ts",
-        "targetSha256": "9e8536c6ffa1fbf4cc1ef4d45a7dbd186b21159d3601b0db325a2c43bc1ea10b"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/ollama/ollamaProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/ollama/ollamaProvider.ts",
-        "sourceSha256": "3263c6ea11d6f00304d9c2257b99f50d65f0666868806d020f7694a6340a9d6b"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/ollama/ollamaTransport.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/ollama/ollamaTransport.ts",
-        "sourceSha256": "a0f3976d171326ff32254ef560f5d444a38d6fcb395857640537f06c8dc03723"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/ovms/ovmsProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/ovms/ovmsProvider.ts",
-        "sourceSha256": "8c1d2e3aff7fba8dda304956d05e322b9f6861ebd4560cb5261dbba2cc1ad2da"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/ovms/ovmsTransport.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/ovms/ovmsTransport.ts",
-        "sourceSha256": "a1c3edeb24157fc813c676f97c1759ad3e546a9f8588aaac1696b6c34830f4af"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/ppio/ppioProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/ppio/ppioProvider.ts",
-        "sourceSha256": "d5ef4e3b2be081f4dcbc25bc61d85e2eefcf48e53283451b91a37d70296c304d"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/ppio/ppioTransport.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/ppio/ppioTransport.ts",
-        "sourceSha256": "d3ec80e25eea3e2572a11d16c4c6d60da2b565d684900894abca79fe596e1750"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/readErrorMessage.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/readErrorMessage.ts",
-        "sourceSha256": "b6af315ca6a4aac5988c0dc668e44ee65864ed8d9d5e55b616ba57965cffff58"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/silicon/SiliconImageModel.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/silicon/SiliconImageModel.ts",
-        "sourceSha256": "6c09be9cfdc4f20c80ebb21a5b3c4ef7b5391f95ff6c03b0770ab4db2a1d83cf"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/silicon/siliconProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/silicon/siliconProvider.ts",
-        "sourceSha256": "455a1e26f162dabdaf1d2cb7be918a3a6e2b981bb5a80a4799c0f7068aa00466"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/tasks/__tests__/imageGenerationJobHandler.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/tasks/__tests__/imageGenerationJobHandler.test.ts",
-        "sourceSha256": "c83f82341b3e016ff6f6c168ee5b47682c7865b7759f3c202a4c02c42451e2b0"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/tasks/imageGenerationJobHandler.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/tasks/imageGenerationJobHandler.ts",
-        "sourceSha256": "37c92c733c01d4f23963892a72ff4b8969a7f558bc80c4ad276899ae6d649f69"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/tasks/jobTypes.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/tasks/jobTypes.ts",
-        "sourceSha256": "c675dd72c5097cd645404120abd50cc7321f5cf8d1b03e37dacc3ec6f88c7675"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/transportUtils.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/transportUtils.ts",
-        "sourceSha256": "32822dba2e2e968fbe4eff5c7b07125574e4ba7320bcb53f4f39a1a3c5da924e"
-      },
-      {
-        "classification": "blocked",
-        "evidence": [
-          "desktop:src/main/ai/provider/custom/wire/__tests__/buildImageRequest.test.ts"
-        ],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/wire/__tests__/buildImageRequest.test.ts",
-        "sourceSha256": "0f1406214e3d56ff245baf56282c08248be6cf8dc3df4ce5ec52ab1b7c7776e9"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/wire/__tests__/wireName.test.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/wire/__tests__/wireName.test.ts",
-        "sourceSha256": "09f931775ea140c4b7c803173689ee16a693e4884c20f35fce63adc8042e52a3"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/wire/buildImageRequest.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/wire/buildImageRequest.ts",
-        "sourceSha256": "74e2ab6f2fea0988e1bcff56986741dc90bf542889c4716455fd0be9194e44c1"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/wire/wireProfile.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/wire/wireProfile.ts",
-        "sourceSha256": "37423db39fef973e12bbae8f8134b96e24cdefebdf9568d07a30e9509bc2b30c"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/custom/zhipuProvider.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/custom/zhipuProvider.ts",
-        "sourceSha256": "f16433ca87a43b0a4e71bdd738232fa848ac3135cb918f5713cf37a9924985ac"
+        "targetSha256": "5977a6f8b9d20a11affe07261cb31d983a7f11e152aca95bae776665bfb2038a"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/ollama/ollamaProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/ollama/ollamaProvider.ts",
+        "sourceSha256": "3263c6ea11d6f00304d9c2257b99f50d65f0666868806d020f7694a6340a9d6b",
+        "target": "packages/ai-runtime/src/provider/custom/ollama/ollamaProvider.ts",
+        "targetSha256": "abc81bedc81f9b2064a7c59553941c1800d9177f772a7e950bf547adbe294094"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/ollama/ollamaTransport.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/ollama/ollamaTransport.ts",
+        "sourceSha256": "a0f3976d171326ff32254ef560f5d444a38d6fcb395857640537f06c8dc03723",
+        "target": "packages/ai-runtime/src/provider/custom/ollama/ollamaTransport.ts",
+        "targetSha256": "1a5f13c1230d1b56aad19c480fb7cab26e50b85293f2aa6ed951ae571930d01b"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/ovms/ovmsProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/ovms/ovmsProvider.ts",
+        "sourceSha256": "8c1d2e3aff7fba8dda304956d05e322b9f6861ebd4560cb5261dbba2cc1ad2da",
+        "target": "packages/ai-runtime/src/provider/custom/ovms/ovmsProvider.ts",
+        "targetSha256": "5efe2097af3f17ccbdcde905ed0c3002817cd6b81e25ff50316c9409c4801ca3"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/ovms/ovmsTransport.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/ovms/ovmsTransport.ts",
+        "sourceSha256": "a1c3edeb24157fc813c676f97c1759ad3e546a9f8588aaac1696b6c34830f4af",
+        "target": "packages/ai-runtime/src/provider/custom/ovms/ovmsTransport.ts",
+        "targetSha256": "6f52718619ee8bf89cff1888b0de2c62859d06c417464e1326292e2d13c1112a"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/ppio/ppioProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/ppio/ppioProvider.ts",
+        "sourceSha256": "d5ef4e3b2be081f4dcbc25bc61d85e2eefcf48e53283451b91a37d70296c304d",
+        "target": "packages/ai-runtime/src/provider/custom/ppio/ppioProvider.ts",
+        "targetSha256": "7e212707773a80f152567e059c3c39cfbbfca588af07bb9b5cd0ab0e4103388a"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/ppio/ppioTransport.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/ppio/ppioTransport.ts",
+        "sourceSha256": "d3ec80e25eea3e2572a11d16c4c6d60da2b565d684900894abca79fe596e1750",
+        "target": "packages/ai-runtime/src/provider/custom/ppio/ppioTransport.ts",
+        "targetSha256": "ce8766a583e4b8a5dc92fba103789e219a33c6068ac977c149aaca5e89f07d85"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/readErrorMessage.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/readErrorMessage.ts",
+        "sourceSha256": "b6af315ca6a4aac5988c0dc668e44ee65864ed8d9d5e55b616ba57965cffff58",
+        "target": "packages/ai-runtime/src/provider/custom/readErrorMessage.ts",
+        "targetSha256": "1ca9220a659b27a7f3648e094aeaa4d486066a2a0aec88e46d10b9590f5b2d0f"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/silicon/SiliconImageModel.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/silicon/SiliconImageModel.ts",
+        "sourceSha256": "6c09be9cfdc4f20c80ebb21a5b3c4ef7b5391f95ff6c03b0770ab4db2a1d83cf",
+        "target": "packages/ai-runtime/src/provider/custom/silicon/SiliconImageModel.ts",
+        "targetSha256": "9f93f561e9d6e9927cbc54075653d85b51d2d85c8b4c977c01e23a42a8d48db7"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/silicon/siliconProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/silicon/siliconProvider.ts",
+        "sourceSha256": "455a1e26f162dabdaf1d2cb7be918a3a6e2b981bb5a80a4799c0f7068aa00466",
+        "target": "packages/ai-runtime/src/provider/custom/silicon/siliconProvider.ts",
+        "targetSha256": "632b2e1745d9eb8b8dcb6b24ed91a72aeb59ddaa3205a5459d4578a93c6c759e"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:src/backend/services/paintings/__tests__/createPaintingsModule.test.ts"
+        ],
+        "reason": "Desktop image-generation job semantics are implemented by the mobile Paintings contract, workflow, and tests.",
+        "source": "src/main/ai/provider/custom/tasks/__tests__/imageGenerationJobHandler.test.ts",
+        "sourceSha256": "c83f82341b3e016ff6f6c168ee5b47682c7865b7759f3c202a4c02c42451e2b0",
+        "target": "src/backend/services/paintings/__tests__/createPaintingsModule.test.ts",
+        "targetSha256": "2e040d13a6de68d25d7bd6e05e142406dc559a12b6da52c6a174fa244a6a3cbc"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:src/backend/services/paintings/createPaintingsModule.ts"],
+        "reason": "Desktop image-generation job semantics are implemented by the mobile Paintings contract, workflow, and tests.",
+        "source": "src/main/ai/provider/custom/tasks/imageGenerationJobHandler.ts",
+        "sourceSha256": "37c92c733c01d4f23963892a72ff4b8969a7f558bc80c4ad276899ae6d649f69",
+        "target": "src/backend/services/paintings/createPaintingsModule.ts",
+        "targetSha256": "baa5a4415ef41c0f24168122ca382db34853efc7de0aefb42ed9503a17d216e5"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:src/shared/contracts/paintings.ts"],
+        "reason": "Desktop image-generation job semantics are implemented by the mobile Paintings contract, workflow, and tests.",
+        "source": "src/main/ai/provider/custom/tasks/jobTypes.ts",
+        "sourceSha256": "c675dd72c5097cd645404120abd50cc7321f5cf8d1b03e37dacc3ec6f88c7675",
+        "target": "src/shared/contracts/paintings.ts",
+        "targetSha256": "bfa02836c0dd159182041dc7fcb9c91146cd807bf6c4459c4cddcadcf5349ab8"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/transportUtils.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/transportUtils.ts",
+        "sourceSha256": "32822dba2e2e968fbe4eff5c7b07125574e4ba7320bcb53f4f39a1a3c5da924e",
+        "target": "packages/ai-runtime/src/provider/custom/transportUtils.ts",
+        "targetSha256": "87709ee9a6f21759d226414288f5bde274e8421b7bca7cfee9901576582cddd4"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/wire/__tests__/buildImageRequest.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/wire/__tests__/buildImageRequest.test.ts",
+        "sourceSha256": "0f1406214e3d56ff245baf56282c08248be6cf8dc3df4ce5ec52ab1b7c7776e9",
+        "target": "packages/ai-runtime/src/provider/custom/wire/__tests__/buildImageRequest.test.ts",
+        "targetSha256": "3a32dd42842f5084c97d4768f89a13cce1d7b127058416def99b152156fe3698"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": [
+          "mobile:packages/ai-runtime/src/provider/custom/wire/__tests__/wireName.test.ts"
+        ],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/wire/__tests__/wireName.test.ts",
+        "sourceSha256": "09f931775ea140c4b7c803173689ee16a693e4884c20f35fce63adc8042e52a3",
+        "target": "packages/ai-runtime/src/provider/custom/wire/__tests__/wireName.test.ts",
+        "targetSha256": "4e4915889b51d16f020115666f00275049d7cdf1b909984089c9a2613e4e4526"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/wire/buildImageRequest.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/wire/buildImageRequest.ts",
+        "sourceSha256": "74e2ab6f2fea0988e1bcff56986741dc90bf542889c4716455fd0be9194e44c1",
+        "target": "packages/ai-runtime/src/provider/custom/wire/buildImageRequest.ts",
+        "targetSha256": "abd2e8dff9118a5a07c090e2bf4b530aecc43131da3226925587f889522f1ef7"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/wire/wireProfile.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/wire/wireProfile.ts",
+        "sourceSha256": "37423db39fef973e12bbae8f8134b96e24cdefebdf9568d07a30e9509bc2b30c",
+        "target": "packages/ai-runtime/src/provider/custom/wire/wireProfile.ts",
+        "targetSha256": "490ade6963008201a4d4476fb421c767e024ecc32a13ec1b355a7f6114bbffed"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/custom/zhipuProvider.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/custom/zhipuProvider.ts",
+        "sourceSha256": "f16433ca87a43b0a4e71bdd738232fa848ac3135cb918f5713cf37a9924985ac",
+        "target": "packages/ai-runtime/src/provider/custom/zhipuProvider.ts",
+        "targetSha256": "405ca36168a6595fdd8130e792d4f3c1da790e30b0689bb62a2560da1646c9e1"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/endpoint.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/endpoint.ts",
         "sourceSha256": "06cf439f1dfd11509eda3e48a9a80d2463f0cf18215378055a5a5a5eecd68b03",
         "target": "packages/ai-runtime/src/provider/endpoint.ts",
-        "targetSha256": "1097d746f4aae01a7772c6a2b1d501c236bca4900090c1222df512e892f847c6"
+        "targetSha256": "f048c7ec0740fac8a8a884c705c4f9b8ab5d192a19d82c643a911618de48b8ff"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/extensions.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/extensions.ts",
         "sourceSha256": "cb96541ab34324b1df49f4dafbbe4ef3f6e43aa0017be6c4dd15162ee66cdf0e",
         "target": "packages/ai-runtime/src/provider/extensions.ts",
-        "targetSha256": "4fd91340a2a68feb09c91dadce25f4cea3049c48f2790a1be8dbce656c37808e"
+        "targetSha256": "dea71f3c2850330f73571393b313a5469249b7e32daecb6c0c40710888fe4de7"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/factory.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/factory.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/factory.ts",
         "sourceSha256": "be9d3195b300e9989fb9ac6d7bae6367f63d1ec20dbc00b3f7164b9e5083a494",
         "target": "packages/ai-runtime/src/provider/factory.ts",
-        "targetSha256": "1f50b1e1718b8e00ffdf70f8509f5ca402f1a28914b542f8dc536e12e3885fc5"
+        "targetSha256": "3e89d5160b336d395e9cf9b2d87ac73db962d95dc0e90fc506a35b02860b3dd7"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/gatewayRouting.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/gatewayRouting.ts",
         "sourceSha256": "007da23c6c4e216c73de2e88f9036f1198551e64a9fe59ef8d5846cfac59d4a2",
         "target": "packages/ai-runtime/src/provider/gatewayRouting.ts",
-        "targetSha256": "94830b1195970d6acc4ced9266eaace9a16ba1735d2caf030d45ce52cae000ad"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/grokCli.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/grokCli.ts",
-        "sourceSha256": "9812e564070ccb0ebed96559eaf1902790ae4962b4b7f986d976101ff5b61447"
+        "targetSha256": "5279dfc2b1aac0629a82511ba3f6d254376fdd3ac650ee724f004967afa19500"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/listModels.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/grokCli.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/grokCli.ts",
+        "sourceSha256": "9812e564070ccb0ebed96559eaf1902790ae4962b4b7f986d976101ff5b61447",
+        "target": "packages/ai-runtime/src/provider/grokCli.ts",
+        "targetSha256": "c64c9a9488fa21399116304d26773368a76e9196664c5e4bc3aa37f717d4e4b9"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/listModels.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/listModels.ts",
         "sourceSha256": "de42d79fe7782758913bb8045277516c90a781e7c35b9b6bad32d663baa57477",
         "target": "packages/ai-runtime/src/provider/listModels.ts",
-        "targetSha256": "3ae1dc31041097beed2468fc225af42c868d89ff2f7273a451c1ffae682eeb6a"
-      },
-      {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/listModels/vertex.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
-        "source": "src/main/ai/provider/listModels/vertex.ts",
-        "sourceSha256": "c9d6d4c3e7d5b3266fb75e7f2a593439f9fbc784914656349dea3676563002eb"
+        "targetSha256": "2ab23f930fb43c2d751dd6114fbf174ff4e970b036f82c0d7aacecf23769d35f"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/listModels/vertex.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
+        "source": "src/main/ai/provider/listModels/vertex.ts",
+        "sourceSha256": "c9d6d4c3e7d5b3266fb75e7f2a593439f9fbc784914656349dea3676563002eb",
+        "target": "packages/ai-runtime/src/provider/listModels/vertex.ts",
+        "targetSha256": "ce58330fbf4ad93acc6f7e1f29ffc700bee846bd79b822eae53231af74727354"
+      },
+      {
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/listModelsSchemas.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/listModelsSchemas.ts",
         "sourceSha256": "ae8b4823cd76d8c6b4b0c5b012ae4dff6c3de3433f881f84d845c3e2da97921f",
         "target": "packages/ai-runtime/src/provider/listModelsSchemas.ts",
-        "targetSha256": "f4198e7b9e80d1829ccf990eae2a6b3706bf7a3b8019493e1aba598237ac4de6"
+        "targetSha256": "64277911ebf467558b3b97fcf0bf62ad1b2e1cee0dc8e7aa09ca6aa2388262ae"
       },
       {
         "classification": "semantic-port",
-        "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/endpoint.test.ts"],
-        "reason": "Portable mobile behavior is owned by @cherrystudio/ai-runtime and guarded by package contracts.",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/vertex.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/vertex.ts",
         "sourceSha256": "4d437f6cb90d191a89647905859bfedd44d92729c863927fb11c3e10c82fae07",
         "target": "packages/ai-runtime/src/provider/vertex.ts",
-        "targetSha256": "9707badf79cf1f0cddc53fe29d7b567437853d1eafa28a0b492961d032305d9d"
+        "targetSha256": "c0b562cb799c839491ea1e1141dbee1486bd01e205ba46119a949a411e927784"
       },
       {
-        "classification": "blocked",
-        "evidence": ["desktop:src/main/ai/provider/zhipuWebSearch.ts"],
-        "reason": "No mobile implementation or approved semantic equivalence mapping exists.",
+        "classification": "semantic-port",
+        "evidence": ["mobile:packages/ai-runtime/src/provider/zhipuWebSearch.ts"],
+        "reason": "Portable desktop provider behavior is owned by @cherrystudio/ai-runtime and covered by package contracts.",
         "source": "src/main/ai/provider/zhipuWebSearch.ts",
-        "sourceSha256": "48437075da1b1d59dfc3c7fbe0165fe79e5e385c2c698f4d339b28c3965c8243"
+        "sourceSha256": "48437075da1b1d59dfc3c7fbe0165fe79e5e385c2c698f4d339b28c3965c8243",
+        "target": "packages/ai-runtime/src/provider/zhipuWebSearch.ts",
+        "targetSha256": "a1db09dc468be1aa727a8f8c93a00faba375704b34d5cd20020224b05347a343"
       },
       {
         "classification": "semantic-port",
@@ -2772,7 +3028,7 @@
         "source": "src/main/ai/runtime/aiSdk/params/buildAgentParams.ts",
         "sourceSha256": "fb3df0bf6f17740fc7637b4609fdaabf6956e44e66ab7777325ce8512b3e6846",
         "target": "src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts",
-        "targetSha256": "734c09614763e667114c73be3611936e9097e4715482c70a774847b9f32fe098"
+        "targetSha256": "ef835b7af96f283aded1976e22437d3649c9d11b8f477f7d5fefc750fb9a4037"
       },
       {
         "classification": "blocked",
@@ -4713,7 +4969,7 @@
         "source": "src/main/ai/utils/imageOptions.ts",
         "sourceSha256": "9a85ad18361670c860b717e4e5c0d04e45d0a41e8d3f2e1df937c9ffcfd63931",
         "target": "packages/ai-runtime/src/utils/imageOptions.ts",
-        "targetSha256": "1bc405f3e1bc1a2cbd39905dc400a99079833f68fc6c599eccdabdc4b07d101b"
+        "targetSha256": "0552d128dc2702c8f831df858ab3a2e63138eb62c1c10541e38788a965b04653"
       },
       {
         "classification": "blocked",
@@ -4747,7 +5003,7 @@
         "source": "src/main/ai/utils/provider.ts",
         "sourceSha256": "70f00b0d6e5a1e8f8a3b78dcd0cacb508e7b8b73d6a4d1d2408b29b04b7fcba5",
         "target": "packages/ai-runtime/src/utils/provider.ts",
-        "targetSha256": "2badbe89be3bbd0d19a80872c8a06436b6c2e24d46bbbcf6cd711a60cd49b3f3"
+        "targetSha256": "f9918c6511089ca5388775bc599168267fb3ede4614f9c98f7a96bec01247ac8"
       },
       {
         "classification": "semantic-port",
@@ -5239,7 +5495,7 @@
         "source": "src/backend/ai/provider/custom/dmxapi/dmxapiProvider.test.ts",
         "sourceSha256": "0cda86fdff1559f4f0e3b5dda3f80b418775dd1bb4d5e55810f01f4394feb7dd",
         "target": "packages/ai-runtime/src/provider/custom/dmxapi/dmxapiProvider.test.ts",
-        "targetSha256": "d02f0e605f89473834f3b2830ee5b4087817527008c31eb9790e48909a2db8ba"
+        "targetSha256": "7e0ee93b08d49c2e8082e086fd954b0c2b6c8b826d995b521263c17cc4cc9999"
       },
       {
         "classification": "semantic-port",
@@ -6523,17 +6779,24 @@
     },
     {
       "classification": "mobile-extension",
-      "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/factory.test.ts"],
-      "reason": "Package-owned public entrypoint or contract test has no one-to-one mobile or reviewed desktop source.",
-      "target": "packages/ai-runtime/src/provider/__tests__/factory.test.ts",
-      "targetSha256": "1abd572b4dcb6a108fd0959302970144fa48c17bb56d6e370cfa408d336efde2"
+      "evidence": ["mobile:packages/ai-runtime/src/provider/__tests__/fixtures.ts"],
+      "reason": "Portable package support code has no one-to-one desktop source and is covered by package tests.",
+      "target": "packages/ai-runtime/src/provider/__tests__/fixtures.ts",
+      "targetSha256": "1f7d77dc03b4fd497e0b11ea6ce03adece38375d457dfbeecf88e12a861f1a1c"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:packages/ai-runtime/src/provider/diagnostics.ts"],
+      "reason": "Portable package support code has no one-to-one desktop source and is covered by package tests.",
+      "target": "packages/ai-runtime/src/provider/diagnostics.ts",
+      "targetSha256": "e176ada52962009e2b9fff91e509cd5d2170b0c35830f92d65f2679257a46b0b"
     },
     {
       "classification": "mobile-extension",
       "evidence": ["mobile:packages/ai-runtime/src/provider/index.ts"],
       "reason": "Package-owned public entrypoint or contract test has no one-to-one mobile or reviewed desktop source.",
       "target": "packages/ai-runtime/src/provider/index.ts",
-      "targetSha256": "91e152ff9ed454b3db3b6ea655df614fc611d4a26d097dc08fba94b38cf55601"
+      "targetSha256": "b6581ce5619310f08c97be247ffb4fa82f1f04d2934900ba633cff3ff873bda8"
     },
     {
       "classification": "mobile-extension",
@@ -6592,6 +6855,20 @@
     }
   ],
   "backendOwned": [
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/VertexAuthClient.ts"],
+      "reason": "Mobile-owned AI adapter has no one-to-one desktop source and keeps platform behavior outside the portable package.",
+      "target": "src/backend/ai/provider/VertexAuthClient.ts",
+      "targetSha256": "6d814814a034a43febdcde53a7bdfcdaa0f6f1fa7bdb6e11bb554e558ed31d9a"
+    },
+    {
+      "classification": "mobile-extension",
+      "evidence": ["mobile:src/backend/ai/provider/__tests__/VertexAuthClient.test.ts"],
+      "reason": "Mobile-owned AI adapter has no one-to-one desktop source and keeps platform behavior outside the portable package.",
+      "target": "src/backend/ai/provider/__tests__/VertexAuthClient.test.ts",
+      "targetSha256": "a5b00b0aa0dbed5dce4c57aa37c318fff86157f3882938c6438fcedb5a56e258"
+    },
     {
       "classification": "mobile-extension",
       "evidence": ["mobile:src/backend/ai/tools/__tests__/ToolResolver.test.ts"],
