@@ -1,18 +1,27 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import { isTerminalStatus } from '@cherrystudio/universal/data/api/schemas/jobs';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ComposerAttachmentDraft } from '@/frontend/components/composer/utils/composerAttachments';
-import { useBackendModule, useQuery } from '@/frontend/data';
+import { queryKeys, useBackendModule, useQuery } from '@/frontend/data';
 import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
 } from '@/shared/contracts';
 
-import { useSyncPaintingQueries } from './usePaintings';
+import { paintingJobFailureMessage, usePaintingJobs } from './usePaintingJobs';
+import { useDeletePaintings, useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
+
+/**
+ * The receipt exists but holds no images and nothing is running for it — the
+ * previous attempt died with the app, timed out, or the provider refused.
+ * `message` is provider text when there is any worth repeating.
+ */
+export type PaintingInterruption = { message?: string };
 
 export type PaintingOutput = PaintingGenerationOutput;
 
@@ -26,8 +35,6 @@ export type PaintingGenerationInput = {
 
 export type PaintingGenerationResult = BackendPaintingGenerationResult;
 
-const PAINTING_GENERATE_JOB_TYPE = 'painting.generate';
-const ACTIVE_JOB_STATUSES = 'pending,running,delayed';
 const JOB_POLL_INTERVAL_MS = 1000;
 
 type PendingSettle = {
@@ -38,43 +45,68 @@ type PendingSettle = {
 /**
  * Drives painting generation through the job ledger: `startGeneration` enqueues
  * a `painting.generate` job that outlives this hook, and the terminal snapshot
- * is observed by polling `GET /jobs/:id`. On mount the hook adopts a still
- * active generation left behind by a previous visit, so navigating away and
- * back keeps showing (and eventually reveals) the in-flight result.
+ * is observed by polling `GET /jobs/:id`.
+ *
+ * `paintingId` binds the screen to one receipt: the hook adopts that receipt's
+ * running job (so returning to it keeps showing progress) and reports it as
+ * interrupted when nothing is running and no image ever landed. A composer
+ * opened without one is a blank canvas and adopts nothing, however many other
+ * generations happen to be in flight.
  */
 export function usePaintingGeneration({
   initialOutputs,
+  onReceipt,
+  paintingId,
 }: {
   initialOutputs: readonly PaintingOutput[];
+  /**
+   * Fires with the receipt this screen is now bound to (and with `undefined`
+   * when a cancel discards it), so the route can carry the id and survive a
+   * remount.
+   */
+  onReceipt?: (paintingId: string | undefined) => void;
+  paintingId?: string;
 }) {
   const paintings = useBackendModule('paintings');
+  const queryClient = useQueryClient();
   const syncPaintingQueries = useSyncPaintingQueries();
+  const deletePaintings = useDeletePaintings();
+  const jobs = usePaintingJobs();
   const [error, setError] = useState<Error | null>(null);
   const [outputs, setOutputs] = useState<PaintingOutput[]>(() => [...initialOutputs]);
   const [status, setStatus] = useState<PaintingGenerationStatus>('idle');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [adoptionSettled, setAdoptionSettled] = useState(false);
   const pendingSettleRef = useRef<PendingSettle | null>(null);
+  // A job stays in the active list for up to one poll after its terminal row
+  // lands; without this the settle effect would re-adopt what it just settled
+  // and replay the reveal.
+  const [settledJobIds, setSettledJobIds] = useState<ReadonlySet<string>>(() => new Set());
+  const receiptIdRef = useRef<string | undefined>(paintingId);
 
-  // Adoption is a one-shot mount decision: a screen that was already open when
-  // another screen enqueued a job must not hijack it later.
-  const restoreQuery = useQuery('/jobs', {
-    enabled: !adoptionSettled && activeJobId === null,
-    query: { limit: 1, status: ACTIVE_JOB_STATUSES, type: PAINTING_GENERATE_JOB_TYPE },
-    staleTime: 0,
-  });
-  const restoredJob = restoreQuery.data?.[0];
-  const restoreSettled = restoreQuery.data !== undefined || restoreQuery.isError;
-  // Render-phase adjustment (not an effect): once the restore query settles,
-  // adopt at most once. The `adoptionSettled` guard makes the setState
+  const runningJob = paintingId === undefined ? undefined : jobs.activeByPaintingId.get(paintingId);
+  const adoptableJobId = runningJob && !settledJobIds.has(runningJob.id) ? runningJob.id : null;
+  // Render-phase adjustment (not an effect): the guard makes the setState
   // idempotent, so the extra render pass converges immediately.
-  if (!adoptionSettled && activeJobId === null && restoreSettled) {
-    setAdoptionSettled(true);
-    if (restoredJob && !isTerminalStatus(restoredJob.status)) {
-      setActiveJobId(restoredJob.id);
-      setStatus('generating');
-    }
+  if (activeJobId === null && adoptableJobId !== null) {
+    setActiveJobId(adoptableJobId);
+    setStatus('generating');
   }
+
+  // Purely derived: a bound receipt with nothing running and nothing to show
+  // is one whose generation never landed. `jobs.isLoading` matters — before the
+  // active list arrives every in-flight painting would read as interrupted.
+  const isInterrupted =
+    paintingId !== undefined &&
+    !jobs.isLoading &&
+    !runningJob &&
+    activeJobId === null &&
+    status === 'idle' &&
+    outputs.length === 0;
+  const interruptedJob = paintingId ? jobs.interruptedByPaintingId.get(paintingId) : undefined;
+  const interruption: PaintingInterruption | null = useMemo(
+    () => (isInterrupted ? { message: paintingJobFailureMessage(interruptedJob) } : null),
+    [interruptedJob, isInterrupted],
+  );
 
   const jobQuery = useQuery('/jobs/:id', {
     enabled: activeJobId !== null,
@@ -96,6 +128,7 @@ export function usePaintingGeneration({
     }
     const settle = pendingSettleRef.current;
     pendingSettleRef.current = null;
+    setSettledJobIds((current) => new Set(current).add(job.id));
     setActiveJobId(null);
     if (job.status === 'completed') {
       const result = job.output as PaintingGenerationResult;
@@ -123,10 +156,9 @@ export function usePaintingGeneration({
       }
       setError(null);
       setStatus('generating');
-      setAdoptionSettled(true);
 
       try {
-        const { jobId } = await paintings.startGeneration({
+        const started = await paintings.startGeneration({
           images: input.attachments.flatMap((attachment) =>
             attachment.kind === 'image'
               ? [
@@ -142,12 +174,21 @@ export function usePaintingGeneration({
           ),
           mode: input.mode,
           modelId: input.modelId,
+          // Retrying reuses the interrupted receipt so its gallery tile flips in
+          // place; a receipt that already holds images is never passed here, and
+          // the backend rejects it if one ever is.
+          ...(interruption ? { paintingId } : {}),
           paramValues: input.paramValues,
           prompt: input.prompt,
         });
+        receiptIdRef.current = started.paintingId;
+        onReceipt?.(started.paintingId);
+        // The gallery's active-job poll stops once nothing is running, so a
+        // fresh enqueue has to wake it explicitly.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
         return await new Promise<PaintingGenerationResult>((resolve, reject) => {
           pendingSettleRef.current = { reject, resolve };
-          setActiveJobId(jobId);
+          setActiveJobId(started.jobId);
         });
       } catch (generationError) {
         const normalized =
@@ -157,15 +198,26 @@ export function usePaintingGeneration({
         throw normalized;
       }
     },
-    [activeJobId, paintings],
+    [activeJobId, interruption, onReceipt, paintingId, paintings, queryClient],
   );
 
   const cancel = useCallback(() => {
     if (activeJobId === null) {
       return;
     }
-    void paintings.cancelGeneration(activeJobId);
-  }, [activeJobId, paintings]);
+    const receiptId = receiptIdRef.current ?? paintingId;
+    void paintings.cancelGeneration(activeJobId).then(async () => {
+      // Stopping on purpose is not the same as being interrupted: leaving the
+      // receipt behind would put an "interrupted, tap to retry" tile in the
+      // gallery for something the user just said they did not want.
+      if (receiptId === undefined) {
+        return;
+      }
+      receiptIdRef.current = undefined;
+      onReceipt?.(undefined);
+      await deletePaintings([receiptId]);
+    });
+  }, [activeJobId, deletePaintings, onReceipt, paintingId, paintings]);
   const finishReveal = useCallback(() => setStatus('idle'), []);
 
   return {
@@ -173,6 +225,7 @@ export function usePaintingGeneration({
     error,
     finishReveal,
     generate,
+    interruption,
     outputs,
     status,
   };

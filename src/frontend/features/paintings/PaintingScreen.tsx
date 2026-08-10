@@ -1,5 +1,5 @@
-import { Stack, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
+import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,12 +11,24 @@ import { usePainting, useResolvedPaintingFiles } from './hooks/usePaintings';
 import { consumePaintingDraftHandoff } from './utils/paintingDraftHandoff';
 
 export function PaintingScreen() {
+  // Screen-scoped rather than `router.setParams`: the receipt id can land after
+  // the user has already navigated away, and the router's version would write
+  // it into whatever route is focused by then.
+  // `RootParamList` is empty here (no generated route types), so the default
+  // `setParams` signature takes `undefined`; name the params this screen owns.
+  const navigation = useNavigation<{
+    setParams(params: { paintingId: string | undefined }): void;
+  }>();
   const params = useLocalSearchParams<{
     handoff?: string | string[];
     paintingId?: string | string[];
   }>();
   const handoffToken = firstParam(params.handoff);
   const paintingId = firstParam(params.paintingId);
+  // Frozen at mount: once a generation started here writes its receipt id back
+  // into the route, re-entering the loading gate would tear the composer down
+  // mid-generation.
+  const [openedWithPaintingId] = useState(() => paintingId !== undefined);
   const [handoff] = useState(() => consumePaintingDraftHandoff(handoffToken));
   const paintingQuery = usePainting(paintingId);
   const painting = paintingQuery.data;
@@ -27,8 +39,12 @@ export function PaintingScreen() {
   const filesQuery = useResolvedPaintingFiles(handoff ? undefined : painting);
   const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
   const insets = useSafeAreaInsets();
-  const isLoading = Boolean(paintingId) && (paintingQuery.isLoading || filesQuery.isLoading);
+  const isLoading = openedWithPaintingId && (paintingQuery.isLoading || filesQuery.isLoading);
   const backgroundColor = useThemeColor('background');
+  const handleReceipt = useCallback(
+    (receiptId: string | undefined) => navigation.setParams({ paintingId: receiptId }),
+    [navigation],
+  );
 
   return (
     <View className="flex-1 bg-background" style={{ paddingBottom: Math.max(insets.bottom, 8) }}>
@@ -48,7 +64,11 @@ export function PaintingScreen() {
           initialAttachments={handoff?.attachments ?? paintingFiles.inputs}
           initialDraft={handoff?.draft ?? painting?.prompt ?? ''}
         >
-          <PaintingComposer initialFiles={paintingFiles} painting={painting} />
+          <PaintingComposer
+            initialFiles={paintingFiles}
+            onReceipt={handleReceipt}
+            painting={painting}
+          />
         </ManagedComposerProvider>
       )}
     </View>

@@ -1,4 +1,5 @@
 import { useImage } from '@shopify/react-native-skia';
+import { RotateCcwIcon } from 'lucide-uniwind/png';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -8,17 +9,22 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingSkeleton } from '@/frontend/components/paintingSkeleton';
 import { paintingSkeleton } from '@/frontend/utils/constants';
 
-import type { PaintingGenerationStatus } from '../hooks/usePaintingGeneration';
+import type {
+  PaintingGenerationStatus,
+  PaintingInterruption,
+} from '../hooks/usePaintingGeneration';
 
 type PaintingOutput = { fileEntryId: string; uri: string };
 
 export function PaintingCanvas({
   error,
+  interruption,
   onRevealFinish,
   outputs,
   status,
 }: {
   error: Error | null;
+  interruption: PaintingInterruption | null;
   onRevealFinish: () => void;
   outputs: readonly PaintingOutput[];
   status: PaintingGenerationStatus;
@@ -71,9 +77,24 @@ export function PaintingCanvas({
               </View>
             ))}
           </ScrollView>
+        ) : interruption ? (
+          // The gallery tile truncates the provider's words to two lines; this
+          // is where they can be read in full, next to the input that retries.
+          <View
+            className="flex-1 items-center justify-center gap-2 px-6"
+            testID="painting-interrupted"
+          >
+            <RotateCcwIcon className="size-7 text-foreground-tertiary" strokeWidth={1.5} />
+            <Text className="text-center font-medium text-foreground-secondary text-sm">
+              {t('painting.status.interrupted')}
+            </Text>
+            <Text className="text-center text-foreground-tertiary text-xs">
+              {interruption.message ?? t('painting.status.interruptedHint')}
+            </Text>
+          </View>
         ) : null}
       </View>
-      {error ? (
+      {error && !interruption ? (
         <Text
           accessibilityRole="alert"
           className="pt-2 text-center text-destructive text-sm"

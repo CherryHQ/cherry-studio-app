@@ -53,21 +53,25 @@ function jobSnapshot(overrides: Partial<JobSnapshot>): JobSnapshot {
   };
 }
 
-const mockStartGeneration = jest.fn(async () => ({ jobId: 'job-1' }));
+const mockStartGeneration = jest.fn(async () => ({ jobId: 'job-1', paintingId: 'painting-1' }));
 const mockCancelGeneration = jest.fn(async () => undefined);
 const backend = {
   paintings: { cancelGeneration: mockCancelGeneration, startGeneration: mockStartGeneration },
 } as unknown as Backend;
 const mockSyncPaintingQueries = jest.fn(async () => undefined);
+const mockDeletePaintings = jest.fn(async () => undefined);
 
 /** Per-test ledger state served by the mocked Data API. */
 let activeJobs: JobSnapshot[] = [];
+let interruptedJobs: JobSnapshot[] = [];
 let jobById = new Map<string, JobSnapshot>();
 
 const dataApi = {
   delete: jest.fn(),
-  get: jest.fn(async (path: string) => {
-    if (path === '/jobs') return activeJobs;
+  get: jest.fn(async (path: string, options?: { query?: { status?: string } }) => {
+    if (path === '/jobs') {
+      return options?.query?.status?.includes('running') ? activeJobs : interruptedJobs;
+    }
     const jobId = path.replace('/jobs/', '');
     const job = jobById.get(jobId);
     if (!job) throw new Error(`Job not found: ${jobId}`);
@@ -79,6 +83,7 @@ const dataApi = {
 } as unknown as jest.Mocked<ApiClient>;
 
 jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
+  useDeletePaintings: () => mockDeletePaintings,
   useSyncPaintingQueries: () => mockSyncPaintingQueries,
 }));
 
@@ -87,21 +92,21 @@ let api: GenerationApi | undefined;
 let renderer: ReactTestRenderer | undefined;
 let queryClient: QueryClient;
 
-function Probe() {
-  const generation = usePaintingGeneration({ initialOutputs: [] });
+function Probe({ paintingId }: { paintingId?: string }) {
+  const generation = usePaintingGeneration({ initialOutputs: [], paintingId });
   useEffect(() => {
     api = generation;
   }, [generation]);
   return null;
 }
 
-async function mountProbe() {
+async function mountProbe(paintingId?: string) {
   await act(async () => {
     renderer = create(
       <QueryClientProvider client={queryClient}>
         <DataApiProvider dataApi={dataApi}>
           <BackendProvider backend={backend}>
-            <Probe />
+            <Probe paintingId={paintingId} />
           </BackendProvider>
         </DataApiProvider>
       </QueryClientProvider>,
@@ -148,6 +153,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   api = undefined;
   activeJobs = [];
+  interruptedJobs = [];
   jobById = new Map();
   queryClient = new QueryClient({
     defaultOptions: { queries: { gcTime: Infinity, retry: false } },
@@ -195,7 +201,7 @@ describe('usePaintingGeneration', () => {
   });
 
   it('surfaces a failed job as frontend error state and allows a retry', async () => {
-    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-fail' });
+    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-fail', paintingId: 'painting-1' });
     jobById.set(
       'job-fail',
       jobSnapshot({
@@ -214,7 +220,7 @@ describe('usePaintingGeneration', () => {
     expect(api?.error).toEqual(new Error('network failed'));
     expect(api?.status).toBe('idle');
 
-    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-2' });
+    mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-2', paintingId: 'painting-1' });
     jobById.set(
       'job-2',
       jobSnapshot({ id: 'job-2', output: { outputs: [output], painting }, status: 'completed' }),
@@ -276,10 +282,10 @@ describe('usePaintingGeneration', () => {
     expect(api?.status).toBe('idle');
   });
 
-  it('adopts a still-active generation on mount and reveals its result', async () => {
-    activeJobs = [jobSnapshot({ status: 'running' })];
+  it("adopts this painting's still-active generation on mount and reveals its result", async () => {
+    activeJobs = [jobSnapshot({ input: { paintingId: 'painting-1' }, status: 'running' })];
     jobById.set('job-1', jobSnapshot({ status: 'running' }));
-    await mountProbe();
+    await mountProbe('painting-1');
     await waitForCondition(() => api?.status === 'generating');
 
     jobById.set(
@@ -295,10 +301,119 @@ describe('usePaintingGeneration', () => {
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
   });
 
-  it('does not adopt anything when the ledger has no active generation', async () => {
+  it('leaves a blank composer blank while another painting is generating', async () => {
+    activeJobs = [jobSnapshot({ input: { paintingId: 'painting-other' }, status: 'running' })];
+    jobById.set('job-1', jobSnapshot({ status: 'running' }));
     await mountProbe();
+    await waitForCondition(() => dataApi.get.mock.calls.length > 0);
 
     expect(api?.status).toBe('idle');
-    expect(dataApi.get).toHaveBeenCalledWith('/jobs', expect.anything());
+    expect(api?.interruption).toBeNull();
+  });
+
+  it("ignores another painting's generation even when bound to a receipt", async () => {
+    activeJobs = [jobSnapshot({ input: { paintingId: 'painting-other' }, status: 'running' })];
+    await mountProbe('painting-1');
+    await waitForCondition(() => api?.interruption !== null);
+
+    expect(api?.status).toBe('idle');
+  });
+
+  it('reports an image-less receipt with nothing running as interrupted, carrying the provider text', async () => {
+    interruptedJobs = [
+      jobSnapshot({
+        error: { code: 'JOB_HANDLER_THREW', message: 'Invalid JSON response', retryable: true },
+        input: { paintingId: 'painting-1' },
+        status: 'failed',
+      }),
+    ];
+    await mountProbe('painting-1');
+    await waitForCondition(() => api?.interruption !== null);
+
+    expect(api?.interruption).toEqual({ message: 'Invalid JSON response' });
+  });
+
+  it('keeps a cancelled job wordless: its message never went through i18n', async () => {
+    interruptedJobs = [
+      jobSnapshot({
+        error: {
+          code: 'JOB_CANCELLED',
+          message: 'Cancelled by startup recovery',
+          retryable: false,
+        },
+        input: { paintingId: 'painting-1' },
+        status: 'cancelled',
+      }),
+    ];
+    await mountProbe('painting-1');
+    await waitForCondition(() => api?.interruption !== null);
+
+    expect(api?.interruption).toEqual({ message: undefined });
+  });
+
+  it('retries into the interrupted receipt instead of minting a second painting', async () => {
+    interruptedJobs = [
+      jobSnapshot({
+        error: { code: 'JOB_HANDLER_THREW', message: 'boom', retryable: true },
+        input: { paintingId: 'painting-1' },
+        status: 'failed',
+      }),
+    ];
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await mountProbe('painting-1');
+    await waitForCondition(() => api?.interruption !== null);
+
+    await act(async () => {
+      await api?.generate(request);
+    });
+
+    expect(mockStartGeneration).toHaveBeenCalledWith(
+      expect.objectContaining({ paintingId: 'painting-1' }),
+    );
+  });
+
+  it('starts a fresh painting from a blank composer', async () => {
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await mountProbe();
+
+    await act(async () => {
+      await api?.generate(request);
+    });
+
+    expect(mockStartGeneration).toHaveBeenCalledWith(
+      expect.not.objectContaining({ paintingId: expect.anything() }),
+    );
+  });
+
+  it('discards the receipt when the user cancels, so no interrupted tile is left behind', async () => {
+    jobById.set('job-1', jobSnapshot({ status: 'running' }));
+    await mountProbe();
+
+    let settled: Promise<unknown> | undefined;
+    await act(async () => {
+      settled = api?.generate(request).catch((error) => error);
+      await Promise.resolve();
+    });
+
+    jobById.set(
+      'job-1',
+      jobSnapshot({
+        error: { code: 'JOB_CANCELLED', message: 'Cancelled by user', retryable: false },
+        status: 'cancelled',
+      }),
+    );
+    await act(async () => {
+      api?.cancel();
+      await queryClient.refetchQueries();
+      await settled;
+    });
+
+    expect(mockDeletePaintings).toHaveBeenCalledWith(['painting-1']);
   });
 });

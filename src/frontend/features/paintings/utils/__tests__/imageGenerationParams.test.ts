@@ -1,6 +1,7 @@
 import type { ImageGenerationSupport } from '@cherrystudio/provider-registry';
 
 import {
+  imageParamsAspectRatio,
   isImageParamDraftValid,
   prepareImageParamValues,
   reconcileImageParamDraft,
@@ -125,5 +126,23 @@ describe('image generation parameter drafts', () => {
       'Invalid custom image size',
     );
     expect(prepareImageParamValues({ seed: 4 }, undefined, undefined)).toEqual({});
+  });
+});
+
+describe('placeholder tile sizing', () => {
+  it('prefers an explicit ratio, then a pixel size, and squares off when neither is set', () => {
+    expect(imageParamsAspectRatio({ aspectRatio: '16:9' })).toBeCloseTo(16 / 9);
+    expect(imageParamsAspectRatio({ size: '1024x768' })).toBeCloseTo(4 / 3);
+    expect(imageParamsAspectRatio({ imageResolution: '512X1024' })).toBeCloseTo(0.5);
+    // Ratio wins: `size` may be the provider's own pixel spelling of it.
+    expect(imageParamsAspectRatio({ aspectRatio: '1:2', size: '1024x1024' })).toBeCloseTo(0.5);
+    expect(imageParamsAspectRatio(undefined)).toBe(1);
+    expect(imageParamsAspectRatio({})).toBe(1);
+  });
+
+  it('falls back to square rather than trusting junk from the ledger', () => {
+    expect(imageParamsAspectRatio({ aspectRatio: 'auto' })).toBe(1);
+    expect(imageParamsAspectRatio({ size: '0x1024' })).toBe(1);
+    expect(imageParamsAspectRatio({ size: '1024' })).toBe(1);
   });
 });

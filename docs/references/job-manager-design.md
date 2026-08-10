@@ -77,9 +77,20 @@ consumer is `painting.generate`
 creates the receipt and enqueues in one `withWriteTx` (with an idempotency pre-check so a
 duplicate signature joins the active job instead of orphaning a fresh receipt), and
 `usePaintingGeneration` observes the ledger by polling `GET /jobs/:id` (1 s while active, stop on
-terminal) and adopts a still-active job on mount via `GET /jobs`. Because `DbService.withWriteTx`
-is not reentrant, the in-transaction path is built entirely from `*Tx` variants
-(`PaintingService.createTx`, `JobRuntime.enqueueTx`, `JobService.findActiveByIdempotencyKeyTx`).
+terminal) and adopts a still-active job on mount via `usePaintingJobs`. Because
+`DbService.withWriteTx` is not reentrant, the in-transaction path is built entirely from `*Tx`
+variants (`PaintingService.createTx` / `resetForRetryTx`, `JobRuntime.enqueueTx`,
+`JobService.findActiveByIdempotencyKeyTx`).
+
+**The ledger is the gallery's status source.** `usePaintingJobs`
+(`src/frontend/features/paintings/hooks/usePaintingJobs.ts`) is the one subscription both the
+drawings list and the composer read: an active query (`status=pending,delayed,running`, polling at
+1 s only while non-empty) plus an untimed terminal query used purely for failure copy. An
+output-less painting is *generating* when its id appears in the active map and *interrupted*
+otherwise — deriving the interrupted state from the **absence** of an active job rather than the
+presence of a terminal one keeps it correct after job GC collects the row that explains why. That
+same hook is the only thing that invalidates `/paintings` when a generation lands while the user
+sits on the list.
 
 **As-built deviations from the design text:**
 
@@ -94,8 +105,11 @@ is not reentrant, the in-transaction path is built entirely from `*Tx` variants
   Draft picker images are materialized into durable internal file entries *before* enqueue; the
   `uri` riding along is the internal-storage path (never an ephemeral picker URI), which the
   handler reads data URLs from directly.
-- **`startGeneration` returns `{ jobId }`**, not `{ paintingId, jobId }`; the receipt reaches the
-  frontend through the completed job's output and the painting query sync.
+- **`startGeneration` returns `{ jobId, paintingId }`** and takes an optional `paintingId` to
+  retry an image-less receipt in place (bumping it back to the head of the gallery) rather than
+  minting a second one. The receipt id participates in `generationSignature`, so a retry and an
+  identical fresh generation cannot collide on idempotency. `resetForRetryTx` rejects a receipt
+  that already holds outputs — reuse would delete finished images.
 - **`internal.echo` was not built.** The jest harness
   (`src/backend/services/jobs/__tests__/_helpers.ts`) registers inline test handlers, which serve
   the proof role without needing a production-registry exclusion mechanism.
@@ -103,10 +117,14 @@ is not reentrant, the in-transaction path is built entirely from `*Tx` variants
   enqueue, the delayed-retry timer, and cold start; with only `foreground-only` handlers, an
   enqueue can only happen in the foreground, so the listener adds nothing until delayed retries
   can span a backgrounding or a Phase 2 window exists. Add it with Phase 2.
-- **Dangling receipts are kept.** A failed/cancelled/abandoned generation leaves a painting row
-  with no outputs — invisible to the list (it filters on having output), matching the old session
-  behavior. A future file-orphan-cleanup job is the designated collector; the "interrupted, tap
-  to retry" UI remains an open question.
+- **Image-less receipts are visible, and that is what makes the durability observable.**
+  `PaintingService` no longer filters the list on having outputs: the receipt row *is* the tile
+  for a generation in flight (a `PaintingSkeleton`, tapping back into its progress) and for one
+  that never landed ("interrupted", with the provider's own failure text, tapping into a
+  prefilled composer). Select-all sees them too, and deleting one cancels its running job first.
+  A user-initiated cancel deletes its receipt on the spot — being stopped on purpose is not the
+  same as being interrupted, and leaving the row would put a retry prompt in front of someone who
+  just said no.
 
 **Deliberate gaps** (settled in the 2026-08 design review, recorded so they read as decisions):
 
