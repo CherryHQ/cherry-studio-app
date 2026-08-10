@@ -1,12 +1,12 @@
+import type { BranchMessagesResponse, Message } from '@cherrystudio/universal/data/types/message';
 import { useCallback, useMemo, useRef, useState } from 'react';
+
 import { useInfiniteQuery } from '@/frontend/data';
-import type { BranchMessagesResponse, Message } from '@/shared/data/types/message';
+
 import { useMessageRenderWindow } from './useMessageRenderWindow';
-import {
-  getOlderLoadAction,
-  shouldPrefetchOlderMessages,
-} from './utils/messageHistoryWindowStrategy';
+import { getOlderLoadAction } from './utils/messageHistoryWindowStrategy';
 import { initialMessagesPageSize } from './utils/messageQueryOptions';
+import { messageWindowPolicy } from './utils/messageWindowPolicy';
 
 export type MessageHistoryWindowOptions = {
   enabled: boolean;
@@ -17,7 +17,6 @@ export type MessageHistoryWindow = {
   isLoadingOlder: boolean;
   loadOlder: () => Promise<void>;
   messages: readonly Message[];
-  prefetchOlder: () => void;
 };
 
 type OlderFetchOptions = {
@@ -49,6 +48,7 @@ export function useMessageHistoryWindow(
     enabled,
     limit: initialMessagesPageSize,
     params: { topicId: queryTopicId },
+    staleTime: messageWindowPolicy.staleTimeMs,
   });
 
   const allMessages = useMemo(() => flattenMessagePages(query.pages), [query.pages]);
@@ -102,19 +102,10 @@ export function useMessageHistoryWindow(
     await fetchOlderIfNeeded({ showLoading: true });
   }, [fetchOlderIfNeeded, hasHiddenMessages, hiddenMessageCount, revealMore]);
 
-  const prefetchOlder = useCallback(() => {
-    if (!shouldPrefetchOlderMessages({ hasHiddenMessages, hiddenMessageCount })) {
-      return;
-    }
-
-    void fetchOlderIfNeeded({ showLoading: false });
-  }, [fetchOlderIfNeeded, hasHiddenMessages, hiddenMessageCount]);
-
   return {
     isLoadingInitial: query.isLoading,
     isLoadingOlder,
     loadOlder,
     messages: visibleMessages,
-    prefetchOlder,
   };
 }

@@ -13,8 +13,8 @@ export function SourceUrlItem({ label, url, variant = 'card' }: SourceUrlItemPro
   const { domain } = parseSourceUrl(url);
   const containerClassName =
     variant === 'card'
-      ? 'flex-row items-center gap-2 rounded-lg border border-border bg-surface-secondary p-3 active:opacity-70'
-      : '-mx-2 flex-row items-center gap-2 rounded-md px-2 py-1.5 active:bg-surface-tertiary active:opacity-80';
+      ? 'flex-row items-center gap-2 rounded-lg border border-border bg-secondary p-3 active:opacity-70'
+      : '-mx-2 flex-row items-center gap-2 rounded-md px-2 py-1.5 active:bg-secondary-active active:opacity-80';
 
   return (
     <Pressable
@@ -23,18 +23,18 @@ export function SourceUrlItem({ label, url, variant = 'card' }: SourceUrlItemPro
       className={containerClassName}
       onPress={() => void openExternalUrl(url)}
     >
-      <View className="size-7 items-center justify-center rounded-md bg-surface-tertiary">
-        <GlobeIcon className="size-3.5 text-default-foreground" strokeWidth={2} />
+      <View className="size-7 items-center justify-center rounded-md bg-secondary">
+        <GlobeIcon className="size-3.5 text-foreground" strokeWidth={2} />
       </View>
       <View className="min-w-0 flex-1">
-        <Text className="font-medium text-default-foreground text-sm" numberOfLines={1} selectable>
+        <Text className="font-medium text-foreground text-sm" numberOfLines={1} selectable>
           {label || url}
         </Text>
-        <Text className="text-foreground-muted text-xs" numberOfLines={1} selectable>
+        <Text className="text-foreground-tertiary text-xs" numberOfLines={1} selectable>
           {domain || url}
         </Text>
       </View>
-      <SquareArrowOutUpRightIcon className="size-3.5 text-foreground-muted" strokeWidth={2} />
+      <SquareArrowOutUpRightIcon className="size-3.5 text-foreground-tertiary" strokeWidth={2} />
     </Pressable>
   );
 }

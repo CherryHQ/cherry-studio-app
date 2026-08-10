@@ -1,7 +1,8 @@
 import { DefaultTheme, ThemeProvider } from 'expo-router';
-import { useThemeColor } from 'heroui-native/hooks';
 import { useMemo } from 'react';
 import { useUniwind } from 'uniwind';
+
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 type NavigationThemeProviderProps = {
   children: React.ReactNode;
@@ -9,11 +10,11 @@ type NavigationThemeProviderProps = {
 
 export function NavigationThemeProvider({ children }: NavigationThemeProviderProps) {
   const { theme } = useUniwind();
-  const [accent, background, foreground, separator] = useThemeColor([
-    'accent',
+  const [primary, background, foreground, separator] = useThemeColor([
+    'primary',
     'background',
     'foreground',
-    'separator',
+    'border-strong',
   ]);
 
   const navigationTheme = useMemo(
@@ -25,12 +26,12 @@ export function NavigationThemeProvider({ children }: NavigationThemeProviderPro
         background,
         border: separator,
         card: background,
-        notification: accent,
-        primary: accent,
+        notification: primary,
+        primary,
         text: foreground,
       },
     }),
-    [accent, background, foreground, separator, theme],
+    [background, foreground, primary, separator, theme],
   );
 
   return <ThemeProvider value={navigationTheme}>{children}</ThemeProvider>;

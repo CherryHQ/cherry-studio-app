@@ -6,23 +6,27 @@
  * transport-aware method applies the narrower mobile contract.
  */
 
-import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
-import type { DbService } from '@/backend/data/db/DbService';
-import type { InsertMcpServerRow, McpServerRow } from '@/backend/data/db/schemas';
-import { mcpServerTable } from '@/backend/data/db/schemas';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   type CreateMcpServerDto,
   CreateMcpServerSchema,
   type UpdateMcpServerDto,
   UpdateMcpServerSchema,
-} from '@/shared/data/api/schemas/mcpServers';
-import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/data/api/types';
+} from '@cherrystudio/universal/data/api/schemas/mcpServers';
+import {
+  DataApiErrorFactory,
+  type OffsetPaginationResponse,
+} from '@cherrystudio/universal/data/api/types';
 import type {
   McpServer,
   McpServerType,
   StreamableHttpMcpServer,
-} from '@/shared/data/types/mcpServer';
+} from '@cherrystudio/universal/data/types/mcpServer';
+import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
+
+import type { DbService } from '@/backend/data/db/DbService';
+import type { InsertMcpServerRow, McpServerRow } from '@/backend/data/db/schemas';
+import { mcpServerTable } from '@/backend/data/db/schemas';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 
@@ -132,7 +136,10 @@ export class McpServerService {
         .from(mcpServerTable)
         .where(whereClause)
         .orderBy(asc(mcpServerTable.sortOrder), asc(mcpServerTable.createdAt)),
-      this.db.select({ count: sql<number>`count(*)` }).from(mcpServerTable).where(whereClause),
+      this.db
+        .select({ count: sql<number>`count(*)` })
+        .from(mcpServerTable)
+        .where(whereClause),
     ]);
     const items = rows.map(rowToMcpServer);
 

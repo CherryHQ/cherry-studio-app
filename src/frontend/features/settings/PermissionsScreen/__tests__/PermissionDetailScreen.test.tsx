@@ -1,9 +1,9 @@
+import type { PermissionMode } from '@cherrystudio/universal/data/preference';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
-import type { PermissionMode } from '@/shared/data/preference';
 
 import PermissionDetailSettingsScreen from '../PermissionDetailScreen';
 
@@ -48,28 +48,46 @@ jest.mock('../hooks/usePermissionPolicies', () => ({
 jest.mock('../hooks/usePermissionSystemStatuses', () => ({
   usePermissionSystemStatuses: () => ({ refresh: mockRefresh, statuses: mockStatuses }),
 }));
-jest.mock('../../components/SettingsSection', () => ({
-  SettingsSection: ({
-    items,
-    title,
-  }: {
-    items: { onPress?: () => void; title: string }[];
-    title?: string;
-  }) => {
+jest.mock('@cherrystudio/ui/components', () => {
+  const Section = ({ children, title }: { children: React.ReactNode; title?: string }) => {
     const { Fragment } = jest.requireActual('react');
-    const { Pressable: MockPressable, Text: MockText } = jest.requireActual('react-native');
+    const { Text: MockText } = jest.requireActual('react-native');
     return (
       <Fragment>
         {title ? <MockText>{title}</MockText> : null}
-        {items.map((item) => (
-          <MockPressable accessibilityLabel={item.title} key={item.title} onPress={item.onPress}>
-            <MockText>{item.title}</MockText>
-          </MockPressable>
-        ))}
+        {children}
       </Fragment>
     );
-  },
-}));
+  };
+  Section.Item = function MockSectionItem({
+    accessibilityRole,
+    accessibilityState,
+    disabled,
+    label,
+    onPress,
+  }: {
+    accessibilityRole?: string;
+    accessibilityState?: object;
+    disabled?: boolean;
+    label: string;
+    onPress?: () => void;
+  }) {
+    const { Pressable: MockPressable, Text: MockText } = jest.requireActual('react-native');
+    return (
+      <MockPressable
+        accessibilityLabel={label}
+        accessibilityRole={accessibilityRole}
+        accessibilityState={accessibilityState}
+        disabled={disabled}
+        onPress={onPress}
+      >
+        <MockText>{label}</MockText>
+      </MockPressable>
+    );
+  };
+
+  return { Section };
+});
 
 describe('PermissionDetailSettingsScreen', () => {
   let renderer: ReactTestRenderer | undefined;

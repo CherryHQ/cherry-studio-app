@@ -64,6 +64,7 @@ describe('ProviderDetailChrome.ios', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete
+          checkAction={{ onPress: jest.fn() }}
           isActive={false}
           isDisabled={false}
           onDelete={onDelete}
@@ -98,6 +99,7 @@ describe('ProviderDetailChrome.ios', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
+          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -107,7 +109,7 @@ describe('ProviderDetailChrome.ios', () => {
     });
 
     const [toggle] = renderer?.root.findAllByType('ToolbarButton') ?? [];
-    expect(renderer?.root.findAllByType('ToolbarButton')).toHaveLength(1);
+    expect(renderer?.root.findAllByType('ToolbarButton')).toHaveLength(2);
     expect(toggle.props.accessibilityLabel).toBe('Disable provider');
     expect(toggle.props.icon).toBe('pause');
   });
@@ -183,6 +185,7 @@ describe('ProviderDetailChrome.ios', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
+          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -204,11 +207,12 @@ describe('ProviderDetailChrome.ios', () => {
     ).toHaveLength(0);
   });
 
-  it('omits pull and check outside the models tab', async () => {
+  it('keeps check visible when pull is omitted outside the models tab', async () => {
     await act(async () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
+          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -217,6 +221,11 @@ describe('ProviderDetailChrome.ios', () => {
       );
     });
 
-    expect(renderer?.root.findAllByType('ToolbarButton')).toHaveLength(1);
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Pull models' })).toHaveLength(0);
+    expect(
+      renderer?.root
+        .findAllByType('ToolbarButton')
+        .filter((button) => button.props.accessibilityLabel === 'Check models'),
+    ).toHaveLength(1);
   });
 });

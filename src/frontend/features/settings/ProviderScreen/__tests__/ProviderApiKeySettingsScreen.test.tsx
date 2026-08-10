@@ -1,6 +1,10 @@
+import type {
+  ApiKeyEntry,
+  AuthConfig,
+  Provider,
+} from '@cherrystudio/universal/data/types/provider';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
 import ProviderApiKeySettingsScreen from '../ProviderApiKeySettingsScreen';
 
 type QueryState = { isError: boolean; isPending: boolean; isSuccess: boolean };
@@ -39,6 +43,10 @@ jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { confirm: jest.fn(), show: jest.fn() } }),
+}));
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -54,10 +62,6 @@ jest.mock('../apiService', () => ({
     mockKeyFormRenders.push(props);
     return null;
   },
-  useProviderApiServiceConfirmDialog: () => ({
-    confirmDialog: null,
-    requestConfirm: jest.fn(),
-  }),
   useProviderApiServiceQueries: () => ({
     apiKeys: mockApiKeys,
     authConfig: mockAuthConfig,
@@ -67,7 +71,6 @@ jest.mock('../apiService', () => ({
     replaceApiKeysMutation: { mutateAsync: jest.fn() },
   }),
   useProviderApiServiceSheetClose: () => ({
-    discardDialog: null,
     requestClose: jest.fn(),
   }),
 }));

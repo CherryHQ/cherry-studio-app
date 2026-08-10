@@ -1,6 +1,8 @@
-import { cn } from 'heroui-native/utils';
-import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Section } from '@cherrystudio/ui/components';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import { type ReactNode, useState } from 'react';
+import { Text, View } from 'react-native';
 
 import {
   getModelPickerTags,
@@ -9,13 +11,10 @@ import {
   type ModelPickerTag,
   ModelPickerTagChip,
 } from '@/frontend/components/modelPicker';
-import type { Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 
-// One line of text against a 32pt avatar, plus the row's vertical padding.
-export const providerModelRowHeight = 48;
+export const providerModelRowEstimatedHeight = 48;
 // Past this the capability strip starts squeezing the model name off the row.
 const providerModelRowMaxTags = 4;
 
@@ -27,6 +26,7 @@ const providerModelRowMaxTags = 4;
  */
 export function ProviderModelRow({
   children,
+  hideSeparator = false,
   isDisabled = false,
   isFirst,
   isLast,
@@ -38,6 +38,7 @@ export function ProviderModelRow({
 }: {
   /** The row's trailing action. */
   children?: ReactNode;
+  hideSeparator?: boolean;
   isDisabled?: boolean;
   isFirst: boolean;
   isLast: boolean;
@@ -51,49 +52,45 @@ export function ProviderModelRow({
   tone?: 'default' | 'struck';
 }) {
   const tags = getProviderModelRowTags(model);
+  const [isPressed, setIsPressed] = useState(false);
 
-  const content = (
-    <>
-      <ModelPickerIcon model={model} provider={provider} />
-      <Text
-        className={cn(
-          'min-w-0 flex-1 text-sm',
-          tone === 'struck' ? 'text-default-foreground line-through' : 'text-foreground',
-        )}
-        numberOfLines={1}
-      >
-        {model.name}
-      </Text>
-      {tags.length > 0 ? (
-        <View className="shrink-0 flex-row items-center gap-1">
-          {tags.slice(0, providerModelRowMaxTags).map((tag) => (
-            <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
-          ))}
-        </View>
-      ) : null}
-      {children}
-    </>
-  );
+  const trailing =
+    tags.length > 0 || children ? (
+      <View className="flex-row items-center gap-1">
+        {tags.slice(0, providerModelRowMaxTags).map((tag) => (
+          <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
+        ))}
+        {children}
+      </View>
+    ) : undefined;
 
   return (
-    <SettingsGroupedSurface className={surfaceClassName} isFirst={isFirst} isLast={isLast}>
-      {onPress ? (
-        <Pressable
-          accessibilityLabel={model.name}
-          accessibilityRole="button"
-          accessibilityState={{ busy: isDisabled, disabled: isDisabled }}
-          className="flex-row items-center gap-3 px-4 py-2 active:opacity-60 disabled:opacity-40"
-          disabled={isDisabled}
-          onPress={onPress}
-          style={styles.row}
-        >
-          {content}
-        </Pressable>
-      ) : (
-        <View className="flex-row items-center gap-3 px-4 py-2" style={styles.row}>
-          {content}
-        </View>
-      )}
+    <SettingsGroupedSurface
+      className={surfaceClassName}
+      hideSeparator={hideSeparator || isPressed}
+      isFirst={isFirst}
+      isLast={isLast}
+    >
+      <Section.Item
+        accessibilityLabel={model.name}
+        accessibilityState={{ busy: isDisabled, disabled: isDisabled }}
+        disabled={isDisabled}
+        label={
+          tone === 'struck' ? (
+            <Text className="text-foreground text-base line-through" numberOfLines={1}>
+              {model.name}
+            </Text>
+          ) : (
+            model.name
+          )
+        }
+        leading={<ModelPickerIcon model={model} provider={provider} />}
+        onPress={onPress}
+        onPressIn={() => setIsPressed(true)}
+        onPressOut={() => setIsPressed(false)}
+        showChevron={false}
+        trailing={trailing}
+      />
     </SettingsGroupedSurface>
   );
 }
@@ -104,9 +101,3 @@ function getProviderModelRowTags(model: Model): ModelPickerTag[] {
   const tags = getModelPickerTags(model);
   return isFreeModel(model) ? [...tags, 'free'] : tags;
 }
-
-const styles = StyleSheet.create({
-  row: {
-    height: providerModelRowHeight,
-  },
-});

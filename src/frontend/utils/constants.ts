@@ -8,26 +8,13 @@ export const isAndroid = process.env.EXPO_OS === 'android';
 export const isIOS = process.env.EXPO_OS === 'ios';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
-// Shared scrim (backdrop) color for every `ModalBottomSheet` so all sheets dim
-// the background behind them consistently. Single source of truth — tune here.
-export const sheetScrimColor = 'rgba(0, 0, 0, 0.4)';
-
-// Shared chrome for the floating BottomSheet frame (src/frontend/components/bottomSheet).
-// Every sheet derives its inset width, bottom gap, concentric corner radius, and
-// header placement from these values — single source of truth, tune here.
-export const bottomSheet = {
-  // Gap between the floating card and the screen edges, uniform on the left,
-  // right and bottom — that uniformity is what lets the bottom corners be
-  // concentric with the display's own corners.
-  outerInset: 4,
-  cornerRadius: 28, // the top corners exactly; a floor for the concentric bottom ones
-  headerHeight: 60, // minimum header row height
-  headerSideWidth: 44, // close button + right-slot square size
-} as const;
-
-// Brand accent (ui.theme_user.color_primary default). SlotText tints freshly
-// landed glyphs with it before they fade to the regular text color.
-export const slotTextHighlightColor = '#00b96b';
+// Geist Mono, embedded natively by the expo-font plugin (see app.json). This is
+// the font's PostScript name, which is also its filename, so iOS and Android
+// both resolve it from this single string. Components that style through
+// `className` should use the `font-mono` utility instead; this constant exists
+// for the few places that build RN style objects directly (MarkdownText).
+// Must stay in sync with `--font-mono` in src/frontend/styles/global.css.
+export const monoFontFamily = 'GeistMono-Regular';
 
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
@@ -42,27 +29,20 @@ export const screenBottomActionInset = 16;
 // focus() call landing before that is silently ignored by UIKit.
 export const searchBarAutoFocusDelayMs = 100;
 
-// Tuning knobs for the GitHub-style activity calendar card on the Home tab.
-// Sizes, colors and spring feel replicate the reference contribution-graph
-// animation 1:1 — adjust here, not in the activity components.
-export const homeActivityCalendar = {
+// Tuning knobs for the GitHub-style AI usage calendars.
+// Sizes and spring feel replicate the reference contribution-graph animation
+// 1:1 — adjust here, not in the AI usage components. The heat scale is not
+// here: it was GitHub's own two ladders of five hex, one per theme, and it now
+// comes from `--usage-level-*`, which `AiUsageCalendar` names.
+export const aiUsageCalendar = {
   cellSize: 14,
   cellGap: 3,
   cellRadius: 2,
-  cardShadow: '0px 0px 20px 0px rgba(0, 0, 0, 0.05)',
-  // no activity → highest; GitHub's green scales for both themes. Level 0 in
-  // dark sits slightly above the dark surface so empty cells stay visible.
-  levelColors: {
-    light: ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'],
-    dark: ['#2c2c2c', '#0e4429', '#006d32', '#26a641', '#39d353'],
-  },
+  summaryCellGap: 2,
+  summaryFallbackCellSize: 10,
+  dimmedOpacity: 0.35,
   sweepStepMs: 45, // per-diagonal delay of the bottom-left → top-right entrance wave
-  resetMaxDelayMs: 500, // each square rewinds after a random slice of this window
-  pressedScale: 0.96, // card press-down feedback
-  previewWidthRatio: 0.9, // preview data length: days = floor(windowWidth * ratio / dayWidth)
-  previewDayWidth: 3,
   enterSpring: { mass: 1.1, damping: 13, stiffness: 150, overshootClamping: false },
-  exitSpring: { mass: 0.9, damping: 10, stiffness: 60 },
 } as const;
 
 // Tuning knobs for the painting loading grid skeleton — a 1:1 port of the
@@ -85,7 +65,7 @@ export const paintingSkeleton = {
   keyframeTimes: [0.39, 0.5, 0.68], // rise start / peak / afterglow points of the loop
   reducedMotionAlpha: 0.66, // static snapshot opacity when Reduce Motion is on
   // Cell color is foreground × foregroundAlpha × the animated opacity; rgb is
-  // normalized for the shader and matches --cs-foreground (black light / white
+  // normalized for the shader and matches --foreground (black light / white
   // dark), whose 0.9 alpha lives in foregroundAlpha.
   foregroundAlpha: 0.9,
   foreground: { light: [0, 0, 0], dark: [1, 1, 1] },
@@ -141,14 +121,7 @@ export const profileHero = {
   unlockScrollPx: 150, // scroll-up distance (from locked) that releases the lock
   lockTimingMs: 220, // lock / unlock spring-to-rest duration
   expandedRadius: 20, // locked full-width photo bottom-corner radius
-  expandedScrimOpacity: 0.18, // dim over the locked photo, so the white name stays legible
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
-} as const;
-
-// `SettingsServiceRow` geometry, shared with the virtualized lists that render
-// it (`estimatedItemSize`). Keep in sync with the row's `min-h-11` class.
-export const settingsServiceRow = {
-  rowHeight: 44,
 } as const;
 
 // Providers that exist as rows but must never appear in the provider settings

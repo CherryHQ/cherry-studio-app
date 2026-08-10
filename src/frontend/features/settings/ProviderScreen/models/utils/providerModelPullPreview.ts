@@ -1,5 +1,6 @@
+import type { Model } from '@cherrystudio/universal/data/types/model';
+
 import type { ModelPullPreview } from '@/shared/contracts';
-import type { Model } from '@/shared/data/types/model';
 
 export type ProviderModelPullPreview = ModelPullPreview;
 
@@ -49,10 +50,8 @@ export function filterProviderModelPullPreview(
 
 export function buildProviderModelPullListItems(
   preview: ProviderModelPullPreview,
-  expandedSections: readonly ProviderModelPullSectionKey[],
   visibleSections: readonly ProviderModelPullSectionKey[],
 ): ProviderModelPullListItem[] {
-  const expandedSectionSet = new Set(expandedSections);
   const visibleSectionSet = new Set(visibleSections);
   const items: ProviderModelPullListItem[] = [];
   const sections: { models: Model[]; section: ProviderModelPullSectionKey }[] = [
@@ -62,7 +61,7 @@ export function buildProviderModelPullListItems(
   let renderedSectionCount = 0;
 
   for (const { models, section } of sections) {
-    if (!visibleSectionSet.has(section)) {
+    if (!visibleSectionSet.has(section) || models.length === 0) {
       continue;
     }
 
@@ -73,10 +72,6 @@ export function buildProviderModelPullListItems(
       type: 'section',
     });
     renderedSectionCount += 1;
-
-    if (!expandedSectionSet.has(section)) {
-      continue;
-    }
 
     for (const [index, model] of models.entries()) {
       items.push({

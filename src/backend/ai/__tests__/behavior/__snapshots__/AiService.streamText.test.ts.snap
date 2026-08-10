@@ -1,0 +1,136 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`AiService.streamText AI SDK contract preserves rich input and resolves a managed attachment before the model boundary: rich model call 1`] = `
+{
+  "abortSignal": {
+    "aborted": false,
+  },
+  "headers": {
+    "X-Contract": "rich-input",
+  },
+  "maxOutputTokens": 256,
+  "prompt": [
+    {
+      "content": "Answer from the supplied evidence.",
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "What is shown?",
+          "type": "text",
+        },
+        {
+          "data": "iVBORw0KGgo=",
+          "filename": "image.png",
+          "mediaType": "image/png",
+          "providerOptions": {
+            "cherry": {
+              "fileEntryId": "file-entry-1",
+            },
+          },
+          "type": "file",
+        },
+      ],
+      "role": "user",
+    },
+  ],
+  "providerOptions": {
+    "contract-provider": {},
+  },
+  "stopSequences": [
+    "END",
+  ],
+  "temperature": 0.3,
+  "topP": 0.8,
+}
+`;
+
+exports[`AiService.streamText AI SDK contract projects a plain model stream into stable chunks, final message, and usage: plain model call 1`] = `
+{
+  "abortSignal": {
+    "aborted": false,
+  },
+  "prompt": [
+    {
+      "content": "You are a precise assistant.",
+      "role": "system",
+    },
+    {
+      "content": [
+        {
+          "text": "Hello",
+          "type": "text",
+        },
+      ],
+      "role": "user",
+    },
+  ],
+  "providerOptions": {
+    "contract-provider": {},
+  },
+}
+`;
+
+exports[`AiService.streamText AI SDK contract projects a plain model stream into stable chunks, final message, and usage: plain stream output 1`] = `
+{
+  "chunks": [
+    {
+      "messageId": "assistant-message-1",
+      "type": "start",
+    },
+    {
+      "type": "start-step",
+    },
+    {
+      "id": "text-1",
+      "type": "text-start",
+    },
+    {
+      "delta": "Hello from the contract model.",
+      "id": "text-1",
+      "type": "text-delta",
+    },
+    {
+      "id": "text-1",
+      "type": "text-end",
+    },
+    {
+      "messageMetadata": {
+        "completionTokens": 5,
+        "promptTokens": 10,
+        "thoughtsTokens": 1,
+        "totalTokens": 15,
+      },
+      "type": "message-metadata",
+    },
+    {
+      "type": "finish-step",
+    },
+    {
+      "finishReason": "stop",
+      "type": "finish",
+    },
+  ],
+  "finalMessage": {
+    "id": "assistant-message-1",
+    "metadata": {
+      "completionTokens": 5,
+      "promptTokens": 10,
+      "thoughtsTokens": 1,
+      "totalTokens": 15,
+    },
+    "parts": [
+      {
+        "type": "step-start",
+      },
+      {
+        "state": "done",
+        "text": "Hello from the contract model.",
+        "type": "text",
+      },
+    ],
+    "role": "assistant",
+  },
+}
+`;

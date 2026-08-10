@@ -1,7 +1,7 @@
-import type { Painting } from '@/shared/data/types/painting';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
-import type { ResolvedPaintingFiles } from '../../../hooks/usePaintings';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
+import type { ResolvedPaintingFiles } from '../../../hooks/usePaintings';
 import {
   createPaintingConversationMessages,
   createPendingPaintingConversationMessages,
@@ -29,6 +29,7 @@ const files: ResolvedPaintingFiles = {
       kind: 'image',
       mediaType: 'image/jpeg',
       name: 'reference.jpg',
+      status: 'ready',
       uri: 'file:///reference.jpg',
     },
   ],
@@ -39,6 +40,7 @@ const files: ResolvedPaintingFiles = {
       kind: 'image',
       mediaType: 'image/png',
       name: 'painting.png',
+      status: 'ready',
       uri: 'file:///painting.png',
     },
   ],

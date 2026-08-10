@@ -1,12 +1,12 @@
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { Painting } from '@/shared/data/types/painting';
 
 import { DrawingList } from '../DrawingList';
 
 const mockToggleId = jest.fn();
 const mockPush = jest.fn();
 let mockIsEditing = false;
+let mockPendingDeletionIds: ReadonlySet<string> = new Set();
 let mockSelectedIds: ReadonlySet<string> = new Set();
 
 const mockPaintingOne = { id: 'painting-1' } as Painting;
@@ -52,8 +52,8 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 
 jest.mock('lucide-uniwind/png', () => ({
@@ -106,12 +106,12 @@ jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
   }),
 }));
 
-jest.mock('@/frontend/features/chat/input/hooks/useChatInputPhotoPicker', () => ({
-  CHAT_INPUT_PHOTO_SELECTION_LIMIT: 6,
+jest.mock('../utils/photoLibrary', () => ({
   loadPhotoPreviewPage: jest.fn(),
 }));
 
-jest.mock('@/frontend/features/chat/input/utils/chatInputAttachments', () => ({
+jest.mock('@/frontend/components/composer/utils/composerAttachments', () => ({
+  COMPOSER_PHOTO_SELECTION_LIMIT: 6,
   createPhotoAttachmentDraft: jest.fn(),
 }));
 
@@ -121,9 +121,14 @@ jest.mock('@/frontend/features/paintings/utils/paintingDraftHandoff', () => ({
 
 jest.mock('@/frontend/components/messageTabs', () => ({
   useMessageListBottomInset: () => 0,
+  useMessagePendingDeletionIds: () => mockPendingDeletionIds,
   useMessageScope: () => ({ scope: 'drawings' }),
   useMessageSelectionActions: () => ({ toggleId: mockToggleId }),
-  useMessageSelectionState: () => ({ isEditing: mockIsEditing, selectedIds: mockSelectedIds }),
+  useMessageSelectionState: () => ({
+    isDeletionPending: mockPendingDeletionIds.size > 0,
+    isEditing: mockIsEditing,
+    selectedIds: mockSelectedIds,
+  }),
   useRegisterSelectionSource: () => undefined,
 }));
 
@@ -151,6 +156,7 @@ describe('DrawingList', () => {
     jest.clearAllMocks();
     mockGalleryItems = defaultGalleryItems;
     mockIsEditing = false;
+    mockPendingDeletionIds = new Set();
     mockSelectedIds = new Set();
   });
 
@@ -220,6 +226,16 @@ describe('DrawingList', () => {
     ]);
     const [otherItem] = findHostsByTestID(tree, 'painting-history-painting-2:file-3');
     expect(otherItem.props.accessibilityState).toEqual({ checked: false });
+  });
+
+  it('hides every output of a painting while its deletion is pending', async () => {
+    mockPendingDeletionIds = new Set(['painting-1']);
+
+    const tree = await render();
+
+    expect(findHostsByTestID(tree, 'painting-history-painting-1:file-1')).toHaveLength(0);
+    expect(findHostsByTestID(tree, 'painting-history-painting-1:file-2')).toHaveLength(0);
+    expect(findHostsByTestID(tree, 'painting-history-painting-2:file-3')).toHaveLength(1);
   });
 
   it('offers the same create action when the drawing history is empty', async () => {

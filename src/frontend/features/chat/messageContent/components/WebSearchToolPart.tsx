@@ -1,11 +1,10 @@
-import { Accordion } from 'heroui-native/accordion';
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { SearchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Text, View } from 'react-native';
-
-import type { CherryMessagePart } from '@/shared/data/types/message';
+import { Text } from 'react-native';
 
 import { SourceUrlItem } from './SourceUrlItem';
+import { ToolPartDisclosure } from './ToolPartDisclosure';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -34,77 +33,29 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
   const title = query || part.title?.trim() || t('chat.actions.webSearch');
   const isSearching = part.state === 'input-streaming' || part.state === 'input-available';
 
-  if (results.length === 0) {
-    return (
-      <View className="rounded-lg border border-border bg-surface-secondary p-3">
-        <WebSearchHeaderContent isSearching={isSearching} statusText={statusText} title={title} />
-      </View>
-    );
-  }
-
   return (
-    <Accordion
-      className="overflow-hidden rounded-lg border border-border bg-surface-secondary"
-      hideSeparator
-      isCollapsible
-      selectionMode="single"
+    <ToolPartDisclosure
+      icon={SearchIcon}
+      isRunning={isSearching}
+      statusText={statusText}
+      statusTone={getWebSearchStatusTone(part)}
+      testIDPrefix="web-search-tool-part"
+      title={title}
     >
-      <Accordion.Item value="web-search-results">
-        <Accordion.Trigger className="min-h-0 px-3 py-3">
-          <WebSearchHeaderContent isSearching={isSearching} statusText={statusText} title={title} />
-          <Accordion.Indicator
-            animation={{ rotation: { value: [-90, 0] } }}
-            iconProps={{ size: 16 }}
-          />
-        </Accordion.Trigger>
-        <Accordion.Content className="px-3 pt-0 pb-3">
-          <View className="gap-0.5 border-border border-t pt-2">
-            {results.map((result) => (
-              <SourceUrlItem
-                key={`${result.id}-${result.url}`}
-                label={result.title || result.url}
-                url={result.url}
-                variant="listItem"
-              />
-            ))}
-          </View>
-        </Accordion.Content>
-      </Accordion.Item>
-    </Accordion>
-  );
-}
-
-function WebSearchHeaderContent({
-  isSearching,
-  statusText,
-  title,
-}: {
-  isSearching: boolean;
-  statusText: string;
-  title: string;
-}) {
-  return (
-    <View className="min-w-0 flex-1 flex-row items-center gap-2">
-      {isSearching ? (
-        <ActivityIndicator size="small" />
+      {results.length === 0 ? (
+        <Text className="text-foreground text-base italic" selectable>
+          {statusText}
+        </Text>
       ) : (
-        <SearchIcon className="size-4 text-default-foreground" strokeWidth={2} />
+        results.map((result) => (
+          <SourceUrlItem
+            key={`${result.id}-${result.url}`}
+            label={result.title || result.url}
+            url={result.url}
+          />
+        ))
       )}
-      <Text
-        className="min-w-0 flex-1 font-semibold text-default-foreground text-sm"
-        numberOfLines={1}
-        selectable
-      >
-        {title}
-      </Text>
-      <Text
-        className="max-w-[42%] shrink-0 text-foreground-muted text-xs"
-        numberOfLines={1}
-        selectable
-      >
-        {statusText}
-      </Text>
-    </View>
+    </ToolPartDisclosure>
   );
 }
 
@@ -144,6 +95,17 @@ function getWebSearchStatusText(
   }
 
   return t('chat.webSearch.searching');
+}
+
+function getWebSearchStatusTone(part: ToolMessagePart): 'danger' | 'default' | 'warning' {
+  if (
+    part.state === 'output-denied' ||
+    (part.state === 'approval-responded' && !part.approval.approved)
+  ) {
+    return 'warning';
+  }
+
+  return part.state === 'output-error' ? 'danger' : 'default';
 }
 
 function parseWebSearchResults(output: unknown): WebSearchResult[] {

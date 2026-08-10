@@ -96,15 +96,13 @@
         }
       ],
       "expo-document-picker",
-      "expo-font",
-      "expo-image",
       [
-        "expo-camera",
+        "expo-font",
         {
-          "cameraPermission": "Allow Cherry Studio to open the camera for chat messages.",
-          "recordAudioAndroid": false
+          "fonts": ["./assets/fonts/GeistMono-Regular.ttf"]
         }
       ],
+      "expo-image",
       [
         "expo-image-picker",
         {

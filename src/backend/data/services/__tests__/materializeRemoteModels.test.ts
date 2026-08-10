@@ -1,11 +1,12 @@
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { MODEL_CAPABILITY, REASONING_FORMAT_PROFILES } from '@cherrystudio/provider-registry';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import {
   mergePresetModel,
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
-import type { Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 jest.mock('@/backend/data/services/ProviderRegistryService', () => ({
   mergePresetModel: jest.fn(),
@@ -14,10 +15,16 @@ jest.mock('@/backend/data/services/ProviderRegistryService', () => ({
 
 const provider = { id: 'cherryin' } as Provider;
 
+const reasoningProfile = {
+  format: 'openai-chat',
+  wire: REASONING_FORMAT_PROFILES['openai-chat'].wire,
+} as const;
+
 describe('materializeRemoteModels', () => {
   beforeEach(() => {
     jest.mocked(providerRegistryService.lookupModel).mockReturnValue({
       presetModel: null,
+      reasoningProfile,
       registryOverride: null,
     });
   });
@@ -52,6 +59,7 @@ describe('materializeRemoteModels', () => {
         metadata: {},
         name: 'DeepSeek V3.2',
       },
+      reasoningProfile,
       registryOverride: null,
     });
     jest.mocked(mergePresetModel).mockReturnValue({

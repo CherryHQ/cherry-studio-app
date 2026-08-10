@@ -1,5 +1,20 @@
+import type {
+  ApiPath,
+  BodyForPath,
+  ConcreteApiPaths,
+  ParamsForPath,
+  QueryParamsForPath,
+  ResponseForPath,
+  TemplateApiPaths,
+} from '@cherrystudio/universal/data/api/paths';
+import type {
+  ApiClient,
+  CursorPaginationResponse,
+  InferPaginationMode,
+} from '@cherrystudio/universal/data/api/types';
 import {
   type InfiniteData,
+  keepPreviousData,
   type QueryClient,
   useQueryClient,
   useInfiniteQuery as useTanStackInfiniteQuery,
@@ -9,20 +24,6 @@ import {
 import { useCallback, useMemo } from 'react';
 
 import { useApiClient } from '@/frontend/data/DataApiProvider';
-import type {
-  ApiPath,
-  BodyForPath,
-  ConcreteApiPaths,
-  ParamsForPath,
-  QueryParamsForPath,
-  ResponseForPath,
-  TemplateApiPaths,
-} from '@/shared/data/api/paths';
-import type {
-  ApiClient,
-  CursorPaginationResponse,
-  InferPaginationMode,
-} from '@/shared/data/api/types';
 
 type DataApiQueryKey = readonly [string] | readonly [string, unknown];
 type MutationMethod = 'DELETE' | 'PATCH' | 'POST' | 'PUT';
@@ -53,10 +54,25 @@ type RefreshOption<TPath extends ApiPath, TMethod extends MutationMethod> =
   | readonly string[]
   | ((context: RefreshContext<TPath, TMethod>) => readonly string[]);
 
+/**
+ * react-query merges options as `{...clientDefaults, ...options}`, so passing an explicit
+ * `staleTime: undefined` *overrides* the client default (see `createMobileQueryClient`) and
+ * leaves the query permanently stale — every observer that mounts refetches. Forward these
+ * two only when a caller actually set them, so unset callers inherit the client defaults.
+ */
+function callerQueryOverrides(options?: { retry?: boolean | number; staleTime?: number }) {
+  return {
+    ...(options?.retry === undefined ? {} : { retry: options.retry }),
+    ...(options?.staleTime === undefined ? {} : { staleTime: options.staleTime }),
+  };
+}
+
 export function useQuery<TPath extends ApiPath>(
   path: TPath,
   options?: ParamsOption<TPath, 'GET'> & {
     enabled?: boolean;
+    /** Keep the previous key's data on screen while the new key loads. */
+    keepPreviousData?: boolean;
     query?: QueryParamsForPath<TPath, 'GET'>;
     retry?: boolean | number;
     staleTime?: number;
@@ -70,13 +86,13 @@ export function useQuery<TPath extends ApiPath>(
   const query = options?.query;
   const result = useTanStackQuery<ResponseForPath<TPath, 'GET'>, Error>({
     enabled,
+    placeholderData: options?.keepPreviousData ? keepPreviousData : undefined,
     queryFn: () =>
       dataApi.get(resolvedPath as ConcreteApiPaths, {
         query: query as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
       }) as Promise<ResponseForPath<TPath, 'GET'>>,
     queryKey: buildQueryKey(resolvedPath, query),
-    retry: options?.retry,
-    staleTime: options?.staleTime,
+    ...callerQueryOverrides(options),
   });
 
   return {
@@ -120,12 +136,32 @@ export function usePrefetch() {
   );
 }
 
-export function useMutation<TPath extends ApiPath, TMethod extends MutationMethod>(
+export function useMutation<
+  TPath extends ApiPath,
+  TMethod extends MutationMethod,
+  TContext = unknown,
+>(
   method: TMethod,
   path: TPath,
   options?: {
-    onError?: (error: Error) => Promise<void> | void;
-    onSuccess?: (data: ResponseForPath<TPath, TMethod>) => Promise<void> | void;
+    onError?: (
+      error: Error,
+      variables: TriggerArgs<TPath, TMethod> | undefined,
+      context: TContext | undefined,
+    ) => Promise<void> | void;
+    /** Runs before the mutation request; its return value becomes the context passed to the other callbacks. */
+    onMutate?: (variables: TriggerArgs<TPath, TMethod> | undefined) => Promise<TContext> | TContext;
+    onSettled?: (
+      data: ResponseForPath<TPath, TMethod> | undefined,
+      error: Error | null,
+      variables: TriggerArgs<TPath, TMethod> | undefined,
+      context: TContext | undefined,
+    ) => Promise<void> | void;
+    onSuccess?: (
+      data: ResponseForPath<TPath, TMethod>,
+      variables: TriggerArgs<TPath, TMethod> | undefined,
+      context: TContext,
+    ) => Promise<void> | void;
     refresh?: RefreshOption<TPath, TMethod>;
   },
 ) {
@@ -134,7 +170,8 @@ export function useMutation<TPath extends ApiPath, TMethod extends MutationMetho
   const mutation = useTanStackMutation<
     ResponseForPath<TPath, TMethod>,
     Error,
-    TriggerArgs<TPath, TMethod> | undefined
+    TriggerArgs<TPath, TMethod> | undefined,
+    TContext
   >({
     mutationFn: (args) => {
       const resolvedPath = resolveTemplate(
@@ -143,14 +180,17 @@ export function useMutation<TPath extends ApiPath, TMethod extends MutationMetho
       );
       return request(dataApi, method, resolvedPath as ConcreteApiPaths, args);
     },
-    onError: (error) => options?.onError?.(error),
-    onSuccess: async (result, args) => {
+    onError: (error, variables, context) => options?.onError?.(error, variables, context),
+    onMutate: options?.onMutate,
+    onSettled: (data, error, variables, context) =>
+      options?.onSettled?.(data, error, variables, context),
+    onSuccess: async (result, args, context) => {
       const refresh = options?.refresh;
       if (refresh) {
         const paths = typeof refresh === 'function' ? refresh({ args, result }) : refresh;
         await invalidatePaths(queryClient, paths);
       }
-      await options?.onSuccess?.(result);
+      await options?.onSuccess?.(result, args, context);
     },
   });
   const mutateAsync = mutation.mutateAsync;
@@ -207,8 +247,7 @@ export function useInfiniteQuery<TPath extends ApiPath>(
         } as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
       }) as Promise<ResponseForPath<TPath, 'GET'>>,
     queryKey,
-    retry: options?.retry,
-    staleTime: options?.staleTime,
+    ...callerQueryOverrides(options),
   });
   const pages = useMemo(() => result.data?.pages ?? [], [result.data?.pages]);
   const fetchNextPage = result.fetchNextPage;

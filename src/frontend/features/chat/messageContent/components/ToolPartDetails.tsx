@@ -22,10 +22,10 @@ export function ToolPartValueSection({
       <View className="gap-1">
         {entries.map(([key, entryValue]) => (
           <View className="flex-row gap-2" key={key}>
-            <Text className="w-20 shrink-0 font-mono text-default-foreground text-md" selectable>
+            <Text className="w-20 shrink-0 font-mono text-foreground text-base" selectable>
               {key}
             </Text>
-            <Text className="min-w-0 flex-1 font-mono text-default-foreground text-md" selectable>
+            <Text className="min-w-0 flex-1 font-mono text-foreground text-base" selectable>
               {formatToolPartValue(entryValue, maxLength)}
             </Text>
           </View>
@@ -50,8 +50,8 @@ export function ToolPartTextSection({
       <Text
         className={
           tone === 'error'
-            ? 'font-mono text-danger text-md leading-5'
-            : 'font-mono text-default-foreground text-md leading-5'
+            ? 'font-mono text-destructive text-base'
+            : 'font-mono text-foreground text-base'
         }
         selectable
       >
@@ -63,7 +63,7 @@ export function ToolPartTextSection({
 
 export function ToolPartSectionTitle({ title }: { title: string }) {
   return (
-    <Text className="text-default-foreground text-md" selectable>
+    <Text className="text-foreground text-base" selectable>
       {title}
     </Text>
   );

@@ -1,7 +1,7 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
 import { FilePart } from '../FilePart';
 
 const mockPreviewFile = jest.fn(async (_input: unknown) => undefined);
@@ -23,7 +23,14 @@ jest.mock('../../hooks/useFilePartUri', () => ({
   useFilePartUri: (part: unknown) => mockUseFilePartUri(part),
 }));
 
-jest.mock('../../../mediaTile', () => {
+jest.mock('@/frontend/components/FilePreview', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    FilePreview: (props: object) => createElement('FilePreview', props),
+  };
+});
+
+jest.mock('@/frontend/components/mediaTile', () => {
   const { createElement } = jest.requireActual('react');
   return {
     FileTile: (props: object) => createElement('FileTile', props),
@@ -52,6 +59,21 @@ describe('FilePart', () => {
       editingMode: 'disabled',
       uri: 'file:///new-sandbox/files/image.png',
     });
+  });
+
+  test('delegates managed attachments to FilePreview without resolving a legacy URI', () => {
+    const part = {
+      ...filePart('application/pdf'),
+      providerMetadata: {
+        cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' },
+      },
+    };
+    const renderer = render(<FilePart part={part} />);
+
+    expect(renderer.root.findByType('FilePreview').props.entryId).toBe(
+      '00000000-0000-7000-8000-000000000001',
+    );
+    expect(mockUseFilePartUri).not.toHaveBeenCalled();
   });
 
   test('previews a non-image file with the same resolved URI', async () => {

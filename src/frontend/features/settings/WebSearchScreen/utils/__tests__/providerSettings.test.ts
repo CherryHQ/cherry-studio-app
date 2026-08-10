@@ -27,7 +27,11 @@ describe('web search provider settings', () => {
       { type: 'capabilityApiHosts' },
       { type: 'basicAuth' },
     ]);
-    expect(getWebSearchProviderDetailSections('exa-mcp')).toEqual([]);
+    expect(getWebSearchProviderDetailSections('exa-mcp')).toEqual([{ type: 'capabilityApiHosts' }]);
+    expect(getWebSearchProviderDetailSections('firecrawl')).toEqual([
+      { type: 'apiKeys' },
+      { type: 'capabilityApiHosts' },
+    ]);
   });
 
   test('groups providers by capability', () => {
@@ -40,9 +44,11 @@ describe('web search provider settings', () => {
       'searchKeywords:tavily',
       'searchKeywords:searxng',
       'searchKeywords:exa',
+      'searchKeywords:exa-mcp',
       'searchKeywords:bocha',
       'searchKeywords:querit',
       'searchKeywords:jina',
+      'searchKeywords:firecrawl',
     ]);
     expect(sections[1].capability).toBe('fetchUrls');
     expect(sections[1].entries.map((entry) => entry.key)).toEqual(['fetchUrls:jina']);

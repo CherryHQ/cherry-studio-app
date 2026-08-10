@@ -1,11 +1,16 @@
+import {
+  WEB_SEARCH_PROVIDER_IDS,
+  type WebSearchProviderId,
+} from '@cherrystudio/universal/data/preference';
+import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
-import { WEB_SEARCH_PROVIDER_IDS, type WebSearchProviderId } from '@/shared/data/preference';
-import { isMobileSupportedWebSearchProviderId } from '@/shared/data/presets/webSearchProviders';
+
 import {
   normalizeWebSearchApiKeys,
   useWebSearchApiKeySettings,
@@ -38,12 +43,19 @@ export default function WebSearchApiKeySettingsScreen() {
   const canManageApiKeys =
     provider &&
     getWebSearchProviderDetailSections(provider.id).some((section) => section.type === 'apiKeys');
-  const { addApiKey, entries, promoteApiKey, removeApiKey, saveApiKeys, updateApiKey } =
-    useWebSearchApiKeySettings(validProviderId);
+  const {
+    addApiKey,
+    entries,
+    promoteApiKey,
+    removeApiKey,
+    restoreApiKey,
+    saveApiKeys,
+    updateApiKey,
+  } = useWebSearchApiKeySettings(validProviderId);
   const [apiKeyErrors, setApiKeyErrors] = useState<Record<string, string>>({});
   const [pendingApiKeyIds, setPendingApiKeyIds] = useState<ReadonlySet<string>>(() => new Set());
   const pendingApiKeyIdsRef = useRef<ReadonlySet<string>>(new Set());
-  const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const { alert } = useAlert();
 
   const closeSheet = useCallback(() => {
     router.back();
@@ -143,7 +155,8 @@ export default function WebSearchApiKeySettingsScreen() {
 
   const handleRemoveApiKey = useCallback(
     (id: string) => {
-      const entry = entries.find((item) => item.id === id);
+      const entryIndex = entries.findIndex((item) => item.id === id);
+      const entry = entries[entryIndex];
 
       if (!entry) {
         return;
@@ -155,24 +168,28 @@ export default function WebSearchApiKeySettingsScreen() {
         return;
       }
 
-      requestConfirm({
-        message: t('settings.websearch.provider.removeApiKeyMessage'),
+      alert.confirm({
+        confirmLabel: t('common.remove'),
+        description: t('settings.websearch.provider.removeApiKeyMessage'),
         onConfirm: () => {
           const nextEntries = entries.filter((item) => item.id !== id);
+          removeApiKey(id);
+          setApiKeyErrors((current) => removeApiKeyError(current, id));
 
           void (async () => {
             const didSave = await saveEntries({ apiKeyId: id, nextEntries });
 
-            if (didSave) {
-              removeApiKey(id);
-              setApiKeyErrors((current) => removeApiKeyError(current, id));
+            if (!didSave) {
+              restoreApiKey(entry, entryIndex);
+              alert.show({ title: t('settings.websearch.provider.saveFailed') });
             }
           })();
         },
+        role: 'destructive',
         title: t('settings.websearch.provider.removeApiKeyTitle'),
       });
     },
-    [entries, removeApiKey, requestConfirm, saveEntries, t],
+    [alert, entries, removeApiKey, restoreApiKey, saveEntries, t],
   );
 
   if (!provider || !canManageApiKeys) {
@@ -185,7 +202,6 @@ export default function WebSearchApiKeySettingsScreen() {
         title={providerName ?? t('settings.websearch.provider.manageApiKeys')}
         onBack={closeSheet}
       />
-      {confirmDialog}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

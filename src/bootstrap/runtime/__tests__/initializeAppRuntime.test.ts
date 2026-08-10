@@ -3,10 +3,15 @@ import type { BackendServices } from '@/bootstrap/composition/createBackendServi
 import { initializeAppRuntime } from '../initializeAppRuntime';
 
 const mockSetTheme = jest.fn();
+const mockUpdateCSSVariables = jest.fn();
 const mockInitI18n = jest.fn(async (..._args: unknown[]) => undefined);
 
 jest.mock('uniwind', () => ({
-  Uniwind: { setTheme: (...args: unknown[]) => mockSetTheme(...args) },
+  Uniwind: {
+    currentTheme: 'light',
+    setTheme: (...args: unknown[]) => mockSetTheme(...args),
+    updateCSSVariables: (...args: unknown[]) => mockUpdateCSSVariables(...args),
+  },
 }));
 
 jest.mock('@/frontend/i18n', () => ({
@@ -20,7 +25,11 @@ function createServices(message?: {
   return {
     message,
     preference: {
-      getMultipleCached: () => ({ language: 'en-US', themeMode: 'system' }),
+      getMultipleCached: () => ({
+        fontSizeStep: 1,
+        language: 'en-US',
+        themeMode: 'system',
+      }),
     },
   } as unknown as BackendServices;
 }
@@ -28,6 +37,7 @@ function createServices(message?: {
 describe('initializeAppRuntime', () => {
   beforeEach(() => {
     mockSetTheme.mockClear();
+    mockUpdateCSSVariables.mockClear();
     mockInitI18n.mockClear();
   });
 
@@ -35,6 +45,9 @@ describe('initializeAppRuntime', () => {
     await initializeAppRuntime(createServices());
 
     expect(mockSetTheme).toHaveBeenCalledWith('system');
+    const variables = expect.objectContaining({ '--ui-text-base': 18 });
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(1, 'dark', variables);
+    expect(mockUpdateCSSVariables).toHaveBeenNthCalledWith(2, 'light', variables);
     expect(mockInitI18n).toHaveBeenCalledWith('en-US');
   });
 

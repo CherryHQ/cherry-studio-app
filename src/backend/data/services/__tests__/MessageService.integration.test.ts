@@ -1,12 +1,14 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+
+import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
-import type { CherryMessagePart, Message } from '@/shared/data/types/message';
-import { FileEntryService } from '../FileEntryService';
+
+import { AiUsageRecordService } from '../AiUsageRecordService';
 import { MessageService } from '../MessageService';
 import { PinService } from '../PinService';
 import { TagService } from '../TagService';
@@ -14,7 +16,7 @@ import { TopicService } from '../TopicService';
 
 // Rows are inserted in bulk here, so unlike the fixed-id mocks elsewhere these
 // have to be distinct. `expo-crypto` is already mocked the same way globally.
-jest.mock('uuid', () => ({ v7: mockRandomUUID }));
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 // `fractional-indexing` is ESM-only and outside jest's transform allowlist, so
 // importing the real TopicService fails to parse without this. Appending to the
@@ -43,6 +45,7 @@ type MigrationJournal = { entries: { tag: string }[] };
  */
 describe('MessageService integration', () => {
   let sqlite: DatabaseSync;
+  let dbService: DbService;
   let service: MessageService;
   let topicService: TopicService;
 
@@ -68,7 +71,7 @@ describe('MessageService integration', () => {
       { casing: 'snake_case', schema },
     ) as unknown as Database;
     let writeTail: Promise<void> = Promise.resolve();
-    const dbService = {
+    dbService = {
       getDb: () => database,
       withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
         const previous = writeTail;
@@ -95,7 +98,7 @@ describe('MessageService integration', () => {
       new PinService(dbService),
       new TagService(dbService),
     );
-    service = new MessageService(dbService, topicService, new FileEntryService(dbService));
+    service = new MessageService(dbService, topicService);
   });
 
   afterEach(() => sqlite.close());
@@ -134,6 +137,175 @@ describe('MessageService integration', () => {
     sqlite.prepare('UPDATE message SET deleted_at = 1 WHERE id = ?').run(softDeleted.id);
 
     await expect(service.findPendingAssistantMessageIds()).resolves.toEqual([pending.id]);
+  });
+
+  test('materializes assistant usage stats from durable invocation records', async () => {
+    const topic = await topicService.create({ name: 'usage projection' });
+    const message = await service.create(topic.id, {
+      data: { parts: [] },
+      role: 'assistant',
+      status: 'pending',
+    });
+    sqlite
+      .prepare('UPDATE message SET stats = ? WHERE id = ?')
+      .run(JSON.stringify({ timeFirstTokenMs: 12 }), message.id);
+    const usageService = new AiUsageRecordService(dbService);
+    const context = {
+      providerId: 'openrouter',
+      providerName: 'OpenRouter',
+      modelId: 'openai/gpt-5',
+      modelName: 'GPT-5',
+      pricingSnapshot: {
+        currency: 'USD' as const,
+        inputPerMillionTokens: 1,
+        outputPerMillionTokens: 2,
+        cacheReadPerMillionTokens: 0.5,
+        capturedAt: '2026-07-30T00:00:00.000Z',
+      },
+      trustProviderReportedCost: true,
+      reportedCostCurrency: 'USD' as const,
+      credentialReceipt: { attribution: 'unknown' as const },
+      source: null,
+      messageRef: { kind: 'chat' as const, id: message.id },
+    };
+
+    await usageService.recordInvocation({
+      requestId: 'request-1',
+      context,
+      modality: 'language',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 20,
+        totalTokens: 120,
+        reasoningTokens: 5,
+        noCacheTokens: 80,
+        cacheReadTokens: 20,
+      },
+      metrics: { timeFirstTokenMs: 100, timeCompletionMs: 900 },
+      completedAt: 1_785_427_200_000,
+    });
+    await usageService.recordInvocation({
+      requestId: 'request-2',
+      context,
+      modality: 'language',
+      usage: { inputTokens: 50, outputTokens: 10, reasoningTokens: 2 },
+      providerCost: { amount: 0.2, currency: 'CNY' },
+      metrics: { timeCompletionMs: 400 },
+      completedAt: 1_785_427_201_000,
+    });
+    await service.update(message.id, { data: { parts: [] }, status: 'success' });
+
+    await expect(service.getById(message.id)).resolves.toMatchObject({
+      stats: {
+        inputTokens: 150,
+        outputTokens: 30,
+        totalTokens: 180,
+        inputTokenDetails: { noCacheTokens: 80, cacheReadTokens: 20 },
+        outputTokenDetails: { textTokens: 23, reasoningTokens: 7 },
+        requestCount: 2,
+        estimatedRequestCount: 0,
+        unpricedRequestCount: 0,
+        costs: [
+          {
+            currency: 'CNY',
+            amount: 0.2,
+            providerReportedRequestCount: 1,
+            computedRequestCount: 0,
+          },
+          {
+            currency: 'USD',
+            amount: 0.00013000000000000002,
+            providerReportedRequestCount: 0,
+            computedRequestCount: 1,
+          },
+        ],
+        providerPerformance: { measuredOutputTokens: 30, generationDurationMs: 1200 },
+        timeFirstTokenMs: 12,
+      },
+    });
+  });
+
+  test('finalizes assistant runtime timing while preserving the durable usage projection', async () => {
+    const topic = await topicService.create({ name: 'runtime timing' });
+    const message = await service.create(topic.id, {
+      data: { parts: [] },
+      role: 'assistant',
+      status: 'pending',
+    });
+    sqlite.prepare('UPDATE message SET stats = ? WHERE id = ?').run(
+      JSON.stringify({
+        outputTokens: 20,
+        providerPerformance: { measuredOutputTokens: 20, generationDurationMs: 500 },
+        timeFirstTokenMs: 100,
+        runtimeTiming: {
+          startedAt: 1_000,
+          spans: [
+            {
+              id: 'tool:first',
+              kind: 'tool-execution',
+              toolCallId: 'first',
+              startedAt: 1_500,
+              completedAt: 2_000,
+            },
+          ],
+        },
+      }),
+      message.id,
+    );
+
+    await service.finalizeAssistantMessage(message.id, {
+      data: { parts: [{ text: 'done', type: 'text' }] },
+      runtimeStats: {
+        runtimeTiming: {
+          startedAt: 1_000,
+          completedAt: 4_000,
+          spans: [
+            {
+              id: 'tool:second',
+              kind: 'tool-execution',
+              toolCallId: 'second',
+              startedAt: 3_000,
+              completedAt: 3_500,
+            },
+          ],
+        },
+      },
+      status: 'success',
+    });
+
+    await expect(service.getById(message.id)).resolves.toMatchObject({
+      data: { parts: [{ text: 'done', type: 'text' }] },
+      stats: {
+        outputTokens: 20,
+        providerPerformance: { measuredOutputTokens: 20, generationDurationMs: 500 },
+        runtimeTiming: {
+          startedAt: 1_000,
+          completedAt: 4_000,
+          spans: [{ id: 'tool:first' }, { id: 'tool:second' }],
+        },
+      },
+      status: 'success',
+    });
+    expect((await service.getById(message.id)).stats).not.toHaveProperty('timeFirstTokenMs');
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()).toMatchObject({
+      count: 0,
+    });
+  });
+
+  test('rejects runtime finalization for non-assistant messages', async () => {
+    const topic = await topicService.create({ name: 'runtime timing role' });
+    const message = await service.create(topic.id, {
+      data: { parts: [] },
+      role: 'user',
+      status: 'success',
+    });
+
+    await expect(
+      service.finalizeAssistantMessage(message.id, {
+        data: { parts: [] },
+        status: 'error',
+      }),
+    ).rejects.toThrow('only assistant messages can be finalized');
   });
 
   describe('applyToolApprovalDecisions', () => {
@@ -176,6 +348,52 @@ describe('MessageService integration', () => {
           state: 'approval-responded',
         }),
       ]);
+    });
+
+    test('completes approval wait timing in the same transaction as the decision', async () => {
+      const { tip } = await seedTip();
+      sqlite.prepare('UPDATE message SET stats = ? WHERE id = ?').run(
+        JSON.stringify({
+          runtimeTiming: {
+            startedAt: 1_000,
+            spans: [
+              {
+                id: 'approval:a1',
+                kind: 'approval-wait',
+                approvalId: 'a1',
+                toolCallId: 'call-a1',
+                startedAt: 1_100,
+              },
+              {
+                id: 'approval:a2',
+                kind: 'approval-wait',
+                approvalId: 'a2',
+                toolCallId: 'call-a2',
+                startedAt: 1_200,
+              },
+            ],
+          },
+        }),
+        tip.id,
+      );
+      const now = jest.spyOn(Date, 'now').mockReturnValue(2_000);
+
+      try {
+        await service.applyToolApprovalDecisions(tip.id, [{ approvalId: 'a1', approved: true }]);
+      } finally {
+        now.mockRestore();
+      }
+
+      await expect(service.getById(tip.id)).resolves.toMatchObject({
+        stats: {
+          runtimeTiming: {
+            spans: [
+              expect.objectContaining({ approvalId: 'a1', completedAt: 2_000 }),
+              expect.not.objectContaining({ completedAt: expect.anything() }),
+            ],
+          },
+        },
+      });
     });
 
     test('returns null for a deleted approval message', async () => {

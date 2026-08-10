@@ -1,8 +1,10 @@
+import { PreferenceDefaults } from '@cherrystudio/universal/data/preference';
+
 import { preferenceTable } from '@/backend/data/db/schemas';
-import { DefaultPreferences } from '@/shared/data/preference';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';
+import { collectPreferenceValueMigrations } from './preferenceValueMigrations';
 
 export class PreferenceSeeder implements DatabaseSeeder {
   readonly name = 'preference';
@@ -10,7 +12,7 @@ export class PreferenceSeeder implements DatabaseSeeder {
   readonly version: string;
 
   constructor() {
-    this.version = hashObject(DefaultPreferences);
+    this.version = hashObject(PreferenceDefaults);
   }
 
   async run(dbService: Parameters<DatabaseSeeder['run']>[0]) {
@@ -19,6 +21,7 @@ export class PreferenceSeeder implements DatabaseSeeder {
       .select({
         scope: preferenceTable.scope,
         key: preferenceTable.key,
+        value: preferenceTable.value,
       })
       .from(preferenceTable);
 
@@ -31,10 +34,14 @@ export class PreferenceSeeder implements DatabaseSeeder {
       scope: string;
       key: string;
       value: unknown;
-    }[] = [];
+    }[] = collectPreferenceValueMigrations(preferences);
 
-    // Process each scope in DefaultPreferences.
-    for (const [scope, scopeData] of Object.entries(DefaultPreferences)) {
+    for (const preference of newPreferences) {
+      existingPreferences.add(`${preference.scope}.${preference.key}`);
+    }
+
+    // Process each scope in the complete mobile preference surface.
+    for (const [scope, scopeData] of Object.entries(PreferenceDefaults)) {
       // Process each key-value pair in the scope.
       for (const [key, value] of Object.entries(scopeData)) {
         const preferenceKey = `${scope}.${key}`;

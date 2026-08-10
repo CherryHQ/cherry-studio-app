@@ -1,12 +1,16 @@
 import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-
-import { createUniqueModelId, type Model, type ModelCapability } from '@/shared/data/types/model';
-import type { Pin } from '@/shared/data/types/pin';
+import {
+  createUniqueModelId,
+  type Model,
+  type ModelCapability,
+} from '@cherrystudio/universal/data/types/model';
+import type { Pin } from '@cherrystudio/universal/data/types/pin';
 import {
   DEFAULT_API_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
   type Provider,
-} from '@/shared/data/types/provider';
+} from '@cherrystudio/universal/data/types/provider';
+
 import {
   buildModelPickerGroups,
   filterModelsByModelPickerTags,

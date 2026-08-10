@@ -1,0 +1,18 @@
+/**
+ * Cherry Studio semantic contract.
+ *
+ * Import order is architectural and must remain one-way:
+ * foundation providers -> official Shadcn semantics -> product semantics.
+ *
+ * There used to be a `runtime inputs` layer between the first two, holding the
+ * `--theme-*` pair the app rewrote from the theme-colour preference. Mobile
+ * never shipped a screen that sets that preference, so the layer existed to
+ * make one unreachable setting configurable; `--primary` reads `--brand`
+ * directly now.
+ * This entry contains no Tailwind adapter and is suitable for consumers that
+ * use CSS custom properties directly.
+ */
+
+@import './tokens.css';
+@import './shadcn.css';
+@import './product.css';

@@ -1,13 +1,14 @@
-import { useThemeColor } from 'heroui-native/hooks';
 import { ActivityIndicator } from 'react-native';
 import Animated, { Easing, FadeOut } from 'react-native-reanimated';
+
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 type ChatInitialRenderCoverProps = {
   isVisible: boolean;
 };
 
 export function ChatInitialRenderCover({ isVisible }: ChatInitialRenderCoverProps) {
-  const [backgroundColor, indicatorColor] = useThemeColor(['background', 'muted']);
+  const [backgroundColor, indicatorColor] = useThemeColor(['background', 'muted-foreground']);
 
   if (!isVisible) {
     return null;

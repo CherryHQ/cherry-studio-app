@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import {
   BellRingIcon,
@@ -12,8 +13,8 @@ import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Image } from '@/frontend/components/nativePrimitives';
 
-import { SettingsSection } from '../components/SettingsSection';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { getPermissionSummaryKey, type PermissionKind, permissionConfig } from './permissionConfig';
@@ -56,20 +57,31 @@ export default function PermissionsSettingsScreen() {
         ? 'settings.permissions.accessRequired'
         : getPermissionSummaryKey(kind, policies);
 
+    const Icon = permissionIcons[kind];
+
     return {
-      accessory: (
+      id: kind,
+      label: t(`settings.permissions.type.${kind}`),
+      leading:
+        Platform.OS === 'ios' ? (
+          <Image
+            cachePolicy="memory-disk"
+            className="size-5"
+            contentFit="contain"
+            source={iosPermissionImages[kind]}
+          />
+        ) : (
+          <Icon className="size-5 text-foreground" strokeWidth={2} />
+        ),
+      onPress: () => router.push(`/settings/permissions/${kind}`),
+      trailing: (
         <View className="flex-row items-center gap-2">
-          <Text className="text-base text-default-foreground" numberOfLines={1}>
+          <Text className="text-base text-foreground" numberOfLines={1}>
             {t(summaryKey)}
           </Text>
-          <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
+          <ChevronRightIcon className="size-5 text-foreground" strokeWidth={2} />
         </View>
       ),
-      icon: Platform.OS === 'ios' ? undefined : permissionIcons[kind],
-      id: kind,
-      imageSource: Platform.OS === 'ios' ? iosPermissionImages[kind] : undefined,
-      onPress: () => router.push(`/settings/permissions/${kind}`),
-      title: t(`settings.permissions.type.${kind}`),
     };
   });
 
@@ -83,7 +95,11 @@ export default function PermissionsSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="px-4 py-5">
-          <SettingsSection items={items} />
+          <Section>
+            {items.map(({ id, ...item }) => (
+              <Section.Item key={id} {...item} />
+            ))}
+          </Section>
         </View>
       </ScrollView>
     </>

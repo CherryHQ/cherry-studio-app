@@ -1,6 +1,7 @@
+import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
-import type { PreferenceKeyType } from '@/shared/data/preference';
 
 jest.mock('@/backend/data/db/schemas', () => ({
   preferenceTable: {
@@ -83,7 +84,7 @@ describe('PreferenceService', () => {
       scope: 'default',
       value: 'ask',
     });
-    expect(Object.keys(service.getAll())).toHaveLength(237);
+    expect(Object.keys(service.getAll())).toHaveLength(244);
   });
 
   test('returns mapped and full cached preferences', async () => {

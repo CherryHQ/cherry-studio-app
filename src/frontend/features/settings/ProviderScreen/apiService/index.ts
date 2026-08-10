@@ -3,15 +3,16 @@ export {
   ProviderApiServiceApiKeysField,
 } from './components/ProviderApiServiceApiKeyFields';
 export {
+  ProviderDefaultEndpointControl,
   ProviderApiServiceEndpointField,
   ProviderApiServiceEndpointForm,
 } from './components/ProviderApiServiceEndpointFields';
 export { useProviderApiServiceApiKeysDraft } from './hooks/useProviderApiServiceApiKeysDraft';
-export { useProviderApiServiceConfirmDialog } from './hooks/useProviderApiServiceConfirmDialog';
 export { useProviderApiServiceEndpointDraft } from './hooks/useProviderApiServiceEndpointDraft';
 export { useProviderApiServiceQueries } from './hooks/useProviderApiServiceQueries';
 export { useProviderApiServiceSheetClose } from './hooks/useProviderApiServiceSheetClose';
 export {
+  buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
   normalizeApiKeyEntries,
 } from './utils/providerApiServiceApiKeys';
@@ -22,13 +23,12 @@ export {
 } from './utils/providerApiServiceDirtyState';
 export type { EndpointDraft } from './utils/providerApiServiceEndpointDraft';
 export {
-  buildAddableEndpointOptions,
   canEditProviderEndpoint,
   getConfigurableEndpointTypesForProvider,
-  getEndpointLabel,
   getProviderPrimaryBaseUrl,
 } from './utils/providerApiServiceEndpointRules';
 export {
   buildProviderApiServiceEndpointUpdates,
+  buildProviderPrimaryBaseUrlUpdates,
   ProviderApiServiceSaveError,
 } from './utils/providerApiServiceSave';

@@ -1,9 +1,10 @@
-import { useToast } from 'heroui-native/toast';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { useMutation } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 const emptyModelIdSet: ReadonlySet<UniqueModelId> = new Set();
 
@@ -18,8 +19,10 @@ const emptyModelIdSet: ReadonlySet<UniqueModelId> = new Set();
  */
 export function useProviderModelRemove() {
   const { t } = useTranslation();
-  const { toast } = useToast();
-  const removeModelMutation = useMutation('DELETE', '/models/:id', { refresh: ['/models'] });
+  const { alert } = useAlert();
+  const removeModelMutation = useMutation('DELETE', '/models/:uniqueModelId*', {
+    refresh: ['/models'],
+  });
   const deleteModel = removeModelMutation.trigger;
   const [defaultModelId] = usePreference('chat.default_model_id');
   const [removingIds, setRemovingIds] = useState<ReadonlySet<UniqueModelId>>(emptyModelIdSet);
@@ -32,13 +35,9 @@ export function useProviderModelRemove() {
 
       setRemovingIds((current) => new Set(current).add(model.id));
       try {
-        const didRemove = await deleteModel({ params: { id: model.id } });
-        if (!didRemove) {
-          toast.show({ label: t('settings.provider.models.removeFailed'), variant: 'danger' });
-          return;
-        }
+        await deleteModel({ params: { uniqueModelId: model.id } });
       } catch {
-        toast.show({ label: t('settings.provider.models.removeFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.provider.models.removeFailed') });
       } finally {
         setRemovingIds((current) => {
           const next = new Set(current);
@@ -47,7 +46,7 @@ export function useProviderModelRemove() {
         });
       }
     },
-    [deleteModel, removingIds, t, toast],
+    [alert, deleteModel, removingIds, t],
   );
 
   return {

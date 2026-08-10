@@ -6,18 +6,17 @@
  * because frontend and backend execute in one Hermes runtime.
  */
 
-import { loggerService } from '@logger';
-import { createMMKV } from 'react-native-mmkv';
-
 import {
   type BackendCacheKey,
   type BackendPersistCacheKey,
   type BackendPersistCacheSchema,
   DefaultBackendPersistCache,
   type InferBackendCacheValue,
-} from '@/shared/data/cache/cacheSchemas';
-import type { CacheEntry } from '@/shared/data/cache/cacheTypes';
-import { deepEqual } from '@/shared/data/cache/cacheUtils';
+} from '@cherrystudio/universal/data/cache/cacheSchemas';
+import type { CacheEntry } from '@cherrystudio/universal/data/cache/cacheTypes';
+import { deepEqual } from '@cherrystudio/universal/data/cache/cacheUtils';
+import { loggerService } from '@logger';
+import { createMMKV } from 'react-native-mmkv';
 
 const logger = loggerService.withContext('BackendCacheService');
 

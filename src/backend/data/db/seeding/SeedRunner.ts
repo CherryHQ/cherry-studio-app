@@ -1,5 +1,6 @@
 import { loggerService } from '@logger';
 import { inArray } from 'drizzle-orm';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import { appStateTable } from '@/backend/data/db/schemas/appState';
 
@@ -7,6 +8,8 @@ import type { DatabaseSeeder } from './types';
 
 const logger = loggerService.withContext('SeedRunner');
 const seedKeyPrefix = 'seed:';
+const bootstrapMarkerKey = 'seedRunner:bootstrapCompleted';
+const legacyDefaultAssistantJournalKey = `${seedKeyPrefix}default-assistant`;
 
 type SeedJournal = {
   version: string;
@@ -22,8 +25,14 @@ export class SeedRunner {
 
     const journalKeys = seeders.map((seeder) => `${seedKeyPrefix}${seeder.name}`);
     const journalMap = await this.loadJournals(journalKeys);
+    const bootstrapState = await this.loadBootstrapState();
 
     for (const seeder of seeders) {
+      if (seeder.executionPolicy === 'bootstrap-only' && bootstrapState.completed) {
+        logger.debug(`Skipping seed "${seeder.name}" (bootstrap-only) - bootstrap window closed`);
+        continue;
+      }
+
       const key = `${seedKeyPrefix}${seeder.name}`;
       const journal = journalMap.get(key);
 
@@ -55,6 +64,38 @@ export class SeedRunner {
 
       logger.info(`Seed "${seeder.name}" applied (v${seeder.version}) - ${seeder.description}`);
     }
+
+    if (!bootstrapState.hasMarker) {
+      await this.markBootstrapCompleted();
+    }
+  }
+
+  private async loadBootstrapState() {
+    const rows = await this.dbService
+      .getDb()
+      .select({ key: appStateTable.key })
+      .from(appStateTable)
+      .where(inArray(appStateTable.key, [bootstrapMarkerKey, legacyDefaultAssistantJournalKey]));
+    const keys = new Set(rows.map((row) => row.key));
+
+    return {
+      completed: keys.has(bootstrapMarkerKey) || keys.has(legacyDefaultAssistantJournalKey),
+      hasMarker: keys.has(bootstrapMarkerKey),
+    };
+  }
+
+  private async markBootstrapCompleted() {
+    await this.dbService.withWriteTx(async (tx) => {
+      await tx
+        .insert(appStateTable)
+        .values({
+          description:
+            'Set after the first fully-successful seeding pass; bootstrap-only seeders never run once present',
+          key: bootstrapMarkerKey,
+          value: { completedAt: Date.now() },
+        })
+        .onConflictDoNothing({ target: appStateTable.key });
+    });
   }
 
   private async loadJournals(keys: string[]) {

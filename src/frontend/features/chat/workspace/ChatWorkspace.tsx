@@ -1,27 +1,31 @@
+import type { Message } from '@cherrystudio/universal/data/types/message';
+import { useKeyboardChatComposerInset } from '@legendapp/list/keyboard';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useToast } from 'heroui-native/toast';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
+
+import { useAlert } from '@/frontend/components/AlertProvider';
+import { useComposerDockLayout } from '@/frontend/components/composer';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { isIOS } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { Message } from '@/shared/data/types/message';
+
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { MessageSlideInProvider } from '../messageItem';
-import { useChatSession, useChatSessionTopic } from '../session/ChatSessionProvider';
+import { useChat, useChatTopic } from '../runtime/ChatProvider';
 import {
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
-} from '../session/chatSessionProjection';
+} from '../runtime/chatRuntimeProjection';
 import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessageList } from './components/ChatMessageList';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { ChatWorkspaceFrame } from './components/ChatWorkspaceFrame';
 import { ScrollToBottomButton } from './components/ScrollToBottomButton';
-import { useFloatingChatInputLayout } from './hooks/useFloatingChatInputLayout';
 import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
@@ -38,7 +42,7 @@ const gateLog = loggerService.withContext('ChatGate');
 type ChatWorkspaceProps = {
   messageWindow: Pick<
     MessagesViewModel,
-    'isLoadingInitial' | 'isLoadingOlder' | 'loadOlder' | 'messages' | 'prefetchOlder'
+    'isLoadingInitial' | 'isLoadingOlder' | 'loadOlder' | 'messages'
   >;
   renderGateKey: string;
   topicId: string;
@@ -46,35 +50,36 @@ type ChatWorkspaceProps = {
 
 export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
-  const chatSession = useChatSessionTopic(topicId);
+  const chatTopic = useChatTopic(topicId);
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const listRef = useRef<LegendListRef | null>(null);
+  const composerRef = useRef<View | null>(null);
   const isAtBottom = useSharedValue(true);
   const handleScrollToEnd = useCallback(() => {
     void listRef.current?.scrollToEnd({ animated: true });
   }, []);
-  const messagesWithUser = mergeMessagesWithOverlay(messages, chatSession.pendingUserMessage);
-  const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatSession.overlayMessage);
+  const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
+  const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
   const anchorIndex = getAnchoredUserMessageIndex(visibleMessages);
-  const session = useChatSession();
+  const chat = useChat();
   // 待审批检测以活动 tip 的 parts 为准，因此杀 app 重进后 sheet 也会自动恢复。
   const pendingApprovals = getPendingToolApprovals(visibleMessages);
-  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatSession.status !== 'streaming';
+  const isApprovalSheetOpen = pendingApprovals.length > 0 && chatTopic.status !== 'streaming';
   const handleApprovalRespond = useCallback(
     async (input: { approvalId: string; approved: boolean; messageId: string }) => {
       try {
-        await session.respondToolApproval({ ...input, topicId });
+        await chat.respondToolApproval({ ...input, topicId });
       } catch (error) {
         logger.error('Tool approval response failed', error as Error);
-        toast.show({ label: t('chat.tool.approval.failed'), variant: 'danger' });
+        alert.show({ title: t('chat.tool.approval.failed') });
       }
     },
-    [session, t, toast, topicId],
+    [alert, chat, t, topicId],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
-    hasHistoryBeforePendingTurn: chatSession.hasHistoryBeforePendingTurn,
+    hasHistoryBeforePendingTurn: chatTopic.hasHistoryBeforePendingTurn,
     isLoadingInitial,
     messageCount: messages.length,
   });
@@ -83,8 +88,12 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
     requiresInitialHistoryLayout,
   });
   const contentTopInset = isIOS ? headerHeight : 0;
-  const { contentBottomInset, handleInputHeightChange, inputHeightShared } =
-    useFloatingChatInputLayout();
+  const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
+    useComposerDockLayout();
+  const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
+    listRef,
+    composerRef,
+  );
 
   // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
   useEffect(() => {
@@ -100,21 +109,29 @@ export function ChatWorkspace({ messageWindow, renderGateKey, topicId }: ChatWor
   return (
     <ChatWorkspaceFrame>
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
-      <MessageSlideInProvider slideInMessageId={chatSession.pendingUserMessage?.id}>
+      <MessageSlideInProvider slideInMessageId={chatTopic.pendingUserMessage?.id}>
         <ChatMessageList
           key={listRenderKey}
           anchorIndex={anchorIndex}
           contentBottomInset={contentBottomInset}
+          contentInsetEndAdjustment={contentInsetEndAdjustment}
           contentTopInset={contentTopInset}
           isAtBottom={isAtBottom}
+          keyboardOffset={keyboardOffset}
           listRef={listRef}
           messages={visibleMessages}
           onLoadOlder={loadOlder}
-          onPrefetchOlder={messageWindow.prefetchOlder}
           onReady={markListLoaded}
+          pendingUserMessageId={chatTopic.pendingUserMessage?.id}
         />
       </MessageSlideInProvider>
-      <ChatComposer onHeightChange={handleInputHeightChange} topicId={topicId} />
+      <ChatComposer
+        composerRef={composerRef}
+        dismissKeyboardOnSend={false}
+        onComposerLayout={onComposerLayout}
+        onHeightChange={handleInputHeightChange}
+        topicId={topicId}
+      />
       <ScrollToBottomButton
         gap={SCROLL_BUTTON_GAP_ABOVE_INPUT}
         inputHeight={inputHeightShared}

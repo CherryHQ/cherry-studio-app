@@ -1,13 +1,12 @@
+import type { Message } from '@cherrystudio/universal/data/types/message';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Message } from '@/shared/data/types/message';
-import type { Painting } from '@/shared/data/types/painting';
 import type {
   PaintingGenerationInput,
   PaintingGenerationResult,
 } from '../../hooks/usePaintingGeneration';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
-
 import { PaintingConversationScreen } from '../PaintingConversationScreen';
 
 type PaintingInputProps = {
@@ -16,10 +15,14 @@ type PaintingInputProps = {
 };
 
 type MessageListProps = {
+  contentInsetEndAdjustment: unknown;
+  keyboardOffset: number;
   messages: Message[];
 };
 
 const mockRouterReplace = jest.fn();
+const mockContentInsetEndAdjustment = { value: 88 };
+const mockOnComposerLayout = jest.fn();
 const mockGenerate = jest.fn<Promise<PaintingGenerationResult>, [PaintingGenerationInput]>();
 let mockPaintingInputProps: PaintingInputProps | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -48,6 +51,7 @@ const mockFiles: ResolvedPaintingFiles = {
       kind: 'image',
       mediaType: 'image/jpeg',
       name: 'reference.jpg',
+      status: 'ready',
       uri: 'file:///reference.jpg',
     },
   ],
@@ -58,6 +62,7 @@ const mockFiles: ResolvedPaintingFiles = {
       kind: 'image',
       mediaType: 'image/png',
       name: 'painting.png',
+      status: 'ready',
       uri: 'file:///painting.png',
     },
   ],
@@ -78,6 +83,13 @@ jest.mock('expo-crypto', () => ({
     mockUuidIndex += 1;
     return `00000000-0000-7000-8000-${String(mockUuidIndex).padStart(12, '0')}`;
   },
+}));
+
+jest.mock('@legendapp/list/keyboard', () => ({
+  useKeyboardChatComposerInset: () => ({
+    contentInsetEndAdjustment: mockContentInsetEndAdjustment,
+    onComposerLayout: mockOnComposerLayout,
+  }),
 }));
 
 jest.mock('react-i18next', () => ({
@@ -105,8 +117,9 @@ jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
   useResolvedPaintingFiles: () => ({ data: mockFiles, isError: false, isLoading: false }),
 }));
 
-jest.mock('@/frontend/features/chat/input', () => ({
-  ChatInputProvider: ({
+jest.mock('@/frontend/components/composer', () => ({
+  ComposerDock: ({ children }: { children: React.ReactNode }) => children,
+  ComposerProvider: ({
     children,
     initialAttachments,
   }: {
@@ -116,6 +129,13 @@ jest.mock('@/frontend/features/chat/input', () => ({
     mockInitialAttachments = initialAttachments;
     return children;
   },
+  useComposerDockLayout: () => ({
+    contentBottomInset: 0,
+    handleInputHeightChange: jest.fn(),
+    inputHeight: 88,
+    inputHeightShared: { value: 0 },
+    keyboardOffset: 26,
+  }),
 }));
 
 jest.mock('@/frontend/features/chat/workspace', () => ({
@@ -125,11 +145,6 @@ jest.mock('@/frontend/features/chat/workspace', () => ({
   },
   ChatWorkspaceFrame: ({ children }: { children: React.ReactNode }) => children,
   ScrollToBottomButton: () => null,
-  useFloatingChatInputLayout: () => ({
-    contentBottomInset: 0,
-    handleInputHeightChange: jest.fn(),
-    inputHeightShared: { value: 0 },
-  }),
 }));
 
 jest.mock('@/frontend/features/paintings/components/PaintingInput', () => ({
@@ -229,5 +244,7 @@ describe('PaintingConversationScreen', () => {
       'assistant',
     ]);
     expect(mockMessageListProps?.messages[0].searchableText).toBe(mockPainting.prompt);
+    expect(mockMessageListProps?.contentInsetEndAdjustment).toBe(mockContentInsetEndAdjustment);
+    expect(mockMessageListProps?.keyboardOffset).toBe(26);
   });
 });

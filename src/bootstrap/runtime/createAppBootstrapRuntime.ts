@@ -1,3 +1,6 @@
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
+import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
+
 import { createDataApiHandlers } from '@/backend/data/api/handlers/apiHandlers';
 import { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
@@ -8,14 +11,12 @@ import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
 import i18n from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
-import type { ApiClient } from '@/shared/data/api/types';
-import type { PreferenceClient } from '@/shared/data/preference';
 
 export type AppBootstrapRuntime = {
   readonly backend: Backend;
   readonly dataApi: ApiClient;
   readonly preference: PreferenceClient;
-  dispose(): void;
+  dispose(): Promise<void>;
   initialize(): Promise<void>;
   runPostReadyTasks(): Promise<void>;
 };
@@ -24,20 +25,48 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
   const cacheService = new CacheService();
   const dbService = new DbService();
   const services = createBackendServices(dbService, cacheService);
-  const { backend, dataApiDependencies } = createBackend(services, {
+  const {
+    backend,
+    dataApiDependencies,
+    dispose: disposeBackend,
+  } = createBackend(services, {
     translate: (key) => i18n.t(key),
   });
+  let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
+      agentChannels: services.agentChannel,
+      agentGlobalSkills: services.agentGlobalSkill,
+      agents: services.agent,
+      agentSessionMessages: services.agentSessionMessage,
+      agentSessions: services.agentSession,
+      agentTasks: services.agentTask,
+      agentWorkspaces: services.agentWorkspace,
+      aiUsageRecords: services.aiUsageRecord,
       assistants: services.assistant,
+      contentSearch: services.contentSearch,
+      entitySearch: services.entitySearch,
       files: services.fileEntry,
-      mcpServers: dataApiDependencies.mcpServers,
+      fileRefs: services.fileRef,
+      groups: services.group,
+      jobs: services.job,
+      knowledgeBases: services.knowledgeBase,
+      knowledgeItems: services.knowledgeItem,
+      mcpServerMutations: dataApiDependencies.mcpServerMutations,
+      mcpServers: services.mcpServer,
       messages: services.message,
-      models: dataApiDependencies.models,
-      paintings: dataApiDependencies.paintings,
+      miniApps: services.miniApp,
+      models: services.model,
+      notes: services.note,
+      paintings: services.painting,
       pins: services.pin,
-      providers: dataApiDependencies.providers,
+      prompts: services.prompt,
+      providers: services.provider,
+      tags: services.tag,
+      temporaryChats: services.temporaryChat,
       topics: services.topic,
+      translateHistories: services.translateHistory,
+      translateLanguages: services.translateLanguage,
     }),
   );
 
@@ -46,10 +75,14 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
     dataApi,
     preference: services.preference,
     dispose: () => {
-      services.mcpRuntime.dispose();
-      services.webSearch.dispose();
-      services.cache.dispose();
-      dbService.dispose();
+      disposePromise ??= (async () => {
+        await disposeBackend();
+        services.mcpRuntime.dispose();
+        services.webSearch.dispose();
+        services.cache.dispose();
+        dbService.dispose();
+      })();
+      return disposePromise;
     },
     initialize: async () => {
       services.cache.init();

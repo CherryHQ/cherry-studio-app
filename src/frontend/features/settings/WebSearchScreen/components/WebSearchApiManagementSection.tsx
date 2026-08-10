@@ -1,16 +1,15 @@
+import type {
+  WebSearchCapability,
+  WebSearchProviderId,
+  WebSearchProviderOverride,
+  WebSearchProviderOverrides,
+} from '@cherrystudio/universal/data/preference';
+import type { WebSearchProviderPreset } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useBackendModule } from '@/frontend/data';
-import type {
-  WebSearchCapability,
-  WebSearchProvider,
-  WebSearchProviderId,
-  WebSearchProviderOverride,
-  WebSearchProviderOverrides,
-} from '@/shared/data/preference';
-import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
+
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
   WebSearchApiManagementContext,
@@ -40,7 +39,6 @@ export function WebSearchApiManagementSection({
 }: WebSearchApiManagementSectionProps) {
   const { t } = useTranslation();
   const router = useRouter();
-  const webSearch = useBackendModule('webSearch');
   const providerOverride = providerOverrides[provider.id];
   const sections = getWebSearchProviderDetailSections(provider.id);
 
@@ -63,18 +61,12 @@ export function WebSearchApiManagementSection({
       },
     });
   }, [provider.id, provider.name, router]);
-  const checkProvider = useCallback(
-    (providerConfig: WebSearchProvider, capability?: WebSearchCapability) =>
-      webSearch.checkProvider({ provider: providerConfig, capability }),
-    [webSearch],
-  );
 
   const contextValue = useMemo<WebSearchApiManagementContextValue>(
     () => ({
       actions: {
         onCapabilityApiHostChange,
         onProviderOverrideChange,
-        checkProvider,
         openApiKeySettings,
         openZhipuApiKeySettings,
       },
@@ -89,7 +81,6 @@ export function WebSearchApiManagementSection({
     [
       onCapabilityApiHostChange,
       onProviderOverrideChange,
-      checkProvider,
       openApiKeySettings,
       openZhipuApiKeySettings,
       provider,

@@ -1,43 +1,45 @@
-import { readUIMessageStream, type UIMessageChunk } from 'ai';
-import {
-  discardPreparedFiles,
-  imageUriToDataUrl,
-  prepareGeneratedImage,
-  prepareInternalFileFromUri,
-  prepareMessageParts,
-} from '@/backend/data/services/fileStorage';
+import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { readUIMessageStream } from 'ai';
+
+import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
+import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { BackgroundReplyService } from '@/backend/services/backgroundReply';
-import { ChatService } from '@/backend/services/chat/ChatService';
-import { McpService } from '@/backend/services/mcp/McpService';
-import { ModelsService } from '@/backend/services/models/ModelsService';
-import { CherryInOauthService } from '@/backend/services/oauth/CherryInOauthService';
-import { PaintingsService } from '@/backend/services/paintings/PaintingsService';
-import { PermissionsService } from '@/backend/services/permissions/PermissionsService';
-import { ProfileService } from '@/backend/services/profile/ProfileService';
+import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
+import {
+  createInternalEntry,
+  createMessageParts,
+  discardInternalEntries,
+  getInternalFileUri,
+  imageUriToDataUrl,
+} from '@/backend/services/file/fileStorage';
+import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
+import { createModelsModule } from '@/backend/services/models/createModelsModule';
+import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
+import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
+import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
+import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
+import { createProfileModule } from '@/backend/services/profile/createProfileModule';
 import {
   replaceUserAvatar,
   resolveUserAvatarUri,
 } from '@/backend/services/profile/userAvatarStorage';
-import { ProvidersService } from '@/backend/services/providers/ProvidersService';
+import { createProvidersModule } from '@/backend/services/providers/createProvidersModule';
 import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
-import type { CherryUIMessage } from '@/shared/data/types/message';
-import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
-    mcpServers: McpService;
-    models: ModelsService;
-    paintings: PaintingsService;
-    providers: ProvidersService;
+    mcpServerMutations: McpServerMutations;
   };
+  dispose(): Promise<void>;
 };
 
 type BackendCompositionDependencies = {
@@ -48,16 +50,32 @@ export function createBackend(
   services: BackendServices,
   dependencies: BackendCompositionDependencies,
 ): BackendComposition {
-  const oauth = CherryInOauthService.getInstance(services.provider);
-  const chat = new ChatService({
-    createBackgroundReply: () =>
-      new BackgroundReplyService({
-        preference: services.preference,
-        translate: dependencies.translate,
-      }),
+  const oauth = new OAuthRuntimeService({
+    providers: {
+      listApiKeys: (providerId) => services.provider.listApiKeys(providerId),
+      replaceApiKeys: (providerId, keys) => services.provider.replaceApiKeys(providerId, keys),
+      update: (providerId, input) => services.provider.update(providerId, input),
+    },
+    tokenStore: new ProviderAuthConfigOAuthTokenStore({
+      getAuthConfig: (providerId) => services.provider.getAuthConfig(providerId),
+      update: (providerId, input) => services.provider.update(providerId, input),
+    }),
+  });
+  const cherryin = new CherryInClient({
+    oauth: {
+      authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
+        oauth.authenticatedFetch(providerId, buildRequest, doFetch, options),
+      hasToken: (providerId) => oauth.hasToken(providerId),
+    },
+  });
+  const chat = new ChatRuntime({
+    backgroundReply: new BackgroundReplyService({
+      preference: services.preference,
+      translate: dependencies.translate,
+    }),
     files: {
-      discard: discardPreparedFiles,
-      prepareParts: prepareMessageParts,
+      createParts: (parts) => createMessageParts(services.fileEntry, parts),
+      discard: (entries) => discardInternalEntries(services.fileEntry, entries),
     },
     services: {
       ai: {
@@ -65,7 +83,7 @@ export function createBackend(
         readMessageStream: ({ message, stream }) =>
           readUIMessageStream<CherryUIMessage>({
             message,
-            stream: stream as ReadableStream<UIMessageChunk>,
+            stream,
             terminateOnError: true,
           }),
         streamText: (input) => services.ai.streamText(input),
@@ -74,15 +92,14 @@ export function createBackend(
       message: services.message,
       model: services.model,
       preference: services.preference,
+      provider: services.provider,
       topic: services.topic,
     },
   });
-  const models = new ModelsService({
+  const models = createModelsModule({
     ai: services.ai,
     materializeRemoteModels,
     models: {
-      add: (input, provider) =>
-        services.model.createFromRegistry(input, providerConfiguration(provider)),
       get: (id) => services.model.getById(id),
       list: (query) => services.model.list(query),
       reconcile: async (providerId, input, provider) => {
@@ -93,32 +110,24 @@ export function createBackend(
         );
         return { ...result, removedIds: result.removedIds as UniqueModelId[] };
       },
-      remove: (id) => services.model.delete(id),
     },
     providers: {
       get: (id) => services.provider.getByProviderId(id),
       update: (id, input) => services.provider.update(id, input),
     },
   });
-  const paintings = new PaintingsService({
+  const paintings = createPaintingsModule({
     ai: services.ai,
-    files: services.fileEntry,
-    paintings: {
-      create: (input) => services.painting.create(input),
-      get: (id) => services.painting.getById(id),
-      listIds: () => services.painting.listAllIds(),
-      listPage: (query) => services.painting.listByCursor(query),
-      removeMany: (ids) => services.painting.deleteMany(ids),
-      replaceOutputs: (id, outputs) => services.painting.replaceOutputs(id, outputs),
-    },
+    files: services.fileContent,
+    paintings: services.painting,
     storage: {
-      discard: discardPreparedFiles,
-      prepareGeneratedImage,
-      prepareInput: prepareInternalFileFromUri,
+      createInternalEntry: (input) => createInternalEntry(services.fileEntry, input),
+      discard: (entries) => discardInternalEntries(services.fileEntry, entries),
       readDataUrl: imageUriToDataUrl,
+      getUri: getInternalFileUri,
     },
   });
-  const mcp = new McpService({
+  const mcp = createMcpModule({
     runtime: {
       getRuntimeSummaries: (servers) => services.mcpRuntime.getRuntimeSummaries(servers),
       getServerInfo: (config) => services.mcpRuntime.getServerInfo(config),
@@ -130,48 +139,29 @@ export function createBackend(
     servers: {
       create: (input) => services.mcpServer.create(input, 'streamableHttp'),
       get: (id) => services.mcpServer.getById(id, 'streamableHttp'),
-      list: (query) => services.mcpServer.list({ ...query, type: 'streamableHttp' }),
       remove: (id) => services.mcpServer.delete(id, 'streamableHttp'),
       update: (id, input) => services.mcpServer.update(id, input, 'streamableHttp'),
     },
   });
-  const providers = new ProvidersService({
+  const providers = createProvidersModule({
     avatars: {
       persist: saveProviderAvatar,
       resolve: getProviderAvatarUri,
     },
-    oauth: {
-      complete: (input) => oauth.completeOAuth(input),
-      getAccount: (apiHost) => oauth.getBalance(apiHost),
-      getNonOAuthApiKeys: (providerId) => oauth.getNonOAuthApiKeys(providerId),
-      logout: (apiHost) => oauth.logout(apiHost),
-      saveResult: (providerId, apiKeys) => oauth.saveOAuthResult(providerId, apiKeys),
-    },
-    providers: {
-      canRemove: canDeleteProvider,
-      create: (input) => services.provider.create(input),
-      get: (id) => services.provider.getByProviderId(id),
-      getAuth: (id) => services.provider.getAuthConfig(id),
-      list: (query) => services.provider.list(query),
-      listApiKeys: async (id, query) => (await services.provider.listApiKeys(id, query)).keys,
-      remove: (id) => services.provider.delete(id),
-      replaceApiKeys: (id, keys) => services.provider.replaceApiKeys(id, keys),
-      update: (id, input) => services.provider.update(id, input),
-      updateApiKey: (id, keyId, input) => services.provider.updateApiKey(id, keyId, input),
-    },
+    canRemove: canDeleteProvider,
   });
-  const permissions = new PermissionsService({
+  const permissions = createPermissionsModule({
     device: {
-      getStatus: (key) => services.devicePermission.getStatusForPreference(key),
-      openSystemSettings: (permission) => services.devicePermission.openSystemSettings(permission),
-      request: (key) => services.devicePermission.requestForPreference(key),
+      getStatus: (key) => services.devicePermissions.getStatusForPreference(key),
+      openSystemSettings: (permission) => services.devicePermissions.openSystemSettings(permission),
+      request: (key) => services.devicePermissions.requestForPreference(key),
     },
     preferences: {
       readCached: (key) => services.preference.readCached(key),
       set: (key, value) => services.preference.set(key, value),
     },
   });
-  const profile = new ProfileService({
+  const profile = createProfileModule({
     avatars: {
       replace: replaceUserAvatar,
       resolve: resolveUserAvatarUri,
@@ -185,8 +175,15 @@ export function createBackend(
   return {
     backend: {
       chat,
+      cherryin,
+      file: {
+        createInternalEntry: services.fileContent.createInternalEntry,
+        deleteIfUnreferenced: services.fileContent.deleteIfUnreferenced,
+        getUri: services.fileContent.getUri,
+      },
       mcp,
       models,
+      oauth,
       paintings,
       permissions,
       profile,
@@ -194,11 +191,9 @@ export function createBackend(
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
-      mcpServers: mcp,
-      models,
-      paintings,
-      providers,
+      mcpServerMutations: mcp,
     },
+    dispose: () => chat.dispose(),
   };
 }
 
@@ -206,12 +201,12 @@ function providerConfiguration(provider: {
   defaultChatEndpoint?: NonNullable<
     Parameters<BackendServices['model']['createFromRegistry']>[1]
   >['defaultChatEndpoint'];
-  endpointConfigs?: NonNullable<
+  presetProviderId?: NonNullable<
     Parameters<BackendServices['model']['createFromRegistry']>[1]
-  >['endpointConfigs'];
+  >['presetProviderId'];
 }) {
   return {
     defaultChatEndpoint: provider.defaultChatEndpoint,
-    endpointConfigs: provider.endpointConfigs,
+    presetProviderId: provider.presetProviderId,
   };
 }

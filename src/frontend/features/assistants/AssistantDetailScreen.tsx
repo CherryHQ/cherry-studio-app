@@ -1,32 +1,25 @@
+import { Button } from '@cherrystudio/ui/components';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Button } from 'heroui-native/button';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ModelPickerIcon, useModelPickerData } from '@/frontend/components/modelPicker';
-import { useSetBottomTabBarHidden } from '@/frontend/components/navigation';
 import { useAssistantApiById } from '@/frontend/hooks/chat';
 import { screenBottomActionInset } from '@/frontend/utils/constants';
-import type { Assistant } from '@/shared/data/types/assistant';
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const setBottomTabBarHidden = useSetBottomTabBarHidden();
   const { assistantId, returnTopicId } = useLocalSearchParams<{
     assistantId: string;
     returnTopicId?: string;
   }>();
   const { assistant, error, isLoading } = useAssistantApiById(assistantId);
-
-  useEffect(() => {
-    setBottomTabBarHidden(true);
-    return () => setBottomTabBarHidden(false);
-  }, [setBottomTabBarHidden]);
 
   const returnToTopic = useCallback(() => {
     if (!returnTopicId) {
@@ -78,7 +71,7 @@ export default function AssistantDetailScreen() {
         {assistant ? (
           <AssistantSummary assistant={assistant} />
         ) : (
-          <Text className="text-center text-default-foreground text-sm">
+          <Text className="text-center text-foreground text-sm">
             {isLoading ? t('assistant.form.loading') : t('assistant.list.emptyTitle')}
           </Text>
         )}
@@ -93,12 +86,9 @@ export default function AssistantDetailScreen() {
           <Button
             accessibilityLabel={t('assistant.actions.startChat')}
             className="rounded-2xl"
-            variant="primary"
             onPress={startChat}
           >
-            <Text className="font-medium text-base text-white">
-              {t('assistant.actions.startChat')}
-            </Text>
+            {t('assistant.actions.startChat')}
           </Button>
         </View>
       ) : null}
@@ -113,11 +103,8 @@ function AssistantSummary({ assistant }: { assistant: Assistant }) {
   return (
     <View className="items-center gap-6">
       <View className="items-center gap-4">
-        <View className="size-24 items-center justify-center">
-          {/* Apple Color Emoji draws taller than its point size, so a line height
-              equal to the font size (Tailwind's `text-6xl` default) clips the top
-              of the glyph — give it the same ~1.3 slack the list rows use. */}
-          <Text className="text-6xl leading-20">{assistant.emoji}</Text>
+        <View className="min-h-24 min-w-24 items-center justify-center">
+          <Text className="text-emoji-6xl">{assistant.emoji}</Text>
         </View>
         <View className="items-center gap-1.5">
           <Text className="text-center font-semibold text-2xl text-foreground" numberOfLines={2}>
@@ -127,11 +114,9 @@ function AssistantSummary({ assistant }: { assistant: Assistant }) {
         </View>
       </View>
       {prompt ? (
-        <View className="w-full gap-2 rounded-2xl bg-settings-grouped-surface p-4">
-          <Text className="font-medium text-default-foreground text-sm">
-            {t('assistant.form.prompt')}
-          </Text>
-          <Text className="text-base text-foreground leading-6" selectable>
+        <View className="w-full gap-2 rounded-2xl bg-grouped-surface p-4">
+          <Text className="font-medium text-foreground text-sm">{t('assistant.form.prompt')}</Text>
+          <Text className="text-base text-foreground" selectable>
             {prompt}
           </Text>
         </View>
@@ -150,7 +135,7 @@ function AssistantModelLine({ modelId, modelName }: Pick<Assistant, 'modelId' | 
 
   if (!model) {
     return (
-      <Text className="text-center text-base text-default-foreground" numberOfLines={1}>
+      <Text className="text-center text-base text-foreground" numberOfLines={1}>
         {modelName ?? t('assistant.model.none')}
       </Text>
     );
@@ -159,7 +144,7 @@ function AssistantModelLine({ modelId, modelName }: Pick<Assistant, 'modelId' | 
   return (
     <View className="max-w-full flex-row items-center gap-1.5">
       <ModelPickerIcon model={model.model} provider={model.provider} size={20} />
-      <Text className="min-w-0 shrink text-base text-default-foreground" numberOfLines={1}>
+      <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
         {model.model.name}
       </Text>
     </View>

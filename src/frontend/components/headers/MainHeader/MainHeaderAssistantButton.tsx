@@ -1,10 +1,9 @@
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, Text } from 'react-native';
-import { useAssistantApiById, useTopic } from '@/frontend/hooks/chat';
-import type { Assistant } from '@/shared/data/types/assistant';
 
-const assistantButtonSize = 36;
+import { useAssistantApiById, useTopic } from '@/frontend/hooks/chat';
 
 export function useMainHeaderAssistant() {
   const router = useRouter();
@@ -44,13 +43,12 @@ export function MainHeaderAssistantButton({
     <Pressable
       accessibilityLabel={assistant.name}
       accessibilityRole="button"
-      className="items-center justify-center overflow-hidden rounded-full bg-settings-grouped-surface active:opacity-60"
+      className="size-10 items-center justify-center overflow-hidden rounded-full bg-secondary active:opacity-60"
       hitSlop={8}
       onPress={onPress}
-      style={{ height: assistantButtonSize, width: assistantButtonSize }}
       testID="current-assistant-button"
     >
-      <Text className="text-xl leading-7">{assistant.emoji}</Text>
+      <Text className="text-emoji-xl">{assistant.emoji}</Text>
     </Pressable>
   );
 }

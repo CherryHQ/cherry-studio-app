@@ -1,8 +1,7 @@
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Painting } from '@/shared/data/types/painting';
 import type { ResolvedPaintingFiles } from '../../hooks/usePaintings';
-
 import { PaintingViewerScreen } from '../PaintingViewerScreen';
 
 const mockRouterBack = jest.fn();
@@ -148,6 +147,7 @@ function addPainting(paintingId: string, fileEntryId: string) {
         kind: 'image',
         mediaType: 'image/png',
         name: `${fileEntryId}.png`,
+        status: 'ready',
         uri: `file:///${fileEntryId}.png`,
       },
     ],

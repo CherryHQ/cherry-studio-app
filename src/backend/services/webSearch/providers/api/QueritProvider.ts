@@ -1,41 +1,46 @@
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+import type {
+  WebSearchExecutionConfig,
+  WebSearchResponse,
+} from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
+
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';
-import {
-  assertRecord,
-  readNumber,
-  readObject,
-  readObjectArray,
-  readOptionalString,
-  readString,
-} from './schemaUtils';
 
-type QueritSearchRequest = {
-  query: string;
-  count: number;
-  filters?: {
-    sites?: {
-      exclude: string[];
-    };
-  };
-};
+const QueritSearchParamsSchema = z.object({
+  query: z.string(),
+  count: z.number().int().positive(),
+  filters: z
+    .object({
+      sites: z
+        .object({
+          exclude: z.array(z.string()),
+        })
+        .optional(),
+    })
+    .optional(),
+});
 
-type QueritSearchResponse = {
-  error_code: number;
-  error_msg: string;
-  query_context: {
-    query: string;
-  };
-  results: {
-    result: {
-      title: string;
-      snippet?: string;
-      url: string;
-    }[];
-  };
-};
+const QueritSearchResponseSchema = z.object({
+  error_code: z.number(),
+  error_msg: z.string(),
+  query_context: z.object({
+    query: z.string(),
+  }),
+  results: z.object({
+    result: z
+      .array(
+        z.object({
+          title: z.string(),
+          snippet: z.string().optional(),
+          url: z.string(),
+        }),
+      )
+      .default([]),
+  }),
+});
 
-type QueritSearchContext = ApiKeyRequestSearchContext<QueritSearchRequest>;
+type QueritSearchContext = ApiKeyRequestSearchContext<z.infer<typeof QueritSearchParamsSchema>>;
 
 export class QueritProvider extends BaseWebSearchProvider {
   async searchKeywords(
@@ -54,17 +59,17 @@ export class QueritProvider extends BaseWebSearchProvider {
     config: WebSearchExecutionConfig,
     httpOptions?: RequestInit,
   ): QueritSearchContext {
-    const requestBody: QueritSearchRequest = {
+    const requestBody = QueritSearchParamsSchema.parse({
       query,
       count: config.maxResults,
-    };
+    });
 
+    const filters: z.input<typeof QueritSearchParamsSchema>['filters'] = {};
     if (config.excludeDomains.length > 0) {
-      requestBody.filters = {
-        sites: {
-          exclude: config.excludeDomains,
-        },
-      };
+      filters.sites = { exclude: config.excludeDomains };
+    }
+    if (Object.keys(filters).length > 0) {
+      requestBody.filters = filters;
     }
 
     return {
@@ -77,7 +82,7 @@ export class QueritProvider extends BaseWebSearchProvider {
     };
   }
 
-  private async executeSearch(context: QueritSearchContext): Promise<QueritSearchResponse> {
+  private async executeSearch(context: QueritSearchContext) {
     const response = await fetch(context.requestUrl, {
       method: 'POST',
       headers: this.buildHeaders({
@@ -92,7 +97,7 @@ export class QueritProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Querit search failed', response);
     }
 
-    return this.parseJsonResponse(response, parseQueritSearchResponse, {
+    return this.parseJsonResponse(response, QueritSearchResponseSchema, {
       operation: 'search',
       requestUrl: context.requestUrl,
     });
@@ -100,7 +105,7 @@ export class QueritProvider extends BaseWebSearchProvider {
 
   private buildFinalResponse(
     context: QueritSearchContext,
-    searchPayload: QueritSearchResponse,
+    searchPayload: z.infer<typeof QueritSearchResponseSchema>,
   ): WebSearchResponse {
     if (searchPayload.error_code !== 200) {
       throw new Error(`Querit search failed: ${searchPayload.error_msg}`);
@@ -119,27 +124,4 @@ export class QueritProvider extends BaseWebSearchProvider {
       })),
     };
   }
-}
-
-function parseQueritSearchResponse(payload: unknown): QueritSearchResponse {
-  const record = assertRecord(payload);
-  const queryContext = readObject(record.query_context, 'payload.query_context');
-  const results = readObject(record.results, 'payload.results');
-
-  return {
-    error_code: readNumber(record.error_code, 'payload.error_code'),
-    error_msg: readString(record.error_msg, 'payload.error_msg'),
-    query_context: {
-      query: readString(queryContext.query, 'payload.query_context.query'),
-    },
-    results: {
-      result: readObjectArray(results.result ?? [], 'payload.results.result').map(
-        (item, index) => ({
-          title: readString(item.title, `payload.results.result[${index}].title`),
-          snippet: readOptionalString(item.snippet, `payload.results.result[${index}].snippet`),
-          url: readString(item.url, `payload.results.result[${index}].url`),
-        }),
-      ),
-    },
-  };
 }

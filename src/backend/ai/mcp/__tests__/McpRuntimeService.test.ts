@@ -1,8 +1,9 @@
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import type { ToolSet } from 'ai';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { Assistant } from '@/shared/data/types/assistant';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+
 import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -56,6 +57,7 @@ function makeAssistant(): Assistant {
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
+    groupId: null,
     id: 'assistant-1',
     knowledgeBaseIds: [],
     mcpServerIds: [],
@@ -148,8 +150,12 @@ async function warmedToolSet(service: McpRuntimeService, assistant = makeAssista
   return getProjectedToolSet(service, assistant);
 }
 
-async function getProjectedToolSet(service: McpRuntimeService, assistant: Assistant) {
-  const entries = await service.getToolEntriesForAssistant(assistant);
+async function getProjectedToolSet(
+  service: McpRuntimeService,
+  assistant: Assistant,
+  selectedToolIds?: readonly string[],
+) {
+  const entries = await service.getToolEntriesForAssistant(assistant, selectedToolIds);
   return entries.length
     ? Object.fromEntries(entries.map((entry) => [entry.name, entry.tool]))
     : undefined;
@@ -201,6 +207,15 @@ describe('assistant tool preparation', () => {
     const { service } = makeService([makeServer()]);
 
     const tools = await getProjectedToolSet(service, makeAssistant());
+
+    expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
+  });
+
+  it('projects only explicitly selected MCP tools for the request', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search', 'read'])));
+    const { service } = makeService([makeServer()]);
+
+    const tools = await getProjectedToolSet(service, makeAssistant(), ['mcp__serverone__search']);
 
     expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
   });

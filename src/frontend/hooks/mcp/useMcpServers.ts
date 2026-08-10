@@ -1,13 +1,24 @@
+import type {
+  CreateMcpServerDto,
+  UpdateMcpServerDto,
+} from '@cherrystudio/universal/data/api/schemas/mcpServers';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQueryClient, useQuery as useTanStackQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
+
 import { queryKeys, useBackendModule, useMutation, useQuery } from '@/frontend/data';
+import {
+  dataApiCollectionFilters,
+  removeItemsFromCountedList,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
-import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/shared/data/api/schemas/mcpServers';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
 
 const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
 const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =
   Object.freeze({});
+type McpServerListData = { items: StreamableHttpMcpServer[]; total: number };
 
 export function useMcpServersApi() {
   const query = useQuery('/mcp-servers');
@@ -72,7 +83,22 @@ export function useMcpServerMutations() {
       }
     },
   });
-  const deleteMutation = useMutation('DELETE', '/mcp-servers/:id');
+  const deleteMutation = useMutation('DELETE', '/mcp-servers/:id', {
+    onMutate: async (variables) => {
+      const serverId = variables?.params.id;
+      const serverIds = new Set(serverId ? [serverId] : []);
+      const servers = await updateQueriesOptimistically<McpServerListData>(
+        queryClient,
+        dataApiCollectionFilters('/mcp-servers'),
+        (current) => removeItemsFromCountedList(current, serverIds),
+      );
+
+      return { servers };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.servers);
+    },
+  });
   const createServerRequest = createMutation.trigger;
   const updateServerRequest = updateMutation.trigger;
   const deleteServerRequest = deleteMutation.trigger;

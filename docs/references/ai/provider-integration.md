@@ -7,10 +7,11 @@ This reference defines the mobile AI provider/model request architecture. Terms 
 
 The request path is:
 
-`ChatSession -> AiService -> providerToAiSdkConfig() -> Agent -> @cherrystudio/ai-core / AI SDK`
+`ChatRuntime -> AiService -> providerToAiSdkConfig() -> Agent -> @cherrystudio/ai-core / AI SDK`
 
-`AiService` is a private backend AI implementation composed into workflow services and Data API
-handlers by bootstrap. It is not exposed through `Backend` or frontend context. It supports:
+`AiService` is a private, desktop-aligned backend AI implementation composed into workflow modules,
+runtimes, and Data API handlers by bootstrap. It is not exposed through `Backend` or frontend
+context. It supports:
 
 - `streamText()`
 - `generateText()`
@@ -18,18 +19,21 @@ handlers by bootstrap. It is not exposed through `Backend` or frontend context. 
 - `generateImage()`
 - `checkModel()`
 
-`streamText()` requires a caller-provided AbortSignal. `ChatSession` owns the chat AbortController;
-`PaintingGenerationSession` receives the frontend-owned generation signal through its contract.
+`streamText()` requires a caller-provided AbortSignal. `ChatRuntime` owns each Topic's chat
+AbortController; `PaintingGenerationSession` owns its generation AbortController and passes the
+signal to `AiService` internally.
 
 ## Model Resolution
 
-Model selection priority is:
+`ChatRuntime` resolves the model for a chat turn in this order:
 
-1. Explicit `uniqueModelId`.
+1. The model selected for the turn.
 2. `assistant.modelId`.
 3. `chat.default_model_id`.
 
-Assistant-less topics do not persist a default assistant id just to resolve a model. They read the default model preference at send time.
+It then passes the resolved model to `AiService` as `uniqueModelId`. Direct `AiService` callers must
+provide either `uniqueModelId` or an Assistant with `modelId`; `AiService` does not read the default
+model preference. Assistant-less topics do not persist a default Assistant solely to resolve a model.
 
 ## Provider And Model Records
 
@@ -73,7 +77,7 @@ behavior to mobile AI SDK generate/stream calls.
 Current exclusions:
 
 - Desktop IPC handlers.
-- Stream manager sessions.
+- Desktop IPC stream-manager session APIs beyond the mobile `ChatRuntime`.
 - Pending message steering.
 - Full agent-session orchestration.
 
@@ -96,8 +100,8 @@ Provider-native web search is an AI request option. It is separate from `WebSear
 
 Beyond provider options, `buildAgentParams`
 (`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`) may also attach a tool set,
-resolved per request by `ToolService.resolveForRequest`
-(`src/backend/ai/tools/ToolService.ts`). The resolved tool set can contain the
+resolved per request by `ToolResolver.resolveForRequest`
+(`src/backend/ai/tools/ToolResolver.ts`). The resolved tool set can contain the
 external `web_search` tool backed by `WebSearchService`, MCP tools merged from
 `McpRuntimeService.getToolEntriesForAssistant(...)`, and built-in device tools (calendar, health,
 location, reminders under `src/backend/ai/tools/adapters/aiSdk/builtin`). When the external web search
@@ -146,4 +150,4 @@ Current state:
 ## Reopen When
 
 - Desktop Provider/Model semantics change.
-- Mobile adds currently excluded agent-session or stream-manager behavior.
+- Mobile adds currently excluded agent-session or desktop-only stream-manager behavior.

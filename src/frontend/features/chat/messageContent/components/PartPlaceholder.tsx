@@ -19,8 +19,8 @@ type PartPlaceholderProps = {
 
 export function PartPlaceholder({ description, icon, label, onPress }: PartPlaceholderProps) {
   const hasDescription = Boolean(description);
-  const iconClassName = `${hasDescription ? 'mt-0.5 ' : ''}size-4 text-default-foreground`;
-  const containerClassName = `flex-row gap-2 rounded-lg border border-border bg-surface-secondary p-3 ${
+  const iconClassName = `${hasDescription ? 'mt-0.5 ' : ''}size-4 text-foreground`;
+  const containerClassName = `flex-row gap-2 rounded-lg border border-border bg-secondary p-3 ${
     hasDescription ? '' : 'items-center'
   }`;
   const iconElement =
@@ -42,11 +42,11 @@ export function PartPlaceholder({ description, icon, label, onPress }: PartPlace
     <>
       {iconElement}
       <View className="min-w-0 flex-1 gap-1">
-        <Text className="font-semibold text-default-foreground text-sm" selectable>
+        <Text className="font-semibold text-foreground text-sm" selectable>
           {label}
         </Text>
         {description ? (
-          <Text className="text-default-foreground text-sm leading-5" selectable>
+          <Text className="text-foreground text-sm" selectable>
             {description}
           </Text>
         ) : null}

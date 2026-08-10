@@ -1,9 +1,11 @@
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+
 import type { ToolRegistry } from '../registry';
 import { createCalendarToolEntries, createReminderToolEntries } from './calendarTools';
 import type { DeviceToolDependencies } from './deviceToolSupport';
 import { createHealthToolEntries } from './healthTools';
 import { createLocationToolEntry } from './locationTools';
+import { createWebFetchToolEntry } from './WebFetchTool';
 import { createWebSearchToolEntry } from './WebSearchTool';
 
 export function registerBuiltinTools(
@@ -14,5 +16,6 @@ export function registerBuiltinTools(
   for (const entry of createCalendarToolEntries(deps)) registry.register(entry);
   for (const entry of createReminderToolEntries(deps)) registry.register(entry);
   for (const entry of createHealthToolEntries(deps)) registry.register(entry);
+  registry.register(createWebFetchToolEntry(deps.webSearch));
   registry.register(createWebSearchToolEntry(deps.webSearch));
 }

@@ -1,6 +1,8 @@
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback } from 'react';
+
 import { useMultiplePreferences } from '@/frontend/data/hooks';
-import type { UniqueModelId } from '@/shared/data/types/model';
+
 import type { ModelSettingKind } from '../utils/modelSettings';
 import { MODEL_SETTING_PREFERENCE_KEYS } from '../utils/modelSettings';
 

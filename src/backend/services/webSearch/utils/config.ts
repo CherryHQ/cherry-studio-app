@@ -4,13 +4,15 @@ import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverrides,
-} from '@/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
-} from '@/shared/data/presets/webSearchProviders';
-import type { WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
-import { normalizeWebSearchCutoffLimit } from '@/shared/data/types/webSearch';
+} from '@cherrystudio/universal/data/presets/webSearchProviders';
+import type { WebSearchExecutionConfig } from '@cherrystudio/universal/data/types/webSearch';
+import { normalizeWebSearchCutoffLimit } from '@cherrystudio/universal/data/types/webSearch';
+
+import { WebSearchConfigError } from '../WebSearchConfigError';
 
 export interface WebSearchPreferenceReader {
   get<K extends PreferenceKeyType>(
@@ -42,7 +44,10 @@ function getWebSearchProviderPresetById(
   providerId: WebSearchProvider['id'],
 ): WebSearchProviderPreset {
   if (!Object.hasOwn(WEB_SEARCH_PROVIDER_PRESET_MAP, providerId)) {
-    throw new Error(`Unknown web search provider: ${providerId}`);
+    throw new WebSearchConfigError(
+      'provider_unknown',
+      `Unknown web search provider: ${providerId}`,
+    );
   }
 
   return {
@@ -118,7 +123,10 @@ export async function getProviderForCapability(
     requestedProviderId ?? (await preferences.get(DEFAULT_PROVIDER_KEY_BY_CAPABILITY[capability]));
 
   if (!providerId) {
-    throw new Error(`Default web search provider is not configured for capability ${capability}`);
+    throw new WebSearchConfigError(
+      'provider_not_configured',
+      `Default web search provider is not configured for capability ${capability}`,
+    );
   }
 
   const provider = await getProviderById(providerId, preferences);
@@ -126,8 +134,19 @@ export async function getProviderForCapability(
   if (
     !provider.capabilities.some((providerCapability) => providerCapability.feature === capability)
   ) {
-    throw new Error(`Web search provider ${providerId} does not support capability ${capability}`);
+    throw new WebSearchConfigError(
+      'capability_unsupported',
+      `Web search provider ${providerId} does not support capability ${capability}`,
+    );
   }
 
   return provider;
+}
+
+/**
+ * Permanent configuration failures are typed at their owning boundary so callers never infer
+ * retryability from error-message text.
+ */
+export function isPermanentWebSearchConfigError(error: unknown): error is WebSearchConfigError {
+  return error instanceof WebSearchConfigError;
 }

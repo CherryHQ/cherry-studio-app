@@ -1,6 +1,8 @@
+import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
 import { useCallback, useState } from 'react';
+
 import { usePreference } from '@/frontend/data/hooks';
-import type { WebSearchProviderId } from '@/shared/data/preference';
+
 import {
   buildWebSearchApiKeyEntries,
   createEmptyWebSearchApiKeyEntry,
@@ -53,6 +55,18 @@ export function useWebSearchApiKeySettings(providerId: WebSearchProviderId | und
     setEntries((current) => current.filter((entry) => entry.id !== id));
   }, []);
 
+  const restoreApiKey = useCallback((entry: WebSearchApiKeyEntry, index: number) => {
+    setEntries((current) => {
+      if (current.some((item) => item.id === entry.id)) {
+        return current;
+      }
+
+      const next = [...current];
+      next.splice(Math.min(Math.max(index, 0), next.length), 0, entry);
+      return next;
+    });
+  }, []);
+
   const updateApiKey = useCallback((id: string, key: string) => {
     setEntries((current) => current.map((entry) => (entry.id === id ? { ...entry, key } : entry)));
   }, []);
@@ -70,6 +84,7 @@ export function useWebSearchApiKeySettings(providerId: WebSearchProviderId | und
     entries,
     promoteApiKey,
     removeApiKey,
+    restoreApiKey,
     saveApiKeys,
     updateApiKey,
   };

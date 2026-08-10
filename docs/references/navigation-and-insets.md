@@ -59,17 +59,22 @@ Before enabling it, verify:
 - The root Stack hosts the `(tabs)` group (header hidden) plus root-level `onboarding`, `topics` (chat), and `paintings` screens.
 - `src/app/(tabs)/_layout.tsx` owns the native bottom tab bar through `react-native-bottom-tabs` (`createNativeBottomTabNavigator`) with five tabs: home, assistants, `(messages)`, settings, and `(search)`.
 - Settings is a normal nested Stack inside its tab (`src/app/(tabs)/settings/`).
-- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in
-  `ChatSessionProvider`.
+- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in `ChatProvider`.
+  The provider subscribes to the app-owned Chat Runtime; route unmount does not dispose it.
 - Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
 ## Picker Sheets
 
-Short local pickers, such as model setting selection, use the app-owned
-`@/frontend/components/bottomSheet`
-`BottomSheet` (a wrapper over `@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`). These
+Short local pickers, such as model setting selection, use the package-owned
+`@cherrystudio/ui/components` `BottomSheet` (a wrapper over
+`@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`). These
 sheets are plain overlays controlled by local state; their triggers should only pass open/close
 and selection state.
+
+Multi-level component sheets keep navigation history in their owning feature and render the current
+page through `BottomSheet.PageTransition`. A stable `pageKey` identifies the page and `depth`
+determines forward versus backward motion; the UI package owns the animation, interaction isolation,
+and Reduce Motion behavior.
 
 Model selection is a reusable component-level `ModelPickerBottomSheet`. It is used by chat input and settings/model selection, includes search, tags, grouped model rows, pinning, and an 85% snap point.
 

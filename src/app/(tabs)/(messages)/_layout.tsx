@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
-import { useThemeColor } from 'heroui-native/hooks';
 
-import { isIOS, isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { isIOS } from '@/frontend/utils/constants';
 
 export default function MessagesStackLayout() {
   const foregroundColor = useThemeColor('foreground');
@@ -11,7 +11,7 @@ export default function MessagesStackLayout() {
       screenOptions={{
         headerShadowVisible: isIOS ? undefined : false,
         headerShown: isIOS,
-        headerTransparent: isLiquidGlassAvailable,
+        headerTransparent: false,
         headerTintColor: foregroundColor,
       }}
     />

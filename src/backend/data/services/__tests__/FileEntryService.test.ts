@@ -1,18 +1,18 @@
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import type { DbService } from '@/backend/data/db/DbService';
+
 import { FileEntryService } from '../FileEntryService';
 
 jest.mock('uuid', () => ({
+  v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
-}));
-
-jest.mock('../fileStorage', () => ({
-  resolveInternalFileUri: jest.fn(() => 'file:///documents/files/entry.txt'),
 }));
 
 describe('FileEntryService', () => {
   test.each([
     [
       {
+        cleanupPolicy: 'manual',
+        contentHash: null,
         createdAt: 1,
         deletedAt: null,
         ext: 'txt',
@@ -24,6 +24,8 @@ describe('FileEntryService', () => {
         updatedAt: 2,
       },
       {
+        cleanupPolicy: 'manual',
+        contentHash: null,
         createdAt: 1,
         ext: 'txt',
         id: '00000000-0000-7000-8000-000000000001',
@@ -35,6 +37,8 @@ describe('FileEntryService', () => {
     ],
     [
       {
+        cleanupPolicy: 'manual',
+        contentHash: null,
         createdAt: 1,
         deletedAt: null,
         ext: null,
@@ -46,6 +50,7 @@ describe('FileEntryService', () => {
         updatedAt: 2,
       },
       {
+        cleanupPolicy: 'manual',
         createdAt: 1,
         ext: null,
         externalPath: '/tmp/brief',
@@ -59,32 +64,6 @@ describe('FileEntryService', () => {
     const service = createServiceWithRows([row]);
 
     await expect(service.findById(row.id)).resolves.toEqual(expected);
-  });
-
-  test('inserts prepared entries into the caller transaction', async () => {
-    const values = jest.fn(async () => undefined);
-    const tx = { insert: jest.fn(() => ({ values })) } as unknown as Database;
-    const service = new FileEntryService({} as DbService);
-
-    await service.createPreparedEntriesTx(tx, [
-      {
-        ext: 'txt',
-        id: '00000000-0000-7000-8000-000000000001',
-        name: 'brief',
-        size: 12,
-        uri: 'file:///documents/files/entry.txt',
-      },
-    ]);
-
-    expect(values).toHaveBeenCalledWith([
-      {
-        ext: 'txt',
-        id: '00000000-0000-7000-8000-000000000001',
-        name: 'brief',
-        origin: 'internal',
-        size: 12,
-      },
-    ]);
   });
 });
 

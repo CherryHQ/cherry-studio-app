@@ -1,5 +1,5 @@
+import { cn } from '@cherrystudio/ui/utils';
 import { Stack, useRouter } from 'expo-router';
-import { cn } from 'heroui-native/utils';
 import { XIcon } from 'lucide-uniwind/png';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';

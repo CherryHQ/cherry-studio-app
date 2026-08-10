@@ -1,18 +1,26 @@
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReactNode } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import type { Topic } from '@/shared/data/types/topic';
 
 import { TopicList } from '../TopicList';
 
 const mockToggleTopicPin = jest.fn(async () => undefined);
-const mockToastShow = jest.fn();
+const mockAlertShow = jest.fn();
 const mockTopic = {
+  assistantId: 'assistant-1',
   id: 'topic-1',
   name: 'Pinned topic',
   updatedAt: '2026-07-21T12:00:00.000Z',
 } as Topic;
+const mockAssistant = {
+  emoji: '🍒',
+  id: 'assistant-1',
+  modelName: 'Mock Chat Model',
+} as Assistant;
 let mockPinnedTopicIds: readonly string[] = [];
+let mockPendingDeletionIds: ReadonlySet<string> = new Set();
 
 jest.mock('@legendapp/list/react-native', () => {
   const React = jest.requireActual('react');
@@ -35,10 +43,6 @@ jest.mock('@legendapp/list/react-native', () => {
   };
 });
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
-}));
-
 jest.mock('lucide-uniwind/png', () => ({
   CheckIcon: () => null,
   PencilIcon: () => null,
@@ -58,6 +62,7 @@ jest.mock('react-i18next', () => ({
         'navigation.newChat': 'New chat',
         'topic.actions.pin': 'Pin topic',
         'topic.actions.unpin': 'Unpin topic',
+        'topic.pin.failed': 'Failed to update pin state',
         'topic.updatedAt.yesterday': 'Yesterday',
       })[key] ?? key,
   }),
@@ -102,7 +107,11 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
-  useAssistantsApi: () => ({ assistants: [] }),
+  useAssistantsApi: () => ({ assistants: [mockAssistant] }),
+}));
+
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('@/frontend/hooks/useExclusiveSwipeable', () => ({
@@ -126,14 +135,18 @@ jest.mock('../context/TopicListProvider', () => ({
 
 jest.mock('@/frontend/components/messageTabs', () => ({
   useMessageListBottomInset: () => 0,
+  useMessagePendingDeletionIds: () => mockPendingDeletionIds,
   useMessageSelectionActions: () => ({ toggleId: jest.fn() }),
-  useMessageSelectionState: () => ({ isEditing: false, selectedIds: new Set() }),
+  useMessageSelectionState: () => ({
+    isDeletionPending: mockPendingDeletionIds.size > 0,
+    isEditing: false,
+    selectedIds: new Set(),
+  }),
   useRegisterSelectionSource: () => undefined,
 }));
 
-jest.mock('../components/TopicActionDialogs', () => ({
-  useTopicActionDialogs: () => ({
-    dialogs: null,
+jest.mock('../components/useTopicActionAlerts', () => ({
+  useTopicActionAlerts: () => ({
     requestDelete: jest.fn(),
     requestRename: jest.fn(),
   }),
@@ -144,6 +157,7 @@ describe('TopicList pin action', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPendingDeletionIds = new Set();
     mockPinnedTopicIds = [];
   });
 
@@ -165,6 +179,22 @@ describe('TopicList pin action', () => {
     expect(mockToggleTopicPin).toHaveBeenCalledWith('topic-1');
   });
 
+  it('shows an alert when updating the pin state fails', async () => {
+    mockToggleTopicPin.mockRejectedValueOnce(new Error('Pin failed'));
+
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    const pinButton = renderer?.root.findByProps({ accessibilityLabel: 'Pin topic' });
+
+    await act(async () => {
+      pinButton?.props.onPress();
+    });
+
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'Failed to update pin state' });
+  });
+
   it('uses a highlighted background and unpin action for pinned topics', async () => {
     mockPinnedTopicIds = ['topic-1'];
 
@@ -175,9 +205,31 @@ describe('TopicList pin action', () => {
     expect(renderer?.root.findByProps({ accessibilityLabel: 'Unpin topic' })).toBeTruthy();
     const highlightedRows =
       renderer?.root.findAllByProps({
-        className:
-          'relative min-w-0 flex-1 flex-row items-center gap-2 bg-surface-secondary py-2 pl-2',
+        className: 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-secondary py-2 pl-2',
       }) ?? [];
     expect(highlightedRows.length).toBeGreaterThan(0);
+  });
+
+  it('scales the emoji with the global typography scale without a fixed frame height', async () => {
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    const emoji = renderer?.root.findAllByType(Text).find((node) => node.props.children === '🍒');
+
+    expect(emoji?.props.className).toContain('text-emoji-3xl');
+    expect(emoji?.props.className).not.toContain('h-12');
+    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.allowFontScaling).not.toBe(false);
+  });
+
+  it('hides a topic immediately while its deletion is pending', async () => {
+    mockPendingDeletionIds = new Set(['topic-1']);
+
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Pinned topic' })).toHaveLength(0);
   });
 });

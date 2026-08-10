@@ -1,10 +1,9 @@
+import type { Message } from '@cherrystudio/universal/data/types/message';
 import { type MenuAction, MenuView } from '@expo/ui/community/menu';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import Animated from 'react-native-reanimated';
-
-import type { Message } from '@/shared/data/types/message';
 
 import { MessageParts } from '../../messageContent';
 import { useUserMessageSlideInStyle } from '../slideIn/hooks/useUserMessageSlideInStyle';
@@ -30,7 +29,7 @@ export function UserMessageItem({ message }: UserMessageItemProps) {
     <Animated.View className="w-full items-end px-4 py-2" style={slideInStyle}>
       <View className="max-w-[86%]">
         <MenuView actions={menuActions} shouldOpenOnLongPress>
-          <View className="gap-2 rounded-xl bg-settings-grouped-surface p-2">
+          <View className="gap-2 rounded-xl bg-chat-user p-2">
             <MessageParts message={message} renderMode="plainText" />
           </View>
         </MenuView>

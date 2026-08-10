@@ -1,4 +1,5 @@
-import { PROVIDER_ICONS } from '@cherrystudio/ui/icons-png/providers';
+import { Section } from '@cherrystudio/ui/components';
+import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
 import Constants from 'expo-constants';
 import {
   CodeIcon,
@@ -16,7 +17,6 @@ import { useUniwind } from 'uniwind';
 import { BackHeader } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-import { SettingsSection } from './components/SettingsSection';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
 const githubIcon = PROVIDER_ICONS.github;
@@ -53,7 +53,7 @@ export default function AboutSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-4 py-5">
-          <View className="flex-row gap-4 rounded-2xl bg-settings-grouped-surface px-4 py-5">
+          <View className="flex-row gap-4 rounded-2xl bg-grouped-surface px-4 py-5">
             <Image
               accessibilityIgnoresInvertColors
               source={require('@/assets/icon.png')}
@@ -63,86 +63,65 @@ export default function AboutSettingsScreen() {
               <Text className="font-bold text-[22px] text-foreground" numberOfLines={1}>
                 {t('common.cherryStudio')}
               </Text>
-              <Text className="text-default-foreground text-sm" numberOfLines={0}>
+              <Text className="text-foreground text-sm" numberOfLines={0}>
                 {t('common.cherryStudioDescription')}
               </Text>
-              <View className="self-start rounded-full bg-accent/10 px-2 py-0.5">
-                <Text className="font-medium text-accent text-sm">v{APP_VERSION}</Text>
+              <View className="self-start rounded-full bg-primary/10 px-2 py-0.5">
+                <Text className="font-medium text-primary text-sm">v{APP_VERSION}</Text>
               </View>
             </View>
           </View>
 
-          <SettingsSection
-            items={[
-              {
-                accessory: (
-                  <SquareArrowOutUpRightIcon
-                    className="size-5 text-default-foreground"
-                    strokeWidth={2}
-                  />
-                ),
-                icon: GitHubIcon,
-                title: t('settings.about.repository.title'),
-                onPress: () => openLink(ABOUT_LINKS.repository),
-              },
-              {
-                accessory: (
-                  <SquareArrowOutUpRightIcon
-                    className="size-5 text-default-foreground"
-                    strokeWidth={2}
-                  />
-                ),
-                icon: RssIcon,
-                title: t('settings.about.releases.title'),
-                onPress: () => openLink(ABOUT_LINKS.releases),
-              },
-              {
-                accessory: (
-                  <SquareArrowOutUpRightIcon
-                    className="size-5 text-default-foreground"
-                    strokeWidth={2}
-                  />
-                ),
-                icon: GlobeIcon,
-                title: t('settings.about.website.title'),
-                onPress: () => openLink(ABOUT_LINKS.website),
-              },
-              {
-                accessory: (
-                  <SquareArrowOutUpRightIcon
-                    className="size-5 text-default-foreground"
-                    strokeWidth={2}
-                  />
-                ),
-                icon: CodeIcon,
-                title: t('settings.about.feedback.title'),
-                onPress: () => openLink(ABOUT_LINKS.feedback),
-              },
-              {
-                accessory: (
-                  <SquareArrowOutUpRightIcon
-                    className="size-5 text-default-foreground"
-                    strokeWidth={2}
-                  />
-                ),
-                icon: CopyrightIcon,
-                title: t('settings.about.license.title'),
-                onPress: () => openLink(ABOUT_LINKS.license),
-              },
-              {
-                accessory: (
-                  <SquareArrowOutUpRightIcon
-                    className="size-5 text-default-foreground"
-                    strokeWidth={2}
-                  />
-                ),
-                icon: MailIcon,
-                title: t('settings.about.contact.title'),
-                onPress: () => openLink(ABOUT_LINKS.contact),
-              },
-            ]}
-            title={t('settings.about.title')}
-          />
+          <Section title={t('settings.about.title')}>
+            <Section.Item
+              label={t('settings.about.repository.title')}
+              leading={<GitHubIcon className="size-5" />}
+              onPress={() => openLink(ABOUT_LINKS.repository)}
+              trailing={
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
+              }
+            />
+            <Section.Item
+              label={t('settings.about.releases.title')}
+              leading={<RssIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => openLink(ABOUT_LINKS.releases)}
+              trailing={
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
+              }
+            />
+            <Section.Item
+              label={t('settings.about.website.title')}
+              leading={<GlobeIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => openLink(ABOUT_LINKS.website)}
+              trailing={
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
+              }
+            />
+            <Section.Item
+              label={t('settings.about.feedback.title')}
+              leading={<CodeIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => openLink(ABOUT_LINKS.feedback)}
+              trailing={
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
+              }
+            />
+            <Section.Item
+              label={t('settings.about.license.title')}
+              leading={<CopyrightIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => openLink(ABOUT_LINKS.license)}
+              trailing={
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
+              }
+            />
+            <Section.Item
+              label={t('settings.about.contact.title')}
+              leading={<MailIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => openLink(ABOUT_LINKS.contact)}
+              trailing={
+                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
+              }
+            />
+          </Section>
         </View>
       </ScrollView>
     </>

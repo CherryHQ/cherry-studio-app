@@ -1,4 +1,5 @@
-import type { Provider } from '@/shared/data/types/provider';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
 import { splitImageParamValues } from '../imageOptions';
 import { buildImageProviderOptions, mergeImageProviderOptions } from '../imageProviderOptions';
 
@@ -10,6 +11,7 @@ function provider(id: string, presetProviderId?: string): Provider {
       serviceTier: true,
       streamOptions: true,
       verbosity: false,
+      reportsActualCost: false,
     },
     apiKeys: [],
     authType: 'api-key',

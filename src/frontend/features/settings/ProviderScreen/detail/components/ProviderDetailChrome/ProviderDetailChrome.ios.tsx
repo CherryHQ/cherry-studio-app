@@ -61,14 +61,12 @@ export function ProviderDetailChrome({
         />
       ) : null}
       <Stack.Toolbar.Spacer />
-      {checkAction ? (
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('settings.provider.models.check')}
-          disabled={checkAction.isDisabled || checkAction.isLoading}
-          icon="waveform.path.ecg"
-          onPress={checkAction.onPress}
-        />
-      ) : null}
+      <Stack.Toolbar.Button
+        accessibilityLabel={t('settings.provider.models.check')}
+        disabled={checkAction.isDisabled || checkAction.isLoading}
+        icon="waveform.path.ecg"
+        onPress={checkAction.onPress}
+      />
     </Stack.Toolbar>
   );
 }

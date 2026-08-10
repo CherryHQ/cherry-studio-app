@@ -1,20 +1,32 @@
+import { Spinner } from '@cherrystudio/ui/components';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import { useQueryClient } from '@tanstack/react-query';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Spinner } from 'heroui-native/spinner';
 import { useToast } from 'heroui-native/toast';
 import { PlusIcon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule, useMutation } from '@/frontend/data';
-import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import {
+  dataApiCollectionFilters,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
+
+import {
+  buildApiKeyEntriesFromInput,
   buildApiKeysInputFromEntries,
+  buildProviderPrimaryBaseUrlUpdates,
   canEditProviderEndpoint,
   getEffectiveAuthConfig,
   getProviderPrimaryBaseUrl,
   normalizeApiKeyEntries,
+  ProviderApiServiceSaveError,
   shouldShowApiKeys,
   useProviderApiServiceQueries,
 } from './apiService';
@@ -24,8 +36,6 @@ import { useProviderDetailSettings } from './detail';
 import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
 import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
-import { ProviderModelCheckSheet } from './models/components/ProviderModelCheckSheet';
-import { useProviderModelCheck } from './models/hooks/useProviderModelCheck';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
@@ -36,35 +46,43 @@ export default function ProviderDetailSettingsScreen() {
   }>();
   const { t } = useTranslation();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const { alert } = useAlert();
   const providers = useBackendModule('providers');
   const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
   const deleteProviderMutation = useMutation('DELETE', '/providers/:id', {
+    onMutate: async (variables) => {
+      const providerIdToDelete = variables?.params.id;
+      const providers = await updateQueriesOptimistically<Provider[]>(
+        queryClient,
+        dataApiCollectionFilters('/providers'),
+        (current) => current?.filter((item) => item.id !== providerIdToDelete),
+      );
+
+      return { providers };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.providers);
+    },
+    onSuccess: (_result, variables) => {
+      if (variables) {
+        queryClient.removeQueries({ queryKey: [`/providers/${variables.params.id}`] });
+      }
+    },
     refresh: ['/providers'],
   });
-  const { apiKeys, apiKeysQuery, authConfig, authConfigQuery } = useProviderApiServiceQueries(
-    providerId ?? '',
-  );
   const {
-    apiKeyOptions: checkApiKeyOptions,
-    closeSheet: closeCheckSheet,
-    isChecking: isModelChecking,
-    isSheetOpen: isCheckSheetOpen,
-    openCheckSheet,
-    selectedApiKeyId: selectedCheckApiKeyId,
-    selectedModelId: selectedCheckModelId,
-    setSelectedApiKeyId: setSelectedCheckApiKeyId,
-    setSelectedModelId: setSelectedCheckModelId,
-    startCheck: startModelCheck,
-  } = useProviderModelCheck({
     apiKeys,
-    models,
-    providerId: providerId ?? '',
-  });
+    apiKeysQuery,
+    authConfig,
+    authConfigQuery,
+    replaceApiKeysMutation,
+    saveProviderMutation,
+  } = useProviderApiServiceQueries(providerId ?? '');
   const { isPreviewLoading: isModelPullLoading, loadPullPreview } = useProviderModelPull({
     onPreviewReady: (preview) => {
       if (!providerId) {
@@ -120,6 +138,48 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/api-key-settings',
     });
   }, [provider, providerId, router]);
+  const commitApiKeys = useCallback(
+    (input: string) => {
+      const nextApiKeys = buildApiKeyEntriesFromInput(input, apiKeys ?? []);
+
+      void replaceApiKeysMutation.mutateAsync(nextApiKeys).catch(() => {
+        alert.show({ title: t('settings.provider.apiService.saveFailed') });
+      });
+    },
+    [alert, apiKeys, replaceApiKeysMutation, t],
+  );
+  const commitBaseUrl = useCallback(
+    async (baseUrl: string): Promise<boolean> => {
+      if (!provider) {
+        return false;
+      }
+
+      try {
+        const updates = buildProviderPrimaryBaseUrlUpdates({ baseUrl, provider });
+        if (
+          updates.endpointConfigs[updates.defaultChatEndpoint]?.baseUrl ===
+          getProviderPrimaryBaseUrl(provider).trim()
+        ) {
+          return true;
+        }
+
+        await saveProviderMutation.mutateAsync(updates);
+        return true;
+      } catch (error) {
+        if (error instanceof ProviderApiServiceSaveError) {
+          alert.show({
+            description: t('settings.provider.apiService.invalidBaseUrlMessage'),
+            title: t('settings.provider.apiService.invalidBaseUrlTitle'),
+          });
+        } else {
+          alert.show({ title: t('settings.provider.apiService.saveFailed') });
+        }
+
+        return false;
+      }
+    },
+    [alert, provider, saveProviderMutation, t],
+  );
   const openModelAddSettings = useCallback(() => {
     if (!providerId) {
       return;
@@ -133,6 +193,19 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/model-add',
     });
   }, [provider, providerId, router]);
+  const openModelCheckSettings = useCallback(() => {
+    if (!providerId || models.length === 0) {
+      return;
+    }
+
+    router.push({
+      params: {
+        ...(provider?.name ? { providerName: provider.name } : {}),
+        providerId,
+      },
+      pathname: '/settings/provider/[providerId]/model-check',
+    });
+  }, [models.length, provider, providerId, router]);
   const openModelPullSettings = useCallback(async () => {
     if (!providerId) {
       return;
@@ -179,33 +252,24 @@ export default function ProviderDetailSettingsScreen() {
     ],
     [openModelAddSettings, provider, t],
   );
-  // Pull and check act on the model list, so they only belong in the bottom
-  // toolbar while that tab is up; `undefined` drops them from the toolbar.
-  const modelActionsForTab = useMemo(
+  const checkAction = useMemo(
+    () => ({
+      isDisabled: models.length === 0,
+      isLoading: false,
+      onPress: openModelCheckSettings,
+    }),
+    [models.length, openModelCheckSettings],
+  );
+  const pullAction = useMemo(
     () =>
       activeTab === 'models'
         ? {
-            check: {
-              isDisabled: models.length === 0,
-              isLoading: isModelChecking,
-              onPress: openCheckSheet,
-            },
-            pull: {
-              isDisabled: !provider || isModelPullLoading,
-              isLoading: isModelPullLoading,
-              onPress: () => void openModelPullSettings(),
-            },
+            isDisabled: !provider || isModelPullLoading,
+            isLoading: isModelPullLoading,
+            onPress: () => void openModelPullSettings(),
           }
         : undefined,
-    [
-      activeTab,
-      isModelChecking,
-      isModelPullLoading,
-      models.length,
-      openCheckSheet,
-      openModelPullSettings,
-      provider,
-    ],
+    [activeTab, isModelPullLoading, openModelPullSettings, provider],
   );
   const handleToggleProvider = useCallback(() => {
     if (!provider) {
@@ -214,30 +278,34 @@ export default function ProviderDetailSettingsScreen() {
 
     updateProviderEnabledMutation.mutate(!provider.isEnabled);
   }, [provider, updateProviderEnabledMutation]);
-  const handleDeleteProvider = useCallback(async () => {
+  const handleDeleteProvider = useCallback(() => {
     if (!providerId) {
       return;
     }
 
-    try {
-      await deleteProviderMutation.trigger({ params: { id: providerId } });
-      toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
-      router.back();
-    } catch {
-      toast.show({ label: t('settings.provider.toast.deleteFailed'), variant: 'danger' });
-    }
-  }, [deleteProviderMutation, providerId, router, t, toast]);
+    const deletion = deleteProviderMutation.trigger({ params: { id: providerId } });
+    router.back();
+    void deletion
+      .then(() => {
+        toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
+      })
+      .catch(() => {
+        alert.show({ title: t('settings.provider.toast.deleteFailed') });
+      });
+  }, [alert, deleteProviderMutation, providerId, router, t, toast]);
   const requestDeleteProvider = useCallback(() => {
     if (!provider || !providers.canRemove(provider)) {
       return;
     }
 
-    requestConfirm({
-      message: t('settings.provider.delete.message', { name: provider.name }),
+    alert.confirm({
+      confirmLabel: t('common.delete'),
+      description: t('settings.provider.delete.message', { name: provider.name }),
       onConfirm: handleDeleteProvider,
+      role: 'destructive',
       title: t('settings.provider.delete.title'),
     });
-  }, [handleDeleteProvider, provider, providers, requestConfirm, t]);
+  }, [alert, handleDeleteProvider, provider, providers, t]);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -281,8 +349,10 @@ export default function ProviderDetailSettingsScreen() {
               provider={provider}
               showApiKeys={showApiKeys}
               showBaseUrl={canEditEndpoint}
+              onApiKeysCommit={commitApiKeys}
               onApiKeysManagePress={openApiKeySettings}
               onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
+              onBaseUrlCommit={commitBaseUrl}
               onBaseUrlManagePress={openEndpointSettings}
             />
           )}
@@ -292,35 +362,22 @@ export default function ProviderDetailSettingsScreen() {
           isLoading={modelsQuery.isPending}
           models={models}
           provider={provider}
-          pullAction={modelActionsForTab?.pull}
+          pullAction={pullAction}
         />
       )}
-      <ProviderModelCheckSheet
-        apiKeyOptions={checkApiKeyOptions}
-        isChecking={isModelChecking}
-        isOpen={isCheckSheetOpen}
-        models={models}
-        selectedApiKeyId={selectedCheckApiKeyId}
-        selectedModelId={selectedCheckModelId}
-        onApiKeyChange={setSelectedCheckApiKeyId}
-        onClose={closeCheckSheet}
-        onModelChange={setSelectedCheckModelId}
-        onStart={startModelCheck}
-      />
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
         canDelete={provider ? providers.canRemove(provider) : false}
-        checkAction={modelActionsForTab?.check}
+        checkAction={checkAction}
         isActive={provider?.isEnabled ?? false}
         isDisabled={
           !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isLoading
         }
         onDelete={requestDeleteProvider}
         onToggleActive={handleToggleProvider}
-        pullAction={modelActionsForTab?.pull}
+        pullAction={pullAction}
       />
-      {confirmDialog}
     </>
   );
 }

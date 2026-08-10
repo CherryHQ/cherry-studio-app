@@ -1,12 +1,11 @@
-import { createContext, use } from 'react';
-import type { useTranslation } from 'react-i18next';
 import type {
   WebSearchCapability,
-  WebSearchProvider,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/shared/data/preference';
-import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
+} from '@cherrystudio/universal/data/preference';
+import type { WebSearchProviderPreset } from '@cherrystudio/universal/data/presets/webSearchProviders';
+import { createContext, use } from 'react';
+import type { useTranslation } from 'react-i18next';
 
 export type WebSearchApiManagementContextValue = {
   actions: {
@@ -21,10 +20,6 @@ export type WebSearchApiManagementContextValue = {
     ) => void;
     openApiKeySettings: () => void;
     openZhipuApiKeySettings: () => void;
-    checkProvider: (
-      provider: WebSearchProvider,
-      capability?: WebSearchCapability,
-    ) => Promise<{ error?: string; valid: boolean }>;
   };
   meta: {
     t: ReturnType<typeof useTranslation>['t'];

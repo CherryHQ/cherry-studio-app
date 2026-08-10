@@ -8,6 +8,12 @@ import type { SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSw
 export function useExclusiveSwipeable() {
   const openRef = useRef<SwipeableMethods | null>(null);
 
+  const closeOpen = useCallback(() => {
+    const open = openRef.current;
+    openRef.current = null;
+    open?.close();
+  }, []);
+
   const notifyWillOpen = useCallback((swipeable: SwipeableMethods) => {
     if (openRef.current && openRef.current !== swipeable) {
       openRef.current.close();
@@ -21,5 +27,5 @@ export function useExclusiveSwipeable() {
     }
   }, []);
 
-  return { notifyClose, notifyWillOpen };
+  return { closeOpen, notifyClose, notifyWillOpen };
 }

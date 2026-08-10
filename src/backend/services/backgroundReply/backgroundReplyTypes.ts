@@ -1,4 +1,4 @@
-import type { CherryUIMessage } from '@/shared/data/types/message';
+import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 
 export type BackgroundReplyPhase =
   | 'awaiting-approval'

@@ -1,0 +1,71 @@
+import { createFileHandlers } from '../files';
+
+const entryId = '00000000-0000-7000-8000-000000000001';
+const missingId = '00000000-0000-7000-8000-000000000002';
+describe('file Data API handlers', () => {
+  function createHandlers() {
+    const entries = {
+      findInternalByContentHash: jest.fn(async () => []),
+      get: jest.fn(async () => null),
+      getById: jest.fn(async () => ({ id: entryId })),
+      getStats: jest.fn(async () => ({ activeTotal: 0, extCounts: [], trashTotal: 0 })),
+      listCursor: jest.fn(async () => ({ items: [], total: 0 })),
+    };
+    const refs = {
+      countByEntryIds: jest.fn(async () => new Map([[entryId, 2]])),
+      findByEntryId: jest.fn(async () => []),
+      findBySource: jest.fn(async () => []),
+    };
+    return {
+      entries,
+      handlers: createFileHandlers(entries as never, refs as never),
+      refs,
+    };
+  }
+
+  it('validates and delegates desktop-aligned entry queries', async () => {
+    const { entries, handlers } = createHandlers();
+
+    await handlers['/files/entries'].GET({ query: { limit: 10, sortBy: 'name' } });
+    expect(entries.listCursor).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 10, sortBy: 'name' }),
+    );
+    await handlers['/files/entries/by-content-hash'].GET({
+      query: { contentHash: 'sha256:abcd' },
+    });
+    expect(entries.findInternalByContentHash).toHaveBeenCalledWith('sha256:abcd');
+    expect(() => handlers['/files/entries/:id'].GET({ params: { id: 'not-a-uuid' } })).toThrow();
+    expect(entries.getById).not.toHaveBeenCalled();
+  });
+
+  it('returns zero rows explicitly in ref-count responses', async () => {
+    const { handlers, refs } = createHandlers();
+
+    await expect(
+      handlers['/files/entries/ref-counts'].GET({
+        query: { entryIds: [entryId, missingId] },
+      }),
+    ).resolves.toEqual([
+      { entryId, refCount: 2 },
+      { entryId: missingId, refCount: 0 },
+    ]);
+    expect(refs.countByEntryIds).toHaveBeenCalledWith([entryId, missingId]);
+  });
+
+  it('validates source reference queries', async () => {
+    const { handlers, refs } = createHandlers();
+
+    await handlers['/files/refs'].GET({
+      query: { sourceId: 'provider', sourceType: 'provider_logo' },
+    });
+    expect(refs.findBySource).toHaveBeenCalledWith({
+      sourceId: 'provider',
+      sourceType: 'provider_logo',
+    });
+    expect(() =>
+      handlers['/files/refs'].GET({
+        query: { sourceId: 'source', sourceType: 'temp_session' as never },
+      }),
+    ).toThrow();
+  });
+});

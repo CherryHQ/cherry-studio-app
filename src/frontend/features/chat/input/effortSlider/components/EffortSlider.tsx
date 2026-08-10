@@ -1,16 +1,13 @@
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  type AccessibilityActionEvent,
-  type LayoutChangeEvent,
-  useColorScheme,
-  View,
-} from 'react-native';
+import { type AccessibilityActionEvent, type LayoutChangeEvent, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useReducedMotion, withTiming } from 'react-native-reanimated';
+import { useUniwind } from 'uniwind';
 
 import { useShaderClock } from '@/frontend/hooks/useShaderClock';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { useEffortSliderGesture } from '../hooks/useEffortSliderGesture';
 import { useThinkingReveal } from '../hooks/useThinkingReveal';
@@ -22,7 +19,6 @@ import {
   effortTickColor,
   lightThinkingFallbackGradient,
   lightThinkingPalette,
-  thinkingAccentColor,
 } from '../utils/thinkingPalette';
 import { EffortSliderTrack, effortSliderTrackRadius } from './EffortSliderTrack';
 import { ThinkingPixelField } from './ThinkingPixelField';
@@ -68,7 +64,14 @@ export function EffortSlider({
   testID,
 }: EffortSliderProps) {
   const reducedMotion = useReducedMotion();
-  const isDark = useColorScheme() === 'dark';
+  // The app's own theme, not the OS's: appearance settings can pin one against
+  // the system, and reading `useColorScheme` here painted the light field on a
+  // dark track whenever they disagreed.
+  const isDark = useUniwind().theme === 'dark';
+  // The product's green rather than the user's `--primary`: the field this dot
+  // sits on is a fixed green artwork, so a recoloured dot would read as a
+  // defect. `--brand` does follow the theme, which the field does too.
+  const accentColor = useThemeColor('brand');
   // 0 until the first onLayout lands: with travelDistance 0 the thumb/fill
   // would paint at the left edge, then teleport once measured — hide the
   // track for those frames (the panel's fade-in covers the gap).
@@ -163,7 +166,7 @@ export function EffortSlider({
         testID={testID}
       >
         <EffortSliderTrack
-          accentColor={thinkingAccentColor[isDark ? 'dark' : 'light']}
+          accentColor={accentColor}
           hideTicks={fieldMounted || showStaticField}
           measuredWidth={measuredWidth}
           pixelStopIndex={pixelStopIndex}

@@ -1,9 +1,11 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useThemeColor } from 'heroui-native/hooks';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChatInputProvider } from '@/frontend/features/chat/input';
+
+import { ComposerProvider } from '@/frontend/components/composer';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
 import { PaintingComposer } from './components/PaintingComposer';
 import { usePainting, useResolvedPaintingFiles } from './hooks/usePaintings';
 import { consumePaintingDraftHandoff } from './utils/paintingDraftHandoff';
@@ -42,12 +44,12 @@ export function PaintingScreen() {
           <ActivityIndicator />
         </View>
       ) : (
-        <ChatInputProvider
+        <ComposerProvider
           initialAttachments={handoff?.attachments ?? paintingFiles.inputs}
           initialDraft={handoff?.draft ?? painting?.prompt ?? ''}
         >
           <PaintingComposer initialFiles={paintingFiles} painting={painting} />
-        </ChatInputProvider>
+        </ComposerProvider>
       )}
     </View>
   );

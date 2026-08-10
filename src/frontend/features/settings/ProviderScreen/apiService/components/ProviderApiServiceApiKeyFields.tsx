@@ -1,7 +1,6 @@
+import { Button, FieldError, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
-import { Button } from 'heroui-native/button';
-import { Input } from 'heroui-native/input';
-import { Switch } from 'heroui-native/switch';
 import {
   CopyIcon,
   EyeIcon,
@@ -10,134 +9,111 @@ import {
   PlusIcon,
   Trash2Icon,
 } from 'lucide-uniwind/png';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import type { ApiKeyEntry } from '@/shared/data/types/provider';
-import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import { normalizeApiKeySingleLine } from '../utils/providerApiServiceApiKeys';
-import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
-
-const apiKeyPreviewMaxLength = 21;
 
 export function ProviderApiServiceApiKeysField({
   apiKeysInput,
   apiKeysVisible,
+  onCommit,
   onManagePress,
   onToggleVisible,
 }: {
   apiKeysInput: string;
   apiKeysVisible: boolean;
+  onCommit: (value: string) => void;
   onManagePress: () => void;
   onToggleVisible: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.provider.apiService.apiKeys')}
-      </Text>
+    <TextField>
+      <Label>{t('settings.provider.apiService.apiKeys')}</Label>
       <View className="flex-row items-center gap-2">
-        {apiKeysVisible ? (
-          <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
-            <ApiKeysVisiblePreview
-              accessibilityLabel={t('settings.provider.apiService.apiKeys')}
-              onPress={onManagePress}
-              placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
-              value={apiKeysInput}
-            />
-          </View>
-        ) : (
-          <ApiKeysMaskedPreview
+        <View className="min-w-0 flex-1 overflow-hidden">
+          <ApiKeysCommitInput
             accessibilityLabel={t('settings.provider.apiService.apiKeys')}
-            hasValue={apiKeysInput.trim().length > 0}
+            isVisible={apiKeysVisible}
+            onCommit={onCommit}
             placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
-            onPress={onToggleVisible}
+            value={apiKeysInput}
           />
-        )}
-        <SettingsIconButton
+        </View>
+        <Button
           accessibilityLabel={
             apiKeysVisible
               ? t('settings.provider.apiService.hideApiKeys')
               : t('settings.provider.apiService.showApiKeys')
           }
+          hitSlop={2}
+          icon={apiKeysVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
           onPress={onToggleVisible}
-        >
-          <ApiKeysVisibilityIcon visible={apiKeysVisible} />
-        </SettingsIconButton>
-        <SettingsIconButton
+          variant="secondary"
+        />
+        <Button
           accessibilityLabel={t('settings.provider.apiService.manageApiKeys')}
+          hitSlop={2}
+          icon={<KeyRoundIcon strokeWidth={2} />}
           onPress={onManagePress}
-        >
-          <KeyRoundIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
+          variant="secondary"
+        />
       </View>
-    </View>
+    </TextField>
   );
 }
 
-function ApiKeysVisiblePreview({
+function ApiKeysCommitInput({
   accessibilityLabel,
-  onPress,
+  isVisible,
+  onCommit,
   placeholder,
   value,
 }: {
   accessibilityLabel: string;
-  onPress: () => void;
+  isVisible: boolean;
+  onCommit: (value: string) => void;
   placeholder: string;
   value: string;
 }) {
-  const previewValue = clipApiKeyPreviewValue(normalizeApiKeysInputSingleLine(value));
+  const [draftValue, setDraftValue] = useState(value);
+  const [sourceValue, setSourceValue] = useState(value);
+
+  if (sourceValue !== value) {
+    setSourceValue(value);
+    setDraftValue(value);
+  }
+
+  const commitValue = useCallback(() => {
+    if (draftValue !== value) {
+      onCommit(draftValue);
+    }
+  }, [draftValue, onCommit, value]);
+
+  const handleChangeText = useCallback((nextValue: string) => {
+    setDraftValue(normalizeApiKeysInputSingleLine(nextValue));
+  }, []);
 
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
-      editable={false}
       lineBreakModeIOS="clip"
       multiline={false}
       numberOfLines={1}
-      onPressIn={onPress}
+      onBlur={commitValue}
+      onChangeText={handleChangeText}
       placeholder={placeholder}
       returnKeyType="done"
-      scrollEnabled={false}
-      style={providerApiServiceStyles.input}
-      value={previewValue}
-      variant="secondary"
+      selectTextOnFocus
+      secureTextEntry={!isVisible}
+      value={draftValue}
     />
-  );
-}
-
-function ApiKeysMaskedPreview({
-  accessibilityLabel,
-  hasValue,
-  onPress,
-  placeholder,
-}: {
-  accessibilityLabel: string;
-  hasValue: boolean;
-  onPress: () => void;
-  placeholder: string;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      className="h-10 min-h-0 flex-1 justify-center overflow-hidden rounded-xl bg-settings-grouped-surface px-3 active:opacity-70"
-      onPress={onPress}
-    >
-      <Text
-        className={hasValue ? 'text-base text-foreground' : 'text-base text-default-foreground'}
-        numberOfLines={1}
-      >
-        {hasValue ? '••••••••••••••••••••••••••••••••' : placeholder}
-      </Text>
-    </Pressable>
   );
 }
 
@@ -181,25 +157,10 @@ export function ProviderApiServiceApiKeyForm({
         </View>
       ) : null}
 
-      <Button
-        className="h-10 min-h-10 flex-row items-center justify-center gap-2 rounded-xl"
-        onPress={onAdd}
-        variant="secondary"
-      >
-        <PlusIcon className="size-4 text-default-foreground" strokeWidth={2} />
-        <Text className="text-base text-foreground">
-          {t('settings.provider.apiService.addApiKey')}
-        </Text>
+      <Button icon={<PlusIcon strokeWidth={2} />} onPress={onAdd} variant="secondary">
+        {t('settings.provider.apiService.addApiKey')}
       </Button>
     </View>
-  );
-}
-
-function ApiKeysVisibilityIcon({ visible }: { visible: boolean }) {
-  return visible ? (
-    <EyeIcon className="size-5 text-default-foreground" strokeWidth={2} />
-  ) : (
-    <EyeOffIcon className="size-5 text-default-foreground" strokeWidth={2} />
   );
 }
 
@@ -223,57 +184,54 @@ function ApiKeyRow({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
+    <TextField isDisabled={!apiKey.isEnabled} isInvalid={Boolean(errorMessage)}>
       <View className="min-h-8 flex-row items-center justify-between gap-3">
-        <Text className="font-medium text-default-foreground text-sm">
-          {t('settings.provider.apiService.apiKey')}
-        </Text>
+        <Label className="min-w-0 flex-1">{t('settings.provider.apiService.apiKey')}</Label>
         <Switch
           accessibilityLabel={t('settings.provider.apiService.apiKeyEnabled')}
-          isDisabled={isPending}
-          isSelected={apiKey.isEnabled}
-          onSelectedChange={(isEnabled) => onEnabledChange(apiKey.id, isEnabled)}
+          disabled={isPending}
+          onValueChange={(isEnabled) => onEnabledChange(apiKey.id, isEnabled)}
+          value={apiKey.isEnabled}
         />
       </View>
       <View className="flex-row items-center gap-2">
-        <View className="h-10 min-w-0 flex-1 overflow-hidden rounded-xl">
+        <View className="min-w-0 flex-1 overflow-hidden">
           <ApiKeyInput
             accessibilityLabel={t('settings.provider.apiService.apiKey')}
-            isDisabled={!apiKey.isEnabled || isPending}
             value={apiKey.key}
             onChangeText={(key) => onKeyChange(apiKey.id, key)}
             onCommit={(key) => onCommitKey(apiKey.id, key)}
           />
         </View>
-        <SettingsIconButton
+        <Button
           accessibilityLabel={t('settings.provider.apiService.copyApiKey')}
-          isDisabled={isPending}
+          disabled={isPending}
+          hitSlop={2}
+          icon={<CopyIcon strokeWidth={2} />}
           onPress={() => void Clipboard.setStringAsync(apiKey.key)}
-        >
-          <CopyIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
-        <SettingsIconButton
+          variant="secondary"
+        />
+        <Button
           accessibilityLabel={t('settings.provider.apiService.removeApiKey')}
-          isDisabled={isPending}
+          disabled={isPending}
+          hitSlop={2}
+          icon={<Trash2Icon strokeWidth={2} />}
           onPress={() => onRemove(apiKey.id)}
-        >
-          <Trash2Icon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
+          variant="secondary"
+        />
       </View>
-      {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
-    </View>
+      <FieldError>{errorMessage}</FieldError>
+    </TextField>
   );
 }
 
 function ApiKeyInput({
   accessibilityLabel,
-  isDisabled,
   onCommit,
   onChangeText,
   value,
 }: {
   accessibilityLabel: string;
-  isDisabled?: boolean;
   onCommit: (value: string) => void;
   onChangeText: (value: string) => void;
   value: string;
@@ -285,10 +243,6 @@ function ApiKeyInput({
     },
     [onCommit],
   );
-
-  const handleCommitEvent = useCallback(() => {
-    onCommit(normalizeApiKeySingleLine(value));
-  }, [onCommit, value]);
 
   const handleChangeText = useCallback(
     (nextValue: string) => {
@@ -303,31 +257,18 @@ function ApiKeyInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 max-h-10 min-h-0 w-full overflow-hidden rounded-xl px-3 py-0 text-base leading-5"
-      isDisabled={isDisabled}
       lineBreakModeIOS="clip"
       multiline={false}
       numberOfLines={1}
-      onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
       placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
       returnKeyType="done"
-      scrollEnabled={false}
-      style={providerApiServiceStyles.input}
+      selectTextOnFocus
+      submitBehavior="blurAndSubmit"
       value={normalizedValue}
-      variant="secondary"
     />
   );
-}
-
-function clipApiKeyPreviewValue(value: string): string {
-  if (value.length <= apiKeyPreviewMaxLength) {
-    return value;
-  }
-
-  return `${value.slice(0, apiKeyPreviewMaxLength)}...`;
 }
 
 function normalizeApiKeysInputSingleLine(value: string): string {

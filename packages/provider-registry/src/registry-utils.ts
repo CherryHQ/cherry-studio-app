@@ -59,16 +59,46 @@ export function lookupRegistryProvider(
   return providers.find((p) => p.id === providerId) ?? null;
 }
 
-export interface RuntimeEndpointConfig {
+export interface PersistedEndpointConfig {
   baseUrl?: string;
   modelsApiUrls?: { default?: string; embedding?: string; image?: string; reranker?: string };
-  reasoningFormatType?: string;
   adapterFamily?: string;
 }
 
+/** Mobile's current persisted endpoint shape until its Data migration adopts registry-owned profiles. */
+export interface RuntimeEndpointConfig extends PersistedEndpointConfig {
+  reasoningFormatType?: string;
+}
+
 /**
- * Convert registry endpointConfigs (with reasoningFormat discriminated union)
- * to runtime endpointConfigs (with reasoningFormatType string).
+ * Project registry endpoint configs onto the connection facts persisted in
+ * user_provider. Main-only reasoning profiles deliberately stay in registry
+ * memory and never cross this boundary.
+ */
+export function buildPersistedEndpointConfigs(
+  registryConfigs: Record<string, RegistryEndpointConfig> | undefined,
+): Record<string, PersistedEndpointConfig> | null {
+  if (!registryConfigs || Object.keys(registryConfigs).length === 0) return null;
+
+  const configs: Record<string, PersistedEndpointConfig> = {};
+
+  for (const [k, regConfig] of Object.entries(registryConfigs)) {
+    const config: PersistedEndpointConfig = {};
+
+    if (regConfig.baseUrl) config.baseUrl = regConfig.baseUrl;
+    if (regConfig.modelsApiUrls) config.modelsApiUrls = regConfig.modelsApiUrls;
+    if (regConfig.adapterFamily) config.adapterFamily = regConfig.adapterFamily;
+
+    if (Object.keys(config).length > 0) configs[k] = config;
+  }
+
+  return Object.keys(configs).length > 0 ? configs : null;
+}
+
+/**
+ * Mobile compatibility projection. Keep reasoningFormatType while existing
+ * mobile rows still persist it; new desktop-aligned code should use
+ * buildPersistedEndpointConfigs so registry-owned wire profiles stay in memory.
  */
 export function buildRuntimeEndpointConfigs(
   registryConfigs: Record<string, RegistryEndpointConfig> | undefined,
@@ -77,16 +107,14 @@ export function buildRuntimeEndpointConfigs(
 
   const configs: Record<string, RuntimeEndpointConfig> = {};
 
-  for (const [k, regConfig] of Object.entries(registryConfigs)) {
+  for (const [key, registryConfig] of Object.entries(registryConfigs)) {
     const config: RuntimeEndpointConfig = {};
-
-    if (regConfig.baseUrl) config.baseUrl = regConfig.baseUrl;
-    if (regConfig.modelsApiUrls) config.modelsApiUrls = regConfig.modelsApiUrls;
-    if (regConfig.reasoningFormat?.type)
-      config.reasoningFormatType = regConfig.reasoningFormat.type;
-    if (regConfig.adapterFamily) config.adapterFamily = regConfig.adapterFamily;
-
-    if (Object.keys(config).length > 0) configs[k] = config;
+    if (registryConfig.baseUrl) config.baseUrl = registryConfig.baseUrl;
+    if (registryConfig.modelsApiUrls) config.modelsApiUrls = registryConfig.modelsApiUrls;
+    if (registryConfig.reasoningFormat?.type)
+      config.reasoningFormatType = registryConfig.reasoningFormat.type;
+    if (registryConfig.adapterFamily) config.adapterFamily = registryConfig.adapterFamily;
+    if (Object.keys(config).length > 0) configs[key] = config;
   }
 
   return Object.keys(configs).length > 0 ? configs : null;
@@ -123,6 +151,7 @@ export function inferAdapterFamily(
   endpointType: EndpointType,
   catalogConfig?:
     | Pick<RegistryEndpointConfig, 'adapterFamily'>
+    | Pick<PersistedEndpointConfig, 'adapterFamily'>
     | Pick<RuntimeEndpointConfig, 'adapterFamily'>
     | null,
 ): string {
@@ -133,19 +162,21 @@ export function inferAdapterFamily(
 /**
  * Capability-exclusive endpoints imply a model capability: a model whose primary
  * endpoint is `jina-rerank` can only rerank, `openai-embeddings` can only embed,
- * an image endpoint can only generate images. Single source of truth for deriving
- * a capability from a model's endpoint when the catalog has no entry for it (e.g.
- * opaque gateway/NewAPI model ids). Chat/completions endpoints are general-purpose
- * and imply nothing, so they're absent from the map.
- *
- * ponytail: covers the non-chat leak class (rerank/embedding/image); add the
- * tts/stt/video endpoints here if those ever surface through a gateway.
+ * and dedicated image/audio/video endpoints can only serve their named media task.
+ * Single source of truth for deriving a capability from a model's endpoint when
+ * the catalog has no entry for it (e.g. opaque gateway/NewAPI model ids).
+ * Chat/completions endpoints are general-purpose and imply nothing, so they're
+ * absent from the map.
  */
 const ENDPOINT_IMPLIED_CAPABILITY: Partial<Record<EndpointType, ModelCapability>> = {
   [ENDPOINT_TYPE.JINA_RERANK]: MODEL_CAPABILITY.RERANK,
+  [ENDPOINT_TYPE.OPENAI_AUDIO_TRANSCRIPTION]: MODEL_CAPABILITY.AUDIO_TRANSCRIPT,
+  [ENDPOINT_TYPE.OPENAI_AUDIO_TRANSLATION]: MODEL_CAPABILITY.AUDIO_TRANSCRIPT,
   [ENDPOINT_TYPE.OPENAI_EMBEDDINGS]: MODEL_CAPABILITY.EMBEDDING,
   [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: MODEL_CAPABILITY.IMAGE_GENERATION,
   [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: MODEL_CAPABILITY.IMAGE_GENERATION,
+  [ENDPOINT_TYPE.OPENAI_TEXT_TO_SPEECH]: MODEL_CAPABILITY.AUDIO_GENERATION,
+  [ENDPOINT_TYPE.OPENAI_VIDEO_GENERATION]: MODEL_CAPABILITY.VIDEO_GENERATION,
 };
 
 /** Capability implied by a capability-exclusive endpoint, or `undefined` for general-purpose endpoints. */

@@ -1,12 +1,13 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
+import { cn } from '@cherrystudio/ui/utils';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, useColorScheme, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SlotText } from '@/frontend/components/SlotText';
 
-import { EffortSlider, thinkingAccentColor } from '../effortSlider';
+import { EffortSlider } from '../effortSlider';
 import { useChatInputReasoningEfforts } from '../hooks/useChatInputReasoningEfforts';
 import {
   type ChatInputReasoningEffort,
@@ -28,10 +29,9 @@ export function ChatInputReasoningSection({
   onSelectReasoningEffort: (value: ChatInputReasoningEffort) => void;
 }) {
   const { t } = useTranslation();
-  const isDark = useColorScheme() === 'dark';
   const insets = useSafeAreaInsets();
   // The component is rendered inside a ModalBottomSheet portal (Android)
-  // where ChatInputProvider context is unavailable, so all values must come
+  // where ComposerProvider context is unavailable, so all values must come
   // from props — no fallback to context hooks.
   const reasoningEfforts = useChatInputReasoningEfforts();
 
@@ -72,15 +72,15 @@ export function ChatInputReasoningSection({
         <SlotText
           ellipsizeMode="clip"
           text={currentOption ? t(currentOption.labelKey) : ''}
-          textClassName="font-semibold text-base text-foreground"
-          textStyle={
-            isMaxEffort ? { color: thinkingAccentColor[isDark ? 'dark' : 'light'] } : undefined
-          }
+          textClassName={cn(
+            'font-semibold text-base',
+            isMaxEffort ? 'text-brand' : 'text-foreground',
+          )}
         />
       </View>
       <View className="mt-3 flex-row items-center justify-between">
-        <Text className="text-accent text-sm">{t('chat.reasoning.faster')}</Text>
-        <Text className="text-accent text-sm">{t('chat.reasoning.smarter')}</Text>
+        <Text className="text-primary text-sm">{t('chat.reasoning.faster')}</Text>
+        <Text className="text-primary text-sm">{t('chat.reasoning.smarter')}</Text>
       </View>
       <View className="mt-2">
         <EffortSlider

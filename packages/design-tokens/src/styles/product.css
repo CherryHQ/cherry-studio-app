@@ -1,0 +1,117 @@
+/**
+ * Cherry Studio product semantics.
+ *
+ * Product semantics share the public namespace with the official Shadcn
+ * contract. Feature-local and historical migration values stay outside this
+ * public runtime contract.
+ *
+ * ⚠️ 已 fork：本包不再从 Cherry Studio 桌面端镜像任何东西。取值改用 Vercel Brand
+ * Guidelines（Geist）色彩体系，token 名字也随之归移动端自有 —— `pnpm design:sync`
+ * 现在只同步图标。原先此处的 hex / rgba 字面量一并换成 VBG 的 oklch 取值。
+ *
+ * 每条直接指向 `vercel.css` 的调色板档位，理由同 `shadcn.css`。反馈色此前还多绕
+ * 一层：`--success` → `--cs-success` → `--cs-success-base` → `--cs-green-900`，
+ * 三跳之后才看得到档位。
+ *
+ * `.dark` 只写真正换档的那两条，其余角色指向的调色板名本身就按主题翻转。
+ */
+
+:root {
+  /* Shared product semantics */
+  --background-subtle: var(--background-200);
+  --foreground-tertiary: var(--gray-800);
+  --foreground-disabled: var(--foreground-tertiary);
+  /* 边框四级。Geist 的灰阶不单调 —— 浅色下 `gray-alpha-400`(0.08) 比
+   * `gray-alpha-300`(0.1) 更淡，深色下 `gray-alpha-800`(0.47) 比 `-700`(0.54)
+   * 更淡。若按名字顺序对齐四级边框，浅色模式层级会反转。故跳过 300/400 档，
+   * 取 100/200/500/700，两套主题都单调递增。默认档 `--border` 在 shadcn.css。 */
+  --border-subtle: var(--gray-alpha-100);
+  --border-strong: var(--gray-alpha-500);
+  --border-selected: var(--gray-alpha-700);
+  --link: var(--blue-900);
+  /* Pressed state for `--secondary` fills. Not a Shadcn name — upstream models
+   * interaction states as hover, which a touch surface does not have. */
+  --secondary-active: var(--gray-alpha-300);
+
+  /* Feedback.
+   * 每个 intent 的 base 档位不同（error/info 取 700，success/warning 取 900），
+   * 这是 VBG 刻意的对比度调校，照搬。subtle 是 100 号浅底，其上的文字用 1000
+   * 号，边框用 400 号。 */
+  --success: var(--green-900);
+  --success-subtle: var(--green-100);
+  --success-subtle-foreground: var(--green-1000);
+  --success-border: var(--green-400);
+  --warning: var(--amber-900);
+  --warning-subtle: var(--amber-100);
+  --warning-subtle-foreground: var(--amber-1000);
+  --warning-border: var(--amber-400);
+  --info: var(--blue-700);
+  --info-subtle: var(--blue-100);
+  --info-subtle-foreground: var(--blue-1000);
+  --info-border: var(--blue-400);
+  /* `--error` 与 shadcn 的 `--destructive` 同为 red-700：前者是反馈语气，后者是
+   * 破坏性操作，语义不同而取值相同。 */
+  --error: var(--red-700);
+  --error-subtle: var(--red-100);
+  --error-subtle-foreground: var(--red-1000);
+  --error-border: var(--red-400);
+
+  /* Stable product domain: grouped-list screens (settings / assistants / AI usage).
+   * 这一对在明暗之间是对调的：浅色把页面压暗、卡片留白，深色把页面留黑、卡片提亮。
+   * 这正是 iOS systemGroupedBackground / secondarySystemGroupedBackground 的做法
+   * （#F2F2F7 + #FFF / #000 + #1C1C1E）。 */
+  --grouped-background: var(--gray-100);
+  --grouped-surface: var(--background-100);
+
+  /* Stable product domain: rich text and code (MarkdownText) */
+  --code-block: var(--gray-100);
+  --inline-code: var(--gray-alpha-100);
+  --inline-code-foreground: var(--red-900);
+
+  /* 产品自己的绿。`--primary` 现在直接读它（见 shadcn.css），所以两者暂时是同一个
+   * 值 —— 但仍是两个名字：`--brand` 说「这里必须是产品的绿」，`--primary` 说「这里
+   * 是主色，将来可能由用户决定」。真做了主题色界面时，只有后者会开始变。
+   *
+   * 取值曾是 Cherry 的 #00b96b 字面量、两个主题同值。改成 VBG 的 green-900 之后
+   * 它跟着主题走了，这是有意的：#00b96b 对白底只有 2.58:1，而 `text-brand` 用在
+   * text-sm / text-base 上，按 WCAG 是正文、要 4.5:1 —— 浅色下一直不合格。
+   * green-900 浅色 #107d32 是 5.25:1，深色 #00ca50 对黑底 9.56:1，两边都过。 */
+  --brand: var(--green-900);
+
+  /* Stable product domain: user-message surface (UserMessageItem) */
+  --chat-user: var(--gray-alpha-100);
+
+  /* 唯一一对「不随主题走」的颜色：`:root` 里写死，`.dark` 不覆盖。
+   *
+   * 别的角色都压在受主题控制的表面上，所以跟着主题翻；这两个是给压在**不受控**
+   * 内容之上的 chrome 用的 —— 照片、相机实时取景、全屏图片查看器。一张照片既不
+   * 是浅色也不是深色表面，跟着主题翻就意味着必然有一个主题下控件看不见。
+   *
+   * 按值命名而不是按落点命名（一度叫过 `--media-*`），因为「要一个恒定的黑/白」
+   * 这个需求不是媒体独有的，换个场景照样能用；两个方向都在用：查看器是黑底白图标，
+   * 缩略图角标是白圆片黑字形。 */
+  --constant-black: oklch(0 0 0);
+  --constant-white: oklch(1 0 0);
+
+  /* 模态层背后的遮罩，两个主题同值 —— 压暗的是「下面那一层」，不管它自己是什么
+   * 颜色，所以基于 `--constant-black` 而不是 `--background`（深色下黑压黑等于没
+   * 压）。这条同时喂 app 自己的 ModalBottomSheet 和 heroui 的 `--backdrop`：此前
+   * 两者一个 40% 一个 20%，同一个应用里两种压暗程度。统一取 40%，是 sheet 一直
+   * 在用的那个值，也和 Material 的 dialog/sheet 同档做法一致。 */
+  --scrim: color-mix(in srgb, var(--constant-black) 40%, transparent);
+
+  /* Stable product domain: AI usage heat scale (AiUsageCalendar).
+   * 四档由同一个绿档按 25/50/75/100 调出来，所以强度是均匀的、也不可能逐档跑偏；
+   * 空白格直接用 --border。混的是 transparent 而不是某个表面色，因为这个日历有两
+   * 个落点（首页概览卡与用量全屏），压在哪张表面上不由这里决定。 */
+  --usage-level-1: color-mix(in srgb, var(--green-700) 25%, transparent);
+  --usage-level-2: color-mix(in srgb, var(--green-700) 50%, transparent);
+  --usage-level-3: color-mix(in srgb, var(--green-700) 75%, transparent);
+  --usage-level-4: var(--green-700);
+}
+
+.dark {
+  /* 与浅色对调，见上。 */
+  --grouped-background: var(--background-100);
+  --grouped-surface: var(--gray-100);
+}

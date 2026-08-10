@@ -22,16 +22,22 @@ export type SelectionSource = {
 };
 
 type MessageSelectionState = {
+  isDeletionPending: boolean;
   isEditing: boolean;
+  pendingDeletionIds: PendingDeletionIdsByScope;
   selectedIds: ReadonlySet<string>;
 };
 
 type MessageSelectionActions = {
+  beginDeletion: (scope: MessageScope, ids: readonly string[]) => void;
   enterEditing: () => void;
   exitEditing: () => void;
+  finishDeletion: (scope: MessageScope, ids: readonly string[]) => void;
   toggleAll: (allIds: readonly string[]) => void;
   toggleId: (id: string) => void;
 };
+
+type PendingDeletionIdsByScope = Record<MessageScope, ReadonlySet<string>>;
 
 type RegisterSelectionSource = (scope: MessageScope, source: SelectionSource | undefined) => void;
 
@@ -52,18 +58,64 @@ export function MessageSelectionProvider({
 }: MessageSelectionProviderProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [pendingDeletionIds, setPendingDeletionIds] = useState<PendingDeletionIdsByScope>(() => ({
+    conversations: new Set(),
+    drawings: new Set(),
+  }));
   const [sources, setSources] = useState<Partial<Record<MessageScope, SelectionSource>>>({});
+  const isDeletionPending =
+    pendingDeletionIds.conversations.size > 0 || pendingDeletionIds.drawings.size > 0;
 
   const enterEditing = useCallback(() => {
+    if (isDeletionPending) {
+      return;
+    }
+
     setIsEditing(true);
     onEditingChange?.(true);
-  }, [onEditingChange]);
+  }, [isDeletionPending, onEditingChange]);
 
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
     onEditingChange?.(false);
   }, [onEditingChange]);
+
+  const beginDeletion = useCallback(
+    (scope: MessageScope, ids: readonly string[]) => {
+      if (ids.length === 0) {
+        return;
+      }
+
+      setPendingDeletionIds((current) => {
+        const nextScopeIds = new Set(current[scope]);
+        const previousSize = nextScopeIds.size;
+
+        for (const id of ids) {
+          nextScopeIds.add(id);
+        }
+
+        return nextScopeIds.size === previousSize ? current : { ...current, [scope]: nextScopeIds };
+      });
+      setIsEditing(false);
+      setSelectedIds(new Set());
+      onEditingChange?.(false);
+    },
+    [onEditingChange],
+  );
+
+  const finishDeletion = useCallback((scope: MessageScope, ids: readonly string[]) => {
+    setPendingDeletionIds((current) => {
+      const nextScopeIds = new Set(current[scope]);
+      let changed = false;
+
+      for (const id of ids) {
+        changed = nextScopeIds.delete(id) || changed;
+      }
+
+      return changed ? { ...current, [scope]: nextScopeIds } : current;
+    });
+  }, []);
 
   useEffect(
     () => () => {
@@ -96,10 +148,13 @@ export function MessageSelectionProvider({
     });
   }, []);
 
-  const stateValue = useMemo(() => ({ isEditing, selectedIds }), [isEditing, selectedIds]);
+  const stateValue = useMemo(
+    () => ({ isDeletionPending, isEditing, pendingDeletionIds, selectedIds }),
+    [isDeletionPending, isEditing, pendingDeletionIds, selectedIds],
+  );
   const actionsValue = useMemo(
-    () => ({ enterEditing, exitEditing, toggleAll, toggleId }),
-    [enterEditing, exitEditing, toggleAll, toggleId],
+    () => ({ beginDeletion, enterEditing, exitEditing, finishDeletion, toggleAll, toggleId }),
+    [beginDeletion, enterEditing, exitEditing, finishDeletion, toggleAll, toggleId],
   );
 
   return (
@@ -133,6 +188,10 @@ export function useMessageSelectionActions() {
   }
 
   return context;
+}
+
+export function useMessagePendingDeletionIds(scope: MessageScope): ReadonlySet<string> {
+  return useMessageSelectionState().pendingDeletionIds[scope];
 }
 
 // `registerSource` lives in its own context with a stable reference, so a body

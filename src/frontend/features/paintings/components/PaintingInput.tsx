@@ -1,22 +1,28 @@
 import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { Composer } from '@cherrystudio/ui/components';
 import { resolveIcon } from '@cherrystudio/ui/icons';
+import { isUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import { Settings2Icon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  ComposerAttachments,
+  ComposerField,
+  ComposerMenu,
+  ComposerModelPill,
+  type ComposerSendPayload,
+  ComposerSurface,
+  useComposerActions,
+  useComposerFieldDismiss,
+  useComposerState,
+} from '@/frontend/components/composer';
+import {
   ModelPickerBottomSheet,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
-import {
-  ChatInputActionSheet,
-  type ChatInputSendPayload,
-  ChatInputSurface,
-  useChatInputActions,
-  useChatInputState,
-} from '@/frontend/features/chat/input';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
-import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
-import type { Painting } from '@/shared/data/types/painting';
 
 import type {
   PaintingGenerationInput,
@@ -61,8 +67,8 @@ export function PaintingInput({
     modelId: UniqueModelId;
     values: ImageParamDraft;
   } | null>(null);
-  const { attachments, draft, isActionSheetOpen } = useChatInputState();
-  const { setAttachments } = useChatInputActions();
+  const { attachments, draft } = useComposerState();
+  const { setAttachments } = useComposerActions();
   const { model: selectedModel } = useModelById(selectedModelId);
   const { models: enabledImageModels } = useModels({
     capability: MODEL_CAPABILITY.IMAGE_GENERATION,
@@ -120,6 +126,12 @@ export function PaintingInput({
     setIsModelPickerOpen(false);
   }, []);
   const closeSettings = useCallback(() => setIsSettingsOpen(false), []);
+  const dismissField = useComposerFieldDismiss();
+  const openSettings = useCallback(() => {
+    // The pill does this for itself; a sheet opened from the toolbar has to ask.
+    dismissField();
+    setIsSettingsOpen(true);
+  }, [dismissField]);
   const handleParamValueChange = useCallback(
     (key: string, value: unknown) => {
       if (!selectedModelId) {
@@ -134,7 +146,7 @@ export function PaintingInput({
     [generationMode, paramValues, selectedModelId],
   );
   const handleSend = useCallback(
-    async ({ attachments, text }: ChatInputSendPayload) => {
+    async ({ attachments, text }: ComposerSendPayload) => {
       if (!selectedModelId || !isSelectedModelAvailable) {
         throw new Error('Select an available image generation model');
       }
@@ -203,30 +215,42 @@ export function PaintingInput({
 
   return (
     <>
-      <ChatInputSurface
-        allowEmptySend={resolvedMode?.definition.requirePrompt === false}
-        getSendErrorLabel={getSendErrorLabel}
-        isSendEnabled={
+      <ComposerSurface
+        // `isPromptValid` already carries the promptless case, so this is the
+        // whole gate: a model that can run, valid params, nothing in flight.
+        canSend={
           Boolean(selectedModelId) && isSelectedModelAvailable && isPromptValid && status === 'idle'
         }
-        isStreaming={status === 'generating'}
-        modelIcon={selectedModelIcon}
-        modelLabel={selectedModelLabel}
-        modelSettings={
-          resolvedMode && paramFields.length > 0
-            ? {
-                accessibilityLabel: settingsSummary
+        getSendErrorLabel={getSendErrorLabel}
+        onSend={handleSend}
+        onStop={onCancel}
+        streaming={status === 'generating'}
+      >
+        <ComposerAttachments />
+        <ComposerField />
+        <Composer.Toolbar>
+          <ComposerMenu />
+          {resolvedMode && paramFields.length > 0 ? (
+            <Composer.Action
+              accessibilityLabel={
+                settingsSummary
                   ? `${t('painting.settings.open')}: ${settingsSummary}`
-                  : t('painting.settings.open'),
-                onPress: () => setIsSettingsOpen(true),
+                  : t('painting.settings.open')
               }
-            : undefined
-        }
-        onModelPickerPress={() => setIsModelPickerOpen(true)}
-        onSendPress={handleSend}
-        onStopPress={onCancel}
-      />
-      {isActionSheetOpen ? <ChatInputActionSheet /> : null}
+              onPress={openSettings}
+              testID="painting-input-settings-button"
+            >
+              <Settings2Icon className="size-4 text-foreground" strokeWidth={2} />
+            </Composer.Action>
+          ) : null}
+          <ComposerModelPill
+            icon={selectedModelIcon}
+            label={selectedModelLabel}
+            onPress={() => setIsModelPickerOpen(true)}
+          />
+          <Composer.Send />
+        </Composer.Toolbar>
+      </ComposerSurface>
       {isSettingsOpen && resolvedMode ? (
         <PaintingSettingsBottomSheet
           onDismiss={closeSettings}

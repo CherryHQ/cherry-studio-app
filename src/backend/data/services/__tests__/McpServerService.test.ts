@@ -1,6 +1,7 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
+
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
@@ -8,7 +9,7 @@ import { schema } from '@/backend/data/db/schemas';
 
 import { McpServerService } from '../McpServerService';
 
-jest.mock('uuid', () => ({ v7: mockRandomUUID }));
+jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
 type MigrationJournal = { entries: { tag: string }[] };
 

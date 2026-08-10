@@ -1,4 +1,5 @@
-import { ErrorCode } from '@/shared/data/api/types';
+import { ErrorCode } from '@cherrystudio/universal/data/api/types';
+
 import { DataApiService } from '../DataApiService';
 
 function createService(handlers: Record<string, Record<string, jest.Mock>>) {
@@ -30,6 +31,32 @@ describe('DataApiService', () => {
     });
   });
 
+  it('captures a greedy tail parameter across slash-delimited model ids', async () => {
+    const get = jest.fn(async ({ params }) => params.uniqueModelId);
+    const service = createService({
+      '/models/:uniqueModelId*': { GET: get },
+    });
+
+    await expect(service.get('/models/huggingface::org/model/name')).resolves.toBe(
+      'huggingface::org/model/name',
+    );
+    expect(get).toHaveBeenCalledWith({
+      params: { uniqueModelId: 'huggingface::org/model/name' },
+      query: undefined,
+    });
+  });
+
+  it('stops a middle greedy parameter before its static route suffix', async () => {
+    const get = jest.fn(async ({ params }) => params);
+    const service = createService({
+      '/providers/:providerId/models/:modelId*/image-generation-support': { GET: get },
+    });
+
+    await expect(
+      service.get('/providers/silicon/models/Kwai-Kolors/Kolors/image-generation-support'),
+    ).resolves.toEqual({ modelId: 'Kwai-Kolors/Kolors', providerId: 'silicon' });
+  });
+
   it('distinguishes an unsupported method from an unknown route', async () => {
     const service = createService({
       '/topics': { GET: jest.fn(async () => ({ items: [] })) },
@@ -38,7 +65,7 @@ describe('DataApiService', () => {
     await expect(service.delete('/topics')).rejects.toMatchObject({
       code: ErrorCode.METHOD_NOT_ALLOWED,
     });
-    await expect(service.get('/files/missing/renderable-uri')).rejects.toMatchObject({
+    await expect(service.get('/unknown-route' as never)).rejects.toMatchObject({
       code: ErrorCode.NOT_FOUND,
     });
   });

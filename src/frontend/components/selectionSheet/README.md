@@ -1,7 +1,7 @@
 # Selection Sheet
 
 This module owns the reusable search control for searchable selection flows.
-The sheet frame itself now lives in `@/frontend/components/bottomSheet` (`BottomSheet`);
+The sheet frame lives in `@cherrystudio/ui/components` (`BottomSheet`);
 consumers compose this search field inside that frame.
 
 ## Public Interface

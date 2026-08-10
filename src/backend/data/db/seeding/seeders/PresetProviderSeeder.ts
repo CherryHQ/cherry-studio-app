@@ -1,10 +1,11 @@
 import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
 import { buildRuntimeEndpointConfigs, ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import type { ApiFeatures, AuthConfig } from '@cherrystudio/universal/data/types/provider';
+
 import type { CacheService } from '@/backend/data/CacheService';
 import { PinService } from '@/backend/data/services/PinService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { type CreateProviderInput, ProviderService } from '@/backend/data/services/ProviderService';
-import type { ApiFeatures, AuthConfig } from '@/shared/data/types/provider';
 
 import type { DatabaseSeeder } from '../types';
 
@@ -49,6 +50,7 @@ function toApiFeatures(provider: ProtoProviderConfig): ApiFeatures | null {
   return {
     arrayContent: provider.apiFeatures.arrayContent,
     developerRole: provider.apiFeatures.developerRole,
+    reportsActualCost: provider.apiFeatures.reportsActualCost,
     serviceTier: provider.apiFeatures.serviceTier,
     streamOptions: provider.apiFeatures.streamOptions,
     verbosity: provider.apiFeatures.verbosity,

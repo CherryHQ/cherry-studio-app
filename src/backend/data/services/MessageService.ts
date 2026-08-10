@@ -1,32 +1,36 @@
-import { isToolUIPart } from 'ai';
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import {
   type ApprovalDecision,
   applyToolApprovalDecisionsToParts,
   countPendingToolApprovals,
   finalizeDanglingToolApprovals,
-} from '@/shared/ai/transport/toolApprovals';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+} from '@cherrystudio/universal/ai/transport/toolApprovals';
 import type {
   ActiveNodeStrategy,
+  ClearTopicMessagesResponse,
   CreateMessageDto,
   DeleteMessageResponse,
   UpdateMessageDto,
-} from '@/shared/data/api/schemas/messages';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
-import type { PreparedInternalFile } from '@/shared/data/types/file';
+} from '@cherrystudio/universal/data/api/schemas/messages';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type {
   BranchMessage,
   BranchMessagesResponse,
   CherryMessagePart,
   Message,
   MessageData,
+  MessageRuntimeStatsInput,
+  MessageStats,
   SiblingsGroup,
   TreeNode,
   TreeResponse,
-} from '@/shared/data/types/message';
-import type { UniqueModelId } from '@/shared/data/types/model';
-import { readCherryMeta } from '@/shared/data/types/uiParts';
+} from '@cherrystudio/universal/data/types/message';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+import { isToolUIPart } from 'ai';
+import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
 import type { Database, DbService } from '../db/DbService';
 import {
   chatMessageFileRefTable,
@@ -35,8 +39,8 @@ import {
   messageTable,
   topicTable,
 } from '../db/schemas';
-import type { FileEntryService } from './FileEntryService';
 import type { TopicService } from './TopicService';
+import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';
 
 const previewLength = 50;
@@ -52,14 +56,15 @@ export type BranchMessagesParams = {
   nodeId?: string;
 };
 
-export interface AssistantPlaceholder
-  extends Omit<CreateMessageDto, 'parentId' | 'setAsActive' | 'siblingsGroupId'> {
+export interface AssistantPlaceholder extends Omit<
+  CreateMessageDto,
+  'parentId' | 'setAsActive' | 'siblingsGroupId'
+> {
   id?: string;
 }
 
 export interface CreateUserMessageWithPlaceholdersInput {
   placeholders: AssistantPlaceholder[];
-  preparedFiles?: readonly PreparedInternalFile[];
   siblingsGroupId?: number;
   topicId: string;
   userMessage: { dto: CreateMessageDto; mode: 'create' } | { id: string; mode: 'existing' };
@@ -148,7 +153,6 @@ export class MessageService {
   constructor(
     private readonly dbService: DbService,
     private readonly topicService: TopicService,
-    private readonly fileEntryService: FileEntryService,
   ) {}
 
   private get db() {
@@ -506,13 +510,6 @@ export class MessageService {
   }
 
   async create(topicId: string, dto: CreateMessageDto): Promise<Message> {
-    if (dto.role === 'root') {
-      throw DataApiErrorFactory.invalidOperation(
-        'create message',
-        'the virtual root is created automatically and cannot be created via this endpoint',
-      );
-    }
-
     return await this.dbService.withWriteTx(async (tx) => {
       const [topic] = await tx
         .select()
@@ -530,11 +527,10 @@ export class MessageService {
         .values({
           data: dto.data,
           modelId: dto.modelId ?? null,
-          modelSnapshot: dto.modelSnapshot ?? null,
+          messageSnapshot: dto.messageSnapshot ?? null,
           parentId: resolvedParentId,
           role: dto.role,
           siblingsGroupId: dto.siblingsGroupId ?? 0,
-          stats: dto.stats ?? null,
           status: dto.status ?? 'pending',
           topicId,
         })
@@ -563,13 +559,6 @@ export class MessageService {
         throw DataApiErrorFactory.notFound('Topic', input.topicId);
       }
 
-      if (input.preparedFiles?.length && input.userMessage.mode !== 'create') {
-        throw DataApiErrorFactory.invalidOperation(
-          'prepare files for an existing message',
-          'prepared files require a newly created user message',
-        );
-      }
-
       let userMessage: Message;
       if (input.userMessage.mode === 'create') {
         const dto = input.userMessage.dto;
@@ -577,17 +566,15 @@ export class MessageService {
           dto.parentId === undefined || dto.parentId === null
             ? await getRootMessageIdTx(tx, input.topicId)
             : await validateParent(tx, input.topicId, dto.parentId);
-        await this.fileEntryService.createPreparedEntriesTx(tx, input.preparedFiles ?? []);
         const [row] = await tx
           .insert(messageTable)
           .values({
             data: dto.data,
             modelId: dto.modelId ?? null,
-            modelSnapshot: dto.modelSnapshot ?? null,
+            messageSnapshot: dto.messageSnapshot ?? null,
             parentId: resolvedParentId,
             role: dto.role,
             siblingsGroupId: dto.siblingsGroupId ?? 0,
-            stats: dto.stats ?? null,
             status: dto.status ?? 'pending',
             topicId: input.topicId,
           })
@@ -630,11 +617,10 @@ export class MessageService {
             ...(placeholder.id ? { id: placeholder.id } : {}),
             data: placeholder.data,
             modelId: placeholder.modelId ?? null,
-            modelSnapshot: placeholder.modelSnapshot ?? null,
+            messageSnapshot: placeholder.messageSnapshot ?? null,
             parentId: userMessage.id,
             role: placeholder.role,
             siblingsGroupId: input.siblingsGroupId ?? 0,
-            stats: placeholder.stats ?? null,
             status: placeholder.status ?? 'pending',
             topicId: input.topicId,
           })
@@ -695,9 +681,6 @@ export class MessageService {
       if (dto.siblingsGroupId !== undefined) {
         updates.siblingsGroupId = dto.siblingsGroupId;
       }
-      if (dto.stats !== undefined) {
-        updates.stats = dto.stats;
-      }
       if (dto.status !== undefined) {
         updates.status = dto.status;
       }
@@ -714,6 +697,55 @@ export class MessageService {
         await replaceChatMessageFileRefsTx(tx, id, dto.data);
       }
 
+      return rowToMessage(row);
+    });
+  }
+
+  /**
+   * Internal AI-runtime finalizer. Content/status and runtime timing are
+   * message-owned; the merge preserves the existing record-owned usage
+   * projection and never accepts usage or cost from this caller.
+   */
+  async finalizeAssistantMessage(
+    id: string,
+    input: {
+      data: MessageData;
+      status: Extract<Message['status'], 'success' | 'paused' | 'error'>;
+      runtimeStats?: MessageRuntimeStatsInput;
+    },
+  ): Promise<Message> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(messageTable)
+        .where(and(eq(messageTable.id, id), isNull(messageTable.deletedAt)))
+        .limit(1);
+
+      if (!existing) {
+        throw DataApiErrorFactory.notFound('Message', id);
+      }
+      if (existing.role !== 'assistant') {
+        throw DataApiErrorFactory.invalidOperation(
+          'finalize message',
+          'only assistant messages can be finalized',
+        );
+      }
+
+      const stats = mergeMessageRuntimeStats(existing.stats, input.runtimeStats);
+      const [row] = await tx
+        .update(messageTable)
+        .set({
+          data: input.data,
+          status: input.status,
+          stats: stats ?? null,
+        })
+        .where(eq(messageTable.id, id))
+        .returning();
+      if (!row) {
+        throw DataApiErrorFactory.notFound('Message', id);
+      }
+
+      await replaceChatMessageFileRefsTx(tx, id, input.data);
       return rowToMessage(row);
     });
   }
@@ -834,6 +866,35 @@ export class MessageService {
         ...(newActiveNodeId !== undefined ? { newActiveNodeId } : {}),
         ...(reparentedIds?.length ? { reparentedIds } : {}),
       };
+    });
+  }
+
+  async clearTopicMessages(topicId: string): Promise<ClearTopicMessagesResponse> {
+    return await this.dbService.withWriteTx(async (tx) => {
+      const rootId = await getRootMessageIdTx(tx, topicId);
+      const rows = await tx
+        .select({ id: messageTable.id })
+        .from(messageTable)
+        .where(
+          and(
+            eq(messageTable.topicId, topicId),
+            ne(messageTable.id, rootId),
+            isNull(messageTable.deletedAt),
+          ),
+        );
+      const deletedIds = rows.map((row) => row.id);
+
+      if (deletedIds.length === 0) {
+        return { deletedIds };
+      }
+
+      await tx
+        .delete(messageTable)
+        .where(and(eq(messageTable.topicId, topicId), ne(messageTable.id, rootId)));
+      await this.topicService.clearActiveNodeTx(tx, topicId);
+
+      logger.info('Cleared topic messages', { count: deletedIds.length, topicId });
+      return { deletedIds };
     });
   }
 
@@ -995,6 +1056,7 @@ export class MessageService {
     appliedApprovalIds: string[];
     alreadySettledApprovalIds: string[];
   } | null> {
+    const completedAt = Date.now();
     return await this.dbService.withWriteTx(async (tx) => {
       const [existing] = await tx
         .select()
@@ -1028,10 +1090,15 @@ export class MessageService {
         .filter((id) => settledIds.has(id));
 
       if (appliedApprovalIds.length > 0) {
+        const stats = appliedApprovalIds.reduce(
+          (current, approvalId) => completeApprovalWait(current, approvalId, completedAt),
+          existing.stats ?? undefined,
+        );
         await tx
           .update(messageTable)
           .set({
             data: { ...existing.data, parts: nextParts },
+            stats: stats ?? null,
             ...(countPendingToolApprovals(nextParts) === 0 ? { status: 'pending' as const } : {}),
           })
           .where(eq(messageTable.id, anchorId));
@@ -1116,7 +1183,7 @@ export function rowToMessage(row: MessageRow): Message {
     data: row.data,
     id: row.id,
     modelId: (row.modelId ?? null) as UniqueModelId | null,
-    modelSnapshot: row.modelSnapshot ?? null,
+    messageSnapshot: row.messageSnapshot ?? null,
     parentId: row.parentId,
     role: row.role as Message['role'],
     searchableText: row.searchableText,
@@ -1126,6 +1193,33 @@ export function rowToMessage(row: MessageRow): Message {
     topicId: row.topicId,
     updatedAt: timestampToISO(row.updatedAt),
   };
+}
+
+function completeApprovalWait(
+  existing: MessageStats | null | undefined,
+  approvalId: string,
+  completedAt: number,
+): MessageStats | undefined {
+  const runtimeTiming = existing?.runtimeTiming;
+  if (!runtimeTiming) return existing ?? undefined;
+
+  const spans = runtimeTiming.spans.map((span) =>
+    span.kind === 'approval-wait' &&
+    span.approvalId === approvalId &&
+    span.completedAt === undefined
+      ? { ...span, completedAt: Math.max(span.startedAt, completedAt) }
+      : span,
+  );
+  if (spans.every((span, index) => span === runtimeTiming.spans[index])) {
+    return existing ?? undefined;
+  }
+
+  return mergeMessageRuntimeStats(existing, {
+    runtimeTiming: {
+      ...runtimeTiming,
+      spans,
+    },
+  });
 }
 
 function messageToTreeNode(message: Message, hasChildren: boolean): TreeNode {

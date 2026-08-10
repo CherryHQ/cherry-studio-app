@@ -33,13 +33,18 @@ The database-backed active-branch message window for a Topic. It owns history pa
 _Avoid_: stream state, live message buffer
 
 **Streaming Message Overlay**:
-The in-memory active assistant Message layer composed on top of the Message History Window while a Chat Session is generating.
+The in-memory active assistant Message layer composed on top of the Message History Window while the Chat Runtime is generating for a Topic.
 _Avoid_: persisted history page, query page
 
-**Chat Session**:
-The backend runtime owner for active LLM streams, AbortControllers, topic snapshots, tool approval,
-and terminal assistant Message persistence.
-_Avoid_: UI state, screen state
+**Chat Runtime**:
+The app-owned backend executor for active LLM streams across Topics. It owns per-Topic turn state,
+AbortControllers, snapshots, tool approval, and terminal assistant Message persistence.
+_Avoid_: Chat Session, route state, screen state
+
+**Chat Module**:
+The frontend-visible workflow interface to the Chat Runtime. It sends or aborts Topic turns and
+exposes snapshots and events without transferring runtime ownership to React.
+_Avoid_: Chat Service, Chat Backend, route-owned session
 
 ### Backend And Data
 
@@ -50,8 +55,8 @@ data, constructs the private Backend Service Graph, and composes the stable `Api
 _Avoid_: Data Runtime, desktop application service registry
 
 **Backend Service Graph**:
-The bootstrap-private in-process set that owns persistence, product workflows, platform
-capabilities, web search, and AI implementations behind the frontend-facing interfaces.
+The bootstrap-private in-process set of desktop-aligned services plus mobile runtimes, clients,
+adapters, and workflow implementations behind the frontend-facing interfaces.
 _Avoid_: Data Service Graph, HTTP API layer, repository bag
 
 **Data API**:
@@ -61,9 +66,19 @@ HTTP transport on mobile.
 _Avoid_: module selector, service bag, remote API
 
 **Workflow Backend**:
-The `Backend` aggregate of multi-step workflow and session modules that are not ordinary resource
-endpoints, such as chat sessions, painting generation, model reconciliation, and permission policy.
+The stable `Backend` aggregate of frontend-visible Workflow Modules that are not ordinary resource
+endpoints, such as chat, painting generation, model reconciliation, and permission policy.
 _Avoid_: persistence registry, Data API, resource service bag
+
+**Workflow Module**:
+A frontend-visible `XxxModule` contract that hides meaningful orchestration, lifecycle, platform,
+or third-party complexity. Resource CRUD remains in the Data API.
+_Avoid_: XxxBackend, pass-through service, persistence wrapper
+
+**Painting Generation Session**:
+A caller-owned, isolated image-generation lifecycle. It owns cancellation, incomplete receipt retry
+state, and disposal independently from other sessions.
+_Avoid_: Painting Service, app runtime
 
 **Provider**:
 A user-configurable AI service endpoint with API keys, auth configuration, endpoint configuration, and runtime API feature flags.
@@ -104,6 +119,11 @@ _Avoid_: message, assistant
 The mobile adapter that converts Provider and Model records into AI SDK provider settings, endpoint variants, headers, signing, and model ids.
 _Avoid_: raw SDK client, provider service
 
+**Tool Resolver**:
+The request-scoped backend capability that selects and combines active built-in, MCP, and external
+web-search tools for one AI request.
+_Avoid_: Tool Service, tool persistence registry
+
 **Provider-Native Web Search**:
 Model-native web search enabled through AI provider options during an AI request.
 _Avoid_: Web Search Provider
@@ -116,6 +136,11 @@ _Avoid_: Provider-Native Web Search
 The CherryIN authorization state that stores OAuth credentials and OAuth-derived API keys for the CherryIN Provider.
 _Avoid_: CherryAI signature, manual API key
 
+**CherryIN Client**:
+The mobile external-account client for CherryIN profile and balance requests. Authentication stays
+owned by the provider-aligned OAuth Runtime Service.
+_Avoid_: CherryIN Service, OAuth runtime
+
 **CherryAI Signature**:
 The request signing data added to CherryAI chat completion requests.
 _Avoid_: OAuth token, API key rotation
@@ -123,7 +148,8 @@ _Avoid_: OAuth token, API key rotation
 ### Runtime And UI
 
 **Runtime Owner**:
-A Provider-owned runtime object that owns long-lived resources and their cleanup, abort, pause, or resume behavior when those behaviors apply.
+A runtime object with one explicit app, provider, hook, or caller owner that controls creation,
+cleanup, abort, pause, or resume behavior when those behaviors apply.
 _Avoid_: service registry, desktop lifecycle service
 
 **Startup Gate**:

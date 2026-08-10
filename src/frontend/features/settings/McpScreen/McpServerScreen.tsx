@@ -1,20 +1,24 @@
+import { Input, Label, TextField } from '@cherrystudio/ui/components';
+import {
+  withMcpToolRuleAdded,
+  withMcpToolRuleCleared,
+} from '@cherrystudio/universal/ai/tools/mcpSourcePolicy';
+import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
-import { withMcpToolRuleAdded, withMcpToolRuleCleared } from '@/shared/ai/tools/mcpSourcePolicy';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { DataApiError, ErrorCode } from '@/shared/data/api/types';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpHeadersEditor } from './components/McpHeadersEditor';
 import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';
@@ -88,14 +92,14 @@ function McpServerLoadState({
         <Text
           className={
             onRetry
-              ? 'text-center text-danger-foreground text-sm'
-              : 'text-center text-default-foreground text-sm'
+              ? 'text-center text-destructive-foreground text-sm'
+              : 'text-center text-foreground text-sm'
           }
         >
           {message}
         </Text>
         {detail ? (
-          <Text className="text-center text-default-foreground text-xs" selectable>
+          <Text className="text-center text-foreground text-xs" selectable>
             {detail}
           </Text>
         ) : null}
@@ -118,7 +122,7 @@ function McpServerEditor({
   const router = useRouter();
   const { toast } = useToast();
   const mcp = useBackendModule('mcp');
-  const { confirmDialog, requestConfirm } = useConfirmDialog();
+  const { alert } = useAlert();
 
   const isCreating = !serverId;
   const {
@@ -145,7 +149,7 @@ function McpServerEditor({
   const handleSave = useCallback(async () => {
     const dto = buildDto(form, t('settings.mcp.defaultName'));
     if (!dto.ok) {
-      toast.show({ label: t(dto.errorKey, dto.errorOptions), variant: 'danger' });
+      alert.show({ title: t(dto.errorKey, dto.errorOptions) });
       return;
     }
 
@@ -175,11 +179,11 @@ function McpServerEditor({
       }
     } catch (error) {
       logger.error('Failed to save MCP server', error as Error);
-      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+      alert.show({ title: t('settings.mcp.toast.saveFailed') });
     } finally {
       setIsSaving(false);
     }
-  }, [createServer, form, mcp, router, serverId, t, toast, updateServer]);
+  }, [alert, createServer, form, mcp, router, serverId, t, updateServer]);
 
   const handleToggleTool = useCallback(
     async (toolName: string, enabled: boolean, knownToolNames: string[]) => {
@@ -195,10 +199,10 @@ function McpServerEditor({
         await updateServer(serverId, { disabledTools: nextDisabled });
       } catch (error) {
         logger.error('Failed to toggle MCP tool', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.mcp.toast.saveFailed') });
       }
     },
-    [server, serverId, t, toast, updateServer],
+    [alert, server, serverId, t, updateServer],
   );
 
   const handleToggleAutoApprove = useCallback(
@@ -215,10 +219,10 @@ function McpServerEditor({
         await updateServer(serverId, { disabledAutoApproveTools: nextDisabled });
       } catch (error) {
         logger.error('Failed to toggle MCP tool auto-approve', error as Error);
-        toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.mcp.toast.saveFailed') });
       }
     },
-    [server, serverId, t, toast, updateServer],
+    [alert, server, serverId, t, updateServer],
   );
 
   const handleToggleServer = useCallback(async () => {
@@ -231,35 +235,40 @@ function McpServerEditor({
       await updateServer(serverId, { isActive: nextIsActive });
     } catch (error) {
       logger.error('Failed to toggle MCP server', error as Error);
-      toast.show({ label: t('settings.mcp.toast.saveFailed'), variant: 'danger' });
+      alert.show({ title: t('settings.mcp.toast.saveFailed') });
     }
-  }, [server, serverId, t, toast, updateServer]);
+  }, [alert, server, serverId, t, updateServer]);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = useCallback(() => {
     if (!serverId) {
       return;
     }
-    try {
-      await deleteServer(serverId);
-      toast.show({ label: t('settings.mcp.toast.deleted'), variant: 'success' });
-      router.back();
-    } catch (error) {
-      logger.error('Failed to delete MCP server', error as Error);
-      toast.show({ label: t('settings.mcp.toast.deleteFailed'), variant: 'danger' });
-    }
-  }, [deleteServer, router, serverId, t, toast]);
+
+    const deletion = deleteServer(serverId);
+    router.back();
+    void deletion
+      .then(() => {
+        toast.show({ label: t('settings.mcp.toast.deleted'), variant: 'success' });
+      })
+      .catch((error) => {
+        logger.error('Failed to delete MCP server', error as Error);
+        alert.show({ title: t('settings.mcp.toast.deleteFailed') });
+      });
+  }, [alert, deleteServer, router, serverId, t, toast]);
 
   const requestDelete = useCallback(() => {
     if (!serverId || !server) {
       return;
     }
 
-    requestConfirm({
-      message: t('settings.mcp.delete.message', { name: server.name }),
+    alert.confirm({
+      confirmLabel: t('common.delete'),
+      description: t('settings.mcp.delete.message', { name: server.name }),
       onConfirm: handleDelete,
+      role: 'destructive',
       title: t('settings.mcp.delete.title'),
     });
-  }, [handleDelete, requestConfirm, server, serverId, t]);
+  }, [alert, handleDelete, server, serverId, t]);
 
   const isBusy = isSaving || isCreateMutationPending || isUpdating;
   const saveActions = useMemo<HeaderToolbarAction[]>(
@@ -331,78 +340,55 @@ function McpServerEditor({
           style={styles.scroll}
         >
           {!isCreating ? (
-            <FormField label={t('settings.mcp.fields.name')}>
+            <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.name')}>
               <Input
                 accessibilityLabel={t('settings.mcp.fields.name')}
                 autoCorrect={false}
-                className="rounded-2xl px-4 text-base text-foreground leading-5"
-                isDisabled={!isEditing}
                 onChangeText={(value) => updateField('name', value)}
                 placeholder={t('settings.mcp.fields.name')}
-                placeholderColorClassName="accent-muted"
-                style={styles.textInput}
                 value={displayedForm.name}
-                variant="secondary"
               />
             </FormField>
           ) : null}
-          <FormField label={t('settings.mcp.fields.baseUrl')}>
+          <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.baseUrl')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.baseUrl')}
               autoCapitalize="none"
               autoCorrect={false}
-              className="rounded-2xl px-4 text-base text-foreground leading-5"
-              isDisabled={!isEditing}
               keyboardType="url"
               onChangeText={(value) => updateField('baseUrl', value)}
               placeholder="https://example.com/mcp"
-              placeholderColorClassName="accent-muted"
               spellCheck={false}
-              style={styles.textInput}
               value={displayedForm.baseUrl}
-              variant="secondary"
             />
             {showHttpWarning ? (
-              <Text className="text-warning-foreground text-xs">
-                {t('settings.mcp.fields.httpWarning')}
-              </Text>
+              <Text className="text-warning text-xs">{t('settings.mcp.fields.httpWarning')}</Text>
             ) : null}
           </FormField>
           {!isCreating ? (
-            <FormField label={t('settings.mcp.fields.description')}>
+            <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.description')}>
               <Input
                 accessibilityLabel={t('settings.mcp.fields.description')}
-                className="rounded-2xl px-4 text-base text-foreground leading-5"
-                isDisabled={!isEditing}
                 onChangeText={(value) => updateField('description', value)}
                 placeholder={t('settings.mcp.fields.description')}
-                placeholderColorClassName="accent-muted"
-                style={styles.textInput}
                 value={displayedForm.description}
-                variant="secondary"
               />
             </FormField>
           ) : null}
-          <FormField label={t('settings.mcp.headers.title')}>
+          <FormField isDisabled={!isEditing} label={t('settings.mcp.headers.title')}>
             <McpHeadersEditor
-              isDisabled={!isEditing}
               onChangeText={(value) => updateField('headerText', value)}
               value={displayedForm.headerText}
             />
           </FormField>
-          <FormField label={t('settings.mcp.fields.timeout')}>
+          <FormField isDisabled={!isEditing} label={t('settings.mcp.fields.timeout')}>
             <Input
               accessibilityLabel={t('settings.mcp.fields.timeout')}
-              className="rounded-2xl px-4 text-base text-foreground leading-5"
               inputMode="numeric"
-              isDisabled={!isEditing}
               keyboardType="number-pad"
               onChangeText={(value) => updateField('timeout', value)}
               placeholder="60"
-              placeholderColorClassName="accent-muted"
-              style={styles.textInput}
               value={displayedForm.timeout}
-              variant="secondary"
             />
           </FormField>
         </KeyboardAwareScrollView>
@@ -414,7 +400,7 @@ function McpServerEditor({
           showsVerticalScrollIndicator={false}
           style={styles.scroll}
         >
-          <View className="rounded-2xl bg-settings-grouped-surface p-4">
+          <View className="rounded-2xl bg-grouped-surface p-4">
             <McpToolsSection
               isReadOnly={isUpdating}
               onToggleAutoApprove={handleToggleAutoApprove}
@@ -434,17 +420,24 @@ function McpServerEditor({
           }}
         />
       ) : null}
-      {confirmDialog}
     </>
   );
 }
 
-function FormField({ children, label }: { children: React.ReactNode; label: string }) {
+function FormField({
+  children,
+  isDisabled,
+  label,
+}: {
+  children: React.ReactNode;
+  isDisabled: boolean;
+  label: string;
+}) {
   return (
-    <View className="gap-2">
-      <Text className="px-1 font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField isDisabled={isDisabled}>
+      <Label>{label}</Label>
       {children}
-    </View>
+    </TextField>
   );
 }
 
@@ -537,13 +530,5 @@ const styles = StyleSheet.create({
   headerActivityIndicator: {
     height: 32,
     width: 32,
-  },
-  textInput: {
-    includeFontPadding: false,
-    minHeight: 48,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
   },
 });

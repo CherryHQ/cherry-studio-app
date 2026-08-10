@@ -1,7 +1,8 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
-import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 const ENDPOINT_FALLBACK_ORDER: readonly EndpointType[] = [
   ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
@@ -43,11 +44,21 @@ export function getBaseUrl(provider: Provider, preferredEndpoint?: EndpointType 
 }
 
 export function getExtraHeaders(provider: Provider): Record<string, string> {
-  return provider.settings?.extraHeaders ?? {};
+  const headers = { ...provider.settings?.extraHeaders };
+  if (provider.id !== 'radeon-cloud' && provider.presetProviderId !== 'radeon-cloud') {
+    return headers;
+  }
+
+  for (const name of Object.keys(headers)) {
+    if (name.toLowerCase() === 'x-source') {
+      delete headers[name];
+    }
+  }
+  return { ...headers, 'X-Source': 'cherry-studio' };
 }
 
 export function isAwsBedrockProvider(provider: Provider): boolean {
-  return provider.authType === 'iam-aws';
+  return provider.authType === 'iam-aws' || provider.authType === 'api-key-aws';
 }
 
 export function defaultHeaders(provider: Provider, apiKey = ''): Record<string, string> {
@@ -88,14 +99,29 @@ export function formatApiHost(baseURL = '', appendApiVersion = true, apiVersion 
   if (!trimmed) return '';
   if (trimmed.endsWith('#')) return trimmed;
   const withoutTrailingSlash = trimmed.replace(/\/+$/, '');
-  if (!appendApiVersion || new RegExp(`/${apiVersion}$`).test(withoutTrailingSlash)) {
+  if (!appendApiVersion || hasApiVersion(withoutTrailingSlash)) {
     return withoutTrailingSlash;
   }
   return `${withoutTrailingSlash}/${apiVersion}`;
 }
 
 export function formatOllamaApiHost(baseURL = ''): string {
-  return baseURL.trim().replace(/\/+$/, '');
+  const normalized = baseURL
+    .trim()
+    .replace(/\/+$/, '')
+    .replace(/\/v1$/, '')
+    .replace(/\/api$/, '')
+    .replace(/\/chat$/, '');
+  return normalized ? `${normalized}/api` : '';
+}
+
+function hasApiVersion(value: string): boolean {
+  const versionPattern = /\/v\d+(?:alpha|beta)?(?:\/|$)/i;
+  try {
+    return versionPattern.test(new URL(value).pathname);
+  } catch {
+    return versionPattern.test(value);
+  }
 }
 
 export function isWithTrailingSharp(baseURL = ''): boolean {

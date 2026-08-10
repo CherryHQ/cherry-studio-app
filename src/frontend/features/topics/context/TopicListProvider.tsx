@@ -1,25 +1,21 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useIsFocused, useRouter } from 'expo-router';
-import { createContext, type PropsWithChildren, use, useCallback, useEffect, useMemo } from 'react';
-import { MODEL_SETTING_PREFERENCE_KEYS } from '@/frontend/components/modelPicker/utils/modelSettings';
-import {
-  queryKeys,
-  useMutation,
-  usePreference,
-  usePrefetch,
-  usePrefetchInfiniteQuery,
-} from '@/frontend/data';
-import { usePins, useTopics } from '@/frontend/hooks/chat';
-import {
-  getMessagesQueryKey,
-  initialMessagesPageSize,
-} from '@/frontend/hooks/chat/utils/messageQueryOptions';
-import { messageWindowPolicy } from '@/frontend/hooks/chat/utils/messageWindowPolicy';
-import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isUniqueModelId } from '@/shared/data/types/model';
-import type { Topic } from '@/shared/data/types/topic';
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
+import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'expo-router';
+import { createContext, type PropsWithChildren, use, useCallback, useMemo } from 'react';
 
-const MODEL_DETAIL_PREFETCH_STALE_TIME_MS = 1000 * 60 * 5;
+import { queryKeys, useMutation } from '@/frontend/data';
+import {
+  dataApiCollectionFilters,
+  removeItemsFromInfiniteData,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
+import { usePins, useTopics } from '@/frontend/hooks/chat';
+import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
+type TopicListData = InfiniteData<CursorPaginationResponse<Topic>, string | undefined>;
 
 type TopicListTopicsContextValue = {
   isPinActionDisabled: boolean;
@@ -43,55 +39,78 @@ const perfLog = loggerService.withContext('ChatPerf');
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
 const TopicListActionsContext = createContext<TopicListActionsContextValue | null>(null);
 
-export function TopicListProvider({ children }: PropsWithChildren) {
-  const isFocused = useIsFocused();
+type TopicListProviderProps = PropsWithChildren<{
+  searchText?: string;
+}>;
+
+export function TopicListProvider({ children, searchText = '' }: TopicListProviderProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const [defaultModelId] = usePreference(MODEL_SETTING_PREFERENCE_KEYS.default);
-  const prefetch = usePrefetch();
-  const prefetchInfiniteQuery = usePrefetchInfiniteQuery();
-  const topicList = useTopics({ q: '' });
+  const topicList = useTopics({ q: searchText });
   const topicPins = usePins('topic');
   const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
-
-  useEffect(() => {
-    if (!isFocused) {
-      return;
-    }
-
-    void prefetchDefaultModelDetail(prefetch, defaultModelId);
-
-    for (const topic of topicList.topics.slice(
-      0,
-      messageWindowPolicy.topicListPrefetchTopicCount,
-    )) {
-      void prefetchInfiniteQuery('/topics/:topicId/messages', {
-        limit: initialMessagesPageSize,
-        params: { topicId: topic.id },
-        staleTime: messageWindowPolicy.prefetchStaleTimeMs,
-      });
-    }
-  }, [defaultModelId, isFocused, prefetch, prefetchInfiniteQuery, topicList.topics]);
 
   const openTopic = useCallback(
     (topicId: string) => {
       perfLog.debug('[PERF] tap->push', { topicId, t: Date.now() });
-      void prefetchDefaultModelDetail(prefetch, defaultModelId);
-      void prefetchInfiniteQuery('/topics/:topicId/messages', {
-        limit: initialMessagesPageSize,
-        params: { topicId },
-        staleTime: messageWindowPolicy.prefetchStaleTimeMs,
-      });
       router.push({ pathname: '/topics', params: { topicId } });
     },
-    [defaultModelId, prefetch, prefetchInfiniteQuery, router],
+    [router],
   );
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
+    onMutate: async (variables) => {
+      const id = variables?.params.id;
+      const name = variables?.body?.name;
+      if (!id || !name) {
+        return {};
+      }
+
+      const topicFilters = dataApiCollectionFilters('/topics');
+      const detailFilters = { exact: true, queryKey: queryKeys.topics.detail(id) };
+      await Promise.all([
+        queryClient.cancelQueries(topicFilters),
+        queryClient.cancelQueries(detailFilters),
+      ]);
+      const topics = queryClient.getQueriesData<TopicListData>(topicFilters);
+      const detail = queryClient.getQueriesData<Topic>(detailFilters);
+
+      try {
+        queryClient.setQueriesData<TopicListData>(topicFilters, (current) =>
+          renameTopicInInfiniteData(current, id, name),
+        );
+        queryClient.setQueriesData<Topic>(detailFilters, (current) =>
+          current ? { ...current, isNameManuallyEdited: true, name } : current,
+        );
+      } catch (error) {
+        restoreQuerySnapshot(queryClient, topics);
+        restoreQuerySnapshot(queryClient, detail);
+        throw error;
+      }
+
+      return { detail, topics };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.topics);
+      restoreQuerySnapshot(queryClient, context?.detail);
+    },
     refresh: ({ args }) => ['/topics', ...(args ? [`/topics/${args.params.id}`] : [])],
   });
 
   const deleteTopicsMutation = useMutation('DELETE', '/topics', {
+    onMutate: async (variables) => {
+      const ids = new Set(normalizeTopicIds(variables?.query?.ids));
+      const topics = await updateQueriesOptimistically<TopicListData>(
+        queryClient,
+        dataApiCollectionFilters('/topics'),
+        (current) => removeItemsFromInfiniteData(current, ids),
+      );
+
+      return { topics };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.topics);
+    },
     refresh: ['/topics'],
   });
   const updateTopic = renameTopicMutation.trigger;
@@ -178,17 +197,6 @@ export function TopicListProvider({ children }: PropsWithChildren) {
   );
 }
 
-function prefetchDefaultModelDetail(prefetch: ReturnType<typeof usePrefetch>, modelId: unknown) {
-  if (!isUniqueModelId(modelId)) {
-    return;
-  }
-
-  return prefetch('/models/:id', {
-    params: { id: modelId },
-    staleTime: MODEL_DETAIL_PREFETCH_STALE_TIME_MS,
-  });
-}
-
 export function useTopicListTopics() {
   const context = use(TopicListTopicsContext);
 
@@ -207,4 +215,45 @@ export function useTopicListActions() {
   }
 
   return context;
+}
+
+function normalizeTopicIds(ids: string | readonly string[] | undefined): string[] {
+  if (Array.isArray(ids)) {
+    return ids;
+  }
+
+  return typeof ids === 'string'
+    ? ids
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    : [];
+}
+
+function renameTopicInInfiniteData(
+  current: TopicListData | undefined,
+  topicId: string,
+  name: string,
+): TopicListData | undefined {
+  if (!current) {
+    return current;
+  }
+
+  let changed = false;
+  const pages = current.pages.map((page) => {
+    let pageChanged = false;
+    const items = page.items.map((topic) => {
+      if (topic.id !== topicId) {
+        return topic;
+      }
+
+      changed = true;
+      pageChanged = true;
+      return { ...topic, isNameManuallyEdited: true, name };
+    });
+
+    return pageChanged ? { ...page, items } : page;
+  });
+
+  return changed ? { ...current, pages } : current;
 }

@@ -2,8 +2,8 @@
 
 This directory defines the frontend-visible interface of backend workflow modules. `Backend` is
 the aggregate interface, and `BackendProvider` exposes one of its modules through
-`useBackendModule(key)`. Implementations live in `src/backend/services`; production assembly lives
-in `src/bootstrap`.
+`useBackendModule(key)`. Implementations live in the owning backend domain under
+`src/backend/services` or `src/backend/ai`; production assembly lives in `src/bootstrap`.
 
 The interface is in-process. It does not define IPC, HTTP, a native bridge, serialization, security
 isolation, or a second runtime. Contract values may therefore include `AbortSignal`, callbacks,
@@ -29,7 +29,8 @@ A new contract belongs here only when it cannot be expressed cleanly through the
 preference interface and at least one of these conditions applies:
 
 1. It coordinates multiple backend dependencies or business steps behind one frontend operation.
-2. It owns a long-lived session with state, subscriptions, cancellation, or disposal.
+2. It exposes a backend-owned runtime or caller-owned session with state, subscriptions,
+   cancellation, or disposal.
 3. It encapsulates a platform, filesystem, native, AI, or third-party capability whose concrete
    implementation must remain backend-owned.
 4. It returns workflow outcomes or emits events that let the frontend perform its own navigation,
@@ -92,10 +93,11 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
   implementation class.
 - Use one leaf file per capability. Define the aggregate and module-key helpers only in
   `backend.ts`; re-export the public surface from `index.ts`.
-- Name aggregate members `XBackend` and explicit lifecycle objects `XSession`.
+- Name leaf contracts `XxxModule` and caller-owned lifecycle objects `XxxSession`. Keep the aggregate
+  name `Backend` and its capability keys unchanged.
 - Prefer one operation that owns a complete workflow over exposing every internal step.
-- Accept cancellation explicitly with `AbortSignal` or a clearly scoped `abort` method when work can
-  outlive the initiating render.
+- Put cancellation on its owner: a Topic-scoped `abort` method for the shared Chat Runtime, or
+  `cancel()` on a caller-owned generation session.
 - Sessions that own resources, subscriptions, or in-flight work must expose `dispose()` and define
   who owns calling it.
 - Return structured results or emit semantic events. Do not perform routing, translation, toast, or
@@ -109,17 +111,26 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 - Do not add serialization schemas unless a real transport is introduced through a separate
   architecture decision.
 
+Chat's public state vocabulary is `ChatTopicStatus`, `ChatTopicSnapshot`, `ChatEvent`, and
+`ChatListener`; the temporary new-Topic projection uses `NEW_TOPIC_SNAPSHOT_KEY`. `ChatModule`
+exposes send, branch selection, regeneration, edit-and-resend, multi-model execution, steering,
+follow-up queuing, approval, cancellation, reconnectable streams, snapshots, and subscriptions
+directly. Do not reintroduce `createSession()` or a public Chat session object.
+
 ## Current Modules
 
 | Module | Why it qualifies |
 | --- | --- |
-| `chat` | Owns streaming topic sessions, snapshots, subscriptions, tool approval, abort, and disposal |
-| `paintings` | Owns cancellable generation sessions, file preparation, persistence, cleanup, and file resolution |
-| `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
-| `providers` | Encapsulates OAuth, account lookup, removal policy, and provider avatar storage |
+| `chat` | Projects the app-owned, multi-Topic Chat Runtime through branching, multi-model sends, queued turns, cancellation, stream recovery, and subscriptions |
+| `cherryin` | Encapsulates authenticated CherryIN account and balance requests through the external account client |
+| `file` | Encapsulates managed-file import, Expo URI resolution, and safe unreferenced cleanup |
 | `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
+| `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
+| `oauth` | Exposes provider OAuth authorization completion and logout workflows |
+| `paintings` | Owns cancellable generation sessions, file preparation, persistence, cleanup, and file resolution |
 | `permissions` | Coordinates stored permission policy with device status, recovery, and system settings |
 | `profile` | Encapsulates profile avatar storage and preference coordination |
+| `providers` | Combines provider removal policy with provider avatar storage |
 | `webSearch` | Encapsulates provider-specific connectivity checks and third-party behavior |
 
 Ordinary persistence for these resource families still belongs to the Data API. For example, model
@@ -130,8 +141,8 @@ CRUD is a Data API concern while model pull and health checks are workflow contr
 1. Confirm that an existing Data API endpoint, preference operation, or contract module cannot own
    the behavior cleanly.
 2. Define the smallest frontend-visible interface and reuse existing shared data types.
-3. Put the implementation under `src/backend/services` and keep its private dependency interfaces
-   there.
+3. Put the implementation in its owning `src/backend/services` or `src/backend/ai` domain and keep
+   private dependency interfaces there.
 4. Assemble the production implementation in `src/bootstrap/composition/createBackend.ts`.
 5. Consume it through `useBackendModule(key)`; keep frontend effects in the owning feature or hook.
 6. Test the backend implementation through the contract's observable behavior.

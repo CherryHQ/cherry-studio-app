@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import {
@@ -14,7 +15,6 @@ import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { isAndroid } from '@/frontend/utils/constants';
-import { SettingsSection } from './components/SettingsSection';
 
 const ANDROID_GRANT_READ_URI_PERMISSION_FLAG = 1;
 
@@ -77,40 +77,45 @@ export default function DataSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="gap-6 px-4 py-5">
-          <SettingsSection
-            items={[
-              {
-                hideAccessory: true,
-                icon: UploadIcon,
-                title: t('settings.data.backup.title'),
-                onPress: handleActionPress,
-              },
-              {
-                hideAccessory: true,
-                icon: DownloadIcon,
-                title: t('settings.data.restore.title'),
-                onPress: handleActionPress,
-              },
-              {
-                hideAccessory: true,
-                icon: MonitorCloudIcon,
-                title: t('settings.data.syncDesktop.title'),
-                onPress: handleActionPress,
-              },
-            ]}
-            title={t('settings.data.backupRestore.title')}
-          />
-          <SettingsSection items={directoryItems} title={t('settings.data.directory.title')} />
-          <SettingsSection
-            items={[
-              {
-                hideAccessory: true,
-                icon: RefreshCwIcon,
-                title: t('settings.data.resetData.title'),
-                onPress: handleActionPress,
-              },
-            ]}
-          />
+          <Section title={t('settings.data.backupRestore.title')}>
+            <Section.Item
+              label={t('settings.data.backup.title')}
+              leading={<UploadIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+            <Section.Item
+              label={t('settings.data.restore.title')}
+              leading={<DownloadIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+            <Section.Item
+              label={t('settings.data.syncDesktop.title')}
+              leading={<MonitorCloudIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+          </Section>
+          <Section title={t('settings.data.directory.title')}>
+            {directoryItems.map(({ icon: Icon, onPress, title }) => (
+              <Section.Item
+                key={title}
+                label={title}
+                leading={<Icon className="size-5 text-foreground" strokeWidth={2} />}
+                onPress={onPress}
+                showChevron={false}
+              />
+            ))}
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.data.resetData.title')}
+              leading={<RefreshCwIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={handleActionPress}
+              showChevron={false}
+            />
+          </Section>
         </View>
       </ScrollView>
     </>

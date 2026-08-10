@@ -1,12 +1,11 @@
+import { Section, Switch } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
-import { Switch } from 'heroui-native/switch';
 import {
   CircleUserRoundIcon,
   CloudIcon,
   DatabaseIcon,
   EarthIcon,
-  GlobeIcon,
   InfoIcon,
   RadioIcon,
   ShieldCheckIcon,
@@ -21,12 +20,9 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
+import { Image } from '@/frontend/components/nativePrimitives';
 import { usePreference } from '@/frontend/data/hooks';
 
-import { SettingSelect } from './components/SettingSelect';
-import { SettingsSection } from './components/SettingsSection';
-import { usePrefetchProviders } from './hooks/usePrefetchProviders';
-import { useSettingPreferences } from './hooks/useSettingPreferences';
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
 
 export default function SettingsScreen() {
@@ -39,8 +35,6 @@ export default function SettingsScreen() {
   const [backgroundReplyEnabled, setBackgroundReplyEnabled] = usePreference(
     'chat.background_reply.enabled',
   );
-  const settingPreferences = useSettingPreferences();
-  const prefetchProviders = usePrefetchProviders();
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
 
@@ -60,7 +54,7 @@ export default function SettingsScreen() {
   const contentContainerStyle = useMemo(() => ({ paddingBottom: tabBarHeight }), [tabBarHeight]);
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-grouped-background">
       <Animated.ScrollView
         alwaysBounceVertical
         contentContainerStyle={contentContainerStyle}
@@ -76,113 +70,90 @@ export default function SettingsScreen() {
           userName={userName}
         />
         <View className="gap-6 px-2 pt-6">
-          <SettingsSection
-            items={[
-              {
-                icon: CircleUserRoundIcon,
-                title: t('settings.items.profile'),
-                onPress: openProfileSettings,
-              },
-            ]}
-          />
-          {Platform.OS === 'ios' ? (
-            <SettingsSection
-              items={[
-                {
-                  accessory: (
-                    <Switch
-                      accessibilityLabel={t('settings.items.backgroundReply')}
-                      isSelected={backgroundReplyEnabled}
-                      onSelectedChange={(enabled) => void setBackgroundReplyEnabled(enabled)}
-                    />
-                  ),
-                  icon: RadioIcon,
-                  onPress: () => void setBackgroundReplyEnabled(!backgroundReplyEnabled),
-                  title: t('settings.items.backgroundReply'),
-                },
-              ]}
+          <Section>
+            <Section.Item
+              label={t('settings.items.profile')}
+              leading={<CircleUserRoundIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={openProfileSettings}
             />
+          </Section>
+          {Platform.OS === 'ios' ? (
+            <Section>
+              <Section.Item
+                accessibilityRole="switch"
+                accessibilityState={{ checked: backgroundReplyEnabled }}
+                label={t('settings.items.backgroundReply')}
+                leading={<RadioIcon className="size-5 text-foreground" strokeWidth={2} />}
+                onPress={() => void setBackgroundReplyEnabled(!backgroundReplyEnabled)}
+                trailing={
+                  <Switch
+                    accessibilityLabel={t('settings.items.backgroundReply')}
+                    onValueChange={(enabled) => void setBackgroundReplyEnabled(enabled)}
+                    value={backgroundReplyEnabled}
+                  />
+                }
+              />
+            </Section>
           ) : null}
-          <SettingsSection
-            items={[
-              {
-                icon: CloudIcon,
-                title: t('settings.items.modelService'),
-                onPress: () => router.push('/settings/provider'),
-                onPressIn: prefetchProviders,
-              },
-              {
-                icon: SparklesIcon,
-                title: t('settings.items.defaultModel'),
-                onPress: () => router.push('/settings/model'),
-              },
-            ]}
-          />
-          <SettingsSection
-            items={[
-              {
-                icon: EarthIcon,
-                title: t('settings.items.webSearch'),
-                onPress: () => router.push('/settings/websearch'),
-              },
-              {
-                imageSource: mcpIcon,
-                title: t('settings.items.mcp'),
-                onPress: () => router.push('/settings/mcp'),
-              },
-            ]}
-          />
-          <SettingsSection
-            items={[
-              {
-                icon: DatabaseIcon,
-                title: t('settings.items.dataBackup'),
-                onPress: () => router.push('/settings/data'),
-              },
-              {
-                icon: ShieldCheckIcon,
-                title: t('settings.items.permissions'),
-                onPress: () => router.push('/settings/permissions'),
-              },
-            ]}
-          />
-          <SettingsSection
-            items={[
-              {
-                accessory: (
-                  <SettingSelect
-                    label={t('settings.items.appLanguage')}
-                    options={settingPreferences.language.options}
-                    value={settingPreferences.language.value}
-                    onValueChange={settingPreferences.language.onValueChange}
+          <Section>
+            <Section.Item
+              label={t('settings.items.modelService')}
+              leading={<CloudIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/provider')}
+            />
+            <Section.Item
+              label={t('settings.items.defaultModel')}
+              leading={<SparklesIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/model')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.items.webSearch')}
+              leading={<EarthIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/websearch')}
+            />
+            <Section.Item
+              label={t('settings.items.mcp')}
+              leading={
+                mcpIcon ? (
+                  <Image
+                    cachePolicy="memory-disk"
+                    className="size-5"
+                    contentFit="contain"
+                    source={mcpIcon}
                   />
-                ),
-                icon: GlobeIcon,
-                title: t('settings.items.appLanguage'),
-              },
-              {
-                accessory: (
-                  <SettingSelect
-                    label={t('settings.items.appearance')}
-                    options={settingPreferences.theme.options}
-                    value={settingPreferences.theme.value}
-                    onValueChange={settingPreferences.theme.onValueChange}
-                  />
-                ),
-                icon: SunIcon,
-                title: t('settings.items.appearance'),
-              },
-            ]}
-          />
-          <SettingsSection
-            items={[
-              {
-                icon: InfoIcon,
-                title: t('settings.items.aboutUs'),
-                onPress: () => router.push('/settings/about'),
-              },
-            ]}
-          />
+                ) : null
+              }
+              onPress={() => router.push('/settings/mcp')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.items.dataBackup')}
+              leading={<DatabaseIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/data')}
+            />
+            <Section.Item
+              label={t('settings.items.permissions')}
+              leading={<ShieldCheckIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/permissions')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.appearance.title')}
+              leading={<SunIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/appearance')}
+            />
+          </Section>
+          <Section>
+            <Section.Item
+              label={t('settings.items.aboutUs')}
+              leading={<InfoIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/about')}
+            />
+          </Section>
         </View>
       </Animated.ScrollView>
       <ProfileStickyBar scrollY={scrollY} topInset={insets.top} userName={userName} />

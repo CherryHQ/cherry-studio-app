@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +15,6 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
-import { SettingsSection } from './components/SettingsSection';
 
 const MODEL_SETTING_ICONS = {
   default: '⭐',
@@ -48,15 +48,17 @@ export default function ModelSettingsScreen() {
   const items = useMemo(
     () =>
       MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
-        accessory: (
+        label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
+        leading: (
+          <Text className="min-w-5 text-center text-emoji-xl">{MODEL_SETTING_ICONS[kind]}</Text>
+        ),
+        onPress: () => setOpenKind(kind),
+        trailing: (
           <SelectedModelAccessory
             item={modelPickerData.getModelItem(modelSettings.selections[kind])}
             placeholder={t('settings.select.placeholder')}
           />
         ),
-        iconEmoji: MODEL_SETTING_ICONS[kind],
-        title: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
-        onPress: () => setOpenKind(kind),
       })),
     [modelPickerData, modelSettings.selections, t],
   );
@@ -72,7 +74,9 @@ export default function ModelSettingsScreen() {
       >
         <View className="gap-6 px-4 py-5">
           {items.map((item) => (
-            <SettingsSection key={item.title} items={[item]} />
+            <Section key={item.label}>
+              <Section.Item {...item} />
+            </Section>
           ))}
         </View>
       </ScrollView>
@@ -98,10 +102,10 @@ function SelectedModelAccessory({
 }) {
   return (
     <View className="max-w-[62%] flex-row items-center justify-end gap-1">
-      <Text className="min-w-0 shrink text-right text-default-foreground text-sm" numberOfLines={1}>
+      <Text className="min-w-0 shrink text-right text-foreground text-sm" numberOfLines={1}>
         {item?.model.name ?? placeholder}
       </Text>
-      <ChevronRightIcon className="size-6 text-default-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-6 text-foreground" strokeWidth={2} />
     </View>
   );
 }

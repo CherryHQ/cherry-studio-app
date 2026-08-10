@@ -8,19 +8,8 @@ let mockScopeTabsProps:
   | { onScopeChange: (scope: 'conversations' | 'drawings') => void; scope: string }
   | undefined;
 
-jest.mock('heroui-native/menu', () => {
-  const { Text: MockText, View: MockView } = jest.requireActual('react-native');
-  const Passthrough = ({ children }: { children?: ReactNode }) => children;
-  const Menu = Object.assign(Passthrough, {
-    Content: Passthrough,
-    Item: ({ children, ...props }: { children?: ReactNode }) => (
-      <MockView {...props}>{children}</MockView>
-    ),
-    ItemTitle: MockText,
-    Overlay: () => null,
-    Portal: Passthrough,
-    Trigger: Passthrough,
-  });
+jest.mock('@cherrystudio/ui/components', () => {
+  const Menu = ({ children }: { children: ReactNode }) => children;
 
   return { Menu };
 });
@@ -59,6 +48,7 @@ describe('MessageHeader', () => {
   let renderer: ReactTestRenderer | undefined;
   const onScopeChange = jest.fn();
   const defaultProps = {
+    isEditDisabled: false,
     isEditing: false,
     onEditPress: jest.fn(),
     onNewPaintingPress: jest.fn(),
@@ -121,5 +111,21 @@ describe('MessageHeader', () => {
     expect(
       renderer.root.findAllByType(Text).some((item) => item.props.children === 'Your drawings'),
     ).toBe(true);
+  });
+
+  it('disables editing while a deletion is pending', async () => {
+    await act(async () => {
+      renderer = create(<MessageHeader {...defaultProps} isEditDisabled />);
+    });
+
+    if (!renderer) {
+      throw new Error('MessageHeader test renderer was not created.');
+    }
+
+    const editButton = renderer.root.find(
+      (node) => node.props.accessibilityState?.disabled === true,
+    );
+    expect(editButton.props.disabled).toBe(true);
+    expect(editButton.props.className).toContain('disabled:opacity-35');
   });
 });

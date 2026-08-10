@@ -1,23 +1,97 @@
-import type { AddModelInput, ModelListQuery, ModelSchemas } from '@/shared/data/api/schemas/models';
-import type { HandlersFor } from '@/shared/data/api/types';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import {
+  BulkUpdateModelsSchema,
+  CreateModelsSchema,
+  DeleteModelsQuerySchema,
+  ListModelsQuerySchema,
+  type ModelSchemas,
+  ReconcileProviderModelsSchema,
+  ResolveProviderModelsQuerySchema,
+  UpdateModelSchema,
+} from '@cherrystudio/universal/data/api/schemas/models';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 
-export type ModelData = {
-  add(inputs: readonly AddModelInput[]): Promise<Model[]>;
-  get(id: UniqueModelId): Promise<Model | null>;
-  list(query?: ModelListQuery): Promise<Model[]>;
-  remove(id: UniqueModelId): Promise<boolean>;
-};
+import type { ModelService } from '@/backend/data/services/ModelService';
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 
-export function createModelHandlers(service: ModelData): HandlersFor<ModelSchemas> {
+function parseUniqueId(uniqueModelId: string) {
+  if (!isUniqueModelId(uniqueModelId)) {
+    throw DataApiErrorFactory.validation({
+      uniqueModelId: [`Expected "providerId::modelId", got "${uniqueModelId}"`],
+    });
+  }
+  return parseUniqueModelId(uniqueModelId);
+}
+
+export function createModelHandlers(service: ModelService): HandlersFor<ModelSchemas> {
   return {
     '/models': {
-      GET: ({ query }) => service.list(query),
-      POST: ({ body }) => service.add(body),
+      DELETE: async ({ query }) => {
+        const parsed = DeleteModelsQuerySchema.parse(query);
+        await service.bulkDelete(parsed.ids.map(parseUniqueId));
+      },
+      GET: async ({ query }) => service.list(ListModelsQuerySchema.parse(query ?? {})),
+      PATCH: async ({ body }) =>
+        service.bulkUpdate(
+          BulkUpdateModelsSchema.parse(body).map(({ patch, uniqueModelId }) => ({
+            ...parseUniqueId(uniqueModelId),
+            patch,
+          })),
+        ),
+      POST: async ({ body }) => service.createDtos(CreateModelsSchema.parse(body)),
     },
-    '/models/:id': {
-      DELETE: ({ params }) => service.remove(params.id),
-      GET: ({ params }) => service.get(params.id),
+    '/models/:uniqueModelId*': {
+      DELETE: async ({ params }) => {
+        const { modelId, providerId } = parseUniqueId(params.uniqueModelId);
+        await service.deleteByKey(providerId, modelId);
+      },
+      GET: async ({ params }) => {
+        const { modelId, providerId } = parseUniqueId(params.uniqueModelId);
+        return service.getByKey(providerId, modelId);
+      },
+      PATCH: async ({ body, params }) => {
+        const { modelId, providerId } = parseUniqueId(params.uniqueModelId);
+        return service.update(providerId, modelId, UpdateModelSchema.parse(body));
+      },
+    },
+    '/providers/:providerId/models:reconcile': {
+      POST: async ({ body, params }) => {
+        const parsed = ReconcileProviderModelsSchema.parse(body);
+        for (const model of parsed.toAdd) {
+          if (model.providerId !== params.providerId) {
+            throw DataApiErrorFactory.validation({
+              providerId: [
+                `toAdd item providerId '${model.providerId}' does not match URL providerId '${params.providerId}'`,
+              ],
+            });
+          }
+        }
+        for (const uniqueId of parsed.toRemove) {
+          if (parseUniqueId(uniqueId).providerId !== params.providerId) {
+            throw DataApiErrorFactory.validation({
+              toRemove: [
+                `'${uniqueId}' providerId does not match URL providerId '${params.providerId}'`,
+              ],
+            });
+          }
+        }
+        return service.reconcileForProvider(params.providerId, parsed);
+      },
+    },
+    '/providers/:providerId/models:resolve': {
+      GET: async ({ params, query }) => {
+        const parsed = ResolveProviderModelsQuerySchema.parse(query ?? {});
+        return providerRegistryService.resolveModels(
+          params.providerId,
+          Array.isArray(parsed.ids) ? parsed.ids : [parsed.ids],
+        );
+      },
+    },
+    '/providers/:providerId/models/:modelId*/image-generation-support': {
+      GET: async ({ params }) =>
+        providerRegistryService.getImageGenerationSupport(params.providerId, params.modelId) ??
+        null,
     },
   };
 }

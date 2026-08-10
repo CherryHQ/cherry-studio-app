@@ -1,12 +1,13 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { BellRingIcon } from 'lucide-uniwind/png';
 import type { ReactElement, ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
 import { McpToolPart } from '../McpToolPart';
 import { MetaToolPart } from '../MetaToolPart';
 import { ToolPart } from '../ToolPart';
+import { WebSearchToolPart } from '../WebSearchToolPart';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -131,6 +132,32 @@ describe('tool message detail sheets', () => {
 
     expect(findByTestID('mcp-tool-part-trigger').props.statusText).toBeUndefined();
     expect(findByTestID('mcp-tool-part-detail').props.title).toBe('Exa: search');
+  });
+
+  it('opens web search results in the shared tool detail sheet', async () => {
+    await render(
+      <WebSearchToolPart
+        part={makeToolPart({
+          input: { query: 'Cherry Studio' },
+          output: {
+            results: [{ id: 'result-1', title: 'Cherry Studio', url: 'https://cherry-ai.com' }],
+          },
+          toolName: 'builtin_web_search',
+        })}
+      />,
+    );
+
+    const trigger = findByTestID('web-search-tool-part-trigger');
+    expect(trigger.props.title).toBe('Cherry Studio');
+    expect(trigger.props.statusText).toBe('chat.webSearch.resultCount');
+    expect(findAllByTestID('web-search-tool-part-detail')).toHaveLength(0);
+
+    await act(async () => {
+      trigger.props.onPress();
+    });
+
+    expect(findByTestID('web-search-tool-part-detail').props.title).toBe('Cherry Studio');
+    expect(findText('Cherry Studio')).not.toHaveLength(0);
   });
 
   it.each([

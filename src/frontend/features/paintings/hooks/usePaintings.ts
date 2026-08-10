@@ -1,10 +1,16 @@
+import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
+  type InfiniteData,
   keepPreviousData,
   useQueryClient,
   useQuery as useTanStackQuery,
 } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useCallback, useMemo } from 'react';
+
+import type { ComposerAttachmentReady } from '@/frontend/components/composer/utils/composerAttachments';
 import {
   queryKeys,
   useBackendModule,
@@ -12,21 +18,26 @@ import {
   useMutation,
   useQuery,
 } from '@/frontend/data';
-import type { ChatInputAttachmentDraft } from '@/frontend/features/chat/input/utils/chatInputAttachments';
-import { imageMediaTypeFromExtension } from '@/shared/data/types/file';
-import type { Painting } from '@/shared/data/types/painting';
+import {
+  dataApiCollectionFilters,
+  removeItemsFromInfiniteData,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
+import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
 const pageSize = 20;
+type PaintingListData = InfiniteData<CursorPaginationResponse<Painting>, string | undefined>;
 
 export type PaintingGalleryItem = {
   aspectRatio: number;
-  fileEntryId: string;
+  fileEntryId: FileEntryId;
   key: string;
   painting: Painting;
   uri: string;
 };
 
-export type ResolvedPaintingAttachment = ChatInputAttachmentDraft & { fileEntryId: string };
+export type ResolvedPaintingAttachment = ComposerAttachmentReady;
 
 export type ResolvedPaintingFiles = {
   inputs: ResolvedPaintingAttachment[];
@@ -55,7 +66,26 @@ export function usePaintingIds({ enabled }: { enabled: boolean }) {
 export function useDeletePaintings() {
   const queryClient = useQueryClient();
   const mutation = useMutation('DELETE', '/paintings', {
-    refresh: ['/paintings'],
+    onMutate: async (variables) => {
+      const ids = new Set(variables?.query?.ids ?? []);
+      const paintings = await updateQueriesOptimistically<PaintingListData>(
+        queryClient,
+        dataApiCollectionFilters('/paintings'),
+        (current) => removeItemsFromInfiniteData(current, ids),
+      );
+      const paintingIds = await updateQueriesOptimistically<string[]>(
+        queryClient,
+        { exact: true, queryKey: ['/paintings/ids'] },
+        (current) => current?.filter((id) => !ids.has(id)),
+      );
+
+      return { paintingIds, paintings };
+    },
+    onError: (_error, _variables, context) => {
+      restoreQuerySnapshot(queryClient, context?.paintingIds);
+      restoreQuerySnapshot(queryClient, context?.paintings);
+    },
+    refresh: ['/paintings', '/paintings/ids'],
   });
   const deletePaintings = mutation.trigger;
 
@@ -102,6 +132,7 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
           mediaType,
           name: entry.ext ? `${entry.name}.${entry.ext}` : entry.name,
           size: entry.origin === 'internal' ? entry.size : undefined,
+          status: 'ready' as const,
           uri,
         };
       };

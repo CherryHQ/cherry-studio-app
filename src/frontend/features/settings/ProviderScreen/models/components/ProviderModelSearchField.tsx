@@ -1,6 +1,6 @@
-import { SearchField } from 'heroui-native/search-field';
+import { SearchField } from '@cherrystudio/ui';
+import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet } from 'react-native';
 
 export function ProviderModelSearchField({
   searchText,
@@ -11,31 +11,29 @@ export function ProviderModelSearchField({
 }) {
   const { t } = useTranslation();
 
+  if (process.env.EXPO_OS === 'ios') {
+    return (
+      <Stack.SearchBar
+        autoCapitalize="none"
+        hideNavigationBar={false}
+        hideWhenScrolling={false}
+        obscureBackground={false}
+        placeholder={t('navigation.search')}
+        placement="stacked"
+        onCancelButtonPress={() => setSearchText('')}
+        onChangeText={(event) => setSearchText(event.nativeEvent.text)}
+      />
+    );
+  }
+
   return (
-    <SearchField className="w-full" onChange={setSearchText} value={searchText}>
-      <SearchField.Group className="h-10 rounded-xl bg-settings-grouped-surface">
-        <SearchField.SearchIcon iconProps={{ size: 18 }} />
-        <SearchField.Input
-          accessibilityLabel={t('navigation.search')}
-          autoCapitalize="none"
-          autoComplete="off"
-          autoCorrect={false}
-          className="h-10 min-h-10 rounded-xl border-0 bg-transparent py-0 pl-9 pr-10 text-base leading-5"
-          placeholder={t('navigation.search')}
-          returnKeyType="search"
-          spellCheck={false}
-          style={styles.searchInput}
-          textContentType="none"
-        />
-        <SearchField.ClearButton accessibilityLabel={t('common.clear')} className="right-1" />
-      </SearchField.Group>
-    </SearchField>
+    <SearchField
+      accessibilityLabel={t('navigation.search')}
+      clearAccessibilityLabel={t('common.clear')}
+      onChangeText={setSearchText}
+      onClear={() => setSearchText('')}
+      placeholder={t('navigation.search')}
+      value={searchText}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  searchInput: {
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
-});

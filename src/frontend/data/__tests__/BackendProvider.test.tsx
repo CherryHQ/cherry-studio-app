@@ -1,11 +1,11 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { Backend, ProfileBackend } from '@/shared/contracts';
+import type { Backend, ProfileModule } from '@/shared/contracts';
 
 import { BackendProvider, useBackendModule } from '../BackendProvider';
 
-const profile = { resolveAvatar: jest.fn() } as unknown as ProfileBackend;
+const profile = { resolveAvatar: jest.fn() } as unknown as ProfileModule;
 const backend = { profile } as unknown as Backend;
 
 function ProfileModuleProbe() {

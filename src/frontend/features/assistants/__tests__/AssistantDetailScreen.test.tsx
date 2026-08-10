@@ -1,14 +1,16 @@
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/universal/data/types/assistant';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import AssistantDetailScreen from '../AssistantDetailScreen';
 
 type HeaderAction = { key: string; label?: string; onPress?: () => void };
 
 const mockPush = jest.fn();
 const mockDismissTo = jest.fn();
-const mockSetBottomTabBarHidden = jest.fn();
 let mockAssistantId: string | undefined;
 let mockAssistant: Assistant | undefined;
 let mockError: Error | undefined;
@@ -45,7 +47,7 @@ jest.mock('@/frontend/components/headers', () => ({
   },
 }));
 
-jest.mock('heroui-native/button', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { Pressable: MockPressable } = jest.requireActual('react-native');
 
   return { Button: MockPressable };
@@ -58,10 +60,6 @@ jest.mock('react-native-safe-area-context', () => ({
 jest.mock('@/frontend/components/modelPicker', () => ({
   ModelPickerIcon: () => null,
   useModelPickerData: () => ({ getModelItem: () => mockModelItem }),
-}));
-
-jest.mock('@/frontend/components/navigation', () => ({
-  useSetBottomTabBarHidden: () => mockSetBottomTabBarHidden,
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
@@ -90,6 +88,7 @@ function makeAssistant(overrides: Partial<Assistant> = {}): Assistant {
     createdAt: '2026-07-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
+    groupId: null,
     id: 'assistant-1',
     knowledgeBaseIds: [],
     mcpServerIds: [],
@@ -154,16 +153,15 @@ describe('AssistantDetailScreen', () => {
     expect(texts).toContain('GPT-5 Pro');
   });
 
-  it('hides the bottom tabs while the detail screen is mounted', async () => {
+  it('scales the emoji with the global typography scale without a fixed line height', async () => {
     mockAssistant = makeAssistant();
 
-    await render();
-    expect(mockSetBottomTabBarHidden).toHaveBeenCalledWith(true);
+    const tree = await render();
+    const emoji = tree.root.findAllByType(Text).find((node) => node.props.children === '🌟');
 
-    await act(async () => renderer?.unmount());
-    renderer = undefined;
-
-    expect(mockSetBottomTabBarHidden).toHaveBeenLastCalledWith(false);
+    expect(emoji?.props.className).toContain('text-emoji-6xl');
+    expect(emoji?.props.style).toBeUndefined();
+    expect(emoji?.props.allowFontScaling).not.toBe(false);
   });
 
   it('falls back to the stored model name when the model left the catalog', async () => {

@@ -1,6 +1,8 @@
+import { REASONING_EFFORT } from '@cherrystudio/universal/data/types/model';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
-import { REASONING_EFFORT } from '@/shared/data/types/model';
+
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
 import type { PinService } from '../PinService';
@@ -227,7 +229,7 @@ describe('ModelService', () => {
     expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', result.removedIds);
   });
 
-  test('does not persist remote ownedBy during reconcile', async () => {
+  test('derives remote ownedBy without persisting it during reconcile', async () => {
     const dbService = {
       withWriteTx: jest.fn(async (callback) => callback({})),
     } as unknown as DbService;
@@ -250,7 +252,9 @@ describe('ModelService', () => {
       modelId: 'anthropic/claude-sonnet-4-5',
       providerId: 'cherryin',
     });
-    expect(result.added[0]).not.toHaveProperty('ownedBy');
+    expect(result.added[0]).toHaveProperty('ownedBy', 'anthropic');
+    const insertedValues = jest.mocked(insertManyWithOrderKey).mock.calls.at(-1)?.[2];
+    expect(insertedValues?.[0]).not.toHaveProperty('ownedBy');
   });
 
   test('creates standalone registry override models through synthesized presets', async () => {

@@ -1,4 +1,7 @@
-import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
+import type {
+  PermissionMode,
+  PermissionPreferenceKey,
+} from '@cherrystudio/universal/data/preference';
 
 export type DevicePermission = 'calendar' | 'health' | 'location' | 'reminders';
 export type DevicePermissionAccess = 'read' | 'write';
@@ -10,7 +13,7 @@ export type SetPermissionPolicyResult = {
   status: SystemPermissionState;
 };
 
-export interface PermissionsBackend {
+export interface PermissionsModule {
   getStatuses(keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses>;
   openSystemSettings(permission?: DevicePermission): Promise<void>;
   recover(keys: readonly PermissionPreferenceKey[]): Promise<PermissionStatuses>;

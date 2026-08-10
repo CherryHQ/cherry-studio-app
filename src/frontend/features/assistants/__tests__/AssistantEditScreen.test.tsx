@@ -1,8 +1,11 @@
+import {
+  type Assistant,
+  DEFAULT_ASSISTANT_SETTINGS,
+} from '@cherrystudio/universal/data/types/assistant';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
-import type { UniqueModelId } from '@/shared/data/types/model';
 import AssistantEditScreen from '../AssistantEditScreen';
 
 const nameFieldLabel = 'assistant.form.name';
@@ -11,36 +14,41 @@ let mockAssistantId: string | undefined;
 let mockAssistant: Assistant | undefined;
 let mockIsLoading: boolean;
 let mockDefaultModelPreference: string | null;
+let mockHeaderActions: { onPress?: () => void }[];
 let mockResolvableModelIds: string[];
 let mockPickerSelectedModelIds: (UniqueModelId | null)[];
+const mockCreateAssistant = jest.fn();
+const mockRouterBack = jest.fn();
+const mockAlertShow = jest.fn();
+const mockUpdateAssistant = jest.fn();
 
 jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ assistantId: mockAssistantId }),
-  useRouter: () => ({ back: jest.fn() }),
+  useRouter: () => ({ back: mockRouterBack }),
 }));
 
 jest.mock('@/frontend/components/headers', () => ({
-  BackHeader: () => null,
+  BackHeader: ({ rightActions = [] }: { rightActions?: { onPress?: () => void }[] }) => {
+    mockHeaderActions = rightActions;
+    return null;
+  },
 }));
 
-jest.mock('heroui-native/input', () => {
-  const { TextInput } = jest.requireActual('react-native');
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+  const { Text, TextInput, View } = jest.requireActual('react-native');
 
-  return { Input: TextInput };
+  return {
+    Description: Text,
+    Input: TextInput,
+    Label: Text,
+    Switch: (props: Record<string, unknown>) => React.createElement('MockSwitch', props),
+    TextField: View,
+  };
 });
 
-jest.mock('heroui-native/text-area', () => {
-  const { TextInput } = jest.requireActual('react-native');
-
-  return { TextArea: TextInput };
-});
-
-jest.mock('heroui-native/switch', () => ({
-  Switch: () => null,
-}));
-
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('lucide-uniwind/png', () => ({
@@ -71,6 +79,13 @@ jest.mock('@/frontend/components/modelPicker', () => ({
   }),
 }));
 
+jest.mock('@/frontend/components/selectionSheet', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    SingleSelectionSheet: (props: object) => createElement('SingleSelectionSheet', props),
+  };
+});
+
 jest.mock('@/frontend/data/hooks', () => ({
   usePreference: () => [mockDefaultModelPreference, jest.fn()],
 }));
@@ -78,19 +93,15 @@ jest.mock('@/frontend/data/hooks', () => ({
 jest.mock('@/frontend/hooks/chat', () => ({
   useAssistantApiById: () => ({ assistant: mockAssistant, isLoading: mockIsLoading }),
   useAssistantMutations: () => ({
-    createAssistant: jest.fn(),
+    createAssistant: mockCreateAssistant,
     isCreating: false,
     isUpdating: false,
-    updateAssistant: jest.fn(),
+    updateAssistant: mockUpdateAssistant,
   }),
 }));
 
 jest.mock('@/frontend/hooks/mcp/useMcpServers', () => ({
   useMcpServersApi: () => ({ servers: [] }),
-}));
-
-jest.mock('@/frontend/features/settings/components/SettingSelect', () => ({
-  SettingSelect: () => null,
 }));
 
 jest.mock('../components/EmojiPickerBottomSheet', () => ({
@@ -116,6 +127,35 @@ describe('AssistantEditScreen', () => {
     return renderer?.root.findAll((node) => node.props?.accessibilityLabel === nameFieldLabel);
   }
 
+  function field(accessibilityLabel: string) {
+    return (
+      renderer?.root.findAll((node) => node.props?.accessibilityLabel === accessibilityLabel) ?? []
+    );
+  }
+
+  function switchControl(accessibilityLabel: string) {
+    if (!renderer) {
+      throw new Error('Assistant edit screen was not rendered.');
+    }
+
+    return renderer.root.find(
+      (node) => node.type === 'MockSwitch' && node.props.accessibilityLabel === accessibilityLabel,
+    );
+  }
+
+  async function save() {
+    const saveAction = mockHeaderActions.find((action) => action.onPress);
+    if (!saveAction?.onPress) {
+      throw new Error('Save action was not rendered.');
+    }
+
+    await act(async () => {
+      saveAction.onPress?.();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
   function typeName(value: string) {
     act(() => {
       nameField()?.[0]?.props.onChangeText(value);
@@ -127,8 +167,15 @@ describe('AssistantEditScreen', () => {
     mockAssistant = undefined;
     mockIsLoading = true;
     mockDefaultModelPreference = null;
+    mockHeaderActions = [];
     mockResolvableModelIds = [];
     mockPickerSelectedModelIds = [];
+    mockCreateAssistant.mockReset();
+    mockCreateAssistant.mockResolvedValue(undefined);
+    mockRouterBack.mockReset();
+    mockAlertShow.mockReset();
+    mockUpdateAssistant.mockReset();
+    mockUpdateAssistant.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -187,6 +234,125 @@ describe('AssistantEditScreen', () => {
 
     expect(mockPickerSelectedModelIds.at(-1)).toBeNull();
   });
+
+  it('loads streaming and tool call controls from assistant settings', () => {
+    mockAssistant = makeAssistant({
+      settings: {
+        ...DEFAULT_ASSISTANT_SETTINGS,
+        enableMaxToolCalls: true,
+        maxToolCalls: 7,
+        streamOutput: false,
+      },
+    });
+    mockIsLoading = false;
+
+    render();
+
+    expect(switchControl('assistant.form.streamOutput').props.value).toBe(false);
+    expect(switchControl('assistant.form.enableMaxToolCalls').props.value).toBe(true);
+    expect(field('assistant.form.maxToolCalls')[0]?.props.value).toBe('7');
+  });
+
+  it('shows the max tool calls field only while its limit is enabled', () => {
+    mockAssistant = makeAssistant({
+      settings: {
+        ...DEFAULT_ASSISTANT_SETTINGS,
+        enableMaxToolCalls: false,
+        maxToolCalls: 12,
+      },
+    });
+    mockIsLoading = false;
+    render();
+
+    expect(field('assistant.form.maxToolCalls')).toEqual([]);
+
+    act(() => {
+      switchControl('assistant.form.enableMaxToolCalls').props.onValueChange(true);
+    });
+
+    expect(field('assistant.form.maxToolCalls')[0]?.props.value).toBe('12');
+  });
+
+  it('persists streaming and max tool call settings', async () => {
+    mockAssistant = makeAssistant();
+    mockIsLoading = false;
+    render();
+
+    act(() => {
+      switchControl('assistant.form.streamOutput').props.onValueChange(false);
+      field('assistant.form.maxToolCalls')[0]?.props.onChangeText('35');
+    });
+    await save();
+
+    expect(mockUpdateAssistant).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        settings: expect.objectContaining({
+          enableMaxToolCalls: true,
+          maxToolCalls: 35,
+          streamOutput: false,
+        }),
+      }),
+    );
+    expect(mockRouterBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('selects the MCP mode from a sheet and persists it', async () => {
+    mockAssistant = makeAssistant();
+    mockIsLoading = false;
+    render();
+
+    const mcpModeButton = renderer!.root.find(
+      (node) =>
+        node.props.accessibilityLabel === 'assistant.form.mcpMode.label' &&
+        node.props.accessibilityRole === 'button',
+    );
+    act(() => mcpModeButton.props.onPress());
+
+    let sheet = renderer!.root.findByType('SingleSelectionSheet');
+    expect(sheet.props.heightFraction).toBe(0.6);
+    expect(sheet.props.isOpen).toBe(true);
+    expect(sheet.props.selectedValue).toBe('auto');
+
+    act(() => sheet.props.onSelect('manual'));
+    sheet = renderer!.root.findByType('SingleSelectionSheet');
+    expect(sheet.props.selectedValue).toBe('manual');
+
+    await save();
+
+    expect(mockUpdateAssistant).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ settings: expect.objectContaining({ mcpMode: 'manual' }) }),
+    );
+  });
+
+  it('rejects a non-positive max tool call value', async () => {
+    mockAssistant = makeAssistant();
+    mockIsLoading = false;
+    render();
+
+    act(() => {
+      field('assistant.form.maxToolCalls')[0]?.props.onChangeText('0');
+    });
+    await save();
+
+    expect(mockUpdateAssistant).not.toHaveBeenCalled();
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'assistant.form.maxToolCallsInvalid',
+    });
+  });
+
+  it('shows an alert when saving fails', async () => {
+    mockAssistant = makeAssistant();
+    mockIsLoading = false;
+    mockUpdateAssistant.mockRejectedValueOnce(new Error('Save failed'));
+    render();
+
+    await save();
+
+    expect(mockRouterBack).not.toHaveBeenCalled();
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'assistant.toast.saveFailed' });
+  });
 });
 
 function makeAssistant(overrides: Partial<Assistant> = {}): Assistant {
@@ -194,6 +360,7 @@ function makeAssistant(overrides: Partial<Assistant> = {}): Assistant {
     createdAt: '2026-07-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
+    groupId: null,
     id: 'assistant-1',
     knowledgeBaseIds: [],
     mcpServerIds: [],

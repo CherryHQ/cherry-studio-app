@@ -1,38 +1,42 @@
-import { AnthropicMessagesLanguageModel } from '@ai-sdk/anthropic/internal';
-import { GoogleGenerativeAILanguageModel } from '@ai-sdk/google/internal';
-import type { OpenAIProviderSettings } from '@ai-sdk/openai';
+import { AnthropicMessagesLanguageModel } from '@ai-sdk/anthropic/internal'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { GoogleGenerativeAILanguageModel } from '@ai-sdk/google/internal'
+import type { OpenAIProviderSettings } from '@ai-sdk/openai'
 import {
   OpenAICompletionLanguageModel,
   OpenAIEmbeddingModel,
   OpenAIImageModel,
   OpenAIResponsesLanguageModel,
   OpenAISpeechModel,
-  OpenAITranscriptionModel,
-} from '@ai-sdk/openai/internal';
-import { OpenAICompatibleChatLanguageModel } from '@ai-sdk/openai-compatible';
+  OpenAITranscriptionModel
+} from '@ai-sdk/openai/internal'
+import { OpenAICompatibleChatLanguageModel, OpenAICompatibleImageModel } from '@ai-sdk/openai-compatible'
 import {
   type EmbeddingModelV3,
   type ImageModelV3,
+  type JSONValue,
   type LanguageModelV3,
   type ProviderV3,
+  type RerankingModelV3,
   type SpeechModelV3,
-  type TranscriptionModelV3,
-} from '@ai-sdk/provider';
-import type { FetchFunction } from '@ai-sdk/provider-utils';
-import { loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils';
+  type TranscriptionModelV3
+} from '@ai-sdk/provider'
+import { type FetchFunction, loadApiKey, withoutTrailingSlash } from '@ai-sdk/provider-utils'
 
-export const CHERRYIN_PROVIDER_NAME = 'cherryin' as const;
-export const DEFAULT_CHERRYIN_BASE_URL = 'https://open.cherryin.net/v1';
-export const DEFAULT_CHERRYIN_ANTHROPIC_BASE_URL = 'https://open.cherryin.net/v1';
-export const DEFAULT_CHERRYIN_GEMINI_BASE_URL = 'https://open.cherryin.net/v1beta/models';
+import { OpenAICompatibleRerankingModel } from './openai-compatible-reranking-model'
 
-const ANTHROPIC_PREFIX = /^anthropic\//i;
-const GEMINI_PREFIX = /^google\//i;
+export const CHERRYIN_PROVIDER_NAME = 'cherryin' as const
+export const DEFAULT_CHERRYIN_BASE_URL = 'https://open.cherryin.net/v1'
+export const DEFAULT_CHERRYIN_ANTHROPIC_BASE_URL = 'https://open.cherryin.net/v1'
+export const DEFAULT_CHERRYIN_GEMINI_BASE_URL = 'https://open.cherryin.net/v1beta/models'
+
+const ANTHROPIC_PREFIX = /^anthropic\//i
+const GEMINI_PREFIX = /^google\//i
 // const GEMINI_EXCLUDED_SUFFIXES = ['-nothink', '-search']
 
-type HeaderValue = string | undefined;
+type HeaderValue = string | undefined
 
-type HeadersInput = Record<string, HeaderValue> | (() => Record<string, HeaderValue>);
+type HeadersInput = Record<string, HeaderValue> | (() => Record<string, HeaderValue>)
 
 export interface CherryInProviderSettings {
   /**
@@ -40,129 +44,198 @@ export interface CherryInProviderSettings {
    *
    * If omitted, the provider will read the `CHERRYIN_API_KEY` environment variable.
    */
-  apiKey?: string;
+  apiKey?: string
   /**
    * Optional custom fetch implementation.
    */
-  fetch?: FetchFunction;
+  fetch?: FetchFunction
   /**
    * Base URL for OpenAI-compatible CherryIN endpoints.
    *
    * Defaults to `https://open.cherryin.net/v1`.
    */
-  baseURL?: string;
+  baseURL?: string
   /**
    * Base URL for Anthropic-compatible endpoints.
    *
    * Defaults to `https://open.cherryin.net/anthropic`.
    */
-  anthropicBaseURL?: string;
+  anthropicBaseURL?: string
   /**
    * Base URL for Gemini-compatible endpoints.
    *
    * Defaults to `https://open.cherryin.net/gemini/v1beta`.
    */
-  geminiBaseURL?: string;
+  geminiBaseURL?: string
   /**
    * Optional static headers applied to every request.
    */
-  headers?: HeadersInput;
+  headers?: HeadersInput
   /**
    * Optional endpoint type to distinguish different endpoint behaviors.
    * "image-generation" is also openai endpoint, but specifically for image generation.
    */
-  endpointType?:
-    | 'openai'
-    | 'openai-response'
-    | 'anthropic'
-    | 'gemini'
-    | 'image-generation'
-    | 'jina-rerank';
+  endpointType?: 'openai' | 'openai-response' | 'anthropic' | 'gemini' | 'image-generation' | 'jina-rerank'
 }
 
 export interface CherryInProvider extends ProviderV3 {
-  (modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3;
-  languageModel(modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3;
-  chat(modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3;
-  responses(modelId: string): LanguageModelV3;
-  completion(modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3;
-  embedding(modelId: string, settings?: OpenAIProviderSettings): EmbeddingModelV3;
-  image(modelId: string, settings?: OpenAIProviderSettings): ImageModelV3;
-  imageModel(modelId: string, settings?: OpenAIProviderSettings): ImageModelV3;
-  transcription(modelId: string): TranscriptionModelV3;
-  transcriptionModel(modelId: string): TranscriptionModelV3;
-  speech(modelId: string): SpeechModelV3;
-  speechModel(modelId: string): SpeechModelV3;
+  (modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3
+  languageModel(modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3
+  chat(modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3
+  responses(modelId: string): LanguageModelV3
+  completion(modelId: string, settings?: OpenAIProviderSettings): LanguageModelV3
+  embedding(modelId: string, settings?: OpenAIProviderSettings): EmbeddingModelV3
+  image(modelId: string, settings?: OpenAIProviderSettings): ImageModelV3
+  imageModel(modelId: string, settings?: OpenAIProviderSettings): ImageModelV3
+  transcription(modelId: string): TranscriptionModelV3
+  transcriptionModel(modelId: string): TranscriptionModelV3
+  speech(modelId: string): SpeechModelV3
+  speechModel(modelId: string): SpeechModelV3
+  rerankingModel(modelId: string): RerankingModelV3
 }
 
 const resolveApiKey = (options: CherryInProviderSettings): string =>
   loadApiKey({
     apiKey: options.apiKey,
     environmentVariableName: 'CHERRYIN_API_KEY',
-    description: 'CherryIN',
-  });
+    description: 'CherryIN'
+  })
 
-const isAnthropicModel = (modelId: string) => ANTHROPIC_PREFIX.test(modelId);
-const isGeminiModel = (modelId: string) => GEMINI_PREFIX.test(modelId);
+const isAnthropicModel = (modelId: string) => ANTHROPIC_PREFIX.test(modelId)
+const isGeminiModel = (modelId: string) => GEMINI_PREFIX.test(modelId)
+const isQwenImageModel = (modelId: string) => {
+  const normalized = modelId.toLowerCase()
+  return normalized.includes('qwen') && normalized.includes('image')
+}
+const stripGooglePrefix = (modelId: string) => modelId.replace(/^google\//i, '')
+const isGoogleImageModel = (modelId: string) => {
+  const normalized = stripGooglePrefix(modelId).toLowerCase()
+  return normalized.startsWith('imagen-') || (normalized.startsWith('gemini-') && normalized.includes('image'))
+}
+const isGoogleGeminiImageModel = (modelId: string) => stripGooglePrefix(modelId).toLowerCase().startsWith('gemini-')
 
 const createCustomFetch = (originalFetch?: any) => {
   return async (url: string, options: any) => {
     if (options?.body) {
       try {
-        const body = JSON.parse(options.body);
-        if (
-          body.tools &&
-          Array.isArray(body.tools) &&
-          body.tools.length === 0 &&
-          body.tool_choice
-        ) {
-          delete body.tool_choice;
-          options.body = JSON.stringify(body);
+        const body = JSON.parse(options.body)
+        if (body.tools && Array.isArray(body.tools) && body.tools.length === 0 && body.tool_choice) {
+          delete body.tool_choice
+          options.body = JSON.stringify(body)
         }
       } catch (error) {
         // ignore error
       }
     }
 
-    return originalFetch ? originalFetch(url, options) : fetch(url, options);
-  };
-};
+    return originalFetch ? originalFetch(url, options) : fetch(url, options)
+  }
+}
 class CherryInOpenAIChatLanguageModel extends OpenAICompatibleChatLanguageModel {
   constructor(modelId: string, settings: any) {
     super(modelId, {
       ...settings,
-      fetch: createCustomFetch(settings.fetch),
-    });
+      fetch: createCustomFetch(settings.fetch)
+    })
   }
 }
 
 const resolveConfiguredHeaders = (headers?: HeadersInput): Record<string, HeaderValue> => {
   if (typeof headers === 'function') {
-    return { ...headers() };
+    return { ...headers() }
   }
-  return headers ? { ...headers } : {};
-};
+  return headers ? { ...headers } : {}
+}
 
-const toBearerToken = (authorization?: string) =>
-  authorization ? authorization.replace(/^Bearer\s+/i, '') : undefined;
+const toBearerToken = (authorization?: string) => (authorization ? authorization.replace(/^Bearer\s+/i, '') : undefined)
 
-const createJsonHeadersGetter = (
-  options: CherryInProviderSettings,
-): (() => Record<string, HeaderValue>) => {
+const normalizePersonGeneration = (value: unknown) => {
+  if (typeof value !== 'string') return undefined
+  switch (value.toUpperCase()) {
+    case 'ALLOW_ALL':
+      return 'allow_all'
+    case 'ALLOW_ADULT':
+      return 'allow_adult'
+    case 'DONT_ALLOW':
+      return 'dont_allow'
+    default:
+      return value
+  }
+}
+
+const normalizeAspectRatio = (value: unknown): `${number}:${number}` | undefined => {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.replace(/^ASPECT_/i, '').replace('_', ':')
+  return /^\d+:\d+$/.test(normalized) ? (normalized as `${number}:${number}`) : undefined
+}
+
+const normalizeImageSize = (value: unknown) => {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.toUpperCase()
+  return ['512', '1K', '2K', '4K'].includes(normalized) ? normalized : undefined
+}
+
+const withGoogleImageOptions = (model: ImageModelV3, providerKey: string, isGeminiImage: boolean): ImageModelV3 => ({
+  specificationVersion: model.specificationVersion,
+  provider: model.provider,
+  modelId: model.modelId,
+  maxImagesPerCall: model.maxImagesPerCall,
+  doGenerate(options) {
+    const providerOptions = options.providerOptions ?? {}
+    const source = {
+      ...(providerOptions.openai as Record<string, unknown> | undefined),
+      ...(providerOptions[providerKey] as Record<string, unknown> | undefined)
+    } as Record<string, unknown>
+    const existingGoogle = (providerOptions.google ?? {}) as Record<string, unknown>
+    const existingImageConfig = (existingGoogle.imageConfig ?? {}) as Record<string, unknown>
+
+    const aspectRatio =
+      options.aspectRatio ??
+      normalizeAspectRatio(options.size) ??
+      normalizeAspectRatio(source.aspectRatio ?? source.aspect_ratio)
+    const personGeneration = normalizePersonGeneration(source.personGeneration ?? source.person_generation)
+    const imageSize = normalizeImageSize(
+      source.imageResolution ?? source.imageSize ?? source.image_size ?? source.resolution
+    )
+
+    const googleOptions: Record<string, unknown> = {
+      ...(aspectRatio ? { aspectRatio } : {}),
+      ...(personGeneration ? { personGeneration } : {}),
+      ...existingGoogle
+    }
+
+    if (isGeminiImage && (aspectRatio || imageSize || Object.keys(existingImageConfig).length > 0)) {
+      googleOptions.imageConfig = {
+        ...existingImageConfig,
+        ...(aspectRatio ? { aspectRatio } : {}),
+        ...(imageSize ? { imageSize } : {})
+      }
+    }
+
+    return model.doGenerate({
+      ...options,
+      ...(aspectRatio ? { aspectRatio, size: undefined } : {}),
+      providerOptions: {
+        ...providerOptions,
+        google: googleOptions as Record<string, JSONValue>
+      }
+    })
+  }
+})
+
+const createJsonHeadersGetter = (options: CherryInProviderSettings): (() => Record<string, HeaderValue>) => {
   return () => ({
     Authorization: `Bearer ${resolveApiKey(options)}`,
-    ...resolveConfiguredHeaders(options.headers),
-  });
-};
+    ...resolveConfiguredHeaders(options.headers)
+  })
+}
 
-const createAuthHeadersGetter = (
-  options: CherryInProviderSettings,
-): (() => Record<string, HeaderValue>) => {
+const createAuthHeadersGetter = (options: CherryInProviderSettings): (() => Record<string, HeaderValue>) => {
   return () => ({
     Authorization: `Bearer ${resolveApiKey(options)}`,
-    ...resolveConfiguredHeaders(options.headers),
-  });
-};
+    ...resolveConfiguredHeaders(options.headers)
+  })
+}
 
 export const createCherryIn = (options: CherryInProviderSettings = {}): CherryInProvider => {
   const {
@@ -170,49 +243,48 @@ export const createCherryIn = (options: CherryInProviderSettings = {}): CherryIn
     anthropicBaseURL = DEFAULT_CHERRYIN_ANTHROPIC_BASE_URL,
     geminiBaseURL = DEFAULT_CHERRYIN_GEMINI_BASE_URL,
     fetch,
-    endpointType,
-  } = options;
+    endpointType
+  } = options
 
-  const getJsonHeaders = createJsonHeadersGetter(options);
-  const getAuthHeaders = createAuthHeadersGetter(options);
+  const getJsonHeaders = createJsonHeadersGetter(options)
+  const getAuthHeaders = createAuthHeadersGetter(options)
 
-  const url = ({ path }: { path: string; modelId: string }) =>
-    `${withoutTrailingSlash(baseURL)}${path}`;
+  const url = ({ path }: { path: string; modelId: string }) => `${withoutTrailingSlash(baseURL)}${path}`
 
   const createAnthropicModel = (modelId: string) =>
     new AnthropicMessagesLanguageModel(modelId, {
       provider: `${CHERRYIN_PROVIDER_NAME}.anthropic`,
       baseURL: anthropicBaseURL,
       headers: () => {
-        const headers = getJsonHeaders();
-        const apiKey = toBearerToken(headers.Authorization);
+        const headers = getJsonHeaders()
+        const apiKey = toBearerToken(headers.Authorization)
         return {
           ...headers,
-          'x-api-key': apiKey,
-        };
+          'x-api-key': apiKey
+        }
       },
       fetch,
       supportedUrls: () => ({
-        'image/*': [/^https?:\/\/.*$/],
-      }),
-    });
+        'image/*': [/^https?:\/\/.*$/]
+      })
+    })
 
   const createGeminiModel = (modelId: string) =>
     new GoogleGenerativeAILanguageModel(modelId, {
       provider: `${CHERRYIN_PROVIDER_NAME}.google`,
       baseURL: geminiBaseURL,
       headers: () => {
-        const headers = getJsonHeaders();
-        const apiKey = toBearerToken(headers.Authorization);
+        const headers = getJsonHeaders()
+        const apiKey = toBearerToken(headers.Authorization)
         return {
           ...headers,
-          'x-goog-api-key': apiKey,
-        };
+          'x-goog-api-key': apiKey
+        }
       },
       fetch,
       generateId: () => `${CHERRYIN_PROVIDER_NAME}-${Date.now()}`,
-      supportedUrls: () => ({}),
-    });
+      supportedUrls: () => ({})
+    })
 
   const createOpenAIChatModel = (modelId: string, settings: OpenAIProviderSettings = {}) =>
     new CherryInOpenAIChatLanguageModel(modelId, {
@@ -220,38 +292,38 @@ export const createCherryIn = (options: CherryInProviderSettings = {}): CherryIn
       url,
       headers: () => ({
         ...getJsonHeaders(),
-        ...settings.headers,
+        ...settings.headers
       }),
-      fetch,
-    });
+      fetch
+    })
 
   const createChatModelByModelId = (modelId: string, settings: OpenAIProviderSettings = {}) => {
     if (isAnthropicModel(modelId)) {
-      return createAnthropicModel(modelId);
+      return createAnthropicModel(modelId)
     }
     if (isGeminiModel(modelId)) {
-      return createGeminiModel(modelId);
+      return createGeminiModel(modelId)
     }
     return new OpenAIResponsesLanguageModel(modelId, {
       provider: `${CHERRYIN_PROVIDER_NAME}.openai`,
       url,
       headers: () => ({
         ...getJsonHeaders(),
-        ...settings.headers,
+        ...settings.headers
       }),
-      fetch,
-    });
-  };
+      fetch
+    })
+  }
 
   const createChatModel = (modelId: string, settings: OpenAIProviderSettings = {}) => {
-    if (!endpointType) return createChatModelByModelId(modelId, settings);
+    if (!endpointType) return createChatModelByModelId(modelId, settings)
     switch (endpointType) {
       case 'anthropic':
-        return createAnthropicModel(modelId);
+        return createAnthropicModel(modelId)
       case 'gemini':
-        return createGeminiModel(modelId);
+        return createGeminiModel(modelId)
       case 'openai':
-        return createOpenAIChatModel(modelId);
+        return createOpenAIChatModel(modelId)
       case 'openai-response':
       default:
         return new OpenAIResponsesLanguageModel(modelId, {
@@ -259,12 +331,12 @@ export const createCherryIn = (options: CherryInProviderSettings = {}): CherryIn
           url,
           headers: () => ({
             ...getJsonHeaders(),
-            ...settings.headers,
+            ...settings.headers
           }),
-          fetch,
-        });
+          fetch
+        })
     }
-  };
+  }
 
   const createCompletionModel = (modelId: string, settings: OpenAIProviderSettings = {}) =>
     new OpenAICompletionLanguageModel(modelId, {
@@ -272,10 +344,10 @@ export const createCherryIn = (options: CherryInProviderSettings = {}): CherryIn
       url,
       headers: () => ({
         ...getJsonHeaders(),
-        ...settings.headers,
+        ...settings.headers
       }),
-      fetch,
-    });
+      fetch
+    })
 
   const createEmbeddingModel = (modelId: string, settings: OpenAIProviderSettings = {}) =>
     new OpenAIEmbeddingModel(modelId, {
@@ -283,74 +355,103 @@ export const createCherryIn = (options: CherryInProviderSettings = {}): CherryIn
       url,
       headers: () => ({
         ...getJsonHeaders(),
-        ...settings.headers,
+        ...settings.headers
       }),
-      fetch,
-    });
+      fetch
+    })
 
   const createResponsesModel = (modelId: string) =>
     new OpenAIResponsesLanguageModel(modelId, {
       provider: `${CHERRYIN_PROVIDER_NAME}.responses`,
       url,
       headers: () => ({
-        ...getJsonHeaders(),
+        ...getJsonHeaders()
       }),
-      fetch,
-    });
+      fetch
+    })
 
-  const createImageModel = (modelId: string, settings: OpenAIProviderSettings = {}) =>
-    new OpenAIImageModel(modelId, {
+  const createImageModel = (modelId: string, settings: OpenAIProviderSettings = {}) => {
+    if (isGoogleImageModel(modelId)) {
+      const googleProvider = createGoogleGenerativeAI({
+        apiKey: resolveApiKey(options),
+        baseURL: geminiBaseURL,
+        headers: {
+          ...resolveConfiguredHeaders(options.headers),
+          ...settings.headers
+        },
+        fetch,
+        name: `${CHERRYIN_PROVIDER_NAME}.google`
+      })
+      const isGeminiImage = isGoogleGeminiImageModel(modelId)
+      const googleImageModel = googleProvider.image(modelId)
+      return withGoogleImageOptions(googleImageModel, CHERRYIN_PROVIDER_NAME, isGeminiImage)
+    }
+
+    const config = {
       provider: `${CHERRYIN_PROVIDER_NAME}.image`,
       url,
       headers: () => ({
         ...getJsonHeaders(),
-        ...settings.headers,
+        ...settings.headers
       }),
-      fetch,
-    });
+      fetch
+    }
+    return isQwenImageModel(modelId)
+      ? new OpenAICompatibleImageModel(modelId, config)
+      : new OpenAIImageModel(modelId, config)
+  }
 
   const createTranscriptionModel = (modelId: string) =>
     new OpenAITranscriptionModel(modelId, {
       provider: `${CHERRYIN_PROVIDER_NAME}.transcription`,
       url,
       headers: () => ({
-        ...getAuthHeaders(),
+        ...getAuthHeaders()
       }),
-      fetch,
-    });
+      fetch
+    })
 
   const createSpeechModel = (modelId: string) =>
     new OpenAISpeechModel(modelId, {
       provider: `${CHERRYIN_PROVIDER_NAME}.speech`,
       url,
       headers: () => ({
-        ...getJsonHeaders(),
+        ...getJsonHeaders()
       }),
-      fetch,
-    });
+      fetch
+    })
 
-  const provider = (modelId: string, settings?: OpenAIProviderSettings) =>
-    createChatModel(modelId, settings);
-  provider.specificationVersion = 'v3' as const;
-  provider.languageModel = createChatModel;
-  provider.chat = createOpenAIChatModel;
+  const createRerankingModel = (modelId: string) =>
+    new OpenAICompatibleRerankingModel(modelId, {
+      provider: `${CHERRYIN_PROVIDER_NAME}.rerank`,
+      url,
+      headers: getJsonHeaders,
+      fetch
+    })
 
-  provider.responses = createResponsesModel;
-  provider.completion = createCompletionModel;
+  const provider = (modelId: string, settings?: OpenAIProviderSettings) => createChatModel(modelId, settings)
+  provider.specificationVersion = 'v3' as const
+  provider.languageModel = createChatModel
+  provider.chat = createOpenAIChatModel
 
-  provider.embedding = createEmbeddingModel;
-  provider.embeddingModel = createEmbeddingModel;
+  provider.responses = createResponsesModel
+  provider.completion = createCompletionModel
 
-  provider.image = createImageModel;
-  provider.imageModel = createImageModel;
+  provider.embedding = createEmbeddingModel
+  provider.embeddingModel = createEmbeddingModel
 
-  provider.transcription = createTranscriptionModel;
-  provider.transcriptionModel = createTranscriptionModel;
+  provider.image = createImageModel
+  provider.imageModel = createImageModel
 
-  provider.speech = createSpeechModel;
-  provider.speechModel = createSpeechModel;
+  provider.transcription = createTranscriptionModel
+  provider.transcriptionModel = createTranscriptionModel
 
-  return provider as CherryInProvider;
-};
+  provider.speech = createSpeechModel
+  provider.speechModel = createSpeechModel
 
-export const cherryIn = createCherryIn();
+  provider.rerankingModel = createRerankingModel
+
+  return provider as CherryInProvider
+}
+
+export const cherryIn = createCherryIn()

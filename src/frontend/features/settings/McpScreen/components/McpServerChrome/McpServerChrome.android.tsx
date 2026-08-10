@@ -45,7 +45,7 @@ export function McpServerChrome({
           disabled={isDisabled}
           onPress={onDelete}
         >
-          <Trash2Icon className="size-5 text-danger" strokeWidth={2} />
+          <Trash2Icon className="size-5 text-destructive" strokeWidth={2} />
         </Pressable>
       </View>
     </View>

@@ -1,0 +1,22 @@
+import type { AiUsageRecordSchemas } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+
+import type { AiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
+
+type AiUsageRecordData = Pick<AiUsageRecordService, 'list' | 'stats' | 'timeline'>;
+
+export function createAiUsageRecordHandlers(
+  service: AiUsageRecordData,
+): HandlersFor<AiUsageRecordSchemas> {
+  return {
+    '/ai-usage-records': {
+      GET: ({ query }) => service.list(query),
+    },
+    '/ai-usage-records/stats': {
+      GET: ({ query }) => service.stats(query),
+    },
+    '/ai-usage-records/timeline': {
+      GET: ({ query }) => service.timeline(query),
+    },
+  };
+}

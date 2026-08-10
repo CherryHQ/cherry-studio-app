@@ -1,7 +1,9 @@
-import type { WebSearchProvider } from '@/shared/data/preference';
+import type { WebSearchProvider } from '@cherrystudio/universal/data/preference';
+
 import type { ApiKeyRotationState } from '../utils/provider';
 import { BochaProvider } from './api/BochaProvider';
 import { ExaProvider } from './api/ExaProvider';
+import { FirecrawlProvider } from './api/FirecrawlProvider';
 import { JinaProvider } from './api/JinaProvider';
 import { QueritProvider } from './api/QueritProvider';
 import { SearxngProvider } from './api/SearxngProvider';
@@ -9,6 +11,7 @@ import { TavilyProvider } from './api/TavilyProvider';
 import { UnsupportedProvider } from './api/UnsupportedProvider';
 import { ZhipuProvider } from './api/ZhipuProvider';
 import type { WebSearchProviderDriver } from './factory';
+import { ExaMcpProvider } from './mcp/ExaMcpProvider';
 
 type WebSearchProviderConstructor = new (
   provider: WebSearchProvider,
@@ -20,10 +23,12 @@ export const WEB_SEARCH_PROVIDER_REGISTRY = {
   tavily: TavilyProvider,
   searxng: SearxngProvider,
   exa: ExaProvider,
-  'exa-mcp': UnsupportedProvider,
+  'exa-mcp': ExaMcpProvider,
   bocha: BochaProvider,
   querit: QueritProvider,
+  // Desktop's FetchProvider extracts article text with Readability and pins DNS
+  // on the outbound request; neither is available here.
   fetch: UnsupportedProvider,
   jina: JinaProvider,
-  firecrawl: UnsupportedProvider,
+  firecrawl: FirecrawlProvider,
 } as const satisfies Record<WebSearchProvider['id'], WebSearchProviderConstructor>;

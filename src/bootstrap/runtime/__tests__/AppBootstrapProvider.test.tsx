@@ -1,10 +1,10 @@
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
+import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { AppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 import type { Backend } from '@/shared/contracts';
-import type { ApiClient } from '@/shared/data/api/types';
-import type { PreferenceClient } from '@/shared/data/preference';
 
 import { AppBootstrapGate } from '../AppBootstrapGate';
 import { AppBootstrapProvider, useAppBootstrapState } from '../AppBootstrapProvider';
@@ -29,7 +29,7 @@ function makeRuntime(initializeImplementation: () => Promise<void>): {
   runPostReadyTasks: jest.Mock;
   runtime: AppBootstrapRuntime;
 } {
-  const dispose = jest.fn();
+  const dispose = jest.fn(async () => undefined);
   const initialize = jest.fn(initializeImplementation);
   const runPostReadyTasks = jest.fn(async () => undefined);
 

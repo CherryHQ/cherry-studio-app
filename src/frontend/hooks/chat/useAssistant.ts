@@ -1,10 +1,25 @@
+import type {
+  CreateAssistantDto,
+  DeleteAssistantResult,
+  UpdateAssistantDto,
+} from '@cherrystudio/universal/data/api/schemas/assistants';
+import type { OffsetPaginationResponse } from '@cherrystudio/universal/data/api/types';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+
 import { useMutation, useQuery } from '@/frontend/data';
-import type { CreateAssistantDto, UpdateAssistantDto } from '@/shared/data/api/schemas/assistants';
-import { type Assistant } from '@/shared/data/types/assistant';
+import {
+  dataApiCollectionFilters,
+  removeItemsFromCountedList,
+  restoreQuerySnapshot,
+  updateQueriesOptimistically,
+} from '@/frontend/data/utils/optimisticQueryUpdate';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);
+type AssistantListData = OffsetPaginationResponse<Assistant>;
+type AssistantDeleteRequest = { deleteTopics: boolean; id: string };
 
 export function useAssistantsApi() {
   const query = useQuery('/assistants', {
@@ -38,15 +53,14 @@ export function useAssistantApiById(id: string | undefined) {
 }
 
 export function useAssistantMutations() {
+  const queryClient = useQueryClient();
   const createMutation = useMutation('POST', '/assistants', {
     refresh: ['/assistants'],
   });
   const updateMutation = useMutation('PATCH', '/assistants/:id', {
     refresh: ({ args }) => ['/assistants', ...(args ? [`/assistants/${args.params.id}`] : [])],
   });
-  const deleteMutation = useMutation('DELETE', '/assistants/:id', {
-    refresh: ({ args }) => ['/assistants', ...(args ? [`/assistants/${args.params.id}`] : [])],
-  });
+  const deleteMutation = useMutation('DELETE', '/assistants/:id');
   const createAssistantRequest = createMutation.trigger;
   const updateAssistantRequest = updateMutation.trigger;
   const deleteAssistantRequest = deleteMutation.trigger;
@@ -66,15 +80,84 @@ export function useAssistantMutations() {
     [updateAssistantRequest],
   );
 
+  const deleteAssistantBatch = useCallback(
+    async (requests: readonly AssistantDeleteRequest[]) => {
+      const ids = new Set(requests.map((request) => request.id));
+      const snapshot = await updateQueriesOptimistically<AssistantListData>(
+        queryClient,
+        dataApiCollectionFilters('/assistants'),
+        (current) => removeItemsFromCountedList(current, ids),
+      );
+      const results = await Promise.allSettled(
+        requests.map(({ deleteTopics, id }) =>
+          deleteAssistantRequest(
+            deleteTopics ? { params: { id }, query: { deleteTopics: true } } : { params: { id } },
+          ),
+        ),
+      );
+      const firstFailure = results.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      );
+
+      for (const [index, result] of results.entries()) {
+        if (result.status === 'fulfilled') {
+          queryClient.removeQueries({ queryKey: [`/assistants/${requests[index].id}`] });
+        }
+      }
+
+      if (firstFailure) {
+        restoreQuerySnapshot(queryClient, snapshot);
+      }
+
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['/assistants'] }),
+        queryClient.invalidateQueries({ queryKey: ['/pins'] }),
+        ...(requests.some((request) => request.deleteTopics)
+          ? [queryClient.invalidateQueries({ queryKey: ['/topics'] })]
+          : []),
+      ]);
+
+      if (firstFailure) {
+        throw firstFailure.reason;
+      }
+
+      return results.map(
+        (result) => (result as PromiseFulfilledResult<DeleteAssistantResult>).value,
+      );
+    },
+    [deleteAssistantRequest, queryClient],
+  );
+
   const deleteAssistant = useCallback(
-    (id: string) => deleteAssistantRequest({ params: { id } }),
-    [deleteAssistantRequest],
+    async (
+      id: string,
+      options: { deleteTopics?: boolean } = {},
+    ): Promise<DeleteAssistantResult> => {
+      const [result] = await deleteAssistantBatch([
+        { deleteTopics: options.deleteTopics === true, id },
+      ]);
+      return result;
+    },
+    [deleteAssistantBatch],
+  );
+
+  const deleteAssistants = useCallback(
+    async (ids: readonly string[]) => {
+      const uniqueIds = [...new Set(ids)];
+      if (uniqueIds.length === 0) {
+        return;
+      }
+
+      await deleteAssistantBatch(uniqueIds.map((id) => ({ deleteTopics: false, id })));
+    },
+    [deleteAssistantBatch],
   );
 
   return {
     createAssistant,
     updateAssistant,
     deleteAssistant,
+    deleteAssistants,
     isCreating: createMutation.isLoading,
     isUpdating: updateMutation.isLoading,
     isDeleting: deleteMutation.isLoading,

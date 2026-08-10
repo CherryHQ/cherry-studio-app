@@ -1,9 +1,11 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+
 import {
   CHAT_INPUT_DEFAULT_REASONING_EFFORT,
   chatInputReasoningEffortOptions,
   getChatInputReasoningEffortOption,
+  getChatInputReasoningEffortSnapshot,
   getChatInputReasoningEffortsForModel,
 } from '../chatInputReasoning';
 
@@ -34,8 +36,7 @@ describe('chat input reasoning', () => {
   test('maps model-supported reasoning efforts into input options', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.LOW, REASONING_EFFORT.HIGH],
       },
     });
 
@@ -49,8 +50,7 @@ describe('chat input reasoning', () => {
   test('normalizes xhigh model options to the mobile max effort', () => {
     const model = createModel({
       reasoning: {
-        supportedEfforts: ['xhigh' as typeof REASONING_EFFORT.MAX],
-        type: 'openai-chat',
+        selectableEfforts: [REASONING_EFFORT.XHIGH],
       },
     });
 
@@ -58,6 +58,18 @@ describe('chat input reasoning', () => {
       CHAT_INPUT_DEFAULT_REASONING_EFFORT,
       REASONING_EFFORT.MAX,
     ]);
+  });
+
+  test('snapshots the assistant effort until the user selects a request override', () => {
+    expect(getChatInputReasoningEffortSnapshot('high', false)).toBe('default');
+    expect(
+      getChatInputReasoningEffortSnapshot('default', false, 'high', ['default', 'low', 'high']),
+    ).toBe('high');
+    expect(
+      getChatInputReasoningEffortSnapshot('high', false, 'max', ['default', 'low', 'high']),
+    ).toBe('high');
+    expect(getChatInputReasoningEffortSnapshot('high', true)).toBe('high');
+    expect(getChatInputReasoningEffortSnapshot('low', true, 'high')).toBe('low');
   });
 });
 

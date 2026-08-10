@@ -1,7 +1,7 @@
+import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
 import { Platform, Text } from 'react-native';
 
-import type { CherryMessagePart } from '@/shared/data/types/message';
 import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation';
 import { hasToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
@@ -38,7 +38,7 @@ export function ToolPart({ part }: ToolPartProps) {
         <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
       ) : null}
       {shouldShowNoDetails(part) ? (
-        <Text className="text-default-foreground text-md italic" selectable>
+        <Text className="text-foreground text-base italic" selectable>
           {t('chat.tool.noOutput')}
         </Text>
       ) : null}
@@ -51,7 +51,7 @@ function ToolOutputSection({ output }: { output: unknown }) {
 
   if (!hasToolPartValue(output)) {
     return (
-      <Text className="text-default-foreground text-md italic" selectable>
+      <Text className="text-foreground text-base italic" selectable>
         {t('chat.tool.noOutput')}
       </Text>
     );

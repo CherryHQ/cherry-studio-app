@@ -1,17 +1,19 @@
-import { useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useMultiplePreferences } from '@/frontend/data/hooks';
 import type {
   WebSearchCapability,
   WebSearchCompressionMethod,
   WebSearchProviderId,
   WebSearchProviderOverride,
-} from '@/shared/data/preference';
+} from '@cherrystudio/universal/data/preference';
 import {
   getMobileSupportedWebSearchProvidersByCapability,
   type WebSearchProviderPreset,
-} from '@/shared/data/presets/webSearchProviders';
-import type { SettingSelectOption } from '../components/SettingSelect';
+} from '@cherrystudio/universal/data/presets/webSearchProviders';
+import { useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { useMultiplePreferences } from '@/frontend/data/hooks';
+
+import type { SettingOption } from '../settingOptions';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';
 
 const preferenceMapping = {
@@ -23,14 +25,12 @@ const preferenceMapping = {
 } as const;
 
 const searchKeywordsProviderOptions = createWebSearchProviderOptions(
-  getMobileSupportedWebSearchProvidersByCapability('searchKeywords').filter(
-    (provider) => provider.type === 'api',
-  ),
+  getMobileSupportedWebSearchProvidersByCapability('searchKeywords'),
 );
 
 function createWebSearchProviderOptions(
   providers: readonly WebSearchProviderPreset[],
-): SettingSelectOption<WebSearchProviderId>[] {
+): SettingOption<WebSearchProviderId>[] {
   return providers.map((provider) => ({
     label: provider.name,
     value: provider.id,
@@ -41,7 +41,7 @@ export function useWebSearchProviderPreferences() {
   const { t } = useTranslation();
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
 
-  const compressionMethodOptions = useMemo<SettingSelectOption<WebSearchCompressionMethod>[]>(
+  const compressionMethodOptions = useMemo<SettingOption<WebSearchCompressionMethod>[]>(
     () => [
       { label: t('settings.websearch.compression.method.none'), value: 'none' },
       { label: t('settings.websearch.compression.method.cutoff'), value: 'cutoff' },
@@ -50,7 +50,7 @@ export function useWebSearchProviderPreferences() {
   );
 
   const handleSearchKeywordsProviderChange = useCallback(
-    (providerId: WebSearchProviderId | null) => {
+    (providerId: WebSearchProviderId) => {
       void setPreferences({ defaultSearchKeywordsProvider: providerId });
     },
     [setPreferences],

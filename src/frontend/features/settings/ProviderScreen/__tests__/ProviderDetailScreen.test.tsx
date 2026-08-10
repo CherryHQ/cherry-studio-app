@@ -1,3 +1,9 @@
+import type { ApiClient } from '@cherrystudio/universal/data/api/types';
+import type {
+  ApiKeyEntry,
+  AuthConfig,
+  Provider,
+} from '@cherrystudio/universal/data/types/provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { ScrollView } from 'react-native';
@@ -6,14 +12,15 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BackendProvider } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { Backend } from '@/shared/contracts';
-import type { ApiClient } from '@/shared/data/api/types';
-import type { ApiKeyEntry, AuthConfig, Provider } from '@/shared/data/types/provider';
+
 import ProviderDetailScreen from '../ProviderDetailScreen';
 
 type QueryState = { isPending: boolean; isError: boolean; isSuccess: boolean };
 type SectionProps = {
   apiKeysInput?: string;
   baseUrl?: string;
+  onApiKeysCommit?: (value: string) => void;
+  onBaseUrlCommit?: (value: string) => Promise<boolean>;
   provider?: Provider;
   showApiKeys: boolean;
   showBaseUrl: boolean;
@@ -42,6 +49,10 @@ let mockRedirectHref: unknown;
 let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
 let mockSectionRenders: SectionProps[];
+const mockReplaceApiKeys = jest.fn(async () => undefined);
+const mockSaveProvider = jest.fn(async () => undefined);
+const mockAlertConfirm = jest.fn();
+const mockAlertShow = jest.fn();
 let queryClient: QueryClient;
 
 const providersBackend = {
@@ -66,15 +77,20 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
 }));
 
-jest.mock('@/frontend/components/confirmDialog', () => ({
-  useConfirmDialog: () => ({ confirmDialog: null, requestConfirm: jest.fn() }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({
+    alert: {
+      confirm: mockAlertConfirm,
+      show: mockAlertShow,
+    },
+  }),
 }));
 
 jest.mock('@/frontend/components/headers', () => ({
   BackHeader: () => null,
 }));
 
-jest.mock('heroui-native/spinner', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   Spinner: () => {
     mockSpinnerRenderCount += 1;
     return null;
@@ -100,11 +116,14 @@ jest.mock('../apiService', () => ({
   ...jest.requireActual('../apiService/utils/providerApiServiceApiKeys'),
   ...jest.requireActual('../apiService/utils/providerApiServiceAuth'),
   ...jest.requireActual('../apiService/utils/providerApiServiceEndpointRules'),
+  ...jest.requireActual('../apiService/utils/providerApiServiceSave'),
   useProviderApiServiceQueries: () => ({
     apiKeys: mockApiKeys,
     apiKeysQuery: mockApiKeysQuery,
     authConfig: mockAuthConfig,
     authConfigQuery: mockAuthConfigQuery,
+    replaceApiKeysMutation: { mutateAsync: mockReplaceApiKeys },
+    saveProviderMutation: { mutateAsync: mockSaveProvider },
   }),
 }));
 
@@ -140,25 +159,6 @@ jest.mock('../components/ProviderModelList', () => ({
   // The API management section is handed over as this list's header, so the stub has to
   // render it for the assertions below to see anything.
   ProviderModelList: ({ header }: { header?: ReactElement }) => header ?? null,
-}));
-
-jest.mock('../models/components/ProviderModelCheckSheet', () => ({
-  ProviderModelCheckSheet: () => null,
-}));
-
-jest.mock('../models/hooks/useProviderModelCheck', () => ({
-  useProviderModelCheck: () => ({
-    apiKeyOptions: [],
-    closeSheet: jest.fn(),
-    isChecking: false,
-    isSheetOpen: false,
-    openCheckSheet: jest.fn(),
-    selectedApiKeyId: undefined,
-    selectedModelId: undefined,
-    setSelectedApiKeyId: jest.fn(),
-    setSelectedModelId: jest.fn(),
-    startCheck: jest.fn(),
-  }),
 }));
 
 jest.mock('../models/hooks/useProviderModelPull', () => ({
@@ -213,6 +213,8 @@ describe('ProviderDetailScreen', () => {
     mockSpinnerRenderCount = 0;
     mockChromeRenderCount = 0;
     mockSectionRenders = [];
+    mockReplaceApiKeys.mockClear();
+    mockSaveProvider.mockClear();
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
 
@@ -282,6 +284,73 @@ describe('ProviderDetailScreen', () => {
     rerender();
 
     expect(mockSectionRenders.at(-1)?.apiKeysInput).toBe('sk-a,sk-b');
+  });
+
+  it('persists API keys edited directly in the configuration field', () => {
+    loadEverything();
+    mockApiKeys = [
+      { id: 'key-a', isEnabled: true, key: 'sk-a' },
+      { id: 'key-b', isEnabled: false, key: 'sk-b' },
+    ];
+    render();
+
+    act(() => mockSectionRenders[0]?.onApiKeysCommit?.('next-a, next-b'));
+
+    expect(mockReplaceApiKeys).toHaveBeenCalledWith([
+      { id: 'key-a', isEnabled: true, key: 'next-a' },
+      { id: 'key-b', isEnabled: false, key: 'next-b' },
+    ]);
+  });
+
+  it('persists the primary Base URL without changing other endpoints', async () => {
+    loadEverything();
+    mockProvider = {
+      ...testProvider,
+      endpointConfigs: {
+        'anthropic-messages': {
+          baseUrl: 'https://anthropic.example.com',
+          reasoningFormatType: 'anthropic',
+        },
+        'openai-chat-completions': {
+          baseUrl: 'https://chat.example.com',
+          reasoningFormatType: 'openai-chat',
+        },
+      },
+    } as Provider;
+    render();
+
+    await act(async () => {
+      await mockSectionRenders[0]?.onBaseUrlCommit?.(' https://next.example.com ');
+    });
+
+    expect(mockSaveProvider).toHaveBeenCalledWith({
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'anthropic-messages': {
+          baseUrl: 'https://anthropic.example.com',
+          reasoningFormatType: 'anthropic',
+        },
+        'openai-chat-completions': {
+          baseUrl: 'https://next.example.com',
+          reasoningFormatType: 'openai-chat',
+        },
+      },
+    });
+  });
+
+  it('rejects an invalid primary Base URL before saving', async () => {
+    loadEverything();
+    render();
+
+    await act(async () => {
+      await mockSectionRenders[0]?.onBaseUrlCommit?.('not-a-url');
+    });
+
+    expect(mockSaveProvider).not.toHaveBeenCalled();
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      description: 'settings.provider.apiService.invalidBaseUrlMessage',
+      title: 'settings.provider.apiService.invalidBaseUrlTitle',
+    });
   });
 
   it('hides the API keys and base URL blocks for providers that use neither', () => {

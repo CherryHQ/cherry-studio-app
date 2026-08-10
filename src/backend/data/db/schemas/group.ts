@@ -23,7 +23,7 @@ export const groupTable = sqliteTable(
     ...orderKeyColumns,
     ...createUpdateTimestamps,
   },
-  (table) => [scopedOrderKeyIndex('group', 'entityType')(table)],
+  (t) => [scopedOrderKeyIndex('group', 'entityType')(t)],
 );
 
 export type InsertGroupRow = typeof groupTable.$inferInsert;

@@ -1,17 +1,19 @@
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { View } from 'react-native';
 
-import type { Provider } from '@/shared/data/types/provider';
+import { isOAuthProvider } from '@/shared/oauth';
+
 import { ProviderApiServiceApiKeysField, ProviderApiServiceEndpointField } from '../apiService';
 import { CherryInOauth } from './CherryInOauth';
-
-const CHERRYIN_PROVIDER_ID = 'cherryin';
 
 type ProviderApiManagementSectionProps = {
   apiKeysInput?: string;
   apiKeysVisible: boolean;
   baseUrl?: string;
+  onApiKeysCommit: (value: string) => void;
   onApiKeysManagePress: () => void;
   onApiKeysVisibleToggle: () => void;
+  onBaseUrlCommit: (value: string) => Promise<boolean>;
   onBaseUrlManagePress: () => void;
   provider?: Provider;
   showApiKeys: boolean;
@@ -22,26 +24,35 @@ export function ProviderApiManagementSection({
   apiKeysInput = '',
   apiKeysVisible,
   baseUrl = '',
+  onApiKeysCommit,
   onApiKeysManagePress,
   onApiKeysVisibleToggle,
+  onBaseUrlCommit,
   onBaseUrlManagePress,
   provider,
   showApiKeys,
   showBaseUrl,
 }: ProviderApiManagementSectionProps) {
-  // CherryIN supports OAuth login — show the OAuth card whenever it's CherryIN
-  const isCherryIn = provider?.id === CHERRYIN_PROVIDER_ID;
+  // Whether the provider signs in with OAuth is the registry's answer, not a
+  // name check here. The card itself stays CherryIN-specific because the
+  // balance it renders is CherryIN's own account surface.
+  const showOAuthCard = Boolean(provider?.id && isOAuthProvider(provider.id));
 
   return (
     <View className="gap-3">
-      {isCherryIn && provider?.id ? <CherryInOauth providerId={provider.id} /> : null}
+      {showOAuthCard && provider?.id ? <CherryInOauth providerId={provider.id} /> : null}
       {showBaseUrl ? (
-        <ProviderApiServiceEndpointField baseUrl={baseUrl} onManagePress={onBaseUrlManagePress} />
+        <ProviderApiServiceEndpointField
+          baseUrl={baseUrl}
+          onCommit={onBaseUrlCommit}
+          onManagePress={onBaseUrlManagePress}
+        />
       ) : null}
       {showApiKeys ? (
         <ProviderApiServiceApiKeysField
           apiKeysInput={apiKeysInput}
           apiKeysVisible={apiKeysVisible}
+          onCommit={onApiKeysCommit}
           onManagePress={onApiKeysManagePress}
           onToggleVisible={onApiKeysVisibleToggle}
         />

@@ -36,9 +36,9 @@ export const entityTagTable = sqliteTable(
       .references(() => tagTable.id, { onDelete: 'cascade' }),
     ...createUpdateTimestamps,
   },
-  (table) => [
-    primaryKey({ columns: [table.entityType, table.entityId, table.tagId] }),
-    index('entity_tag_tag_id_idx').on(table.tagId),
+  (t) => [
+    primaryKey({ columns: [t.entityType, t.entityId, t.tagId] }),
+    index('entity_tag_tag_id_idx').on(t.tagId),
   ],
 );
 

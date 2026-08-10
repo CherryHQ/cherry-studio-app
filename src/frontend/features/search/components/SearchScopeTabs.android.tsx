@@ -1,8 +1,8 @@
-import { Tabs } from 'heroui-native';
+import { Tabs } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 import { useSearchScope } from '../context/SearchScopeProvider';
-import { type SearchScope, searchScopes } from '../utils/searchScope';
+import { searchScopes } from '../utils/searchScope';
 
 const labelKeys = {
   assistants: 'navigation.assistants',
@@ -16,23 +16,13 @@ export function SearchScopeTabs() {
 
   return (
     <Tabs
-      className="w-full px-2 pt-3 pb-2"
+      items={searchScopes.map((item) => ({
+        label: t(labelKeys[item]),
+        testID: `search-scope-tab-${item}`,
+        value: item,
+      }))}
+      onValueChange={setScope}
       value={scope}
-      onValueChange={(value) => setScope(value as SearchScope)}
-    >
-      <Tabs.List className="w-full self-stretch">
-        <Tabs.Indicator />
-        {searchScopes.map((item) => (
-          <Tabs.Trigger
-            key={item}
-            className="flex-1"
-            testID={`search-scope-tab-${item}`}
-            value={item}
-          >
-            <Tabs.Label>{t(labelKeys[item])}</Tabs.Label>
-          </Tabs.Trigger>
-        ))}
-      </Tabs.List>
-    </Tabs>
+    />
   );
 }

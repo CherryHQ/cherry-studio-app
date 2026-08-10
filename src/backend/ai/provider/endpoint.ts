@@ -4,11 +4,12 @@
  */
 
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { EndpointType, Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-import { type AppProviderId, appProviderIds, isRegisteredProviderId } from '../types';
+import { type AppProviderId, appProviderIds } from '../types';
 import { getBaseUrl } from '../utils/provider';
+import { resolveGatewayRoute } from './gatewayRouting';
 
 const appProviderIdMap = appProviderIds as Record<string, AppProviderId>;
 
@@ -17,17 +18,24 @@ export interface ResolvedEndpoint {
   endpointType: EndpointType | undefined;
   /** Empty string when no config matched. */
   baseUrl: string;
+  /** Provider-options namespace selected by a multi-backend gateway route. */
+  providerOptionsKey?: string;
 }
 
 /**
- * Priority: `model.endpointTypes[0]` -> `provider.defaultChatEndpoint` -> `undefined`.
+ * Priority: `model.endpointTypes[0]` -> gateway per-model route ->
+ * `provider.defaultChatEndpoint` -> `undefined`.
  * `getBaseUrl` applies its own fallback among `endpointConfigs`.
  */
 export function resolveEffectiveEndpoint(provider: Provider, model: Model): ResolvedEndpoint {
-  const modelEndpoint = model.endpointTypes?.[0];
-  const providerDefault = provider.defaultChatEndpoint;
-  const endpointType = modelEndpoint ?? providerDefault;
-  return { endpointType, baseUrl: getBaseUrl(provider, endpointType) };
+  const gatewayRoute = resolveGatewayRoute(provider, model);
+  const endpointType =
+    model.endpointTypes?.[0] ?? gatewayRoute?.endpointType ?? provider.defaultChatEndpoint;
+  const providerOptionsKey =
+    gatewayRoute && endpointType === gatewayRoute.endpointType
+      ? gatewayRoute.providerOptionsKey
+      : undefined;
+  return { endpointType, baseUrl: getBaseUrl(provider, endpointType), providerOptionsKey };
 }
 
 /** Maps base id -> variant id (`openai` + `openai-chat-completions` -> `openai-chat`). No-op when no variant exists. */
@@ -58,8 +66,7 @@ function resolveKnownProviderId(id: string | undefined): AppProviderId | undefin
     return undefined;
   }
 
-  const providerId = appProviderIdMap[id];
-  return isRegisteredProviderId(providerId) ? providerId : undefined;
+  return appProviderIdMap[id];
 }
 
 export function resolveAiSdkProviderId(
@@ -74,11 +81,57 @@ export function resolveAiSdkProviderId(
     return resolveProviderVariant(adapterProviderId, endpointType);
   }
 
-  const presetId = provider.presetProviderId ?? provider.id;
-  const providerId = resolveKnownProviderId(presetId);
-  if (providerId) {
-    return resolveProviderVariant(providerId, endpointType);
-  }
-
   return appProviderIdMap['openai-compatible'];
+}
+
+/** Maps the runtime adapter id to the namespace its AI SDK model reads. */
+export function resolveProviderOptionsKey(
+  providerId: AppProviderId,
+  context?: {
+    actualProviderId?: string;
+    endpointType?: EndpointType;
+    gatewayProviderOptionsKey?: string;
+  },
+): string {
+  if (context?.gatewayProviderOptionsKey) return context.gatewayProviderOptionsKey;
+
+  switch (providerId) {
+    case 'openai':
+    case 'openai-chat':
+    case 'azure':
+    case 'azure-responses':
+    case 'huggingface':
+      return 'openai';
+    case 'anthropic':
+    case 'azure-anthropic':
+      return 'anthropic';
+    case 'google':
+      return 'google';
+    case 'google-vertex':
+    case 'google-vertex-anthropic':
+    case 'google-vertex-maas':
+      return 'vertex';
+    case 'xai':
+    case 'xai-responses':
+      return 'xai';
+    case 'bedrock':
+      return 'bedrock';
+    case 'ollama':
+      return 'ollama';
+    case 'github-copilot-openai-compatible':
+    case 'openai-compatible':
+      return context?.actualProviderId ?? providerId;
+    case 'cherryin':
+    case 'cherryin-chat':
+    case 'newapi':
+    case 'aihubmix':
+    case 'dmxapi':
+    case 'gateway':
+      if (context?.endpointType === ENDPOINT_TYPE.ANTHROPIC_MESSAGES) return 'anthropic';
+      if (context?.endpointType === ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT) return 'google';
+      if (context?.endpointType === ENDPOINT_TYPE.OPENAI_RESPONSES) return 'openai';
+      return providerId;
+    default:
+      return providerId;
+  }
 }

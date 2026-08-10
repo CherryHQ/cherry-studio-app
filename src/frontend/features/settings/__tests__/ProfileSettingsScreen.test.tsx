@@ -2,6 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
+
 import ProfileSettingsScreen from '../ProfileSettingsScreen';
 
 type HeaderAction = { key: string; onPress?: () => void };
@@ -46,9 +47,13 @@ jest.mock('heroui-native/hooks', () => ({
   useThemeColor: () => '#000000',
 }));
 
-jest.mock('heroui-native/input', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
-  const { TextInput: MockTextInput } = jest.requireActual('react-native');
+  const {
+    Text: MockText,
+    TextInput: MockTextInput,
+    View: MockView,
+  } = jest.requireActual('react-native');
 
   return {
     Input: React.forwardRef(function MockInput(
@@ -57,11 +62,13 @@ jest.mock('heroui-native/input', () => {
     ) {
       return <MockTextInput {...props} ref={ref} />;
     }),
+    Label: MockText,
+    TextField: MockView,
   };
 });
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: jest.fn() } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 
 jest.mock('lucide-uniwind/png', () => ({

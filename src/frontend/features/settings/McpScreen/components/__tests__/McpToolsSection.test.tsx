@@ -1,16 +1,17 @@
-import { Switch } from 'heroui-native/switch';
+import { Switch } from '@cherrystudio/ui/components';
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+
 import { McpToolsSection } from '../McpToolsSection';
 
 type ToolsQueryResult = { data?: { name: string }[]; isError: boolean };
 
 const mockRefetch = jest.fn<Promise<ToolsQueryResult>, []>();
-const mockToastShow = jest.fn();
+const mockAlertShow = jest.fn();
 const mockUseQuery = jest.fn((_options: unknown) => ({
   ...mockToolsQuery,
   refetch: mockRefetch,
@@ -31,20 +32,17 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('heroui-native/spinner', () => {
-  const { View: MockView } = jest.requireActual('react-native');
+jest.mock('@cherrystudio/ui/components', () => {
+  const { Pressable: MockPressable, View: MockView } = jest.requireActual('react-native');
 
-  return { Spinner: MockView };
+  return {
+    Spinner: (props: Record<string, unknown>) => <MockView {...props} />,
+    Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
+  };
 });
 
-jest.mock('heroui-native/switch', () => {
-  const { Pressable: MockPressable } = jest.requireActual('react-native');
-
-  return { Switch: (props: Record<string, unknown>) => <MockPressable {...props} /> };
-});
-
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
+jest.mock('@/frontend/components/AlertProvider', () => ({
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('../../../components/SettingsDialogActionButton', () => {
@@ -122,7 +120,7 @@ describe('McpToolsSection auto-approve toggle', () => {
   /** The first tool row's switches, in column order: enabled, auto-approve. */
   async function toggleFirstTool(column: 'autoApprove' | 'enabled', isSelected: boolean) {
     const toggle = renderer.root.findAllByType(Switch)[column === 'enabled' ? 0 : 1];
-    await act(async () => toggle.props.onSelectedChange(isSelected));
+    await act(async () => toggle.props.onValueChange(isSelected));
   }
 
   async function toggleFirstToolAutoApprove(autoApprove: boolean) {
@@ -138,7 +136,7 @@ describe('McpToolsSection auto-approve toggle', () => {
   test('disables both tool controls in read-only mode', () => {
     render([], [], {}, true);
 
-    expect(renderer.root.findAllByType(Switch).map((toggle) => toggle.props.isDisabled)).toEqual([
+    expect(renderer.root.findAllByType(Switch).map((toggle) => toggle.props.disabled)).toEqual([
       true,
       true,
       true,
@@ -168,16 +166,14 @@ describe('McpToolsSection auto-approve toggle', () => {
     const toggles = renderer.root.findAllByType(Switch);
 
     await act(async () => {
-      toggles[0].props.onSelectedChange(false);
+      toggles[0].props.onValueChange(false);
       await Promise.resolve();
     });
 
-    expect(renderer.root.findAllByType(Switch).every((toggle) => toggle.props.isDisabled)).toBe(
-      true,
-    );
+    expect(renderer.root.findAllByType(Switch).every((toggle) => toggle.props.disabled)).toBe(true);
 
     await act(async () => {
-      toggles[2].props.onSelectedChange(false);
+      toggles[2].props.onValueChange(false);
       await Promise.resolve();
     });
     expect(onToggleTool).toHaveBeenCalledTimes(1);
@@ -188,9 +184,7 @@ describe('McpToolsSection auto-approve toggle', () => {
       await Promise.resolve();
     });
 
-    expect(renderer.root.findAllByType(Switch).some((toggle) => toggle.props.isDisabled)).toBe(
-      false,
-    );
+    expect(renderer.root.findAllByType(Switch).some((toggle) => toggle.props.disabled)).toBe(false);
   });
 
   test('needs no tool list when no rule is wider than one tool', async () => {
@@ -235,9 +229,8 @@ describe('McpToolsSection auto-approve toggle', () => {
     await toggleFirstToolAutoApprove(true);
 
     expect(onToggleAutoApprove).not.toHaveBeenCalled();
-    expect(mockToastShow).toHaveBeenCalledWith({
-      label: 'settings.mcp.tools.refreshFailed',
-      variant: 'danger',
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'settings.mcp.tools.refreshFailed',
     });
   });
 

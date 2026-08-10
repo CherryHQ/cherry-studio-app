@@ -1,6 +1,8 @@
+import type { Message, MessageData } from '@cherrystudio/universal/data/types/message';
+
 import type { DbService } from '@/backend/data/db/DbService';
 import { chatMessageFileRefTable, messageTable } from '@/backend/data/db/schemas';
-import type { Message, MessageData } from '@/shared/data/types/message';
+
 import { MessageService } from '../MessageService';
 
 jest.mock('@/backend/data/db/schemas', () => ({
@@ -27,7 +29,7 @@ jest.mock('@/backend/data/db/schemas', () => ({
 
 describe('MessageService', () => {
   test('reserveAssistantTurn delegates to createUserMessageWithPlaceholders', async () => {
-    const service = new MessageService({} as never, {} as never, {} as never);
+    const service = new MessageService({} as never, {} as never);
     const result = {
       placeholders: [createMessage('650e8400-e29b-41d4-a716-446655440000', 'assistant')],
       userMessage: createMessage('550e8400-e29b-41d4-a716-446655440000', 'user'),
@@ -67,7 +69,7 @@ describe('MessageService', () => {
         }),
       }),
     } as unknown as DbService;
-    const service = new MessageService(dbService, {} as never, {} as never);
+    const service = new MessageService(dbService, {} as never);
 
     await expect(service.findPendingAssistantMessageIds()).resolves.toEqual(['a', 'b']);
   });
@@ -92,7 +94,7 @@ describe('MessageService', () => {
       const dbService = { withWriteTx } as unknown as DbService;
 
       return {
-        service: new MessageService(dbService, {} as never, {} as never),
+        service: new MessageService(dbService, {} as never),
         updates,
         withWriteTx,
       };
@@ -177,7 +179,7 @@ describe('MessageService', () => {
     test('is a no-op for an empty id list', async () => {
       const withWriteTx = jest.fn();
       const dbService = { withWriteTx } as unknown as DbService;
-      const service = new MessageService(dbService, {} as never, {} as never);
+      const service = new MessageService(dbService, {} as never);
 
       await service.settleCrashedMessages([]);
 
@@ -222,7 +224,7 @@ describe('MessageService', () => {
           callback(tx),
         ),
       } as unknown as DbService;
-      return { service: new MessageService(dbService, {} as never, {} as never), updates };
+      return { service: new MessageService(dbService, {} as never), updates };
     }
 
     const baseRow = {
@@ -231,7 +233,7 @@ describe('MessageService', () => {
       deletedAt: null,
       id: 'assistant-1',
       modelId: null,
-      modelSnapshot: null,
+      messageSnapshot: null,
       parentId: 'user-1',
       role: 'assistant',
       searchableText: '',
@@ -370,7 +372,7 @@ describe('MessageService', () => {
       ),
     } as unknown as DbService;
     const topicService = { setActiveNodeTx: jest.fn() };
-    const service = new MessageService(dbService, topicService as never, {} as never);
+    const service = new MessageService(dbService, topicService as never);
     jest.spyOn(service, 'getById').mockResolvedValue(message);
 
     await expect(service.delete(message.id, true, 'parent')).resolves.toEqual({
@@ -379,6 +381,57 @@ describe('MessageService', () => {
     });
     expect(topicUpdates).toContainEqual({ activeNodeId: null });
     expect(topicService.setActiveNodeTx).not.toHaveBeenCalled();
+  });
+
+  test('clearTopicMessages removes content while preserving the virtual root', async () => {
+    const deleteWhere = jest.fn(async () => undefined);
+    const tx = {
+      delete: jest.fn(() => ({ where: deleteWhere })),
+      select: jest
+        .fn()
+        .mockImplementationOnce(() => ({
+          from: () => ({ where: () => ({ limit: async () => [{ id: 'root-1' }] }) }),
+        }))
+        .mockImplementationOnce(() => ({
+          from: () => ({ where: async () => [{ id: 'message-1' }, { id: 'message-2' }] }),
+        })),
+    };
+    const dbService = {
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const topicService = { clearActiveNodeTx: jest.fn(async () => undefined) };
+    const service = new MessageService(dbService, topicService as never);
+
+    await expect(service.clearTopicMessages('topic-1')).resolves.toEqual({
+      deletedIds: ['message-1', 'message-2'],
+    });
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
+    expect(topicService.clearActiveNodeTx).toHaveBeenCalledWith(tx, 'topic-1');
+  });
+
+  test('clearTopicMessages is read-only when a topic only has its virtual root', async () => {
+    const tx = {
+      delete: jest.fn(),
+      select: jest
+        .fn()
+        .mockImplementationOnce(() => ({
+          from: () => ({ where: () => ({ limit: async () => [{ id: 'root-1' }] }) }),
+        }))
+        .mockImplementationOnce(() => ({ from: () => ({ where: async () => [] }) })),
+    };
+    const dbService = {
+      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
+        callback(tx),
+      ),
+    } as unknown as DbService;
+    const topicService = { clearActiveNodeTx: jest.fn() };
+    const service = new MessageService(dbService, topicService as never);
+
+    await expect(service.clearTopicMessages('topic-1')).resolves.toEqual({ deletedIds: [] });
+    expect(tx.delete).not.toHaveBeenCalled();
+    expect(topicService.clearActiveNodeTx).not.toHaveBeenCalled();
   });
 
   test('delete without cascade rebases moved sibling groups above both sides', async () => {
@@ -425,7 +478,7 @@ describe('MessageService', () => {
       ),
     } as unknown as DbService;
     const topicService = { setActiveNodeTx: jest.fn() };
-    const service = new MessageService(dbService, topicService as never, {} as never);
+    const service = new MessageService(dbService, topicService as never);
     jest.spyOn(service, 'getById').mockResolvedValue(message);
 
     await expect(service.delete(message.id, false, 'parent')).resolves.toEqual({
@@ -452,7 +505,7 @@ describe('MessageService', () => {
       ftsRowid: 1,
       id: 'source-1',
       modelId: null,
-      modelSnapshot: null,
+      messageSnapshot: null,
       parentId: 'parent-1',
       role,
       searchableText: '',
@@ -483,7 +536,7 @@ describe('MessageService', () => {
       ),
     } as unknown as DbService;
     const topicService = { setActiveNodeTx: jest.fn() };
-    const service = new MessageService(dbService, topicService as never, {} as never);
+    const service = new MessageService(dbService, topicService as never);
 
     const sibling = await service.createSibling('source-1', { parts: [] });
 
@@ -494,7 +547,7 @@ describe('MessageService', () => {
     });
   });
 
-  test('atomically creates prepared entries, messages, and deduplicated refs', async () => {
+  test('creates messages and deduplicated refs for existing file entries', async () => {
     const firstId = '00000000-0000-7000-8000-000000000001';
     const secondId = '00000000-0000-7000-8000-000000000002';
     const unknownId = '00000000-0000-7000-8000-000000000003';
@@ -519,33 +572,14 @@ describe('MessageService', () => {
       ),
     } as unknown as DbService;
     const topicService = { setActiveNodeTx: jest.fn(async () => undefined) };
-    const createPreparedEntriesTx = jest.fn(async () => undefined);
-    const service = new MessageService(
-      dbService,
-      topicService as never,
-      { createPreparedEntriesTx } as never,
-    );
-    const preparedFiles = [
-      {
-        ext: 'txt',
-        id: firstId,
-        name: 'brief',
-        size: 12,
-        uri: 'file:///documents/files/brief.txt',
-      },
-    ];
+    const service = new MessageService(dbService, topicService as never);
 
     await service.createUserMessageWithPlaceholders({
       placeholders: [{ data: placeholderData, role: 'assistant' }],
-      preparedFiles,
       topicId: 'topic-1',
       userMessage: { dto: { data: userData, role: 'user' }, mode: 'create' },
     });
 
-    expect(createPreparedEntriesTx).toHaveBeenCalledWith(tx, preparedFiles);
-    expect(createPreparedEntriesTx.mock.invocationCallOrder[0]).toBeLessThan(
-      (tx.insert as jest.Mock).mock.invocationCallOrder[0],
-    );
     expect(insertCalls.filter((call) => call.table === messageTable)).toHaveLength(2);
     expect(insertCalls.filter((call) => call.table === chatMessageFileRefTable)).toEqual([
       {
@@ -653,7 +687,7 @@ function createMessageRow(
     ftsRowid: 1,
     id,
     modelId: null,
-    modelSnapshot: null,
+    messageSnapshot: null,
     parentId,
     role,
     searchableText: '',
@@ -674,7 +708,6 @@ function createMessageService(tx: ReturnType<typeof createWriteTx>['tx']) {
       ),
     } as unknown as DbService,
     { setActiveNodeTx: jest.fn(async () => undefined) } as never,
-    { createPreparedEntriesTx: jest.fn(async () => undefined) } as never,
   );
 }
 

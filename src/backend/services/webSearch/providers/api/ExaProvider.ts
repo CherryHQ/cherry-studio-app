@@ -1,26 +1,34 @@
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+import type {
+  WebSearchExecutionConfig,
+  WebSearchResponse,
+} from '@cherrystudio/universal/data/types/webSearch';
+import * as z from 'zod';
+
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';
-import { assertRecord, readObjectArray, readOptionalString } from './schemaUtils';
 
-type ExaSearchRequest = {
-  query: string;
-  numResults: number;
-  contents: {
-    text: boolean;
-  };
-};
+const ExaSearchRequestSchema = z.object({
+  query: z.string(),
+  numResults: z.number().int().positive(),
+  contents: z.object({
+    text: z.boolean(),
+  }),
+});
 
-type ExaSearchResponse = {
-  results: {
-    title?: string | null;
-    text?: string;
-    url?: string;
-  }[];
-  autopromptString?: string;
-};
+const ExaSearchResponseSchema = z.object({
+  results: z
+    .array(
+      z.object({
+        title: z.string().nullable().optional(),
+        text: z.string().optional(),
+        url: z.string().optional(),
+      }),
+    )
+    .default([]),
+  autopromptString: z.string().optional(),
+});
 
-type ExaSearchContext = ApiKeyRequestSearchContext<ExaSearchRequest>;
+type ExaSearchContext = ApiKeyRequestSearchContext<z.infer<typeof ExaSearchRequestSchema>>;
 
 export class ExaProvider extends BaseWebSearchProvider {
   async searchKeywords(
@@ -44,18 +52,18 @@ export class ExaProvider extends BaseWebSearchProvider {
       query,
       maxResults: config.maxResults,
       requestUrl: this.resolveApiUrl('searchKeywords', '/search'),
-      requestBody: {
+      requestBody: ExaSearchRequestSchema.parse({
         query,
         numResults: config.maxResults,
         contents: {
           text: true,
         },
-      },
+      }),
       signal: httpOptions?.signal ?? undefined,
     };
   }
 
-  private async executeSearch(context: ExaSearchContext): Promise<ExaSearchResponse> {
+  private async executeSearch(context: ExaSearchContext) {
     const response = await fetch(context.requestUrl, {
       method: 'POST',
       headers: this.buildHeaders({
@@ -70,7 +78,7 @@ export class ExaProvider extends BaseWebSearchProvider {
       await this.throwHttpError('Exa search failed', response);
     }
 
-    return this.parseJsonResponse(response, parseExaSearchResponse, {
+    return this.parseJsonResponse(response, ExaSearchResponseSchema, {
       operation: 'search',
       requestUrl: context.requestUrl,
     });
@@ -78,7 +86,7 @@ export class ExaProvider extends BaseWebSearchProvider {
 
   private buildFinalResponse(
     context: ExaSearchContext,
-    searchPayload: ExaSearchResponse,
+    searchPayload: z.infer<typeof ExaSearchResponseSchema>,
   ): WebSearchResponse {
     return {
       query: context.query,
@@ -93,20 +101,4 @@ export class ExaProvider extends BaseWebSearchProvider {
       })),
     };
   }
-}
-
-function parseExaSearchResponse(payload: unknown): ExaSearchResponse {
-  const record = assertRecord(payload);
-
-  return {
-    autopromptString: readOptionalString(record.autopromptString, 'payload.autopromptString'),
-    results: readObjectArray(record.results ?? [], 'payload.results').map((item, index) => ({
-      title:
-        item.title === null
-          ? null
-          : readOptionalString(item.title, `payload.results[${index}].title`),
-      text: readOptionalString(item.text, `payload.results[${index}].text`),
-      url: readOptionalString(item.url, `payload.results[${index}].url`),
-    })),
-  };
 }

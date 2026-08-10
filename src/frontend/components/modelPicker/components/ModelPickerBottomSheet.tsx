@@ -1,9 +1,9 @@
+import { BottomSheet } from '@cherrystudio/ui/components';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BottomSheet } from '@/frontend/components/bottomSheet';
 import { SelectionSheetSearchField } from '@/frontend/components/selectionSheet';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
@@ -124,7 +124,7 @@ export function ModelPickerBottomSheet({
       {/* The card's fixed height + this flex column bound the list, so
           LegendList (flex:1) virtualizes without any manual height math. */}
       <View style={styles.body}>
-        <View className="px-4 pt-5">
+        <View className="px-4 pt-2">
           <SelectionSheetSearchField onChange={handleSearchTextChange} value={searchText} />
         </View>
         <View style={styles.modelListViewport}>

@@ -11,17 +11,6 @@
 import { definePlugin } from '@cherrystudio/ai-core';
 import { extractReasoningMiddleware } from 'ai';
 
-import type { AppProviderId } from '../../../../types';
-
-export const INLINE_REASONING_SDK_PROVIDER_IDS: ReadonlySet<AppProviderId> = new Set([
-  'openai',
-  'openai-chat',
-  'openai-response',
-  'openai-compatible',
-  'azure',
-  'azure-responses',
-]);
-
 /**
  * Must run BEFORE simulateStreaming so that after `wrapLanguageModel`
  * reverses the middleware chain, extractReasoning wraps simulateStreaming
@@ -33,7 +22,9 @@ export function createReasoningExtractionPlugin(options: { tagName?: string } = 
     enforce: 'pre',
     configureContext: (context) => {
       context.middlewares = context.middlewares || [];
-      context.middlewares.push(extractReasoningMiddleware({ tagName: options.tagName || 'think' }));
+      context.middlewares.push(
+        extractReasoningMiddleware({ tagName: options.tagName || 'thinking' }),
+      );
     },
   });
 }

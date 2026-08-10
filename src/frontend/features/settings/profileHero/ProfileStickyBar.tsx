@@ -1,4 +1,3 @@
-import { useThemeColor } from 'heroui-native/hooks';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
@@ -8,6 +7,7 @@ import Animated, {
   useAnimatedStyle,
 } from 'react-native-reanimated';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { profileHero } from '@/frontend/utils/constants';
 
 const fadeTravel = profileHero.collapseDistance;
@@ -32,7 +32,7 @@ type ProfileStickyBarProps = {
  */
 export function ProfileStickyBar({ scrollY, topInset, userName }: ProfileStickyBarProps) {
   const { t } = useTranslation();
-  const separatorColor = useThemeColor('separator');
+  const separatorColor = useThemeColor('border-strong');
   // Mirror the hero's name slot: fall back to the set-profile prompt when empty.
   const title = userName.trim().length > 0 ? userName : t('settings.profile.setPrompt');
 
@@ -46,7 +46,7 @@ export function ProfileStickyBar({ scrollY, topInset, userName }: ProfileStickyB
   return (
     <View className="absolute top-0 right-0 left-0" pointerEvents="none">
       <Animated.View
-        className="absolute inset-0 bg-background"
+        className="absolute inset-0 bg-grouped-background"
         style={[
           backgroundStyle,
           { borderBottomColor: separatorColor, borderBottomWidth: StyleSheet.hairlineWidth },

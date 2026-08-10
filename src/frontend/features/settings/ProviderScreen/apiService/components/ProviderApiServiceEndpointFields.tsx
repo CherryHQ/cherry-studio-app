@@ -1,152 +1,227 @@
-import { Select } from 'heroui-native';
-import { Input } from 'heroui-native/input';
-import { cn } from 'heroui-native/utils';
-import { PlusIcon, SettingsIcon, Trash2Icon } from 'lucide-uniwind/png';
-import { useCallback } from 'react';
+import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
+import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import type { EndpointType } from '@/shared/data/types/model';
-import { SettingsIconButton } from '../../../components/SettingsIconButton';
-import {
-  getEndpointLabel,
-  isConfigurableEndpointType,
-} from '../utils/providerApiServiceEndpointRules';
-import { providerApiServiceStyles } from '../utils/providerApiServiceStyles';
+import { isCustomProviderTextEndpointType } from '../utils/providerApiServiceEndpointRules';
+
+const ENDPOINT_LABEL_KEYS: Partial<Record<EndpointType, string>> = {
+  [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'settings.provider.add.endpoint.openaiChatCompletions',
+  [ENDPOINT_TYPE.OPENAI_RESPONSES]: 'settings.provider.add.endpoint.openaiResponses',
+  [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: 'settings.provider.add.endpoint.anthropic',
+  [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: 'settings.provider.add.endpoint.gemini',
+  [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: 'settings.provider.add.endpoint.imageGeneration',
+  [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: 'settings.provider.add.endpoint.imageEdit',
+};
 
 export function ProviderApiServiceEndpointField({
   baseUrl,
+  onCommit,
   onManagePress,
 }: {
   baseUrl: string;
+  onCommit: (value: string) => Promise<boolean>;
   onManagePress: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.provider.apiService.baseUrl')}
-      </Text>
+    <TextField>
+      <Label>{t('settings.provider.apiService.baseUrl')}</Label>
       <View className="flex-row items-center gap-2">
-        <Input
+        <PrimaryEndpointBaseUrlInput
           accessibilityLabel={t('settings.provider.apiService.baseUrl')}
-          className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
-          isDisabled
+          onCommit={onCommit}
           placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-          style={providerApiServiceStyles.input}
           value={baseUrl}
+        />
+        <Button
+          accessibilityLabel={t('settings.provider.apiService.manageEndpoints')}
+          hitSlop={6}
+          icon={<SettingsIcon strokeWidth={2} />}
+          onPress={onManagePress}
           variant="secondary"
         />
-        <SettingsIconButton
-          accessibilityLabel={t('settings.provider.apiService.manageEndpoints')}
-          onPress={onManagePress}
-        >
-          <SettingsIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
       </View>
-    </View>
+    </TextField>
+  );
+}
+
+function PrimaryEndpointBaseUrlInput({
+  accessibilityLabel,
+  onCommit,
+  placeholder,
+  value,
+}: {
+  accessibilityLabel: string;
+  onCommit: (value: string) => Promise<boolean>;
+  placeholder: string;
+  value: string;
+}) {
+  const [draftValue, setDraftValue] = useState(value);
+  const [sourceValue, setSourceValue] = useState(value);
+
+  if (sourceValue !== value) {
+    setSourceValue(value);
+    setDraftValue(value);
+  }
+
+  const handleBlur = useCallback(() => {
+    if (draftValue === value) {
+      return;
+    }
+
+    void onCommit(draftValue).then((didSave) => {
+      if (!didSave) {
+        setDraftValue(value);
+      }
+    });
+  }, [draftValue, onCommit, value]);
+
+  return (
+    <Input
+      accessibilityLabel={accessibilityLabel}
+      autoCapitalize="none"
+      autoCorrect={false}
+      keyboardType="url"
+      onBlur={handleBlur}
+      onChangeText={setDraftValue}
+      placeholder={placeholder}
+      returnKeyType="done"
+      submitBehavior="blurAndSubmit"
+      style={styles.endpointInput}
+      value={draftValue}
+    />
   );
 }
 
 export function ProviderApiServiceEndpointForm({
-  addableEndpointOptions,
   baseUrlByEndpoint,
+  configuredEndpointTypes,
+  defaultChatEndpoint,
   endpointErrors,
-  pendingEndpoint,
-  primaryEndpoint,
-  visibleEndpointTypes,
-  onAddEndpoint,
+  endpointTypes,
+  isSaving,
   onBaseUrlChange,
   onBaseUrlCommit,
-  onRemoveEndpoint,
+  onDefaultChatEndpointChange,
 }: {
-  addableEndpointOptions: EndpointType[];
   baseUrlByEndpoint: Partial<Record<EndpointType, string>>;
+  configuredEndpointTypes: readonly EndpointType[];
+  defaultChatEndpoint: EndpointType;
   endpointErrors?: Partial<Record<EndpointType, string>>;
-  pendingEndpoint?: EndpointType | null;
-  primaryEndpoint: EndpointType;
-  visibleEndpointTypes: EndpointType[];
-  onAddEndpoint: (endpoint: EndpointType) => void;
+  endpointTypes: EndpointType[];
+  isSaving?: boolean;
   onBaseUrlChange: (endpoint: EndpointType, value: string) => void;
   onBaseUrlCommit: (endpoint: EndpointType, value: string) => void;
-  onRemoveEndpoint: (endpoint: EndpointType) => void;
+  onDefaultChatEndpointChange: (endpoint: EndpointType) => void;
 }) {
   const { t } = useTranslation();
-  const sheetEndpointTypes = [
-    primaryEndpoint,
-    ...visibleEndpointTypes.filter((endpoint) => endpoint !== primaryEndpoint),
-  ];
+  const configuredEndpointTypeSet = new Set(configuredEndpointTypes);
 
   return (
     <View className="gap-3">
-      {sheetEndpointTypes.length > 0 ? (
-        <View className="gap-3">
-          {sheetEndpointTypes.map((endpoint) => {
-            const isPrimaryEndpoint = endpoint === primaryEndpoint;
+      {endpointTypes.map((endpoint) => {
+        const labelKey = ENDPOINT_LABEL_KEYS[endpoint];
+        const label = labelKey ? t(labelKey) : endpoint;
+        const value = baseUrlByEndpoint[endpoint] ?? '';
+        const isDefaultChatEndpoint =
+          endpoint === defaultChatEndpoint && isCustomProviderTextEndpointType(endpoint);
+        const canSetAsDefault =
+          isCustomProviderTextEndpointType(endpoint) &&
+          (configuredEndpointTypeSet.has(endpoint) || Boolean(value.trim()));
 
-            return (
-              <View key={endpoint} className="gap-1">
-                <Text className="font-medium text-default-foreground text-sm" numberOfLines={1}>
-                  {getEndpointLabel(endpoint)}
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  <EndpointBaseUrlInput
-                    accessibilityLabel={getEndpointLabel(endpoint)}
-                    className="flex-1"
-                    isDisabled={pendingEndpoint === endpoint}
-                    placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-                    value={baseUrlByEndpoint[endpoint] ?? ''}
-                    onChangeText={(value) => onBaseUrlChange(endpoint, value)}
-                    onCommit={(value) => onBaseUrlCommit(endpoint, value)}
-                  />
-                  {!isPrimaryEndpoint ? (
-                    <SettingsIconButton
-                      accessibilityLabel={t('settings.provider.apiService.removeEndpoint')}
-                      isDisabled={pendingEndpoint === endpoint}
-                      onPress={() => onRemoveEndpoint(endpoint)}
-                    >
-                      <Trash2Icon className="size-5 text-default-foreground" strokeWidth={2} />
-                    </SettingsIconButton>
-                  ) : null}
-                </View>
-                {endpointErrors?.[endpoint] ? (
-                  <Text className="text-danger text-xs">{endpointErrors[endpoint]}</Text>
-                ) : null}
-              </View>
-            );
-          })}
-        </View>
-      ) : (
-        <Text className="rounded-xl bg-settings-grouped-surface px-3 py-3 text-center text-default-foreground text-sm">
-          {t('settings.provider.apiService.noAdditionalEndpoints')}
-        </Text>
-      )}
-
-      {addableEndpointOptions.length > 0 ? (
-        <AddEndpointSelect
-          label={t('settings.provider.apiService.addEndpoint')}
-          options={addableEndpointOptions}
-          onValueChange={onAddEndpoint}
-        />
-      ) : null}
+        return (
+          <TextField key={endpoint} isInvalid={Boolean(endpointErrors?.[endpoint])}>
+            <View
+              className="h-9 flex-row items-center gap-2"
+              testID={`endpoint-label-row-${endpoint}`}
+            >
+              <Label className="min-w-0 flex-1">{label}</Label>
+              <ProviderDefaultEndpointControl
+                endpoint={endpoint}
+                endpointLabel={label}
+                isDefault={isDefaultChatEndpoint}
+                isDisabled={isSaving}
+                isSelectable={canSetAsDefault}
+                onChange={onDefaultChatEndpointChange}
+              />
+            </View>
+            <EndpointBaseUrlInput
+              accessibilityLabel={label}
+              placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
+              value={value}
+              onChangeText={(value) => onBaseUrlChange(endpoint, value)}
+              onCommit={(value) => onBaseUrlCommit(endpoint, value)}
+            />
+            <FieldError>{endpointErrors?.[endpoint]}</FieldError>
+          </TextField>
+        );
+      })}
     </View>
+  );
+}
+
+export function ProviderDefaultEndpointControl({
+  endpoint,
+  endpointLabel,
+  isDefault,
+  isDisabled = false,
+  isSelectable,
+  onChange,
+}: {
+  endpoint: EndpointType;
+  endpointLabel: string;
+  isDefault: boolean;
+  isDisabled?: boolean;
+  isSelectable: boolean;
+  onChange: (endpoint: EndpointType) => void;
+}) {
+  const { t } = useTranslation();
+  const handlePress = useCallback(() => onChange(endpoint), [endpoint, onChange]);
+
+  if (isDefault) {
+    return (
+      <View className="shrink-0 flex-row items-center gap-1.5 px-2 py-2">
+        <CheckIcon className="size-4 text-primary" strokeWidth={2.5} />
+        <Text className="text-primary text-sm">
+          {t('settings.provider.apiService.defaultEndpoint')}
+        </Text>
+      </View>
+    );
+  }
+
+  if (!isSelectable) {
+    return null;
+  }
+
+  return (
+    <Button
+      accessibilityLabel={t('settings.provider.apiService.setDefaultEndpointAccessibility', {
+        endpoint: endpointLabel,
+      })}
+      disabled={isDisabled}
+      onPress={handlePress}
+      size="sm"
+      variant="outline"
+    >
+      {t('settings.provider.apiService.setDefaultEndpoint')}
+    </Button>
   );
 }
 
 function EndpointBaseUrlInput({
   accessibilityLabel,
-  className,
-  isDisabled,
   onCommit,
   onChangeText,
   placeholder,
   value,
 }: {
   accessibilityLabel: string;
-  className?: string;
-  isDisabled?: boolean;
   onCommit: (value: string) => void;
   onChangeText: (value: string) => void;
   placeholder: string;
@@ -159,74 +234,24 @@ function EndpointBaseUrlInput({
     [onCommit],
   );
 
-  const handleCommitEvent = useCallback(() => {
-    onCommit(value);
-  }, [onCommit, value]);
-
   return (
     <Input
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className={cn('h-10 min-h-0 rounded-xl px-3 py-0 text-base leading-5', className)}
-      isDisabled={isDisabled}
-      onBlur={handleCommitEvent}
       onChangeText={onChangeText}
       onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
       placeholder={placeholder}
       returnKeyType="done"
-      style={providerApiServiceStyles.input}
+      submitBehavior="blurAndSubmit"
+      style={styles.endpointInput}
       value={value}
-      variant="secondary"
     />
   );
 }
 
-function AddEndpointSelect({
-  label,
-  onValueChange,
-  options,
-}: {
-  label: string;
-  onValueChange: (value: EndpointType) => void;
-  options: EndpointType[];
-}) {
-  const handleValueChange = useCallback(
-    (nextOption?: { label: string; value: string }) => {
-      const endpoint = nextOption?.value as EndpointType | undefined;
-
-      if (!isConfigurableEndpointType(endpoint)) {
-        return;
-      }
-
-      onValueChange(endpoint);
-    },
-    [onValueChange],
-  );
-
-  return (
-    <Select value={undefined} onValueChange={handleValueChange}>
-      <Select.Trigger
-        accessibilityLabel={label}
-        className="h-10 min-h-10 flex-row items-center justify-center gap-2 rounded-xl bg-settings-grouped-surface px-3 py-0"
-      >
-        <PlusIcon className="size-4 text-default-foreground" strokeWidth={2} />
-        <Text className="text-base text-foreground" numberOfLines={1}>
-          {label}
-        </Text>
-      </Select.Trigger>
-      <Select.Portal>
-        <Select.Overlay />
-        <Select.Content className="p-2" presentation="popover" width="trigger" placement="bottom">
-          {options.map((option) => (
-            <Select.Item key={option} label={getEndpointLabel(option)} value={option}>
-              <Select.ItemLabel className="flex-1" numberOfLines={1} />
-              <Select.ItemIndicator />
-            </Select.Item>
-          ))}
-        </Select.Content>
-      </Select.Portal>
-    </Select>
-  );
-}
+const styles = StyleSheet.create({
+  endpointInput: {
+    flex: 1,
+  },
+});

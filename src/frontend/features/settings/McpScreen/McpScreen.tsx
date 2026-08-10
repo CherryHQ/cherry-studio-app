@@ -1,13 +1,14 @@
+import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useRouter } from 'expo-router';
 import { PlusIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
-import type { StreamableHttpMcpServer } from '@/shared/data/types/mcpServer';
+
 import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 
@@ -16,6 +17,11 @@ export function McpScreen() {
   const router = useRouter();
   const { error, isLoading, refetch, servers } = useMcpServersApi();
   const { summaries } = useMcpServerRuntimeSummaries(servers);
+  const [pressedServerId, setPressedServerId] = useState<string>();
+
+  const handleServerPressedChange = useCallback((id: string, isPressed: boolean) => {
+    setPressedServerId((currentId) => (isPressed ? id : currentId === id ? undefined : currentId));
+  }, []);
 
   const openCreate = useCallback(() => {
     router.push({ pathname: './mcp/[serverId]', params: { serverId: 'new' } });
@@ -47,16 +53,14 @@ export function McpScreen() {
         {isLoading ? (
           <View className="items-center gap-2 px-1 py-8">
             <ActivityIndicator size="small" />
-            <Text className="text-default-foreground text-sm">
-              {t('settings.mcp.list.loading')}
-            </Text>
+            <Text className="text-foreground text-sm">{t('settings.mcp.list.loading')}</Text>
           </View>
         ) : error ? (
           <View className="items-center gap-3 px-1 py-8">
-            <Text className="text-danger-foreground text-sm">
+            <Text className="text-destructive-foreground text-sm">
               {t('settings.mcp.list.loadFailed')}
             </Text>
-            <Text className="text-center text-default-foreground text-xs" selectable>
+            <Text className="text-center text-foreground text-xs" selectable>
               {error instanceof Error ? error.message : String(error)}
             </Text>
             <SettingsDialogActionButton
@@ -73,15 +77,18 @@ export function McpScreen() {
             />
           </View>
         ) : (
-          <View className="overflow-hidden rounded-xl bg-settings-grouped-surface">
+          <View className="overflow-hidden rounded-2xl bg-grouped-surface">
             {servers.map((server, index) => {
+              const previousServerId = servers[index - 1]?.id;
               const summary = summaries[server.id];
               const status = getServerStatus(server, summary);
 
               return (
                 <SettingsServiceRow
                   id={server.id}
-                  isEnabled={server.isActive}
+                  hideSeparator={
+                    pressedServerId === server.id || pressedServerId === previousServerId
+                  }
                   key={server.id}
                   name={server.name}
                   showSeparator={index > 0}
@@ -91,6 +98,7 @@ export function McpScreen() {
                       params: { serverId: server.id },
                     })
                   }
+                  onPressedChange={handleServerPressedChange}
                   statusLabel={t(`settings.mcp.list.status.${status}`)}
                   statusTone={
                     status === 'connected' ? 'success' : status === 'error' ? 'danger' : 'default'

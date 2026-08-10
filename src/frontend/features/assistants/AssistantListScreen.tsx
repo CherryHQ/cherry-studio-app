@@ -1,5 +1,5 @@
-import { useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import { Stack, useRouter } from 'expo-router';
 import { BotIcon, CheckIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,7 +16,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
 } from 'react-native-reanimated';
-import { useConfirmDialog } from '@/frontend/components/confirmDialog';
+
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { type HeaderToolbarAction, TabRootHeader } from '@/frontend/components/headers';
 import {
   areAllSelected,
@@ -27,7 +28,6 @@ import { SelectionToolbar } from '@/frontend/components/messageTabs/SelectionToo
 import { useSetBottomTabBarHidden } from '@/frontend/components/navigation';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
 import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
-import type { Assistant } from '@/shared/data/types/assistant';
 
 // Width of the revealed swipe-to-delete panel; keep in sync with `w-16` below.
 const DELETE_ACTION_WIDTH = 64;
@@ -37,42 +37,77 @@ const ASSISTANT_ROW_ACCESSIBILITY_ACTIONS = [{ name: 'activate' as const }];
 export default function AssistantListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { toast } = useToast();
   const { assistants, isLoading } = useAssistantsApi();
-  const { deleteAssistant } = useAssistantMutations();
-  const { confirmDialog, requestConfirm } = useConfirmDialog();
-  const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  const { deleteAssistant, deleteAssistants } = useAssistantMutations();
+  const { alert } = useAlert();
+  const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
   const setBottomTabBarHidden = useSetBottomTabBarHidden();
   const bottomInset = useMessageListBottomInset();
   const [isEditing, setIsEditing] = useState(false);
-  const [isBatchDeleting, setIsBatchDeleting] = useState(false);
+  const [pendingDeletionIds, setPendingDeletionIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const [searchText, setSearchText] = useState('');
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
+  const isBatchDeleting = pendingDeletionIds.size > 0;
+
+  const visibleAssistants = useMemo(
+    () =>
+      pendingDeletionIds.size === 0
+        ? assistants
+        : assistants.filter((assistant) => !pendingDeletionIds.has(assistant.id)),
+    [assistants, pendingDeletionIds],
+  );
+
+  const filteredAssistants = useMemo(() => {
+    const query = searchText.trim().toLocaleLowerCase();
+    if (!query) {
+      return visibleAssistants;
+    }
+
+    return visibleAssistants.filter((assistant) =>
+      [assistant.name, assistant.modelName].some((value) =>
+        value?.toLocaleLowerCase().includes(query),
+      ),
+    );
+  }, [searchText, visibleAssistants]);
 
   useEffect(() => {
     if (process.env.EXPO_OS !== 'android') {
       return;
     }
 
-    setBottomTabBarHidden(isEditing);
     return () => setBottomTabBarHidden(false);
-  }, [isEditing, setBottomTabBarHidden]);
+  }, [setBottomTabBarHidden]);
 
   const enterEditing = useCallback(() => {
+    if (isBatchDeleting) {
+      return;
+    }
+
+    closeOpen();
+    setSearchText('');
     setIsEditing(true);
-  }, []);
+    if (process.env.EXPO_OS === 'android') {
+      setBottomTabBarHidden(true);
+    }
+  }, [closeOpen, isBatchDeleting, setBottomTabBarHidden]);
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
-  }, []);
+    if (process.env.EXPO_OS === 'android') {
+      setBottomTabBarHidden(false);
+    }
+  }, [setBottomTabBarHidden]);
   const toggleAssistant = useCallback((assistantId: string) => {
     setSelectedIds((current) => toggleSelection(current, assistantId));
   }, []);
   const toggleAllAssistants = useCallback(() => {
-    const assistantIds = assistants.map((assistant) => assistant.id);
+    const assistantIds = visibleAssistants.map((assistant) => assistant.id);
     setSelectedIds((current) =>
       areAllSelected(current, assistantIds) ? new Set() : new Set(assistantIds),
     );
-  }, [assistants]);
+  }, [visibleAssistants]);
 
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/new');
@@ -93,13 +128,13 @@ export default function AssistantListScreen() {
     () => [
       {
         accessibilityLabel: t(isEditing ? 'common.done' : 'common.edit'),
-        disabled: assistants.length === 0 || isBatchDeleting,
+        disabled: visibleAssistants.length === 0 || isBatchDeleting,
         key: 'edit-assistants',
         label: t(isEditing ? 'common.done' : 'common.edit'),
         onPress: isEditing ? exitEditing : enterEditing,
       },
     ],
-    [assistants.length, enterEditing, exitEditing, isBatchDeleting, isEditing, t],
+    [enterEditing, exitEditing, isBatchDeleting, isEditing, t, visibleAssistants.length],
   );
   const openAssistantDetail = useCallback(
     (assistantId: string) => {
@@ -112,20 +147,19 @@ export default function AssistantListScreen() {
   );
   const requestDeleteAssistant = useCallback(
     (assistant: Assistant) => {
-      requestConfirm({
+      alert.confirm({
+        confirmLabel: t('common.delete'),
+        description: t('assistant.delete.message', { name: assistant.name }),
+        role: 'destructive',
         title: t('assistant.delete.title'),
-        message: t('assistant.delete.message', { name: assistant.name }),
         onConfirm: () => {
           void deleteAssistant(assistant.id).catch(() => {
-            toast.show({
-              label: t('assistant.toast.deleteFailed'),
-              variant: 'danger',
-            });
+            alert.show({ title: t('assistant.toast.deleteFailed') });
           });
         },
       });
     },
-    [deleteAssistant, requestConfirm, t, toast],
+    [alert, deleteAssistant, t],
   );
   const deleteSelectedAssistants = useCallback(async () => {
     const ids = [...selectedIds];
@@ -133,30 +167,29 @@ export default function AssistantListScreen() {
       return;
     }
 
-    setIsBatchDeleting(true);
+    setPendingDeletionIds(new Set(ids));
+    exitEditing();
     try {
-      await Promise.all(ids.map((assistantId) => deleteAssistant(assistantId)));
-      exitEditing();
+      await deleteAssistants(ids);
     } catch {
-      toast.show({
-        label: t('assistant.selection.deleteFailed'),
-        variant: 'danger',
-      });
+      alert.show({ title: t('assistant.selection.deleteFailed') });
     } finally {
-      setIsBatchDeleting(false);
+      setPendingDeletionIds(new Set());
     }
-  }, [deleteAssistant, exitEditing, selectedIds, t, toast]);
+  }, [alert, deleteAssistants, exitEditing, selectedIds, t]);
   const requestDeleteSelectedAssistants = useCallback(() => {
     if (selectedIds.size === 0) {
       return;
     }
 
-    requestConfirm({
-      message: t('assistant.selection.deleteMessage', { count: selectedIds.size }),
+    alert.confirm({
+      confirmLabel: t('common.delete'),
+      description: t('assistant.selection.deleteMessage', { count: selectedIds.size }),
       onConfirm: deleteSelectedAssistants,
+      role: 'destructive',
       title: t('assistant.selection.deleteTitle'),
     });
-  }, [deleteSelectedAssistants, requestConfirm, selectedIds.size, t]);
+  }, [alert, deleteSelectedAssistants, selectedIds.size, t]);
   const scrollContentStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
     [bottomInset],
@@ -169,6 +202,18 @@ export default function AssistantListScreen() {
         rightActions={isEditing ? undefined : rightActions}
         title={t('assistant.list.title')}
       />
+      {process.env.EXPO_OS === 'ios' && !isEditing ? (
+        <Stack.SearchBar
+          autoCapitalize="none"
+          hideNavigationBar={false}
+          hideWhenScrolling={false}
+          obscureBackground={false}
+          placeholder={t('navigation.search')}
+          placement="stacked"
+          onCancelButtonPress={() => setSearchText('')}
+          onChangeText={(event) => setSearchText(event.nativeEvent.text)}
+        />
+      ) : null}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -176,14 +221,14 @@ export default function AssistantListScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        {assistants.length > 0 ? (
+        {filteredAssistants.length > 0 ? (
           <View>
-            {assistants.map((assistant, index) => (
+            {filteredAssistants.map((assistant, index) => (
               <AssistantListRow
                 key={assistant.id}
                 assistant={assistant}
                 isEditing={isEditing}
-                isLast={index === assistants.length - 1}
+                isLast={index === filteredAssistants.length - 1}
                 isSelected={selectedIds.has(assistant.id)}
                 notifyClose={notifyClose}
                 notifyWillOpen={notifyWillOpen}
@@ -193,8 +238,12 @@ export default function AssistantListScreen() {
               />
             ))}
           </View>
-        ) : (
+        ) : visibleAssistants.length === 0 ? (
           <AssistantEmptyState isLoading={isLoading} onCreate={openCreateAssistant} />
+        ) : (
+          <View className="items-center px-4 py-12">
+            <Text className="text-sm text-muted-foreground">{t('assistant.list.noResults')}</Text>
+          </View>
         )}
       </ScrollView>
       {isEditing ? (
@@ -205,7 +254,6 @@ export default function AssistantListScreen() {
           selectedCount={selectedIds.size}
         />
       ) : null}
-      {confirmDialog}
     </>
   );
 }
@@ -237,12 +285,6 @@ function AssistantListRow({
   const swipeableRef = useRef<SwipeableMethods>(null);
   const isSwipeOpen = useSharedValue(0);
   const pressProgress = useSharedValue(0);
-
-  useEffect(() => {
-    if (isEditing) {
-      swipeableRef.current?.close();
-    }
-  }, [isEditing]);
 
   const handleDeletePress = useCallback(() => {
     swipeableRef.current?.close();
@@ -327,7 +369,7 @@ function AssistantListRow({
         >
           <View className="relative min-w-0 flex-1 flex-row items-center gap-2 py-2 pl-2">
             <Animated.View
-              className="absolute inset-0 bg-settings-grouped-surface"
+              className="absolute inset-0 bg-secondary"
               pointerEvents="none"
               style={pressedBackgroundStyle}
             />
@@ -353,20 +395,22 @@ function AssistantListRow({
                   className={
                     isSelected
                       ? 'size-6 items-center justify-center rounded-full bg-primary'
-                      : 'size-6 items-center justify-center rounded-full border-2 border-foreground-muted'
+                      : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
                   }
                 >
-                  {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
+                  {isSelected ? (
+                    <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+                  ) : null}
                 </View>
               </Animated.View>
             ) : null}
-            <Text className="min-w-12 h-12 text-center text-3xl leading-12">{assistant.emoji}</Text>
+            <Text className="min-w-12 text-center text-emoji-3xl">{assistant.emoji}</Text>
             <View className="min-w-0 flex-1 pr-4">
               <View className="gap-0.5">
-                <Text className="font-semibold text-foreground text-md" numberOfLines={1}>
+                <Text className="font-semibold text-foreground text-base" numberOfLines={1}>
                   {assistant.name}
                 </Text>
-                <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
                   {assistant.modelName ?? t('assistant.model.none')}
                 </Text>
               </View>
@@ -397,10 +441,10 @@ function DeleteAction({ drag, label, onPress }: DeleteActionProps) {
       <Pressable
         accessibilityLabel={label}
         accessibilityRole="button"
-        className="w-16 flex-1 items-center justify-center bg-danger active:opacity-80"
+        className="w-16 flex-1 items-center justify-center bg-destructive active:opacity-80"
         onPress={onPress}
       >
-        <Trash2Icon className="size-5 text-danger-foreground" strokeWidth={2} />
+        <Trash2Icon className="size-5 text-destructive-foreground" strokeWidth={2} />
       </Pressable>
     </Animated.View>
   );
@@ -417,15 +461,15 @@ function AssistantEmptyState({
 
   return (
     <View className="items-center justify-center gap-4 px-8 py-16">
-      <View className="size-14 items-center justify-center rounded-full bg-settings-grouped-surface">
-        <BotIcon className="size-7 text-default-foreground" strokeWidth={2} />
+      <View className="size-14 items-center justify-center rounded-full bg-secondary">
+        <BotIcon className="size-7 text-foreground" strokeWidth={2} />
       </View>
       <View className="items-center gap-1">
         <Text className="text-center font-semibold text-foreground text-lg">
           {isLoading ? t('assistant.list.loading') : t('assistant.list.emptyTitle')}
         </Text>
         {!isLoading ? (
-          <Text className="text-center text-default-foreground text-sm">
+          <Text className="text-center text-foreground text-sm">
             {t('assistant.list.emptyDescription')}
           </Text>
         ) : null}

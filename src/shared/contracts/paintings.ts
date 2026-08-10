@@ -1,7 +1,9 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { FileEntryId, ResolvedFile } from '@/shared/data/types/file';
-import type { UniqueModelId } from '@/shared/data/types/model';
-import type { Painting } from '@/shared/data/types/painting';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Painting } from '@cherrystudio/universal/data/types/painting';
+
+import type { ResolvedFile } from './file';
 
 export type PaintingSourceImage = {
   fileEntryId?: FileEntryId;
@@ -35,11 +37,12 @@ export type ResolvedPaintingFiles = {
 };
 
 export interface PaintingGenerationSession {
+  cancel(): void;
   dispose(): void;
-  generate(input: PaintingGenerationInput, signal: AbortSignal): Promise<PaintingGenerationResult>;
+  generate(input: PaintingGenerationInput): Promise<PaintingGenerationResult>;
 }
 
-export interface PaintingsBackend {
+export interface PaintingsModule {
   createGenerationSession(): PaintingGenerationSession;
   resolveFiles(painting: Painting): Promise<ResolvedPaintingFiles>;
 }

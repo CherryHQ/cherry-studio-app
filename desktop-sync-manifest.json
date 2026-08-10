@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/CherryHQ/cherry-studio.git",
+  "delegatedManifests": {
+    "design": "packages/design-tokens/src/sync-manifest.json"
+  },
+  "domains": {
+    "design-catalog": {
+      "strategy": "semantic-port",
+      "status": "aligned",
+      "sourcePaths": [
+        "packages/ui/icons",
+        "packages/ui/src/components/icons/registry.ts",
+        "packages/ui/src/components/icons/models",
+        "packages/ui/src/components/icons/providers"
+      ],
+      "targetPaths": ["packages/ui/icons", "packages/ui/src/icons", "packages/ui/src/icons-webp"],
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "40d8b7c58f87db799768b3f9fe27bb79ef3d16e945f3064ab1575e4ec4bcdb85",
+      "explicitExclusions": [],
+      "virtualIconAdapters": {
+        "opencode": "general/open-code"
+      }
+    },
+    "schema": {
+      "strategy": "opaque-retention",
+      "status": "unbaselined",
+      "sourcePaths": ["src/main/data/db/schemas", "migrations/sqlite-drizzle/meta"],
+      "targetPaths": ["src/backend/data/db/schemas", "migrations/sqlite-drizzle/meta"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": []
+    },
+    "shared-data": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["src/shared/data"],
+      "targetPaths": ["packages/universal/src/data"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": [
+        "src/shared/data/bootConfig/**",
+        "src/shared/data/migration/**",
+        "src/shared/data/presets/binaryTools.ts",
+        "src/shared/data/presets/claudeCode.ts",
+        "src/shared/data/presets/codex.ts",
+        "src/shared/data/presets/grokCli.ts",
+        "src/shared/data/presets/localEmbedding.ts",
+        "src/shared/data/presets/localModel.ts",
+        "src/shared/data/types/fileProcessing.ts",
+        "src/shared/data/types/settingsPath.ts"
+      ],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/data/preference/preferenceTypes.ts",
+          "keeps": "DB-backed preference types",
+          "drops": "BootConfigPreferenceKeys intersection in UnifiedPreferenceType (Electron boot-config file does not exist on mobile)"
+        }
+      ],
+      "mobilePreferenceExtensions": [
+        "permissions.calendar_read",
+        "permissions.calendar_write",
+        "permissions.health_read",
+        "permissions.location_read",
+        "permissions.reminders_read",
+        "permissions.reminders_write"
+      ]
+    },
+    "shared-portable": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": [
+        "src/shared/types/aiSdk.ts",
+        "src/shared/types/codeCli.ts",
+        "src/shared/types/error.ts",
+        "src/shared/types/serializable.ts",
+        "src/shared/utils/conversationTitle.ts",
+        "src/shared/utils/keywordSearch.ts",
+        "src/shared/utils/model.ts",
+        "src/shared/utils/shortcut.ts",
+        "src/shared/utils/text.ts",
+        "src/shared/utils/url.ts"
+      ],
+      "targetPaths": [
+        "packages/universal/src/types/aiSdk.ts",
+        "packages/universal/src/types/codeCli.ts",
+        "packages/universal/src/types/error.ts",
+        "packages/universal/src/types/serializable.ts",
+        "packages/universal/src/utils/conversationTitle.ts",
+        "packages/universal/src/utils/keywordSearch.ts",
+        "packages/universal/src/utils/model.ts",
+        "packages/universal/src/utils/shortcut.ts",
+        "packages/universal/src/utils/text.ts",
+        "packages/universal/src/utils/url.ts"
+      ],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": [],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/types/aiSdk.ts",
+          "keeps": "ReasoningEffortOption plus its Zod schema, and the AiSdkParam standard-parameter vocabulary with its isAiSdkParam guard",
+          "drops": "OpenAIVerbosity/ValidOpenAIVerbosity/OpenAIReasoningSummary/OpenAICompletionsStreamOptions, which alias into the @cherrystudio/openai SDK that mobile does not depend on; backend/ai/utils/options.ts re-declares the verbosity union it needs as a literal type"
+        },
+        {
+          "path": "src/shared/types/codeCli.ts",
+          "keeps": "CodeCli enum backing the seeded feature.code_cli.configs preference value",
+          "drops": "TerminalApp/TerminalConfig launch configs, CLI gateway and own-login virtual provider ids (mobile cannot launch CLIs)"
+        },
+        {
+          "path": "src/shared/utils/shortcut.ts",
+          "keeps": "Shortcut token vocabulary, ShortcutToken/ShortcutBinding types, isShortcutToken guard backing seeded shortcut.* preference values",
+          "drops": "Accelerator/hotkey conversion, key display formatting, binding validation for the desktop command system"
+        }
+      ]
+    },
+    "data-main": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["src/main/data"],
+      "targetPaths": ["src/backend/data"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": ["src/main/data/migration/v2/**"]
+    },
+    "data-renderer": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["src/renderer/data"],
+      "targetPaths": ["src/frontend/data"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": []
+    },
+    "ai-core": {
+      "strategy": "mirror",
+      "status": "aligned",
+      "sourcePaths": ["packages/aiCore"],
+      "targetPaths": ["packages/ai-core"],
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "dc1f733dfa854485159ca13786c75cbe0a70788a1a1d6a99a21ced05fa91dddb",
+      "explicitExclusions": []
+    },
+    "ai-sdk-provider": {
+      "strategy": "mirror",
+      "status": "aligned",
+      "sourcePaths": ["packages/ai-sdk-provider"],
+      "targetPaths": ["packages/ai-sdk-provider"],
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "36ab81e817c191119608b0bffc0339fe11da66bb28e5bbd556f01ff36b893af1",
+      "explicitExclusions": []
+    },
+    "provider-registry": {
+      "strategy": "semantic-port",
+      "status": "aligned",
+      "sourcePaths": ["packages/provider-registry"],
+      "targetPaths": ["packages/provider-registry"],
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "4114ac8750f47098cbac0ff8e37cae4dbb1b51840129fdda30125cfcd76d8d33",
+      "explicitExclusions": [],
+      "mobileExtensions": [
+        {
+          "path": "packages/provider-registry/vitestJestShim.ts",
+          "keeps": "every test file's `import { describe, expect, it } from 'vitest'` line verbatim",
+          "adds": "a jest.config.js moduleNameMapper target that re-exports jest's globals under vitest's names, so ten suites run on both runners without a single import diff"
+        },
+        {
+          "path": "packages/provider-registry/src/testing/catalogData.ts",
+          "keeps": "the readCatalogJson helper the catalog suites share",
+          "adds": "a `typeof __dirname === 'undefined'` branch, because vitest resolves the fixture directory from import.meta.url while jest-expo runs CJS and has no import.meta"
+        },
+        {
+          "path": "packages/provider-registry/src/mobile-loader.ts",
+          "keeps": "nothing, there is no desktop counterpart",
+          "adds": "a loader that static-imports data/*.json so Metro bundles the catalog; desktop's registry-loader reads it off disk, which React Native has no fs for"
+        },
+        {
+          "path": "packages/provider-registry/package.json",
+          "keeps": "the package identity, script names and public entry points",
+          "adds": "src-facing main/module/types/exports because Metro does not consume dist, a ./mobile subpath, src+docs+scripts in files, oxfmt instead of biome in generate, and zod promoted to dependencies since the app typechecks this package's source directly. Also drops desktop's class-variance-authority, lucide-react, json-schema and dotenv, which no code in this package imports, and pins vitest 3 and tsdown 0.20 against desktop's vitest 4 and tsdown 0.16"
+        },
+        {
+          "path": "packages/provider-registry/tsdown.config.ts",
+          "keeps": "the desktop build entries",
+          "adds": "the mobile-loader entry"
+        },
+        {
+          "path": "packages/provider-registry/src/registry-utils.ts",
+          "keeps": "every desktop export unchanged",
+          "adds": "RuntimeEndpointConfig and buildRuntimeEndpointConfigs, consumed by PresetProviderSeeder.ts:65 to seed provider rows; desktop builds the same shape inline in the renderer"
+        },
+        {
+          "path": "packages/provider-registry/src/utils/buildParamsSchema.ts",
+          "keeps": "the whole file semantically",
+          "adds": "one `as ImageGenerationMode | undefined` cast on Object.keys(modes)[0]; the app typechecks this package's source rather than its dist, so the widened key type surfaces here and not on desktop. This one gets clobbered on every sync"
+        }
+      ]
+    },
+    "ai-runtime": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["src/main/ai"],
+      "targetPaths": ["src/backend/ai"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": [
+        "src/main/ai/agentSession/**",
+        "src/main/ai/agents/**",
+        "src/main/ai/observability/adapters/claudeCode/**",
+        "src/main/ai/runtime/claudeCode/**",
+        "src/main/ai/streamManager/__tests__/buildCompactReplay.test.ts",
+        "src/main/ai/streamManager/buildCompactReplay.ts",
+        "src/main/ai/tools/adapters/claudeCode/**"
+      ]
+    },
+    "shared-ai": {
+      "strategy": "semantic-port",
+      "status": "aligned",
+      "sourcePaths": ["src/shared/ai"],
+      "targetPaths": ["packages/universal/src/ai"],
+      "sourceCommit": "55feedb21473daf04792962db81ca66ab53e58a0",
+      "sourceSha256": "bb816f1380b3ddd71b5a31f3906e77a55e529640dae90537de6d9640083eb698",
+      "explicitExclusions": [
+        "src/shared/ai/agentSessionApiRetry.ts",
+        "src/shared/ai/agentSessionBackgroundTasks.ts",
+        "src/shared/ai/agentSessionContextUsage.ts",
+        "src/shared/ai/agentSessionFlowParts.ts",
+        "src/shared/ai/agentSessionSlashCommands.ts",
+        "src/shared/ai/agentSlashCommands.ts",
+        "src/shared/ai/claudecode/**",
+        "src/shared/ai/slashCommands.ts",
+        "src/shared/ai/tool.ts"
+      ],
+      "shapeOnlyPorts": [
+        {
+          "path": "src/shared/ai/prompts.ts",
+          "keeps": "TRANSLATE_PROMPT — seeded default of feature.translate.model_prompt",
+          "drops": "AGENT_PROMPT/SUMMARIZE_PROMPT/LANG_DETECT_PROMPT desktop templates with no mobile consumer"
+        },
+        {
+          "path": "src/shared/ai/tools/__tests__/mcpToolName.test.ts",
+          "keeps": "the identity-critical regressions: the 63-character cap, the server hash suffix that stops two long server names from colliding after truncation, single-server attribution for truncated ids, collision suffixes staying inside maxLength, and the mcp__server__tool round-trip",
+          "drops": "desktop's buildMcpToolName and generateMcpToolFunctionName case matrices — both functions have only a test consumer on mobile, no product one, so the matrices would pin behaviour nothing depends on"
+        }
+      ],
+      "mobileExtensions": [
+        {
+          "path": "packages/universal/src/ai/tools/mcpSourcePolicy.ts",
+          "keeps": "all six desktop exports unchanged",
+          "adds": "the write side — hasMcpServerWildcardRule, withMcpToolRuleAdded and withMcpToolRuleCleared. Desktop edits rule arrays inline at each call site; mobile's MCP settings screen needs one shared implementation"
+        },
+        {
+          "path": "packages/universal/src/ai/transport/toolApprovals.ts",
+          "keeps": "nothing, there is no desktop counterpart",
+          "adds": "mobile's own approval settlement helpers. Note this overlaps the ported transport/applyApprovalDecisions.ts, which is barrel-only dead code here, and the two declare their own ApprovalDecision types — collapsing them is open work, not an intended fork"
+        },
+        {
+          "path": "packages/universal/src/ai/tools/mcpResult.ts",
+          "keeps": "desktop's implementation verbatim",
+          "adds": "nothing; it only looks mobile-only in this domain because desktop keeps the same code in src/main/ai/tools/adapters/aiSdk/mcp/utils.ts, which the ai-runtime domain covers"
+        }
+      ]
+    },
+    "services": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["src/main/services"],
+      "targetPaths": ["src/backend/services", "src/backend/data/services", "src/backend/ai"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": []
+    },
+    "dependencies": {
+      "strategy": "semantic-port",
+      "status": "unbaselined",
+      "sourcePaths": ["package.json", "pnpm-lock.yaml", "patches"],
+      "targetPaths": ["package.json", "pnpm-lock.yaml", "patches"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": []
+    },
+    "backup": {
+      "strategy": "opaque-retention",
+      "status": "blocked",
+      "sourcePaths": [
+        "src/main/services/LegacyBackupManager.ts",
+        "src/main/data/db/restore",
+        "src/main/data/CacheService.ts"
+      ],
+      "targetPaths": ["src/backend/data", "src/backend/services"],
+      "sourceCommit": null,
+      "sourceSha256": null,
+      "explicitExclusions": [],
+      "blocker": "Desktop v7 direct backups archive Data/cherrystudio.sqlite, resources, cache.json, and the desktop migration chain; mobile currently uses cherry.db, a different migration chain, and MMKV cache, so it cannot produce or restore that archive losslessly."
+    }
+  }
+}

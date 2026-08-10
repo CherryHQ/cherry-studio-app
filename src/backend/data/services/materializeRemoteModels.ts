@@ -1,9 +1,14 @@
 import {
+  createUniqueModelId,
+  type Model,
+  type UniqueModelId,
+} from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
+import {
   mergePresetModel,
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
-import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
 
 export function materializeRemoteModels(
   provider: Provider,
@@ -63,7 +68,7 @@ export function materializeRemoteModels(
 function enrichFromRegistry(model: Model, provider: Provider): Model {
   const registryData = providerRegistryService.lookupModel(provider.id, model.modelId, {
     defaultChatEndpoint: provider.defaultChatEndpoint,
-    endpointConfigs: provider.endpointConfigs,
+    presetProviderId: provider.presetProviderId,
   });
   if (!registryData.presetModel) {
     return model;
@@ -73,8 +78,8 @@ function enrichFromRegistry(model: Model, provider: Provider): Model {
     registryData.presetModel,
     registryData.registryOverride,
     model.providerId,
-    registryData.reasoningFormatTypes,
-    registryData.defaultChatEndpoint,
+    registryData.reasoningProfile.wire,
+    registryData.reasoningProfile.support,
   );
 
   return {

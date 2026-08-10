@@ -1,19 +1,55 @@
+/**
+ * Read-only File DataApi handlers. Keep filesystem-backed operations in the
+ * mobile FileModule rather than adding platform routes to FileSchemas.
+ */
+import {
+  ContentHashQuerySchema,
+  type FileSchemas,
+  ListFilesQuerySchema,
+  RefCountsQuerySchema,
+  RefsBySourceQuerySchema,
+} from '@cherrystudio/universal/data/api/schemas/files';
+import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
+import { FileEntryIdSchema } from '@cherrystudio/universal/data/types/file';
+
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { FileSchemas } from '@/shared/data/api/schemas/files';
-import type { HandlersFor } from '@/shared/data/api/types';
+import type { FileRefService } from '@/backend/data/services/FileRefService';
 
-type FileData = Pick<FileEntryService, 'get' | 'resolve' | 'resolveRenderableUri'>;
-
-export function createFileHandlers(service: FileData): HandlersFor<FileSchemas> {
+export function createFileHandlers(
+  entries: FileEntryService,
+  refs: FileRefService,
+): HandlersFor<FileSchemas> {
   return {
-    '/files/:id': {
-      GET: ({ params }) => service.get(params.id),
+    '/files/entries': {
+      GET: ({ query }) => entries.listCursor(ListFilesQuerySchema.parse(query ?? {})),
     },
-    '/files/:id/renderable-uri': {
-      GET: async ({ params }) => (await service.resolveRenderableUri(params.id)) ?? null,
+    '/files/entries/:id': {
+      GET: ({ params }) => entries.getById(FileEntryIdSchema.parse(params.id)),
     },
-    '/files/:id/resolved': {
-      GET: ({ params }) => service.resolve(params.id),
+    '/files/entries/by-content-hash': {
+      GET: ({ query }) => {
+        const { contentHash } = ContentHashQuerySchema.parse(query);
+        return entries.findInternalByContentHash(contentHash);
+      },
+    },
+    '/files/entries/stats': {
+      GET: () => entries.getStats(),
+    },
+    '/files/entries/ref-counts': {
+      GET: async ({ query }) => {
+        const { entryIds } = RefCountsQuerySchema.parse(query);
+        const counts = await refs.countByEntryIds(entryIds);
+        return entryIds.map((entryId) => ({
+          entryId,
+          refCount: counts.get(entryId) ?? 0,
+        }));
+      },
+    },
+    '/files/entries/:id/refs': {
+      GET: ({ params }) => refs.findByEntryId(FileEntryIdSchema.parse(params.id)),
+    },
+    '/files/refs': {
+      GET: ({ query }) => refs.findBySource(RefsBySourceQuerySchema.parse(query)),
     },
   };
 }

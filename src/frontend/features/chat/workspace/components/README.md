@@ -6,20 +6,20 @@ When the active topic changes, `ChatWorkspace` remounts `ChatMessageList` with a
 
 The new list renders and measures behind the cover first. After the list reports ready, the cover and loading indicator exit together with a short eased fade.
 
-## Short Conversations
+## Composer Inset
 
-If the measured message content height fits above the floating input, the list does not call `scrollToEnd`.
+The floating composer reports its measured height through `useKeyboardChatComposerInset`. The list waits for its first non-zero viewport layout before attaching that shared inset; this avoids sending an invalid animated scroll-indicator inset while a navigation transition still has the list at `0x0`.
 
-The content stays at the top with the normal top padding. This keeps short topics from being bottom-pinned or hidden under the transparent header.
+`KeyboardAwareLegendList` then owns composer spacing and keyboard lift. The content container keeps only the fixed visual gap below the final message.
 
-## Long Conversations
+## Live Turn Anchoring
 
-If the measured message content height is taller than the visible area above the floating input, the list adds bottom padding equal to the floating input inset.
+The latest user message is anchored below the header. `anchoredEndSpace` reserves the remaining viewport while the assistant reply is short, then reports when that space is exhausted.
 
-Before removing the cover, the list calls `scrollToEnd({ animated: false })`. The user sees the topic already positioned at the latest message, without a visible scroll animation.
+Text anchors use a two-line height cap. Messages containing files use their complete measured height.
 
-## Later Message Updates
+## Tail Following
 
-`maintainScrollAtEnd` only listens to `dataChange`. If the user is already near the bottom, new messages keep the list at the bottom without animation.
+After the reserved space is exhausted, data and item-size changes schedule one non-animated native `scrollToEnd` per frame. The callback rechecks the current phase and the synchronous interaction lock immediately before dispatching.
 
-Layout and item-layout changes do not force the list back to the bottom. This lets the user scroll upward without being pulled back by measurement updates.
+Touch, drag, and momentum events cancel pending follow work and pause following. End-visibility changes are ignored while an interaction is active. Following resumes only after the list's measured distance from the end is within the 20-pixel threshold, including after the existing scroll-to-bottom button reaches the end.

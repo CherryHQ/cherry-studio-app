@@ -6,9 +6,4 @@ export {
   resolveModelToProviderIcon,
   resolveProviderIcon,
 } from './registry';
-export type {
-  GeneralIconKey,
-  IconPngSource,
-  ModelIconKey,
-  ProviderIconKey,
-} from './types';
+export type { GeneralIconKey, IconSource, ModelIconKey, ProviderIconKey } from './types';

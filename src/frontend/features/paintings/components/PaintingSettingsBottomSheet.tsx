@@ -1,16 +1,24 @@
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
-import { Input } from 'heroui-native/input';
-import { Select } from 'heroui-native/select';
-import { Slider } from 'heroui-native/slider';
-import { Switch } from 'heroui-native/switch';
+import {
+  BottomSheet,
+  Description,
+  FieldError,
+  Input,
+  Label,
+  Section,
+  Slider,
+  Switch,
+  TextField,
+  useBottomSheet,
+} from '@cherrystudio/ui/components';
 import type { TFunction } from 'i18next';
-import { ChevronDownIcon } from 'lucide-uniwind/png';
+import { CheckIcon, ChevronRightIcon } from 'lucide-uniwind/png';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BottomSheet } from '@/frontend/components/bottomSheet';
+
 import { SlotText } from '@/frontend/components/SlotText';
-import { bottomSheet } from '@/frontend/utils/constants';
 
 import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 import type {
@@ -34,6 +42,10 @@ type PaintingSettingsBottomSheetProps = {
   values: ImageParamDraft;
 };
 
+type EnumImageParamField = ImageParamField & {
+  spec: Extract<ImageParamField['spec'], { type: 'enum' }>;
+};
+
 export function PaintingSettingsBottomSheet({
   onDismiss,
   onValueChange,
@@ -42,41 +54,90 @@ export function PaintingSettingsBottomSheet({
 }: PaintingSettingsBottomSheetProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { height: windowHeight } = useWindowDimensions();
+  const [activeEnumKey, setActiveEnumKey] = useState<CanonicalParamKey | null>(null);
   const fields = getImageParamFields(resolvedMode);
-  const sheetWidth = Math.max(0, windowWidth - bottomSheet.outerInset * 2);
-  const availableHeight = windowHeight - insets.top - insets.bottom - bottomSheet.outerInset * 2;
+  const activeEnumField = fields.find(
+    (field): field is EnumImageParamField =>
+      field.key === activeEnumKey && field.spec.type === 'enum' && field.spec.render !== 'chips',
+  );
+  const availableHeight = windowHeight - insets.top - insets.bottom;
   const sheetHeight = Math.min(680, Math.max(360, availableHeight * 0.78));
-  const fieldWidth = Math.max(0, sheetWidth - 48);
+  const pageKey = activeEnumField ? `enum-${activeEnumField.key}` : 'settings';
 
   return (
     <BottomSheet
+      backAccessibilityLabel={t('common.back')}
       closeAccessibilityLabel={t('painting.settings.close')}
       height={sheetHeight}
+      onBack={activeEnumField ? () => setActiveEnumKey(null) : undefined}
       onClose={onDismiss}
       testID="painting-settings"
-      title={t('painting.settings.title')}
+      title={
+        activeEnumField ? imageParamLabel(t, activeEnumField.key) : t('painting.settings.title')
+      }
     >
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingBottom: Math.max(24, insets.bottom + 12) },
-        ]}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+      <BottomSheet.PageTransition
+        depth={activeEnumField ? 1 : 0}
+        pageKey={pageKey}
+        testID="painting-settings-pages"
       >
-        {fields.map((field) => (
-          <PaintingSettingField
-            field={field}
-            fieldWidth={fieldWidth}
+        {activeEnumField ? (
+          <EnumSelectionPage
+            field={activeEnumField}
             fields={fields}
-            key={field.key}
             onValueChange={onValueChange}
             values={values}
           />
-        ))}
-      </ScrollView>
+        ) : (
+          <PaintingSettingsRootPage
+            fields={fields}
+            onValueChange={onValueChange}
+            onEnumPress={setActiveEnumKey}
+            values={values}
+            safeAreaBottom={insets.bottom}
+          />
+        )}
+      </BottomSheet.PageTransition>
     </BottomSheet>
+  );
+}
+
+function PaintingSettingsRootPage({
+  fields,
+  onEnumPress,
+  onValueChange,
+  safeAreaBottom,
+  values,
+}: {
+  fields: readonly ImageParamField[];
+  onEnumPress: (key: CanonicalParamKey) => void;
+  onValueChange: (key: string, value: unknown) => void;
+  safeAreaBottom: number;
+  values: ImageParamDraft;
+}) {
+  const { geometry } = useBottomSheet();
+  const fieldWidth = Math.max(0, geometry.sheetWidth - 48);
+
+  return (
+    <ScrollView
+      contentContainerStyle={[styles.content, { paddingBottom: Math.max(24, safeAreaBottom + 12) }]}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      style={styles.page}
+    >
+      {fields.map((field) => (
+        <PaintingSettingField
+          field={field}
+          fieldWidth={fieldWidth}
+          fields={fields}
+          key={field.key}
+          onEnumPress={onEnumPress}
+          onValueChange={onValueChange}
+          values={values}
+        />
+      ))}
+    </ScrollView>
   );
 }
 
@@ -84,12 +145,14 @@ function PaintingSettingField({
   field,
   fieldWidth,
   fields,
+  onEnumPress,
   onValueChange,
   values,
 }: {
   field: ImageParamField;
   fieldWidth: number;
   fields: readonly ImageParamField[];
+  onEnumPress: (key: CanonicalParamKey) => void;
   onValueChange: (key: string, value: unknown) => void;
   values: ImageParamDraft;
 }) {
@@ -104,18 +167,17 @@ function PaintingSettingField({
           <Text className="min-w-0 flex-1 font-medium text-foreground text-sm">{label}</Text>
           <Switch
             accessibilityLabel={label}
-            isSelected={Boolean(value)}
-            onSelectedChange={(selected) => onValueChange(field.key, selected)}
+            onValueChange={(selected) => onValueChange(field.key, selected)}
+            value={Boolean(value)}
           />
         </View>
       );
     case 'enum': {
       if (field.spec.render !== 'chips') {
         return (
-          <EnumSelectField
+          <EnumSettingRow
             field={{ key: field.key, spec: field.spec }}
-            fields={fields}
-            onValueChange={onValueChange}
+            onPress={() => onEnumPress(field.key)}
             values={values}
           />
         );
@@ -147,48 +209,37 @@ function PaintingSettingField({
         <View className="gap-3">
           <View className="flex-row items-center justify-between gap-3">
             <Text className="font-medium text-foreground text-sm">{label}</Text>
-            <Text className="text-default-foreground text-sm" style={styles.tabularText}>
+            <Text className="text-foreground text-sm" style={styles.tabularText}>
               {numericValue}
             </Text>
           </View>
           <Slider
             accessibilityLabel={label}
-            maxValue={field.spec.max}
-            minValue={field.spec.min}
-            onChange={(nextValue) =>
-              onValueChange(field.key, Array.isArray(nextValue) ? nextValue[0] : nextValue)
-            }
+            max={field.spec.max}
+            min={field.spec.min}
+            onValueChange={(nextValue) => onValueChange(field.key, nextValue)}
             step={field.spec.step ?? 1}
             value={numericValue}
-          >
-            <Slider.Track>
-              <Slider.Fill />
-              <Slider.Thumb />
-            </Slider.Track>
-          </Slider>
+          />
         </View>
       );
     }
     case 'text':
       return (
-        <View className="gap-2">
-          <Text className="font-medium text-foreground text-sm">{label}</Text>
+        <TextField>
+          <Label>{label}</Label>
           <Input
             accessibilityLabel={label}
             autoCapitalize="none"
             autoCorrect={false}
-            className={
-              field.spec.multiline ? 'min-h-24 rounded-xl px-3 py-2' : 'h-10 rounded-xl px-3 py-0'
-            }
             keyboardType={numericTextKeys.has(field.key) ? 'numbers-and-punctuation' : 'default'}
             multiline={field.spec.multiline}
             onChangeText={(nextValue) => onValueChange(field.key, nextValue)}
             placeholder={t('painting.settings.optional')}
             textAlignVertical={field.spec.multiline ? 'top' : 'center'}
             value={value === undefined || value === null ? '' : String(value)}
-            variant="secondary"
           />
-        </View>
+        </TextField>
       );
     case 'size':
       return (
@@ -228,22 +279,24 @@ function AspectRatioField({
     <View className="gap-2">
       <View className="flex-row items-center justify-between gap-3">
         <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
-        <SlotText text={headerText} textClassName="font-medium text-default-foreground text-sm" />
+        <SlotText text={headerText} textClassName="font-medium text-foreground text-sm" />
       </View>
-      <View className="rounded-3xl bg-surface-secondary p-4">
-        <View className="flex-row flex-wrap" style={styles.chipGrid}>
-          {options.map((option) => (
-            <AspectRatioOption
-              cellWidth={cellWidth}
-              isSelected={selectedValue === option}
-              key={option}
-              label={ratioOptionLabel(t, field.key, option)}
-              onPress={() => onValueChange(field.key, option)}
-              value={option}
-            />
-          ))}
-        </View>
-      </View>
+      <Section>
+        <Section.Item className="p-4">
+          <View className="flex-row flex-wrap" style={styles.chipGrid}>
+            {options.map((option) => (
+              <AspectRatioOption
+                cellWidth={cellWidth}
+                isSelected={selectedValue === option}
+                key={option}
+                label={ratioOptionLabel(t, field.key, option)}
+                onPress={() => onValueChange(field.key, option)}
+                value={option}
+              />
+            ))}
+          </View>
+        </Section.Item>
+      </Section>
     </View>
   );
 }
@@ -314,7 +367,7 @@ function AspectRatioOption({
         className={
           isSelected
             ? 'font-semibold text-foreground text-sm'
-            : 'font-medium text-default-foreground text-sm'
+            : 'font-medium text-foreground text-sm'
         }
         numberOfLines={1}
         style={styles.tabularText}
@@ -354,8 +407,8 @@ function EnumChipsField({
               accessibilityState={{ selected: isSelected }}
               className={
                 isSelected
-                  ? 'h-14 items-center justify-center gap-1 rounded-lg border border-accent bg-accent/10 px-2 active:opacity-70'
-                  : 'h-14 items-center justify-center gap-1 rounded-lg border border-border bg-surface-secondary px-2 active:opacity-70'
+                  ? 'h-14 items-center justify-center gap-1 rounded-lg border border-primary bg-primary/10 px-2 active:opacity-70'
+                  : 'h-14 items-center justify-center gap-1 rounded-lg border border-border bg-secondary px-2 active:opacity-70'
               }
               key={option}
               onPress={() => onValueChange(field.key, option)}
@@ -363,7 +416,7 @@ function EnumChipsField({
             >
               <RatioPreview value={option} />
               <Text
-                className={isSelected ? 'text-accent text-xs' : 'text-foreground text-xs'}
+                className={isSelected ? 'text-primary text-xs' : 'text-foreground text-xs'}
                 numberOfLines={1}
               >
                 {imageParamOptionLabel(t, field.key, option)}
@@ -376,62 +429,88 @@ function EnumChipsField({
   );
 }
 
-function EnumSelectField({
+function EnumSettingRow({
+  field,
+  onPress,
+  values,
+}: {
+  field: EnumImageParamField;
+  onPress: () => void;
+  values: ImageParamDraft;
+}) {
+  const { t } = useTranslation();
+  const label = imageParamLabel(t, field.key);
+  const selectedValue = values[field.key];
+  const selectedLabel =
+    selectedValue === undefined
+      ? t('painting.settings.select')
+      : imageParamOptionLabel(t, field.key, String(selectedValue));
+
+  return (
+    <Section>
+      <Section.Item
+        label={label}
+        onPress={onPress}
+        testID={`painting-setting-${field.key}`}
+        trailing={
+          <View className="min-w-0 max-w-56 flex-row items-center justify-end gap-1">
+            <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
+              {selectedLabel}
+            </Text>
+            <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
+          </View>
+        }
+      />
+    </Section>
+  );
+}
+
+function EnumSelectionPage({
   field,
   fields,
   onValueChange,
   values,
 }: {
-  field: ImageParamField & { spec: Extract<ImageParamField['spec'], { type: 'enum' }> };
+  field: EnumImageParamField;
   fields: readonly ImageParamField[];
   onValueChange: (key: string, value: unknown) => void;
   values: ImageParamDraft;
 }) {
   const { t } = useTranslation();
-  const label = imageParamLabel(t, field.key);
   const options = enumOptions(field, fields);
   const selectedValue = values[field.key];
-  const selected =
-    selectedValue === undefined
-      ? undefined
-      : {
-          label: imageParamOptionLabel(t, field.key, String(selectedValue)),
-          value: String(selectedValue),
-        };
+
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-foreground text-sm">{label}</Text>
-      <Select onValueChange={(option) => onValueChange(field.key, option?.value)} value={selected}>
-        <Select.Trigger
-          accessibilityLabel={label}
-          className="h-11 flex-row items-center rounded-xl bg-surface-secondary px-3 shadow-none"
-        >
-          <Select.Value
-            className="min-w-0 flex-1 text-sm text-foreground"
-            numberOfLines={1}
-            placeholder={t('painting.settings.select')}
-          >
-            {selected?.label ?? t('painting.settings.select')}
-          </Select.Value>
-          <ChevronDownIcon className="size-4 text-default-foreground" strokeWidth={2} />
-        </Select.Trigger>
-        <Select.Portal>
-          <Select.Overlay />
-          <Select.Content className="max-h-64 p-2" presentation="popover" width="trigger">
-            {options.map((option) => (
-              <Select.Item
-                key={option}
-                label={imageParamOptionLabel(t, field.key, option)}
-                value={option}
-              >
-                <Select.ItemLabel className="flex-1 text-sm" numberOfLines={1} />
-                <Select.ItemIndicator />
-              </Select.Item>
-            ))}
-          </Select.Content>
-        </Select.Portal>
-      </Select>
-    </View>
+    <ScrollView
+      contentContainerStyle={styles.selectionContent}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      style={styles.page}
+      testID={`painting-setting-options-${field.key}`}
+    >
+      <Section>
+        {options.map((option) => {
+          const isSelected = selectedValue === option;
+
+          return (
+            <Section.Item
+              accessibilityRole="radio"
+              accessibilityState={{ checked: isSelected }}
+              key={option}
+              label={imageParamOptionLabel(t, field.key, option)}
+              onPress={() => onValueChange(field.key, option)}
+              showChevron={false}
+              testID={`painting-setting-option-${field.key}-${option}`}
+              trailing={
+                isSelected ? (
+                  <CheckIcon className="size-5 text-primary" strokeWidth={2.5} />
+                ) : undefined
+              }
+            />
+          );
+        })}
+      </Section>
+    </ScrollView>
   );
 }
 
@@ -460,37 +539,35 @@ function CustomSizeField({
   const isInvalid =
     !isSideValid(width, field.spec.minSide, field.spec.maxSide) ||
     !isSideValid(height, field.spec.minSide, field.spec.maxSide);
+  const rangeDescription = t('painting.settings.sizeRange', {
+    max: field.spec.maxSide,
+    min: field.spec.minSide,
+  });
   return (
-    <View className="gap-2">
-      <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
+    <TextField isInvalid={isInvalid}>
+      <Label>{imageParamLabel(t, field.key)}</Label>
       <View className="flex-row items-center gap-2">
         <Input
           accessibilityLabel={t('painting.settings.width')}
-          className="h-10 min-w-0 flex-1 rounded-xl px-3 py-0 text-center"
           keyboardType="number-pad"
           onChangeText={(nextValue) => onValueChange(widthKey, nextValue)}
           placeholder={t('painting.settings.width')}
+          style={styles.sizeInput}
           value={width === undefined || width === null ? '' : String(width)}
-          variant="secondary"
         />
-        <Text className="text-default-foreground">×</Text>
+        <Text className="text-foreground">×</Text>
         <Input
           accessibilityLabel={t('painting.settings.height')}
-          className="h-10 min-w-0 flex-1 rounded-xl px-3 py-0 text-center"
           keyboardType="number-pad"
           onChangeText={(nextValue) => onValueChange(heightKey, nextValue)}
           placeholder={t('painting.settings.height')}
+          style={styles.sizeInput}
           value={height === undefined || height === null ? '' : String(height)}
-          variant="secondary"
         />
       </View>
-      <Text className={isInvalid ? 'text-danger text-xs' : 'text-default-foreground text-xs'}>
-        {t('painting.settings.sizeRange', {
-          max: field.spec.maxSide,
-          min: field.spec.minSide,
-        })}
-      </Text>
-    </View>
+      <Description hideOnInvalid>{rangeDescription}</Description>
+      <FieldError>{rangeDescription}</FieldError>
+    </TextField>
   );
 }
 
@@ -584,6 +661,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 12,
   },
+  page: { flex: 1 },
   ratioDashedShape: { borderStyle: 'dashed' },
+  selectionContent: { paddingBottom: 24, paddingHorizontal: 16, paddingTop: 8 },
+  sizeInput: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
+  },
   tabularText: { fontVariant: ['tabular-nums'] },
 });

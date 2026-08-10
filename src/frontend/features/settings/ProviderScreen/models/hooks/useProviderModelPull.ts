@@ -1,10 +1,12 @@
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { isModelPullTimeoutError } from '@/shared/contracts';
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 import type { ProviderModelPullPreview } from '../utils/providerModelPullPreview';
 import { refreshProviderModelQueries } from '../utils/refreshProviderModelQueries';
@@ -23,6 +25,7 @@ export function useProviderModelPull({
   providerId,
 }: UseProviderModelPullOptions) {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const { toast } = useToast();
   const models = useBackendModule('models');
   const queryClient = useQueryClient();
@@ -56,18 +59,17 @@ export function useProviderModelPull({
     };
     return await load()
       .catch((error): ProviderModelPullLoadResult => {
-        toast.show({
-          label: t(
+        alert.show({
+          title: t(
             isModelPullTimeoutError(error)
               ? 'settings.provider.models.pullTimedOut'
               : 'settings.provider.models.pullFailed',
           ),
-          variant: 'danger',
         });
         return 'error';
       })
       .finally(() => setIsPreviewLoading(false));
-  }, [onPreviewReady, models, providerId, queryClient, t, toast]);
+  }, [alert, onPreviewReady, models, providerId, queryClient, t, toast]);
 
   /**
    * Commits one row's worth of change immediately, the way desktop's pull dialog
@@ -89,11 +91,11 @@ export function useProviderModelPull({
         }
         return true;
       } catch {
-        toast.show({ label: t('settings.provider.models.pullApplyFailed'), variant: 'danger' });
+        alert.show({ title: t('settings.provider.models.pullApplyFailed') });
         return false;
       }
     },
-    [models, providerId, queryClient, t, toast],
+    [alert, models, providerId, queryClient, t],
   );
 
   return {
@@ -111,6 +113,5 @@ async function refreshProviderQueries(
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: queryKeys.providers.detail(providerId) }),
     queryClient.invalidateQueries({ queryKey: queryKeys.providers.list() }),
-    queryClient.invalidateQueries({ queryKey: queryKeys.providers.list({ enabled: true }) }),
   ]);
 }

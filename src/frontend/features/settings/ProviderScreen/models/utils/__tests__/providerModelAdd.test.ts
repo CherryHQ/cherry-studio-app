@@ -1,13 +1,15 @@
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-
-import { createUniqueModelId, type Model } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
+import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import {
   buildProviderModelAddInputs,
   createInitialProviderModelAddFormState,
   getDefaultProviderModelGroupName,
+  getProviderChatEndpointTypes,
+  getProviderModelAddMode,
   isNewApiLikeProvider,
+  providerModelAddEndpointOptions,
   splitProviderModelIds,
 } from '../providerModelAdd';
 
@@ -33,12 +35,46 @@ describe('provider model add helpers', () => {
   test('detects mobile supported new-api-like providers', () => {
     expect(isNewApiLikeProvider(provider({ id: 'new-api' }))).toBe(true);
     expect(isNewApiLikeProvider(provider({ id: 'cherryin' }))).toBe(true);
+    expect(isNewApiLikeProvider(provider({ id: 'aionly' }))).toBe(true);
     expect(isNewApiLikeProvider(provider({ id: 'custom', presetProviderId: 'new-api' }))).toBe(
       true,
     );
-    expect(isNewApiLikeProvider(provider({ id: 'aionly' }))).toBe(false);
     expect(isNewApiLikeProvider(provider({ id: 'openai' }))).toBe(false);
     expect(isNewApiLikeProvider(undefined)).toBe(false);
+  });
+
+  test('uses endpoint selection for gateways, purpose for custom providers, and legacy for presets', () => {
+    expect(getProviderModelAddMode(provider({ id: 'new-api' }))).toBe('endpoint-types');
+    expect(getProviderModelAddMode(provider({ id: 'custom' }))).toBe('purpose');
+    expect(getProviderModelAddMode(provider({ id: 'openai', presetProviderId: 'openai' }))).toBe(
+      'legacy',
+    );
+  });
+
+  test('keeps image endpoints out of the custom provider chat protocol choices', () => {
+    expect(
+      getProviderChatEndpointTypes({
+        defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_RESPONSES,
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_RESPONSES]: {},
+          [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: {},
+          [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: {},
+          [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: {},
+        },
+      }),
+    ).toEqual([ENDPOINT_TYPE.OPENAI_RESPONSES, ENDPOINT_TYPE.ANTHROPIC_MESSAGES]);
+  });
+
+  test('offers generation and editing endpoints without mobile-unsupported rerank', () => {
+    expect(providerModelAddEndpointOptions.map((option) => option.id)).toEqual(
+      expect.arrayContaining([
+        ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION,
+        ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
+      ]),
+    );
+    expect(providerModelAddEndpointOptions.map((option) => option.id)).not.toContain(
+      ENDPOINT_TYPE.JINA_RERANK,
+    );
   });
 
   test('builds single create input with endpoint and numeric fields', () => {
@@ -109,6 +145,40 @@ describe('provider model add helpers', () => {
     });
   });
 
+  test.each([
+    [
+      ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION,
+      {
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION],
+        outputModalities: [MODALITY.IMAGE],
+      },
+    ],
+    [
+      ENDPOINT_TYPE.OPENAI_IMAGE_EDIT,
+      {
+        capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION],
+        endpointTypes: [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT],
+        inputModalities: [MODALITY.IMAGE],
+        outputModalities: [MODALITY.IMAGE],
+      },
+    ],
+  ])('maps a custom provider %s model to desktop-compatible fields', (endpointType, expected) => {
+    const formState = {
+      ...createInitialProviderModelAddFormState(endpointType),
+      modelId: 'custom-image-model',
+    };
+
+    expect(
+      buildProviderModelAddInputs({
+        existingModels: [],
+        formState,
+        provider: provider({ id: 'custom-provider' }),
+        providerId: 'custom-provider',
+      }).inputs[0],
+    ).toMatchObject(expected);
+  });
+
   test('omits invalid optional number fields', () => {
     const formState = {
       ...createInitialProviderModelAddFormState(),
@@ -122,7 +192,7 @@ describe('provider model add helpers', () => {
       buildProviderModelAddInputs({
         existingModels: [],
         formState,
-        provider: provider({ id: 'openai' }),
+        provider: provider({ id: 'openai', presetProviderId: 'openai' }),
         providerId: 'openai',
       }).inputs[0],
     ).toEqual({
@@ -156,6 +226,7 @@ function provider(input: { id: string; presetProviderId?: string }): Provider {
       serviceTier: true,
       streamOptions: true,
       verbosity: false,
+      reportsActualCost: false,
     },
     apiKeys: [],
     authType: 'api-key',

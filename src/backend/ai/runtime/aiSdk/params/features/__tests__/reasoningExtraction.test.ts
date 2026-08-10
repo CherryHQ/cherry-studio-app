@@ -1,9 +1,6 @@
 import type { LanguageModelMiddleware } from 'ai';
 
-import {
-  createReasoningExtractionPlugin,
-  INLINE_REASONING_SDK_PROVIDER_IDS,
-} from '../reasoningExtraction';
+import { createReasoningExtractionPlugin } from '../reasoningExtraction';
 
 function extractMiddleware(options?: { tagName?: string }): LanguageModelMiddleware {
   const context = { middlewares: [] as LanguageModelMiddleware[] };
@@ -12,10 +9,10 @@ function extractMiddleware(options?: { tagName?: string }): LanguageModelMiddlew
 }
 
 describe('reasoningExtraction middleware', () => {
-  it('extracts <think>…</think> blocks into a separate reasoning part by default', async () => {
+  it('extracts <thinking> blocks into a separate reasoning part by default', async () => {
     const middleware = extractMiddleware();
     const doGenerate = jest.fn(async () => ({
-      content: [{ type: 'text', text: '<think>secret plan</think>visible answer' }],
+      content: [{ type: 'text', text: '<thinking>secret plan</thinking>visible answer' }],
       finishReason: 'stop',
     }));
 
@@ -64,20 +61,5 @@ describe('reasoningExtraction middleware', () => {
     } as never);
 
     expect(result?.content).toEqual([{ type: 'text', text: 'plain answer, no tags here' }]);
-  });
-});
-
-describe('INLINE_REASONING_SDK_PROVIDER_IDS', () => {
-  it('covers the openai-style providers that emit tagged reasoning text', () => {
-    expect([...INLINE_REASONING_SDK_PROVIDER_IDS].sort()).toEqual(
-      [
-        'azure',
-        'azure-responses',
-        'openai',
-        'openai-chat',
-        'openai-compatible',
-        'openai-response',
-      ].sort(),
-    );
   });
 });

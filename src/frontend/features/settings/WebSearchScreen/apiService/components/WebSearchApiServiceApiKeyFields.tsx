@@ -1,8 +1,6 @@
+import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { Button } from 'heroui-native/button';
-import { Input } from 'heroui-native/input';
 import {
-  ActivityIcon,
   CopyIcon,
   EyeIcon,
   EyeOffIcon,
@@ -13,65 +11,58 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { View } from 'react-native';
 
-import { SettingsIconButton } from '../../../components/SettingsIconButton';
 import type { WebSearchApiKeyEntry } from '../utils/webSearchApiServiceApiKeys';
 
 export function WebSearchApiServiceApiKeysField({
   apiKeysInput,
   apiKeysVisible,
   onApiKeysInputChange,
-  onCheckPress,
   onManagePress,
   onToggleVisible,
 }: {
   apiKeysInput: string;
   apiKeysVisible: boolean;
   onApiKeysInputChange: (value: string) => void;
-  onCheckPress: () => void;
   onManagePress: () => void;
   onToggleVisible: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.websearch.provider.apiKeys')}
-      </Text>
-      <View className="flex-row items-start gap-2">
-        <ApiKeysCommitInput
-          accessibilityLabel={t('settings.websearch.provider.apiKeys')}
-          onCommit={onApiKeysInputChange}
-          placeholder={t('settings.websearch.provider.apiKeysPlaceholder')}
-          secureTextEntry={!apiKeysVisible}
-          value={apiKeysInput}
-        />
-        <SettingsIconButton
+    <TextField>
+      <Label>{t('settings.websearch.provider.apiKeys')}</Label>
+      <View className="flex-row items-center gap-2">
+        <View className="min-w-0 flex-1 overflow-hidden">
+          <ApiKeysCommitInput
+            accessibilityLabel={t('settings.websearch.provider.apiKeys')}
+            onCommit={onApiKeysInputChange}
+            placeholder={t('settings.websearch.provider.apiKeysPlaceholder')}
+            secureTextEntry={!apiKeysVisible}
+            value={apiKeysInput}
+          />
+        </View>
+        <Button
           accessibilityLabel={
             apiKeysVisible
               ? t('settings.websearch.provider.hideApiKeys')
               : t('settings.websearch.provider.showApiKeys')
           }
+          hitSlop={2}
+          icon={apiKeysVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
           onPress={onToggleVisible}
-        >
-          <ApiKeysVisibilityIcon visible={apiKeysVisible} />
-        </SettingsIconButton>
-        <SettingsIconButton
+          variant="secondary"
+        />
+        <Button
           accessibilityLabel={t('settings.websearch.provider.manageApiKeys')}
+          hitSlop={2}
+          icon={<KeyRoundIcon strokeWidth={2} />}
           onPress={onManagePress}
-        >
-          <KeyRoundIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
-        <SettingsIconButton
-          accessibilityLabel={t('settings.websearch.provider.check')}
-          onPress={onCheckPress}
-        >
-          <ActivityIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
+          variant="secondary"
+        />
       </View>
-    </View>
+    </TextField>
   );
 }
 
@@ -147,17 +138,18 @@ function ApiKeysCommitInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
+      lineBreakModeIOS="clip"
+      multiline={false}
+      numberOfLines={1}
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
       onSubmitEditing={handleCommitEvent}
       placeholder={placeholder}
       returnKeyType="done"
+      selectTextOnFocus
       secureTextEntry={secureTextEntry}
-      style={styles.input}
       value={draftValue}
-      variant="secondary"
     />
   );
 }
@@ -199,25 +191,10 @@ export function WebSearchApiServiceApiKeyForm({
         </View>
       ) : null}
 
-      <Button
-        className="h-10 min-h-10 flex-row items-center justify-center gap-2 rounded-xl"
-        onPress={onAdd}
-        variant="secondary"
-      >
-        <PlusIcon className="size-4 text-default-foreground" strokeWidth={2} />
-        <Text className="text-base text-foreground">
-          {t('settings.websearch.provider.addApiKey')}
-        </Text>
+      <Button icon={<PlusIcon strokeWidth={2} />} onPress={onAdd} variant="secondary">
+        {t('settings.websearch.provider.addApiKey')}
       </Button>
     </View>
-  );
-}
-
-function ApiKeysVisibilityIcon({ visible }: { visible: boolean }) {
-  return visible ? (
-    <EyeIcon className="size-5 text-default-foreground" strokeWidth={2} />
-  ) : (
-    <EyeOffIcon className="size-5 text-default-foreground" strokeWidth={2} />
   );
 }
 
@@ -239,47 +216,44 @@ function ApiKeyRow({
   const { t } = useTranslation();
 
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">
-        {t('settings.websearch.provider.apiKey')}
-      </Text>
+    <TextField isInvalid={Boolean(errorMessage)}>
+      <Label>{t('settings.websearch.provider.apiKey')}</Label>
       <View className="flex-row items-center gap-2">
         <ApiKeyInput
           accessibilityLabel={t('settings.websearch.provider.apiKey')}
-          isDisabled={isPending}
           onChangeText={(key) => onKeyChange(apiKey.id, key)}
           onCommit={(key) => onCommitKey(apiKey.id, key)}
           value={apiKey.key}
         />
-        <SettingsIconButton
+        <Button
           accessibilityLabel={t('settings.websearch.provider.copyApiKey')}
-          isDisabled={isPending}
+          disabled={isPending}
+          hitSlop={2}
+          icon={<CopyIcon strokeWidth={2} />}
           onPress={() => void Clipboard.setStringAsync(apiKey.key)}
-        >
-          <CopyIcon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
-        <SettingsIconButton
+          variant="secondary"
+        />
+        <Button
           accessibilityLabel={t('settings.websearch.provider.removeApiKey')}
-          isDisabled={isPending}
+          disabled={isPending}
+          hitSlop={2}
+          icon={<Trash2Icon strokeWidth={2} />}
           onPress={() => onRemove(apiKey.id)}
-        >
-          <Trash2Icon className="size-5 text-default-foreground" strokeWidth={2} />
-        </SettingsIconButton>
+          variant="secondary"
+        />
       </View>
-      {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
-    </View>
+      <FieldError>{errorMessage}</FieldError>
+    </TextField>
   );
 }
 
 function ApiKeyInput({
   accessibilityLabel,
-  isDisabled,
   onCommit,
   onChangeText,
   value,
 }: {
   accessibilityLabel: string;
-  isDisabled?: boolean;
   onCommit: (value: string) => void;
   onChangeText: (value: string) => void;
   value: string;
@@ -292,37 +266,19 @@ function ApiKeyInput({
     [onCommit],
   );
 
-  const handleCommitEvent = useCallback(() => {
-    onCommit(value);
-  }, [onCommit, value]);
-
   return (
-    <Input
-      accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
-      className="h-10 min-h-0 flex-1 rounded-xl px-3 py-0 text-base leading-5"
-      isDisabled={isDisabled}
-      onBlur={handleCommitEvent}
-      onChangeText={onChangeText}
-      onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
-      placeholder={t('settings.websearch.provider.apiKeyPlaceholder')}
-      returnKeyType="done"
-      style={styles.input}
-      value={value}
-      variant="secondary"
-    />
+    <View className="min-w-0 flex-1">
+      <Input
+        accessibilityLabel={accessibilityLabel}
+        autoCapitalize="none"
+        autoCorrect={false}
+        onChangeText={onChangeText}
+        onEndEditing={handleEndEditing}
+        placeholder={t('settings.websearch.provider.apiKeyPlaceholder')}
+        returnKeyType="done"
+        submitBehavior="blurAndSubmit"
+        value={value}
+      />
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  input: {
-    height: 40,
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    textAlignVertical: 'center',
-    verticalAlign: 'middle',
-  },
-});

@@ -1,11 +1,10 @@
-import { Button } from 'heroui-native/button';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { BottomSheet } from '@/frontend/components/bottomSheet';
-import { parseFunctionCallToolName } from '@/shared/ai/tools/mcpToolName';
-import type { PendingToolApproval } from '../session/chatSessionProjection';
+import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 
 const ignoreClose = () => undefined;
@@ -59,14 +58,14 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
     >
       <View className="gap-4 px-4 pb-4">
         <View className="gap-1">
-          <Text className="text-foreground-muted text-sm">
+          <Text className="text-foreground-tertiary text-sm">
             {t('chat.tool.approval.description')}
           </Text>
-          <Text className="font-semibold text-base text-default-foreground" selectable>
+          <Text className="font-semibold text-base text-foreground" selectable>
             {approval ? formatApprovalTitle(approval, t) : ''}
           </Text>
           {approvals.length > 1 ? (
-            <Text className="text-foreground-muted text-xs">
+            <Text className="text-foreground-tertiary text-xs">
               {t('chat.tool.approval.pendingCount', { count: approvals.length })}
             </Text>
           ) : null}
@@ -75,17 +74,17 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
         <View className="flex-row gap-3">
           <Button
             className="flex-1"
-            isDisabled={isSubmitting}
+            disabled={isSubmitting}
             onPress={() => void submit(false)}
-            variant="danger"
+            variant="destructive"
           >
             <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
           </Button>
           <Button
             className="flex-1"
-            isDisabled={isSubmitting}
+            disabled={isSubmitting}
             onPress={() => void submit(true)}
-            variant="primary"
+            variant="default"
           >
             <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
           </Button>
@@ -105,9 +104,9 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
 
   return (
     <View className="gap-1">
-      <Text className="text-foreground-muted text-xs">{t('chat.tool.arguments')}</Text>
-      <ScrollView className="max-h-48 rounded-md bg-surface-tertiary" nestedScrollEnabled>
-        <Text className="p-2 font-mono text-default-foreground text-xs leading-5" selectable>
+      <Text className="text-foreground-tertiary text-xs">{t('chat.tool.arguments')}</Text>
+      <ScrollView className="max-h-48 rounded-md bg-secondary" nestedScrollEnabled>
+        <Text className="p-2 font-mono text-foreground text-xs" selectable>
           {preview}
         </Text>
       </ScrollView>

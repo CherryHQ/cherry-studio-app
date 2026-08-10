@@ -1,21 +1,19 @@
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { EndpointConfigs, Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import type { EndpointType } from '@/shared/data/types/model';
-import type { EndpointConfigs, Provider } from '@/shared/data/types/provider';
+
 import {
-  buildAddableEndpointOptions,
   buildProviderApiServiceEndpointUpdates,
   canEditProviderEndpoint,
   type EndpointDraft,
-  getEndpointLabel,
   getProviderApiServiceEndpointDirtyState,
   ProviderApiServiceEndpointForm,
   ProviderApiServiceSaveError,
-  useProviderApiServiceConfirmDialog,
   useProviderApiServiceEndpointDraft,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
@@ -31,7 +29,8 @@ export default function ProviderEndpointSettingsScreen() {
     providerId ?? '',
   );
   const saveEndpointConfigs = useCallback(
-    (updates: { endpointConfigs: EndpointConfigs }) => saveProviderMutation.mutateAsync(updates),
+    (updates: { defaultChatEndpoint: EndpointType; endpointConfigs: EndpointConfigs }) =>
+      saveProviderMutation.mutateAsync(updates),
     [saveProviderMutation],
   );
 
@@ -66,21 +65,22 @@ function ProviderEndpointSettingsForm({
   onSave,
   provider,
 }: {
-  onSave: (updates: { endpointConfigs: EndpointConfigs }) => Promise<unknown>;
+  onSave: (updates: {
+    defaultChatEndpoint: EndpointType;
+    endpointConfigs: EndpointConfigs;
+  }) => Promise<unknown>;
   provider: Provider;
 }) {
   const { t } = useTranslation();
   const [endpointErrors, setEndpointErrors] = useState<Partial<Record<EndpointType, string>>>({});
-  const [pendingEndpoint, setPendingEndpoint] = useState<EndpointType | null>(null);
-  const pendingEndpointRef = useRef<EndpointType | null>(null);
-  const { addEndpoint, draft, removeEndpoint, updateBaseUrl } =
+  const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
+  const { draft, updateBaseUrl, updatePrimaryEndpoint } =
     useProviderApiServiceEndpointDraft(provider);
   const hasUnsavedChanges =
     Object.keys(endpointErrors).length > 0 ||
     getProviderApiServiceEndpointDirtyState({ draft, provider });
-  const isSaving = pendingEndpoint !== null;
-  const { confirmDialog, requestConfirm } = useProviderApiServiceConfirmDialog();
-  const { discardDialog, requestClose } = useProviderApiServiceSheetClose({
+  const { requestClose } = useProviderApiServiceSheetClose({
     hasUnsavedChanges,
     isSaving,
   });
@@ -104,12 +104,12 @@ function ProviderEndpointSettingsForm({
       endpoint: EndpointType;
       nextDraft: EndpointDraft;
     }): Promise<boolean> => {
-      if (pendingEndpointRef.current !== null) {
+      if (isSavingRef.current) {
         return false;
       }
 
-      pendingEndpointRef.current = endpoint;
-      setPendingEndpoint(endpoint);
+      isSavingRef.current = true;
+      setIsSaving(true);
 
       try {
         await onSave(buildProviderApiServiceEndpointUpdates({ draft: nextDraft, provider }));
@@ -122,8 +122,8 @@ function ProviderEndpointSettingsForm({
         }));
         return false;
       } finally {
-        pendingEndpointRef.current = null;
-        setPendingEndpoint(null);
+        isSavingRef.current = false;
+        setIsSaving(false);
       }
     },
     [getEndpointSaveError, onSave, provider],
@@ -145,71 +145,39 @@ function ProviderEndpointSettingsForm({
           ...draft.baseUrlByEndpoint,
           [endpoint]: value,
         },
-        visibleEndpointTypes:
-          value.trim() || endpoint === draft.primaryEndpoint
-            ? draft.visibleEndpointTypes
-            : draft.visibleEndpointTypes.filter((item) => item !== endpoint),
       };
 
       updateBaseUrl(endpoint, value);
 
-      void (async () => {
-        const didSave = await saveEndpointDraft({ endpoint, nextDraft });
+      if (!getProviderApiServiceEndpointDirtyState({ draft: nextDraft, provider })) {
+        return;
+      }
 
-        if (didSave && !value.trim() && endpoint !== draft.primaryEndpoint) {
-          removeEndpoint(endpoint);
-        }
-      })();
+      void saveEndpointDraft({ endpoint, nextDraft });
     },
-    [draft, removeEndpoint, saveEndpointDraft, updateBaseUrl],
+    [draft, provider, saveEndpointDraft, updateBaseUrl],
   );
 
-  const handleRemoveEndpoint = useCallback(
+  const handleDefaultChatEndpointChange = useCallback(
     (endpoint: EndpointType) => {
       if (endpoint === draft.primaryEndpoint) {
         return;
       }
 
-      requestConfirm({
-        message: t('settings.provider.apiService.removeEndpointMessage', {
-          endpoint: getEndpointLabel(endpoint),
-        }),
-        onConfirm: () => {
-          const { [endpoint]: _removedBaseUrl, ...baseUrlByEndpoint } = draft.baseUrlByEndpoint;
-          const nextDraft = {
-            ...draft,
-            baseUrlByEndpoint,
-            visibleEndpointTypes: draft.visibleEndpointTypes.filter((item) => item !== endpoint),
-          };
-
-          void (async () => {
-            const didSave = await saveEndpointDraft({ endpoint, nextDraft });
-
-            if (didSave) {
-              removeEndpoint(endpoint);
-              setEndpointErrors((current) => removeEndpointError(current, endpoint));
-            }
-          })();
-        },
-        title: t('settings.provider.apiService.removeEndpointTitle'),
+      const nextDraft = { ...draft, primaryEndpoint: endpoint };
+      updatePrimaryEndpoint(endpoint);
+      void saveEndpointDraft({ endpoint, nextDraft }).then((didSave) => {
+        if (!didSave) {
+          updatePrimaryEndpoint(draft.primaryEndpoint);
+        }
       });
     },
-    [draft, removeEndpoint, requestConfirm, saveEndpointDraft, t],
-  );
-
-  const handleAddEndpoint = useCallback(
-    (endpoint: EndpointType) => {
-      addEndpoint(endpoint);
-      setEndpointErrors((current) => removeEndpointError(current, endpoint));
-    },
-    [addEndpoint],
+    [draft, saveEndpointDraft, updatePrimaryEndpoint],
   );
 
   return (
     <>
       <BackHeader title={t('settings.provider.apiService.manageEndpoints')} onBack={requestClose} />
-      {discardDialog}
-      {confirmDialog}
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -221,19 +189,15 @@ function ProviderEndpointSettingsForm({
       >
         <View className="px-4 py-5">
           <ProviderApiServiceEndpointForm
-            addableEndpointOptions={buildAddableEndpointOptions(
-              provider,
-              draft.visibleEndpointTypes,
-            )}
             baseUrlByEndpoint={draft.baseUrlByEndpoint}
+            configuredEndpointTypes={Object.keys(provider.endpointConfigs ?? {}) as EndpointType[]}
+            defaultChatEndpoint={draft.primaryEndpoint}
             endpointErrors={endpointErrors}
-            pendingEndpoint={pendingEndpoint}
-            primaryEndpoint={draft.primaryEndpoint}
-            visibleEndpointTypes={draft.visibleEndpointTypes}
-            onAddEndpoint={handleAddEndpoint}
+            endpointTypes={draft.visibleEndpointTypes}
+            isSaving={isSaving}
             onBaseUrlChange={handleBaseUrlChange}
             onBaseUrlCommit={handleBaseUrlCommit}
-            onRemoveEndpoint={handleRemoveEndpoint}
+            onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
           />
         </View>
       </ScrollView>

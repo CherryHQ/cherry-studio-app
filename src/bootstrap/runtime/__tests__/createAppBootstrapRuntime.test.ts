@@ -24,9 +24,11 @@ const mockServices = {
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_db: unknown, _cache: unknown) => mockServices);
+const mockDisposeBackend = jest.fn<Promise<void>, []>(async () => undefined);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
   dataApiDependencies: mockDataApiDependencies,
+  dispose: mockDisposeBackend,
 }));
 
 jest.mock('@/backend/data/CacheService', () => ({
@@ -78,15 +80,37 @@ describe('createAppBootstrapRuntime', () => {
     expect(runtime.preference).toBe(mockPreference);
   });
 
-  test('disposes backend cache with the concrete service graph', () => {
+  test('waits for chat before disposing infrastructure and is idempotent', async () => {
+    const backendDisposed = createDeferred();
+    mockDisposeBackend.mockImplementationOnce(() => backendDisposed.promise);
     const runtime = createAppBootstrapRuntime();
 
-    runtime.dispose();
+    const firstDispose = runtime.dispose();
+    const secondDispose = runtime.dispose();
+
+    expect(secondDispose).toBe(firstDispose);
+    expect(mockDisposeBackend).toHaveBeenCalledTimes(1);
+    expect(mockMcpRuntime.dispose).not.toHaveBeenCalled();
+    expect(mockWebSearch.dispose).not.toHaveBeenCalled();
+    expect(mockCache.dispose).not.toHaveBeenCalled();
+    expect(mockDb.dispose).not.toHaveBeenCalled();
+
+    backendDisposed.resolve();
+    await firstDispose;
 
     expect(mockMcpRuntime.dispose).toHaveBeenCalledTimes(1);
     expect(mockWebSearch.dispose).toHaveBeenCalledTimes(1);
     expect(mockCache.dispose).toHaveBeenCalledTimes(1);
     expect(mockDb.dispose).toHaveBeenCalledTimes(1);
+    expect(mockDisposeBackend.mock.invocationCallOrder[0]).toBeLessThan(
+      mockMcpRuntime.dispose.mock.invocationCallOrder[0],
+    );
+    expect(mockWebSearch.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+      mockCache.dispose.mock.invocationCallOrder[0],
+    );
+    expect(mockCache.dispose.mock.invocationCallOrder[0]).toBeLessThan(
+      mockDb.dispose.mock.invocationCallOrder[0],
+    );
   });
 
   test('delegates post-ready work with the same service graph', async () => {
@@ -97,3 +121,12 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockRunPostReadyTasks).toHaveBeenCalledWith(mockServices);
   });
 });
+
+function createDeferred() {
+  let resolve: () => void = () => undefined;
+  const promise = new Promise<void>((nextResolve) => {
+    resolve = nextResolve;
+  });
+
+  return { promise, resolve };
+}

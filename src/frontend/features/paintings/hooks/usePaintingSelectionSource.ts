@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 
-import type { SelectionSource } from '@/frontend/components/messageTabs';
+import {
+  type SelectionSource,
+  useMessagePendingDeletionIds,
+} from '@/frontend/components/messageTabs';
+
 import { useDeletePaintings, usePaintingIds } from './usePaintings';
 
 // Selection behavior the shared toolbar uses for the drawings tab. `enabled`
@@ -8,6 +12,7 @@ import { useDeletePaintings, usePaintingIds } from './usePaintings';
 export function usePaintingSelectionSource(enabled: boolean): SelectionSource {
   const paintingIds = usePaintingIds({ enabled });
   const deletePaintings = useDeletePaintings();
+  const pendingDeletionIds = useMessagePendingDeletionIds('drawings');
 
   return useMemo(
     () => ({
@@ -17,8 +22,8 @@ export function usePaintingSelectionSource(enabled: boolean): SelectionSource {
         deleteTitle: 'painting.selection.deleteTitle',
       },
       deleteSelected: deletePaintings,
-      getAllIds: () => paintingIds.data ?? [],
+      getAllIds: () => (paintingIds.data ?? []).filter((id) => !pendingDeletionIds.has(id)),
     }),
-    [deletePaintings, paintingIds.data],
+    [deletePaintings, paintingIds.data, pendingDeletionIds],
   );
 }

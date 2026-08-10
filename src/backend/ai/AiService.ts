@@ -1,31 +1,40 @@
 import {
-  embedMany as aiCoreEmbedMany,
+  type AiPlugin,
   generateImage as aiCoreGenerateImage,
+  type RuntimeProviderCallEvent,
+  type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
-import {
-  type ImageGenerationMode,
-  MODEL_CAPABILITY,
-  type ParamValues,
-} from '@cherrystudio/provider-registry';
+import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
+import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
-import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { Model } from '@/shared/data/types/model';
-import { parseUniqueModelId } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
-import { resolveMediaCapabilities } from './messages/messageCapabilities';
+
+import type {
+  AiUsageCaptureContext,
+  AiUsageRecordService,
+  MessageRef,
+} from '@/backend/data/services/AiUsageRecordService';
+import type { AssistantService } from '@/backend/data/services/AssistantService';
+import type { ModelService } from '@/backend/data/services/ModelService';
+import type { ProviderService } from '@/backend/data/services/ProviderService';
+
+import { createAiUsagePlugin } from './hooks/billingHook';
 import { resolveUIMessageFileUrls } from './messages/messageConverter';
 import { listModels as listProviderModels } from './provider/listModels';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
-import {
-  type BuildAgentParamsDependencies,
-  getCustomParameters,
-} from './runtime/aiSdk/params/buildAgentParams';
+import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
 import type { AppProviderSettingsMap } from './types';
 import type { AiBaseRequest, AiStreamRequest, ListModelsRequest } from './types/requests';
 import { splitImageParamValues } from './utils/imageOptions';
 import { buildImageProviderOptions, mergeImageProviderOptions } from './utils/imageProviderOptions';
 import { extractAiSdkStandardParams } from './utils/options';
+import { getCustomParameters } from './utils/reasoning';
+import { createAiUsageCaptureContext } from './utils/usageCapture';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -60,7 +69,79 @@ export interface AiImageResult {
 }
 
 export interface AiServiceDependencies extends BuildAgentParamsDependencies {
-  fileEntry: Pick<FileEntryService, 'resolveUri'>;
+  aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
+  assistant: Pick<AssistantService, 'getById'>;
+  fileContent: {
+    getUri(id: FileEntryId): Promise<string | undefined>;
+  };
+  model: Pick<ModelService, 'getById'>;
+  provider: BuildAgentParamsDependencies['provider'] &
+    Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
+}
+
+/** `auto` is the picker's "let the model decide" sentinel, not a wire value. */
+function resolveImageRequestSize(size: string | undefined): string | undefined {
+  return size === 'auto' ? undefined : size;
+}
+
+function createCaptureContext(input: {
+  provider: Provider;
+  model: Model;
+  sdkModelId: string;
+  credentialReceipt: ServingCredentialReceipt;
+  assistant?: Assistant;
+  messageRef: MessageRef | null;
+}): AiUsageCaptureContext {
+  return createAiUsageCaptureContext({
+    providerId: input.provider.id,
+    providerName: input.provider.name,
+    modelId: input.sdkModelId,
+    modelName: input.model.name,
+    pricing: input.model.pricing,
+    trustProviderReportedCost: input.provider.apiFeatures.reportsActualCost,
+    reportedCostCurrency: input.provider.reportedCostCurrency,
+    credentialReceipt: input.credentialReceipt,
+    source: input.assistant
+      ? {
+          type: 'assistant',
+          id: input.assistant.id,
+          name: input.assistant.name,
+          icon: input.assistant.emoji,
+        }
+      : null,
+    messageRef: input.messageRef,
+  });
+}
+
+function createProviderCallHandler(
+  context: AiUsageCaptureContext,
+  recorder: AiServiceDependencies['aiUsageRecord'],
+): RuntimeProviderCallHandler {
+  return (event: RuntimeProviderCallEvent) => {
+    void recorder.recordInvocation({
+      requestId: event.requestId,
+      context,
+      modality: event.modality,
+      ...(event.modality === 'image' && event.usage
+        ? {
+            usage: {
+              ...(event.usage.inputTokens !== undefined
+                ? { inputTokens: event.usage.inputTokens }
+                : {}),
+              ...(event.usage.outputTokens !== undefined
+                ? { outputTokens: event.usage.outputTokens }
+                : {}),
+              ...(event.usage.totalTokens !== undefined
+                ? { totalTokens: event.usage.totalTokens }
+                : {}),
+            },
+          }
+        : {}),
+      ...(event.modality === 'image' ? { imageCount: event.imageCount } : {}),
+      metrics: event.metrics,
+      completedAt: event.completedAt,
+    });
+  };
 }
 
 /**
@@ -88,31 +169,60 @@ export class AiService {
       );
     }
 
-    const [
-      { context, sdkConfig, model, repairToolCall, system, tools, plugins, options },
-      preparedMessages,
-    ] = await Promise.all([
-      buildAgentParams({
-        request,
-        services: this.services,
-        shouldIncludeExternalTools: true,
-      }),
+    const repairUsagePlugins: { current?: AiPlugin[] } = {};
+    const [built, preparedMessages] = await Promise.all([
+      this.buildAgentParamsFor(request, true, () => repairUsagePlugins.current ?? []),
       resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
-        this.services.fileEntry.resolveUri(fileEntryId),
+        this.services.fileContent.getUri(fileEntryId),
       ),
     ]);
+    const {
+      assistant,
+      context,
+      credentialReceipt,
+      model,
+      nativeFileSupport,
+      options,
+      plugins,
+      provider,
+      repairToolCall,
+      sdkConfig,
+      system,
+      tools,
+    } = built;
+    const usagePlugin = createAiUsagePlugin(
+      createCaptureContext({
+        provider,
+        model,
+        sdkModelId: sdkConfig.modelId,
+        credentialReceipt,
+        assistant,
+        messageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
+      }),
+      this.services.aiUsageRecord,
+    );
+    repairUsagePlugins.current = [usagePlugin];
 
     const agent = new Agent({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
       messageId: request.messageId,
-      mediaCapabilities: resolveMediaCapabilities(model),
-      plugins,
+      mediaCapabilities: nativeFileSupport,
+      plugins: [...plugins, usagePlugin],
       context,
       repairToolCall,
       system,
       tools,
+      ...(request.runtimeTimingSink
+        ? {
+            toolExecutionHooks: {
+              onToolExecutionStart: (event) =>
+                request.runtimeTimingSink?.onToolExecutionStart(event),
+              onToolExecutionEnd: (event) => request.runtimeTimingSink?.onToolExecutionEnd(event),
+            },
+          }
+        : {}),
       options,
     });
 
@@ -124,15 +234,37 @@ export class AiService {
   async generateText(request: AiGenerateRequest): Promise<AiGenerateResult> {
     const signal = request.requestOptions?.signal;
 
-    const { context, sdkConfig, system, plugins, repairToolCall, options } = await buildAgentParams(
-      { request, services: this.services },
+    const repairUsagePlugins: { current?: AiPlugin[] } = {};
+    const {
+      assistant,
+      context,
+      credentialReceipt,
+      model,
+      options,
+      plugins,
+      provider,
+      repairToolCall,
+      sdkConfig,
+      system,
+    } = await this.buildAgentParamsFor(request, false, () => repairUsagePlugins.current ?? []);
+    const usagePlugin = createAiUsagePlugin(
+      createCaptureContext({
+        provider,
+        model,
+        sdkModelId: sdkConfig.modelId,
+        credentialReceipt,
+        assistant,
+        messageRef: null,
+      }),
+      this.services.aiUsageRecord,
     );
+    repairUsagePlugins.current = [usagePlugin];
 
     const agent = new Agent({
       providerId: sdkConfig.providerId,
       providerSettings: sdkConfig.providerSettings,
       modelId: sdkConfig.modelId,
-      plugins,
+      plugins: [...plugins, usagePlugin],
       context,
       repairToolCall,
       system: request.system ?? system,
@@ -164,10 +296,8 @@ export class AiService {
 
   async generateImage(request: AiImageRequest): Promise<AiImageResult> {
     const signal = request.requestOptions?.signal;
-    const { sdkConfig, model, assistant, options, provider } = await buildAgentParams({
-      request,
-      services: this.services,
-    });
+    const { sdkConfig, credentialReceipt, model, assistant, options, provider } =
+      await this.buildAgentParamsFor(request);
     const customParams = assistant ? getCustomParameters(assistant) : {};
     const split = extractAiSdkStandardParams(customParams);
     const { structured, vendorBag } = splitImageParamValues(request.paramValues);
@@ -186,15 +316,23 @@ export class AiService {
     const providerSettings = hasInputImages
       ? { ...sdkConfig.providerSettings, fetch: expoFetch }
       : sdkConfig.providerSettings;
+    const usageCaptureContext = createCaptureContext({
+      provider,
+      model,
+      sdkModelId: sdkConfig.modelId,
+      credentialReceipt,
+      assistant,
+      messageRef: null,
+    });
 
     const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
       sdkConfig.providerId,
       providerSettings as never,
       {
-        model: model.modelId,
+        model: sdkConfig.modelId,
         prompt: hasInputImages ? { images: inputImages, text: request.prompt } : request.prompt,
         n: structured.n ?? 1,
-        size: structured.size as `${number}x${number}` | undefined,
+        size: resolveImageRequestSize(structured.size) as `${number}x${number}` | undefined,
         aspectRatio: structured.aspectRatio as `${number}:${number}` | undefined,
         seed: structured.seed,
         maxRetries: request.requestOptions?.maxRetries ?? 0,
@@ -203,6 +341,7 @@ export class AiService {
         ...(request.requestOptions?.headers && {
           headers: stripUndefinedHeaders(request.requestOptions.headers),
         }),
+        onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
         ...split.standardParams,
       },
     );
@@ -218,7 +357,7 @@ export class AiService {
 
   // ── API validation ──
 
-  /** Dispatches to `embedMany` for embedding models, `generateText` otherwise. */
+  /** Validates models supported by the mobile AI runtime with a short text generation. */
   async checkModel(
     request: AiBaseRequest & { apiKeyOverride?: string; timeout?: number },
   ): Promise<{ latency: number }> {
@@ -255,7 +394,7 @@ export class AiService {
         ...request,
         requestOptions: { ...request.requestOptions, signal: controller.signal },
       };
-      const probe = this.runCheckModelProbe(probeRequest, controller.signal);
+      const probe = this.generateText({ ...probeRequest, system: 'test', prompt: 'hi' });
       const probes: Promise<unknown>[] = [probe, timeoutPromise];
       if (abortPromise) {
         probes.push(abortPromise);
@@ -276,44 +415,6 @@ export class AiService {
     }
   }
 
-  private async runCheckModelProbe(
-    request: AiBaseRequest & { apiKeyOverride?: string },
-    signal: AbortSignal,
-  ): Promise<unknown> {
-    const { context, sdkConfig, model, plugins, repairToolCall, options } = await buildAgentParams({
-      request,
-      services: this.services,
-    });
-
-    if (isEmbeddingModel(model)) {
-      return aiCoreEmbedMany<AppProviderSettingsMap>(
-        sdkConfig.providerId,
-        sdkConfig.providerSettings as never,
-        {
-          model: sdkConfig.modelId,
-          values: ['test'],
-          maxRetries: options.maxRetries,
-          abortSignal: signal,
-          ...(options.providerOptions && { providerOptions: options.providerOptions }),
-          ...(options.headers && { headers: stripUndefinedHeaders(options.headers) }),
-        },
-      );
-    }
-
-    const agent = new Agent({
-      providerId: sdkConfig.providerId,
-      providerSettings: sdkConfig.providerSettings,
-      modelId: sdkConfig.modelId,
-      plugins,
-      context,
-      repairToolCall,
-      system: 'test',
-      options,
-    });
-
-    return agent.generate({ prompt: 'hi' }, signal);
-  }
-
   private async getProviderForListModels(request: ListModelsRequest): Promise<Provider> {
     if (request.providerId) {
       return this.services.provider.getByProviderId(request.providerId);
@@ -331,10 +432,54 @@ export class AiService {
     const { providerId } = parseUniqueModelId(assistant.modelId);
     return this.services.provider.getByProviderId(providerId);
   }
-}
 
-function isEmbeddingModel(model: Model): boolean {
-  return model.capabilities.includes(MODEL_CAPABILITY.EMBEDDING);
+  private async buildAgentParamsFor(
+    request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string; messageId?: string },
+    shouldIncludeExternalTools = false,
+    getRepairUsagePlugins?: () => AiPlugin[],
+  ) {
+    const { provider, model, assistant } = await this.getProviderAndModel(request);
+    const built = await buildAgentParams({
+      request,
+      services: this.services,
+      provider,
+      model,
+      assistant,
+      shouldIncludeExternalTools,
+      getRepairUsagePlugins,
+    });
+    return { ...built, provider, model, assistant };
+  }
+
+  /** Priority: explicit `uniqueModelId` > `assistant.modelId`. */
+  private async getProviderAndModel(
+    request: AiBaseRequest & { chatId?: string },
+  ): Promise<{ provider: Provider; model: Model; assistant: Assistant | undefined }> {
+    let assistant: Assistant | undefined;
+    if (request.assistantId) {
+      try {
+        assistant = await this.services.assistant.getById(request.assistantId);
+      } catch {
+        assistant = undefined;
+      }
+    }
+
+    const uniqueModelId = request.uniqueModelId ?? assistant?.modelId;
+    if (!uniqueModelId) {
+      throw new Error('Cannot resolve providerId: not in request and assistant has no model');
+    }
+
+    const { providerId, modelId } = parseUniqueModelId(uniqueModelId);
+    const [provider, model] = await Promise.all([
+      this.services.provider.getByProviderId(providerId),
+      this.services.model.getById(uniqueModelId),
+    ]);
+    if (!model) {
+      throw new Error(`Cannot resolve model: ${providerId}::${modelId}`);
+    }
+
+    return { provider, model, assistant };
+  }
 }
 
 function stripUndefinedHeaders(

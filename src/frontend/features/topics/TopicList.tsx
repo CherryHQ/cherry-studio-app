@@ -1,5 +1,6 @@
+import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
+import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useToast } from 'heroui-native/toast';
 import { CheckIcon, PencilIcon, PinIcon, PinOffIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,17 +18,18 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   useMessageListBottomInset,
+  useMessagePendingDeletionIds,
   useMessageSelectionActions,
   useMessageSelectionState,
   useRegisterSelectionSource,
 } from '@/frontend/components/messageTabs';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 import { useExclusiveSwipeable } from '@/frontend/hooks/useExclusiveSwipeable';
-import type { Assistant } from '@/shared/data/types/assistant';
-import type { Topic } from '@/shared/data/types/topic';
-import { useTopicActionDialogs } from './components/TopicActionDialogs';
+
+import { useTopicActionAlerts } from './components/useTopicActionAlerts';
 import {
   TopicListProvider,
   useTopicListActions,
@@ -97,22 +99,35 @@ function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yes
 
 const TopicListView = memo(function TopicListView() {
   const { t } = useTranslation();
-  const { toast } = useToast();
+  const { alert } = useAlert();
   const bottomInset = useMessageListBottomInset();
   const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
   const { loadMoreTopics, openTopic, toggleTopicPin } = useTopicListActions();
   const { assistants } = useAssistantsApi();
   const { toggleId } = useMessageSelectionActions();
   const { isEditing, selectedIds } = useMessageSelectionState();
+  const pendingDeletionIds = useMessagePendingDeletionIds('conversations');
   const selectionSource = useTopicSelectionSource();
   useRegisterSelectionSource('conversations', selectionSource);
-  const { dialogs, requestDelete, requestRename } = useTopicActionDialogs();
-  const { notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  const { requestDelete, requestRename } = useTopicActionAlerts();
+  const { closeOpen, notifyClose, notifyWillOpen } = useExclusiveSwipeable();
+  useEffect(() => {
+    if (isEditing) {
+      closeOpen();
+    }
+  }, [closeOpen, isEditing]);
   // Bottom inset is stable across the edit⇄done flip (see useMessageListBottomInset),
   // so this style reference stays put and the list never reflows on toggle.
   const contentContainerStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
     [bottomInset],
+  );
+  const visibleTopics = useMemo(
+    () =>
+      pendingDeletionIds.size === 0
+        ? topics
+        : topics.filter((topic) => !pendingDeletionIds.has(topic.id)),
+    [pendingDeletionIds, topics],
   );
   const listExtraData = useMemo(
     () => ({ isEditing, isPinActionDisabled, pinnedTopicIds, selectedIds }),
@@ -126,10 +141,10 @@ const TopicListView = memo(function TopicListView() {
   const handleTogglePin = useCallback(
     (topicId: string) => {
       void toggleTopicPin(topicId).catch(() => {
-        toast.show({ label: t('topic.pin.failed'), variant: 'danger' });
+        alert.show({ title: t('topic.pin.failed') });
       });
     },
-    [t, toast, toggleTopicPin],
+    [alert, t, toggleTopicPin],
   );
 
   const renderItem = useCallback(
@@ -139,7 +154,7 @@ const TopicListView = memo(function TopicListView() {
         isEditing={isEditing}
         isPinActionDisabled={isPinActionDisabled}
         isPinned={pinnedTopicIdSet.has(item.id)}
-        isLast={index === topics.length - 1}
+        isLast={index === visibleTopics.length - 1}
         isSelected={selectedIds.has(item.id)}
         notifyClose={notifyClose}
         notifyWillOpen={notifyWillOpen}
@@ -164,7 +179,7 @@ const TopicListView = memo(function TopicListView() {
       requestRename,
       selectedIds,
       toggleId,
-      topics.length,
+      visibleTopics.length,
     ],
   );
 
@@ -172,7 +187,7 @@ const TopicListView = memo(function TopicListView() {
     () => (
       <View className="items-center justify-center px-6 py-8">
         {isTopicListLoading ? null : (
-          <Text className="text-center text-default-foreground text-sm">
+          <Text className="text-center text-foreground text-sm">
             {t('navigation.noMatchingChats')}
           </Text>
         )}
@@ -187,7 +202,7 @@ const TopicListView = memo(function TopicListView() {
         className="flex-1 bg-background"
         contentInsetAdjustmentBehavior="never"
         contentContainerStyle={contentContainerStyle}
-        data={topics}
+        data={visibleTopics}
         estimatedItemSize={TOPIC_ITEM_ESTIMATED_HEIGHT}
         extraData={listExtraData}
         keyExtractor={topicKeyExtractor}
@@ -199,16 +214,19 @@ const TopicListView = memo(function TopicListView() {
         recycleItems
         renderItem={renderItem}
       />
-      {dialogs}
     </View>
   );
 });
 
 // The topics tab owns its data provider so the messages shell can host it as a
 // pluggable tab without knowing anything about topic state.
-export function TopicList() {
+type TopicListProps = {
+  searchText?: string;
+};
+
+export function TopicList({ searchText = '' }: TopicListProps) {
   return (
-    <TopicListProvider>
+    <TopicListProvider searchText={searchText}>
       <TopicListView />
     </TopicListProvider>
   );
@@ -239,12 +257,6 @@ const TopicRow = memo(function TopicRow({
     i18n.resolvedLanguage,
     t('topic.updatedAt.yesterday'),
   );
-
-  useEffect(() => {
-    if (isEditing) {
-      swipeableRef.current?.close();
-    }
-  }, [isEditing]);
 
   const handlePress = useCallback(() => {
     if (isEditing) {
@@ -402,12 +414,12 @@ const TopicRow = memo(function TopicRow({
           <View
             className={
               isPinned
-                ? 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-surface-secondary py-2 pl-2'
+                ? 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-secondary py-2 pl-2'
                 : 'relative min-w-0 flex-1 flex-row items-center gap-2 bg-transparent py-2 pl-2'
             }
           >
             <Animated.View
-              className="absolute inset-0 bg-settings-grouped-surface"
+              className="absolute inset-0 bg-secondary"
               pointerEvents="none"
               style={pressedBackgroundStyle}
             />
@@ -433,30 +445,30 @@ const TopicRow = memo(function TopicRow({
                   className={
                     isSelected
                       ? 'size-6 items-center justify-center rounded-full bg-primary'
-                      : 'size-6 items-center justify-center rounded-full border-2 border-foreground-muted'
+                      : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
                   }
                 >
-                  {isSelected ? <CheckIcon className="size-4 text-white" strokeWidth={3} /> : null}
+                  {isSelected ? (
+                    <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+                  ) : null}
                 </View>
               </Animated.View>
             ) : null}
-            <Text className="min-w-12 h-12 text-center text-3xl leading-12">
-              {assistant?.emoji ?? '💬'}
-            </Text>
+            <Text className="min-w-12 text-center text-emoji-3xl">{assistant?.emoji ?? '💬'}</Text>
             <View className="min-w-0 flex-1 pr-4">
               <View className="gap-0.5">
                 <View className="min-w-0 flex-row items-center gap-2">
                   <Text
-                    className="min-w-0 flex-1 font-semibold text-foreground text-md"
+                    className="min-w-0 flex-1 font-semibold text-foreground text-base"
                     numberOfLines={1}
                   >
                     {topic.name || t('navigation.newChat')}
                   </Text>
-                  <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                  <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
                     {updatedAtLabel}
                   </Text>
                 </View>
-                <Text className="text-foreground-muted text-xs" numberOfLines={1}>
+                <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
                   {assistant?.modelName ?? t('assistant.model.none')}
                 </Text>
               </View>
@@ -486,7 +498,7 @@ function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: To
       <Pressable
         accessibilityLabel={renameLabel}
         accessibilityRole="button"
-        className="w-16 items-center justify-center bg-surface-secondary active:opacity-80"
+        className="w-16 items-center justify-center bg-secondary active:opacity-80"
         onPress={onRename}
       >
         <PencilIcon className="size-5 text-foreground" strokeWidth={2} />
@@ -494,10 +506,10 @@ function TopicActions({ deleteLabel, drag, onDelete, onRename, renameLabel }: To
       <Pressable
         accessibilityLabel={deleteLabel}
         accessibilityRole="button"
-        className="w-16 items-center justify-center bg-danger active:opacity-80"
+        className="w-16 items-center justify-center bg-destructive active:opacity-80"
         onPress={onDelete}
       >
-        <Trash2Icon className="size-5 text-danger-foreground" strokeWidth={2} />
+        <Trash2Icon className="size-5 text-destructive-foreground" strokeWidth={2} />
       </Pressable>
     </Animated.View>
   );
@@ -526,9 +538,9 @@ function TopicPinAction({ disabled, drag, isPinned, label, onPress }: TopicPinAc
         onPress={onPress}
       >
         {isPinned ? (
-          <PinOffIcon className="size-5 text-white" strokeWidth={2} />
+          <PinOffIcon className="size-5 text-primary-foreground" strokeWidth={2} />
         ) : (
-          <PinIcon className="size-5 text-white" strokeWidth={2} />
+          <PinIcon className="size-5 text-primary-foreground" strokeWidth={2} />
         )}
       </Pressable>
     </Animated.View>

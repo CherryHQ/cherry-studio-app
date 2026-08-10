@@ -19,8 +19,8 @@ export const promptTable = sqliteTable(
     ...orderKeyColumns,
     ...createUpdateTimestamps,
   },
-  (table) => [orderKeyIndex('prompt')(table)],
+  (t) => [orderKeyIndex('prompt')(t)],
 );
 
-export type InsertPromptRow = typeof promptTable.$inferInsert;
 export type PromptRow = typeof promptTable.$inferSelect;
+export type InsertPromptRow = typeof promptTable.$inferInsert;

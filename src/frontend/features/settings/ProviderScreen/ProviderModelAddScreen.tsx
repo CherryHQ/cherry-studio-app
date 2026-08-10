@@ -1,6 +1,8 @@
+import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
+import type { EndpointType } from '@cherrystudio/universal/data/types/model';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Input } from 'heroui-native/input';
-import { cn } from 'heroui-native/utils';
 import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,17 +13,19 @@ import {
 } from 'react-native-keyboard-controller';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import type { EndpointType } from '@/shared/data/types/model';
-import type { Provider } from '@/shared/data/types/provider';
+
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';
-import { providerModelAddEndpointOptions } from './models/utils/providerModelAdd';
+import {
+  getProviderModelEndpointLabelKey,
+  providerModelAddEndpointOptions,
+  PROVIDER_MODEL_PURPOSE_OPTIONS,
+} from './models/utils/providerModelAdd';
 
 const advancedSettingsScrollTopPadding = 16;
 const defaultKeyboardBottomOffset = 0;
 const advancedSettingsKeyboardBottomOffset = 180;
 const advancedSettingsKeyboardPadding = 220;
-const selectedEndpointTypeColor = '#00b96b';
 
 export default function ProviderModelAddScreen() {
   const { providerId } = useLocalSearchParams<{ providerId?: string; providerName?: string }>();
@@ -32,8 +36,8 @@ export default function ProviderModelAddScreen() {
     return <Redirect href="/settings/provider" />;
   }
 
-  // Mount the form only once the provider is loaded: it is what decides whether the
-  // endpoint-type block exists at all, and that block sits directly above the
+  // Mount the form only once the provider is loaded: it decides which model-routing
+  // controls exist, and that block sits directly above the
   // "More settings" control — growing it a commit later moves a live tap target.
   if (!provider) {
     return <BackHeader title={t('settings.provider.models.addTitle')} />;
@@ -47,18 +51,22 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
   const router = useRouter();
   const {
     canSubmit,
+    chatEndpointTypes,
     endpointTypeError,
     formState,
     isSubmitting,
+    modelAddMode,
     modelIdError,
-    showEndpointTypes,
+    modelPurpose,
     submitAddModel,
+    updateChatEndpointType,
     updateContextWindow,
     updateEndpointTypes,
     updateGroup,
     updateMaxInputTokens,
     updateMaxOutputTokens,
     updateModelId,
+    updateModelPurpose,
     updateName,
   } = useProviderModelAdd({ provider });
   const scrollRef = useRef<KeyboardAwareScrollViewRef>(null);
@@ -187,9 +195,9 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
             onChangeText={updateGroup}
           />
 
-          {showEndpointTypes ? (
+          {modelAddMode === 'endpoint-types' ? (
             <View className="gap-2">
-              <Text className="font-medium text-default-foreground text-sm">
+              <Text className="font-medium text-foreground text-sm">
                 {t('settings.provider.models.addEndpointTypeLabel')}
               </Text>
               <View className="flex-row flex-wrap gap-2">
@@ -200,11 +208,55 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
                     isSelected={selectedEndpointTypes.has(option.id)}
                     label={t(option.labelKey)}
                     onPress={() => toggleEndpointType(option.id)}
+                    selectionRole="checkbox"
                   />
                 ))}
               </View>
               {endpointTypeError ? (
-                <Text className="text-danger text-xs">{endpointTypeError}</Text>
+                <Text className="text-destructive text-xs">{endpointTypeError}</Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {modelAddMode === 'purpose' ? (
+            <View className="gap-2">
+              <Text className="font-medium text-foreground text-sm">
+                {t('settings.provider.models.addPurposeLabel')}
+              </Text>
+              <Text className="text-muted-foreground text-xs">
+                {t('settings.provider.models.addPurposeDescription')}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {PROVIDER_MODEL_PURPOSE_OPTIONS.map((option) => (
+                  <EndpointTypeChip
+                    key={option.id}
+                    isDisabled={isSubmitting}
+                    isSelected={modelPurpose === option.id}
+                    label={t(option.labelKey)}
+                    onPress={() => updateModelPurpose(option.id)}
+                    selectionRole="radio"
+                  />
+                ))}
+              </View>
+
+              {modelPurpose === 'chat' && chatEndpointTypes.length > 1 ? (
+                <View className="mt-2 gap-2">
+                  <Text className="font-medium text-foreground text-sm">
+                    {t('settings.provider.models.addChatEndpointLabel')}
+                  </Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {chatEndpointTypes.map((endpointType) => (
+                      <EndpointTypeChip
+                        key={endpointType}
+                        isDisabled={isSubmitting}
+                        isSelected={formState.endpointTypes[0] === endpointType}
+                        label={t(getProviderModelEndpointLabelKey(endpointType))}
+                        onPress={() => updateChatEndpointType(endpointType)}
+                        selectionRole="radio"
+                      />
+                    ))}
+                  </View>
+                </View>
               ) : null}
             </View>
           ) : null}
@@ -212,7 +264,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
           <Pressable
             accessibilityLabel={t('settings.provider.models.addMoreSettings')}
             accessibilityRole="button"
-            className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-settings-grouped-surface px-3 active:opacity-70 disabled:opacity-40"
+            className="h-10 flex-row items-center justify-center gap-2 rounded-xl bg-secondary px-3 active:opacity-70 disabled:opacity-40"
             disabled={isSubmitting}
             onPress={toggleMoreSettings}
           >
@@ -220,9 +272,9 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
               {t('settings.provider.models.addMoreSettings')}
             </Text>
             {showMoreSettings ? (
-              <ChevronUpIcon className="size-4 text-default-foreground" strokeWidth={2} />
+              <ChevronUpIcon className="size-4 text-foreground" strokeWidth={2} />
             ) : (
-              <ChevronDownIcon className="size-4 text-default-foreground" strokeWidth={2} />
+              <ChevronDownIcon className="size-4 text-foreground" strokeWidth={2} />
             )}
           </Pressable>
 
@@ -287,31 +339,23 @@ function ProviderModelAddTextField({
   value: string;
 }) {
   return (
-    <View className="gap-1">
-      <Text className="font-medium text-default-foreground text-sm">{label}</Text>
+    <TextField isDisabled={isDisabled} isInvalid={Boolean(errorMessage)}>
+      <Label>{label}</Label>
       <Input
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"
         autoCorrect={false}
-        className={cn(
-          'min-h-10 rounded-xl px-3 py-0 text-base leading-5',
-          multiline ? 'h-16' : 'h-10',
-        )}
-        isDisabled={isDisabled}
-        isInvalid={Boolean(errorMessage)}
         multiline={multiline}
         onChangeText={onChangeText}
         onFocus={onFocus}
         placeholder={placeholder}
         returnKeyType="done"
-        style={styles.input}
         textAlignVertical={multiline ? 'top' : 'center'}
         value={value}
-        variant="secondary"
         {...textInputProps}
       />
-      {errorMessage ? <Text className="text-danger text-xs">{errorMessage}</Text> : null}
-    </View>
+      <FieldError>{errorMessage}</FieldError>
+    </TextField>
   );
 }
 
@@ -358,29 +402,29 @@ function EndpointTypeChip({
   isSelected,
   label,
   onPress,
+  selectionRole,
 }: {
   isDisabled: boolean;
   isSelected: boolean;
   label: string;
   onPress: () => void;
+  selectionRole: 'checkbox' | 'radio';
 }) {
   return (
     <Pressable
       accessibilityLabel={label}
-      accessibilityRole="checkbox"
+      accessibilityRole={selectionRole}
       accessibilityState={{ checked: isSelected, disabled: isDisabled }}
       className={cn(
         'h-8 flex-row items-center gap-1 rounded-full px-3 active:opacity-70 disabled:opacity-40',
-        isSelected ? null : 'border border-border bg-settings-grouped-surface',
+        isSelected ? 'bg-primary/10' : 'border border-border bg-secondary',
       )}
       disabled={isDisabled}
       onPress={onPress}
-      style={isSelected ? { backgroundColor: `${selectedEndpointTypeColor}20` } : undefined}
     >
       <Text
-        className="font-medium text-default-foreground text-sm"
+        className={cn('font-medium text-sm', isSelected ? 'text-primary' : 'text-foreground')}
         numberOfLines={1}
-        style={isSelected ? { color: selectedEndpointTypeColor } : undefined}
       >
         {label}
       </Text>
@@ -389,12 +433,6 @@ function EndpointTypeChip({
 }
 
 const styles = StyleSheet.create({
-  input: {
-    includeFontPadding: false,
-    paddingBottom: 0,
-    paddingTop: 0,
-    verticalAlign: 'middle',
-  },
   scrollContent: {
     gap: 16,
     paddingHorizontal: 16,
