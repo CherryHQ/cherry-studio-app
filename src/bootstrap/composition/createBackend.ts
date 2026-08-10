@@ -36,6 +36,7 @@ export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
     mcpServerMutations: McpServerMutations;
+    onTopicsDeleted: (topicIds: readonly string[]) => void;
   };
   dispose(): Promise<void>;
 };
@@ -55,11 +56,15 @@ export function createBackend(
       hasToken: (providerId) => services.oauthSession.hasToken(providerId),
     },
   });
+  const backgroundReply = new BackgroundReplyService({
+    preference: {
+      readCached: (key) => services.preference.readCached(key),
+      subscribeChange: (key) => services.preference.subscribeChange(key),
+    },
+    translate: dependencies.translate,
+  });
   const chat = new ChatRuntime({
-    backgroundReply: new BackgroundReplyService({
-      preference: services.preference,
-      translate: dependencies.translate,
-    }),
+    backgroundReply,
     files: {
       createParts: (parts) => createMessageParts(services.fileEntry, parts),
       discard: (entries) => discardInternalEntries(services.fileEntry, entries),
@@ -179,6 +184,9 @@ export function createBackend(
     },
     dataApiDependencies: {
       mcpServerMutations: mcp,
+      onTopicsDeleted: (topicIds) => {
+        for (const topicId of topicIds) backgroundReply.clearTopic(topicId);
+      },
     },
     dispose: async () => {
       services.oauth.dispose();

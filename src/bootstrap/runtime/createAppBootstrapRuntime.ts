@@ -58,6 +58,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       miniApps: services.miniApp,
       models: services.model,
       notes: services.note,
+      onTopicsDeleted: dataApiDependencies.onTopicsDeleted,
       paintings: services.painting,
       pins: services.pin,
       prompts: services.prompt,

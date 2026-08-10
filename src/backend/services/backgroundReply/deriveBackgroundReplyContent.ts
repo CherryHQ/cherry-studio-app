@@ -139,7 +139,7 @@ function isActiveToolPart(part: ToolPart): boolean {
   return (
     part.state === 'input-streaming' ||
     part.state === 'input-available' ||
-    (part.state === 'approval-responded' && part.approval.approved)
+    (part.state === 'approval-responded' && part.approval?.approved === true)
   );
 }
 

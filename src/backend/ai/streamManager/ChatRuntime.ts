@@ -32,7 +32,10 @@ import {
 } from '@cherrystudio/universal/utils/conversationTitle';
 import { isToolUIPart, type UIMessageChunk } from 'ai';
 
-import type { BackgroundReplyTurn } from '@/backend/services/backgroundReply';
+import type {
+  BackgroundReplyOutcome,
+  BackgroundReplyTurn,
+} from '@/backend/services/backgroundReply';
 import type {
   ChatCancelExecutionInput,
   ChatEditAndResendInput,
@@ -98,6 +101,15 @@ const defaultChatRuntimeConfig: ChatRuntimeConfig = {
   approvalIdleTimeoutMs: 2 * 60 * 60 * 1000,
   idleTimeoutMs: 30 * 60 * 1000,
 };
+
+const BACKGROUND_REPLY_OUTCOMES = {
+  aborted: 'cancelled',
+  done: 'completed',
+  error: 'failed',
+} satisfies Record<
+  Exclude<ReturnType<typeof resolveTurnOutcome>, 'awaiting-approval'>,
+  BackgroundReplyOutcome
+>;
 
 export class ChatRuntime implements ChatModule {
   private activeTasks = new Set<Promise<unknown>>();
@@ -698,16 +710,19 @@ export class ChatRuntime implements ChatModule {
       await this.invalidateTopicMessagesSafely(topicId);
 
       if (!applied) {
+        shouldRemainAwaitingApproval = false;
         throw new Error('The tool approval message no longer exists.');
       }
 
       if (applied.appliedApprovalIds.length === 0) {
         this.activeTurns.delete(topicId);
         const hasPendingApproval = hasPendingToolApproval(applied.parts);
+        shouldRemainAwaitingApproval = hasPendingApproval;
         this.setTopicSnapshot(topicId, {
           status: hasPendingApproval ? 'awaiting-approval' : 'idle',
         });
         if (applied.alreadySettledApprovalIds.includes(input.approvalId)) {
+          if (!hasPendingApproval) this.dependencies.backgroundReply.clearTopic(topicId);
           return;
         }
 
@@ -737,6 +752,9 @@ export class ChatRuntime implements ChatModule {
           error,
           wasAborted: abortController.signal.aborted,
         });
+      }
+      if (!shouldRemainAwaitingApproval && !activeTurn.backgroundReply) {
+        this.dependencies.backgroundReply.clearTopic(topicId);
       }
 
       this.activeTurns.delete(topicId);
@@ -1152,9 +1170,7 @@ export class ChatRuntime implements ChatModule {
         approvalMessage ? toCherryUIMessage(approvalMessage) : undefined,
       );
     } else {
-      input.activeTurn.backgroundReply?.finish(
-        outcome === 'done' ? 'completed' : outcome === 'aborted' ? 'cancelled' : 'failed',
-      );
+      input.activeTurn.backgroundReply?.finish(BACKGROUND_REPLY_OUTCOMES[outcome]);
     }
     input.activeTurn.streamStatus = outcome === 'awaiting-approval' ? 'awaiting-approval' : outcome;
     if (outcome === 'done') {
@@ -1818,8 +1834,13 @@ export class ChatRuntime implements ChatModule {
         topicId: topic.id,
       });
       activeTurn.backgroundReply = backgroundReply;
-      await backgroundReply.ready;
+      void backgroundReply.ready.catch((error) => {
+        logger.error('Background reply lifecycle failed to initialize', toError(error), {
+          topicId: topic.id,
+        });
+      });
     } catch (error) {
+      this.dependencies.backgroundReply.clearTopic(topic.id);
       logger.warn('Failed to start background reply lifecycle', toError(error), {
         topicId: topic.id,
       });

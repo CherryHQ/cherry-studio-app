@@ -15,18 +15,32 @@ import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
 import type { TopicService } from '@/backend/data/services/TopicService';
 
-export function createTopicHandlers(service: TopicService): HandlersFor<TopicSchemas> {
+export function createTopicHandlers(
+  service: TopicService,
+  onTopicsDeleted: (topicIds: readonly string[]) => void,
+): HandlersFor<TopicSchemas> {
   return {
     '/assistants/:assistantId/topics': {
-      DELETE: async ({ params }) => service.deleteByAssistantId(params.assistantId),
+      DELETE: async ({ params }) => {
+        const result = await service.deleteByAssistantId(params.assistantId);
+        onTopicsDeleted(result.deletedIds);
+        return result;
+      },
     },
     '/topics': {
-      DELETE: async ({ query }) => service.deleteByIds(DeleteTopicsQuerySchema.parse(query).ids),
+      DELETE: async ({ query }) => {
+        const result = await service.deleteByIds(DeleteTopicsQuerySchema.parse(query).ids);
+        onTopicsDeleted(result.deletedIds);
+        return result;
+      },
       GET: async ({ query }) => service.listByCursor(ListTopicsQuerySchema.parse(query ?? {})),
       POST: async ({ body }) => service.create(CreateTopicSchema.parse(body)),
     },
     '/topics/:id': {
-      DELETE: async ({ params }) => service.delete(params.id),
+      DELETE: async ({ params }) => {
+        await service.delete(params.id);
+        onTopicsDeleted([params.id]);
+      },
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => service.update(params.id, UpdateTopicSchema.parse(body)),
     },

@@ -24,9 +24,17 @@ export type BackgroundReplyActivityProps = BackgroundReplyContent & {
   startedAtEpochMs: number;
 };
 
-export type BackgroundReplyOutcome = 'cancelled' | 'completed' | 'failed';
+export type BackgroundReplyOutcome = Extract<
+  BackgroundReplyPhase,
+  'cancelled' | 'completed' | 'failed'
+>;
 
+/**
+ * Capability handle for one reply generation. Calls never throw, and handles
+ * superseded by a newer generation become no-ops.
+ */
 export type BackgroundReplyTurn = {
+  /** Settles after the initial native reconciliation and never rejects. */
   ready: Promise<void>;
   awaitApproval: (message?: CherryUIMessage) => void;
   finish: (outcome: BackgroundReplyOutcome) => void;
@@ -39,6 +47,7 @@ export type BackgroundReplyTurnInput = {
 };
 
 export type BackgroundReplyLifecycle = {
+  clearTopic: (topicId: string) => void;
   dispose: () => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
 };

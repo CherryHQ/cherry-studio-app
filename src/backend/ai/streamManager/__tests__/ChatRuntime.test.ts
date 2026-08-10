@@ -146,6 +146,84 @@ describe('ChatRuntime', () => {
     expect(backgroundTurn.finish).toHaveBeenCalledWith('completed');
   });
 
+  test('does not wait for native background reply readiness before streaming', async () => {
+    const services = createServices();
+    const readiness = createDeferred();
+    const backgroundTurn = createBackgroundReplyTurn();
+    backgroundTurn.ready = readiness.promise;
+    const runtime = createRuntime({
+      backgroundReply: createBackgroundReplyLifecycle(backgroundTurn),
+      services,
+    });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    const result = await Promise.race([
+      runtime
+        .sendText({
+          selectedModelId: 'provider::model' as UniqueModelId,
+          text: 'hi',
+          topicId: 'topic-1',
+        })
+        .then(() => 'completed'),
+      delay(1_000).then(() => 'timed-out'),
+    ]);
+
+    expect(result).toBe('completed');
+    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'success' }),
+    );
+  });
+
+  test('keeps streaming when the background reply lifecycle throws or rejects', async () => {
+    const throwingServices = createServices();
+    const throwingLifecycle: BackgroundReplyLifecycle = {
+      clearTopic: jest.fn(),
+      dispose: jest.fn(),
+      startTurn: jest.fn(() => {
+        throw new Error('native start failed');
+      }),
+    };
+    const throwingRuntime = createRuntime({
+      backgroundReply: throwingLifecycle,
+      services: throwingServices,
+    });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    await expect(
+      throwingRuntime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'hi',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toBeUndefined();
+    expect(throwingLifecycle.clearTopic).toHaveBeenCalledWith('topic-1');
+
+    const rejectingServices = createServices();
+    const readiness = createDeferred();
+    const rejectingTurn = createBackgroundReplyTurn();
+    rejectingTurn.ready = readiness.promise;
+    const rejectingLifecycle = createBackgroundReplyLifecycle(rejectingTurn);
+    const rejectingRuntime = createRuntime({
+      backgroundReply: rejectingLifecycle,
+      services: rejectingServices,
+    });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+    const sendPromise = rejectingRuntime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+    await waitUntil(() => (rejectingLifecycle.startTurn as jest.Mock).mock.calls.length > 0);
+    readiness.reject(new Error('native readiness failed'));
+
+    await expect(sendPromise).resolves.toBeUndefined();
+    expect(rejectingServices.message.finalizeAssistantMessage).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'success' }),
+    );
+  });
+
   test('pauses the background reply lifecycle while tool approval is pending', async () => {
     const services = createServices();
     const backgroundTurn = createBackgroundReplyTurn();
@@ -1280,7 +1358,8 @@ describe('ChatRuntime', () => {
     ]);
     services.model.getById = jest.fn(async (modelId: UniqueModelId) => createModel(modelId));
     const invalidateTopicMessages = jest.fn(async () => undefined);
-    const runtime = createRuntime({ invalidateTopicMessages, services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, invalidateTopicMessages, services });
     const finalChunk = createUiMessage('assistant-1', 'tool ran; here is the answer');
     mockReadUIMessageStream.mockReturnValue(asyncIterable([finalChunk]));
 
@@ -1296,6 +1375,10 @@ describe('ChatRuntime', () => {
       { approvalId: 'approval-1', approved: true, updatedInput: { query: 'revised' } },
     ]);
     expect(services.message.getPathToNode).toHaveBeenCalledWith('assistant-1');
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      assistantName: 'Assistant',
+      topicId: 'topic-1',
+    });
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'topic-1',
@@ -1352,7 +1435,8 @@ describe('ChatRuntime', () => {
       appliedApprovalIds: [],
       parts: [createRespondedApprovalPart('approval-1')],
     }));
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await runtime.respondToolApproval({
       approvalId: 'approval-1',
@@ -1363,6 +1447,7 @@ describe('ChatRuntime', () => {
 
     expect(services.message.getById).not.toHaveBeenCalled();
     expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(backgroundReply.clearTopic).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -1404,7 +1489,8 @@ describe('ChatRuntime', () => {
       appliedApprovalIds: [],
       parts: [createApprovalPart('approval-1')],
     }));
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await expect(
       runtime.respondToolApproval({
@@ -1416,13 +1502,15 @@ describe('ChatRuntime', () => {
     ).rejects.toThrow('The tool approval request was not found on the message.');
 
     expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(backgroundReply.clearTopic).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
   });
 
   test('reports a deleted approval message without starting a continuation', async () => {
     const services = createServices();
     services.message.applyToolApprovalDecisions = jest.fn(async () => null);
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await expect(
       runtime.respondToolApproval({
@@ -1434,7 +1522,8 @@ describe('ChatRuntime', () => {
     ).rejects.toThrow('The tool approval message no longer exists.');
 
     expect(services.ai.streamText).not.toHaveBeenCalled();
-    expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
+    expect(backgroundReply.clearTopic).toHaveBeenCalledWith('topic-1');
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
   test('persists an error and keeps prior parts when the resumed stream fails before any chunk', async () => {
@@ -1727,7 +1816,8 @@ describe('ChatRuntime', () => {
     services.topic.getById = jest.fn(async () => {
       throw new Error('topic lookup failed');
     });
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await expect(
       runtime.respondToolApproval({
@@ -1753,6 +1843,7 @@ describe('ChatRuntime', () => {
       }),
     );
     expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(backgroundReply.clearTopic).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -2595,12 +2686,15 @@ function asyncIterableWithFailure<T>(items: T[], error: Error) {
 
 function createDeferred<T = void>() {
   let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((nextResolve) => {
+  let reject: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
     resolve = nextResolve;
+    reject = nextReject;
   });
 
   return {
     promise,
+    reject,
     resolve,
   };
 }
@@ -2703,6 +2797,7 @@ function createBackgroundReplyLifecycle(
   turn: BackgroundReplyTurn = createBackgroundReplyTurn(),
 ): BackgroundReplyLifecycle {
   return {
+    clearTopic: jest.fn(),
     dispose: jest.fn(),
     startTurn: jest.fn(() => turn),
   };

@@ -1,5 +1,10 @@
 import { Asset } from 'expo-asset';
-import { type AudioPlayer, createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import {
+  type AudioPlayer,
+  type AudioStatus,
+  createAudioPlayer,
+  setAudioModeAsync,
+} from 'expo-audio';
 import { File } from 'expo-file-system';
 import { type LiveActivity, widgetsDirectory } from 'expo-widgets';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
@@ -24,6 +29,7 @@ import {
 } from './deriveBackgroundReplyContent';
 
 const KEEP_ALIVE_VOLUME = 0.001;
+const AUDIO_STATUS_UPDATE_INTERVAL_MS = 1000;
 const LIVE_ACTIVITY_UPDATE_INTERVAL_MS = 1000;
 const PREFERENCE_KEY = 'chat.background_reply.enabled';
 const logger = loggerService.withContext('BackgroundReply');
@@ -41,7 +47,7 @@ type TurnRecord = {
 
 type BackgroundReplyServiceDependencies = {
   preference: {
-    getCachedValue: (key: typeof PREFERENCE_KEY) => boolean | undefined;
+    readCached: (key: typeof PREFERENCE_KEY) => boolean;
     subscribeChange: (key: typeof PREFERENCE_KEY) => (listener: () => void) => () => void;
   };
   translate: BackgroundReplyTranslate;
@@ -56,12 +62,12 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
   private logoUri?: string;
   private operationTail: Promise<void> = Promise.resolve();
   private player?: AudioPlayer;
+  private playerStatusSubscription?: { remove: () => void };
   private preferenceUnsubscribe?: () => void;
   private turns = new Map<string, TurnRecord>();
 
   constructor(private readonly dependencies: BackgroundReplyServiceDependencies) {
-    this.enabled =
-      Platform.OS === 'ios' && dependencies.preference.getCachedValue(PREFERENCE_KEY) !== false;
+    this.enabled = Platform.OS === 'ios' && dependencies.preference.readCached(PREFERENCE_KEY);
 
     if (Platform.OS !== 'ios') return;
 
@@ -98,29 +104,52 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     const ready = this.enqueue(async () => {
       await this.reconcileAudio();
       await this.reconcileActivity(record, true);
+    }).catch((error) => {
+      logger.error('Background reply turn failed to initialize', error as Error, {
+        topicId: input.topicId,
+      });
     });
 
     return {
       ready,
-      awaitApproval: (message) => {
-        if (!this.isCurrent(input.topicId, generation)) return;
-        const current = this.turns.get(input.topicId);
-        if (!current) return;
-        const latest = deriveBackgroundReplyContent(message, this.dependencies.translate);
-        current.content = {
-          detail: this.dependencies.translate('chat.backgroundReply.awaitingApproval'),
-          phase: 'awaiting-approval',
-          ...(latest.preview ? { preview: latest.preview } : {}),
-        };
-        this.clearUpdateTimer(current);
-        void this.enqueue(async () => {
-          await this.reconcileAudio();
-          await this.reconcileActivity(current, true);
-        });
-      },
-      finish: (outcome) => this.finishTurn(input.topicId, generation, outcome),
-      update: (message) => this.updateTurn(input.topicId, generation, message),
+      awaitApproval: (message) =>
+        this.runTurnCallback(input.topicId, 'mark approval pending', () => {
+          if (!this.isCurrent(input.topicId, generation)) return;
+          const current = this.turns.get(input.topicId);
+          if (!current) return;
+          const latest = deriveBackgroundReplyContent(message, this.dependencies.translate);
+          current.content = {
+            detail: this.dependencies.translate('chat.backgroundReply.awaitingApproval'),
+            phase: 'awaiting-approval',
+            ...(latest.preview ? { preview: latest.preview } : {}),
+          };
+          this.clearUpdateTimer(current);
+          void this.enqueue(async () => {
+            await this.reconcileAudio();
+            await this.reconcileActivity(current, true);
+          });
+        }),
+      finish: (outcome) =>
+        this.runTurnCallback(input.topicId, 'finish turn', () => {
+          this.finishTurn(input.topicId, generation, outcome);
+        }),
+      update: (message) =>
+        this.runTurnCallback(input.topicId, 'update turn', () => {
+          this.updateTurn(input.topicId, generation, message);
+        }),
     };
+  };
+
+  clearTopic = (topicId: string): void => {
+    const record = this.turns.get(topicId);
+    if (!record) return;
+
+    this.turns.delete(topicId);
+    this.clearUpdateTimer(record);
+    void this.enqueue(async () => {
+      await this.reconcileAudio();
+      await this.endActivity(record, 'immediate');
+    });
   };
 
   dispose(): void {
@@ -149,6 +178,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
         return;
       }
 
+      await this.reconcileAudio();
       await Promise.all(
         [...this.turns.values()].map((record) => this.reconcileActivity(record, true)),
       );
@@ -156,7 +186,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
   };
 
   private handlePreferenceChange(): void {
-    this.enabled = this.dependencies.preference.getCachedValue(PREFERENCE_KEY) !== false;
+    this.enabled = this.dependencies.preference.readCached(PREFERENCE_KEY);
     void this.enqueue(async () => {
       if (!this.enabled) {
         await Promise.all(
@@ -217,6 +247,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     this.clearUpdateTimer(record);
     void this.enqueue(async () => {
       await this.reconcileAudio();
+      if (!this.isRecordCurrent(record)) return;
       if (record.activity) {
         await this.endActivity(record, 'default', Date.now());
       }
@@ -225,15 +256,13 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
   }
 
   private async reconcileAudio(): Promise<void> {
-    const shouldPlay =
-      this.enabled &&
-      [...this.turns.values()].some((record) => isGeneratingPhase(record.content.phase));
-    if (!shouldPlay) {
+    if (!this.shouldKeepAudioAlive()) {
       await this.stopAudio();
       return;
     }
     if (this.player) return;
 
+    let player: AudioPlayer | undefined;
     try {
       await setAudioModeAsync({
         allowsRecording: false,
@@ -241,16 +270,22 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
         playsInSilentMode: true,
         shouldPlayInBackground: true,
       });
-      const player = createAudioPlayer(require('../../../../assets/audio/silence.m4a'), {
-        updateInterval: LIVE_ACTIVITY_UPDATE_INTERVAL_MS,
+      const activePlayer = createAudioPlayer(require('../../../../assets/audio/silence.m4a'), {
+        updateInterval: AUDIO_STATUS_UPDATE_INTERVAL_MS,
       });
-      player.loop = true;
-      player.volume = KEEP_ALIVE_VOLUME;
-      player.play();
-      this.player = player;
+      player = activePlayer;
+      activePlayer.loop = true;
+      activePlayer.volume = KEEP_ALIVE_VOLUME;
+      activePlayer.play();
+      this.player = activePlayer;
+      this.playerStatusSubscription = activePlayer.addListener(
+        'playbackStatusUpdate',
+        (status: AudioStatus) => this.handlePlayerStatusUpdate(activePlayer, status),
+      );
       logger.info('Background audio started', { activeTurnCount: this.turns.size });
     } catch (error) {
-      logger.warn('Background audio failed to start', error as Error, {
+      if (player) this.releasePlayer(player);
+      logger.error('Background audio failed to start', error as Error, {
         activeTurnCount: this.turns.size,
       });
     }
@@ -260,12 +295,59 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     const player = this.player;
     if (!player) return;
     this.player = undefined;
+    const subscription = this.playerStatusSubscription;
+    this.playerStatusSubscription = undefined;
+
+    try {
+      subscription?.remove();
+    } catch (error) {
+      logger.error('Background audio status listener cleanup failed', error as Error);
+    }
     try {
       player.pause();
+    } catch (error) {
+      logger.error('Background audio pause failed', error as Error);
+    }
+    try {
       player.remove();
       logger.info('Background audio stopped');
     } catch (error) {
-      logger.warn('Background audio cleanup failed', error as Error);
+      logger.error('Background audio removal failed', error as Error);
+    }
+  }
+
+  private handlePlayerStatusUpdate(player: AudioPlayer, status: AudioStatus): void {
+    if (
+      this.player !== player ||
+      status.playing ||
+      status.isBuffering ||
+      !status.isLoaded ||
+      !this.shouldKeepAudioAlive()
+    ) {
+      return;
+    }
+
+    try {
+      player.play();
+      logger.info('Background audio resumed after interruption');
+    } catch (error) {
+      logger.error('Background audio failed to resume after interruption', error as Error);
+    }
+  }
+
+  private releasePlayer(player: AudioPlayer): void {
+    if (this.player === player) this.player = undefined;
+    const subscription = this.playerStatusSubscription;
+    this.playerStatusSubscription = undefined;
+    try {
+      subscription?.remove();
+    } catch (error) {
+      logger.error('Background audio status listener cleanup failed', error as Error);
+    }
+    try {
+      player.remove();
+    } catch (error) {
+      logger.error('Background audio removal failed after start error', error as Error);
     }
   }
 
@@ -369,6 +451,21 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
 
   private isRecordCurrent(record: TurnRecord): boolean {
     return !this.disposed && this.turns.get(record.topicId) === record;
+  }
+
+  private runTurnCallback(topicId: string, operation: string, callback: () => void): void {
+    try {
+      callback();
+    } catch (error) {
+      logger.error(`Background reply failed to ${operation}`, error as Error, { topicId });
+    }
+  }
+
+  private shouldKeepAudioAlive(): boolean {
+    return (
+      this.enabled &&
+      [...this.turns.values()].some((record) => isGeneratingPhase(record.content.phase))
+    );
   }
 
   private enqueue(operation: () => Promise<void>): Promise<void> {

@@ -27,7 +27,10 @@ type AssistantData = Pick<
   | 'update'
 >;
 
-export function createAssistantHandlers(service: AssistantData): HandlersFor<AssistantSchemas> {
+export function createAssistantHandlers(
+  service: AssistantData,
+  onTopicsDeleted: (topicIds: readonly string[]) => void,
+): HandlersFor<AssistantSchemas> {
   return {
     '/assistants': {
       GET: async ({ query }) => service.list(ListAssistantsQuerySchema.parse(query ?? {})),
@@ -39,7 +42,11 @@ export function createAssistantHandlers(service: AssistantData): HandlersFor<Ass
     '/assistants/:id': {
       DELETE: async ({ params, query }) => {
         const parsed = DeleteAssistantQuerySchema.parse(query ?? {});
-        return service.delete(params.id, { deleteTopics: parsed.deleteTopics === true });
+        const result = await service.delete(params.id, {
+          deleteTopics: parsed.deleteTopics === true,
+        });
+        if (result.deletedTopicIds) onTopicsDeleted(result.deletedTopicIds);
+        return result;
       },
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => {
