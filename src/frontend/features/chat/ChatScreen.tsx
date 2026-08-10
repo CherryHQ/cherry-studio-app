@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 
@@ -13,6 +13,7 @@ import { ChatWorkspace } from './workspace';
 const perfLog = loggerService.withContext('ChatPerf');
 
 export function ChatScreen() {
+  const isPreview = useIsPreview();
   const { assistantId, topicId } = useLocalSearchParams<{
     assistantId?: string;
     topicId?: string;
@@ -47,7 +48,12 @@ export function ChatScreen() {
       <MainHeader />
       {isTopicAvailable ? (
         <View className="flex-1">
-          <ChatWorkspace messageWindow={messageWindow} renderGateKey={topicId} topicId={topicId} />
+          <ChatWorkspace
+            isPreview={isPreview}
+            messageWindow={messageWindow}
+            renderGateKey={topicId}
+            topicId={topicId}
+          />
         </View>
       ) : (
         <NewTopicScreen assistantId={assistantId} />

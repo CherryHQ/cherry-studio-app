@@ -1,7 +1,7 @@
+import { ToolRegistry } from '@cherrystudio/ai-runtime/tools';
 import { asSchema, type Tool } from 'ai';
 
-import { ToolRegistry } from '../../registry';
-import type { DeviceToolAccess, ToolApplyScope, ToolEntry } from '../../types';
+import type { DeviceToolAccess, ToolApplyScope, ToolEntry } from '../../../../types';
 import { registerBuiltinTools } from '../registerBuiltinTools';
 import { DEVICE_TOOL_NAMES } from '../toolNames';
 
@@ -61,7 +61,7 @@ describe('registerBuiltinTools', () => {
 
   test('exposes ask-mode tools inline and resolves approval dynamically', async () => {
     const deps = dependencies('ask');
-    const registry = new ToolRegistry();
+    const registry = new ToolRegistry<ToolApplyScope>();
     registerBuiltinTools(registry, deps);
     const entry = registry
       .selectActive(scope({ deviceAccess: access({}, 'ask') }))
@@ -72,7 +72,7 @@ describe('registerBuiltinTools', () => {
 });
 
 function createRegistry() {
-  const registry = new ToolRegistry();
+  const registry = new ToolRegistry<ToolApplyScope>();
   registerBuiltinTools(registry, dependencies('always'));
   return registry;
 }
@@ -85,7 +85,7 @@ function dependencies(mode: 'ask' | 'always') {
   } as never;
 }
 
-function deviceEntries(registry: ToolRegistry): ToolEntry[] {
+function deviceEntries(registry: ToolRegistry<ToolApplyScope>): ToolEntry[] {
   return registry.getAll().filter((entry) => entry.namespace !== 'web');
 }
 

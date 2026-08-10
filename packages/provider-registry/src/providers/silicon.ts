@@ -51,6 +51,7 @@ const siliconReasoningModels = [
 ];
 
 export default openaiCompatible({
+  authMethods: ['api-key', 'oauth'],
   id: 'silicon',
   name: 'Silicon',
   baseUrl: 'https://api.siliconflow.cn/v1',

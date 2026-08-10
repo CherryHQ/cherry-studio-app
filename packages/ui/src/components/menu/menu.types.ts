@@ -1,21 +1,20 @@
-import type { MenuAction } from '@expo/ui/community/menu';
-import type { ReactElement, ReactNode } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { ReactElement } from 'react';
+import type { SFSymbol } from 'sf-symbols-typescript';
 
-export type MenuItem = {
+export type MenuSystemImage = SFSymbol;
+
+export type MenuItem = Readonly<{
+  checked?: boolean;
+  destructive?: boolean;
   disabled?: boolean;
-  icon?: ReactNode;
   id: string;
   label: string;
   onPress: () => void;
-  role?: 'default' | 'destructive';
-  systemImage?: Extract<MenuAction['image'], string>;
-  testID?: string;
-};
+  systemImage?: MenuSystemImage;
+}>;
 
 export type MenuProps = {
   children: ReactElement;
   items: readonly MenuItem[];
-  style?: StyleProp<ViewStyle>;
-  testID?: string;
+  trigger: 'longPress' | 'tap';
 };

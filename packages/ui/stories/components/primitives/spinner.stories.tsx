@@ -8,7 +8,7 @@ const colors: SpinnerColor[] = ['default', 'success', 'warning', 'danger'];
 const themes = ['light', 'dark'] as const;
 
 const meta = {
-  title: 'Components/Primitives/Spinner',
+  title: 'Components/Loading/Spinner',
   component: Spinner,
   args: {
     accessibilityLabel: 'Loading',

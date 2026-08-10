@@ -10,7 +10,7 @@ import { Pressable, Text, type PressableProps, type TextProps, type View } from 
 import { useResolveClassNames } from 'uniwind';
 
 import { cn } from '../../utils';
-import { Spinner, type SpinnerSize } from '../spinner';
+import { Spinner, type SpinnerSize } from '../loading/spinner';
 
 export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
 export type ButtonSize = 'default' | 'lg' | 'sm';

@@ -26,7 +26,7 @@ overrides:
   '@storybook/react-native-ui': 10.5.1
   '@storybook/react-native-ui-common': 10.5.1
   '@valibot/to-json-schema': 1.5.0
-  '@ai-sdk/anthropic': 3.0.87
+  '@ai-sdk/anthropic': 3.0.103
   '@ai-sdk/azure': 3.0.54
   '@ai-sdk/deepseek': 2.0.30
   '@ai-sdk/google': 3.0.64
@@ -48,13 +48,14 @@ allowBuilds:
   '@shopify/react-native-skia': true
 
 patchedDependencies:
+  '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.4: patches/metro@0.84.4.patch
   metro-runtime@0.84.4: patches/metro-runtime@0.84.4.patch
   uniwind@1.6.5: patches/uniwind@1.6.5.patch
   react-native-reanimated@4.5.0: patches/react-native-reanimated@4.5.0.patch
   '@bottom-tabs/react-navigation@1.4.0': patches/@bottom-tabs__react-navigation@1.4.0.patch
-  '@ai-sdk/anthropic@3.0.87': patches/@ai-sdk__anthropic.patch
+  '@ai-sdk/anthropic@3.0.103': patches/@ai-sdk__anthropic.patch
   '@ai-sdk/deepseek@2.0.30': patches/@ai-sdk__deepseek@2.0.30.patch
   '@ai-sdk/google@3.0.64': patches/@ai-sdk__google@3.0.64.patch
   '@ai-sdk/openai@3.0.53': patches/@ai-sdk__openai@3.0.53.patch

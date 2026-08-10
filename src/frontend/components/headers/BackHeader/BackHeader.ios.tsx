@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useIsPreview, useRouter } from 'expo-router';
 import type { ReactElement, ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,6 +60,7 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
 }
 
 export function BackHeader({ onBack, rightActions, title = '', titleElement }: BackHeaderProps) {
+  const isPreview = useIsPreview();
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -77,6 +78,10 @@ export function BackHeader({ onBack, rightActions, title = '', titleElement }: B
     () => ({ headerBackVisible: false, title: hasTitleElement ? '' : title }),
     [hasTitleElement, title],
   );
+
+  if (isPreview) {
+    return null;
+  }
 
   return (
     <>

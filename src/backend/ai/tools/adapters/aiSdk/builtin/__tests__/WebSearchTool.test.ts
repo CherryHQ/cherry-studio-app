@@ -1,4 +1,5 @@
-import { getTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
+import { getTrustedLocalToolTerminalFailure } from '@cherrystudio/ai-runtime/runtime';
+
 import {
   WEB_LOOKUP_ERROR_NOTE,
   WEB_NETWORK_ERROR_NOTE,

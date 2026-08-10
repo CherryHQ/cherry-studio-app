@@ -9,6 +9,8 @@
 import { Easing } from 'react-native-reanimated';
 
 export const easing = {
+  /** Constant velocity for progress loops that should not settle between cycles. */
+  linear: Easing.linear,
   /**
    * Overshoots past the target and comes back — the y=1.25 control point. For
    * something appearing out of nothing, where the overshoot is the arrival.

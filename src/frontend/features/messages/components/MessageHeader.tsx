@@ -1,7 +1,7 @@
 // Android-only: mirrors the native iOS messages-tab header actions.
-import { Menu } from '@cherrystudio/ui/components';
-import { ImageIcon, MessageCircleIcon, SquarePenIcon } from 'lucide-uniwind/png';
-import { memo } from 'react';
+import { Menu, type MenuItem } from '@cherrystudio/ui/components';
+import { SquarePenIcon } from 'lucide-uniwind/png';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
@@ -29,6 +29,17 @@ export const MessageHeader = memo(function MessageHeader({
   scope,
 }: MessageHeaderProps) {
   const { t } = useTranslation();
+  const createMenuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      { id: 'new-chat', label: t('navigation.newChat'), onPress: onNewTopicPress },
+      {
+        id: 'new-painting',
+        label: t('navigation.newPainting'),
+        onPress: onNewPaintingPress,
+      },
+    ],
+    [onNewPaintingPress, onNewTopicPress, t],
+  );
 
   return (
     <View className="h-14 flex-row items-center px-2">
@@ -58,26 +69,7 @@ export const MessageHeader = memo(function MessageHeader({
       <View className="w-[88px] items-end">
         {isEditing ? null : (
           <View className="flex-row rounded-3xl bg-field android:shadow-sm">
-            <Menu
-              items={[
-                {
-                  icon: <MessageCircleIcon className="size-5 text-foreground" strokeWidth={2} />,
-                  id: 'new-chat',
-                  label: t('navigation.newChat'),
-                  onPress: onNewTopicPress,
-                  systemImage: 'message',
-                  testID: 'topic-create-chat',
-                },
-                {
-                  icon: <ImageIcon className="size-5 text-foreground" strokeWidth={2} />,
-                  id: 'new-painting',
-                  label: t('navigation.newPainting'),
-                  onPress: onNewPaintingPress,
-                  systemImage: 'paintbrush',
-                  testID: 'topic-create-painting',
-                },
-              ]}
-            >
+            <Menu items={createMenuItems} trigger="tap">
               <Pressable
                 accessibilityLabel={t('navigation.new')}
                 accessibilityRole="button"

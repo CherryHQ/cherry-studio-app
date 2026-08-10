@@ -1,3 +1,4 @@
+import { markTrustedLocalToolTerminalFailure } from '@cherrystudio/ai-runtime/runtime';
 import {
   WEB_FETCH_TOOL_NAME,
   webFetchInputSchema,
@@ -6,7 +7,6 @@ import {
 import { tool } from 'ai';
 import * as z from 'zod';
 
-import { markTrustedLocalToolTerminalFailure } from '@/backend/ai/runtime/aiSdk/loop/localToolTerminalOutcome';
 import {
   fetchWeb,
   WEB_FETCH_DESCRIPTION,
@@ -15,7 +15,7 @@ import {
 } from '@/backend/ai/tools/webLookup';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
-import type { ToolEntry } from '../types';
+import type { ToolEntry } from '../../../types';
 
 export { WEB_FETCH_TOOL_NAME, webFetchInputSchema };
 

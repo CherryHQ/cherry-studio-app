@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
+import { getBuiltInToolPresentation } from '@/frontend/components/messagePresentation/utils/builtInToolPresentation';
+
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
-import { getBuiltInToolPresentation } from '../utils/builtInToolPresentation';
 
 const ignoreClose = () => undefined;
 
@@ -105,7 +106,11 @@ function ApprovalArgumentsPreview({ input }: { input: unknown }) {
   return (
     <View className="gap-1">
       <Text className="text-foreground-tertiary text-xs">{t('chat.tool.arguments')}</Text>
-      <ScrollView className="max-h-48 rounded-md bg-secondary" nestedScrollEnabled>
+      <ScrollView
+        className="max-h-48 rounded-md bg-secondary"
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={false}
+      >
         <Text className="p-2 font-mono text-foreground text-xs" selectable>
           {preview}
         </Text>

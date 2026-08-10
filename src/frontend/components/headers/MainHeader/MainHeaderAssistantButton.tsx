@@ -15,21 +15,21 @@ export function useMainHeaderAssistant() {
   const currentAssistantId = topicId ? topic.data?.assistantId : assistantId;
   const { assistant } = useAssistantApiById(currentAssistantId);
 
+  const openNewTopic = useCallback(() => {
+    router.setParams({ assistantId: currentAssistantId, topicId: undefined });
+  }, [currentAssistantId, router]);
   const openAssistant = useCallback(() => {
     if (!assistant) {
       return;
     }
 
     router.push({
-      params: {
-        assistantId: assistant.id,
-        ...(topicId ? { returnTopicId: topicId } : {}),
-      },
-      pathname: '/assistants/[assistantId]',
+      params: { assistantId: assistant.id },
+      pathname: '/assistants/[assistantId]/edit',
     });
-  }, [assistant, router, topicId]);
+  }, [assistant, router]);
 
-  return { assistant, openAssistant };
+  return { assistant, openAssistant, openNewTopic };
 }
 
 export function MainHeaderAssistantButton({

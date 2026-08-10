@@ -1,6 +1,7 @@
 import { defineProvider } from './types';
 
 export default defineProvider({
+  authMethods: ['oauth'],
   id: 'copilot',
   name: 'Github Copilot',
   defaultChatEndpoint: 'openai-chat-completions',

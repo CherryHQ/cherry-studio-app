@@ -1,6 +1,7 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { MessageListProps } from '@/frontend/components/messagePresentation';
 
 import type {
   PaintingGenerationInput,
@@ -14,15 +15,7 @@ type PaintingInputProps = {
   onGenerated?: (result: PaintingGenerationResult) => void;
 };
 
-type MessageListProps = {
-  contentInsetEndAdjustment: unknown;
-  keyboardOffset: number;
-  messages: Message[];
-};
-
 const mockRouterReplace = jest.fn();
-const mockContentInsetEndAdjustment = { value: 88 };
-const mockOnComposerLayout = jest.fn();
 const mockGenerate = jest.fn<Promise<PaintingGenerationResult>, [PaintingGenerationInput]>();
 let mockPaintingInputProps: PaintingInputProps | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -85,13 +78,6 @@ jest.mock('expo-crypto', () => ({
   },
 }));
 
-jest.mock('@legendapp/list/keyboard', () => ({
-  useKeyboardChatComposerInset: () => ({
-    contentInsetEndAdjustment: mockContentInsetEndAdjustment,
-    onComposerLayout: mockOnComposerLayout,
-  }),
-}));
-
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -119,7 +105,7 @@ jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
 
 jest.mock('@/frontend/components/composer', () => ({
   ComposerDock: ({ children }: { children: React.ReactNode }) => children,
-  ComposerProvider: ({
+  ManagedComposerProvider: ({
     children,
     initialAttachments,
   }: {
@@ -130,7 +116,7 @@ jest.mock('@/frontend/components/composer', () => ({
     return children;
   },
   useComposerDockLayout: () => ({
-    contentBottomInset: 0,
+    contentBottomInset: 88,
     handleInputHeightChange: jest.fn(),
     inputHeight: 88,
     inputHeightShared: { value: 0 },
@@ -138,13 +124,11 @@ jest.mock('@/frontend/components/composer', () => ({
   }),
 }));
 
-jest.mock('@/frontend/features/chat/workspace', () => ({
-  ChatMessageList: (props: MessageListProps) => {
+jest.mock('@/frontend/components/messagePresentation', () => ({
+  MessageList: (props: MessageListProps) => {
     mockMessageListProps = props;
     return null;
   },
-  ChatWorkspaceFrame: ({ children }: { children: React.ReactNode }) => children,
-  ScrollToBottomButton: () => null,
 }));
 
 jest.mock('@/frontend/features/paintings/components/PaintingInput', () => ({
@@ -218,8 +202,12 @@ describe('PaintingConversationScreen', () => {
       'user',
       'assistant',
     ]);
-    expect(mockMessageListProps?.messages[0].searchableText).toBe(input.prompt);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: input.prompt,
+      type: 'text',
+    });
     expect(mockMessageListProps?.messages[1].status).toBe('pending');
+    expect(mockMessageListProps?.enteringMessageId).toBe('00000000-0000-7000-8000-000000000002');
     expect(mockRouterReplace).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -234,7 +222,11 @@ describe('PaintingConversationScreen', () => {
       params: { paintingId: result.painting.id },
       pathname: '/paintings/[paintingId]/conversation',
     });
-    expect(mockMessageListProps?.messages[0].searchableText).toBe(mockPainting.prompt);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: mockPainting.prompt,
+      type: 'text',
+    });
+    expect(mockMessageListProps?.enteringMessageId).toBeUndefined();
   });
 
   it('shows persisted history without seeding the output as an input attachment', () => {
@@ -243,8 +235,12 @@ describe('PaintingConversationScreen', () => {
       'user',
       'assistant',
     ]);
-    expect(mockMessageListProps?.messages[0].searchableText).toBe(mockPainting.prompt);
-    expect(mockMessageListProps?.contentInsetEndAdjustment).toBe(mockContentInsetEndAdjustment);
+    expect(mockMessageListProps?.messages[0].data.parts?.[0]).toEqual({
+      text: mockPainting.prompt,
+      type: 'text',
+    });
+    expect(mockMessageListProps?.contentBottomInset).toBe(88);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
+    expect(mockMessageListProps?.bottomAccessoryHeight).toBeDefined();
   });
 });

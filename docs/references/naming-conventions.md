@@ -198,7 +198,7 @@ When a directory **is** a component (i.e. contains `index.tsx` exporting the com
 ```
 src/frontend/components/headers/MainHeader/                       ✅
 src/frontend/components/headers/BackHeader/                       ✅
-src/frontend/features/chat/workspace/components/ScrollToBottomButton/  ✅
+src/frontend/components/messagePresentation/components/ScrollToBottomButton/  ✅
 ```
 
 ### 4.3 Bucket Directories — `lowercase plural noun`
@@ -317,16 +317,20 @@ A **large multi-file domain** co-locates *everything* it owns — its components
 
 This is the §4.4 promotion rule applied at the top level: a domain graduates from "a file (plus maybe one util) in a bucket" to "its own subtree" only once the additional files actually arrive and span more than one concern. Do not pre-create a subtree for an anticipated module.
 
-**Canonical example** — `src/frontend/features/chat/`:
+**Canonical examples** — route-owned Chat orchestration and shared message presentation:
 
 ```
 src/frontend/features/chat/
 ├── ChatScreen.tsx        # the route-bound screen component (§3.1)
 ├── input/                # ChatInput + its components/hooks/utils
-├── workspace/            # message list + scroll/layout sub-modules
-├── messageContent/       # message part renderers
-├── messageItem/          # user/assistant message items
+├── workspace/            # runtime projection, loading gates, approvals, composer placement
 └── runtime/              # React subscription layer for the app-owned ChatRuntime
+
+src/frontend/components/messagePresentation/
+├── components/           # virtualized MessageList and its private platform controls
+├── messageContent/       # structured message part renderers and hooks
+├── messageRow/           # user/assistant rows and entry animation
+└── utils/                # private presentation mappings
 ```
 
 Layer-level buckets such as `frontend/components`, `frontend/hooks`, `backend/services`,

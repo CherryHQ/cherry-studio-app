@@ -4,6 +4,7 @@ import {
   normalizeApiKeyEntries,
   normalizeApiKeySingleLine,
 } from '../apiService/utils/providerApiServiceApiKeys';
+import { shouldShowApiKeys } from '../apiService/utils/providerApiServiceAuth';
 import {
   getProviderApiServiceApiKeysDirtyState,
   getProviderApiServiceEndpointDirtyState,
@@ -35,6 +36,12 @@ function createTestEndpointDraft(overrides: Partial<EndpointDraft> = {}): Endpoi
 }
 
 describe('provider API service form helpers', () => {
+  it('hides manual keys only for login-only providers', () => {
+    expect(shouldShowApiKeys('api-key', { authMethods: ['oauth'] })).toBe(false);
+    expect(shouldShowApiKeys('api-key', { authMethods: ['api-key', 'oauth'] })).toBe(true);
+    expect(shouldShowApiKeys('oauth', { authMethods: ['api-key', 'oauth'] })).toBe(true);
+  });
+
   it('removes line breaks from a single API key', () => {
     expect(normalizeApiKeySingleLine('sk-a\r\nsk-b\nsk-c')).toBe('sk-ask-bsk-c');
   });

@@ -53,10 +53,8 @@ describe('painting conversation messages', () => {
     expect(messages).toHaveLength(2);
     expect(messages[0]).toEqual(
       expect.objectContaining({
-        createdAt: painting.createdAt,
         id: painting.id,
         role: 'user',
-        searchableText: painting.prompt,
         status: 'success',
       }),
     );
@@ -70,14 +68,14 @@ describe('painting conversation messages', () => {
     });
     expect(messages[1]).toEqual(
       expect.objectContaining({
-        createdAt: painting.updatedAt,
         id: painting.files.output[0],
-        modelId: painting.modelId,
-        parentId: painting.id,
         role: 'assistant',
         status: 'success',
       }),
     );
+    for (const message of messages) {
+      expect(Object.keys(message).sort()).toEqual(['data', 'id', 'role', 'status']);
+    }
     const outputPart = messages[1].data.parts?.[0];
     if (!outputPart || outputPart.type !== 'file') {
       throw new Error('Expected the assistant message to contain the output file');
@@ -90,7 +88,6 @@ describe('painting conversation messages', () => {
   it('creates a pending assistant turn for a new painting request', () => {
     const messages = createPendingPaintingConversationMessages({
       assistantMessageId: '00000000-0000-7000-8000-000000000005',
-      createdAt: '2026-07-21T11:00:00.000Z',
       input: {
         attachments: files.outputs,
         mode: 'edit',
@@ -106,9 +103,11 @@ describe('painting conversation messages', () => {
     expect(messages[1]).toEqual(
       expect.objectContaining({
         data: { parts: [] },
-        modelId: 'provider::image-model',
         status: 'pending',
       }),
     );
+    for (const message of messages) {
+      expect(Object.keys(message).sort()).toEqual(['data', 'id', 'role', 'status']);
+    }
   });
 });

@@ -1,7 +1,6 @@
-import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
-import { type MenuAction, MenuView, type NativeActionEvent } from '@expo/ui/community/menu';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -372,34 +371,34 @@ function NewProviderAvatarSection({
     }
   }, [onAvatarChange]);
 
-  const uploadActions = useMemo<MenuAction[]>(
-    () => [
-      { id: 'camera', image: 'camera', title: t('chat.media.camera') },
-      { id: 'photos', image: 'photo', title: t('chat.media.photos') },
-    ],
-    [t],
-  );
-  const handleUploadAction = useCallback(
-    (event: NativeActionEvent) => {
-      if (event.nativeEvent.event === 'camera') {
-        void selectAvatarFromCamera();
-        return;
-      }
-      void selectAvatarFromPhotoLibrary();
-    },
-    [selectAvatarFromCamera, selectAvatarFromPhotoLibrary],
-  );
   const resetAvatar = useCallback(() => onAvatarChange(null), [onAvatarChange]);
+  const avatarMenuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'camera',
+        label: t('chat.media.camera'),
+        onPress: () => void selectAvatarFromCamera(),
+        systemImage: 'camera',
+      },
+      {
+        id: 'photos',
+        label: t('chat.media.photos'),
+        onPress: () => void selectAvatarFromPhotoLibrary(),
+        systemImage: 'photo',
+      },
+    ],
+    [selectAvatarFromCamera, selectAvatarFromPhotoLibrary, t],
+  );
 
   return (
     <View className="items-center gap-4">
       <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarUri} />
       <View className="flex-row items-center gap-3">
-        <MenuView actions={uploadActions} onPressAction={handleUploadAction}>
+        <Menu items={avatarMenuItems} trigger="tap">
           <Button icon={<ImageUpIcon strokeWidth={2} />} variant="secondary">
             {t('settings.provider.add.uploadImage')}
           </Button>
-        </MenuView>
+        </Menu>
         <Button
           disabled={!avatarUri}
           icon={<RotateCcwIcon strokeWidth={2} />}

@@ -53,8 +53,8 @@ describe('MarkdownText', () => {
       expect(props.markdownStyle).toEqual(
         expect.objectContaining({
           paragraph: { color: 'foreground', fontSize: 20, lineHeight: 26 },
-          h1: { color: 'foreground', fontSize: 48, lineHeight: 56 },
-          h2: { color: 'foreground', fontSize: 40, lineHeight: 48 },
+          h1: { color: 'foreground', fontSize: 40, lineHeight: 48 },
+          h2: { color: 'foreground', fontSize: 32, lineHeight: 40 },
           // Code cannot reach the `font-mono` utility through a style object,
           // so the family is named explicitly. Colors come from the product
           // domain tokens, not from the renderer's own palette — and they do so

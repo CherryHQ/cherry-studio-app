@@ -1,5 +1,6 @@
 import type { LanguageModelV3StreamPart, LanguageModelV3Usage } from '@ai-sdk/provider';
 import { type AiPlugin, definePlugin } from '@cherrystudio/ai-core';
+import { extractProviderCostWithCurrency } from '@cherrystudio/ai-runtime/utils';
 import type { LanguageModelMiddleware } from 'ai';
 import * as Crypto from 'expo-crypto';
 
@@ -8,8 +9,6 @@ import type {
   AiUsageRecordService,
   RecordAiInvocationInput,
 } from '@/backend/data/services/AiUsageRecordService';
-
-import { extractProviderCostWithCurrency } from '../utils/billingCost';
 
 type UsageRecorder = Pick<AiUsageRecordService, 'recordInvocation'>;
 

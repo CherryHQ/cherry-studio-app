@@ -16,6 +16,11 @@
       "@shared/*": ["./packages/universal/src/*"],
       "@cherrystudio/ai-core/core": ["./packages/ai-core/src/core/index.ts"],
       "@cherrystudio/ai-core/core/*": ["./packages/ai-core/src/core/*"],
+      "@cherrystudio/ai-runtime/messages": ["./packages/ai-runtime/src/messages/index.ts"],
+      "@cherrystudio/ai-runtime/provider": ["./packages/ai-runtime/src/provider/index.ts"],
+      "@cherrystudio/ai-runtime/runtime": ["./packages/ai-runtime/src/runtime/index.ts"],
+      "@cherrystudio/ai-runtime/tools": ["./packages/ai-runtime/src/tools/index.ts"],
+      "@cherrystudio/ai-runtime/utils": ["./packages/ai-runtime/src/utils/index.ts"],
       "@cherrystudio/ui": ["./packages/ui/src/index.ts"],
       "@cherrystudio/ui/*": ["./packages/ui/src/*"],
       "lucide-uniwind": ["./packages/lucide-uniwind/src/index.ts"],
@@ -27,5 +32,5 @@
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
-  "exclude": ["packages/ai-core", "packages/ai-sdk-provider"]
+  "exclude": ["packages/ai-core", "packages/ai-runtime", "packages/ai-sdk-provider"]
 }

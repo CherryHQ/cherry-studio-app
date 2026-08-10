@@ -15,8 +15,9 @@ suffix.
 - `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` expose mobile workflow
   factories named `createXxxModule()`. Their modules retain only orchestration that earns a
   frontend workflow contract; resource CRUD remains in Data API handlers.
-- `oauth` and `webSearch` retain desktop-aligned `OAuthRuntimeService` and `WebSearchService` names
-  and behavior. See the OAuth [README](./oauth/README.md).
+- `oauth` separates the desktop-aligned session runtime from mobile authorization adapters;
+  `webSearch` retains the desktop-aligned `WebSearchService`. See the OAuth
+  [README](./oauth/README.md).
 - `cherryin` owns the mobile-only `CherryInClient` for that provider's external account REST
   surface. Device permissions are adapted by `DevicePermissions`; avatar storage remains a set of
   domain functions.

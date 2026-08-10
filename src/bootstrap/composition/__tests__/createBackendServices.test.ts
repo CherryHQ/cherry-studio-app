@@ -8,6 +8,7 @@ const mockDataServices = {
   assistant: { kind: 'assistant' },
   dataOnly: { kind: 'data-only' },
   fileEntry: { kind: 'file-entry' },
+  fileRef: { kind: 'file-ref' },
   mcpServer: { kind: 'mcp-server' },
   model: { kind: 'model' },
   preference: { kind: 'preference' },
@@ -25,6 +26,16 @@ const mockAiServices = {
   tools: { kind: 'tools' },
   webSearch: { kind: 'web-search' },
 };
+const mockOauth = { kind: 'oauth' };
+const mockOauthSession = {
+  authenticatedFetch: jest.fn(),
+  kind: 'oauth-session',
+};
+const mockCopilot = { getServingToken: jest.fn() };
+const mockApiKeys = { kind: 'oauth-api-keys' };
+const mockTokenStore = { kind: 'oauth-token-store' };
+const mockDefinitions = { cherryin: { providerId: 'cherryin' } };
+const mockAdapters = [{ providerId: 'cherryin' }];
 
 const mockCreateDataServices = jest.fn((_dependencies: unknown) => mockDataServices);
 const mockCreatePlatformAdapters = jest.fn((_dependencies: unknown) => mockPlatformAdapters);
@@ -39,6 +50,25 @@ jest.mock('../createPlatformAdapters', () => ({
 jest.mock('../createAiServices', () => ({
   createAiServices: (dependencies: unknown) => mockCreateAiServices(dependencies),
 }));
+jest.mock('@/backend/services/oauth/runtime/OAuthRuntimeService', () => ({
+  OAuthRuntimeService: jest.fn().mockImplementation(() => mockOauthSession),
+}));
+jest.mock('@/backend/services/oauth/runtime/OAuthTokenStore', () => ({
+  ProviderAuthConfigOAuthTokenStore: jest.fn().mockImplementation(() => mockTokenStore),
+}));
+jest.mock('@/backend/services/oauth/runtime/providerDefinitions', () => ({
+  createOAuthProviderDefinitions: jest.fn(() => mockDefinitions),
+}));
+jest.mock('@/backend/services/oauth/authorization/OAuthApiKeyStore', () => ({
+  OAuthApiKeyStore: jest.fn().mockImplementation(() => mockApiKeys),
+}));
+jest.mock('@/backend/services/oauth/authorization/ProviderOAuthService', () => ({
+  ProviderOAuthService: jest.fn().mockImplementation(() => mockOauth),
+}));
+jest.mock('@/backend/services/oauth/authorization/createOAuthFlowRegistry', () => ({
+  createOAuthFlowRegistry: jest.fn(() => ({ copilot: mockCopilot, registry: mockAdapters })),
+}));
+jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
@@ -50,21 +80,30 @@ describe('createBackendServices', () => {
     expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, dbService });
     expect(mockCreatePlatformAdapters).toHaveBeenCalledWith({
       fileEntry: mockDataServices.fileEntry,
+      fileRef: mockDataServices.fileRef,
     });
-    expect(mockCreateAiServices).toHaveBeenCalledWith({
-      aiUsageRecord: mockDataServices.aiUsageRecord,
-      assistant: mockDataServices.assistant,
-      devicePermissions: mockPlatformAdapters.devicePermissions,
-      fileContent: mockPlatformAdapters.fileContent,
-      mcpServer: mockDataServices.mcpServer,
-      model: mockDataServices.model,
-      preference: mockDataServices.preference,
-      provider: mockDataServices.provider,
-    });
+    expect(mockCreateAiServices).toHaveBeenCalledWith(
+      expect.objectContaining({
+        aiUsageRecord: mockDataServices.aiUsageRecord,
+        assistant: mockDataServices.assistant,
+        devicePermissions: mockPlatformAdapters.devicePermissions,
+        fileContent: mockPlatformAdapters.fileContent,
+        mcpServer: mockDataServices.mcpServer,
+        model: mockDataServices.model,
+        oauth: {
+          authenticatedFetch: expect.any(Function),
+          getCopilotServingToken: expect.any(Function),
+        },
+        preference: mockDataServices.preference,
+        provider: mockDataServices.provider,
+      }),
+    );
     expect(services).toEqual({
       ...mockDataServices,
       ...mockPlatformAdapters,
       ...mockAiServices,
+      oauth: mockOauth,
+      oauthSession: mockOauthSession,
     });
   });
 });

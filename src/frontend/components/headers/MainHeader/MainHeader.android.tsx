@@ -15,11 +15,7 @@ export function MainHeader() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const separatorColor = useThemeColor('border-strong');
-  const { assistant, openAssistant } = useMainHeaderAssistant();
-
-  const openNewTopic = useCallback(() => {
-    router.setParams({ topicId: undefined });
-  }, [router]);
+  const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
   const goBack = useCallback(() => {
     router.back();
   }, [router]);

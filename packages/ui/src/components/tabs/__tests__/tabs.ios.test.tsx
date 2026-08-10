@@ -77,6 +77,10 @@ describe('Tabs.ios', () => {
       'Messages',
       'Settings',
     ]);
+    expect(renderer.root.findAllByType(Text).map((label) => label.props.className)).toEqual([
+      'font-medium text-xs',
+      'font-medium text-xs',
+    ]);
 
     act(() => messages.props.onPress());
     expect(onValueChange).toHaveBeenCalledWith('messages');

@@ -1,7 +1,6 @@
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'expo-router';
 import { createContext, type PropsWithChildren, use, useCallback, useMemo } from 'react';
 
 import { queryKeys, useMutation } from '@/frontend/data';
@@ -13,7 +12,6 @@ import {
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
-import { loggerService } from '@/shared/core/logger/LoggerService';
 
 type TopicListData = InfiniteData<CursorPaginationResponse<Topic>, string | undefined>;
 
@@ -28,13 +26,9 @@ type TopicListActionsContextValue = {
   deleteTopic: (topicId: string) => Promise<void>;
   deleteTopics: (topicIds: readonly string[]) => Promise<void>;
   loadMoreTopics: () => void;
-  openTopic: (topicId: string) => void;
   renameTopic: (topicId: string, name: string) => Promise<void>;
   toggleTopicPin: (topicId: string) => Promise<void>;
 };
-
-// 诊断埋点：量化「点击 topic → 进入界面 → 渲染」链路耗时。`[PERF]` 前缀。
-const perfLog = loggerService.withContext('ChatPerf');
 
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
 const TopicListActionsContext = createContext<TopicListActionsContextValue | null>(null);
@@ -45,18 +39,10 @@ type TopicListProviderProps = PropsWithChildren<{
 
 export function TopicListProvider({ children, searchText = '' }: TopicListProviderProps) {
   const queryClient = useQueryClient();
-  const router = useRouter();
   const topicList = useTopics({ q: searchText });
   const topicPins = usePins('topic');
+  const togglePin = topicPins.togglePin;
   const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
-
-  const openTopic = useCallback(
-    (topicId: string) => {
-      perfLog.debug('[PERF] tap->push', { topicId, t: Date.now() });
-      router.push({ pathname: '/topics', params: { topicId } });
-    },
-    [router],
-  );
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
     onMutate: async (variables) => {
@@ -163,10 +149,10 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
         return;
       }
 
-      await topicPins.togglePin(topicId);
+      await togglePin(topicId);
       await queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() });
     },
-    [isPinActionDisabled, queryClient, topicPins.togglePin],
+    [isPinActionDisabled, queryClient, togglePin],
   );
 
   const topicsValue = useMemo(
@@ -183,11 +169,10 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
       deleteTopic,
       deleteTopics,
       loadMoreTopics: topicList.loadMore,
-      openTopic,
       renameTopic,
       toggleTopicPin,
     }),
-    [deleteTopic, deleteTopics, openTopic, renameTopic, topicList.loadMore, toggleTopicPin],
+    [deleteTopic, deleteTopics, renameTopic, topicList.loadMore, toggleTopicPin],
   );
 
   return (

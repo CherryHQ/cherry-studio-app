@@ -56,6 +56,10 @@ export class MobileRegistryLoader {
     return overrides;
   }
 
+  isProviderExcluded(_providerId: string): boolean {
+    return false;
+  }
+
   getModelsVersion(): string {
     return loadBundle().models.version;
   }

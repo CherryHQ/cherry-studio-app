@@ -1,10 +1,9 @@
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { View } from 'react-native';
 
-import { isOAuthProvider } from '@/shared/oauth';
-
 import { ProviderApiServiceApiKeysField, ProviderApiServiceEndpointField } from '../apiService';
 import { CherryInOauth } from './CherryInOauth';
+import { ProviderOauthSection } from './ProviderOauthSection';
 
 type ProviderApiManagementSectionProps = {
   apiKeysInput?: string;
@@ -36,11 +35,17 @@ export function ProviderApiManagementSection({
   // Whether the provider signs in with OAuth is the registry's answer, not a
   // name check here. The card itself stays CherryIN-specific because the
   // balance it renders is CherryIN's own account surface.
-  const showOAuthCard = Boolean(provider?.id && isOAuthProvider(provider.id));
+  const showOAuthCard = provider?.authMethods?.includes('oauth') ?? false;
 
   return (
     <View className="gap-3">
-      {showOAuthCard && provider?.id ? <CherryInOauth providerId={provider.id} /> : null}
+      {showOAuthCard && provider ? (
+        provider.id === 'cherryin' ? (
+          <CherryInOauth provider={provider} />
+        ) : (
+          <ProviderOauthSection provider={provider} />
+        )
+      ) : null}
       {showBaseUrl ? (
         <ProviderApiServiceEndpointField
           baseUrl={baseUrl}

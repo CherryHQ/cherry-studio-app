@@ -1,6 +1,7 @@
 import { openaiCompatible } from './types';
 
 export default openaiCompatible({
+  authMethods: ['api-key', 'oauth'],
   id: '302ai',
   name: '302.AI',
   baseUrl: 'https://api.302.ai',

@@ -1,3 +1,4 @@
+import { applyDeferExposition, ToolRegistry } from '@cherrystudio/ai-runtime/tools';
 import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { ToolSet } from 'ai';
@@ -10,9 +11,8 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { McpRuntimeService } from '../mcp';
 import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';
-import { applyDeferExposition } from './adapters/aiSdk/exposition/applyDeferExposition';
-import { ToolRegistry } from './adapters/aiSdk/registry';
-import type { DeviceToolAccess, ToolEntry } from './adapters/aiSdk/types';
+import { reportToolRuntimeDiagnostic } from './toolRuntimeDiagnostics';
+import type { DeviceToolAccess, ToolApplyScope, ToolEntry } from './types';
 
 const logger = loggerService.withContext('ToolResolver');
 const DEVICE_PREFERENCE_KEYS = [
@@ -32,7 +32,7 @@ export type ToolResolverDependencies = {
 };
 
 export class ToolResolver {
-  private readonly builtinRegistry = new ToolRegistry();
+  private readonly builtinRegistry = new ToolRegistry<ToolApplyScope>(reportToolRuntimeDiagnostic);
 
   constructor(private readonly deps: ToolResolverDependencies) {
     registerBuiltinTools(this.builtinRegistry, deps);
@@ -53,7 +53,7 @@ export class ToolResolver {
       platform: Platform.OS,
     });
 
-    const requestRegistry = new ToolRegistry();
+    const requestRegistry = new ToolRegistry<ToolApplyScope>(reportToolRuntimeDiagnostic);
     for (const entry of [...activeBuiltins, ...mcpEntries]) requestRegistry.register(entry);
     const tools = toToolSet(requestRegistry.getAll());
     return {
