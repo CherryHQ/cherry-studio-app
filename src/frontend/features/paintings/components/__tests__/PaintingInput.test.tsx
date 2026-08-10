@@ -80,18 +80,6 @@ jest.mock('@cherrystudio/ui/components', () => ({
   },
 }));
 
-jest.mock('../../utils/paintingOutputAttachment', () => ({
-  createPaintingOutputAttachmentDraft: (output: { fileEntryId: string; uri: string }) => ({
-    fileEntryId: output.fileEntryId,
-    id: `painting-file:${output.fileEntryId}`,
-    kind: 'image',
-    mediaType: 'image/png',
-    name: 'generated.png',
-    status: 'ready',
-    uri: output.uri,
-  }),
-}));
-
 const painting = {
   modelId: 'provider::image-model',
 } as Painting;
@@ -128,7 +116,7 @@ describe('PaintingInput', () => {
     await act(async () => renderer?.unmount());
   });
 
-  it('seeds the generated output as the next ordinary attachment', async () => {
+  it('keeps generated outputs out of the next input attachments', async () => {
     await act(async () => {
       renderer = create(
         <PaintingInput
@@ -167,17 +155,7 @@ describe('PaintingInput', () => {
       paramValues: {},
       prompt: payload.text,
     });
-    expect(mockSetAttachments).toHaveBeenCalledWith([
-      {
-        fileEntryId: generationResult.outputs[0].fileEntryId,
-        id: `painting-file:${generationResult.outputs[0].fileEntryId}`,
-        kind: 'image',
-        mediaType: 'image/png',
-        name: 'generated.png',
-        status: 'ready',
-        uri: generationResult.outputs[0].uri,
-      },
-    ]);
+    expect(mockSetAttachments).not.toHaveBeenCalled();
     expect(mockOnGenerated).toHaveBeenCalledWith(generationResult);
   });
 

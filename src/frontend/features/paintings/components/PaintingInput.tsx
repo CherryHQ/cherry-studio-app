@@ -14,7 +14,6 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
-  useComposerActions,
   useComposerFieldDismiss,
   useComposerState,
 } from '@/frontend/components/composer';
@@ -38,7 +37,6 @@ import {
   reconcileImageParamDraft,
   resolveImageGenerationMode,
 } from '../utils/imageGenerationParams';
-import { createPaintingOutputAttachmentDraft } from '../utils/paintingOutputAttachment';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
 
 type PaintingInputProps = {
@@ -76,7 +74,6 @@ export function PaintingInput({
   } | null>(null);
   const [seedApplied, setSeedApplied] = useState(false);
   const { attachments, draft } = useComposerState();
-  const { setAttachments } = useComposerActions();
   const { model: selectedModel } = useModelById(selectedModelId);
   const { models: enabledImageModels } = useModels({
     capability: MODEL_CAPABILITY.IMAGE_GENERATION,
@@ -211,7 +208,6 @@ export function PaintingInput({
         paramValues: submittedValues,
         prompt: text,
       });
-      setAttachments(result.outputs.map(createPaintingOutputAttachmentDraft));
       onGenerated?.(result);
     },
     [
@@ -221,7 +217,6 @@ export function PaintingInput({
       paramValues,
       selectedModel?.imageGeneration,
       selectedModelId,
-      setAttachments,
     ],
   );
   const getSendErrorLabel = useCallback(
