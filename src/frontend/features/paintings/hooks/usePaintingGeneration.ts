@@ -11,7 +11,12 @@ import type {
   PaintingGenerationOutput,
 } from '@/shared/contracts';
 
-import { paintingJobFailureMessage, usePaintingJobs } from './usePaintingJobs';
+import { imageParamsAspectRatio } from '../utils/imageGenerationParams';
+import {
+  paintingJobFailureMessage,
+  paintingJobParamValues,
+  usePaintingJobs,
+} from './usePaintingJobs';
 import { useDeletePaintings, useSyncPaintingQueries } from './usePaintings';
 
 export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
@@ -72,6 +77,7 @@ export function usePaintingGeneration({
   const syncPaintingQueries = useSyncPaintingQueries();
   const deletePaintings = useDeletePaintings();
   const jobs = usePaintingJobs();
+  const [aspectRatio, setAspectRatio] = useState(1);
   const [error, setError] = useState<Error | null>(null);
   const [outputs, setOutputs] = useState<PaintingOutput[]>(() => [...initialOutputs]);
   const [status, setStatus] = useState<PaintingGenerationStatus>('idle');
@@ -89,6 +95,7 @@ export function usePaintingGeneration({
   // idempotent, so the extra render pass converges immediately.
   if (activeJobId === null && adoptableJobId !== null) {
     setActiveJobId(adoptableJobId);
+    setAspectRatio(imageParamsAspectRatio(paintingJobParamValues(runningJob)));
     setStatus('generating');
   }
 
@@ -155,6 +162,7 @@ export function usePaintingGeneration({
         throw new Error('Painting generation is already in progress');
       }
       setError(null);
+      setAspectRatio(imageParamsAspectRatio(input.paramValues));
       setStatus('generating');
 
       try {
@@ -221,6 +229,7 @@ export function usePaintingGeneration({
   const finishReveal = useCallback(() => setStatus('idle'), []);
 
   return {
+    aspectRatio,
     cancel,
     error,
     finishReveal,

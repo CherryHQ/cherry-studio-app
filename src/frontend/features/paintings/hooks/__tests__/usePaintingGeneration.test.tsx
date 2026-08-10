@@ -200,6 +200,21 @@ describe('usePaintingGeneration', () => {
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
   });
 
+  it('keeps the requested aspect ratio through the reveal', async () => {
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await mountProbe();
+
+    await act(async () => {
+      await api?.generate({ ...request, paramValues: { aspectRatio: '3:4' } });
+    });
+
+    expect(api?.aspectRatio).toBeCloseTo(3 / 4);
+    expect(api?.status).toBe('revealing');
+  });
+
   it('surfaces a failed job as frontend error state and allows a retry', async () => {
     mockStartGeneration.mockResolvedValueOnce({ jobId: 'job-fail', paintingId: 'painting-1' });
     jobById.set(
@@ -283,10 +298,17 @@ describe('usePaintingGeneration', () => {
   });
 
   it("adopts this painting's still-active generation on mount and reveals its result", async () => {
-    activeJobs = [jobSnapshot({ input: { paintingId: 'painting-1' }, status: 'running' })];
+    activeJobs = [
+      jobSnapshot({
+        input: { paintingId: 'painting-1', paramValues: { aspectRatio: '3:4' } },
+        status: 'running',
+      }),
+    ];
     jobById.set('job-1', jobSnapshot({ status: 'running' }));
     await mountProbe('painting-1');
     await waitForCondition(() => api?.status === 'generating');
+
+    expect(api?.aspectRatio).toBeCloseTo(3 / 4);
 
     jobById.set(
       'job-1',
@@ -298,6 +320,7 @@ describe('usePaintingGeneration', () => {
     await waitForCondition(() => api?.status === 'revealing');
 
     expect(api?.outputs).toEqual([output]);
+    expect(api?.aspectRatio).toBeCloseTo(3 / 4);
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
   });
 

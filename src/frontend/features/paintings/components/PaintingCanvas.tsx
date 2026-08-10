@@ -17,12 +17,14 @@ import type {
 type PaintingOutput = { fileEntryId: string; uri: string };
 
 export function PaintingCanvas({
+  aspectRatio,
   error,
   interruption,
   onRevealFinish,
   outputs,
   status,
 }: {
+  aspectRatio: number;
   error: Error | null;
   interruption: PaintingInterruption | null;
   onRevealFinish: () => void;
@@ -35,14 +37,12 @@ export function PaintingCanvas({
 
   return (
     <View className="min-h-0 flex-1 items-center justify-center px-4 pb-3 pt-2">
-      {/* Keep the skeleton / reveal / result in one centered ~half-height square
-          so the loading grid stays a compact preview rather than filling the
-          whole canvas, and the three states never jump in size between each
-          other. */}
+      {/* The request ratio sizes all three states before an output exists, so
+          decoding the generated image cannot reflow the canvas. */}
       <View
         className="overflow-hidden"
         onLayout={({ nativeEvent }) => setPreviewWidth(nativeEvent.layout.width)}
-        style={styles.preview}
+        style={[styles.preview, { aspectRatio }]}
       >
         {status === 'generating' ? (
           <PaintingSkeleton
@@ -146,9 +146,9 @@ const styles = StyleSheet.create({
   outputList: {
     alignItems: 'stretch',
   },
-  // Half the canvas height, kept square via aspectRatio so the width follows.
+  // Stay compact on portrait output and within the canvas on wide output.
   preview: {
-    aspectRatio: 1,
     height: '50%',
+    maxWidth: '100%',
   },
 });

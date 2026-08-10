@@ -43,6 +43,7 @@ export function PaintingComposer({
   return (
     <View className="flex-1 bg-background">
       <PaintingCanvas
+        aspectRatio={generation.aspectRatio}
         error={generation.error}
         interruption={generation.interruption}
         onRevealFinish={generation.finishReveal}
