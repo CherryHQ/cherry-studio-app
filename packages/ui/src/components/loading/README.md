@@ -1,8 +1,22 @@
 # Loading
 
 This component family owns Cherry UI loading and ongoing-work indicators. It exports the standard
-`Spinner`, `PrismSweep`, and four numbered dot-matrix loaders ported from the source design set:
-`DotMatrixSquare2`, `DotMatrixSquare6`, `DotMatrixSquare19`, and `DotMatrixSquare20`.
+`Spinner`, the image-rendering status surface `ImageGenerationLoader`, `PrismSweep`, and four
+numbered dot-matrix loaders ported from the source design set: `DotMatrixSquare2`,
+`DotMatrixSquare6`, `DotMatrixSquare19`, and `DotMatrixSquare20`.
+
+## ImageGenerationLoader
+
+`ImageGenerationLoader` is the pending state for a future generated-image surface. It combines a
+square 19x19 dot field, a resolution badge, status copy, and the prompt. Callers can provide
+`active`, `label`, `prompt`, `resolution`, `size`, and standard `View` props.
+
+- One Skia runtime shader draws the background field and both moving ellipse masks in a single GPU
+  pass. Building the same mask from React Native views would require hundreds of mounted nodes.
+- One Reanimated frame callback drives both the shader and the clipped text sweep on the UI thread.
+- The clock pauses and resets while inactive, and Reduce Motion renders a readable static frame.
+- Colors come from Cherry's semantic Uniwind tokens, so scoped and app-selected themes both work.
+- Product call sites should pass translated `label` and `accessibilityLabel` values.
 
 ## Dot matrix foundation
 
