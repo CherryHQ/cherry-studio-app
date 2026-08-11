@@ -33,7 +33,10 @@ mobile extensions; Codex and Grok loopback login remain visible blockers.
 - `authorization/providers` owns each hosted provider's URL, origin allowlist,
   response schema, and decryption behavior.
 - `runtime/OAuthTokenStore` serializes async SQLite mutations. Desktop data access
-  is synchronous, so this queue is a required mobile adaptation.
+  is synchronous, so this queue is a required mobile adaptation. The queue lives on
+  the instance, so the module shares one store: `oauthTokenStore`.
+- `providerRepository` binds the four provider-row calls this module makes to
+  `providerService`, which desktop's stores reach directly.
 
 Executable provider logic stays in backend. `src/shared/oauth` contains only
 DTOs and errors, while the frontend decides whether to render OAuth from the

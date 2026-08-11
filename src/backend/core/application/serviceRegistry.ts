@@ -2,6 +2,8 @@ import { McpRuntimeService } from '@/backend/ai/mcp';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
+import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
+import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -27,6 +29,8 @@ export const services = {
   PreferenceService,
   WebSearchService,
   McpRuntimeService,
+  OAuthRuntimeService,
+  ProviderOAuthService,
 } as const;
 
 /** Service name to instance type, derived from `services`. */

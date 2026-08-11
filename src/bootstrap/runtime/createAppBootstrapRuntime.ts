@@ -10,6 +10,8 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
+import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -39,9 +41,18 @@ export function createAppBootstrapRuntime(
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
+  const oauth = host.container.get<ProviderOAuthService>('ProviderOAuthService');
+  const oauthSession = host.container.get<OAuthRuntimeService>('OAuthRuntimeService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
-  const services = createBackendServices({ cache, mcpRuntime, preference, webSearch });
+  const services = createBackendServices({
+    cache,
+    mcpRuntime,
+    oauth,
+    oauthSession,
+    preference,
+    webSearch,
+  });
   const {
     backend,
     dataApiDependencies,

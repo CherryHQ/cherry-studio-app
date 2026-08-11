@@ -1,14 +1,9 @@
-import { fetch as expoFetch } from 'expo/fetch';
-
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import { createOAuthFlowRegistry } from '@/backend/services/oauth/authorization/createOAuthFlowRegistry';
-import { OAuthApiKeyStore } from '@/backend/services/oauth/authorization/OAuthApiKeyStore';
-import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
-import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
-import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
-import { createOAuthProviderDefinitions } from '@/backend/services/oauth/runtime/providerDefinitions';
+import { COPILOT_PROVIDER_ID } from '@/backend/services/oauth/authorization/adapters/CopilotOAuthAdapter';
+import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
+import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import { createAiServices } from './createAiServices';
@@ -26,6 +21,8 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
 export type BackendInfrastructure = {
   cache: CacheService;
   mcpRuntime: McpRuntimeService;
+  oauth: ProviderOAuthService;
+  oauthSession: OAuthRuntimeService;
   preference: PreferenceService;
   webSearch: WebSearchService;
 };
@@ -33,6 +30,8 @@ export type BackendInfrastructure = {
 export function createBackendServices({
   cache,
   mcpRuntime,
+  oauth,
+  oauthSession,
   preference,
   webSearch,
 }: BackendInfrastructure) {
@@ -41,38 +40,6 @@ export function createBackendServices({
     fileEntry: dataServices.fileEntry,
     fileRef: dataServices.fileRef,
   });
-  const fetch = expoFetch as typeof globalThis.fetch;
-  const providers = {
-    listApiKeys: (providerId: string) => dataServices.provider.listApiKeys(providerId),
-    replaceApiKeys: (
-      providerId: string,
-      keys: Parameters<typeof dataServices.provider.replaceApiKeys>[1],
-    ) => dataServices.provider.replaceApiKeys(providerId, keys),
-    update: (providerId: string, input: { isEnabled?: boolean }) =>
-      dataServices.provider.update(providerId, input),
-  };
-  const tokenStore = new ProviderAuthConfigOAuthTokenStore({
-    getAuthConfig: (providerId) => dataServices.provider.getAuthConfig(providerId),
-    update: (providerId, input) => dataServices.provider.update(providerId, input),
-  });
-  const apiKeys = new OAuthApiKeyStore(providers);
-  const definitions = createOAuthProviderDefinitions(fetch);
-  const oauthSession = new OAuthRuntimeService({
-    apiKeys,
-    definitions,
-    fetch,
-    providers,
-    tokenStore,
-  });
-  const registry = createOAuthFlowRegistry({
-    apiKeys,
-    definitions,
-    fetch,
-    providers,
-    runtime: oauthSession,
-    tokenStore,
-  });
-  const oauth = new ProviderOAuthService(registry.registry);
   const aiServices = createAiServices({
     aiUsageRecord: dataServices.aiUsageRecord,
     assistant: dataServices.assistant,
@@ -82,7 +49,11 @@ export function createBackendServices({
     model: dataServices.model,
     oauth: {
       authenticatedFetch: (...args) => oauthSession.authenticatedFetch(...args),
-      getCopilotServingToken: (...args) => registry.copilot.getServingToken(...args),
+      // The provider name lives here, in the composition, rather than in the
+      // OAuth module: its README keeps the generic runtime and public contract
+      // free of provider names.
+      getCopilotServingToken: (headers, signal) =>
+        oauth.getServingToken(COPILOT_PROVIDER_ID, headers, signal),
     },
     preference: dataServices.preference,
     provider: dataServices.provider,

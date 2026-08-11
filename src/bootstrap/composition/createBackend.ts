@@ -209,11 +209,11 @@ export function createBackend(
     jobRuntime,
     dispose: async () => {
       // Jobs first: the drain gives in-flight handlers a bounded chance to land
-      // their terminal rows before the caller closes SQLite, and it keeps the
-      // oauth session alive for any authenticated request still in flight.
+      // their terminal rows before the caller closes SQLite. An authenticated
+      // request still in flight keeps working throughout — the oauth session is
+      // the host's to stop now, and the host is only torn down once this
+      // promise settles.
       await jobRuntime.dispose();
-      services.oauth.dispose();
-      services.oauthSession.dispose();
       await chat.dispose();
     },
   };

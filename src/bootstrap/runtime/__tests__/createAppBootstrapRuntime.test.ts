@@ -8,11 +8,15 @@ const mockDataApiHandlers = { kind: 'handlers' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
+const mockOauth = { kind: 'oauth' };
+const mockOauthSession = { kind: 'oauth-session' };
 const mockPreference = { kind: 'preference' };
 const mockWebSearch = { kind: 'web-search' };
 const mockServices = {
   cache: mockCache,
   mcpRuntime: mockMcpRuntime,
+  oauth: mockOauth,
+  oauthSession: mockOauthSession,
   preference: mockPreference,
   webSearch: mockWebSearch,
 };
@@ -59,7 +63,9 @@ const createRuntime = () =>
     CacheService: mockCache,
     DbService: mockDb,
     McpRuntimeService: mockMcpRuntime,
+    OAuthRuntimeService: mockOauthSession,
     PreferenceService: mockPreference,
+    ProviderOAuthService: mockOauth,
     WebSearchService: mockWebSearch,
   });
 
@@ -82,6 +88,8 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackendServices).toHaveBeenCalledWith({
       cache: mockCache,
       mcpRuntime: mockMcpRuntime,
+      oauth: mockOauth,
+      oauthSession: mockOauthSession,
       preference: mockPreference,
       webSearch: mockWebSearch,
     });
