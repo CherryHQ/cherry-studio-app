@@ -718,6 +718,8 @@
   "painting.selection.deleteTitle": "Delete selected drawings?",
   "painting.status.failed": "Generation failed. Try again.",
   "painting.status.generating": "Generating image",
+  "painting.status.interrupted": "Interrupted",
+  "painting.status.interruptedHint": "The last generation did not finish. Try again.",
   "painting.status.revealing": "Revealing image",
   "painting.templates.close": "Close template details",
   "painting.templates.item": "Open {{title}} template",

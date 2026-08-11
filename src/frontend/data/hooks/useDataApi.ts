@@ -74,6 +74,14 @@ export function useQuery<TPath extends ApiPath>(
     /** Keep the previous key's data on screen while the new key loads. */
     keepPreviousData?: boolean;
     query?: QueryParamsForPath<TPath, 'GET'>;
+    /**
+     * Poll while mounted. A function form receives the latest data and returns
+     * the next delay, or `false` to stop (e.g. once a job reaches a terminal
+     * status).
+     */
+    refetchInterval?:
+      | number
+      | ((data: ResponseForPath<TPath, 'GET'> | undefined) => number | false);
     retry?: boolean | number;
     staleTime?: number;
   },
@@ -84,6 +92,7 @@ export function useQuery<TPath extends ApiPath>(
     ? resolveTemplate(path, options?.params as Record<string, string | number> | undefined)
     : path;
   const query = options?.query;
+  const refetchInterval = options?.refetchInterval;
   const result = useTanStackQuery<ResponseForPath<TPath, 'GET'>, Error>({
     enabled,
     placeholderData: options?.keepPreviousData ? keepPreviousData : undefined,
@@ -92,6 +101,15 @@ export function useQuery<TPath extends ApiPath>(
         query: query as QueryParamsForPath<ConcreteApiPaths, 'GET'>,
       }) as Promise<ResponseForPath<TPath, 'GET'>>,
     queryKey: buildQueryKey(resolvedPath, query),
+    ...(refetchInterval === undefined
+      ? {}
+      : {
+          refetchInterval:
+            typeof refetchInterval === 'function'
+              ? (tanStackQuery: { state: { data?: ResponseForPath<TPath, 'GET'> } }) =>
+                  refetchInterval(tanStackQuery.state.data)
+              : refetchInterval,
+        }),
     ...callerQueryOverrides(options),
   });
 

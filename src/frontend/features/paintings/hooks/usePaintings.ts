@@ -26,16 +26,41 @@ import {
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
+import { imageParamsAspectRatio } from '../utils/imageGenerationParams';
+import {
+  paintingJobFailureMessage,
+  paintingJobParamValues,
+  usePaintingJobs,
+} from './usePaintingJobs';
+
 const pageSize = 20;
 type PaintingListData = InfiniteData<CursorPaginationResponse<Painting>, string | undefined>;
 
-export type PaintingGalleryItem = {
+export type PaintingOutputGalleryItem = {
   aspectRatio: number;
   fileEntryId: FileEntryId;
   key: string;
+  kind: 'output';
   painting: Painting;
   uri: string;
 };
+
+/**
+ * A receipt with no images yet: either `painting.generate` is still running or
+ * it stopped without producing any. Both keep the painting's place in the
+ * gallery — the tile is the only way back to a running generation and the only
+ * handle on an abandoned one.
+ */
+export type PaintingPendingGalleryItem = {
+  aspectRatio: number;
+  key: string;
+  kind: 'generating' | 'interrupted';
+  /** Provider failure text; absent when there is nothing user-facing to say. */
+  message?: string;
+  painting: Painting;
+};
+
+export type PaintingGalleryItem = PaintingOutputGalleryItem | PaintingPendingGalleryItem;
 
 export type ResolvedPaintingAttachment = ComposerAttachmentReady;
 
@@ -65,6 +90,8 @@ export function usePaintingIds({ enabled }: { enabled: boolean }) {
 
 export function useDeletePaintings() {
   const queryClient = useQueryClient();
+  const paintingsBackend = useBackendModule('paintings');
+  const { activeByPaintingId } = usePaintingJobs();
   const mutation = useMutation('DELETE', '/paintings', {
     onMutate: async (variables) => {
       const ids = new Set(variables?.query?.ids ?? []);
@@ -96,13 +123,21 @@ export function useDeletePaintings() {
         return;
       }
 
+      // Stop first: a generation that lands after its receipt is gone fails on
+      // the write and burns the provider call for images nobody can reach.
+      await Promise.all(
+        uniqueIds.flatMap((id) => {
+          const job = activeByPaintingId.get(id);
+          return job ? [paintingsBackend.cancelGeneration(job.id)] : [];
+        }),
+      );
       await deletePaintings({ query: { ids: uniqueIds } });
       for (const id of uniqueIds) {
         // Drop rather than invalidate: refetching a deleted painting would throw.
         queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(id) });
       }
     },
-    [deletePaintings, queryClient],
+    [activeByPaintingId, deletePaintings, paintingsBackend, queryClient],
   );
 }
 
@@ -154,7 +189,7 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
     // regeneration) mints a fresh key. Keep the previous resolved items visible
     // until the new set resolves so the masonry never blinks to empty mid-scroll.
     placeholderData: keepPreviousData,
-    queryFn: async (): Promise<PaintingGalleryItem[]> => {
+    queryFn: async (): Promise<PaintingOutputGalleryItem[]> => {
       const items = (
         await Promise.all(
           paintings.map(async (painting) => ({
@@ -171,29 +206,74 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
       );
       return await Promise.all(
         items.map(async ({ fileEntryId, painting, uri }) => {
+          const base = {
+            fileEntryId,
+            key: `${painting.id}:${fileEntryId}`,
+            kind: 'output' as const,
+            painting,
+            uri,
+          };
           try {
             const image = await ExpoImage.loadAsync(uri);
             return {
+              ...base,
               aspectRatio: image.width > 0 && image.height > 0 ? image.width / image.height : 1,
-              fileEntryId,
-              key: `${painting.id}:${fileEntryId}`,
-              painting,
-              uri,
             };
           } catch {
-            return {
-              aspectRatio: 1,
-              fileEntryId,
-              key: `${painting.id}:${fileEntryId}`,
-              painting,
-              uri,
-            };
+            return { ...base, aspectRatio: 1 };
           }
         }),
       );
     },
     queryKey: ['painting-gallery-files', ...paintings.map((painting) => painting.updatedAt)],
   });
+}
+
+/**
+ * The gallery in painting order, with an output-less receipt standing in for
+ * its own tile. Placeholders are merged here rather than inside
+ * {@link usePaintingGalleryItems} so that the once-per-second job poll never
+ * re-runs the image measuring pass behind it.
+ */
+export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
+  const outputs = usePaintingGalleryItems(paintings);
+  const jobs = usePaintingJobs();
+  const outputItems = outputs.data;
+
+  const items = useMemo(() => {
+    const byPaintingId = new Map<string, PaintingOutputGalleryItem[]>();
+    for (const item of outputItems ?? []) {
+      const existing = byPaintingId.get(item.painting.id);
+      if (existing) {
+        existing.push(item);
+      } else {
+        byPaintingId.set(item.painting.id, [item]);
+      }
+    }
+
+    return paintings.flatMap((painting): PaintingGalleryItem[] => {
+      const resolved = byPaintingId.get(painting.id);
+      if (resolved && resolved.length > 0) {
+        return resolved;
+      }
+      const activeJob = jobs.activeByPaintingId.get(painting.id);
+      const interruptedJob = jobs.interruptedByPaintingId.get(painting.id);
+      return [
+        {
+          aspectRatio: imageParamsAspectRatio(paintingJobParamValues(activeJob ?? interruptedJob)),
+          // No file entry to key on, and exactly one placeholder per painting:
+          // a multi-image request still shows a single tile until its outputs
+          // land and the real count is known.
+          key: `${painting.id}:pending`,
+          kind: activeJob ? 'generating' : 'interrupted',
+          message: activeJob ? undefined : paintingJobFailureMessage(interruptedJob),
+          painting,
+        },
+      ];
+    });
+  }, [jobs.activeByPaintingId, jobs.interruptedByPaintingId, outputItems, paintings]);
+
+  return { isLoading: outputs.isLoading || jobs.isLoading, items };
 }
 
 export function useSyncPaintingQueries() {

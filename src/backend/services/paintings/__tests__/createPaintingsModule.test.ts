@@ -2,13 +2,15 @@ import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/dat
 import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
+import type { Database } from '@/backend/data/db/DbService';
 import type { PaintingsModule } from '@/shared/contracts';
 
 import { createPaintingsModule, type PaintingsModuleDependencies } from '../createPaintingsModule';
 
 const modelId = createUniqueModelId('openai', 'image-1');
 const inputFileId = '00000000-0000-4000-8000-000000000001' as FileEntryId;
-const outputFileId = '00000000-0000-4000-8000-000000000002' as FileEntryId;
+const existingFileId = '00000000-0000-4000-8000-000000000003' as FileEntryId;
+const tx = { sentinel: 'tx' } as unknown as Database;
 
 function painting(id: string, outputs: FileEntryId[] = []): Painting {
   return {
@@ -38,31 +40,25 @@ function internalEntry(id: FileEntryId): InternalFileEntry {
 }
 
 function createSubject() {
-  const receipt = painting('painting-1');
-  const completed = painting('painting-1', [outputFileId]);
-  const files = {
-    resolve: jest.fn(),
-  } satisfies PaintingsModuleDependencies['files'];
   const dependencies: PaintingsModuleDependencies = {
-    ai: {
-      generateImage: jest.fn(async () => ({
-        images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }],
-      })),
+    db: {
+      withWriteTx: jest.fn(async (fn) => fn(tx)),
     },
-    files,
+    files: {
+      resolve: jest.fn(),
+    },
+    jobs: {
+      cancelGenerate: jest.fn(async () => undefined),
+      enqueueGenerateTx: jest.fn(async () => ({ id: 'job-1' })),
+      findActiveGenerateTx: jest.fn(async () => null),
+    },
     paintings: {
-      create: jest.fn(async () => receipt),
-      replaceOutputs: jest.fn(async () => completed),
+      createTx: jest.fn(async () => painting('painting-1')),
+      resetForRetryTx: jest.fn(async (_tx: Database, id: string) => painting(id)),
     },
     storage: {
-      createInternalEntry: jest.fn(async (input) =>
-        input.source === 'uri' ? internalEntry(inputFileId) : internalEntry(outputFileId),
-      ),
+      createInternalEntry: jest.fn(async () => internalEntry(inputFileId)),
       discard: jest.fn(async () => undefined),
-      readDataUrl: jest.fn(async () => 'data:image/png;base64,aW1hZ2U='),
-      getUri: jest.fn((entry) =>
-        entry.id === outputFileId ? 'file:///output.png' : 'file:///input.png',
-      ),
     },
   };
   const backend: PaintingsModule = createPaintingsModule(dependencies);
@@ -84,198 +80,156 @@ const generationInput = {
   prompt: ' draw ',
 };
 
-describe('createPaintingsModule', () => {
-  it('persists created input and output entries behind one session call', async () => {
-    const { backend, dependencies } = createSubject();
-    const session = backend.createGenerationSession();
+function signatureFor(paintingId: string | null = null) {
+  return JSON.stringify({
+    images: ['draft-1:file:///picked.png'],
+    mode: 'generate',
+    modelId,
+    paintingId,
+    paramValues: {},
+    prompt: 'draw',
+  });
+}
 
-    await expect(session.generate(generationInput)).resolves.toEqual({
-      outputs: [{ fileEntryId: outputFileId, uri: 'file:///output.png' }],
-      painting: painting('painting-1', [outputFileId]),
+const expectedSignature = signatureFor();
+
+describe('createPaintingsModule', () => {
+  it('creates the receipt and enqueues the job atomically inside one transaction', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await expect(backend.startGeneration(generationInput)).resolves.toEqual({
+      jobId: 'job-1',
+      paintingId: 'painting-1',
     });
-    expect(dependencies.paintings.create).toHaveBeenCalledWith(
+
+    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
       expect.objectContaining({
-        inputFileIds: [inputFileId],
-        prompt: 'draw',
-        providerId: 'openai',
+        cleanupPolicy: 'delete_when_unreferenced',
+        source: 'uri',
+        uri: 'file:///picked.png',
       }),
     );
-    expect(dependencies.ai.generateImage).toHaveBeenCalledWith(
-      expect.objectContaining({ prompt: 'draw', uniqueModelId: modelId }),
+    expect(dependencies.paintings.createTx).toHaveBeenCalledWith(tx, {
+      inputFileIds: [inputFileId],
+      modelId,
+      prompt: 'draw',
+      providerId: 'openai',
+    });
+    expect(dependencies.jobs.enqueueGenerateTx).toHaveBeenCalledWith(
+      tx,
+      {
+        images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///picked.png' }],
+        mode: 'generate',
+        modelId,
+        paintingId: 'painting-1',
+        paramValues: {},
+        prompt: 'draw',
+      },
+      { idempotencyKey: expectedSignature },
     );
-    expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith('painting-1', [
-      outputFileId,
-    ]);
-    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced', source: 'uri' }),
-    );
-    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced', source: 'base64' }),
+    expect(dependencies.storage.discard).not.toHaveBeenCalled();
+  });
+
+  it('passes through images that already have a file entry without re-creating them', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await backend.startGeneration({
+      ...generationInput,
+      images: [
+        {
+          fileEntryId: existingFileId,
+          id: 'attachment-1',
+          mediaType: 'image/png',
+          name: 'existing.png',
+          uri: 'file:///existing.png',
+        },
+      ],
+    });
+
+    expect(dependencies.storage.createInternalEntry).not.toHaveBeenCalled();
+    expect(dependencies.paintings.createTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ inputFileIds: [existingFileId] }),
     );
   });
 
-  it('reuses an incomplete receipt when the same generation is retried', async () => {
+  it('returns the active job on an idempotency hit and discards its fresh inputs', async () => {
     const { backend, dependencies } = createSubject();
     jest
-      .mocked(dependencies.ai.generateImage)
-      .mockRejectedValueOnce(new Error('provider failed'))
-      .mockResolvedValueOnce({ images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }] });
-    const session = backend.createGenerationSession();
+      .mocked(dependencies.jobs.findActiveGenerateTx)
+      .mockResolvedValue({ id: 'job-9', input: { paintingId: 'painting-9' } });
 
-    await expect(session.generate(generationInput)).rejects.toThrow('provider failed');
-    await session.generate(generationInput);
+    await expect(backend.startGeneration(generationInput)).resolves.toEqual({
+      jobId: 'job-9',
+      paintingId: 'painting-9',
+    });
 
-    expect(dependencies.paintings.create).toHaveBeenCalledTimes(1);
-  });
-
-  it('discards created inputs when receipt persistence fails', async () => {
-    const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.paintings.create).mockRejectedValue(new Error('database failed'));
-    const session = backend.createGenerationSession();
-
-    await expect(session.generate(generationInput)).rejects.toThrow('database failed');
+    expect(dependencies.jobs.findActiveGenerateTx).toHaveBeenCalledWith(tx, expectedSignature);
+    expect(dependencies.paintings.createTx).not.toHaveBeenCalled();
+    expect(dependencies.jobs.enqueueGenerateTx).not.toHaveBeenCalled();
     expect(dependencies.storage.discard).toHaveBeenCalledWith([
       expect.objectContaining({ id: inputFileId }),
     ]);
   });
 
-  it('discards created outputs when output reference persistence fails', async () => {
+  it('reuses the interrupted receipt when a paintingId is supplied instead of minting a new one', async () => {
     const { backend, dependencies } = createSubject();
-    jest
-      .mocked(dependencies.paintings.replaceOutputs)
-      .mockRejectedValue(new Error('database failed'));
-    const session = backend.createGenerationSession();
 
-    await expect(session.generate(generationInput)).rejects.toThrow('database failed');
+    await expect(
+      backend.startGeneration({ ...generationInput, paintingId: 'painting-7' }),
+    ).resolves.toEqual({ jobId: 'job-1', paintingId: 'painting-7' });
+
+    expect(dependencies.paintings.createTx).not.toHaveBeenCalled();
+    expect(dependencies.paintings.resetForRetryTx).toHaveBeenCalledWith(tx, 'painting-7', {
+      inputFileIds: [inputFileId],
+      modelId,
+      prompt: 'draw',
+      providerId: 'openai',
+    });
+    expect(dependencies.jobs.enqueueGenerateTx).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ paintingId: 'painting-7' }),
+      { idempotencyKey: signatureFor('painting-7') },
+    );
+  });
+
+  it('keeps a retry and a fresh generation on distinct idempotency keys', async () => {
+    const { backend, dependencies } = createSubject();
+
+    await backend.startGeneration(generationInput);
+    await backend.startGeneration({ ...generationInput, paintingId: 'painting-7' });
+
+    const keys = jest
+      .mocked(dependencies.jobs.findActiveGenerateTx)
+      .mock.calls.map(([, idempotencyKey]) => idempotencyKey);
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it('discards created inputs when receipt persistence fails', async () => {
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.paintings.createTx).mockRejectedValue(new Error('database failed'));
+
+    await expect(backend.startGeneration(generationInput)).rejects.toThrow('database failed');
     expect(dependencies.storage.discard).toHaveBeenCalledWith([
-      expect.objectContaining({ id: outputFileId }),
+      expect.objectContaining({ id: inputFileId }),
     ]);
   });
 
-  it('keeps referenced outputs when their URI cannot be resolved', async () => {
+  it('discards created inputs when the enqueue fails', async () => {
     const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.storage.getUri).mockReturnValue(undefined);
-    const session = backend.createGenerationSession();
+    jest.mocked(dependencies.jobs.enqueueGenerateTx).mockRejectedValue(new Error('enqueue failed'));
 
-    await expect(session.generate(generationInput)).rejects.toThrow(
-      `Generated painting file is unavailable: ${outputFileId}`,
-    );
-    expect(dependencies.paintings.replaceOutputs).toHaveBeenCalledWith('painting-1', [
-      outputFileId,
+    await expect(backend.startGeneration(generationInput)).rejects.toThrow('enqueue failed');
+    expect(dependencies.storage.discard).toHaveBeenCalledWith([
+      expect.objectContaining({ id: inputFileId }),
     ]);
-    expect(dependencies.storage.discard).not.toHaveBeenCalled();
   });
 
-  it('cancels the active call and reuses its receipt for the same input', async () => {
+  it('delegates cancellation to the job port', async () => {
     const { backend, dependencies } = createSubject();
-    let observedSignal: AbortSignal | undefined;
-    jest
-      .mocked(dependencies.ai.generateImage)
-      .mockImplementationOnce(
-        ({ requestOptions }) =>
-          new Promise((_resolve, reject) => {
-            observedSignal = requestOptions.signal;
-            requestOptions.signal.addEventListener(
-              'abort',
-              () => reject(requestOptions.signal.reason),
-              {
-                once: true,
-              },
-            );
-          }),
-      )
-      .mockResolvedValueOnce({ images: [{ base64: 'aW1hZ2U=', mediaType: 'image/png' }] });
-    const session = backend.createGenerationSession();
 
-    const firstGeneration = session.generate(generationInput);
-    await waitUntil(() => observedSignal !== undefined);
-    await expect(session.generate(generationInput)).rejects.toThrow(
-      'Painting generation is already in progress',
-    );
-    session.cancel();
+    await backend.cancelGeneration('job-1');
 
-    await expect(firstGeneration).rejects.toThrow('Painting generation cancelled');
-    expect(observedSignal?.aborted).toBe(true);
-    await session.generate(generationInput);
-    expect(dependencies.paintings.create).toHaveBeenCalledTimes(1);
-  });
-
-  it('keeps incomplete receipts isolated between sessions', async () => {
-    const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.ai.generateImage).mockRejectedValue(new Error('provider failed'));
-    const firstSession = backend.createGenerationSession();
-    const secondSession = backend.createGenerationSession();
-
-    await expect(firstSession.generate(generationInput)).rejects.toThrow('provider failed');
-    await expect(secondSession.generate(generationInput)).rejects.toThrow('provider failed');
-
-    expect(dependencies.paintings.create).toHaveBeenCalledTimes(2);
-  });
-
-  it('aborts on dispose and permanently rejects later generation', async () => {
-    const { backend, dependencies } = createSubject();
-    let observedSignal: AbortSignal | undefined;
-    jest.mocked(dependencies.ai.generateImage).mockImplementationOnce(
-      ({ requestOptions }) =>
-        new Promise((_resolve, reject) => {
-          observedSignal = requestOptions.signal;
-          requestOptions.signal.addEventListener(
-            'abort',
-            () => reject(requestOptions.signal.reason),
-            {
-              once: true,
-            },
-          );
-        }),
-    );
-    const session = backend.createGenerationSession();
-
-    const generation = session.generate(generationInput);
-    await waitUntil(() => observedSignal !== undefined);
-    session.dispose();
-
-    await expect(generation).rejects.toThrow('Painting generation session is disposed');
-    expect(observedSignal?.aborted).toBe(true);
-    await expect(session.generate(generationInput)).rejects.toThrow(
-      'Painting generation session is disposed',
-    );
-  });
-
-  it('does not revive a disposed session when receipt creation settles late', async () => {
-    const { backend, dependencies } = createSubject();
-    const receipt = createDeferred<Painting>();
-    jest.mocked(dependencies.paintings.create).mockReturnValueOnce(receipt.promise);
-    const session = backend.createGenerationSession();
-
-    const generation = session.generate(generationInput);
-    await waitUntil(() => jest.mocked(dependencies.paintings.create).mock.calls.length === 1);
-    session.dispose();
-    receipt.resolve(painting('painting-late'));
-
-    await expect(generation).rejects.toThrow('Painting generation session is disposed');
-    expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
-    await expect(session.generate(generationInput)).rejects.toThrow(
-      'Painting generation session is disposed',
-    );
+    expect(dependencies.jobs.cancelGenerate).toHaveBeenCalledWith('job-1');
   });
 });
-
-function createDeferred<T>() {
-  let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((nextResolve) => {
-    resolve = nextResolve;
-  });
-
-  return { promise, resolve };
-}
-
-async function waitUntil(predicate: () => boolean) {
-  for (let index = 0; index < 20; index += 1) {
-    if (predicate()) {
-      return;
-    }
-    await Promise.resolve();
-  }
-
-  throw new Error('Timed out waiting for condition');
-}

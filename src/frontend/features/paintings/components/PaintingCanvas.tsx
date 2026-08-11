@@ -1,4 +1,5 @@
 import { useImage } from '@shopify/react-native-skia';
+import { RotateCcwIcon } from 'lucide-uniwind/png';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -8,17 +9,24 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingSkeleton } from '@/frontend/components/paintingSkeleton';
 import { paintingSkeleton } from '@/frontend/utils/constants';
 
-import type { PaintingGenerationStatus } from '../hooks/usePaintingGeneration';
+import type {
+  PaintingGenerationStatus,
+  PaintingInterruption,
+} from '../hooks/usePaintingGeneration';
 
 type PaintingOutput = { fileEntryId: string; uri: string };
 
 export function PaintingCanvas({
+  aspectRatio,
   error,
+  interruption,
   onRevealFinish,
   outputs,
   status,
 }: {
+  aspectRatio: number;
   error: Error | null;
+  interruption: PaintingInterruption | null;
   onRevealFinish: () => void;
   outputs: readonly PaintingOutput[];
   status: PaintingGenerationStatus;
@@ -29,14 +37,12 @@ export function PaintingCanvas({
 
   return (
     <View className="min-h-0 flex-1 items-center justify-center px-4 pb-3 pt-2">
-      {/* Keep the skeleton / reveal / result in one centered ~half-height square
-          so the loading grid stays a compact preview rather than filling the
-          whole canvas, and the three states never jump in size between each
-          other. */}
+      {/* The request ratio sizes all three states before an output exists, so
+          decoding the generated image cannot reflow the canvas. */}
       <View
         className="overflow-hidden"
         onLayout={({ nativeEvent }) => setPreviewWidth(nativeEvent.layout.width)}
-        style={styles.preview}
+        style={[styles.preview, { aspectRatio }]}
       >
         {status === 'generating' ? (
           <PaintingSkeleton
@@ -71,9 +77,24 @@ export function PaintingCanvas({
               </View>
             ))}
           </ScrollView>
+        ) : interruption ? (
+          // The gallery tile truncates the provider's words to two lines; this
+          // is where they can be read in full, next to the input that retries.
+          <View
+            className="flex-1 items-center justify-center gap-2 px-6"
+            testID="painting-interrupted"
+          >
+            <RotateCcwIcon className="size-7 text-foreground-tertiary" strokeWidth={1.5} />
+            <Text className="text-center font-medium text-foreground-secondary text-sm">
+              {t('painting.status.interrupted')}
+            </Text>
+            <Text className="text-center text-foreground-tertiary text-xs">
+              {interruption.message ?? t('painting.status.interruptedHint')}
+            </Text>
+          </View>
         ) : null}
       </View>
-      {error ? (
+      {error && !interruption ? (
         <Text
           accessibilityRole="alert"
           className="pt-2 text-center text-destructive text-sm"
@@ -125,9 +146,9 @@ const styles = StyleSheet.create({
   outputList: {
     alignItems: 'stretch',
   },
-  // Half the canvas height, kept square via aspectRatio so the width follows.
+  // Stay compact on portrait output and within the canvas on wide output.
   preview: {
-    aspectRatio: 1,
     height: '50%',
+    maxWidth: '100%',
   },
 });

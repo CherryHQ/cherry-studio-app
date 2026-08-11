@@ -29,7 +29,9 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
     backend,
     dataApiDependencies,
     dispose: disposeBackend,
+    jobRuntime,
   } = createBackend(services, {
+    dbService,
     translate: (key) => i18n.t(key),
   });
   let disposePromise: Promise<void> | undefined;
@@ -91,6 +93,6 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       await services.preference.init();
       await initializeAppRuntime(services);
     },
-    runPostReadyTasks: () => runPostReadyTasks(services),
+    runPostReadyTasks: () => runPostReadyTasks(services, { jobRuntime }),
   };
 }

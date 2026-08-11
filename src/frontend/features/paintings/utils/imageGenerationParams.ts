@@ -42,6 +42,38 @@ export function resolveImageGenerationMode(
     : undefined;
 }
 
+/**
+ * Shape of the image a request will produce, read back from the params that
+ * asked for it. A placeholder tile has no image to measure, so this is the only
+ * way to size it before the generation lands — and every key here is optional
+ * in the registry, hence the square fallback.
+ */
+export function imageParamsAspectRatio(values: ParamValues | undefined): number {
+  const ratio = parseRatio(values?.aspectRatio);
+  if (ratio !== undefined) {
+    return ratio;
+  }
+  const size = parseSize(values?.size) ?? parseSize(values?.imageResolution);
+  return size ?? 1;
+}
+
+function parseRatio(value: unknown): number | undefined {
+  return typeof value === 'string' ? toRatio(value.split(':')) : undefined;
+}
+
+function parseSize(value: unknown): number | undefined {
+  return typeof value === 'string' ? toRatio(value.toLowerCase().split('x')) : undefined;
+}
+
+function toRatio(parts: string[]): number | undefined {
+  if (parts.length !== 2) {
+    return undefined;
+  }
+  const width = Number(parts[0]);
+  const height = Number(parts[1]);
+  return width > 0 && height > 0 ? width / height : undefined;
+}
+
 export function getImageParamFields(
   resolvedMode: ResolvedImageGenerationMode | undefined,
 ): ImageParamField[] {

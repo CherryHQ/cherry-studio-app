@@ -504,8 +504,6 @@ function mapGatewayEndpointType(
       return 'openai';
     case ENDPOINT_TYPE.OPENAI_RESPONSES:
       return 'openai-response';
-    case ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION:
-      return 'image-generation';
     case ENDPOINT_TYPE.JINA_RERANK:
       return 'jina-rerank';
     default:

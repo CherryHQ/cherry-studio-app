@@ -11,11 +11,22 @@ let mockSelectedIds: ReadonlySet<string> = new Set();
 
 const mockPaintingOne = { id: 'painting-1' } as Painting;
 const mockPaintingTwo = { id: 'painting-2' } as Painting;
-const defaultGalleryItems = [
+const mockPaintingPending = { id: 'painting-3' } as Painting;
+type MockGalleryItem = {
+  aspectRatio: number;
+  fileEntryId?: string;
+  key: string;
+  kind: 'generating' | 'interrupted' | 'output';
+  message?: string;
+  painting: Painting;
+  uri?: string;
+};
+const defaultGalleryItems: MockGalleryItem[] = [
   {
     aspectRatio: 1,
     fileEntryId: 'file-1',
     key: 'painting-1:file-1',
+    kind: 'output',
     painting: mockPaintingOne,
     uri: 'file:///file-1.png',
   },
@@ -23,6 +34,7 @@ const defaultGalleryItems = [
     aspectRatio: 1,
     fileEntryId: 'file-2',
     key: 'painting-1:file-2',
+    kind: 'output',
     painting: mockPaintingOne,
     uri: 'file:///file-2.png',
   },
@@ -30,6 +42,7 @@ const defaultGalleryItems = [
     aspectRatio: 1,
     fileEntryId: 'file-3',
     key: 'painting-2:file-3',
+    kind: 'output',
     painting: mockPaintingTwo,
     uri: 'file:///file-3.png',
   },
@@ -43,14 +56,23 @@ jest.mock('expo-image-picker', () => ({
 
 jest.mock('expo-media-library', () => ({
   addListener: jest.fn(() => ({ remove: jest.fn() })),
-  Asset: class {},
+  Asset: jest.fn(),
   getPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
   requestPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
 }));
 
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('expo-router', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return {
+    Link: ({ children, href }: { children?: React.ReactNode; href: unknown }) => (
+      <MockView testID="painting-composer-link" testProps={href}>
+        {children}
+      </MockView>
+    ),
+    useRouter: () => ({ push: mockPush }),
+  };
+});
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: jest.fn() } }),
@@ -59,7 +81,14 @@ jest.mock('@/frontend/components/AlertProvider', () => ({
 jest.mock('lucide-uniwind/png', () => ({
   CheckIcon: () => null,
   ImageIcon: () => null,
+  RotateCcwIcon: () => null,
 }));
+
+jest.mock('@/frontend/components/paintingSkeleton', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+
+  return { PaintingSkeleton: ({ testID }: { testID?: string }) => <MockView testID={testID} /> };
+});
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -97,7 +126,7 @@ jest.mock('@/frontend/components/navigation', () => {
 });
 
 jest.mock('@/frontend/features/paintings/hooks/usePaintings', () => ({
-  usePaintingGalleryItems: () => ({ data: mockGalleryItems, isLoading: false }),
+  usePaintingGalleryEntries: () => ({ isLoading: false, items: mockGalleryItems }),
   usePaintings: () => ({
     isLoading: false,
     isLoadingMore: false,
@@ -239,6 +268,48 @@ describe('DrawingList', () => {
     expect(findHostsByTestID(tree, 'painting-history-painting-1:file-1')).toHaveLength(0);
     expect(findHostsByTestID(tree, 'painting-history-painting-1:file-2')).toHaveLength(0);
     expect(findHostsByTestID(tree, 'painting-history-painting-2:file-3')).toHaveLength(1);
+  });
+
+  it('shows a running generation as a skeleton tile that leads back to the composer', async () => {
+    mockGalleryItems = [
+      {
+        aspectRatio: 1,
+        key: 'painting-3:pending',
+        kind: 'generating',
+        painting: mockPaintingPending,
+      },
+    ];
+
+    const tree = await render();
+
+    expect(findHostsByTestID(tree, 'painting-history-skeleton-painting-3')).toHaveLength(1);
+    // No image to zoom into: the tile links to the composer, not the viewer.
+    expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(0);
+    expect(findHostsByTestID(tree, 'painting-composer-link')[0]?.props.testProps).toEqual({
+      params: { paintingId: 'painting-3' },
+      pathname: '/paintings',
+    });
+  });
+
+  it("puts the provider's own words on an interrupted tile", async () => {
+    mockGalleryItems = [
+      {
+        aspectRatio: 1,
+        key: 'painting-3:pending',
+        kind: 'interrupted',
+        message: 'Invalid JSON response',
+        painting: mockPaintingPending,
+      },
+    ];
+
+    const tree = await render();
+    const texts = tree.root
+      .findAll((node) => typeof node.type === 'string' && node.type === 'Text')
+      .flatMap((node) => (Array.isArray(node.props.children) ? [] : [node.props.children]));
+
+    expect(texts).toContain('painting.status.interrupted');
+    expect(texts).toContain('Invalid JSON response');
+    expect(findHostsByTestID(tree, 'painting-history-painting-3:pending')).toHaveLength(1);
   });
 
   it('offers the same create action when the drawing history is empty', async () => {
