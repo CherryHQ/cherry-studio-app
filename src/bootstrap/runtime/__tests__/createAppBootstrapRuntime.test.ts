@@ -1,17 +1,12 @@
+import { application } from '@/backend/core/application/Application';
 import { createAppBootstrapRuntime } from '@/bootstrap/runtime/createAppBootstrapRuntime';
 
 const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
-const mockCache = {
-  dispose: jest.fn(),
-  init: jest.fn(),
-};
-const mockDb = {
-  dispose: jest.fn(),
-  init: jest.fn(async () => undefined),
-};
+const mockCache = { kind: 'cache' };
+const mockDb = { kind: 'db' };
 const mockMcpRuntime = { dispose: jest.fn() };
 const mockPreference = { init: jest.fn(async () => undefined) };
 const mockWebSearch = { dispose: jest.fn() };
@@ -31,17 +26,11 @@ const mockCreateBackend = jest.fn((_services: unknown) => ({
   dispose: mockDisposeBackend,
 }));
 
-jest.mock('@/backend/data/CacheService', () => ({
-  CacheService: jest.fn(() => mockCache),
-}));
 jest.mock('@/backend/data/DataApiService', () => ({
   DataApiService: jest.fn(() => mockDataApi),
 }));
 jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
   createDataApiHandlers: jest.fn(() => mockDataApiHandlers),
-}));
-jest.mock('@/backend/data/db/DbService', () => ({
-  DbService: jest.fn(() => mockDb),
 }));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
@@ -56,22 +45,33 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
   createBackend: (services: unknown) => mockCreateBackend(services),
 }));
 
+/**
+ * `CacheService` and `DbService` are supplied as host overrides rather than
+ * module mocks. Overrides are handed out ready-made and receive no lifecycle
+ * callbacks, so this file no longer asserts *when* they initialize — the
+ * dependency graph owns that now, and `serviceRegistry.test.ts` asserts the
+ * graph. What is left here is the wiring this function is actually responsible
+ * for: which instances reach the composition, and the disposal ordering it
+ * still hand-writes.
+ */
+const createRuntime = () =>
+  createAppBootstrapRuntime({ CacheService: mockCache, DbService: mockDb });
+
 beforeEach(() => {
   jest.clearAllMocks();
 });
 
+afterEach(async () => {
+  await application.uninstall();
+});
+
 describe('createAppBootstrapRuntime', () => {
-  test('initializes backend cache before database seeding', async () => {
-    const runtime = createAppBootstrapRuntime();
+  test('composes the backend from the host-resolved infrastructure services', async () => {
+    const runtime = createRuntime();
 
     await runtime.initialize();
 
     expect(mockCreateBackendServices).toHaveBeenCalledWith(mockDb, mockCache);
-    expect(mockCache.init).toHaveBeenCalledTimes(1);
-    expect(mockDb.init).toHaveBeenCalledWith(mockCache);
-    expect(mockCache.init.mock.invocationCallOrder[0]).toBeLessThan(
-      mockDb.init.mock.invocationCallOrder[0],
-    );
     expect(mockPreference.init).toHaveBeenCalledTimes(1);
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
@@ -79,10 +79,21 @@ describe('createAppBootstrapRuntime', () => {
     expect(runtime.preference).toBe(mockPreference);
   });
 
+  test('installs its host so services resolve through application', async () => {
+    const runtime = createRuntime();
+
+    expect(application.hasHost).toBe(false);
+    await runtime.initialize();
+
+    expect(application.hasHost).toBe(true);
+    expect(application.get('DbService')).toBe(mockDb);
+  });
+
   test('waits for chat before disposing infrastructure and is idempotent', async () => {
     const backendDisposed = createDeferred();
     mockDisposeBackend.mockImplementationOnce(() => backendDisposed.promise);
-    const runtime = createAppBootstrapRuntime();
+    const runtime = createRuntime();
+    await runtime.initialize();
 
     const firstDispose = runtime.dispose();
     const secondDispose = runtime.dispose();
@@ -91,29 +102,35 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockDisposeBackend).toHaveBeenCalledTimes(1);
     expect(mockMcpRuntime.dispose).not.toHaveBeenCalled();
     expect(mockWebSearch.dispose).not.toHaveBeenCalled();
-    expect(mockCache.dispose).not.toHaveBeenCalled();
-    expect(mockDb.dispose).not.toHaveBeenCalled();
+    expect(application.hasHost).toBe(true);
 
     backendDisposed.resolve();
     await firstDispose;
 
     expect(mockMcpRuntime.dispose).toHaveBeenCalledTimes(1);
     expect(mockWebSearch.dispose).toHaveBeenCalledTimes(1);
-    expect(mockCache.dispose).toHaveBeenCalledTimes(1);
-    expect(mockDb.dispose).toHaveBeenCalledTimes(1);
     expect(mockDisposeBackend.mock.invocationCallOrder[0]).toBeLessThan(
       mockMcpRuntime.dispose.mock.invocationCallOrder[0],
     );
-    expect(mockWebSearch.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      mockCache.dispose.mock.invocationCallOrder[0],
-    );
-    expect(mockCache.dispose.mock.invocationCallOrder[0]).toBeLessThan(
-      mockDb.dispose.mock.invocationCallOrder[0],
-    );
+    // The host goes last: everything above it is still reachable while it drains.
+    expect(application.hasHost).toBe(false);
+  });
+
+  test('disposal leaves a replacement host alone', async () => {
+    const outgoing = createRuntime();
+    await outgoing.initialize();
+
+    const incoming = createRuntime();
+    await incoming.initialize();
+
+    // Out-of-order teardown of the runtime that was already replaced.
+    await outgoing.dispose();
+
+    expect(application.hasHost).toBe(true);
   });
 
   test('delegates post-ready work with the same service graph', async () => {
-    const runtime = createAppBootstrapRuntime();
+    const runtime = createRuntime();
 
     await runtime.runPostReadyTasks();
 

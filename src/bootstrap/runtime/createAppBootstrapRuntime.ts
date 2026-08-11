@@ -1,10 +1,13 @@
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
+import { application } from '@/backend/core/application/Application';
+import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
+import { serviceList } from '@/backend/core/application/serviceRegistry';
 import { createDataApiHandlers } from '@/backend/data/api/handlers/apiHandlers';
-import { CacheService } from '@/backend/data/CacheService';
+import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
-import { DbService } from '@/backend/data/db/DbService';
+import type { DbService } from '@/backend/data/db/DbService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
@@ -20,9 +23,18 @@ export type AppBootstrapRuntime = {
   runPostReadyTasks(): Promise<void>;
 };
 
-export function createAppBootstrapRuntime(): AppBootstrapRuntime {
-  const cacheService = new CacheService();
-  const dbService = new DbService();
+export function createAppBootstrapRuntime(
+  /** Test seam. Overridden services are supplied ready-made and receive no lifecycle callbacks. */
+  overrides?: HostProfile['overrides'],
+): AppBootstrapRuntime {
+  // Resolved straight from the host's container rather than through
+  // `application.get()`: the React provider reads `backend`/`dataApi` during
+  // render, so the graph has to be assembled before `install()` can run. Both
+  // resolutions only construct — the connection opens in `DbService.onInit`,
+  // inside `start()`.
+  const host = new ApplicationHost({ overrides, services: serviceList });
+  const cacheService = host.container.get<CacheService>('CacheService');
+  const dbService = host.container.get<DbService>('DbService');
   const services = createBackendServices(dbService, cacheService);
   const {
     backend,
@@ -77,14 +89,21 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
         await disposeBackend();
         services.mcpRuntime.dispose();
         services.webSearch.dispose();
-        services.cache.dispose();
-        dbService.dispose();
+        // Tear down this generation's host. Uninstalling is only correct while
+        // it is still the installed one — a runtime disposed out of order must
+        // not take down whichever host replaced it.
+        if (application.current === host) {
+          await application.uninstall();
+        } else {
+          await host.dispose();
+        }
       })();
       return disposePromise;
     },
     initialize: async () => {
-      services.cache.init();
-      await dbService.init(services.cache);
+      // Runs the Gate phase: CacheService.onInit, then DbService.onInit, ordered
+      // by the dependency graph rather than by the order written here.
+      await application.install(host);
       await services.preference.init();
       await initializeAppRuntime(services);
     },

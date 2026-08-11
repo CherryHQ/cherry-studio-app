@@ -413,7 +413,13 @@ function createRotationService(
 
 function createCacheService(): CacheService {
   const service = new CacheService(createInMemoryBackendCacheStorage());
-  service.init();
+  // `CacheService.onInit` is synchronous, so the cache is usable as soon as
+  // `_doInit()` has been called. Awaiting it would force the ~20 call sites in
+  // this file — several of them expressions like `createRotationService([…]).
+  // resolveApiKey()` — to become async for no behavioural gain. If that hook
+  // ever turns async, these tests fail loudly on `CacheService is not
+  // initialized` rather than passing with a half-built cache.
+  void service._doInit();
   return service;
 }
 
