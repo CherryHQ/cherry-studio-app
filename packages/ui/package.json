@@ -9,6 +9,14 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "sideEffects": false,
+  "codegenConfig": {
+    "name": "CherryStudioUISpec",
+    "type": "all",
+    "jsSrcsDir": "./src",
+    "android": {
+      "javaPackageName": "com.margelo.nitro.cherrystudio.ui"
+    }
+  },
   "scripts": {
     "icons:generate": "tsx src/scripts/generate-icons.ts",
     "icons:generate:webp": "tsx src/scripts/generate-icons.ts",
