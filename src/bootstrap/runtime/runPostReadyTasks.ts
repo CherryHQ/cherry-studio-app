@@ -19,8 +19,6 @@ export async function runPostReadyTasks(
   try {
     await Promise.all([
       reconcileStalePendingMessages(services),
-      // The chat path is cache-only, so warm tools off the startup critical path.
-      services.mcpRuntime.prewarmActiveServers(),
       // The first pump also runs lazy startup recovery (abandon/retry/singleton
       // sweeps over prior-process leftovers) and the cold-start GC sweep.
       runtime.jobRuntime.pump({ reason: 'cold-start' }),

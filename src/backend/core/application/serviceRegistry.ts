@@ -1,3 +1,4 @@
+import { McpRuntimeService } from '@/backend/ai/mcp';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
@@ -25,6 +26,7 @@ export const services = {
   DbService,
   PreferenceService,
   WebSearchService,
+  McpRuntimeService,
 } as const;
 
 /** Service name to instance type, derived from `services`. */

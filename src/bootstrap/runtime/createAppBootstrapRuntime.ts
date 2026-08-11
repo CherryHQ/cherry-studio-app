@@ -1,6 +1,7 @@
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
+import type { McpRuntimeService } from '@/backend/ai/mcp';
 import { application } from '@/backend/core/application/Application';
 import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
 import { serviceList } from '@/backend/core/application/serviceRegistry';
@@ -37,9 +38,10 @@ export function createAppBootstrapRuntime(
   const host = new ApplicationHost({ overrides, services: serviceList });
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
+  const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
-  const services = createBackendServices({ cache, preference, webSearch });
+  const services = createBackendServices({ cache, mcpRuntime, preference, webSearch });
   const {
     backend,
     dataApiDependencies,
@@ -91,7 +93,6 @@ export function createAppBootstrapRuntime(
     dispose: () => {
       disposePromise ??= (async () => {
         await disposeBackend();
-        services.mcpRuntime.dispose();
         // Tear down this generation's host. Uninstalling is only correct while
         // it is still the installed one — a runtime disposed out of order must
         // not take down whichever host replaced it.
@@ -109,6 +110,12 @@ export function createAppBootstrapRuntime(
       await application.install(host);
       await initializeAppRuntime(services);
     },
-    runPostReadyTasks: () => runPostReadyTasks(services, { jobRuntime }),
+    runPostReadyTasks: async () => {
+      // Starts the PostReady phase alongside the hand-run tasks. Both are
+      // best-effort and off the first-paint path; the host logs its own
+      // failures rather than surfacing them here.
+      host.runPostReady();
+      await runPostReadyTasks(services, { jobRuntime });
+    },
   };
 }

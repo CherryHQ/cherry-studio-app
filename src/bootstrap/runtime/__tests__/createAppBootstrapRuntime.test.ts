@@ -7,7 +7,7 @@ const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
-const mockMcpRuntime = { dispose: jest.fn() };
+const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockPreference = { kind: 'preference' };
 const mockWebSearch = { kind: 'web-search' };
 const mockServices = {
@@ -58,6 +58,7 @@ const createRuntime = () =>
   createAppBootstrapRuntime({
     CacheService: mockCache,
     DbService: mockDb,
+    McpRuntimeService: mockMcpRuntime,
     PreferenceService: mockPreference,
     WebSearchService: mockWebSearch,
   });
@@ -80,6 +81,7 @@ describe('createAppBootstrapRuntime', () => {
     // composition is only handed the infrastructure it cannot reach that way.
     expect(mockCreateBackendServices).toHaveBeenCalledWith({
       cache: mockCache,
+      mcpRuntime: mockMcpRuntime,
       preference: mockPreference,
       webSearch: mockWebSearch,
     });
@@ -99,7 +101,7 @@ describe('createAppBootstrapRuntime', () => {
     expect(application.get('DbService')).toBe(mockDb);
   });
 
-  test('waits for chat before disposing infrastructure and is idempotent', async () => {
+  test('waits for chat before tearing down the host and is idempotent', async () => {
     const backendDisposed = createDeferred();
     mockDisposeBackend.mockImplementationOnce(() => backendDisposed.promise);
     const runtime = createRuntime();
@@ -110,16 +112,11 @@ describe('createAppBootstrapRuntime', () => {
 
     expect(secondDispose).toBe(firstDispose);
     expect(mockDisposeBackend).toHaveBeenCalledTimes(1);
-    expect(mockMcpRuntime.dispose).not.toHaveBeenCalled();
     expect(application.hasHost).toBe(true);
 
     backendDisposed.resolve();
     await firstDispose;
 
-    expect(mockMcpRuntime.dispose).toHaveBeenCalledTimes(1);
-    expect(mockDisposeBackend.mock.invocationCallOrder[0]).toBeLessThan(
-      mockMcpRuntime.dispose.mock.invocationCallOrder[0],
-    );
     // The host goes last: everything above it is still reachable while it drains.
     expect(application.hasHost).toBe(false);
   });

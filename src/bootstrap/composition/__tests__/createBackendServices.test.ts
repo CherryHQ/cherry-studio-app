@@ -1,3 +1,4 @@
+import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -74,10 +75,11 @@ jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
     const cache = { kind: 'cache' } as unknown as CacheService;
+    const mcpRuntime = { kind: 'mcp-runtime' } as unknown as McpRuntimeService;
     const preference = { kind: 'preference' } as unknown as PreferenceService;
     const webSearch = { kind: 'web-search' } as unknown as WebSearchService;
 
-    const services = createBackendServices({ cache, preference, webSearch });
+    const services = createBackendServices({ cache, mcpRuntime, preference, webSearch });
 
     expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, preference });
     expect(mockCreatePlatformAdapters).toHaveBeenCalledWith({
@@ -90,7 +92,7 @@ describe('createBackendServices', () => {
         assistant: mockDataServices.assistant,
         devicePermissions: mockPlatformAdapters.devicePermissions,
         fileContent: mockPlatformAdapters.fileContent,
-        mcpServer: mockDataServices.mcpServer,
+        mcpRuntime,
         model: mockDataServices.model,
         oauth: {
           authenticatedFetch: expect.any(Function),

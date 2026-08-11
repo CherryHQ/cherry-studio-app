@@ -1,5 +1,6 @@
 import { fetch as expoFetch } from 'expo/fetch';
 
+import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { createOAuthFlowRegistry } from '@/backend/services/oauth/authorization/createOAuthFlowRegistry';
@@ -24,11 +25,17 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
  */
 export type BackendInfrastructure = {
   cache: CacheService;
+  mcpRuntime: McpRuntimeService;
   preference: PreferenceService;
   webSearch: WebSearchService;
 };
 
-export function createBackendServices({ cache, preference, webSearch }: BackendInfrastructure) {
+export function createBackendServices({
+  cache,
+  mcpRuntime,
+  preference,
+  webSearch,
+}: BackendInfrastructure) {
   const dataServices = createDataServices({ cache, preference });
   const platformAdapters = createPlatformAdapters({
     fileEntry: dataServices.fileEntry,
@@ -71,7 +78,7 @@ export function createBackendServices({ cache, preference, webSearch }: BackendI
     assistant: dataServices.assistant,
     devicePermissions: platformAdapters.devicePermissions,
     fileContent: platformAdapters.fileContent,
-    mcpServer: dataServices.mcpServer,
+    mcpRuntime,
     model: dataServices.model,
     oauth: {
       authenticatedFetch: (...args) => oauthSession.authenticatedFetch(...args),
