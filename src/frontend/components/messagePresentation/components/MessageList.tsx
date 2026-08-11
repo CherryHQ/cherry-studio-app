@@ -166,7 +166,6 @@ export function MessageList({
     anchorMessageId === enteringMessageId;
   const isStagingFirstAnchor = isFirstEnteringAnchor && releasedFirstAnchorId !== anchorMessageId;
   const stagedFirstAnchorIdRef = useRef<string | undefined>(undefined);
-  stagedFirstAnchorIdRef.current = isStagingFirstAnchor ? anchorMessageId : undefined;
   const [tailFollowState, setTailFollowState] = useState<TailFollowState>(() =>
     createTailFollowState(anchorMessageId),
   );
@@ -190,6 +189,12 @@ export function MessageList({
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;
   }, [tailFollowPhase]);
+
+  // Read from size and layout callbacks, which the platform dispatches well
+  // after commit, so mirroring the staged anchor here is soon enough.
+  useLayoutEffect(() => {
+    stagedFirstAnchorIdRef.current = isStagingFirstAnchor ? anchorMessageId : undefined;
+  }, [anchorMessageId, isStagingFirstAnchor]);
 
   // LegendList 的 maintainScrollAtEnd 会在 rAF 中捕获旧配置，拖动已暂停后仍可能执行一次。
   // 在应用层合并 follow 请求，并在直接派发给原生 ScrollView 前重新检查同步交互锁。
