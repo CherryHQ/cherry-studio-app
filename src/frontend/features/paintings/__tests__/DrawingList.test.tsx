@@ -11,7 +11,7 @@ let mockSelectedIds: ReadonlySet<string> = new Set();
 
 const mockPaintingOne = { id: 'painting-1' } as Painting;
 const mockPaintingTwo = { id: 'painting-2' } as Painting;
-const mockPaintingPending = { id: 'painting-3' } as Painting;
+const mockPaintingPending = { id: 'painting-3', prompt: 'draw a cherry orchard' } as Painting;
 type MockGalleryItem = {
   aspectRatio: number;
   fileEntryId?: string;
@@ -84,10 +84,12 @@ jest.mock('lucide-uniwind/png', () => ({
   RotateCcwIcon: () => null,
 }));
 
-jest.mock('@/frontend/components/paintingSkeleton', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
-  return { PaintingSkeleton: ({ testID }: { testID?: string }) => <MockView testID={testID} /> };
+  return {
+    ImageGenerationLoader: (props: { testID?: string }) => <MockView {...props} />,
+  };
 });
 
 jest.mock('react-i18next', () => ({
@@ -270,7 +272,7 @@ describe('DrawingList', () => {
     expect(findHostsByTestID(tree, 'painting-history-painting-2:file-3')).toHaveLength(1);
   });
 
-  it('shows a running generation as a skeleton tile that leads back to the composer', async () => {
+  it('shows a running generation loader that leads back to the composer', async () => {
     mockGalleryItems = [
       {
         aspectRatio: 1,
@@ -282,7 +284,8 @@ describe('DrawingList', () => {
 
     const tree = await render();
 
-    expect(findHostsByTestID(tree, 'painting-history-skeleton-painting-3')).toHaveLength(1);
+    const [loader] = findHostsByTestID(tree, 'painting-history-loader-painting-3');
+    expect(loader.props).toMatchObject({ presentation: 'thumbnail' });
     // No image to zoom into: the tile links to the composer, not the viewer.
     expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(0);
     expect(findHostsByTestID(tree, 'painting-composer-link')[0]?.props.testProps).toEqual({

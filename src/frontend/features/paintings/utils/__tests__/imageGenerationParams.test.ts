@@ -2,6 +2,7 @@ import type { ImageGenerationSupport } from '@cherrystudio/provider-registry';
 
 import {
   imageParamsAspectRatio,
+  imageParamsResolutionLabel,
   isImageParamDraftValid,
   prepareImageParamValues,
   reconcileImageParamDraft,
@@ -138,6 +139,15 @@ describe('placeholder tile sizing', () => {
     expect(imageParamsAspectRatio({ aspectRatio: '1:2', size: '1024x1024' })).toBeCloseTo(0.5);
     expect(imageParamsAspectRatio(undefined)).toBe(1);
     expect(imageParamsAspectRatio({})).toBe(1);
+  });
+
+  it('formats the best available resolution for loading copy', () => {
+    expect(imageParamsResolutionLabel({ size: '1024x768' })).toBe('1024 \u00d7 768');
+    expect(imageParamsResolutionLabel({ imageResolution: '2K' })).toBe('2K');
+    expect(imageParamsResolutionLabel({ resolution: '512X1024' })).toBe('512 \u00d7 1024');
+    expect(imageParamsResolutionLabel({ imageResolution: '2K', size: 'auto' })).toBe('2K');
+    expect(imageParamsResolutionLabel({ size: 'auto' })).toBeUndefined();
+    expect(imageParamsResolutionLabel(undefined)).toBeUndefined();
   });
 
   it('falls back to square rather than trusting junk from the ledger', () => {

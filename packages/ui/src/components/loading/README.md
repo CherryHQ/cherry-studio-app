@@ -7,9 +7,10 @@ numbered dot-matrix loaders ported from the source design set: `DotMatrixSquare2
 
 ## ImageGenerationLoader
 
-`ImageGenerationLoader` is the pending state for a future generated-image surface. It combines a
-square 19x19 dot field, a resolution badge, status copy, and the prompt. Callers can provide
-`active`, `label`, `prompt`, `resolution`, `size`, and standard `View` props.
+`ImageGenerationLoader` is the pending state for generated images. It combines a 19x19 dot field,
+a resolution badge, status copy, and the prompt. Callers can provide
+`active`, `height`, `label`, `prompt`, `presentation`, `resolution`, `size`, `width`, and standard
+`View` props. `presentation="thumbnail"` keeps only the animated field for compact image tiles.
 
 - One Skia runtime shader draws the background field and both moving ellipse masks in a single GPU
   pass. Building the same mask from React Native views would require hundreds of mounted nodes.

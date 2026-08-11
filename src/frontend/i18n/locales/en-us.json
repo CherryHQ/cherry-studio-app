@@ -708,7 +708,6 @@
   "painting.status.generating": "Generating image",
   "painting.status.interrupted": "Interrupted",
   "painting.status.interruptedHint": "The last generation did not finish. Try again.",
-  "painting.status.revealing": "Revealing image",
   "painting.templates.close": "Close template details",
   "painting.templates.item": "Open {{title}} template",
   "painting.templates.title": "Create from a template",

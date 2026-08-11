@@ -1,13 +1,10 @@
-import { useImage } from '@shopify/react-native-skia';
+import { ImageGenerationLoader } from '@cherrystudio/ui/components';
 import { RotateCcwIcon } from 'lucide-uniwind/png';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { runOnJS, useSharedValue, withTiming } from 'react-native-reanimated';
+import { type LayoutChangeEvent, StyleSheet, Text, View } from 'react-native';
 
 import { Image } from '@/frontend/components/nativePrimitives';
-import { PaintingSkeleton } from '@/frontend/components/paintingSkeleton';
-import { paintingSkeleton } from '@/frontend/utils/constants';
 
 import type {
   PaintingGenerationStatus,
@@ -20,63 +17,70 @@ export function PaintingCanvas({
   aspectRatio,
   error,
   interruption,
-  onRevealFinish,
   outputs,
+  prompt,
+  resolution,
   status,
 }: {
   aspectRatio: number;
   error: Error | null;
   interruption: PaintingInterruption | null;
-  onRevealFinish: () => void;
   outputs: readonly PaintingOutput[];
+  prompt: string;
+  resolution: string;
   status: PaintingGenerationStatus;
 }) {
   const { t } = useTranslation();
-  const [previewWidth, setPreviewWidth] = useState(0);
+  const [previewLayout, setPreviewLayout] = useState({ height: 0, width: 0 });
   const currentOutput = outputs[0];
+  const hasPreviewLayout = previewLayout.height > 0 && previewLayout.width > 0;
+  const handlePreviewLayout = ({ nativeEvent }: LayoutChangeEvent) => {
+    const next = nativeEvent.layout;
+    setPreviewLayout((current) =>
+      current.height === next.height && current.width === next.width
+        ? current
+        : { height: next.height, width: next.width },
+    );
+  };
 
   return (
     <View className="min-h-0 flex-1 items-center justify-center px-4 pb-3 pt-2">
       {/* The request ratio sizes all three states before an output exists, so
           decoding the generated image cannot reflow the canvas. */}
       <View
-        className="overflow-hidden"
-        onLayout={({ nativeEvent }) => setPreviewWidth(nativeEvent.layout.width)}
+        onLayout={status === 'generating' ? handlePreviewLayout : undefined}
         style={[styles.preview, { aspectRatio }]}
       >
         {status === 'generating' ? (
-          <PaintingSkeleton
-            accessibilityLabel={t('painting.status.generating')}
-            testID="painting-loading-skeleton"
-          />
-        ) : status === 'revealing' && currentOutput ? (
-          <PaintingReveal
-            key={currentOutput.fileEntryId}
-            onFinish={onRevealFinish}
-            uri={currentOutput.uri}
-          />
-        ) : outputs.length > 0 ? (
-          <ScrollView
-            contentContainerStyle={styles.outputList}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            testID="painting-output-gallery"
+          hasPreviewLayout ? (
+            <ImageGenerationLoader
+              height={previewLayout.height}
+              label={t('painting.status.generating')}
+              prompt={prompt}
+              resolution={resolution}
+              testID="painting-generation-loader"
+              width={previewLayout.width}
+            />
+          ) : null
+        ) : currentOutput ? (
+          <View
+            className="relative h-full w-full overflow-hidden rounded-xl border-continuous bg-card"
+            testID="painting-output-frame"
           >
-            {outputs.map((output) => (
-              <View className="h-full" key={output.fileEntryId} style={{ width: previewWidth }}>
-                <Image
-                  accessibilityLabel={t('painting.output')}
-                  cachePolicy="memory-disk"
-                  contentFit="contain"
-                  source={output.uri}
-                  style={styles.outputImage}
-                  testID={`painting-output-${output.fileEntryId}`}
-                  transition={180}
-                />
-              </View>
-            ))}
-          </ScrollView>
+            <Image
+              accessibilityLabel={t('painting.output')}
+              cachePolicy="memory-disk"
+              contentFit="contain"
+              source={currentOutput.uri}
+              style={styles.outputImage}
+              testID={`painting-output-${currentOutput.fileEntryId}`}
+              transition={180}
+            />
+            <View
+              className="absolute inset-0 rounded-xl border border-border border-continuous"
+              pointerEvents="none"
+            />
+          </View>
         ) : interruption ? (
           // The gallery tile truncates the provider's words to two lines; this
           // is where they can be read in full, next to the input that retries.
@@ -107,48 +111,12 @@ export function PaintingCanvas({
   );
 }
 
-function PaintingReveal({ onFinish, uri }: { onFinish: () => void; uri: string }) {
-  const { t } = useTranslation();
-  const image = useImage(uri);
-  const revealSeconds = useSharedValue(-1);
-
-  useEffect(() => {
-    if (!image) {
-      return;
-    }
-    revealSeconds.value = 0;
-    revealSeconds.value = withTiming(
-      paintingSkeleton.reveal.endSeconds,
-      { duration: paintingSkeleton.reveal.endSeconds * 1000 },
-      (finished) => {
-        if (finished) {
-          runOnJS(onFinish)();
-        }
-      },
-    );
-  }, [image, onFinish, revealSeconds]);
-
-  return (
-    <PaintingSkeleton
-      accessibilityLabel={t('painting.status.revealing')}
-      image={image}
-      reveal={revealSeconds}
-      testID="painting-result-reveal"
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   outputImage: {
     height: '100%',
     width: '100%',
   },
-  outputList: {
-    alignItems: 'stretch',
-  },
-  // Stay compact on portrait output and within the canvas on wide output.
   preview: {
-    height: '50%',
-    maxWidth: '100%',
+    width: '100%',
   },
 });

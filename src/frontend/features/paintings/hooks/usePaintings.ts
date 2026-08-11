@@ -66,6 +66,7 @@ export type ResolvedPaintingAttachment = ComposerAttachmentReady;
 
 export type ResolvedPaintingFiles = {
   inputs: ResolvedPaintingAttachment[];
+  outputAspectRatio?: number;
   outputs: ResolvedPaintingAttachment[];
 };
 
@@ -172,9 +173,11 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
         };
       };
 
+      const outputs = resolved.outputs.map(resolveAttachment);
       return {
         inputs: resolved.inputs.map(resolveAttachment),
-        outputs: resolved.outputs.map(resolveAttachment),
+        outputAspectRatio: outputs[0] ? await loadImageAspectRatio(outputs[0].uri) : undefined,
+        outputs,
       };
     },
     queryKey: ['painting-files', painting?.id ?? '', painting?.updatedAt ?? ''],
@@ -213,20 +216,21 @@ export function usePaintingGalleryItems(paintings: readonly Painting[]) {
             painting,
             uri,
           };
-          try {
-            const image = await ExpoImage.loadAsync(uri);
-            return {
-              ...base,
-              aspectRatio: image.width > 0 && image.height > 0 ? image.width / image.height : 1,
-            };
-          } catch {
-            return { ...base, aspectRatio: 1 };
-          }
+          return { ...base, aspectRatio: await loadImageAspectRatio(uri) };
         }),
       );
     },
     queryKey: ['painting-gallery-files', ...paintings.map((painting) => painting.updatedAt)],
   });
+}
+
+async function loadImageAspectRatio(uri: string): Promise<number> {
+  try {
+    const image = await ExpoImage.loadAsync(uri);
+    return image.width > 0 && image.height > 0 ? image.width / image.height : 1;
+  } catch {
+    return 1;
+  }
 }
 
 /**
@@ -258,9 +262,10 @@ export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
       }
       const activeJob = jobs.activeByPaintingId.get(painting.id);
       const interruptedJob = jobs.interruptedByPaintingId.get(painting.id);
+      const paramValues = paintingJobParamValues(activeJob ?? interruptedJob);
       return [
         {
-          aspectRatio: imageParamsAspectRatio(paintingJobParamValues(activeJob ?? interruptedJob)),
+          aspectRatio: imageParamsAspectRatio(paramValues),
           // No file entry to key on, and exactly one placeholder per painting:
           // a multi-image request still shows a single tile until its outputs
           // land and the real count is known.

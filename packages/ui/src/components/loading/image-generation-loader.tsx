@@ -2,6 +2,7 @@ import { Canvas, Rect, Shader, Skia, type SkColor } from '@shopify/react-native-
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, type LayoutChangeEvent, type ViewProps, View } from 'react-native';
 import Animated, {
+  type SharedValue,
   useAnimatedStyle,
   useDerivedValue,
   useFrameCallback,
@@ -24,32 +25,45 @@ export type ImageGenerationLoaderProps = Omit<ViewProps, 'children'> &
   Readonly<{
     /** Runs the loader while true and shows its static state otherwise. */
     active?: boolean;
+    /** Preview height in points. Defaults to `size`. */
+    height?: number;
     /** Visible status text. Pass a translated value at product call sites. */
     label?: string;
     prompt?: string;
+    /** Full status copy by default, or a canvas-only treatment for image tiles. */
+    presentation?: 'default' | 'thumbnail';
     resolution?: string;
-    /** Width and height of the square preview in points. */
+    /** Square fallback used when `width` or `height` is not provided. */
     size?: number;
+    /** Preview width in points. Defaults to `size`. */
+    width?: number;
   }>;
 
 export function ImageGenerationLoader({
   accessibilityLabel,
+  accessible,
   active = true,
   className,
+  height,
   label = 'Generating image',
   prompt = 'a calm mountain lake at dawn',
+  presentation = 'default',
   resolution = '1024 \u00d7 1024',
   size = DEFAULT_SIZE,
+  width,
   ...props
 }: ImageGenerationLoaderProps) {
   const reducedMotion = useReducedMotion();
   const isAnimating = active && !reducedMotion;
+  const isThumbnail = presentation === 'thumbnail';
+  const isAccessible = accessible ?? !isThumbnail;
+  const previewHeight = height ?? size;
+  const previewWidth = width ?? size;
   const time = useLoaderClock(isAnimating);
-  const labelWidth = useSharedValue(0);
   const colorValues = useCSSVariable(FIELD_COLOR_VARIABLES);
   const baseColorValue = colorValues[0];
   const glowColorValue = colorValues[1];
-  const dotFieldEffect = useMemo(getImageGenerationLoaderEffect, []);
+  const dotFieldEffect = getImageGenerationLoaderEffect();
   const [baseColor, glowColor] = useMemo(
     () => [
       resolveSkiaColor(baseColorValue, '#a1a1a1'),
@@ -62,13 +76,74 @@ export function ImageGenerationLoader({
     () => ({
       uBaseColor: baseColor,
       uGlowColor: glowColor,
-      uResolution: [size, size],
+      uResolution: [previewWidth, previewHeight],
       uStatic: isAnimating ? 0 : 1,
       uTime: time.get(),
     }),
-    [baseColor, glowColor, isAnimating, size, time],
+    [baseColor, glowColor, isAnimating, previewHeight, previewWidth, time],
   );
 
+  const spokenLabel = accessibilityLabel ?? `${label}: ${prompt}. ${resolution}`;
+
+  return (
+    <View
+      {...props}
+      accessibilityLabel={spokenLabel}
+      accessibilityRole="progressbar"
+      accessibilityState={{ busy: active }}
+      accessible={isAccessible}
+      className={cn('items-center', !isThumbnail && 'gap-3.5', className)}
+    >
+      <View
+        className="relative overflow-hidden rounded-xl border border-border border-continuous bg-card"
+        pointerEvents="none"
+        style={{ height: previewHeight, width: previewWidth }}
+      >
+        <Canvas style={StyleSheet.absoluteFill}>
+          <Rect height={previewHeight} width={previewWidth} x={0} y={0}>
+            <Shader source={dotFieldEffect} uniforms={uniforms} />
+          </Rect>
+        </Canvas>
+        {isThumbnail ? null : (
+          <View className="absolute right-2 top-2 rounded-full border border-border bg-background/75 px-2 py-0.5">
+            <Text
+              className="font-mono text-xs text-foreground-tertiary"
+              numberOfLines={1}
+              selectable
+            >
+              {resolution}
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {isThumbnail ? null : (
+        <ImageGenerationMetadata
+          isAnimating={isAnimating}
+          label={label}
+          prompt={prompt}
+          time={time}
+          width={previewWidth}
+        />
+      )}
+    </View>
+  );
+}
+
+function ImageGenerationMetadata({
+  isAnimating,
+  label,
+  prompt,
+  time,
+  width,
+}: {
+  isAnimating: boolean;
+  label: string;
+  prompt: string;
+  time: SharedValue<number>;
+  width: number;
+}) {
+  const labelWidth = useSharedValue(0);
   const shineOffset = useDerivedValue(() => {
     const width = labelWidth.get();
     if (!isAnimating || width <= 0) return -SHINE_BAND_WIDTH;
@@ -81,7 +156,6 @@ export function ImageGenerationLoader({
     const easedProgress = progress * progress * (3 - 2 * progress);
     return -SHINE_BAND_WIDTH + (width + SHINE_BAND_WIDTH) * easedProgress;
   }, [isAnimating, labelWidth, time]);
-
   const shineBandStyle = useAnimatedStyle(
     () => ({
       opacity: isAnimating ? 1 : 0,
@@ -93,70 +167,41 @@ export function ImageGenerationLoader({
     () => ({ transform: [{ translateX: -shineOffset.get() }] }),
     [shineOffset],
   );
-
   const handleLabelLayout = (event: LayoutChangeEvent) => {
     labelWidth.set(event.nativeEvent.layout.width);
   };
 
-  const spokenLabel = accessibilityLabel ?? `${label}: ${prompt}. ${resolution}`;
-
   return (
-    <View
-      {...props}
-      accessibilityLabel={spokenLabel}
-      accessibilityRole="progressbar"
-      accessibilityState={{ busy: active }}
-      accessible
-      className={cn('items-center gap-3.5', className)}
-    >
-      <View
-        className="relative overflow-hidden rounded-xl border-continuous bg-background-subtle"
-        pointerEvents="none"
-        style={{ height: size, width: size }}
-      >
-        <Canvas style={StyleSheet.absoluteFill}>
-          <Rect height={size} width={size} x={0} y={0}>
-            <Shader source={dotFieldEffect} uniforms={uniforms} />
-          </Rect>
-        </Canvas>
-        <View className="absolute right-2 top-2 rounded-full bg-background/75 px-2 py-0.5">
-          <Text className="font-mono text-xs text-foreground-tertiary" numberOfLines={1} selectable>
-            {resolution}
-          </Text>
-        </View>
-      </View>
-
-      <View className="items-start gap-0.5" style={{ width: size }}>
-        <View className="relative self-start">
-          <Text
-            className="text-sm font-semibold text-foreground"
+    <View className="items-start gap-0.5" style={{ width }}>
+      <View className="relative self-start">
+        <Text
+          className="text-sm font-semibold text-foreground"
+          numberOfLines={1}
+          onLayout={handleLabelLayout}
+        >
+          {label}
+        </Text>
+        <Animated.View
+          accessibilityElementsHidden
+          className="absolute inset-y-0 left-0 overflow-hidden"
+          importantForAccessibility="no-hide-descendants"
+          pointerEvents="none"
+          style={[{ width: SHINE_BAND_WIDTH }, shineBandStyle]}
+        >
+          <Animated.Text
+            className="text-sm font-semibold text-foreground-tertiary"
             numberOfLines={1}
-            onLayout={handleLabelLayout}
+            style={shineTextStyle}
           >
             {label}
-          </Text>
-          <Animated.View
-            accessibilityElementsHidden
-            className="absolute inset-y-0 left-0 overflow-hidden"
-            importantForAccessibility="no-hide-descendants"
-            pointerEvents="none"
-            style={[{ width: SHINE_BAND_WIDTH }, shineBandStyle]}
-          >
-            <Animated.Text
-              className="text-sm font-semibold text-foreground-tertiary"
-              numberOfLines={1}
-              style={shineTextStyle}
-            >
-              {label}
-            </Animated.Text>
-          </Animated.View>
-        </View>
-        <Text className="text-xs text-foreground-tertiary" numberOfLines={2} selectable>
-          {'\u201c'}
-          {prompt}
-          {'\u201d'}
-        </Text>
+          </Animated.Text>
+        </Animated.View>
       </View>
+      <Text className="text-xs text-foreground-tertiary" numberOfLines={2} selectable>
+        {'\u201c'}
+        {prompt}
+        {'\u201d'}
+      </Text>
     </View>
   );
 }

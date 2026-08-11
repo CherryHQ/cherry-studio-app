@@ -48,6 +48,24 @@ export const Static: Story = {
   ),
 };
 
+export const Thumbnail: Story = {
+  args: { presentation: 'thumbnail', size: 128 },
+  render: (args) => (
+    <View className="flex-1 items-center justify-center bg-background p-4">
+      <ImageGenerationLoader {...args} />
+    </View>
+  ),
+};
+
+export const Portrait: Story = {
+  args: { height: 224, resolution: '928 \u00d7 1664', width: 128 },
+  render: (args) => (
+    <View className="flex-1 items-center justify-center bg-background p-4">
+      <ImageGenerationLoader {...args} />
+    </View>
+  ),
+};
+
 type ThemePreviewProps = Readonly<{
   args: ImageGenerationLoaderProps;
   label: string;

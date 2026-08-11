@@ -92,21 +92,27 @@ let api: GenerationApi | undefined;
 let renderer: ReactTestRenderer | undefined;
 let queryClient: QueryClient;
 
-function Probe({ paintingId }: { paintingId?: string }) {
-  const generation = usePaintingGeneration({ initialOutputs: [], paintingId });
+function Probe({
+  initialAspectRatio,
+  paintingId,
+}: {
+  initialAspectRatio?: number;
+  paintingId?: string;
+}) {
+  const generation = usePaintingGeneration({ initialAspectRatio, initialOutputs: [], paintingId });
   useEffect(() => {
     api = generation;
   }, [generation]);
   return null;
 }
 
-async function mountProbe(paintingId?: string) {
+async function mountProbe(paintingId?: string, initialAspectRatio?: number) {
   await act(async () => {
     renderer = create(
       <QueryClientProvider client={queryClient}>
         <DataApiProvider dataApi={dataApi}>
           <BackendProvider backend={backend}>
-            <Probe paintingId={paintingId} />
+            <Probe initialAspectRatio={initialAspectRatio} paintingId={paintingId} />
           </BackendProvider>
         </DataApiProvider>
       </QueryClientProvider>,
@@ -167,7 +173,23 @@ afterEach(async () => {
 });
 
 describe('usePaintingGeneration', () => {
-  it('enqueues via the backend and reveals the outputs from the terminal job', async () => {
+  it('restores the initial output ratio until a new request replaces it', async () => {
+    await mountProbe(undefined, 1664 / 928);
+
+    expect(api?.aspectRatio).toBeCloseTo(1664 / 928);
+
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await act(async () => {
+      await api?.generate({ ...request, paramValues: { size: '928x1664' } });
+    });
+
+    expect(api?.aspectRatio).toBeCloseTo(928 / 1664);
+  });
+
+  it('enqueues via the backend and displays outputs from the terminal job', async () => {
     jobById.set(
       'job-1',
       jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
@@ -196,11 +218,13 @@ describe('usePaintingGeneration', () => {
     });
     expect(result).toEqual({ outputs: [output], painting });
     expect(api?.outputs).toEqual([output]);
-    expect(api?.status).toBe('revealing');
+    expect(api?.paramValues).toEqual({});
+    expect(api?.prompt).toBe('draw a cherry');
+    expect(api?.status).toBe('idle');
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
   });
 
-  it('keeps the requested aspect ratio through the reveal', async () => {
+  it('keeps the requested aspect ratio when the output arrives', async () => {
     jobById.set(
       'job-1',
       jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
@@ -212,7 +236,7 @@ describe('usePaintingGeneration', () => {
     });
 
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
-    expect(api?.status).toBe('revealing');
+    expect(api?.status).toBe('idle');
   });
 
   it('surfaces a failed job as frontend error state and allows a retry', async () => {
@@ -251,7 +275,7 @@ describe('usePaintingGeneration', () => {
     await act(async () => {
       await retry;
     });
-    expect(api?.status).toBe('revealing');
+    expect(api?.status).toBe('idle');
     expect(mockStartGeneration).toHaveBeenCalledTimes(2);
   });
 
@@ -297,10 +321,14 @@ describe('usePaintingGeneration', () => {
     expect(api?.status).toBe('idle');
   });
 
-  it("adopts this painting's still-active generation on mount and reveals its result", async () => {
+  it("adopts this painting's still-active generation on mount and displays its result", async () => {
     activeJobs = [
       jobSnapshot({
-        input: { paintingId: 'painting-1', paramValues: { aspectRatio: '3:4' } },
+        input: {
+          paintingId: 'painting-1',
+          paramValues: { aspectRatio: '3:4', resolution: '2K' },
+          prompt: 'adopt this request',
+        },
         status: 'running',
       }),
     ];
@@ -309,6 +337,8 @@ describe('usePaintingGeneration', () => {
     await waitForCondition(() => api?.status === 'generating');
 
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
+    expect(api?.paramValues).toEqual({ aspectRatio: '3:4', resolution: '2K' });
+    expect(api?.prompt).toBe('adopt this request');
 
     jobById.set(
       'job-1',
@@ -317,7 +347,7 @@ describe('usePaintingGeneration', () => {
     await act(async () => {
       await queryClient.refetchQueries();
     });
-    await waitForCondition(() => api?.status === 'revealing');
+    await waitForCondition(() => api?.status === 'idle');
 
     expect(api?.outputs).toEqual([output]);
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);

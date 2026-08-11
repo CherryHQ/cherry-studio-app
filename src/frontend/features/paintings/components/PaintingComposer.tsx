@@ -1,4 +1,5 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,6 +9,7 @@ import { getComposerKeyboardStickyOffset } from '@/frontend/components/composer/
 import { usePaintingGeneration } from '../hooks/usePaintingGeneration';
 import { paintingJobParamValues, usePaintingJobs } from '../hooks/usePaintingJobs';
 import type { ResolvedPaintingFiles } from '../hooks/usePaintings';
+import { imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import { PaintingCanvas } from './PaintingCanvas';
 import { PaintingInput } from './PaintingInput';
 
@@ -20,6 +22,7 @@ export function PaintingComposer({
   onReceipt?: (paintingId: string | undefined) => void;
   painting?: Painting;
 }) {
+  const { t } = useTranslation();
   const { bottom } = useSafeAreaInsets();
   const keyboardInputOffset = getComposerKeyboardStickyOffset(bottom);
   // Only an image-less receipt is this screen's to adopt or retry. One that
@@ -27,6 +30,7 @@ export function PaintingComposer({
   // generation started here must mint its own painting instead.
   const receiptId = painting && painting.files.output.length === 0 ? painting.id : undefined;
   const generation = usePaintingGeneration({
+    initialAspectRatio: initialFiles.outputAspectRatio,
     initialOutputs: initialFiles.outputs,
     onReceipt,
     paintingId: receiptId,
@@ -39,6 +43,9 @@ export function PaintingComposer({
         jobs.activeByPaintingId.get(receiptId) ?? jobs.interruptedByPaintingId.get(receiptId),
       )
     : undefined;
+  const generationResolution =
+    imageParamsResolutionLabel(generation.paramValues ?? initialParamValues) ??
+    t('painting.settings.option.auto');
 
   return (
     <View className="flex-1 bg-background">
@@ -46,8 +53,9 @@ export function PaintingComposer({
         aspectRatio={generation.aspectRatio}
         error={generation.error}
         interruption={generation.interruption}
-        onRevealFinish={generation.finishReveal}
         outputs={generation.outputs}
+        prompt={generation.prompt || painting?.prompt || ''}
+        resolution={generationResolution}
         status={generation.status}
       />
       <KeyboardStickyView offset={{ opened: keyboardInputOffset }}>

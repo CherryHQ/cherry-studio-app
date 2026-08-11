@@ -47,7 +47,7 @@ float ellipseMask(float2 uv, float4 blob) {
 }
 
 half4 main(float2 position) {
-  float2 cellSize = uResolution / GRID_SIZE;
+  float cellSize = min(uResolution.x, uResolution.y) / GRID_SIZE;
   float2 cellPosition = (fract(position / cellSize) - 0.5) * cellSize;
   float dotDistance = length(cellPosition);
   float scale = min(uResolution.x, uResolution.y) / 208.0;

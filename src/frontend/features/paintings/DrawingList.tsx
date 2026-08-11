@@ -1,3 +1,4 @@
+import { ImageGenerationLoader } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
@@ -30,7 +31,6 @@ import {
 } from '@/frontend/components/messageTabs';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
-import { PaintingSkeleton } from '@/frontend/components/paintingSkeleton';
 
 import {
   type PaintingGalleryItem,
@@ -300,7 +300,7 @@ function DrawingGridItem({
   label,
   onToggle,
 }: DrawingGridItemProps) {
-  const content = renderTileContent(item, generatingLabel, interruptedLabel);
+  const content = renderTileContent(item, interruptedLabel, height);
   const accessibilityLabel =
     item.kind === 'output'
       ? label
@@ -365,11 +365,7 @@ function DrawingGridItem({
   );
 }
 
-function renderTileContent(
-  item: PaintingGalleryItem,
-  generatingLabel: string,
-  interruptedLabel: string,
-) {
+function renderTileContent(item: PaintingGalleryItem, interruptedLabel: string, height: number) {
   if (item.kind === 'output') {
     return (
       <Image
@@ -384,10 +380,13 @@ function renderTileContent(
 
   if (item.kind === 'generating') {
     return (
-      <PaintingSkeleton
-        accessibilityLabel={generatingLabel}
-        testID={`painting-history-skeleton-${item.painting.id}`}
-      />
+      <View className="flex-1 items-center justify-center">
+        <ImageGenerationLoader
+          presentation="thumbnail"
+          size={Math.max(1, Math.min(128, height * 0.72))}
+          testID={`painting-history-loader-${item.painting.id}`}
+        />
+      </View>
     );
   }
 

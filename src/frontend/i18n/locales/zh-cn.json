@@ -707,7 +707,6 @@
   "painting.status.generating": "正在生成图片",
   "painting.status.interrupted": "已中断",
   "painting.status.interruptedHint": "上次生成未完成，可以重新生成",
-  "painting.status.revealing": "正在显示图片",
   "painting.templates.close": "关闭模板详情",
   "painting.templates.item": "打开 {{title}} 模板",
   "painting.templates.title": "从模板创建",

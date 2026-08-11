@@ -19,7 +19,7 @@ import {
 } from './usePaintingJobs';
 import { useDeletePaintings, useSyncPaintingQueries } from './usePaintings';
 
-export type PaintingGenerationStatus = 'idle' | 'generating' | 'revealing';
+export type PaintingGenerationStatus = 'idle' | 'generating';
 
 /**
  * The receipt exists but holds no images and nothing is running for it — the
@@ -47,6 +47,8 @@ type PendingSettle = {
   resolve: (result: PaintingGenerationResult) => void;
 };
 
+type GenerationDisplayInput = Pick<PaintingGenerationInput, 'paramValues' | 'prompt'>;
+
 /**
  * Drives painting generation through the job ledger: `startGeneration` enqueues
  * a `painting.generate` job that outlives this hook, and the terminal snapshot
@@ -59,10 +61,12 @@ type PendingSettle = {
  * generations happen to be in flight.
  */
 export function usePaintingGeneration({
+  initialAspectRatio,
   initialOutputs,
   onReceipt,
   paintingId,
 }: {
+  initialAspectRatio?: number;
   initialOutputs: readonly PaintingOutput[];
   /**
    * Fires with the receipt this screen is now bound to (and with `undefined`
@@ -77,7 +81,7 @@ export function usePaintingGeneration({
   const syncPaintingQueries = useSyncPaintingQueries();
   const deletePaintings = useDeletePaintings();
   const jobs = usePaintingJobs();
-  const [aspectRatio, setAspectRatio] = useState(1);
+  const [displayInput, setDisplayInput] = useState<GenerationDisplayInput | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [outputs, setOutputs] = useState<PaintingOutput[]>(() => [...initialOutputs]);
   const [status, setStatus] = useState<PaintingGenerationStatus>('idle');
@@ -85,17 +89,23 @@ export function usePaintingGeneration({
   const pendingSettleRef = useRef<PendingSettle | null>(null);
   // A job stays in the active list for up to one poll after its terminal row
   // lands; without this the settle effect would re-adopt what it just settled
-  // and replay the reveal.
+  // and show it as generating again.
   const [settledJobIds, setSettledJobIds] = useState<ReadonlySet<string>>(() => new Set());
   const receiptIdRef = useRef<string | undefined>(paintingId);
+  const aspectRatio = displayInput
+    ? imageParamsAspectRatio(displayInput.paramValues)
+    : (initialAspectRatio ?? 1);
 
   const runningJob = paintingId === undefined ? undefined : jobs.activeByPaintingId.get(paintingId);
-  const adoptableJobId = runningJob && !settledJobIds.has(runningJob.id) ? runningJob.id : null;
   // Render-phase adjustment (not an effect): the guard makes the setState
   // idempotent, so the extra render pass converges immediately.
-  if (activeJobId === null && adoptableJobId !== null) {
-    setActiveJobId(adoptableJobId);
-    setAspectRatio(imageParamsAspectRatio(paintingJobParamValues(runningJob)));
+  if (activeJobId === null && runningJob && !settledJobIds.has(runningJob.id)) {
+    const input = runningJob.input as { prompt?: unknown } | null;
+    setActiveJobId(runningJob.id);
+    setDisplayInput({
+      paramValues: paintingJobParamValues(runningJob) ?? {},
+      prompt: typeof input?.prompt === 'string' ? input.prompt : '',
+    });
     setStatus('generating');
   }
 
@@ -140,7 +150,7 @@ export function usePaintingGeneration({
     if (job.status === 'completed') {
       const result = job.output as PaintingGenerationResult;
       setOutputs(result.outputs);
-      setStatus('revealing');
+      setStatus('idle');
       void syncPaintingQueries(result.painting);
       settle?.resolve(result);
       return;
@@ -162,7 +172,7 @@ export function usePaintingGeneration({
         throw new Error('Painting generation is already in progress');
       }
       setError(null);
-      setAspectRatio(imageParamsAspectRatio(input.paramValues));
+      setDisplayInput({ paramValues: input.paramValues, prompt: input.prompt });
       setStatus('generating');
 
       try {
@@ -226,16 +236,15 @@ export function usePaintingGeneration({
       await deletePaintings([receiptId]);
     });
   }, [activeJobId, deletePaintings, onReceipt, paintingId, paintings]);
-  const finishReveal = useCallback(() => setStatus('idle'), []);
-
   return {
     aspectRatio,
     cancel,
     error,
-    finishReveal,
     generate,
     interruption,
     outputs,
+    paramValues: displayInput?.paramValues,
+    prompt: displayInput?.prompt ?? '',
     status,
   };
 }
