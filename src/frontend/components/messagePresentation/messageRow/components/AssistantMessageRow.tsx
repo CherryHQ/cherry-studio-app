@@ -15,7 +15,10 @@ type AssistantMessageRowProps = {
 export function AssistantMessageRow({ actions, message }: AssistantMessageRowProps) {
   const { t } = useTranslation();
   const isPendingEmptyMessage = message.status === 'pending' && !message.data.parts?.length;
-  const copyText = copyAssistantMessageText(message.data.parts ?? []);
+  const copyText =
+    actions && message.status !== 'pending'
+      ? copyAssistantMessageText(message.data.parts ?? [])
+      : '';
   const isCopied = actions?.copiedMessageId === message.id;
 
   return (
