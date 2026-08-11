@@ -13,7 +13,6 @@ const meta = {
     accessibilityLabel: 'Generating image',
     active: true,
     label: 'Generating image',
-    prompt: 'a calm mountain lake at dawn',
     resolution: '1024 \u00d7 1024',
     size: 208,
   },

@@ -1,9 +1,7 @@
 import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ManagedComposerProvider } from '@/frontend/components/composer';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { PaintingComposer } from './components/PaintingComposer';
@@ -38,7 +36,6 @@ export function PaintingScreen() {
   // echoing the old output back at the user. Skip resolving them entirely then.
   const filesQuery = useResolvedPaintingFiles(handoff ? undefined : painting);
   const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
-  const insets = useSafeAreaInsets();
   const isLoading =
     openedPaintingId !== undefined &&
     paintingId === openedPaintingId &&
@@ -48,9 +45,11 @@ export function PaintingScreen() {
     (receiptId: string | undefined) => navigation.setParams({ paintingId: receiptId }),
     [navigation],
   );
+  const initialAttachments = handoff?.attachments ?? [];
+  const initialDraft = handoff?.draft ?? '';
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingBottom: Math.max(insets.bottom, 8) }}>
+    <View className="flex-1 bg-background">
       <Stack.Screen
         options={{
           headerBackButtonDisplayMode: 'minimal',
@@ -63,16 +62,14 @@ export function PaintingScreen() {
           <ActivityIndicator />
         </View>
       ) : (
-        <ManagedComposerProvider
-          initialAttachments={handoff?.attachments ?? paintingFiles.inputs}
-          initialDraft={handoff?.draft ?? painting?.prompt ?? ''}
-        >
-          <PaintingComposer
-            initialFiles={paintingFiles}
-            onReceipt={handleReceipt}
-            painting={painting}
-          />
-        </ManagedComposerProvider>
+        <PaintingComposer
+          initialAttachments={initialAttachments}
+          initialDraft={initialDraft}
+          initialFiles={paintingFiles}
+          isHandoff={Boolean(handoff)}
+          onReceipt={handleReceipt}
+          painting={painting}
+        />
       )}
     </View>
   );

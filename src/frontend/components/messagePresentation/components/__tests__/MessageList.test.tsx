@@ -233,6 +233,35 @@ describe('MessageList anchored tail following', () => {
       });
   });
 
+  test('uses an assistant renderer override without changing user rows', () => {
+    const user = createMessage('user-1', 'user', [textPart('hello')]);
+    const assistant = createMessage('assistant-1', 'assistant');
+    const renderAssistantMessage = jest.fn(() => null);
+
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([user, assistant])}
+          renderAssistantMessage={renderAssistantMessage}
+        />,
+      );
+    });
+
+    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: user });
+    expect(renderAssistantMessage).toHaveBeenCalledWith(assistant);
+    expect(mockAssistantMessageRow).not.toHaveBeenCalled();
+  });
+
+  test('does not show the scroll control for an empty message list', () => {
+    act(() => {
+      renderer = create(
+        <MessageList {...listProps([])} bottomAccessoryHeight={{ value: 80 } as never} />,
+      );
+    });
+
+    expect(mockScrollButtonProps).toBeUndefined();
+  });
+
   afterEach(() => {
     act(() => renderer?.unmount());
     Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
@@ -558,6 +587,25 @@ describe('MessageList anchored tail following', () => {
     expect(mockScrollMessageToEnd).toHaveBeenLastCalledWith({
       animated: false,
       closeKeyboard: false,
+    });
+  });
+
+  test('animates the first live anchor when requested by the caller', () => {
+    const firstTurn = [
+      createMessage('user-1', 'user', [textPart('hello')]),
+      createMessage('assistant-1', 'assistant'),
+    ];
+    act(() => {
+      renderer = create(
+        <MessageList {...listProps(firstTurn, 'user-1')} animateFirstEnteringMessage />,
+      );
+    });
+    act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
+    act(() => flushAnimationFrames());
+
+    expect(mockScrollMessageToEnd).toHaveBeenCalledWith({
+      animated: true,
+      closeKeyboard: true,
     });
   });
 });

@@ -31,3 +31,9 @@ export const duration = {
   /** Long enough for an overshoot to read as one rather than as a wobble. */
   slow: 350,
 } as const;
+
+/** Continuous glyph highlight used by shared loading and pending-state copy. */
+export const shimmerTextMotion = {
+  duration: 2000,
+  easing: easing.linear,
+} as const;

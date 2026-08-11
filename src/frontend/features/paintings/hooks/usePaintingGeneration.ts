@@ -44,10 +44,8 @@ const JOB_POLL_INTERVAL_MS = 1000;
 
 type PendingSettle = {
   reject: (error: Error) => void;
-  resolve: (result: PaintingGenerationResult) => void;
+  resolve: (result: PaintingGenerationResult | null) => void;
 };
-
-type GenerationDisplayInput = Pick<PaintingGenerationInput, 'paramValues' | 'prompt'>;
 
 /**
  * Drives painting generation through the job ledger: `startGeneration` enqueues
@@ -81,31 +79,29 @@ export function usePaintingGeneration({
   const syncPaintingQueries = useSyncPaintingQueries();
   const deletePaintings = useDeletePaintings();
   const jobs = usePaintingJobs();
-  const [displayInput, setDisplayInput] = useState<GenerationDisplayInput | null>(null);
+  const [displayParamValues, setDisplayParamValues] = useState<ParamValues | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [outputs, setOutputs] = useState<PaintingOutput[]>(() => [...initialOutputs]);
   const [status, setStatus] = useState<PaintingGenerationStatus>('idle');
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const pendingSettleRef = useRef<PendingSettle | null>(null);
+  const cancelPromiseRef = useRef<Promise<boolean> | null>(null);
+  const cancelRequestedRef = useRef(false);
   // A job stays in the active list for up to one poll after its terminal row
   // lands; without this the settle effect would re-adopt what it just settled
   // and show it as generating again.
   const [settledJobIds, setSettledJobIds] = useState<ReadonlySet<string>>(() => new Set());
   const receiptIdRef = useRef<string | undefined>(paintingId);
-  const aspectRatio = displayInput
-    ? imageParamsAspectRatio(displayInput.paramValues)
+  const aspectRatio = displayParamValues
+    ? imageParamsAspectRatio(displayParamValues)
     : (initialAspectRatio ?? 1);
 
   const runningJob = paintingId === undefined ? undefined : jobs.activeByPaintingId.get(paintingId);
   // Render-phase adjustment (not an effect): the guard makes the setState
   // idempotent, so the extra render pass converges immediately.
   if (activeJobId === null && runningJob && !settledJobIds.has(runningJob.id)) {
-    const input = runningJob.input as { prompt?: unknown } | null;
     setActiveJobId(runningJob.id);
-    setDisplayInput({
-      paramValues: paintingJobParamValues(runningJob) ?? {},
-      prompt: typeof input?.prompt === 'string' ? input.prompt : '',
-    });
+    setDisplayParamValues(paintingJobParamValues(runningJob) ?? {});
     setStatus('generating');
   }
 
@@ -140,13 +136,19 @@ export function usePaintingGeneration({
   // clearing `activeJobId` disables the query that carries the snapshot.
   /* eslint-disable react-hooks/set-state-in-effect -- see above */
   useEffect(() => {
-    if (!job || job.id !== activeJobId || !isTerminalStatus(job.status)) {
+    if (
+      !job ||
+      job.id !== activeJobId ||
+      !isTerminalStatus(job.status) ||
+      cancelRequestedRef.current
+    ) {
       return;
     }
     const settle = pendingSettleRef.current;
     pendingSettleRef.current = null;
     setSettledJobIds((current) => new Set(current).add(job.id));
     setActiveJobId(null);
+    cancelRequestedRef.current = false;
     if (job.status === 'completed') {
       const result = job.output as PaintingGenerationResult;
       setOutputs(result.outputs);
@@ -166,13 +168,53 @@ export function usePaintingGeneration({
   }, [activeJobId, job, syncPaintingQueries]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
+  const cancelStartedGeneration = useCallback(
+    (jobId: string, receiptId: string | undefined): Promise<boolean> => {
+      if (cancelPromiseRef.current) {
+        return cancelPromiseRef.current;
+      }
+
+      const cancellation = (async () => {
+        try {
+          await paintings.cancelGeneration(jobId);
+          if (receiptId !== undefined) {
+            await deletePaintings([receiptId]);
+            receiptIdRef.current = undefined;
+            onReceipt?.(undefined);
+          }
+
+          const settle = pendingSettleRef.current;
+          pendingSettleRef.current = null;
+          setSettledJobIds((current) => new Set(current).add(jobId));
+          setActiveJobId(null);
+          setError(null);
+          setStatus('idle');
+          cancelRequestedRef.current = false;
+          settle?.resolve(null);
+          return true;
+        } catch (cancelError) {
+          cancelRequestedRef.current = false;
+          setError(cancelError instanceof Error ? cancelError : new Error(String(cancelError)));
+          return false;
+        } finally {
+          cancelPromiseRef.current = null;
+        }
+      })();
+
+      cancelPromiseRef.current = cancellation;
+      return cancellation;
+    },
+    [deletePaintings, onReceipt, paintings],
+  );
+
   const generate = useCallback(
-    async (input: PaintingGenerationInput): Promise<PaintingGenerationResult> => {
+    async (input: PaintingGenerationInput): Promise<PaintingGenerationResult | null> => {
       if (pendingSettleRef.current || activeJobId !== null) {
         throw new Error('Painting generation is already in progress');
       }
+      cancelRequestedRef.current = false;
       setError(null);
-      setDisplayInput({ paramValues: input.paramValues, prompt: input.prompt });
+      setDisplayParamValues(input.paramValues);
       setStatus('generating');
 
       try {
@@ -200,11 +242,17 @@ export function usePaintingGeneration({
           prompt: input.prompt,
         });
         receiptIdRef.current = started.paintingId;
+        if (cancelRequestedRef.current) {
+          const cancelled = await cancelStartedGeneration(started.jobId, started.paintingId);
+          if (cancelled) {
+            return null;
+          }
+        }
         onReceipt?.(started.paintingId);
         // The gallery's active-job poll stops once nothing is running, so a
         // fresh enqueue has to wake it explicitly.
         void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
-        return await new Promise<PaintingGenerationResult>((resolve, reject) => {
+        return await new Promise<PaintingGenerationResult | null>((resolve, reject) => {
           pendingSettleRef.current = { reject, resolve };
           setActiveJobId(started.jobId);
         });
@@ -216,26 +264,25 @@ export function usePaintingGeneration({
         throw normalized;
       }
     },
-    [activeJobId, interruption, onReceipt, paintingId, paintings, queryClient],
+    [
+      activeJobId,
+      cancelStartedGeneration,
+      interruption,
+      onReceipt,
+      paintingId,
+      paintings,
+      queryClient,
+    ],
   );
 
   const cancel = useCallback(() => {
+    cancelRequestedRef.current = true;
     if (activeJobId === null) {
       return;
     }
     const receiptId = receiptIdRef.current ?? paintingId;
-    void paintings.cancelGeneration(activeJobId).then(async () => {
-      // Stopping on purpose is not the same as being interrupted: leaving the
-      // receipt behind would put an "interrupted, tap to retry" tile in the
-      // gallery for something the user just said they did not want.
-      if (receiptId === undefined) {
-        return;
-      }
-      receiptIdRef.current = undefined;
-      onReceipt?.(undefined);
-      await deletePaintings([receiptId]);
-    });
-  }, [activeJobId, deletePaintings, onReceipt, paintingId, paintings]);
+    void cancelStartedGeneration(activeJobId, receiptId);
+  }, [activeJobId, cancelStartedGeneration, paintingId]);
   return {
     aspectRatio,
     cancel,
@@ -243,8 +290,7 @@ export function usePaintingGeneration({
     generate,
     interruption,
     outputs,
-    paramValues: displayInput?.paramValues,
-    prompt: displayInput?.prompt ?? '',
+    paramValues: displayParamValues ?? undefined,
     status,
   };
 }

@@ -7,14 +7,11 @@ const mockConsumePaintingDraftHandoff = jest.fn();
 const mockUsePainting = jest.fn();
 const mockUseResolvedPaintingFiles = jest.fn();
 let mockParams: { handoff?: string; paintingId?: string } = {};
-let mockComposerProviderProps:
-  | {
-      initialAttachments?: readonly unknown[];
-      initialDraft?: string;
-    }
-  | undefined;
 let mockPaintingComposerProps:
   | {
+      initialAttachments: readonly unknown[];
+      initialDraft: string;
+      isHandoff: boolean;
       onReceipt?: (paintingId: string | undefined) => void;
     }
   | undefined;
@@ -23,17 +20,6 @@ jest.mock('expo-router', () => ({
   Stack: { Screen: () => null },
   useLocalSearchParams: () => mockParams,
   useNavigation: () => ({ setParams: mockSetParams }),
-}));
-
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ bottom: 0 }),
-}));
-
-jest.mock('@/frontend/components/composer', () => ({
-  ManagedComposerProvider: ({ children, ...props }: { children?: React.ReactNode }) => {
-    mockComposerProviderProps = props;
-    return children;
-  },
 }));
 
 jest.mock('@/frontend/hooks/useThemeColor', () => ({
@@ -62,7 +48,6 @@ describe('PaintingScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockParams = {};
-    mockComposerProviderProps = undefined;
     mockPaintingComposerProps = undefined;
     mockUsePainting.mockReturnValue({ data: undefined, isLoading: false });
     mockUseResolvedPaintingFiles.mockReturnValue({ data: undefined, isLoading: false });
@@ -87,7 +72,7 @@ describe('PaintingScreen', () => {
       draft: '',
     });
     mockUsePainting.mockReturnValue({
-      data: { id: 'source-1', prompt: 'source prompt' },
+      data: { files: { input: [], output: ['output-1'] }, id: 'source-1', prompt: 'source prompt' },
       isLoading: false,
     });
 
@@ -96,9 +81,10 @@ describe('PaintingScreen', () => {
     });
 
     expect(mockPaintingComposerProps).toBeDefined();
-    expect(mockComposerProviderProps).toEqual({
+    expect(mockPaintingComposerProps).toMatchObject({
       initialAttachments: [handoffAttachment],
       initialDraft: '',
+      isHandoff: true,
     });
     act(() => {
       mockPaintingComposerProps?.onReceipt?.('receipt-2');
@@ -116,7 +102,7 @@ describe('PaintingScreen', () => {
     expect(mockPaintingComposerProps).toBeDefined();
   });
 
-  it('restores persisted inputs when opening a receipt without a handoff', () => {
+  it('keeps persisted inputs in the user message instead of restoring the composer', () => {
     const persistedInput = {
       fileEntryId: '00000000-0000-7000-8000-000000000002',
       id: 'painting-file:persisted',
@@ -128,7 +114,11 @@ describe('PaintingScreen', () => {
     };
     mockParams = { paintingId: 'receipt-2' };
     mockUsePainting.mockReturnValue({
-      data: { id: 'receipt-2', prompt: 'retry this edit' },
+      data: {
+        files: { input: ['input-1'], output: [] },
+        id: 'receipt-2',
+        prompt: 'retry this edit',
+      },
       isLoading: false,
     });
     mockUseResolvedPaintingFiles.mockReturnValue({
@@ -140,9 +130,36 @@ describe('PaintingScreen', () => {
       renderer = create(<PaintingScreen />);
     });
 
-    expect(mockComposerProviderProps).toEqual({
-      initialAttachments: [persistedInput],
-      initialDraft: 'retry this edit',
+    expect(mockPaintingComposerProps).toMatchObject({
+      initialAttachments: [],
+      initialDraft: '',
+      isHandoff: false,
+    });
+  });
+
+  it('keeps the composer empty when opening a completed painting', () => {
+    mockParams = { paintingId: 'painting-1' };
+    mockUsePainting.mockReturnValue({
+      data: {
+        files: { input: ['input-1'], output: ['output-1'] },
+        id: 'painting-1',
+        prompt: 'finished prompt',
+      },
+      isLoading: false,
+    });
+    mockUseResolvedPaintingFiles.mockReturnValue({
+      data: { inputs: [{ id: 'input-1' }], outputs: [{ id: 'output-1' }] },
+      isLoading: false,
+    });
+
+    act(() => {
+      renderer = create(<PaintingScreen />);
+    });
+
+    expect(mockPaintingComposerProps).toMatchObject({
+      initialAttachments: [],
+      initialDraft: '',
+      isHandoff: false,
     });
   });
 });

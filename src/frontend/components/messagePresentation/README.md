@@ -9,7 +9,9 @@ history, message rows and parts, live-turn anchoring, entry motion, and scroll-t
 - `MessageList` renders a complete message history from `MessagePresentationItem` values.
 - `MessagePresentationItem` contains only the persistence-neutral fields needed for presentation.
 - `MessageListProps` accepts layout measurements plus optional pagination, readiness, entry-motion,
-  and bottom-accessory inputs.
+  bottom-accessory inputs, and a feature-owned assistant renderer. Chat uses the default assistant
+  row; painting supplies its proportional loader and image result without changing message data.
+  Single-turn workspaces can opt into animating their first entering anchor.
 
 Message rows, part renderers, animation providers, and platform controls are private implementation
 details. Callers import only from `@/frontend/components/messagePresentation`.

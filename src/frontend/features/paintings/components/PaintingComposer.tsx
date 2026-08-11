@@ -1,33 +1,59 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import * as Crypto from 'expo-crypto';
+import { useHeaderHeight } from 'expo-router/react-navigation';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { getComposerKeyboardStickyOffset } from '@/frontend/components/composer/utils/composerLayout';
+import {
+  ComposerDock,
+  ManagedComposerProvider,
+  useComposerDockLayout,
+} from '@/frontend/components/composer';
+import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
+import {
+  MessageList,
+  type MessagePresentationItem,
+} from '@/frontend/components/messagePresentation';
+import { isIOS } from '@/frontend/utils/constants';
 
-import { usePaintingGeneration } from '../hooks/usePaintingGeneration';
+import {
+  type PaintingGenerationInput,
+  usePaintingGeneration,
+} from '../hooks/usePaintingGeneration';
 import { paintingJobParamValues, usePaintingJobs } from '../hooks/usePaintingJobs';
 import type { ResolvedPaintingFiles } from '../hooks/usePaintings';
 import { imageParamsResolutionLabel } from '../utils/imageGenerationParams';
-import { PaintingCanvas } from './PaintingCanvas';
+import { createPaintingMessages } from '../utils/paintingMessages';
+import { PaintingAssistantMessage } from './PaintingAssistantMessage';
 import { PaintingInput } from './PaintingInput';
 
+type ActivePaintingTurn = {
+  assistantMessageId: string;
+  input: PaintingGenerationInput;
+  paintingId?: string;
+  userMessageId: string;
+};
+
 export function PaintingComposer({
+  initialAttachments,
+  initialDraft,
   initialFiles,
+  isHandoff,
   onReceipt,
   painting,
 }: {
+  initialAttachments: readonly ComposerInitialAttachment[];
+  initialDraft: string;
   initialFiles: ResolvedPaintingFiles;
+  isHandoff: boolean;
   onReceipt?: (paintingId: string | undefined) => void;
   painting?: Painting;
 }) {
   const { t } = useTranslation();
-  const { bottom } = useSafeAreaInsets();
-  const keyboardInputOffset = getComposerKeyboardStickyOffset(bottom);
-  // Only an image-less receipt is this screen's to adopt or retry. One that
-  // already holds images is a source to work from (edit / resize), so a
-  // generation started here must mint its own painting instead.
+  const headerHeight = useHeaderHeight();
+  const [activeTurn, setActiveTurn] = useState<ActivePaintingTurn | null>(null);
+  const [showPersistedTurn, setShowPersistedTurn] = useState(!isHandoff);
   const receiptId = painting && painting.files.output.length === 0 ? painting.id : undefined;
   const generation = usePaintingGeneration({
     initialAspectRatio: initialFiles.outputAspectRatio,
@@ -35,8 +61,6 @@ export function PaintingComposer({
     onReceipt,
     paintingId: receiptId,
   });
-  // Size, image count and the rest of a retried attempt live only in the job's
-  // input — the painting row never carried them.
   const jobs = usePaintingJobs();
   const initialParamValues = receiptId
     ? paintingJobParamValues(
@@ -46,29 +70,123 @@ export function PaintingComposer({
   const generationResolution =
     imageParamsResolutionLabel(generation.paramValues ?? initialParamValues) ??
     t('painting.settings.option.auto');
+  const output = generation.outputs[0] ?? initialFiles.outputs[0];
+  const failure = generation.error ?? generation.interruption;
+  const assistantStatus =
+    generation.status === 'generating' || (!output && !failure)
+      ? 'pending'
+      : failure
+        ? 'error'
+        : 'success';
 
-  return (
-    <View className="flex-1 bg-background">
-      <PaintingCanvas
+  const messages = useMemo(() => {
+    if (activeTurn) {
+      return createPaintingMessages({
+        assistantMessageId: activeTurn.assistantMessageId,
+        assistantStatus,
+        attachments: activeTurn.input.attachments,
+        prompt: activeTurn.input.prompt,
+        userMessageId: activeTurn.userMessageId,
+      });
+    }
+
+    if (!showPersistedTurn || !painting) {
+      return [];
+    }
+
+    return createPaintingMessages({
+      assistantMessageId: output?.fileEntryId ?? `${painting.id}:assistant`,
+      assistantStatus,
+      attachments: initialFiles.inputs,
+      prompt: painting.prompt,
+      userMessageId: painting.id,
+    });
+  }, [activeTurn, assistantStatus, initialFiles.inputs, output, painting, showPersistedTurn]);
+
+  const handleGenerate = useCallback(
+    async (input: PaintingGenerationInput) => {
+      setShowPersistedTurn(false);
+      setActiveTurn({
+        assistantMessageId: Crypto.randomUUID(),
+        input,
+        userMessageId: Crypto.randomUUID(),
+      });
+
+      const result = await generation.generate(input);
+      if (!result) {
+        setActiveTurn(null);
+        return null;
+      }
+
+      setActiveTurn((current) =>
+        current ? { ...current, paintingId: result.painting.id } : current,
+      );
+      return result;
+    },
+    [generation.generate],
+  );
+  const renderAssistantMessage = useCallback(
+    (_message: MessagePresentationItem) => (
+      <PaintingAssistantMessage
+        animateOutput={
+          output?.fileEntryId !== undefined &&
+          output.fileEntryId !== initialFiles.outputs[0]?.fileEntryId
+        }
         aspectRatio={generation.aspectRatio}
         error={generation.error}
         interruption={generation.interruption}
-        outputs={generation.outputs}
-        prompt={generation.prompt || painting?.prompt || ''}
+        output={output}
+        paintingId={activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined)}
         resolution={generationResolution}
         status={generation.status}
       />
-      <KeyboardStickyView offset={{ opened: keyboardInputOffset }}>
-        <View className="px-3 pb-2" testID="painting-composer">
+    ),
+    [
+      activeTurn?.paintingId,
+      generation.aspectRatio,
+      generation.error,
+      generation.interruption,
+      generation.status,
+      generationResolution,
+      initialFiles.outputs,
+      output,
+      painting?.id,
+      showPersistedTurn,
+    ],
+  );
+  const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
+    useComposerDockLayout();
+  const composerKey = output?.fileEntryId ?? 'painting-composer';
+  const composerInitialAttachments = output ? [] : initialAttachments;
+  const composerInitialDraft = output ? '' : initialDraft;
+
+  return (
+    <View className="flex-1 bg-background">
+      <MessageList
+        animateFirstEnteringMessage
+        bottomAccessoryHeight={inputHeightShared}
+        contentBottomInset={contentBottomInset}
+        contentTopInset={isIOS ? headerHeight : 0}
+        enteringMessageId={activeTurn?.userMessageId}
+        keyboardOffset={keyboardOffset}
+        messages={messages}
+        renderAssistantMessage={renderAssistantMessage}
+      />
+      <ManagedComposerProvider
+        initialAttachments={composerInitialAttachments}
+        initialDraft={composerInitialDraft}
+        key={composerKey}
+      >
+        <ComposerDock onHeightChange={handleInputHeightChange}>
           <PaintingInput
             initialParamValues={initialParamValues}
             onCancel={generation.cancel}
-            onGenerate={generation.generate}
+            onGenerate={handleGenerate}
             painting={painting}
             status={generation.status}
           />
-        </View>
-      </KeyboardStickyView>
+        </ComposerDock>
+      </ManagedComposerProvider>
     </View>
   );
 }

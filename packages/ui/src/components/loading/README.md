@@ -8,13 +8,14 @@ numbered dot-matrix loaders ported from the source design set: `DotMatrixSquare2
 ## ImageGenerationLoader
 
 `ImageGenerationLoader` is the pending state for generated images. It combines a 19x19 dot field,
-a resolution badge, status copy, and the prompt. Callers can provide
-`active`, `height`, `label`, `prompt`, `presentation`, `resolution`, `size`, `width`, and standard
-`View` props. `presentation="thumbnail"` keeps only the animated field for compact image tiles.
+a resolution badge, and shimmering status copy inside the canvas. Callers can provide `active`,
+`height`, `label`, `presentation`, `resolution`, `size`, `width`, and standard `View` props. The
+default `presentation="message"` is the single full treatment, while `presentation="thumbnail"`
+keeps only the animated field for compact image tiles.
 
 - One Skia runtime shader draws the background field and both moving ellipse masks in a single GPU
   pass. Building the same mask from React Native views would require hundreds of mounted nodes.
-- One Reanimated frame callback drives both the shader and the clipped text sweep on the UI thread.
+- Reanimated drives the shader clock and shared `ShimmerText` sweep on the UI thread.
 - The clock pauses and resets while inactive, and Reduce Motion renders a readable static frame.
 - Colors come from Cherry's semantic Uniwind tokens, so scoped and app-selected themes both work.
 - Product call sites should pass translated `label` and `accessibilityLabel` values.

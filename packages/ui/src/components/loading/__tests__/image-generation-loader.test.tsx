@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { ShimmerText } from '../../shimmer-text';
 import { ImageGenerationLoader } from '../image-generation-loader';
 
 let mockReducedMotion = false;
@@ -8,7 +9,18 @@ const mockSetFrameActive = jest.fn();
 
 jest.mock('uniwind', () => ({
   useCSSVariable: () => ['#777777', '#111111'],
+  useResolveClassNames: () => ({ color: '#777777' }),
 }));
+
+jest.mock('@react-native-masked-view/masked-view', () => {
+  const { View: NativeView } = jest.requireActual('react-native');
+  return { __esModule: true, default: NativeView };
+});
+
+jest.mock('expo-linear-gradient', () => {
+  const { View: NativeView } = jest.requireActual('react-native');
+  return { LinearGradient: NativeView };
+});
 
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
@@ -41,6 +53,8 @@ jest.mock('react-native-reanimated', () => {
   return {
     __esModule: true,
     default: { Text: NativeText, View: NativeView },
+    cancelAnimation: jest.fn(),
+    Easing: { bezier: () => 'bezier', linear: 'linear' },
     useAnimatedStyle: (factory: () => object) => factory(),
     useDerivedValue: (factory: () => unknown) => ({ get: factory }),
     useFrameCallback: () => {
@@ -52,6 +66,8 @@ jest.mock('react-native-reanimated', () => {
     },
     useReducedMotion: () => mockReducedMotion,
     useSharedValue: useShared,
+    withRepeat: (animation: unknown) => animation,
+    withTiming: (value: unknown) => value,
   };
 });
 
@@ -78,11 +94,8 @@ describe('ImageGenerationLoader', () => {
 
     expect(root.props.accessibilityRole).toBe('progressbar');
     expect(root.props.accessibilityState).toEqual({ busy: true });
-    expect(root.props.accessibilityLabel).toBe(
-      'Generating image: a calm mountain lake at dawn. 1024 \u00d7 1024',
-    );
+    expect(root.props.accessibilityLabel).toBe('Generating image. 1024 \u00d7 1024');
     expect(text).toContain('Generating image');
-    expect(text).toContain('\u201ca calm mountain lake at dawn\u201d');
     expect(text).toContain('1024 \u00d7 1024');
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(true);
   });
@@ -94,7 +107,6 @@ describe('ImageGenerationLoader', () => {
           accessibilityLabel="Rendering cover image"
           active={false}
           label="Rendering"
-          prompt="mist over a cedar forest"
           resolution={'1536 \u00d7 1024'}
           size={160}
           testID="loader"
@@ -109,19 +121,19 @@ describe('ImageGenerationLoader', () => {
     const resolutionBadge = renderer!.root
       .findAllByType(View)
       .find((node) => node.props.className?.includes('absolute right-2 top-2'));
+    const resolutionText = renderer!.root
+      .findAllByType(Text)
+      .find((node) => flattenText(node.props.children) === '1536 \u00d7 1024');
 
     expect(root.props.accessibilityLabel).toBe('Rendering cover image');
     expect(root.props.accessibilityState).toEqual({ busy: false });
     expect(preview?.props.className).toContain('border border-border');
     expect(preview?.props.className).toContain('bg-card');
     expect(resolutionBadge?.props.className).toContain('border border-border');
+    expect(resolutionText?.props.className).toBe('font-mono text-xs text-foreground');
     expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 160, width: 160 });
     expect(collectText(renderer!)).toEqual(
-      expect.arrayContaining([
-        'Rendering',
-        '\u201cmist over a cedar forest\u201d',
-        '1536 \u00d7 1024',
-      ]),
+      expect.arrayContaining(['Rendering', '1536 \u00d7 1024']),
     );
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(false);
   });
@@ -142,7 +154,6 @@ describe('ImageGenerationLoader', () => {
       renderer = create(
         <ImageGenerationLoader
           presentation="thumbnail"
-          prompt="mist over a cedar forest"
           resolution={'1536 \u00d7 1024'}
           size={96}
           testID="loader"
@@ -158,6 +169,46 @@ describe('ImageGenerationLoader', () => {
     expect(root.props.accessible).toBe(false);
     expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 96, width: 96 });
     expect(collectText(renderer!)).toEqual([]);
+  });
+
+  it('renders the message shimmer at the canvas bottom-left', () => {
+    act(() => {
+      renderer = create(
+        <ImageGenerationLoader
+          label="Rendering"
+          presentation="message"
+          resolution={'1536 \u00d7 1024'}
+          testID="loader"
+        />,
+      );
+    });
+
+    expect(findHostRoot(renderer!).props.accessibilityLabel).toBe('Rendering. 1536 \u00d7 1024');
+    expect(collectText(renderer!)).toEqual(
+      expect.arrayContaining(['Rendering', '1536 \u00d7 1024']),
+    );
+    const shimmer = renderer!.root.findByType(ShimmerText);
+    expect(shimmer.props).toMatchObject({
+      active: true,
+      children: 'Rendering',
+      className: 'font-mono text-xs',
+      numberOfLines: 1,
+    });
+    const label = renderer!.root
+      .findAllByType(Text)
+      .find((node) => flattenText(node.props.children) === 'Rendering');
+    expect(label?.props.className).toBe('font-mono text-xs text-foreground');
+    expect(
+      renderer!.root
+        .findAllByType(View)
+        .find((node) => node.props.className === 'absolute bottom-2 left-2'),
+    ).toBeDefined();
+    expect(
+      renderer!.root.findAll((node) => {
+        const style = StyleSheet.flatten(node.props.style);
+        return style?.width === 208 && style.height === undefined;
+      }),
+    ).toHaveLength(0);
   });
 
   it('renders the dot field at a requested non-square image size', () => {

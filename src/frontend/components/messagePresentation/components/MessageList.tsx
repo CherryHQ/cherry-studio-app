@@ -79,14 +79,6 @@ function resolveTailFollowState(
   return state.anchorMessageId === anchorMessageId ? state : createTailFollowState(anchorMessageId);
 }
 
-function renderMessageRow({ item }: LegendListRenderItemProps<MessagePresentationItem>) {
-  return item.role === 'user' ? (
-    <UserMessageRow message={item} />
-  ) : (
-    <AssistantMessageRow message={item} />
-  );
-}
-
 function messageKeyExtractor(item: MessagePresentationItem) {
   return item.id;
 }
@@ -111,6 +103,7 @@ function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[
 }
 
 export function MessageList({
+  animateFirstEnteringMessage = false,
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
@@ -119,6 +112,7 @@ export function MessageList({
   messages,
   onLoadOlder,
   onReady,
+  renderAssistantMessage,
 }: MessageListProps) {
   const listRef = useRef<LegendListRef | null>(null);
   const isAtBottom = useSharedValue(true);
@@ -139,6 +133,17 @@ export function MessageList({
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
+  const renderMessageRow = useCallback(
+    ({ item }: LegendListRenderItemProps<MessagePresentationItem>) =>
+      item.role === 'user' ? (
+        <UserMessageRow message={item} />
+      ) : renderAssistantMessage ? (
+        renderAssistantMessage(item)
+      ) : (
+        <AssistantMessageRow message={item} />
+      ),
+    [renderAssistantMessage],
+  );
   const handleStartReached = useCallback(() => {
     if (!onLoadOlder) {
       return;
@@ -270,7 +275,8 @@ export function MessageList({
   // （含刚 mount 的助手 pending 占位、hasUnknownTailSize=false）后，才把预留空白算成真实值
   // 并回调 onReady。此刻落点已是终值。
   //
-  // 首轮瞬时定位，后续实时发送在权威尺寸就绪后动画钉顶；历史恢复仍瞬时定位。
+  // 默认首轮瞬时定位，后续实时发送在权威尺寸就绪后动画钉顶；需要单轮工作区也播放
+  // 完整锚定动画时，由调用方显式开启 animateFirstEnteringMessage。历史恢复仍瞬时定位。
   const scrolledAnchorKeyRef = useRef<string | undefined>(undefined);
   const handleAnchorReady = useCallback(
     (info: { anchorKey: string | undefined }) => {
@@ -285,7 +291,7 @@ export function MessageList({
         t: Date.now(),
       });
       const isEnteringMessage = info.anchorKey === enteringMessageId;
-      const shouldAnimate = isEnteringMessage && anchorIndex > 0;
+      const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
         void scrollMessageToEnd({
           animated: shouldAnimate,
@@ -293,7 +299,7 @@ export function MessageList({
         });
       });
     },
-    [anchorIndex, enteringMessageId, scrollMessageToEnd],
+    [animateFirstEnteringMessage, anchorIndex, enteringMessageId, scrollMessageToEnd],
   );
 
   const handleAnchoredEndSpaceSizeChanged = useCallback(
@@ -586,7 +592,7 @@ export function MessageList({
             className="flex-1"
           />
         </ScrollShadow>
-        {bottomAccessoryHeight ? (
+        {bottomAccessoryHeight && messages.length > 0 ? (
           <ScrollToBottomButton
             gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
             inputHeight={bottomAccessoryHeight}

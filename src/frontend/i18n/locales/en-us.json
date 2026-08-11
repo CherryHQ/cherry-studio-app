@@ -608,8 +608,6 @@
   "painting.history.create": "Create drawing",
   "painting.history.item": "Generated drawing",
   "painting.history.title": "Your drawings",
-  "painting.conversation.loadFailed": "Unable to load this drawing conversation",
-  "painting.conversation.title": "View conversation",
   "painting.input.invalidCustomSize": "Width and height must be between {{min}} and {{max}} px",
   "painting.input.tooManyImages": "This model accepts up to {{count}} input images",
   "painting.output": "Generated image",
