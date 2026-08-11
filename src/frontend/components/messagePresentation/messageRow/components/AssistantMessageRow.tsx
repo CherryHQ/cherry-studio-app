@@ -20,7 +20,10 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
   const isPendingEmptyMessage = message.status === 'pending' && !message.data.parts?.length;
   // 行高从第一帧起就要占住（预留空白与钉顶落点都靠它），所以显形只走 opacity。
   const slideInStyle = useAssistantSlideInStyle(message.id);
-  const copyText = copyAssistantMessageText(message.data.parts ?? []);
+  const copyText =
+    actions && message.status !== 'pending'
+      ? copyAssistantMessageText(message.data.parts ?? [])
+      : '';
   const isCopied = actions?.copiedMessageId === message.id;
 
   return (
