@@ -9,6 +9,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
@@ -37,7 +38,8 @@ export function createAppBootstrapRuntime(
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
-  const services = createBackendServices({ cache, dbService, preference });
+  const webSearch = host.container.get<WebSearchService>('WebSearchService');
+  const services = createBackendServices({ cache, dbService, preference, webSearch });
   const {
     backend,
     dataApiDependencies,
@@ -90,7 +92,6 @@ export function createAppBootstrapRuntime(
       disposePromise ??= (async () => {
         await disposeBackend();
         services.mcpRuntime.dispose();
-        services.webSearch.dispose();
         // Tear down this generation's host. Uninstalling is only correct while
         // it is still the installed one — a runtime disposed out of order must
         // not take down whichever host replaced it.

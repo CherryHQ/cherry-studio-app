@@ -4,7 +4,7 @@ import { AiService, type AiServiceDependencies } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
 import { VertexAuthClient } from '@/backend/ai/provider/VertexAuthClient';
 import { ToolResolver } from '@/backend/ai/tools';
-import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { DataServices } from './createDataServices';
 import type { PlatformAdapters } from './createPlatformAdapters';
@@ -15,11 +15,13 @@ type AiServicesDependencies = Pick<
 > &
   Pick<PlatformAdapters, 'devicePermissions' | 'fileContent'> & {
     oauth: AiServiceDependencies['oauth'];
+    /** Lifecycle-owned: the host constructs and tears it down; this only wires it. */
+    webSearch: WebSearchService;
   };
 
 export function createAiServices(dependencies: AiServicesDependencies) {
   const mcpRuntime = new McpRuntimeService({ mcpServer: dependencies.mcpServer });
-  const webSearch = new WebSearchService(dependencies.preference);
+  const { webSearch } = dependencies;
   const vertexAuth = new VertexAuthClient({ fetch: expoFetch as typeof globalThis.fetch });
   const toolResolver = new ToolResolver({
     devicePermissions: dependencies.devicePermissions,

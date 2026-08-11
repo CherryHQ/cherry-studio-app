@@ -9,6 +9,7 @@ import { ProviderOAuthService } from '@/backend/services/oauth/authorization/Pro
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { ProviderAuthConfigOAuthTokenStore } from '@/backend/services/oauth/runtime/OAuthTokenStore';
 import { createOAuthProviderDefinitions } from '@/backend/services/oauth/runtime/providerDefinitions';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import { createAiServices } from './createAiServices';
 import { createDataServices } from './createDataServices';
@@ -17,17 +18,24 @@ import { createPlatformAdapters } from './createPlatformAdapters';
 export type BackendServices = ReturnType<typeof createBackendServices>;
 
 /**
- * Infrastructure the host owns. Named rather than positional because all three
- * are opaque service objects, and a positional list of those is a swap waiting
- * to happen.
+ * Services the host owns. Named rather than positional because they are all
+ * opaque service instances, and a positional list of those is a swap waiting to
+ * happen. This shrinks as stage B moves modules into the registry: every entry
+ * here is one the composition still has to be handed rather than resolve.
  */
 export type BackendInfrastructure = {
   cache: CacheService;
   dbService: DbService;
   preference: PreferenceService;
+  webSearch: WebSearchService;
 };
 
-export function createBackendServices({ cache, dbService, preference }: BackendInfrastructure) {
+export function createBackendServices({
+  cache,
+  dbService,
+  preference,
+  webSearch,
+}: BackendInfrastructure) {
   const dataServices = createDataServices({ cache, dbService, preference });
   const platformAdapters = createPlatformAdapters({
     fileEntry: dataServices.fileEntry,
@@ -78,6 +86,7 @@ export function createBackendServices({ cache, dbService, preference }: BackendI
     },
     preference: dataServices.preference,
     provider: dataServices.provider,
+    webSearch,
   });
 
   return {

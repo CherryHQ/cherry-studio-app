@@ -1,6 +1,7 @@
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import { createBackendServices } from '../createBackendServices';
 
@@ -76,8 +77,9 @@ describe('createBackendServices', () => {
     const cache = { kind: 'cache' } as unknown as CacheService;
     const dbService = { kind: 'database' } as unknown as DbService;
     const preference = { kind: 'preference' } as unknown as PreferenceService;
+    const webSearch = { kind: 'web-search' } as unknown as WebSearchService;
 
-    const services = createBackendServices({ cache, dbService, preference });
+    const services = createBackendServices({ cache, dbService, preference, webSearch });
 
     expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, dbService, preference });
     expect(mockCreatePlatformAdapters).toHaveBeenCalledWith({

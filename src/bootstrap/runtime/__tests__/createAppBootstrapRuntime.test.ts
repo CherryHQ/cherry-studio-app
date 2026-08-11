@@ -9,7 +9,7 @@ const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockMcpRuntime = { dispose: jest.fn() };
 const mockPreference = { kind: 'preference' };
-const mockWebSearch = { dispose: jest.fn() };
+const mockWebSearch = { kind: 'web-search' };
 const mockServices = {
   cache: mockCache,
   mcpRuntime: mockMcpRuntime,
@@ -46,19 +46,20 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
 }));
 
 /**
- * `CacheService` and `DbService` are supplied as host overrides rather than
- * module mocks. Overrides are handed out ready-made and receive no lifecycle
- * callbacks, so this file no longer asserts *when* they initialize — the
+ * Registered services are supplied as host overrides rather than module mocks.
+ * Overrides are handed out ready-made and receive no lifecycle callbacks, so
+ * this file no longer asserts *when* anything initializes or tears down — the
  * dependency graph owns that now, and `serviceRegistry.test.ts` asserts the
  * graph. What is left here is the wiring this function is actually responsible
  * for: which instances reach the composition, and the disposal ordering it
- * still hand-writes.
+ * still hand-writes for the modules stage B has not migrated yet.
  */
 const createRuntime = () =>
   createAppBootstrapRuntime({
     CacheService: mockCache,
     DbService: mockDb,
     PreferenceService: mockPreference,
+    WebSearchService: mockWebSearch,
   });
 
 beforeEach(() => {
@@ -79,6 +80,7 @@ describe('createAppBootstrapRuntime', () => {
       cache: mockCache,
       dbService: mockDb,
       preference: mockPreference,
+      webSearch: mockWebSearch,
     });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
@@ -108,14 +110,12 @@ describe('createAppBootstrapRuntime', () => {
     expect(secondDispose).toBe(firstDispose);
     expect(mockDisposeBackend).toHaveBeenCalledTimes(1);
     expect(mockMcpRuntime.dispose).not.toHaveBeenCalled();
-    expect(mockWebSearch.dispose).not.toHaveBeenCalled();
     expect(application.hasHost).toBe(true);
 
     backendDisposed.resolve();
     await firstDispose;
 
     expect(mockMcpRuntime.dispose).toHaveBeenCalledTimes(1);
-    expect(mockWebSearch.dispose).toHaveBeenCalledTimes(1);
     expect(mockDisposeBackend.mock.invocationCallOrder[0]).toBeLessThan(
       mockMcpRuntime.dispose.mock.invocationCallOrder[0],
     );

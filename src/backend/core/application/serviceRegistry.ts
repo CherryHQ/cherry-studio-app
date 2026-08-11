@@ -1,6 +1,7 @@
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
+import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
 
@@ -23,6 +24,7 @@ export const services = {
   CacheService,
   DbService,
   PreferenceService,
+  WebSearchService,
 } as const;
 
 /** Service name to instance type, derived from `services`. */
