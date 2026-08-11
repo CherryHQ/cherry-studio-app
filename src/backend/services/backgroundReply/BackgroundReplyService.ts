@@ -1,14 +1,9 @@
 import { Asset } from 'expo-asset';
-import {
-  type AudioPlayer,
-  type AudioStatus,
-  createAudioPlayer,
-  setAudioModeAsync,
-} from 'expo-audio';
 import { File } from 'expo-file-system';
 import { type LiveActivity, widgetsDirectory } from 'expo-widgets';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
+import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import AssistantActivity from './AssistantActivity';
@@ -28,9 +23,8 @@ import {
   getTerminalBackgroundReplyContent,
 } from './deriveBackgroundReplyContent';
 
-const KEEP_ALIVE_VOLUME = 0.001;
-const AUDIO_STATUS_UPDATE_INTERVAL_MS = 1000;
 const LIVE_ACTIVITY_UPDATE_INTERVAL_MS = 1000;
+const KEEP_ALIVE_TAG = 'chat.backgroundReply';
 const PREFERENCE_KEY = 'chat.background_reply.enabled';
 const logger = loggerService.withContext('BackgroundReply');
 
@@ -46,6 +40,9 @@ type TurnRecord = {
 };
 
 type BackgroundReplyServiceDependencies = {
+  keepAlive: {
+    acquire: (tag: string) => KeepAliveLease;
+  };
   preference: {
     readCached: (key: typeof PREFERENCE_KEY) => boolean;
     subscribeChange: (key: typeof PREFERENCE_KEY) => (listener: () => void) => () => void;
@@ -59,10 +56,9 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
   private disposed = false;
   private enabled: boolean;
   private generation = 0;
+  private keepAliveLease?: KeepAliveLease;
   private logoUri?: string;
   private operationTail: Promise<void> = Promise.resolve();
-  private player?: AudioPlayer;
-  private playerStatusSubscription?: { remove: () => void };
   private preferenceUnsubscribe?: () => void;
   private turns = new Map<string, TurnRecord>();
 
@@ -101,8 +97,8 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     };
     this.turns.set(input.topicId, record);
 
+    this.reconcileKeepAlive();
     const ready = this.enqueue(async () => {
-      await this.reconcileAudio();
       await this.reconcileActivity(record, true);
     }).catch((error) => {
       logger.error('Background reply turn failed to initialize', error as Error, {
@@ -124,8 +120,8 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
             ...(latest.preview ? { preview: latest.preview } : {}),
           };
           this.clearUpdateTimer(current);
+          this.reconcileKeepAlive();
           void this.enqueue(async () => {
-            await this.reconcileAudio();
             await this.reconcileActivity(current, true);
           });
         }),
@@ -146,8 +142,8 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
 
     this.turns.delete(topicId);
     this.clearUpdateTimer(record);
+    this.reconcileKeepAlive();
     void this.enqueue(async () => {
-      await this.reconcileAudio();
       await this.endActivity(record, 'immediate');
     });
   };
@@ -161,10 +157,10 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     const records = [...this.turns.values()];
     this.turns.clear();
     for (const record of records) this.clearUpdateTimer(record);
+    this.reconcileKeepAlive();
 
     void this.enqueue(async () => {
       await Promise.all(records.map((record) => this.endActivity(record, 'immediate')));
-      await this.stopAudio();
     });
   }
 
@@ -178,7 +174,6 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
         return;
       }
 
-      await this.reconcileAudio();
       await Promise.all(
         [...this.turns.values()].map((record) => this.reconcileActivity(record, true)),
       );
@@ -187,13 +182,13 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
 
   private handlePreferenceChange(): void {
     this.enabled = this.dependencies.preference.readCached(PREFERENCE_KEY);
+    this.reconcileKeepAlive();
     void this.enqueue(async () => {
       if (!this.enabled) {
         await Promise.all(
           [...this.turns.values()].map((record) => this.endActivity(record, 'immediate')),
         );
       }
-      await this.reconcileAudio();
       if (this.enabled && this.appState !== 'active') {
         await Promise.all(
           [...this.turns.values()].map((record) => this.reconcileActivity(record, true)),
@@ -245,8 +240,8 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
       this.dependencies.translate,
     );
     this.clearUpdateTimer(record);
+    this.reconcileKeepAlive();
     void this.enqueue(async () => {
-      await this.reconcileAudio();
       if (!this.isRecordCurrent(record)) return;
       if (record.activity) {
         await this.endActivity(record, 'default', Date.now());
@@ -255,99 +250,18 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     });
   }
 
-  private async reconcileAudio(): Promise<void> {
-    if (!this.shouldKeepAudioAlive()) {
-      await this.stopAudio();
-      return;
-    }
-    if (this.player) return;
-
-    let player: AudioPlayer | undefined;
-    try {
-      await setAudioModeAsync({
-        allowsRecording: false,
-        interruptionMode: 'mixWithOthers',
-        playsInSilentMode: true,
-        shouldPlayInBackground: true,
-      });
-      const activePlayer = createAudioPlayer(require('../../../../assets/audio/silence.m4a'), {
-        updateInterval: AUDIO_STATUS_UPDATE_INTERVAL_MS,
-      });
-      player = activePlayer;
-      activePlayer.loop = true;
-      activePlayer.volume = KEEP_ALIVE_VOLUME;
-      activePlayer.play();
-      this.player = activePlayer;
-      this.playerStatusSubscription = activePlayer.addListener(
-        'playbackStatusUpdate',
-        (status: AudioStatus) => this.handlePlayerStatusUpdate(activePlayer, status),
-      );
-      logger.info('Background audio started', { activeTurnCount: this.turns.size });
-    } catch (error) {
-      if (player) this.releasePlayer(player);
-      logger.error('Background audio failed to start', error as Error, {
-        activeTurnCount: this.turns.size,
-      });
-    }
-  }
-
-  private async stopAudio(): Promise<void> {
-    const player = this.player;
-    if (!player) return;
-    this.player = undefined;
-    const subscription = this.playerStatusSubscription;
-    this.playerStatusSubscription = undefined;
-
-    try {
-      subscription?.remove();
-    } catch (error) {
-      logger.error('Background audio status listener cleanup failed', error as Error);
-    }
-    try {
-      player.pause();
-    } catch (error) {
-      logger.error('Background audio pause failed', error as Error);
-    }
-    try {
-      player.remove();
-      logger.info('Background audio stopped');
-    } catch (error) {
-      logger.error('Background audio removal failed', error as Error);
-    }
-  }
-
-  private handlePlayerStatusUpdate(player: AudioPlayer, status: AudioStatus): void {
-    if (
-      this.player !== player ||
-      status.playing ||
-      status.isBuffering ||
-      !status.isLoaded ||
-      !this.shouldKeepAudioAlive()
-    ) {
-      return;
-    }
-
-    try {
-      player.play();
-      logger.info('Background audio resumed after interruption');
-    } catch (error) {
-      logger.error('Background audio failed to resume after interruption', error as Error);
-    }
-  }
-
-  private releasePlayer(player: AudioPlayer): void {
-    if (this.player === player) this.player = undefined;
-    const subscription = this.playerStatusSubscription;
-    this.playerStatusSubscription = undefined;
-    try {
-      subscription?.remove();
-    } catch (error) {
-      logger.error('Background audio status listener cleanup failed', error as Error);
-    }
-    try {
-      player.remove();
-    } catch (error) {
-      logger.error('Background audio removal failed after start error', error as Error);
+  /**
+   * Holds exactly one keep-alive lease while any turn is in a generating
+   * phase (and the feature is enabled); the coordinator aggregates holders
+   * across consumers. Synchronous so lease state can never lag turn state.
+   */
+  private reconcileKeepAlive(): void {
+    const shouldHold = !this.disposed && this.shouldStayAlive();
+    if (shouldHold && !this.keepAliveLease) {
+      this.keepAliveLease = this.dependencies.keepAlive.acquire(KEEP_ALIVE_TAG);
+    } else if (!shouldHold && this.keepAliveLease) {
+      this.keepAliveLease.release();
+      this.keepAliveLease = undefined;
     }
   }
 
@@ -461,7 +375,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     }
   }
 
-  private shouldKeepAudioAlive(): boolean {
+  private shouldStayAlive(): boolean {
     return (
       this.enabled &&
       [...this.turns.values()].some((record) => isGeneratingPhase(record.content.phase))

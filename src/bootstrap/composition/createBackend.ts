@@ -21,6 +21,7 @@ import {
   jobHandlerEntry,
   type JobRuntime,
 } from '@/backend/services/jobs/JobRuntime';
+import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -66,7 +67,11 @@ export function createBackend(
       hasToken: (providerId) => services.oauthSession.hasToken(providerId),
     },
   });
+  const keepAlive = new KeepAliveCoordinator();
   const backgroundReply = new BackgroundReplyService({
+    keepAlive: {
+      acquire: (tag) => keepAlive.acquire(tag),
+    },
     preference: {
       readCached: (key) => services.preference.readCached(key),
       subscribeChange: (key) => services.preference.subscribeChange(key),
@@ -233,6 +238,8 @@ export function createBackend(
       services.oauth.dispose();
       services.oauthSession.dispose();
       await chat.dispose();
+      // Last: chat and jobs release their leases during their own disposal.
+      keepAlive.dispose();
     },
   };
 }

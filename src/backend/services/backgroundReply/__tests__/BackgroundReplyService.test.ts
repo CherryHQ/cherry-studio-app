@@ -1,27 +1,11 @@
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
-const mockPlayer = {
-  addListener: jest.fn(
-    (
-      _event: string,
-      listener: (status: { isBuffering: boolean; isLoaded: boolean; playing: boolean }) => void,
-    ) => {
-      mockPlaybackStatusListener = listener;
-      return { remove: mockPlayerStatusRemove };
-    },
-  ),
-  loop: false,
-  pause: jest.fn(),
-  play: jest.fn(),
-  remove: jest.fn(),
-  volume: 1,
-};
-const mockPlayerStatusRemove = jest.fn();
-let mockPlaybackStatusListener:
-  | ((status: { isBuffering: boolean; isLoaded: boolean; playing: boolean }) => void)
-  | undefined;
-const mockCreateAudioPlayer = jest.fn(() => mockPlayer);
-const mockSetAudioModeAsync = jest.fn(async () => {});
+const mockLeases: { release: jest.Mock }[] = [];
+const mockAcquire = jest.fn((_tag: string) => {
+  const lease = { release: jest.fn() };
+  mockLeases.push(lease);
+  return lease;
+});
 const mockOrphanEnd = jest.fn(async () => {});
 const mockActivityInstances: { end: jest.Mock; update: jest.Mock }[] = [];
 const mockActivityFactory = {
@@ -33,10 +17,6 @@ const mockActivityFactory = {
   }),
 };
 
-jest.mock('expo-audio', () => ({
-  createAudioPlayer: mockCreateAudioPlayer,
-  setAudioModeAsync: mockSetAudioModeAsync,
-}));
 jest.mock('expo-file-system', () => ({
   File: class MockFile {
     exists = true;
@@ -61,10 +41,8 @@ describe('BackgroundReplyService', () => {
     enabled = true;
     appStateListener = undefined;
     preferenceListener = undefined;
-    mockPlaybackStatusListener = undefined;
     mockActivityInstances.length = 0;
-    mockPlayer.loop = false;
-    mockPlayer.volume = 1;
+    mockLeases.length = 0;
     jest.clearAllMocks();
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'active' });
@@ -81,7 +59,7 @@ describe('BackgroundReplyService', () => {
     jest.restoreAllMocks();
   });
 
-  test('shares audio across turns and creates one activity per topic in the background', async () => {
+  test('holds one keep-alive lease across turns and creates one activity per topic', async () => {
     const service = createService();
     expect(Platform.OS).toBe('ios');
     expect(AppState.addEventListener).toHaveBeenCalledTimes(1);
@@ -90,11 +68,10 @@ describe('BackgroundReplyService', () => {
     expect(first).not.toBe(second);
     await Promise.all([first.ready, second.ready]);
 
-    expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(1);
     expect(mockActivityFactory.getInstances).toHaveBeenCalledTimes(1);
     expect(mockOrphanEnd).toHaveBeenCalledWith('immediate');
-    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
-    expect(mockPlayer.play).toHaveBeenCalledTimes(1);
+    expect(mockAcquire).toHaveBeenCalledTimes(1);
+    expect(mockAcquire).toHaveBeenCalledWith('chat.backgroundReply');
 
     appStateListener?.('background');
     await flushOperations();
@@ -107,12 +84,11 @@ describe('BackgroundReplyService', () => {
 
     first.finish('completed');
     await flushOperations();
-    expect(mockPlayer.pause).not.toHaveBeenCalled();
+    expect(mockLeases[0]?.release).not.toHaveBeenCalled();
 
     second.finish('completed');
     await flushOperations();
-    expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
-    expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
+    expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
     expect(
       mockActivityInstances.every((instance) => instance.end.mock.calls[0]?.[0] === 'default'),
     ).toBe(true);
@@ -156,7 +132,7 @@ describe('BackgroundReplyService', () => {
     preferenceListener?.();
     await flushOperations();
 
-    expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
+    expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
     expect(mockActivityInstances[1]?.end).toHaveBeenCalledWith(
       'immediate',
       expect.any(Object),
@@ -166,7 +142,7 @@ describe('BackgroundReplyService', () => {
     service.dispose();
   });
 
-  test('stops audio while approval is pending and resumes it for the continuation', async () => {
+  test('releases the lease while approval is pending and reacquires for the continuation', async () => {
     const service = createService();
     const first = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await first.ready;
@@ -177,14 +153,15 @@ describe('BackgroundReplyService', () => {
       role: 'assistant',
     });
     await flushOperations();
-    expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
+    expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
 
     const resumed = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await resumed.ready;
-    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
+    expect(mockAcquire).toHaveBeenCalledTimes(2);
 
     resumed.finish('cancelled');
     await flushOperations();
+    expect(mockLeases[1]?.release).toHaveBeenCalledTimes(1);
     service.dispose();
   });
 
@@ -217,7 +194,6 @@ describe('BackgroundReplyService', () => {
   });
 
   test('isolates native failures from the reply lifecycle and disposes idempotently', async () => {
-    mockSetAudioModeAsync.mockRejectedValueOnce(new Error('audio unavailable'));
     mockActivityFactory.start.mockImplementationOnce(() => {
       throw new Error('activities unavailable');
     });
@@ -236,7 +212,7 @@ describe('BackgroundReplyService', () => {
     await flushOperations();
   });
 
-  test('ends the activity and stops audio when disposed during an active turn', async () => {
+  test('ends the activity and releases the lease when disposed during an active turn', async () => {
     const service = createService();
     const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await turn.ready;
@@ -248,59 +224,7 @@ describe('BackgroundReplyService', () => {
     await flushOperations();
 
     expect(activity?.end).toHaveBeenCalledWith('immediate', expect.any(Object), expect.any(Date));
-    expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
-    expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
-    expect(mockPlayerStatusRemove).toHaveBeenCalledTimes(1);
-  });
-
-  test('retries audio when the app enters the background after startup failed', async () => {
-    mockSetAudioModeAsync.mockRejectedValueOnce(new Error('audio session busy'));
-    const service = createService();
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
-
-    await expect(turn.ready).resolves.toBeUndefined();
-    expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
-
-    appStateListener?.('background');
-    await flushOperations();
-
-    expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(2);
-    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
-    expect(mockPlayer.play).toHaveBeenCalledTimes(1);
-
-    turn.finish('completed');
-    await flushOperations();
-    service.dispose();
-  });
-
-  test('removes the audio player even when pause throws', async () => {
-    const service = createService();
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
-    await turn.ready;
-    mockPlayer.pause.mockImplementationOnce(() => {
-      throw new Error('pause failed');
-    });
-
-    expect(() => turn.finish('completed')).not.toThrow();
-    await flushOperations();
-
-    expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
-    expect(mockPlayerStatusRemove).toHaveBeenCalledTimes(1);
-    service.dispose();
-  });
-
-  test('resumes keep-alive playback after an interruption', async () => {
-    const service = createService();
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
-    await turn.ready;
-
-    mockPlaybackStatusListener?.({ isBuffering: false, isLoaded: true, playing: false });
-
-    expect(mockPlayer.play).toHaveBeenCalledTimes(2);
-
-    turn.finish('completed');
-    await flushOperations();
-    service.dispose();
+    expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
   });
 
   test('does not let an older finish end the activity inherited by a newer turn', async () => {
@@ -355,7 +279,7 @@ describe('BackgroundReplyService', () => {
     const androidTurn = androidService.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await androidTurn.ready;
     expect(AppState.addEventListener).not.toHaveBeenCalled();
-    expect(mockSetAudioModeAsync).not.toHaveBeenCalled();
+    expect(mockAcquire).not.toHaveBeenCalled();
     androidService.dispose();
 
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
@@ -368,7 +292,7 @@ describe('BackgroundReplyService', () => {
     await disabledTurn.ready;
     appStateListener?.('background');
     await flushOperations();
-    expect(mockSetAudioModeAsync).not.toHaveBeenCalled();
+    expect(mockAcquire).not.toHaveBeenCalled();
     expect(mockActivityFactory.start).not.toHaveBeenCalled();
     disabledService.dispose();
   });
@@ -405,6 +329,7 @@ describe('BackgroundReplyService', () => {
       key === 'chat.backgroundReply.assistant' ? 'Localized assistant' : key,
   ) {
     return new BackgroundReplyService({
+      keepAlive: { acquire: mockAcquire },
       preference: {
         readCached: jest.fn(() => enabled),
         subscribeChange: jest.fn(() => (listener: () => void) => {
