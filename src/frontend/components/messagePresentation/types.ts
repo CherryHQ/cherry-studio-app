@@ -8,7 +8,15 @@ export type MessagePresentationItem = Readonly<
   }
 >;
 
+export type AssistantMessageActions = {
+  copiedMessageId?: string;
+  isRegenerateDisabled: boolean;
+  onCopy: (input: { messageId: string; text: string }) => void;
+  onRegenerate: (messageId: string) => void;
+};
+
 export type MessageListProps = {
+  assistantActions?: AssistantMessageActions;
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
