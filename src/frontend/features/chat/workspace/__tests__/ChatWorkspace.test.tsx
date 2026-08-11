@@ -13,15 +13,25 @@ const mockInputHeightShared = {
 } as unknown as SharedValue<number>;
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
+const mockRegenerate = jest.fn(async () => undefined);
+const mockSetStringAsync = jest.fn(async () => undefined);
+const mockAlertShow = jest.fn();
+const mockLoggerError = jest.fn();
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
 let mockChatTopic: {
   hasHistoryBeforePendingTurn?: boolean;
+  isBusy: boolean;
   overlayMessage?: Message;
   pendingUserMessage?: Message;
+  regenerate: typeof mockRegenerate;
   status: string;
 };
+
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: (text: string) => mockSetStringAsync(text),
+}));
 
 jest.mock('expo-router/react-navigation', () => ({
   useHeaderHeight: () => 52,
@@ -32,7 +42,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
-  useAlert: () => ({ alert: { show: jest.fn() } }),
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('@/frontend/components/messagePresentation', () => ({
@@ -48,7 +58,10 @@ jest.mock('@/frontend/utils/constants', () => ({
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
   loggerService: {
-    withContext: () => ({ debug: jest.fn(), error: jest.fn() }),
+    withContext: () => ({
+      debug: jest.fn(),
+      error: (...args: unknown[]) => mockLoggerError(...args),
+    }),
   },
 }));
 
@@ -121,14 +134,32 @@ describe('ChatWorkspace message presentation integration', () => {
   let renderer: ReactTestRenderer | undefined;
   let requestAnimationFrameSpy: jest.SpyInstance;
   let readyFrame: FrameRequestCallback | undefined;
+  let copiedFeedbackCallback: (() => void) | undefined;
+  let clearTimeoutSpy: jest.SpyInstance;
+  let setTimeoutSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockChatTopic = { hasHistoryBeforePendingTurn: true, status: 'idle' };
+    mockRegenerate.mockReset().mockResolvedValue(undefined);
+    mockSetStringAsync.mockReset().mockResolvedValue(undefined);
+    mockChatTopic = {
+      hasHistoryBeforePendingTurn: true,
+      isBusy: false,
+      regenerate: mockRegenerate,
+      status: 'idle',
+    };
     mockCoverVisible = undefined;
     mockIsLoadingOlder = undefined;
     mockMessageListProps = undefined;
+    copiedFeedbackCallback = undefined;
     readyFrame = undefined;
+    setTimeoutSpy = jest.spyOn(global, 'setTimeout').mockImplementation((callback, delay) => {
+      if (delay === 1_200 && typeof callback === 'function') {
+        copiedFeedbackCallback = callback;
+      }
+      return 101 as unknown as ReturnType<typeof setTimeout>;
+    });
+    clearTimeoutSpy = jest.spyOn(global, 'clearTimeout').mockImplementation(() => undefined);
     requestAnimationFrameSpy = jest
       .spyOn(global, 'requestAnimationFrame')
       .mockImplementation((callback) => {
@@ -139,7 +170,9 @@ describe('ChatWorkspace message presentation integration', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount());
+    clearTimeoutSpy.mockRestore();
     requestAnimationFrameSpy.mockRestore();
+    setTimeoutSpy.mockRestore();
   });
 
   test('passes displayable messages, history loading, and dock layout on a normal page', () => {
@@ -162,6 +195,13 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.contentBottomInset).toBe(96);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
+    expect(mockMessageListProps?.assistantActions).toEqual(
+      expect.objectContaining({
+        isRegenerateDisabled: false,
+        onCopy: expect.any(Function),
+        onRegenerate: expect.any(Function),
+      }),
+    );
     expect(mockIsLoadingOlder).toBe(true);
   });
 
@@ -171,6 +211,75 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.bottomAccessoryHeight).toBeUndefined();
     expect(mockMessageListProps?.contentBottomInset).toBe(12);
     expect(mockMessageListProps?.keyboardOffset).toBe(0);
+    expect(mockMessageListProps?.assistantActions).toBeUndefined();
+  });
+
+  test('copies visible text, reports feedback, and clears it after the timeout', async () => {
+    renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
+
+    await act(async () => {
+      mockMessageListProps?.assistantActions?.onCopy({
+        messageId: 'assistant-1',
+        text: 'Visible answer',
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockSetStringAsync).toHaveBeenCalledWith('Visible answer');
+    expect(mockMessageListProps?.assistantActions?.copiedMessageId).toBe('assistant-1');
+
+    act(() => copiedFeedbackCallback?.());
+    expect(mockMessageListProps?.assistantActions?.copiedMessageId).toBeUndefined();
+  });
+
+  test('regenerates the selected assistant message', async () => {
+    renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
+
+    await act(async () => {
+      mockMessageListProps?.assistantActions?.onRegenerate('assistant-1');
+      await Promise.resolve();
+    });
+
+    expect(mockRegenerate).toHaveBeenCalledWith({ messageId: 'assistant-1' });
+  });
+
+  test('reports copy and regenerate failures through the shared alert', async () => {
+    mockSetStringAsync.mockRejectedValueOnce(new Error('copy failed'));
+    mockRegenerate.mockRejectedValueOnce(new Error('regenerate failed'));
+    renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
+
+    await act(async () => {
+      mockMessageListProps?.assistantActions?.onCopy({
+        messageId: 'assistant-1',
+        text: 'Visible answer',
+      });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      mockMessageListProps?.assistantActions?.onRegenerate('assistant-1');
+      await Promise.resolve();
+    });
+
+    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'chat.messageActions.copyFailed' });
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'chat.messageActions.regenerateFailed',
+    });
+    expect(mockLoggerError).toHaveBeenCalledTimes(2);
+  });
+
+  test('clears pending copied feedback when the workspace unmounts', async () => {
+    renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
+    await act(async () => {
+      mockMessageListProps?.assistantActions?.onCopy({
+        messageId: 'assistant-1',
+        text: 'Visible answer',
+      });
+      await Promise.resolve();
+    });
+
+    act(() => renderer?.unmount());
+
+    expect(clearTimeoutSpy).toHaveBeenCalledWith(101);
   });
 
   test('passes the initial-ready callback through to the history render gate', () => {
