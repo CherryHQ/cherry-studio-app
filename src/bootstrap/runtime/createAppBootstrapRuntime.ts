@@ -9,6 +9,7 @@ import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
+import AssistantActivity from '@/frontend/features/chat/background/AssistantActivity';
 import i18n from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 
@@ -31,6 +32,7 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
     dispose: disposeBackend,
     jobRuntime,
   } = createBackend(services, {
+    activities: { assistantActivity: AssistantActivity },
     dbService,
     translate: (key) => i18n.t(key),
   });

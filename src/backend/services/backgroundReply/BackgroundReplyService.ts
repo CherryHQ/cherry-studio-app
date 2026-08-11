@@ -1,18 +1,19 @@
-import { Asset } from 'expo-asset';
-import { File } from 'expo-file-system';
-import { type LiveActivity, widgetsDirectory } from 'expo-widgets';
-import { AppState, type AppStateStatus, Platform } from 'react-native';
+import { Platform } from 'react-native';
 
-import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { loggerService } from '@/shared/core/logger/LoggerService';
-
-import AssistantActivity from './AssistantActivity';
+import type {
+  BackgroundActivitySession,
+  BackgroundActivitySessionInput,
+} from '@/backend/services/backgroundActivities/BackgroundActivityManager';
 import type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,
+  BackgroundReplyPhase,
+} from '@/shared/backgroundActivities/chatReply';
+import { loggerService } from '@/shared/core/logger/LoggerService';
+
+import type {
   BackgroundReplyLifecycle,
   BackgroundReplyOutcome,
-  BackgroundReplyPhase,
   BackgroundReplyTurn,
   BackgroundReplyTurnInput,
 } from './backgroundReplyTypes';
@@ -23,25 +24,26 @@ import {
   getTerminalBackgroundReplyContent,
 } from './deriveBackgroundReplyContent';
 
-const LIVE_ACTIVITY_UPDATE_INTERVAL_MS = 1000;
-const KEEP_ALIVE_TAG = 'chat.backgroundReply';
 const PREFERENCE_KEY = 'chat.background_reply.enabled';
+const SESSION_TAG = 'chat.backgroundReply';
 const logger = loggerService.withContext('BackgroundReply');
 
+type ChatActivitySession = BackgroundActivitySession<BackgroundReplyActivityProps>;
+
 type TurnRecord = {
-  activity?: LiveActivity<BackgroundReplyActivityProps>;
   assistantName: string;
   content: BackgroundReplyContent;
   generation: number;
-  lastActivityUpdateAt: number;
+  session?: ChatActivitySession;
   startedAtEpochMs: number;
   topicId: string;
-  updateTimer?: ReturnType<typeof setTimeout>;
 };
 
 type BackgroundReplyServiceDependencies = {
-  keepAlive: {
-    acquire: (tag: string) => KeepAliveLease;
+  activities: {
+    startSession: (
+      input: Omit<BackgroundActivitySessionInput<BackgroundReplyActivityProps>, 'presenter'>,
+    ) => ChatActivitySession;
   };
   preference: {
     readCached: (key: typeof PREFERENCE_KEY) => boolean;
@@ -50,14 +52,17 @@ type BackgroundReplyServiceDependencies = {
   translate: BackgroundReplyTranslate;
 };
 
+/**
+ * Chat's domain adapter over the background-activity mechanism: it owns the
+ * per-topic turn state machine, derives presentable content from chat
+ * messages, and maps generating phases onto the session's keepAlive bit.
+ * Throttling, AppState handling, orphan sweeps, and keep-alive audio all live
+ * behind the injected session manager.
+ */
 export class BackgroundReplyService implements BackgroundReplyLifecycle {
-  private appState: AppStateStatus = AppState.currentState;
-  private appStateSubscription?: ReturnType<typeof AppState.addEventListener>;
   private disposed = false;
   private enabled: boolean;
   private generation = 0;
-  private keepAliveLease?: KeepAliveLease;
-  private logoUri?: string;
   private operationTail: Promise<void> = Promise.resolve();
   private preferenceUnsubscribe?: () => void;
   private turns = new Map<string, TurnRecord>();
@@ -67,13 +72,8 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
 
     if (Platform.OS !== 'ios') return;
 
-    this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
     this.preferenceUnsubscribe = dependencies.preference.subscribeChange(PREFERENCE_KEY)(() => {
       this.handlePreferenceChange();
-    });
-    void this.enqueue(async () => {
-      await this.clearOrphanedActivities();
-      await this.prepareLogo();
     });
   }
 
@@ -81,8 +81,6 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     if (Platform.OS !== 'ios' || this.disposed) return noOpTurn;
 
     const existing = this.turns.get(input.topicId);
-    if (existing?.updateTimer) clearTimeout(existing.updateTimer);
-
     const generation = ++this.generation;
     const content = deriveBackgroundReplyContent(undefined, this.dependencies.translate);
     const record: TurnRecord = {
@@ -90,24 +88,15 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
         input.assistantName.trim() || this.dependencies.translate('chat.backgroundReply.assistant'),
       content,
       generation,
-      lastActivityUpdateAt: existing?.lastActivityUpdateAt ?? 0,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       topicId: input.topicId,
-      ...(existing?.activity ? { activity: existing.activity } : {}),
+      ...(existing?.session ? { session: existing.session } : {}),
     };
     this.turns.set(input.topicId, record);
-
-    this.reconcileKeepAlive();
-    const ready = this.enqueue(async () => {
-      await this.reconcileActivity(record, true);
-    }).catch((error) => {
-      logger.error('Background reply turn failed to initialize', error as Error, {
-        topicId: input.topicId,
-      });
-    });
+    this.ensureSession(record);
 
     return {
-      ready,
+      ready: record.session?.ready ?? Promise.resolve(),
       awaitApproval: (message) =>
         this.runTurnCallback(input.topicId, 'mark approval pending', () => {
           if (!this.isCurrent(input.topicId, generation)) return;
@@ -119,10 +108,9 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
             phase: 'awaiting-approval',
             ...(latest.preview ? { preview: latest.preview } : {}),
           };
-          this.clearUpdateTimer(current);
-          this.reconcileKeepAlive();
-          void this.enqueue(async () => {
-            await this.reconcileActivity(current, true);
+          current.session?.update(this.toActivityProps(current), {
+            keepAlive: false,
+            urgent: true,
           });
         }),
       finish: (outcome) =>
@@ -141,60 +129,33 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     if (!record) return;
 
     this.turns.delete(topicId);
-    this.clearUpdateTimer(record);
-    this.reconcileKeepAlive();
-    void this.enqueue(async () => {
-      await this.endActivity(record, 'immediate');
-    });
+    record.session?.cancel();
+    record.session = undefined;
   };
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.appStateSubscription?.remove();
     this.preferenceUnsubscribe?.();
 
     const records = [...this.turns.values()];
     this.turns.clear();
-    for (const record of records) this.clearUpdateTimer(record);
-    this.reconcileKeepAlive();
-
-    void this.enqueue(async () => {
-      await Promise.all(records.map((record) => this.endActivity(record, 'immediate')));
-    });
+    for (const record of records) {
+      record.session?.cancel();
+      record.session = undefined;
+    }
   }
-
-  private readonly handleAppStateChange = (nextState: AppStateStatus) => {
-    this.appState = nextState;
-    void this.enqueue(async () => {
-      if (nextState === 'active') {
-        await Promise.all(
-          [...this.turns.values()].map((record) => this.endActivity(record, 'immediate')),
-        );
-        return;
-      }
-
-      await Promise.all(
-        [...this.turns.values()].map((record) => this.reconcileActivity(record, true)),
-      );
-    });
-  };
 
   private handlePreferenceChange(): void {
     this.enabled = this.dependencies.preference.readCached(PREFERENCE_KEY);
-    this.reconcileKeepAlive();
-    void this.enqueue(async () => {
-      if (!this.enabled) {
-        await Promise.all(
-          [...this.turns.values()].map((record) => this.endActivity(record, 'immediate')),
-        );
+    if (!this.enabled) {
+      for (const record of this.turns.values()) {
+        record.session?.cancel();
+        record.session = undefined;
       }
-      if (this.enabled && this.appState !== 'active') {
-        await Promise.all(
-          [...this.turns.values()].map((record) => this.reconcileActivity(record, true)),
-        );
-      }
-    });
+      return;
+    }
+    for (const record of this.turns.values()) this.ensureSession(record);
   }
 
   private updateTurn(
@@ -208,25 +169,11 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
 
     const nextContent = deriveBackgroundReplyContent(message, this.dependencies.translate);
     const phaseChanged = nextContent.phase !== record.content.phase;
-    const previewChanged = nextContent.preview !== record.content.preview;
-    const detailChanged = nextContent.detail !== record.content.detail;
     record.content = nextContent;
-
-    if (this.appState === 'active' || (!phaseChanged && !previewChanged && !detailChanged)) return;
-
-    const elapsed = Date.now() - record.lastActivityUpdateAt;
-    if (phaseChanged || elapsed >= LIVE_ACTIVITY_UPDATE_INTERVAL_MS) {
-      this.clearUpdateTimer(record);
-      void this.enqueue(() => this.reconcileActivity(record, true));
-      return;
-    }
-
-    if (!record.updateTimer) {
-      record.updateTimer = setTimeout(() => {
-        record.updateTimer = undefined;
-        void this.enqueue(() => this.reconcileActivity(record, true));
-      }, LIVE_ACTIVITY_UPDATE_INTERVAL_MS - elapsed);
-    }
+    record.session?.update(this.toActivityProps(record), {
+      keepAlive: isGeneratingPhase(nextContent.phase),
+      urgent: phaseChanged,
+    });
   }
 
   private finishTurn(topicId: string, generation: number, outcome: BackgroundReplyOutcome): void {
@@ -239,80 +186,35 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
       record.content.preview,
       this.dependencies.translate,
     );
-    this.clearUpdateTimer(record);
-    this.reconcileKeepAlive();
+    // Deferred so a continuation turn started in the same tick (approval
+    // resume, regenerate) inherits the live session instead of watching it
+    // end and restart.
     void this.enqueue(async () => {
       if (!this.isRecordCurrent(record)) return;
-      if (record.activity) {
-        await this.endActivity(record, 'default', Date.now());
-      }
+      record.session?.finish(this.toActivityProps(record));
+      record.session = undefined;
       if (this.turns.get(topicId) === record) this.turns.delete(topicId);
     });
   }
 
-  /**
-   * Holds exactly one keep-alive lease while any turn is in a generating
-   * phase (and the feature is enabled); the coordinator aggregates holders
-   * across consumers. Synchronous so lease state can never lag turn state.
-   */
-  private reconcileKeepAlive(): void {
-    const shouldHold = !this.disposed && this.shouldStayAlive();
-    if (shouldHold && !this.keepAliveLease) {
-      this.keepAliveLease = this.dependencies.keepAlive.acquire(KEEP_ALIVE_TAG);
-    } else if (!shouldHold && this.keepAliveLease) {
-      this.keepAliveLease.release();
-      this.keepAliveLease = undefined;
-    }
-  }
+  /** Starts the topic's session, or re-syncs an inherited one, when enabled. */
+  private ensureSession(record: TurnRecord): void {
+    if (!this.enabled || this.disposed) return;
 
-  private async reconcileActivity(record: TurnRecord, forceUpdate: boolean): Promise<void> {
-    if (!this.enabled || this.appState === 'active' || !this.isRecordCurrent(record)) return;
-
-    const props = this.toActivityProps(record);
-    if (!record.activity) {
-      try {
-        record.activity = AssistantActivity.start(
-          props,
-          `cherrystudio://topics?topicId=${encodeURIComponent(record.topicId)}`,
-        );
-        record.lastActivityUpdateAt = Date.now();
-        logger.info('Live Activity started', { topicId: record.topicId });
-      } catch (error) {
-        logger.warn('Live Activity failed to start', error as Error, { topicId: record.topicId });
-      }
+    const keepAlive = isGeneratingPhase(record.content.phase);
+    if (record.session) {
+      record.session.update(this.toActivityProps(record), { keepAlive, urgent: true });
       return;
     }
-
-    if (!forceUpdate) return;
-    try {
-      await record.activity.update(props);
-      record.lastActivityUpdateAt = Date.now();
-    } catch (error) {
-      logger.warn('Live Activity update failed', error as Error, { topicId: record.topicId });
-    }
+    record.session = this.dependencies.activities.startSession({
+      deepLinkUrl: `cherrystudio://topics?topicId=${encodeURIComponent(record.topicId)}`,
+      keepAlive,
+      props: this.toActivityProps(record),
+      tag: SESSION_TAG,
+    });
   }
 
-  private async endActivity(
-    record: TurnRecord,
-    policy: 'default' | 'immediate',
-    finishedAtEpochMs?: number,
-  ): Promise<void> {
-    const activity = record.activity;
-    if (!activity) return;
-    record.activity = undefined;
-    try {
-      const props = this.toActivityProps(record, finishedAtEpochMs);
-      await activity.end(policy, props, new Date());
-      logger.info('Live Activity ended', { policy, topicId: record.topicId });
-    } catch (error) {
-      logger.warn('Live Activity cleanup failed', error as Error, { topicId: record.topicId });
-    }
-  }
-
-  private toActivityProps(
-    record: TurnRecord,
-    finishedAtEpochMs?: number,
-  ): BackgroundReplyActivityProps {
+  private toActivityProps(record: TurnRecord): BackgroundReplyActivityProps {
     return {
       ...record.content,
       assistantName: record.assistantName,
@@ -321,42 +223,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
         this.dependencies.translate,
       ),
       startedAtEpochMs: record.startedAtEpochMs,
-      ...(finishedAtEpochMs ? { finishedAtEpochMs } : {}),
-      ...(this.logoUri ? { logoUri: this.logoUri } : {}),
     };
-  }
-
-  private async clearOrphanedActivities(): Promise<void> {
-    try {
-      const activities = AssistantActivity.getInstances();
-      await Promise.all(activities.map((activity) => activity.end('immediate')));
-      if (activities.length > 0) {
-        logger.info('Cleared orphaned Live Activities', { count: activities.length });
-      }
-    } catch (error) {
-      logger.warn('Orphaned Live Activity cleanup failed', error as Error);
-    }
-  }
-
-  private async prepareLogo(): Promise<void> {
-    try {
-      const destination = new File(widgetsDirectory, 'cherry-studio-logo.png');
-      if (!destination.exists) {
-        const asset = await Asset.fromModule(
-          require('../../../../assets/icon.png'),
-        ).downloadAsync();
-        if (!asset.localUri) throw new Error('Cherry Studio logo has no local URI.');
-        await new File(asset.localUri).copy(destination);
-      }
-      this.logoUri = destination.uri;
-    } catch (error) {
-      logger.warn('Live Activity logo preparation failed', error as Error);
-    }
-  }
-
-  private clearUpdateTimer(record: TurnRecord): void {
-    if (record.updateTimer) clearTimeout(record.updateTimer);
-    record.updateTimer = undefined;
   }
 
   private isCurrent(topicId: string, generation: number): boolean {
@@ -373,13 +240,6 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     } catch (error) {
       logger.error(`Background reply failed to ${operation}`, error as Error, { topicId });
     }
-  }
-
-  private shouldStayAlive(): boolean {
-    return (
-      this.enabled &&
-      [...this.turns.values()].some((record) => isGeneratingPhase(record.content.phase))
-    );
   }
 
   private enqueue(operation: () => Promise<void>): Promise<void> {

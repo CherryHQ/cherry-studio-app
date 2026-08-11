@@ -5,9 +5,10 @@ import type {
 
 import type {
   BackgroundReplyContent,
-  BackgroundReplyOutcome,
   BackgroundReplyPhase,
-} from './backgroundReplyTypes';
+} from '@/shared/backgroundActivities/chatReply';
+
+import type { BackgroundReplyOutcome } from './backgroundReplyTypes';
 
 const PREVIEW_CHARACTER_LIMIT = 160;
 const WEB_SEARCH_TOOL_NAMES = new Set([

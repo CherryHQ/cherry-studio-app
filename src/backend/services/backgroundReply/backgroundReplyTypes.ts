@@ -1,28 +1,15 @@
 import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 
-export type BackgroundReplyPhase =
-  | 'awaiting-approval'
-  | 'cancelled'
-  | 'completed'
-  | 'failed'
-  | 'preparing'
-  | 'responding'
-  | 'thinking'
-  | 'using-tool';
+import type { BackgroundReplyPhase } from '@/shared/backgroundActivities/chatReply';
 
-export type BackgroundReplyContent = {
-  detail: string;
-  phase: BackgroundReplyPhase;
-  preview?: string;
-};
-
-export type BackgroundReplyActivityProps = BackgroundReplyContent & {
-  assistantName: string;
-  compactLabel: string;
-  finishedAtEpochMs?: number;
-  logoUri?: string;
-  startedAtEpochMs: number;
-};
+// The presentation contract (phase/content/props) lives in
+// src/shared/backgroundActivities/chatReply so the frontend widget layout can
+// share it; these re-exports keep the service-local import surface stable.
+export type {
+  BackgroundReplyActivityProps,
+  BackgroundReplyContent,
+  BackgroundReplyPhase,
+} from '@/shared/backgroundActivities/chatReply';
 
 export type BackgroundReplyOutcome = Extract<
   BackgroundReplyPhase,

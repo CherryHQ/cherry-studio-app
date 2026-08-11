@@ -1,12 +1,15 @@
 import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { readUIMessageStream } from 'ai';
+import type { LiveActivityFactory } from 'expo-widgets';
 
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
+import { BackgroundActivityManager } from '@/backend/services/backgroundActivities/BackgroundActivityManager';
+import { createLiveActivityPresenter } from '@/backend/services/backgroundActivities/liveActivityPresenter';
 import { BackgroundReplyService } from '@/backend/services/backgroundReply';
 import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
 import {
@@ -38,6 +41,7 @@ import {
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
+import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivities/chatReply';
 import type { Backend } from '@/shared/contracts';
 
 export type BackendComposition = {
@@ -51,6 +55,14 @@ export type BackendComposition = {
 };
 
 type BackendCompositionDependencies = {
+  /**
+   * Frontend-owned widget layouts, handed in by bootstrap/runtime (this layer
+   * must not import frontend itself). `undefined` on platforms without the
+   * surface — the presenter degrades to a no-op.
+   */
+  activities: {
+    assistantActivity: LiveActivityFactory<BackgroundReplyActivityProps> | undefined;
+  };
   dbService: DbService;
   translate: (key: string) => string;
 };
@@ -68,9 +80,19 @@ export function createBackend(
     },
   });
   const keepAlive = new KeepAliveCoordinator();
-  const backgroundReply = new BackgroundReplyService({
+  const assistantActivityPresenter = createLiveActivityPresenter(
+    dependencies.activities.assistantActivity,
+  );
+  const backgroundActivities = new BackgroundActivityManager({
     keepAlive: {
       acquire: (tag) => keepAlive.acquire(tag),
+    },
+    presenters: [assistantActivityPresenter],
+  });
+  const backgroundReply = new BackgroundReplyService({
+    activities: {
+      startSession: (input) =>
+        backgroundActivities.startSession({ ...input, presenter: assistantActivityPresenter }),
     },
     preference: {
       readCached: (key) => services.preference.readCached(key),
@@ -238,7 +260,9 @@ export function createBackend(
       services.oauth.dispose();
       services.oauthSession.dispose();
       await chat.dispose();
-      // Last: chat and jobs release their leases during their own disposal.
+      // Last: chat and jobs release their sessions/leases during their own
+      // disposal; the mechanism layers go down after their consumers.
+      backgroundActivities.dispose();
       keepAlive.dispose();
     },
   };

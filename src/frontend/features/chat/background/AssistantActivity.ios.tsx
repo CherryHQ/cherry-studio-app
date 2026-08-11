@@ -13,7 +13,7 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets';
 
-import type { BackgroundReplyActivityProps } from './backgroundReplyTypes';
+import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivities/chatReply';
 
 function AssistantActivity(
   props: BackgroundReplyActivityProps,

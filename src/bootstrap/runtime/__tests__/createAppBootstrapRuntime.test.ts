@@ -56,6 +56,11 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
   createBackend: (services: unknown, dependencies: unknown) =>
     mockCreateBackend(services, dependencies),
 }));
+// The real layout touches the ExpoWidgets native module at import time.
+jest.mock('@/frontend/features/chat/background/AssistantActivity', () => ({
+  __esModule: true,
+  default: { getInstances: jest.fn(() => []), start: jest.fn() },
+}));
 
 beforeEach(() => {
   jest.clearAllMocks();
