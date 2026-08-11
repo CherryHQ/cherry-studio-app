@@ -86,6 +86,7 @@ function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[
 }
 
 export function MessageList({
+  assistantActions,
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
@@ -126,9 +127,9 @@ export function MessageList({
       ) : renderAssistantMessage ? (
         renderAssistantMessage(item)
       ) : (
-        <AssistantMessageRow message={item} />
+        <AssistantMessageRow actions={assistantActions} message={item} />
       ),
-    [renderAssistantMessage],
+    [assistantActions, renderAssistantMessage],
   );
   const handleStartReached = useCallback(() => {
     if (!onLoadOlder) {
@@ -298,6 +299,7 @@ export function MessageList({
             drawDistance={80}
             estimatedItemSize={300}
             estimatedHeaderSize={contentTopInset}
+            extraData={assistantActions}
             freeze={freeze}
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}

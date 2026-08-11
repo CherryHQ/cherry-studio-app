@@ -6,7 +6,11 @@ import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageSlideInFlight } from '../../messageRow/slideIn/hooks/useMessageSlideInFlight';
-import type { MessageListProps, MessagePresentationItem } from '../../types';
+import type {
+  AssistantMessageActions,
+  MessageListProps,
+  MessagePresentationItem,
+} from '../../types';
 import { MessageList } from '../MessageList';
 import { followingMaintainVisibleContentPosition as androidFollowingPosition } from '../messageListPlatform/messageListPlatform.android';
 import { followingMaintainVisibleContentPosition as iosFollowingPosition } from '../messageListPlatform/messageListPlatform.ios';
@@ -24,6 +28,7 @@ type MockLegendListProps = {
   anchoredEndSpace?: AnchoredEndSpaceConfig;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
   data?: readonly MessagePresentationItem[];
+  extraData?: unknown;
   freeze?: unknown;
   getItemType?: (item: MessagePresentationItem) => string;
   keyboardLiftBehavior?: string;
@@ -77,7 +82,9 @@ function mockCreateSharedValue<T>(initial: T): SharedValue<T> {
 
   return shared as unknown as SharedValue<T>;
 }
-const mockAssistantMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
+const mockAssistantMessageRow = jest.fn(
+  (_props: { actions?: AssistantMessageActions; message: MessagePresentationItem }) => null,
+);
 const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
 let mockSlideInFlight: MessageSlideInFlight | undefined;
 let mockScrollButtonProps:
@@ -182,8 +189,10 @@ jest.mock('react-native-reanimated', () => {
 });
 
 jest.mock('../../messageRow', () => ({
-  AssistantMessageRow: (props: { message: MessagePresentationItem }) =>
-    mockAssistantMessageRow(props),
+  AssistantMessageRow: (props: {
+    actions?: AssistantMessageActions;
+    message: MessagePresentationItem;
+  }) => mockAssistantMessageRow(props),
   MessageSlideInProvider: ({
     children,
     flight,
@@ -248,7 +257,7 @@ function listProps(
   };
 }
 
-describe('MessageList anchored tail following', () => {
+describe('MessageList', () => {
   let renderer: ReactTestRenderer | undefined;
   let cancelAnimationFrameSpy: jest.SpyInstance;
   let frameCallbacks: Map<number, FrameRequestCallback>;
@@ -336,6 +345,29 @@ describe('MessageList anchored tail following', () => {
     act(() => renderer?.unmount());
     cancelAnimationFrameSpy.mockRestore();
     requestAnimationFrameSpy.mockRestore();
+  });
+
+  test('forwards controlled actions only to assistant rows', () => {
+    const actions: AssistantMessageActions = {
+      isRegenerateDisabled: false,
+      onCopy: jest.fn(),
+      onRegenerate: jest.fn(),
+    };
+    const user = createMessage('user-1', 'user', [textPart('hello')]);
+    const assistant = {
+      ...createMessage('assistant-1', 'assistant', [textPart('answer')]),
+      status: 'success' as const,
+    };
+
+    act(() => {
+      renderer = create(
+        <MessageList {...listProps([user, assistant])} assistantActions={actions} />,
+      );
+    });
+
+    expect(mockAssistantMessageRow).toHaveBeenCalledWith({ actions, message: assistant });
+    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: user });
+    expect(mockLatestListProps?.extraData).toBe(actions);
   });
 
   test('caps text anchors at two current body lines and leaves file anchors uncapped', () => {
