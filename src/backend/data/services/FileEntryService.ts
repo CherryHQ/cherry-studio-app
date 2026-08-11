@@ -33,7 +33,8 @@ import {
 } from 'drizzle-orm';
 import * as z from 'zod';
 
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import { persistentRefAbsenceConditions } from '@/backend/data/db/schemas/fileRelations';
@@ -100,7 +101,14 @@ const FILE_ENTRY_SIZE_NULL_SORT_VALUE = -1;
 const FILE_ENTRY_EXT_NULL_SORT_VALUE = ' ';
 
 export class FileEntryService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -400,3 +408,5 @@ function getListCursorParser(sortBy: ListSortBy): (raw: string) => string | numb
     ? (raw) => asStringKey(raw)
     : (raw) => asNumericKey(raw);
 }
+
+export const fileEntryService = new FileEntryService();

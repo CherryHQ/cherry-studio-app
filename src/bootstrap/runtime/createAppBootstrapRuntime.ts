@@ -39,7 +39,7 @@ export function createAppBootstrapRuntime(
   const dbService = host.container.get<DbService>('DbService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
-  const services = createBackendServices({ cache, dbService, preference, webSearch });
+  const services = createBackendServices({ cache, preference, webSearch });
   const {
     backend,
     dataApiDependencies,

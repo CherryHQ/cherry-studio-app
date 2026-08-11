@@ -1,5 +1,4 @@
 import type { CacheService } from '@/backend/data/CacheService';
-import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -75,13 +74,12 @@ jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
     const cache = { kind: 'cache' } as unknown as CacheService;
-    const dbService = { kind: 'database' } as unknown as DbService;
     const preference = { kind: 'preference' } as unknown as PreferenceService;
     const webSearch = { kind: 'web-search' } as unknown as WebSearchService;
 
-    const services = createBackendServices({ cache, dbService, preference, webSearch });
+    const services = createBackendServices({ cache, preference, webSearch });
 
-    expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, dbService, preference });
+    expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, preference });
     expect(mockCreatePlatformAdapters).toHaveBeenCalledWith({
       fileEntry: mockDataServices.fileEntry,
       fileRef: mockDataServices.fileRef,

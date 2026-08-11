@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
@@ -17,7 +18,7 @@ describe('McpServerService desktop contract', () => {
   let sqlite: DatabaseSync;
   let service: McpServerService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
@@ -52,10 +53,16 @@ describe('McpServerService desktop contract', () => {
         }
       },
     } as unknown as DbService;
-    service = new McpServerService(dbService);
+    // Data services resolve `DbService` from `application`, so the fake is
+    // installed as a host override instead of being passed to constructors.
+    await installTestHost({ DbService: dbService });
+    service = new McpServerService();
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+  });
 
   it('creates and returns a complete desktop-compatible entity', async () => {
     const server = await service.create({

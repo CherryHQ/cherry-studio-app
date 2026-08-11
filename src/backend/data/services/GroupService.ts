@@ -22,7 +22,8 @@ import type {
 } from '@cherrystudio/universal/data/types/group';
 import { and, asc, eq } from 'drizzle-orm';
 
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { groupTable } from '@/backend/data/db/schemas';
 import type { GroupRow } from '@/backend/data/db/schemas/group';
 
@@ -41,7 +42,14 @@ function rowToGroup(row: GroupRow): Group {
 }
 
 export class GroupService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -184,3 +192,5 @@ export class GroupService {
     );
   }
 }
+
+export const groupService = new GroupService();

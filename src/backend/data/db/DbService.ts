@@ -27,7 +27,13 @@ export class DbService extends BaseService {
   private disposed = false;
   private writeTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly cache: CacheService) {
+  /**
+   * The cache is declared but never read here. Seeding reaches it through the
+   * data-service singletons (`ProviderService` resolves `CacheService` from
+   * `application`), and those run inside `onInit` — so the dependency edge is
+   * what orders cache initialization ahead of this service, nothing more.
+   */
+  constructor(_cache: CacheService) {
     super();
   }
 
@@ -49,7 +55,7 @@ export class DbService extends BaseService {
     await this.configurePragmas();
     await migrate(this.db, migrations);
     this.runCustomMigrations();
-    await seedDatabase(this, this.cache);
+    await seedDatabase(this);
   }
 
   protected onStop(): void {

@@ -28,7 +28,8 @@ import {
 } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
-import type { DbService } from '../db/DbService';
+import { application } from '@/backend/core/application/Application';
+
 import {
   assistantTable,
   chatMessageFileRefTable,
@@ -38,9 +39,10 @@ import {
   type TopicRow,
   topicTable,
 } from '../db/schemas';
+import { registerDataService } from './dataServiceRegistry';
 import { createRootMessageTx } from './MessageService';
-import type { PinService } from './PinService';
-import type { TagService } from './TagService';
+import { pinService } from './PinService';
+import { tagService } from './TagService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
@@ -58,11 +60,14 @@ type TopicCursor =
 const firstPageCursor: TopicCursor = { id: '', orderKey: '', section: 'pin' };
 
 export class TopicService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly pinService: PinService,
-    private readonly tagService: TagService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -458,12 +463,15 @@ export class TopicService {
     }
 
     await tx.delete(messageTable).where(inArray(messageTable.topicId, deletedIds));
-    await this.tagService.purgeForEntitiesTx(tx, 'topic', deletedIds);
-    await this.pinService.purgeForEntitiesTx(tx, 'topic', deletedIds);
+    await tagService.purgeForEntitiesTx(tx, 'topic', deletedIds);
+    await pinService.purgeForEntitiesTx(tx, 'topic', deletedIds);
     await tx.delete(topicTable).where(inArray(topicTable.id, deletedIds));
     return deletedIds;
   }
 }
+
+export const topicService = new TopicService();
+registerDataService('TopicService', topicService);
 
 export function rowToTopic(row: TopicRow): Topic {
   return {

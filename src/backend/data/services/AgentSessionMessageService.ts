@@ -9,7 +9,7 @@ import {
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import { and, desc, eq, lt, lte, or } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { agentSessionTable } from '@/backend/data/db/schemas/agentSession';
 import {
   type AgentSessionMessageRow,
@@ -37,7 +37,14 @@ function rowToEntity(row: AgentSessionMessageRow): AgentSessionMessageEntity {
 }
 
 export class AgentSessionMessageService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -171,3 +178,5 @@ export class AgentSessionMessageService {
     if (rows.length === 0) throw DataApiErrorFactory.notFound('Message', messageId);
   }
 }
+
+export const agentSessionMessageService = new AgentSessionMessageService();

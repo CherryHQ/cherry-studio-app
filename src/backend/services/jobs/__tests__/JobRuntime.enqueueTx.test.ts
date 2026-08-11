@@ -1,6 +1,7 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
+import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { jobTable } from '@/backend/data/db/schemas/job';
 
 import type { JobHandle } from '../types';
@@ -22,24 +23,25 @@ describe('JobRuntime.enqueueTx', () => {
   let sqlite: DatabaseSync | undefined;
   let ctx: TestRuntime | undefined;
 
-  function setup(
+  async function setup(
     handlers: Parameters<typeof createTestRuntime>[1],
     overrides?: Parameters<typeof createTestRuntime>[2],
   ) {
     sqlite = new DatabaseSync(':memory:');
-    ctx = createTestRuntime(sqlite, handlers, overrides);
+    ctx = await createTestRuntime(sqlite, handlers, overrides);
     return ctx;
   }
 
-  afterEach(() => {
-    ctx?.runtime.dispose();
+  afterEach(async () => {
+    await ctx?.runtime.dispose();
+    await uninstallTestHost();
     sqlite?.close();
     ctx = undefined;
     sqlite = undefined;
   });
 
   it('commits the job with the caller transaction and executes it after commit', async () => {
-    const { db, jobService, runtime } = setup([['internal.echo', makeEchoHandler()]]);
+    const { db, jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]]);
 
     const handle = await db.dbService.withWriteTx(async (tx) => {
       // Stand-in for the business write sharing the transaction. Terminal
@@ -63,7 +65,7 @@ describe('JobRuntime.enqueueTx', () => {
   });
 
   it('rollback leaves no row and the handle finished never settles (dropped, not rejected)', async () => {
-    const { db, jobService, runtime } = setup([['internal.echo', makeEchoHandler()]]);
+    const { db, jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]]);
 
     let handle: JobHandle | undefined;
     await expect(
@@ -83,7 +85,7 @@ describe('JobRuntime.enqueueTx', () => {
 
   it('cleans up rolled-back rows even when the pump cannot claim (cap full)', async () => {
     const gate = makeGate();
-    const { db, jobService, runtime } = setup([
+    const { db, jobService, runtime } = await setup([
       ['internal.hold', makeHoldHandler(gate)],
       ['internal.echo', makeEchoHandler()],
     ]);
@@ -116,7 +118,9 @@ describe('JobRuntime.enqueueTx', () => {
 
   it('an idempotency hit inside the transaction shares the existing handle', async () => {
     let clock = 1_000_000;
-    const { db, runtime } = setup([['internal.echo', makeEchoHandler()]], { now: () => clock });
+    const { db, runtime } = await setup([['internal.echo', makeEchoHandler()]], {
+      now: () => clock,
+    });
     const first = await enqueueTest(
       runtime,
       'internal.echo',

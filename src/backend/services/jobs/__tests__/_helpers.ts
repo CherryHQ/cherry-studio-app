@@ -4,6 +4,7 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 
+import { installTestHost } from '@/backend/core/application/testHost';
 import type { Database } from '@/backend/data/db/DbService';
 import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
 import { JobService } from '@/backend/data/services/JobService';
@@ -23,13 +24,20 @@ export type TestRuntime = {
   runtime: JobRuntime;
 };
 
-export function createTestRuntime(
+/**
+ * Async because `JobService` resolves `DbService` through `application`: the
+ * harness database has to be serving from an installed host before the runtime
+ * exists, since startup recovery reaches the job table on the first pump. Pair
+ * with `uninstallTestHost` in `afterEach`.
+ */
+export async function createTestRuntime(
   sqlite: DatabaseSync,
   handlers: readonly (readonly [string, JobHandler])[],
   overrides: Partial<Omit<JobRuntimeOptions, 'dbService' | 'handlers' | 'jobService'>> = {},
-): TestRuntime {
+): Promise<TestRuntime> {
   const db = createTestDb(sqlite);
-  const jobService = new JobService(db.dbService);
+  await installTestHost({ DbService: db.dbService });
+  const jobService = new JobService();
   const runtime = createJobRuntime({
     dbService: db.dbService,
     handlers,

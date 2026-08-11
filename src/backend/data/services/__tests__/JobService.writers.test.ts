@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { JobError } from '@cherrystudio/universal/data/api/schemas/jobs';
 import { eq } from 'drizzle-orm';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
 
@@ -18,6 +19,7 @@ jest.mock('@logger', () => ({
     // JobService binds its logger at module load, before this file's `const`
     // initializers run — forward lazily instead of capturing the mock now.
     withContext: () => ({
+      debug: jest.fn(),
       error: jest.fn(),
       info: jest.fn(),
       warn: (...args: unknown[]) => mockLoggerWarn(...args),
@@ -33,15 +35,19 @@ describe('JobService runtime writers', () => {
   let tx: Database;
   let service: JobService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     mockLoggerWarn.mockClear();
     sqlite = new DatabaseSync(':memory:');
     db = createTestDb(sqlite);
+    await installTestHost({ DbService: db.dbService });
     tx = db.database;
-    service = new JobService(db.dbService);
+    service = new JobService();
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+  });
 
   async function insertJob(overrides: Partial<InsertJobRow> = {}) {
     const [row] = await tx

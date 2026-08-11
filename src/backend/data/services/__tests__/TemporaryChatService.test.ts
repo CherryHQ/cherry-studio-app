@@ -1,40 +1,41 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 
-import type { AiUsageRecordService } from '../AiUsageRecordService';
-import { TemporaryChatService } from '../TemporaryChatService';
+import { temporaryChatService } from '../TemporaryChatService';
 
 jest.mock('uuid', () => ({
   v4: () => '11111111-1111-4111-8111-111111111111',
   v7: () => '22222222-2222-4222-8222-222222222222',
 }));
+// `debug` is here for the lifecycle manager the test host starts, not for the
+// service under test.
 jest.mock('@logger', () => ({
   loggerService: {
-    withContext: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
+    withContext: () => ({ debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
   },
 }));
 
-function createService(options: { persistError?: Error } = {}) {
-  const aiUsageRecord = {
-    getMessageUsageProjection: jest.fn(async () => ({ requestCount: 0 })),
-    refreshMessageProjection: jest.fn(async () => undefined),
-  };
+afterEach(uninstallTestHost);
+
+async function createService(options: { persistError?: Error } = {}) {
   const dbService = {
     withWriteTx: jest.fn(async () => {
       throw options.persistError ?? new Error('unexpected write');
     }),
-  };
-  return {
-    aiUsageRecord,
-    service: new TemporaryChatService(
-      dbService as unknown as DbService,
-      aiUsageRecord as unknown as AiUsageRecordService,
-    ),
-  };
+  } as unknown as DbService;
+
+  // The service resolves `DbService` per call, so the fake is installed as a
+  // host override rather than handed to a constructor. `createTopic` re-seeds
+  // both in-memory maps under the mocked uuid, so the shared singleton carries
+  // no state from the previous case.
+  await installTestHost({ DbService: dbService });
+
+  return { service: temporaryChatService };
 }
 
 describe('TemporaryChatService', () => {
-  test('keeps messages isolated in memory and rejects branching fields', () => {
-    const { service } = createService();
+  test('keeps messages isolated in memory and rejects branching fields', async () => {
+    const { service } = await createService();
     const topic = service.createTopic({ name: 'Temporary' });
     const message = service.appendMessage(topic.id, {
       data: { parts: [{ text: 'hello', type: 'text' }] },
@@ -56,7 +57,7 @@ describe('TemporaryChatService', () => {
   });
 
   test('restores the in-memory snapshot when persistence fails', async () => {
-    const { service } = createService({ persistError: new Error('database is busy') });
+    const { service } = await createService({ persistError: new Error('database is busy') });
     const topic = service.createTopic({ name: 'Retryable' });
     service.appendMessage(topic.id, { data: { parts: [] }, role: 'user' });
 

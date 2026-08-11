@@ -19,12 +19,11 @@ import {
 } from '@cherrystudio/universal/data/types/model';
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 
-import type { PreferenceService } from '../PreferenceService';
-import type { PinService } from './PinService';
+import { pinService } from './PinService';
 import {
   createCustomModel,
   type ModelRegistryLookup,
@@ -282,11 +281,18 @@ function dtoToCreateInput(
 }
 
 export class ModelService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly preferenceService: PreferenceService,
-    private readonly pinService: PinService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
+
+  private get preferenceService() {
+    return application.get('PreferenceService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -472,7 +478,7 @@ export class ModelService {
       if (rows.length === 0) {
         throw DataApiErrorFactory.notFound('Model', `${providerId}/${modelId}`);
       }
-      await this.pinService.purgeForEntitiesTx(tx, 'model', [rows[0].id]);
+      await pinService.purgeForEntitiesTx(tx, 'model', [rows[0].id]);
     });
   }
 
@@ -516,7 +522,7 @@ export class ModelService {
           .returning({ id: userModelTable.id });
         deletedIds.push(...rows.map((row: { id: string }) => row.id));
       }
-      await this.pinService.purgeForEntitiesTx(tx, 'model', deletedIds);
+      await pinService.purgeForEntitiesTx(tx, 'model', deletedIds);
     });
   }
 
@@ -684,7 +690,7 @@ export class ModelService {
         removedIds.push(...rows.map((row: { id: string }) => row.id));
       }
       if (removedIds.length > 0) {
-        await this.pinService.purgeForEntitiesTx(tx, 'model', removedIds);
+        await pinService.purgeForEntitiesTx(tx, 'model', removedIds);
       }
 
       const inserted: UserModelRow[] = [];
@@ -748,6 +754,8 @@ export class ModelService {
     return new Set(values.filter((id): id is string => typeof id === 'string' && id.length > 0));
   }
 }
+
+export const modelService = new ModelService();
 
 function chunks<TValue>(values: TValue[], size: number): TValue[][] {
   const result: TValue[][] = [];

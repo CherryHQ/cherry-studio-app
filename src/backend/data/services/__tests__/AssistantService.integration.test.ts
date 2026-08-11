@@ -4,17 +4,17 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
 import type { PreferenceService } from '../../PreferenceService';
-import { AssistantService } from '../AssistantService';
-import { GroupService } from '../GroupService';
+import { assistantService } from '../AssistantService';
+import { groupService } from '../GroupService';
 import { McpServerService } from '../McpServerService';
-import type { ModelService } from '../ModelService';
-import type { PinService } from '../PinService';
-import type { TagService } from '../TagService';
-import { TopicService } from '../TopicService';
+import { pinService } from '../PinService';
+import { tagService } from '../TagService';
+import { topicService } from '../TopicService';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 
@@ -22,15 +22,10 @@ type MigrationJournal = { entries: { tag: string }[] };
 
 describe('AssistantService persistence', () => {
   let sqlite: DatabaseSync;
-  let assistantService: AssistantService;
   let dbService: DbService;
-  let groupService: GroupService;
   let mcpServerService: McpServerService;
-  let purgeAssistantPin: jest.Mock;
-  let purgeAssistantTags: jest.Mock;
-  let topicService: TopicService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
@@ -65,32 +60,20 @@ describe('AssistantService persistence', () => {
         }
       },
     } as unknown as DbService;
-    purgeAssistantTags = jest.fn(async () => undefined);
-    const tagService = {
-      getTagsByEntitiesTx: jest.fn(async () => new Map()),
-      purgeForEntitiesTx: jest.fn(async () => undefined),
-      purgeForEntityTx: purgeAssistantTags,
-    } as unknown as TagService;
-    purgeAssistantPin = jest.fn(async () => undefined);
-    const pinService = {
-      purgeForEntitiesTx: jest.fn(async () => undefined),
-      purgeForEntityTx: purgeAssistantPin,
-    } as unknown as PinService;
-    groupService = new GroupService(dbService);
-    topicService = new TopicService(dbService, pinService, tagService);
-    assistantService = new AssistantService(
-      dbService,
-      groupService,
-      topicService,
-      {} as ModelService,
-      { get: jest.fn(async () => null) } as unknown as PreferenceService,
-      tagService,
-      pinService,
-    );
-    mcpServerService = new McpServerService(dbService);
+    // Data services resolve `DbService` from `application`, so the fake is
+    // installed as a host override instead of being passed to constructors.
+    await installTestHost({
+      DbService: dbService,
+      PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
+    });
+    mcpServerService = new McpServerService();
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    jest.restoreAllMocks();
+    sqlite.close();
+  });
 
   it('replaces all MCP associations regardless of transport', async () => {
     const a = await mcpServerService.create(
@@ -228,6 +211,10 @@ describe('AssistantService persistence', () => {
   });
 
   it('soft-deletes an assistant while preserving topics by default', async () => {
+    // Spying rather than stubbing: the purges are siblings the service imports
+    // as singletons, and against the real schema they can run for real.
+    const purgeAssistantTags = jest.spyOn(tagService, 'purgeForEntityTx');
+    const purgeAssistantPin = jest.spyOn(pinService, 'purgeForEntityTx');
     const group = await groupService.create({ entityType: 'assistant', name: 'Work' });
     insertAssistant(sqlite, 'assistant-delete', { groupId: group.id });
     insertTopic(sqlite, 'topic-preserved', 'assistant-delete');

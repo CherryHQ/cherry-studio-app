@@ -9,7 +9,7 @@ import type {
 } from '@cherrystudio/universal/data/types/tag';
 import { and, asc, eq, inArray, or, type SQL } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { entityTagTable, tagTable } from '@/backend/data/db/schemas';
 import type { TagRow } from '@/backend/data/db/schemas/tagging';
 
@@ -59,7 +59,14 @@ function rowToTag(row: TagRow): Tag {
 }
 
 export class TagService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -354,3 +361,5 @@ export class TagService {
     }
   }
 }
+
+export const tagService = new TagService();

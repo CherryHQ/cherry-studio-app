@@ -1,11 +1,12 @@
 import { REASONING_EFFORT } from '@cherrystudio/universal/data/types/model';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
-import type { PinService } from '../PinService';
+import { pinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';
 import { insertManyWithOrderKey } from '../utils/orderKey';
 
@@ -26,6 +27,15 @@ jest.mock('../utils/orderKey', () => ({
   ),
   insertWithOrderKey: jest.fn(),
 }));
+
+// Deletes reach `pinService` as a module singleton, so the purge is stubbed on
+// the real instance: letting it run would issue a second `tx.delete` against the
+// fake transactions below.
+const purgeForEntitiesTx = jest
+  .spyOn(pinService, 'purgeForEntitiesTx')
+  .mockResolvedValue(undefined);
+
+afterEach(uninstallTestHost);
 
 describe('ModelService', () => {
   beforeEach(() => {
@@ -73,7 +83,7 @@ describe('ModelService', () => {
     const dbService = {
       getDb: () => db,
     } as unknown as DbService;
-    const service = createService(dbService);
+    const service = await createService(dbService);
 
     await expect(service.getById('openai::gpt-5')).resolves.toMatchObject({
       reasoning: {
@@ -104,7 +114,7 @@ describe('ModelService', () => {
     const dbService = {
       withWriteTx: jest.fn(async (callback) => callback(tx)),
     } as unknown as DbService;
-    const service = createService(dbService);
+    const service = await createService(dbService);
 
     const result = await service.reconcileProviderModels('openai', {
       toAdd: [{ modelId: 'gpt-4o', name: 'GPT-4o', providerId: 'ignored-provider' }],
@@ -151,10 +161,7 @@ describe('ModelService', () => {
     const preferenceService = {
       get: jest.fn(async () => 'openai::default'),
     } as unknown as PreferenceService;
-    const pinService = {
-      purgeForEntitiesTx: jest.fn(async () => undefined),
-    } as unknown as PinService;
-    const service = new ModelService(dbService, preferenceService, pinService);
+    const service = await createService(dbService, preferenceService);
 
     const result = await service.reconcileProviderModels('openai', {
       toAdd: [{ modelId: 'replace', providerId: 'openai' }],
@@ -168,7 +175,7 @@ describe('ModelService', () => {
     });
 
     expect(result.removedIds).toEqual(['openai::replace', 'openai::stale']);
-    expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', [
+    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', [
       'openai::replace',
       'openai::stale',
     ]);
@@ -199,14 +206,9 @@ describe('ModelService', () => {
         from: jest.fn(() => ({ where: selectWhere })),
       })),
     };
-    const pinService = {
-      purgeForEntitiesTx: jest.fn(async () => undefined),
-    } as unknown as PinService;
-    const service = new ModelService(
-      { withWriteTx: jest.fn(async (callback) => callback(tx)) } as unknown as DbService,
-      { get: jest.fn(async () => null) } as unknown as PreferenceService,
-      pinService,
-    );
+    const service = await createService({
+      withWriteTx: jest.fn(async (callback) => callback(tx)),
+    } as unknown as DbService);
 
     const result = await service.reconcileProviderModels('openai', {
       toAdd: Array.from({ length: 1001 }, (_, index) => ({
@@ -226,14 +228,14 @@ describe('ModelService', () => {
     }
     expect(result.added).toHaveLength(1001);
     expect(result.removedIds).toHaveLength(1001);
-    expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', result.removedIds);
+    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', result.removedIds);
   });
 
   test('derives remote ownedBy without persisting it during reconcile', async () => {
     const dbService = {
       withWriteTx: jest.fn(async (callback) => callback({})),
     } as unknown as DbService;
-    const service = createService(dbService);
+    const service = await createService(dbService);
 
     const result = await service.reconcileProviderModels('cherryin', {
       toAdd: [
@@ -261,7 +263,7 @@ describe('ModelService', () => {
     const dbService = {
       withWriteTx: jest.fn(async (callback) => callback({})),
     } as unknown as DbService;
-    const service = createService(dbService);
+    const service = await createService(dbService);
     const registryData = providerRegistryService.lookupModel('302ai', 'chatgpt-4o-latest');
 
     const result = await service.reconcileProviderModels('302ai', {
@@ -289,7 +291,7 @@ describe('ModelService', () => {
     const dbService = {
       withWriteTx: jest.fn(),
     } as unknown as DbService;
-    const service = createService(dbService);
+    const service = await createService(dbService);
 
     await expect(service.reconcileProviderModels('openai', {})).resolves.toEqual({
       added: [],
@@ -306,26 +308,19 @@ describe('ModelService', () => {
         where: jest.fn(() => ({ returning: jest.fn(async () => [{ id: 'openai::custom' }]) })),
       })),
     };
-    const pinService = {
-      purgeForEntitiesTx: jest.fn(async () => undefined),
-    } as unknown as PinService;
-    const service = new ModelService(
-      { withWriteTx: jest.fn(async (callback) => callback(tx)) } as unknown as DbService,
-      { get: jest.fn(async () => null) } as unknown as PreferenceService,
-      pinService,
-    );
+    const service = await createService({
+      withWriteTx: jest.fn(async (callback) => callback(tx)),
+    } as unknown as DbService);
 
     await expect(service.delete('openai::custom')).resolves.toBe(true);
-    expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', ['openai::custom']);
+    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', ['openai::custom']);
   });
 
   test('refuses to delete the chat default and never opens a transaction for it', async () => {
     const dbService = { withWriteTx: jest.fn() } as unknown as DbService;
-    const service = new ModelService(
-      dbService,
-      { get: jest.fn(async () => 'openai::default') } as unknown as PreferenceService,
-      { purgeForEntitiesTx: jest.fn() } as unknown as PinService,
-    );
+    const service = await createService(dbService, {
+      get: jest.fn(async () => 'openai::default'),
+    } as unknown as PreferenceService);
 
     await expect(service.delete('openai::default')).resolves.toBe(false);
     expect(dbService.withWriteTx).not.toHaveBeenCalled();
@@ -337,22 +332,21 @@ describe('ModelService', () => {
         where: jest.fn(() => ({ returning: jest.fn(async () => []) })),
       })),
     };
-    const pinService = { purgeForEntitiesTx: jest.fn() } as unknown as PinService;
-    const service = new ModelService(
-      { withWriteTx: jest.fn(async (callback) => callback(tx)) } as unknown as DbService,
-      { get: jest.fn(async () => null) } as unknown as PreferenceService,
-      pinService,
-    );
+    const service = await createService({
+      withWriteTx: jest.fn(async (callback) => callback(tx)),
+    } as unknown as DbService);
 
     await expect(service.delete('openai::missing')).resolves.toBe(false);
-    expect(pinService.purgeForEntitiesTx).not.toHaveBeenCalled();
+    expect(purgeForEntitiesTx).not.toHaveBeenCalled();
   });
 });
 
-function createService(dbService: DbService) {
-  return new ModelService(
-    dbService,
-    { get: jest.fn(async () => null) } as unknown as PreferenceService,
-    { purgeForEntitiesTx: jest.fn(async () => undefined) } as unknown as PinService,
-  );
+// `ModelService` resolves `DbService` and `PreferenceService` per call, so the
+// fakes are installed as host overrides instead of handed to a constructor.
+async function createService(
+  dbService: DbService,
+  preferenceService = { get: jest.fn(async () => null) } as unknown as PreferenceService,
+): Promise<ModelService> {
+  await installTestHost({ DbService: dbService, PreferenceService: preferenceService });
+  return new ModelService();
 }

@@ -3,6 +3,8 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { JOB_ERROR_CODES } from '@cherrystudio/universal/data/api/schemas/jobs';
 
+import { uninstallTestHost } from '@/backend/core/application/testHost';
+
 import { createJobRuntime, DISPOSE_DRAIN_TIMEOUT_MS } from '../JobRuntime';
 import { MAX_CANCEL_REASON_CHARS } from '../types';
 import {
@@ -23,12 +25,12 @@ describe('JobRuntime cancel & dispose', () => {
   let sqlite: DatabaseSync | undefined;
   let ctx: TestRuntime | undefined;
 
-  function setup(
+  async function setup(
     handlers: Parameters<typeof createTestRuntime>[1],
     overrides?: Parameters<typeof createTestRuntime>[2],
   ) {
     sqlite = new DatabaseSync(':memory:');
-    ctx = createTestRuntime(sqlite, handlers, overrides);
+    ctx = await createTestRuntime(sqlite, handlers, overrides);
     return ctx;
   }
 
@@ -36,13 +38,14 @@ describe('JobRuntime cancel & dispose', () => {
     // Await: dispose now drains in-flight handlers, and closing SQLite out from
     // under that drain is exactly the teardown race the drain exists to prevent.
     await ctx?.runtime.dispose();
+    await uninstallTestHost();
     sqlite?.close();
     ctx = undefined;
     sqlite = undefined;
   });
 
   it('rejects a cancel reason above the length cap', async () => {
-    const { runtime } = setup([['internal.echo', makeEchoHandler()]]);
+    const { runtime } = await setup([['internal.echo', makeEchoHandler()]]);
     await expect(
       runtime.cancel('whatever', 'x'.repeat(MAX_CANCEL_REASON_CHARS + 1)),
     ).rejects.toMatchObject({ code: JOB_ERROR_CODES.CANCEL_REASON_TOO_LONG });
@@ -50,7 +53,7 @@ describe('JobRuntime cancel & dispose', () => {
 
   it('cancels a delayed job immediately without running it', async () => {
     let clock = 1_000_000;
-    const { jobService, runtime } = setup([['internal.echo', makeEchoHandler()]], {
+    const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]], {
       now: () => clock,
     });
     const handle = await enqueueTest(
@@ -76,7 +79,7 @@ describe('JobRuntime cancel & dispose', () => {
 
   it('cancels a cap-blocked pending job without running it', async () => {
     const gate = makeGate();
-    const { jobService, runtime } = setup([
+    const { jobService, runtime } = await setup([
       ['internal.hold', makeHoldHandler(gate)],
       ['internal.echo', makeEchoHandler()],
     ]);
@@ -103,7 +106,7 @@ describe('JobRuntime cancel & dispose', () => {
 
   it('cancels a signal-respecting running job within the grace window, never retrying it', async () => {
     const gate = makeGate();
-    const { jobService, runtime } = setup([['internal.hold', makeHoldHandler(gate)]]);
+    const { jobService, runtime } = await setup([['internal.hold', makeHoldHandler(gate)]]);
     const handle = await enqueueTest(runtime, 'internal.hold', {}, { maxAttempts: 3 });
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
 
@@ -123,7 +126,7 @@ describe('JobRuntime cancel & dispose', () => {
   it('force-finalizes a stubborn handler as timed-out; the late settle is a fenced no-op', async () => {
     const gate = makeGate();
     let settledCount = 0;
-    const { jobService, runtime } = setup([
+    const { jobService, runtime } = await setup([
       [
         'internal.stubborn',
         makeStubbornHandler(gate, {
@@ -156,7 +159,7 @@ describe('JobRuntime cancel & dispose', () => {
   });
 
   it('reports not-cancellable for terminal and unknown jobs', async () => {
-    const { runtime } = setup([['internal.echo', makeEchoHandler()]]);
+    const { runtime } = await setup([['internal.echo', makeEchoHandler()]]);
     const handle = await enqueueTest(runtime, 'internal.echo', { message: 'quick' });
     await handle.finished;
     expect((await runtime.cancel(handle.id)).outcome).toBe('not-cancellable');
@@ -165,7 +168,7 @@ describe('JobRuntime cancel & dispose', () => {
 
   it('dispose aborts running jobs, drops finished resolvers, and blocks new enqueues', async () => {
     const gate = makeGate();
-    const { jobService, runtime } = setup([['internal.hold', makeHoldHandler(gate)]]);
+    const { jobService, runtime } = await setup([['internal.hold', makeHoldHandler(gate)]]);
     const handle = await enqueueTest(runtime, 'internal.hold', {});
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
 
@@ -185,7 +188,7 @@ describe('JobRuntime cancel & dispose', () => {
 
   it('drains in-flight handlers so their terminal rows land before dispose resolves', async () => {
     const gate = makeGate();
-    const { jobService, runtime } = setup([['internal.hold', makeHoldHandler(gate)]]);
+    const { jobService, runtime } = await setup([['internal.hold', makeHoldHandler(gate)]]);
     const handle = await enqueueTest(runtime, 'internal.hold', {});
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
 
@@ -199,7 +202,7 @@ describe('JobRuntime cancel & dispose', () => {
 
   it('bounds the drain so a handler ignoring its signal cannot hang teardown', async () => {
     const gate = makeGate();
-    const { jobService, runtime } = setup([['internal.stubborn', makeStubbornHandler(gate)]]);
+    const { jobService, runtime } = await setup([['internal.stubborn', makeStubbornHandler(gate)]]);
     const handle = await enqueueTest(runtime, 'internal.stubborn', {});
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
 
@@ -218,8 +221,8 @@ describe('JobRuntime cancel & dispose', () => {
     expect((await jobService.getById(handle.id))?.status).toBe('running');
   });
 
-  it('refuses a second runtime on the same database', () => {
-    const { db, jobService } = setup([['internal.echo', makeEchoHandler()]]);
+  it('refuses a second runtime on the same database', async () => {
+    const { db, jobService } = await setup([['internal.echo', makeEchoHandler()]]);
     // The claim fence isolates by state, not by attempt, so it is only sound
     // while one runtime owns the database. `<StrictMode>` double-invoking a
     // `useMemo` factory is the realistic way to break that silently.
@@ -232,7 +235,7 @@ describe('JobRuntime cancel & dispose', () => {
     jest.useFakeTimers();
     try {
       let clock = 1_000_000;
-      const { runtime } = setup([['internal.echo', makeEchoHandler()]], { now: () => clock });
+      const { runtime } = await setup([['internal.echo', makeEchoHandler()]], { now: () => clock });
       await enqueueTest(
         runtime,
         'internal.echo',

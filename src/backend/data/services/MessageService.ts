@@ -29,9 +29,10 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
+import { application } from '@/backend/core/application/Application';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { Database, DbService } from '../db/DbService';
+import type { Database } from '../db/DbService';
 import {
   chatMessageFileRefTable,
   fileEntryTable,
@@ -39,7 +40,7 @@ import {
   messageTable,
   topicTable,
 } from '../db/schemas';
-import type { TopicService } from './TopicService';
+import { getDataService } from './dataServiceRegistry';
 import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';
 
@@ -150,10 +151,23 @@ async function replaceChatMessageFileRefsTx(
 }
 
 export class MessageService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly topicService: TopicService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
+
+  /**
+   * Lazily located: `TopicService` imports `createRootMessageTx` from this
+   * module, so a direct import of its singleton here would close a value-level
+   * cycle the bundler cannot order.
+   */
+  private get topicService() {
+    return getDataService('TopicService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -1173,6 +1187,8 @@ export class MessageService {
     });
   }
 }
+
+export const messageService = new MessageService();
 
 /** Fed to the model as a tool result, so it stays untranslated. */
 const crashedTurnApprovalReason = 'The app closed before this tool call completed.';

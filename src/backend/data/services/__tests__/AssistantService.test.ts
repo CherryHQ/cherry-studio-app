@@ -1,15 +1,12 @@
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { AssistantRow } from '@/backend/data/db/schemas';
 
 import type { PreferenceService } from '../../PreferenceService';
-import { AssistantService } from '../AssistantService';
-import type { GroupService } from '../GroupService';
-import type { ModelService } from '../ModelService';
-import type { PinService } from '../PinService';
-import type { TagService } from '../TagService';
-import type { TopicService } from '../TopicService';
+import { assistantService } from '../AssistantService';
+import { tagService } from '../TagService';
 import { applyMoves, insertWithOrderKey } from '../utils/orderKey';
 
 jest.mock('uuid', () => ({
@@ -26,6 +23,11 @@ describe('AssistantService', () => {
     jest.clearAllMocks();
   });
 
+  afterEach(async () => {
+    await uninstallTestHost();
+    jest.restoreAllMocks();
+  });
+
   test('reads desktop order and opaque knowledge/MCP relation ids without resolving targets', async () => {
     const row = createAssistantRow({
       settings: {
@@ -35,20 +37,15 @@ describe('AssistantService', () => {
       },
     });
     const db = createReadDb(row);
-    const tagService = {
-      getTagsByEntitiesTx: jest.fn(async () => new Map([[row.id, []]])),
-    } as unknown as TagService;
-    const service = new AssistantService(
-      { getDb: () => db } as unknown as DbService,
-      {} as GroupService,
-      {} as TopicService,
-      {} as ModelService,
-      {} as PreferenceService,
-      tagService,
-      {} as PinService,
-    );
+    // `createReadDb` only answers the projections this test drives, so the tag
+    // lookup is stubbed on the singleton the service imports rather than run for
+    // real against it.
+    jest.spyOn(tagService, 'getTagsByEntitiesTx').mockResolvedValue(new Map([[row.id, []]]));
+    // The service resolves `DbService` per call, so the fake is installed as a
+    // host override rather than handed to a constructor.
+    await installTestHost({ DbService: { getDb: () => db } as unknown as DbService });
 
-    const assistant = await service.getById(row.id);
+    const assistant = await assistantService.getById(row.id);
 
     expect(assistant).toMatchObject({
       knowledgeBaseIds: ['unknown-knowledge-id'],
@@ -71,23 +68,15 @@ describe('AssistantService', () => {
     });
     const db = createReadDb(row);
     const { transaction, writtenSettings } = createUpdateTransaction(row);
-    const tagService = {
-      getTagsByEntitiesTx: jest.fn(async () => new Map([[row.id, []]])),
-    } as unknown as TagService;
-    const service = new AssistantService(
-      {
+    jest.spyOn(tagService, 'getTagsByEntitiesTx').mockResolvedValue(new Map([[row.id, []]]));
+    await installTestHost({
+      DbService: {
         getDb: () => db,
         withWriteTx: async (callback: (tx: unknown) => Promise<unknown>) => callback(transaction),
       } as unknown as DbService,
-      {} as GroupService,
-      {} as TopicService,
-      {} as ModelService,
-      {} as PreferenceService,
-      tagService,
-      {} as PinService,
-    );
+    });
 
-    const assistant = await service.update(row.id, { settings: { temperature: 0.7 } });
+    const assistant = await assistantService.update(row.id, { settings: { temperature: 0.7 } });
 
     expect(writtenSettings()).toMatchObject({
       futureDesktopSetting: { enabled: true },
@@ -119,24 +108,17 @@ describe('AssistantService', () => {
         from: jest.fn(() => ({ where: jest.fn(() => queryRows) })),
       })),
     };
-    const tagService = {
-      getTagsByEntitiesTx: jest.fn(async () => new Map([[row.id, []]])),
-    } as unknown as TagService;
-    const service = new AssistantService(
-      {
+    jest.spyOn(tagService, 'getTagsByEntitiesTx').mockResolvedValue(new Map([[row.id, []]]));
+    await installTestHost({
+      DbService: {
         withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
       } as unknown as DbService,
-      {} as GroupService,
-      {} as TopicService,
-      {} as ModelService,
-      { get: jest.fn(async () => null) } as unknown as PreferenceService,
-      tagService,
-      {} as PinService,
-    );
+      PreferenceService: { get: jest.fn(async () => null) } as unknown as PreferenceService,
+    });
 
-    await service.create({ name: 'Assistant' });
-    await service.reorder(row.id, { position: 'first' });
-    await service.reorderBatch([{ anchor: { position: 'last' }, id: row.id }]);
+    await assistantService.create({ name: 'Assistant' });
+    await assistantService.reorder(row.id, { position: 'first' });
+    await assistantService.reorderBatch([{ anchor: { position: 'last' }, id: row.id }]);
 
     expect(jest.mocked(insertWithOrderKey).mock.calls[0]?.[3]).toEqual(
       expect.objectContaining({ scope: expect.anything() }),

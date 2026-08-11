@@ -6,11 +6,11 @@ import type {
 import { AgentSessionWorkspaceSourceSchema } from '@cherrystudio/universal/data/api/schemas/agentWorkspaces';
 import { and, desc, eq, ne } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { jobScheduleTable } from '@/backend/data/db/schemas/job';
 
-import type { AgentChannelService } from './AgentChannelService';
-import type { JobService } from './JobService';
+import { agentChannelService } from './AgentChannelService';
+import { jobService } from './JobService';
 import { timestampToISO } from './utils/rowMappers';
 
 const AGENT_TASK_TYPE = 'agent.task';
@@ -43,18 +43,21 @@ function parseTemplate(value: unknown): TaskTemplate | null {
 }
 
 export class AgentTaskService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly channelService: AgentChannelService,
-    private readonly jobService: JobService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private async toEntity(row: typeof jobScheduleTable.$inferSelect): Promise<ScheduledTaskEntity> {
     const template = parseTemplate(row.jobInputTemplate);
     if (!template) {
       throw DataApiErrorFactory.invalidOperation('read task', 'invalid agent task template');
     }
-    const channels = await this.channelService.getSubscribedChannels(row.id);
+    const channels = await agentChannelService.getSubscribedChannels(row.id);
     return {
       agentId: template.agentId,
       channelIds: channels.map(({ id }) => id),
@@ -143,7 +146,7 @@ export class AgentTaskService {
     taskId: string,
     options: { limit?: number; offset?: number } = {},
   ): Promise<{ logs: TaskRunLogEntity[]; total: number }> {
-    const jobs = await this.jobService.list({ scheduleId: taskId });
+    const jobs = await jobService.list({ scheduleId: taskId });
     const page = jobs.slice(
       options.offset ?? 0,
       options.limit ? (options.offset ?? 0) + options.limit : undefined,
@@ -174,3 +177,5 @@ export class AgentTaskService {
     };
   }
 }
+
+export const agentTaskService = new AgentTaskService();

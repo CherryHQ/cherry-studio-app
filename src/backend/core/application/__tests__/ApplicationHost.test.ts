@@ -143,6 +143,42 @@ describe('application.get', () => {
 });
 
 describe('application.install', () => {
+  it('resolves services from inside a starting service', async () => {
+    // The real case is `DbService.onInit` seeding through data-service module
+    // singletons, which reach `DbService` via `application`. If the host were
+    // only installed after `start()` resolved, first launch would throw.
+    let resolvedDuringInit: unknown;
+
+    @Injectable('SelfResolving')
+    class SelfResolving extends BaseService {
+      protected onInit(): void {
+        resolvedDuringInit = application.get('Connection' as never);
+      }
+    }
+
+    await application.install(
+      new ApplicationHost({ services: [Connection, SelfResolving] as never }),
+    );
+
+    expect(resolvedDuringInit).toBeInstanceOf(Connection);
+  });
+
+  it('installs nothing when the incoming host fails to start', async () => {
+    @Injectable('Exploding')
+    class Exploding extends BaseService {
+      protected onInit(): void {
+        throw new Error('cannot start');
+      }
+    }
+
+    await expect(
+      application.install(new ApplicationHost({ services: [Exploding] as never })),
+    ).rejects.toThrow(/cannot start/);
+
+    // A half-started graph must not stay reachable behind `get()`.
+    expect(application.hasHost).toBe(false);
+  });
+
   it('disposes the outgoing host before starting the incoming one', async () => {
     await application.install(new ApplicationHost({ services: [SlowClose] }));
 

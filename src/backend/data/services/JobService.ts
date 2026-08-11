@@ -9,7 +9,8 @@ import {
 import { loggerService } from '@logger';
 import { and, asc, count, desc, eq, inArray, lte, type SQL } from 'drizzle-orm';
 
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, type JobRow, jobTable } from '@/backend/data/db/schemas/job';
 
 import { timestampToISO } from './utils/rowMappers';
@@ -77,7 +78,14 @@ function rowToSnapshot(row: JobRow): JobSnapshot {
 }
 
 export class JobService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async list(filter: JobListFilter = {}): Promise<JobSnapshot[]> {
     const conditions: SQL[] = [];
@@ -364,3 +372,5 @@ export class JobService {
     return row?.scheduledAt ?? null;
   }
 }
+
+export const jobService = new JobService();

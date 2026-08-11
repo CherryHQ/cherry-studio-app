@@ -1,3 +1,4 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 
 import { ContentSearchService } from '../ContentSearchService';
@@ -9,7 +10,7 @@ jest.mock('uuid', () => ({
 }));
 jest.mock('@logger', () => ({
   loggerService: {
-    withContext: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
+    withContext: () => ({ debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
   },
 }));
 
@@ -22,6 +23,8 @@ function queryResult(rows: unknown[]) {
   builder.limit = jest.fn(async () => rows);
   return builder;
 }
+
+afterEach(uninstallTestHost);
 
 describe('EntitySearchService', () => {
   test('aggregates the five desktop entity groups in stable order', async () => {
@@ -74,9 +77,10 @@ describe('EntitySearchService', () => {
       .mockReturnValueOnce(
         queryResult([{ id: 'knowledge-1', name: 'Needle Knowledge', updatedAt: 500 }]),
       );
-    const service = new EntitySearchService({
-      getDb: () => ({ select }),
-    } as unknown as DbService);
+    await installTestHost({
+      DbService: { getDb: () => ({ select }) } as unknown as DbService,
+    });
+    const service = new EntitySearchService();
 
     const result = await service.search({ q: 'Needle' });
 
@@ -128,9 +132,10 @@ describe('ContentSearchService', () => {
         },
       ])
       .mockResolvedValueOnce([]);
-    const service = new ContentSearchService({
-      getDb: () => ({ all }),
-    } as unknown as DbService);
+    await installTestHost({
+      DbService: { getDb: () => ({ all }) } as unknown as DbService,
+    });
+    const service = new ContentSearchService();
 
     const result = await service.search({ limitPerSource: 2, q: 'needle' });
 
@@ -149,9 +154,10 @@ describe('ContentSearchService', () => {
   });
 
   test('rewrites malformed cursor errors onto the source-specific field', async () => {
-    const service = new ContentSearchService({
-      getDb: () => ({ all: jest.fn() }),
-    } as unknown as DbService);
+    await installTestHost({
+      DbService: { getDb: () => ({ all: jest.fn() }) } as unknown as DbService,
+    });
+    const service = new ContentSearchService();
 
     await expect(
       service.search({

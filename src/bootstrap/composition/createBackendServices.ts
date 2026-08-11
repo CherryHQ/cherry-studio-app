@@ -1,7 +1,6 @@
 import { fetch as expoFetch } from 'expo/fetch';
 
 import type { CacheService } from '@/backend/data/CacheService';
-import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { createOAuthFlowRegistry } from '@/backend/services/oauth/authorization/createOAuthFlowRegistry';
 import { OAuthApiKeyStore } from '@/backend/services/oauth/authorization/OAuthApiKeyStore';
@@ -25,18 +24,12 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
  */
 export type BackendInfrastructure = {
   cache: CacheService;
-  dbService: DbService;
   preference: PreferenceService;
   webSearch: WebSearchService;
 };
 
-export function createBackendServices({
-  cache,
-  dbService,
-  preference,
-  webSearch,
-}: BackendInfrastructure) {
-  const dataServices = createDataServices({ cache, dbService, preference });
+export function createBackendServices({ cache, preference, webSearch }: BackendInfrastructure) {
+  const dataServices = createDataServices({ cache, preference });
   const platformAdapters = createPlatformAdapters({
     fileEntry: dataServices.fileEntry,
     fileRef: dataServices.fileRef,

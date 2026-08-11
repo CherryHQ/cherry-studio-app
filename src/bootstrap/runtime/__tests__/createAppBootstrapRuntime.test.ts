@@ -76,9 +76,10 @@ describe('createAppBootstrapRuntime', () => {
 
     await runtime.initialize();
 
+    // No `dbService`: the data services resolve it through `application`, so the
+    // composition is only handed the infrastructure it cannot reach that way.
     expect(mockCreateBackendServices).toHaveBeenCalledWith({
       cache: mockCache,
-      dbService: mockDb,
       preference: mockPreference,
       webSearch: mockWebSearch,
     });
