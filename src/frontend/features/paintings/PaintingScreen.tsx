@@ -2,8 +2,6 @@ import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-
 import { PaintingComposer } from './components/PaintingComposer';
 import { usePainting, useResolvedPaintingFiles } from './hooks/usePaintings';
 import { consumePaintingDraftHandoff } from './utils/paintingDraftHandoff';
@@ -40,7 +38,6 @@ export function PaintingScreen() {
     openedPaintingId !== undefined &&
     paintingId === openedPaintingId &&
     (paintingQuery.isLoading || filesQuery.isLoading);
-  const backgroundColor = useThemeColor('background');
   const handleReceipt = useCallback(
     (receiptId: string | undefined) => navigation.setParams({ paintingId: receiptId }),
     [navigation],
@@ -54,7 +51,6 @@ export function PaintingScreen() {
         options={{
           headerBackButtonDisplayMode: 'minimal',
           title: '',
-          headerStyle: { backgroundColor },
         }}
       />
       {isLoading ? (

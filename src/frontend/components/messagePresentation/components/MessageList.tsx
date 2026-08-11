@@ -124,6 +124,7 @@ export function MessageList({
   const pendingReadyFrameRef = useRef<number | null>(null);
   const pendingReadySettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readyGenerationRef = useRef(0);
+  const pendingFirstAnchorReleaseFrameRef = useRef<number | null>(null);
   const pendingTailFollowFrameRef = useRef<number | null>(null);
   const pendingInteractionEndFrameRef = useRef<number | null>(null);
   const isTouchingListRef = useRef(false);
@@ -155,6 +156,17 @@ export function MessageList({
   const hasAnchor = anchorIndex >= 0;
   const anchorMessage = hasAnchor ? messages[anchorIndex] : undefined;
   const anchorMessageId = anchorMessage?.id;
+  // A single-turn workspace has no previous content to scroll past. Keep its first live turn at
+  // the list end until the rows report a real size; then add the anchor space and animate to it.
+  const [releasedFirstAnchorId, setReleasedFirstAnchorId] = useState<string>();
+  const isFirstEnteringAnchor =
+    animateFirstEnteringMessage &&
+    anchorIndex === 0 &&
+    anchorMessageId !== undefined &&
+    anchorMessageId === enteringMessageId;
+  const isStagingFirstAnchor = isFirstEnteringAnchor && releasedFirstAnchorId !== anchorMessageId;
+  const stagedFirstAnchorIdRef = useRef<string | undefined>(undefined);
+  stagedFirstAnchorIdRef.current = isStagingFirstAnchor ? anchorMessageId : undefined;
   const [tailFollowState, setTailFollowState] = useState<TailFollowState>(() =>
     createTailFollowState(anchorMessageId),
   );
@@ -186,6 +198,20 @@ export function MessageList({
       cancelAnimationFrame(pendingTailFollowFrameRef.current);
       pendingTailFollowFrameRef.current = null;
     }
+  }, []);
+
+  const releaseStagedFirstAnchor = useCallback(() => {
+    const stagedAnchorId = stagedFirstAnchorIdRef.current;
+    if (!stagedAnchorId || pendingFirstAnchorReleaseFrameRef.current !== null) {
+      return;
+    }
+
+    pendingFirstAnchorReleaseFrameRef.current = requestAnimationFrame(() => {
+      pendingFirstAnchorReleaseFrameRef.current = null;
+      if (stagedFirstAnchorIdRef.current === stagedAnchorId) {
+        setReleasedFirstAnchorId(stagedAnchorId);
+      }
+    });
   }, []);
 
   const scheduleTailFollow = useCallback(() => {
@@ -379,13 +405,14 @@ export function MessageList({
   }, [scheduleInteractionEnd]);
 
   const handleItemSizeChanged = useCallback(() => {
+    releaseStagedFirstAnchor();
     scheduleTailFollow();
-  }, [scheduleTailFollow]);
+  }, [releaseStagedFirstAnchor, scheduleTailFollow]);
 
   // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
   const anchoredEndSpace = useMemo(
     () =>
-      hasAnchor
+      hasAnchor && !isStagingFirstAnchor
         ? {
             anchorIndex,
             anchorMaxSize,
@@ -401,6 +428,7 @@ export function MessageList({
       handleAnchorReady,
       handleAnchoredEndSpaceSizeChanged,
       hasAnchor,
+      isStagingFirstAnchor,
     ],
   );
 
@@ -457,8 +485,9 @@ export function MessageList({
         t: Date.now(),
       });
       setContentBaseHeight(Math.max(0, height - contentBottomInset));
+      releaseStagedFirstAnchor();
     },
-    [contentBottomInset],
+    [contentBottomInset, releaseStagedFirstAnchor],
   );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
@@ -540,6 +569,10 @@ export function MessageList({
     return () => {
       isMountedRef.current = false;
       cancelPendingInteractionEnd();
+      if (pendingFirstAnchorReleaseFrameRef.current !== null) {
+        cancelAnimationFrame(pendingFirstAnchorReleaseFrameRef.current);
+        pendingFirstAnchorReleaseFrameRef.current = null;
+      }
       cancelPendingReadyFrame();
       cancelPendingTailFollow();
     };
@@ -551,6 +584,7 @@ export function MessageList({
         <ScrollShadow className="flex-1" visibility="bottom" size={80}>
           <KeyboardAwareLegendList
             ref={listRef}
+            alignItemsAtEnd={isStagingFirstAnchor}
             applyWorkaroundForContentInsetHitTestBug
             anchoredEndSpace={anchoredEndSpace}
             contentContainerStyle={contentContainerStyle}

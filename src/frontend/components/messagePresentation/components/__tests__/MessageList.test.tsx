@@ -16,6 +16,7 @@ type AnchoredEndSpaceConfig = {
 };
 
 type MockLegendListProps = {
+  alignItemsAtEnd?: boolean;
   applyWorkaroundForContentInsetHitTestBug?: boolean;
   anchoredEndSpace?: AnchoredEndSpaceConfig;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
@@ -27,6 +28,7 @@ type MockLegendListProps = {
   maintainScrollAtEndThreshold?: number;
   maintainVisibleContentPosition?: unknown;
   onEndVisible?: (visible: boolean) => void;
+  onContentSizeChange?: (width: number, height: number) => void;
   onItemSizeChanged?: () => void;
   onLayout?: (event: LayoutChangeEvent) => void;
   onMomentumScrollBegin?: () => void;
@@ -590,16 +592,28 @@ describe('MessageList anchored tail following', () => {
     });
   });
 
-  test('animates the first live anchor when requested by the caller', () => {
+  test('stages the first live turn at the list end before animating it to the anchor', () => {
     const firstTurn = [
       createMessage('user-1', 'user', [textPart('hello')]),
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(
+      renderer = create(<MessageList {...listProps([])} animateFirstEnteringMessage />);
+    });
+    act(() => {
+      renderer?.update(
         <MessageList {...listProps(firstTurn, 'user-1')} animateFirstEnteringMessage />,
       );
     });
+
+    expect(mockLatestListProps?.anchoredEndSpace).toBeUndefined();
+    expect(mockLatestListProps?.alignItemsAtEnd).toBe(true);
+
+    act(() => mockLatestListProps?.onContentSizeChange?.(320, 260));
+    act(() => flushAnimationFrames());
+
+    expect(mockLatestListProps?.anchoredEndSpace?.anchorIndex).toBe(0);
+    expect(mockLatestListProps?.alignItemsAtEnd).toBe(false);
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
     act(() => flushAnimationFrames());
 

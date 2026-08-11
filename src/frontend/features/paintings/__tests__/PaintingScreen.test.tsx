@@ -7,6 +7,7 @@ const mockConsumePaintingDraftHandoff = jest.fn();
 const mockUsePainting = jest.fn();
 const mockUseResolvedPaintingFiles = jest.fn();
 let mockParams: { handoff?: string; paintingId?: string } = {};
+let mockScreenOptions: Record<string, unknown> | undefined;
 let mockPaintingComposerProps:
   | {
       initialAttachments: readonly unknown[];
@@ -17,13 +18,14 @@ let mockPaintingComposerProps:
   | undefined;
 
 jest.mock('expo-router', () => ({
-  Stack: { Screen: () => null },
+  Stack: {
+    Screen: ({ options }: { options: Record<string, unknown> }) => {
+      mockScreenOptions = options;
+      return null;
+    },
+  },
   useLocalSearchParams: () => mockParams,
   useNavigation: () => ({ setParams: mockSetParams }),
-}));
-
-jest.mock('@/frontend/hooks/useThemeColor', () => ({
-  useThemeColor: () => '#000000',
 }));
 
 jest.mock('../components/PaintingComposer', () => ({
@@ -49,6 +51,7 @@ describe('PaintingScreen', () => {
     jest.clearAllMocks();
     mockParams = {};
     mockPaintingComposerProps = undefined;
+    mockScreenOptions = undefined;
     mockUsePainting.mockReturnValue({ data: undefined, isLoading: false });
     mockUseResolvedPaintingFiles.mockReturnValue({ data: undefined, isLoading: false });
   });
@@ -56,6 +59,18 @@ describe('PaintingScreen', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+  });
+
+  it('inherits the transparent root header without painting an opaque background', () => {
+    act(() => {
+      renderer = create(<PaintingScreen />);
+    });
+
+    expect(mockScreenOptions).toMatchObject({
+      headerBackButtonDisplayMode: 'minimal',
+      title: '',
+    });
+    expect(mockScreenOptions).not.toHaveProperty('headerStyle');
   });
 
   it('keeps the handoff composer mounted while its new receipt loads', () => {
