@@ -1,6 +1,7 @@
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
+import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import { application } from '@/backend/core/application/Application';
 import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
@@ -38,6 +39,7 @@ export function createAppBootstrapRuntime(
   // resolutions only construct — the connection opens in `DbService.onInit`,
   // inside `start()`.
   const host = new ApplicationHost({ overrides, services: serviceList });
+  const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
@@ -46,6 +48,7 @@ export function createAppBootstrapRuntime(
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const services = createBackendServices({
+    ai,
     cache,
     mcpRuntime,
     oauth,

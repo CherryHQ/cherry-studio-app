@@ -5,6 +5,7 @@ const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
+const mockAi = { kind: 'ai' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
@@ -13,6 +14,7 @@ const mockOauthSession = { kind: 'oauth-session' };
 const mockPreference = { kind: 'preference' };
 const mockWebSearch = { kind: 'web-search' };
 const mockServices = {
+  ai: mockAi,
   cache: mockCache,
   mcpRuntime: mockMcpRuntime,
   oauth: mockOauth,
@@ -60,6 +62,7 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
  */
 const createRuntime = () =>
   createAppBootstrapRuntime({
+    AiService: mockAi,
     CacheService: mockCache,
     DbService: mockDb,
     McpRuntimeService: mockMcpRuntime,
@@ -86,6 +89,7 @@ describe('createAppBootstrapRuntime', () => {
     // No `dbService`: the data services resolve it through `application`, so the
     // composition is only handed the infrastructure it cannot reach that way.
     expect(mockCreateBackendServices).toHaveBeenCalledWith({
+      ai: mockAi,
       cache: mockCache,
       mcpRuntime: mockMcpRuntime,
       oauth: mockOauth,

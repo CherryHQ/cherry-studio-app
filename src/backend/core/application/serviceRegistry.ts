@@ -1,3 +1,4 @@
+import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
@@ -31,6 +32,7 @@ export const services = {
   McpRuntimeService,
   OAuthRuntimeService,
   ProviderOAuthService,
+  AiService,
 } as const;
 
 /** Service name to instance type, derived from `services`. */

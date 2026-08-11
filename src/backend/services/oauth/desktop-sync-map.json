@@ -562,13 +562,6 @@
       },
       {
         "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/AiService.ts"],
-        "reason": "Injects only authenticated fetch and Copilot serving-token capabilities into AI services.",
-        "target": "src/bootstrap/composition/createAiServices.ts",
-        "targetSha256": "57fba83b658441830fce3de67567a6e393aca87c1d719d2a32083570290f1b49"
-      },
-      {
-        "classification": "mobile-extension",
         "evidence": ["mobile:src/shared/contracts/oauth.ts"],
         "reason": "Exposes only OAuthModule publicly and gives CherryIN a narrow session interface.",
         "target": "src/bootstrap/composition/createBackend.ts",
@@ -760,7 +753,6 @@
       "src/backend/services/cherryin/CherryInClient.ts",
       "src/backend/services/cherryin/__tests__/CherryInClient.test.ts",
       "src/bootstrap/composition/__tests__/createBackendServices.test.ts",
-      "src/bootstrap/composition/createAiServices.ts",
       "src/bootstrap/composition/createBackend.ts",
       "src/bootstrap/composition/createBackendServices.ts",
       "src/frontend/features/settings/ProviderScreen/ProviderApiKeySettingsScreen.tsx",

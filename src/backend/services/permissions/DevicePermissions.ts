@@ -151,6 +151,13 @@ export class DevicePermissions {
   }
 }
 
+/**
+ * Shared instance. The class carries no per-instance state — its only field is
+ * the HealthKit loader test seam, and the Android return waiter is scoped to the
+ * call that creates it — so one instance is as good as many.
+ */
+export const devicePermissions = new DevicePermissions();
+
 async function loadHealthKitModule() {
   const { getHealthKit } = await import('react-native-nitro-healthkit');
   return getHealthKit();
