@@ -205,6 +205,7 @@ function PaintingSettingField({
     }
     case 'range': {
       const numericValue = typeof value === 'number' ? value : Number(value ?? field.spec.min);
+      const isFixed = field.spec.max <= field.spec.min;
       return (
         <View className="gap-3">
           <View className="flex-row items-center justify-between gap-3">
@@ -213,14 +214,16 @@ function PaintingSettingField({
               {numericValue}
             </Text>
           </View>
-          <Slider
-            accessibilityLabel={label}
-            max={field.spec.max}
-            min={field.spec.min}
-            onValueChange={(nextValue) => onValueChange(field.key, nextValue)}
-            step={field.spec.step ?? 1}
-            value={numericValue}
-          />
+          {isFixed ? null : (
+            <Slider
+              accessibilityLabel={label}
+              max={field.spec.max}
+              min={field.spec.min}
+              onValueChange={(nextValue) => onValueChange(field.key, nextValue)}
+              step={field.spec.step ?? 1}
+              value={numericValue}
+            />
+          )}
         </View>
       );
     }

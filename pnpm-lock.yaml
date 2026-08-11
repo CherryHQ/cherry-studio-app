@@ -29,7 +29,7 @@ patchedDependencies:
   '@ai-sdk/deepseek@2.0.30': db4c4c1e60c18e61952ec4432de7a401adf44420bdbfe4bb6f726a8958642790
   '@ai-sdk/google@3.0.64': 8486f495c82f8187fcc9dfe9b4c77b9f54026c273fab22ab7d4bbdc2e50d0312
   '@ai-sdk/openai-compatible@2.0.62': d95c024a7f2a5a8c0a82336e78fe757a3a4ba86cf4f9af11bb26fb8b52fd7aee
-  '@ai-sdk/openai@3.0.53': b2a56a32b4cf7aee1801b9a74d8098ea211135bcb2545f351f0835894c40db17
+  '@ai-sdk/openai@3.0.53': 47168cbc7adb7c20e625b441185d9608937e842a65c6539752f10c61e1907f62
   '@ai-sdk/xai@3.0.111': 14ac373f04d53e60b277485bdcc1e590b2a2e17dfbe28575f5098c108a32977e
   '@bottom-tabs/react-navigation@1.4.0': 3b020e5c2082d73190742b6c8fbdf6712b3db373d93c237c4ee935a92118a61e
   '@magrinj/expo-quick-look@0.3.1': 2b97fda8470c046179cf3e97282b6984fd1b926d2f54df9056a5cc455f073f2f
@@ -79,7 +79,7 @@ importers:
         version: 3.0.37(zod@4.4.3)
       '@ai-sdk/openai':
         specifier: 3.0.53
-        version: 3.0.53(patch_hash=b2a56a32b4cf7aee1801b9a74d8098ea211135bcb2545f351f0835894c40db17)(zod@4.4.3)
+        version: 3.0.53(patch_hash=47168cbc7adb7c20e625b441185d9608937e842a65c6539752f10c61e1907f62)(zod@4.4.3)
       '@ai-sdk/openai-compatible':
         specifier: 2.0.62
         version: 2.0.62(patch_hash=d95c024a7f2a5a8c0a82336e78fe757a3a4ba86cf4f9af11bb26fb8b52fd7aee)(zod@4.4.3)
@@ -476,7 +476,7 @@ importers:
         version: 3.0.64(patch_hash=8486f495c82f8187fcc9dfe9b4c77b9f54026c273fab22ab7d4bbdc2e50d0312)(zod@4.4.3)
       '@ai-sdk/openai':
         specifier: 3.0.53
-        version: 3.0.53(patch_hash=b2a56a32b4cf7aee1801b9a74d8098ea211135bcb2545f351f0835894c40db17)(zod@4.4.3)
+        version: 3.0.53(patch_hash=47168cbc7adb7c20e625b441185d9608937e842a65c6539752f10c61e1907f62)(zod@4.4.3)
       '@ai-sdk/openai-compatible':
         specifier: 2.0.62
         version: 2.0.62(patch_hash=d95c024a7f2a5a8c0a82336e78fe757a3a4ba86cf4f9af11bb26fb8b52fd7aee)(zod@4.4.3)
@@ -552,7 +552,7 @@ importers:
         version: 3.0.37(zod@4.4.3)
       '@ai-sdk/openai':
         specifier: 3.0.53
-        version: 3.0.53(patch_hash=b2a56a32b4cf7aee1801b9a74d8098ea211135bcb2545f351f0835894c40db17)(zod@4.4.3)
+        version: 3.0.53(patch_hash=47168cbc7adb7c20e625b441185d9608937e842a65c6539752f10c61e1907f62)(zod@4.4.3)
       '@ai-sdk/openai-compatible':
         specifier: 2.0.62
         version: 2.0.62(patch_hash=d95c024a7f2a5a8c0a82336e78fe757a3a4ba86cf4f9af11bb26fb8b52fd7aee)(zod@4.4.3)
@@ -622,7 +622,7 @@ importers:
         version: 3.0.64(patch_hash=8486f495c82f8187fcc9dfe9b4c77b9f54026c273fab22ab7d4bbdc2e50d0312)(zod@4.4.3)
       '@ai-sdk/openai':
         specifier: 3.0.53
-        version: 3.0.53(patch_hash=b2a56a32b4cf7aee1801b9a74d8098ea211135bcb2545f351f0835894c40db17)(zod@4.4.3)
+        version: 3.0.53(patch_hash=47168cbc7adb7c20e625b441185d9608937e842a65c6539752f10c61e1907f62)(zod@4.4.3)
       '@ai-sdk/openai-compatible':
         specifier: 2.0.62
         version: 2.0.62(patch_hash=d95c024a7f2a5a8c0a82336e78fe757a3a4ba86cf4f9af11bb26fb8b52fd7aee)(zod@4.4.3)
@@ -9289,7 +9289,7 @@ snapshots:
 
   '@ai-sdk/azure@3.0.54(zod@4.4.3)':
     dependencies:
-      '@ai-sdk/openai': 3.0.53(patch_hash=b2a56a32b4cf7aee1801b9a74d8098ea211135bcb2545f351f0835894c40db17)(zod@4.4.3)
+      '@ai-sdk/openai': 3.0.53(patch_hash=47168cbc7adb7c20e625b441185d9608937e842a65c6539752f10c61e1907f62)(zod@4.4.3)
       '@ai-sdk/provider': 3.0.14
       '@ai-sdk/provider-utils': 4.0.40(zod@4.4.3)
       zod: 4.4.3
@@ -9377,7 +9377,7 @@ snapshots:
       '@ai-sdk/provider-utils': 4.0.40(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/openai@3.0.53(patch_hash=b2a56a32b4cf7aee1801b9a74d8098ea211135bcb2545f351f0835894c40db17)(zod@4.4.3)':
+  '@ai-sdk/openai@3.0.53(patch_hash=47168cbc7adb7c20e625b441185d9608937e842a65c6539752f10c61e1907f62)(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.14
       '@ai-sdk/provider-utils': 4.0.40(zod@4.4.3)

@@ -14,7 +14,6 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
-  useComposerActions,
   useComposerFieldDismiss,
   useComposerState,
 } from '@/frontend/components/composer';
@@ -38,10 +37,15 @@ import {
   reconcileImageParamDraft,
   resolveImageGenerationMode,
 } from '../utils/imageGenerationParams';
-import { createPaintingOutputAttachmentDraft } from '../utils/paintingOutputAttachment';
 import { PaintingSettingsBottomSheet } from './PaintingSettingsBottomSheet';
 
 type PaintingInputProps = {
+  /**
+   * Params to restore rather than derive — the settings an interrupted attempt
+   * ran with. They arrive a beat after mount (they live in the job ledger), so
+   * they are applied as a one-shot override of the model defaults.
+   */
+  initialParamValues?: ImageParamDraft;
   onCancel: () => void;
   onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult>;
   onGenerated?: (result: PaintingGenerationResult) => void;
@@ -50,6 +54,7 @@ type PaintingInputProps = {
 };
 
 export function PaintingInput({
+  initialParamValues,
   onCancel,
   onGenerate,
   onGenerated,
@@ -67,8 +72,8 @@ export function PaintingInput({
     modelId: UniqueModelId;
     values: ImageParamDraft;
   } | null>(null);
+  const [seedApplied, setSeedApplied] = useState(false);
   const { attachments, draft } = useComposerState();
-  const { setAttachments } = useComposerActions();
   const { model: selectedModel } = useModelById(selectedModelId);
   const { models: enabledImageModels } = useModels({
     capability: MODEL_CAPABILITY.IMAGE_GENERATION,
@@ -108,10 +113,21 @@ export function PaintingInput({
   // safe: reconcileImageParamDraft (already computed above as paramValues) is
   // idempotent, so once the draft settles the conditions stop matching and
   // setState is no longer called.
+  const pendingSeed = seedApplied ? undefined : initialParamValues;
   if (!selectedModelId) {
     if (paramState !== null) {
       setParamState(null);
     }
+  } else if (pendingSeed) {
+    // Restore branch, checked first: by the time the interrupted attempt's
+    // params load, the draft above has already reconciled to the model's
+    // defaults, so the equality guard would never let them through.
+    setSeedApplied(true);
+    setParamState({
+      mode: generationMode,
+      modelId: selectedModelId,
+      values: reconcileImageParamDraft(pendingSeed, resolvedMode),
+    });
   } else if (
     paramState?.modelId !== selectedModelId ||
     paramState.mode !== generationMode ||
@@ -192,7 +208,6 @@ export function PaintingInput({
         paramValues: submittedValues,
         prompt: text,
       });
-      setAttachments(result.outputs.map(createPaintingOutputAttachmentDraft));
       onGenerated?.(result);
     },
     [
@@ -202,7 +217,6 @@ export function PaintingInput({
       paramValues,
       selectedModel?.imageGeneration,
       selectedModelId,
-      setAttachments,
     ],
   );
   const getSendErrorLabel = useCallback(

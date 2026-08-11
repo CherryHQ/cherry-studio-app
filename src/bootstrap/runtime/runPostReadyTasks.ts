@@ -1,5 +1,6 @@
 import { loggerService } from '@logger';
 
+import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 
 const logger = loggerService.withContext('runPostReadyTasks');
@@ -9,7 +10,10 @@ const logger = loggerService.withContext('runPostReadyTasks');
  * preferences — data repair and diagnostics belong here, not
  * in `initializeAppRuntime`. Best-effort: callers fire-and-forget and a failure
  * must not surface to the user. */
-export async function runPostReadyTasks(services: BackendServices) {
+export async function runPostReadyTasks(
+  services: BackendServices,
+  runtime: { jobRuntime: JobRuntime },
+) {
   // The catch lives here, not in callers: they `void` this promise, so a task
   // added below without its own handling would become an unhandled rejection.
   try {
@@ -17,6 +21,9 @@ export async function runPostReadyTasks(services: BackendServices) {
       reconcileStalePendingMessages(services),
       // The chat path is cache-only, so warm tools off the startup critical path.
       services.mcpRuntime.prewarmActiveServers(),
+      // The first pump also runs lazy startup recovery (abandon/retry/singleton
+      // sweeps over prior-process leftovers) and the cold-start GC sweep.
+      runtime.jobRuntime.pump({ reason: 'cold-start' }),
     ]);
   } catch (error) {
     logger.error('Post-ready tasks failed', error as Error);

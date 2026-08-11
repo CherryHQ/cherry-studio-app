@@ -5,7 +5,9 @@ import { useEffect } from 'react';
 import { Linking } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import type { Backend } from '@/shared/contracts';
 
 import { usePaintingViewerActions } from '../usePaintingViewerActions';
 
@@ -59,13 +61,19 @@ const painting = {
   id: '00000000-0000-7000-8000-000000000001',
   prompt: 'Draw a cherry',
 } as Painting;
+const mockCancelGeneration = jest.fn(async () => undefined);
 const dataApi = {
   delete: mockDelete,
-  get: jest.fn(),
+  // Deleting a painting stops any generation still writing into it, so the hook
+  // now reads the painting job list; nothing is running in these cases.
+  get: jest.fn(async () => []),
   patch: jest.fn(),
   post: jest.fn(),
   put: jest.fn(),
 } as unknown as ApiClient;
+const backend = {
+  paintings: { cancelGeneration: mockCancelGeneration },
+} as unknown as Backend;
 let queryClient: QueryClient;
 
 let actions: ReturnType<typeof usePaintingViewerActions> | undefined;
@@ -100,7 +108,9 @@ describe('usePaintingViewerActions', () => {
       renderer = create(
         <QueryClientProvider client={queryClient}>
           <DataApiProvider dataApi={dataApi}>
-            <Probe />
+            <BackendProvider backend={backend}>
+              <Probe />
+            </BackendProvider>
           </DataApiProvider>
         </QueryClientProvider>,
       );

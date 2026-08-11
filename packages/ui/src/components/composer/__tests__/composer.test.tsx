@@ -1,4 +1,4 @@
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Composer } from '../composer';
@@ -232,6 +232,38 @@ describe('Composer', () => {
       uris: ['file:///pasted.jpg'],
     });
     expect(onPaste).toHaveBeenNthCalledWith(2, { type: 'unsupported' });
+  });
+
+  it('returns a controlled multiline input to its single-line height when cleared', () => {
+    const onChangeText = jest.fn();
+    const onSend = jest.fn();
+    const children = <Composer.Input testID="composer-input" />;
+    const tree = render({ children, onChangeText, onSend, value: 'first\nsecond\nthird' });
+    const populatedInput = tree.root.findByType(TextInput);
+
+    expect(StyleSheet.flatten(populatedInput.props.style)?.height).toBeUndefined();
+
+    act(() => {
+      tree.update(
+        <Composer onChangeText={onChangeText} onSend={onSend} value="">
+          {children}
+        </Composer>,
+      );
+    });
+
+    const input = tree.root.findByType(TextInput);
+    expect(StyleSheet.flatten(input.props.style)?.height).toEqual(expect.any(Number));
+
+    act(() => {
+      tree.update(
+        <Composer onChangeText={onChangeText} onSend={onSend} value={'new\nmultiline'}>
+          {children}
+        </Composer>,
+      );
+    });
+
+    const repopulatedInput = tree.root.findByType(TextInput);
+    expect(StyleSheet.flatten(repopulatedInput.props.style)?.height).toBeUndefined();
   });
 
   it('carries an icon and a label in a pill without letting the icon shrink', () => {

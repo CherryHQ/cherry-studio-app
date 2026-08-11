@@ -7,7 +7,7 @@ import type {
   PaintingFileRole,
   PaintingFiles,
 } from '@cherrystudio/universal/data/types/painting';
-import { and, asc, eq, exists, gt, inArray, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, or } from 'drizzle-orm';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import {
@@ -17,7 +17,7 @@ import {
   paintingTable,
 } from '@/backend/data/db/schemas';
 
-import { insertWithOrderKey } from './utils/orderKey';
+import { computeNewOrderKey, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
 const defaultLimit = 20;
@@ -40,26 +40,17 @@ export class PaintingService {
     return this.dbService.getDb();
   }
 
-  private hasOutputFilter() {
-    return exists(
-      this.db
-        .select({ id: paintingFileRefTable.id })
-        .from(paintingFileRefTable)
-        .where(
-          and(
-            eq(paintingFileRefTable.sourceId, paintingTable.id),
-            eq(paintingFileRefTable.role, 'output'),
-          ),
-        ),
-    );
-  }
-
+  /**
+   * Output-less receipts are listed too: while `painting.generate` runs (or
+   * after it was interrupted) the row is all the gallery has to show, and
+   * hiding it would leave the user with no way back to a running generation
+   * and no way to delete an abandoned one.
+   */
   async listByCursor(
     params: { cursor?: string; limit?: number } = {},
   ): Promise<CursorPaginationResponse<Painting>> {
     const limit = Math.min(Math.max(params.limit ?? defaultLimit, 1), maxLimit);
     const cursor = params.cursor ? decodeCursor(params.cursor) : undefined;
-    const hasOutput = this.hasOutputFilter();
     const afterCursor = cursor
       ? or(
           gt(paintingTable.orderKey, cursor.orderKey),
@@ -70,7 +61,7 @@ export class PaintingService {
     const rows = await this.db
       .select()
       .from(paintingTable)
-      .where(afterCursor ? and(hasOutput, afterCursor) : hasOutput)
+      .where(afterCursor)
       .orderBy(asc(paintingTable.orderKey), asc(paintingTable.id))
       .limit(limit + 1);
     const pageRows = rows.slice(0, limit);
@@ -89,7 +80,6 @@ export class PaintingService {
     const rows = await this.db
       .select({ id: paintingTable.id })
       .from(paintingTable)
-      .where(this.hasOutputFilter())
       .orderBy(asc(paintingTable.orderKey), asc(paintingTable.id));
     return rows.map((row) => row.id);
   }
@@ -109,23 +99,80 @@ export class PaintingService {
   }
 
   async create(input: CreatePaintingInput): Promise<Painting> {
-    const inputFileIds = [...(input.inputFileIds ?? [])];
-    const row = (await this.dbService.withWriteTx(async (tx) => {
-      const inserted = (await insertWithOrderKey(
-        tx,
-        paintingTable,
-        {
-          modelId: normalizeModelId(input.providerId, input.modelId),
-          prompt: input.prompt,
-          providerId: input.providerId,
-        },
-        { pkColumn: paintingTable.id, position: 'first' },
-      )) as PaintingRow;
-      await insertFileRefsTx(tx, inserted.id, 'input', inputFileIds);
-      return inserted;
-    })) as PaintingRow;
+    return this.dbService.withWriteTx((tx) => this.createTx(tx, input));
+  }
 
-    return rowToPainting(row, { input: inputFileIds, output: [] });
+  /** Rides the caller's write transaction (`withWriteTx` is not reentrant). */
+  async createTx(tx: Database, input: CreatePaintingInput): Promise<Painting> {
+    const inputFileIds = [...(input.inputFileIds ?? [])];
+    const inserted = (await insertWithOrderKey(
+      tx,
+      paintingTable,
+      {
+        modelId: normalizeModelId(input.providerId, input.modelId),
+        prompt: input.prompt,
+        providerId: input.providerId,
+      },
+      { pkColumn: paintingTable.id, position: 'first' },
+    )) as PaintingRow;
+    await insertFileRefsTx(tx, inserted.id, 'input', inputFileIds);
+
+    return rowToPainting(inserted, { input: inputFileIds, output: [] });
+  }
+
+  /**
+   * Re-points an interrupted receipt at a fresh attempt: new prompt/model, new
+   * input refs, back to the head of the list. A retry is another attempt at the
+   * same painting rather than a new one, so reusing the row keeps its gallery
+   * tile in place instead of stranding the interrupted one beside it.
+   *
+   * Rides the caller's write transaction (`withWriteTx` is not reentrant).
+   */
+  async resetForRetryTx(tx: Database, id: string, input: CreatePaintingInput): Promise<Painting> {
+    const [row] = await tx
+      .select({ id: paintingTable.id })
+      .from(paintingTable)
+      .where(eq(paintingTable.id, id))
+      .limit(1);
+    if (!row) {
+      throw DataApiErrorFactory.notFound('Painting', id);
+    }
+
+    const existingFiles = await loadFilesTx(tx, [id]);
+    if ((existingFiles.get(id)?.output.length ?? 0) > 0) {
+      // Reuse would drop finished images on the floor. Callers are meant to
+      // gate on the interrupted state (zero outputs); getting here means the
+      // caller mistook a finished painting for one worth retrying.
+      throw DataApiErrorFactory.validation(
+        { paintingId: ['Painting already has outputs'] },
+        `Painting ${id} already has outputs and cannot be reused for a retry`,
+      );
+    }
+
+    const inputFileIds = [...(input.inputFileIds ?? [])];
+    const orderKey = await computeNewOrderKey(
+      tx,
+      paintingTable,
+      { position: 'first' },
+      { excludePkValue: id, pkColumn: paintingTable.id },
+    );
+    await tx
+      .delete(paintingFileRefTable)
+      .where(and(eq(paintingFileRefTable.sourceId, id), eq(paintingFileRefTable.role, 'input')));
+    await insertFileRefsTx(tx, id, 'input', inputFileIds);
+    const [updated] = await tx
+      .update(paintingTable)
+      .set({
+        modelId: normalizeModelId(input.providerId, input.modelId),
+        orderKey,
+        prompt: input.prompt,
+        providerId: input.providerId,
+        updatedAt: Date.now(),
+      })
+      .where(eq(paintingTable.id, id))
+      .returning();
+
+    return rowToPainting(updated as PaintingRow, { input: inputFileIds, output: [] });
   }
 
   async replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting> {
