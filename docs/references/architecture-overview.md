@@ -74,6 +74,7 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Universal Package](./universal-package.md): `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync.
 - [Storage Engine](./data/storage-engine.md): current SQLite constraints and migration criteria.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, runtimes, sessions, cleanup, and startup gates.
+- [Lifecycle](./lifecycle/README.md): service container, hosts, phases, and resource-scope coordination (designed; landing in stages).
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
 - [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): `ChatRuntime`, overlay, and persistence.
 - [Web Search](./web-search.md): external providers versus provider-native web search.
