@@ -42,6 +42,7 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivities/chatReply';
+import type { PaintingActivityProps } from '@/shared/backgroundActivities/painting';
 import type { Backend } from '@/shared/contracts';
 
 export type BackendComposition = {
@@ -62,6 +63,7 @@ type BackendCompositionDependencies = {
    */
   activities: {
     assistantActivity: LiveActivityFactory<BackgroundReplyActivityProps> | undefined;
+    paintingActivity: LiveActivityFactory<PaintingActivityProps> | undefined;
   };
   dbService: DbService;
   translate: (key: string) => string;
@@ -83,11 +85,14 @@ export function createBackend(
   const assistantActivityPresenter = createLiveActivityPresenter(
     dependencies.activities.assistantActivity,
   );
+  const paintingActivityPresenter = createLiveActivityPresenter(
+    dependencies.activities.paintingActivity,
+  );
   const backgroundActivities = new BackgroundActivityManager({
     keepAlive: {
       acquire: (tag) => keepAlive.acquire(tag),
     },
-    presenters: [assistantActivityPresenter],
+    presenters: [assistantActivityPresenter, paintingActivityPresenter],
   });
   const backgroundReply = new BackgroundReplyService({
     activities: {
@@ -159,9 +164,14 @@ export function createBackend(
       jobHandlerEntry(
         'painting.generate',
         createPaintingGenerateJobHandler({
+          activities: {
+            startSession: (input) =>
+              backgroundActivities.startSession({ ...input, presenter: paintingActivityPresenter }),
+          },
           ai: services.ai,
           paintings: services.painting,
           storage: paintingStorage,
+          translate: dependencies.translate,
         }),
       ),
     ],

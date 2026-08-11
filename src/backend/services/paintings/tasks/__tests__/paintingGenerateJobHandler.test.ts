@@ -166,6 +166,69 @@ describe('createPaintingGenerateJobHandler', () => {
     expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
   });
 
+  describe('background activity session', () => {
+    function createSessionDependencies() {
+      const dependencies = createDependencies();
+      const sessions: { cancel: jest.Mock; finish: jest.Mock; update: jest.Mock }[] = [];
+      const startSession = jest.fn(() => {
+        const session = {
+          cancel: jest.fn(),
+          finish: jest.fn(),
+          ready: Promise.resolve(),
+          update: jest.fn(),
+        };
+        sessions.push(session);
+        return session;
+      });
+      dependencies.activities = { startSession };
+      return { dependencies, sessions, startSession };
+    }
+
+    it('opens a session while generating and finishes it as completed', async () => {
+      const { dependencies, sessions, startSession } = createSessionDependencies();
+      const handler = createPaintingGenerateJobHandler(dependencies);
+
+      await handler.execute(createContext());
+
+      expect(startSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deepLinkUrl: 'cherrystudio://paintings/painting-1',
+          keepAlive: false,
+          props: expect.objectContaining({ phase: 'generating', preview: 'draw' }),
+          tag: 'painting.generate',
+        }),
+      );
+      expect(sessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'completed' }),
+      );
+    });
+
+    it('finishes the session as failed when generation throws', async () => {
+      const { dependencies, sessions } = createSessionDependencies();
+      jest.mocked(dependencies.ai.generateImage).mockRejectedValue(new Error('provider down'));
+      const handler = createPaintingGenerateJobHandler(dependencies);
+
+      await expect(handler.execute(createContext())).rejects.toThrow('provider down');
+      expect(sessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'failed' }),
+      );
+    });
+
+    it('finishes the session as cancelled when the signal aborted', async () => {
+      const { dependencies, sessions } = createSessionDependencies();
+      const controller = new AbortController();
+      controller.abort(new Error('Job cancelled: user'));
+      const handler = createPaintingGenerateJobHandler(dependencies);
+
+      await expect(handler.execute(createContext({ signal: controller.signal }))).rejects.toThrow(
+        'Job cancelled: user',
+      );
+      expect(sessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'cancelled' }),
+      );
+    });
+  });
+
   describe('through the job runtime', () => {
     let sqlite: DatabaseSync | undefined;
     let ctx: TestRuntime | undefined;

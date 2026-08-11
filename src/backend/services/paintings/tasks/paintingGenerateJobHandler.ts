@@ -3,7 +3,15 @@ import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/dat
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
+import type {
+  BackgroundActivitySession,
+  BackgroundActivitySessionInput,
+} from '@/backend/services/backgroundActivities/BackgroundActivityManager';
 import type { JobHandlerFor } from '@/backend/services/jobs/types';
+import type {
+  PaintingActivityPhase,
+  PaintingActivityProps,
+} from '@/shared/backgroundActivities/painting';
 import type { PaintingGenerationResult } from '@/shared/contracts';
 
 import type { CreateInternalEntryInput } from '../../file/fileStorage';
@@ -57,12 +65,21 @@ export type PaintingFileStorage = {
   getUri(entry: InternalFileEntry): string | undefined;
 };
 
+export type PaintingActivityDriver = {
+  startSession: (
+    input: Omit<BackgroundActivitySessionInput<PaintingActivityProps>, 'presenter'>,
+  ) => BackgroundActivitySession<PaintingActivityProps>;
+};
+
 export type PaintingGenerateJobDependencies = {
+  /** Dynamic-island progress surface; omitted in tests and off iOS. */
+  activities?: PaintingActivityDriver;
   ai: PaintingAi;
   paintings: {
     replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting>;
   };
   storage: PaintingFileStorage;
+  translate?: (key: string) => string;
 };
 
 /**
@@ -87,64 +104,96 @@ export function createPaintingGenerateJobHandler(
     async execute(ctx): Promise<PaintingGenerationResult> {
       const { images, mode, modelId, paintingId, paramValues, prompt } = ctx.input;
       const { ai, paintings, storage } = dependencies;
-
-      const inputImages = await Promise.all(
-        images.map((image) => storage.readDataUrl(image.uri, image.mediaType)),
-      );
-      throwIfAborted(ctx.signal);
-      const result = await ai.generateImage({
-        inputImages,
-        mode,
-        paramValues,
-        prompt,
-        requestOptions: { signal: ctx.signal },
-        uniqueModelId: modelId,
+      const translate = dependencies.translate ?? ((key: string) => key);
+      const startedAtEpochMs = Date.now();
+      const session = dependencies.activities?.startSession({
+        deepLinkUrl: `cherrystudio://paintings/${encodeURIComponent(paintingId)}`,
+        // The dispatch loop already holds the user-continued keep-alive lease.
+        keepAlive: false,
+        props: paintingActivityProps(translate, 'generating', prompt, startedAtEpochMs),
+        tag: 'painting.generate',
       });
-      throwIfAborted(ctx.signal);
 
-      if (result.images.length === 0) {
-        throw new Error('Image provider returned no image');
-      }
-
-      const createdOutputs: InternalFileEntry[] = [];
-      let outputRefsCommitted = false;
       try {
-        for (const image of result.images) {
-          createdOutputs.push(
-            await storage.createInternalEntry({
-              cleanupPolicy: 'delete_when_unreferenced',
-              data: image.base64,
-              mediaType: image.mediaType,
-              source: 'base64',
-            }),
-          );
-        }
-        const painting = await paintings.replaceOutputs(
-          paintingId,
-          createdOutputs.map((entry) => entry.id),
+        const inputImages = await Promise.all(
+          images.map((image) => storage.readDataUrl(image.uri, image.mediaType)),
         );
-        outputRefsCommitted = true;
         throwIfAborted(ctx.signal);
-        const persistedOutputIds = new Set(painting.files.output);
-        const outputs = createdOutputs.map((entry) => {
-          if (!persistedOutputIds.has(entry.id)) {
-            throw new Error('Generated painting has a missing output file');
-          }
-          const uri = storage.getUri(entry);
-          if (!uri) {
-            throw new Error(`Generated painting file is unavailable: ${entry.id}`);
-          }
-          return { fileEntryId: entry.id, uri };
+        const result = await ai.generateImage({
+          inputImages,
+          mode,
+          paramValues,
+          prompt,
+          requestOptions: { signal: ctx.signal },
+          uniqueModelId: modelId,
         });
+        throwIfAborted(ctx.signal);
 
-        return { outputs, painting };
-      } catch (error) {
-        if (!outputRefsCommitted) {
-          await storage.discard(createdOutputs);
+        if (result.images.length === 0) {
+          throw new Error('Image provider returned no image');
         }
+
+        const createdOutputs: InternalFileEntry[] = [];
+        let outputRefsCommitted = false;
+        try {
+          for (const image of result.images) {
+            createdOutputs.push(
+              await storage.createInternalEntry({
+                cleanupPolicy: 'delete_when_unreferenced',
+                data: image.base64,
+                mediaType: image.mediaType,
+                source: 'base64',
+              }),
+            );
+          }
+          const painting = await paintings.replaceOutputs(
+            paintingId,
+            createdOutputs.map((entry) => entry.id),
+          );
+          outputRefsCommitted = true;
+          throwIfAborted(ctx.signal);
+          const persistedOutputIds = new Set(painting.files.output);
+          const outputs = createdOutputs.map((entry) => {
+            if (!persistedOutputIds.has(entry.id)) {
+              throw new Error('Generated painting has a missing output file');
+            }
+            const uri = storage.getUri(entry);
+            if (!uri) {
+              throw new Error(`Generated painting file is unavailable: ${entry.id}`);
+            }
+            return { fileEntryId: entry.id, uri };
+          });
+
+          session?.finish(paintingActivityProps(translate, 'completed', prompt, startedAtEpochMs));
+          return { outputs, painting };
+        } catch (error) {
+          if (!outputRefsCommitted) {
+            await storage.discard(createdOutputs);
+          }
+          throw error;
+        }
+      } catch (error) {
+        const phase: PaintingActivityPhase = ctx.signal.aborted ? 'cancelled' : 'failed';
+        session?.finish(paintingActivityProps(translate, phase, prompt, startedAtEpochMs));
         throw error;
       }
     },
+  };
+}
+
+function paintingActivityProps(
+  translate: (key: string) => string,
+  phase: PaintingActivityPhase,
+  preview: string,
+  startedAtEpochMs: number,
+): PaintingActivityProps {
+  return {
+    compactLabel: translate('painting.backgroundActivity.title'),
+    detail: translate(`painting.backgroundActivity.${phase}`),
+    phase,
+    startedAtEpochMs,
+    title: translate('painting.backgroundActivity.title'),
+    ...(preview.trim() ? { preview: preview.trim() } : {}),
   };
 }
 
