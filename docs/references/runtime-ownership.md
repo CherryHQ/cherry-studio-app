@@ -6,7 +6,10 @@ Terms follow [Domain Language](./domain-language.md).
 
 ## Principles
 
-- Mobile does not port the desktop lifecycle framework, service registry, or phase graph.
+- Mobile adopts the desktop lifecycle framework, service registry, and a mobile-specific phase pair;
+  see [Lifecycle](./lifecycle/README.md). This document describes the current explicit-composition
+  wiring, which that design replaces stage by stage — where the two disagree, Lifecycle is the
+  target state and this document is the present one.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
 - Backgrounding is not a reliable execution window for chat or painting generation.
