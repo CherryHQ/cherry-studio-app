@@ -404,8 +404,10 @@ type JobHandler<K extends JobType> = {
 ```
 
 `JobExecutionClass` is `'foreground-only' | 'bounded-background' | 'user-continued' |
-'system-transfer'`. Phase 1 dispatches only `foreground-only`. `server-required` from the
-assessment is deliberately not a class — such work must never be enqueued locally.
+'system-transfer'`. The pump dispatches `foreground-only` and (as-built, since the
+KeepAliveCoordinator landed) `user-continued`, wrapping the latter's `execute` in a keep-alive
+lease. `server-required` from the assessment is deliberately not a class — such work must never
+be enqueued locally.
 
 Every first-wave handler must declare, in its PR description: destination, idempotency rule,
 checkpoint format (or "none"), cancellation behavior, and recovery policy — the assessment's
@@ -422,11 +424,15 @@ go/no-go checklist enforced at review time.
   paramValues, prompt }` — draft picker images are materialized into durable internal file
   entries before enqueue, so the URIs are internal-storage paths, never ephemeral picker URIs;
   the handler reads data URLs from them.
-- `executionClass: 'foreground-only'`, `recovery: 'abandon'`, `maxAttempts: 1`, queue
-  `'painting'`, concurrency 1. Mobile `generateImage` is a single un-resumable provider call with
-  no task ID; process death mid-call is an ambiguous external outcome, so recovery must not
-  resubmit. Idempotency key: reuse the session's existing `generationSignature` so double-taps
-  join the active job instead of double-charging.
+- `executionClass: 'user-continued'` (as-built; shipped as `'foreground-only'` until the
+  KeepAliveCoordinator landed — the dispatch loop now holds a keep-alive lease around `execute`,
+  so generation keeps running when the app is backgrounded), `recovery: 'abandon'`,
+  `maxAttempts: 1`, queue `'painting'`, concurrency 1. Mobile `generateImage` is a single
+  un-resumable provider call with no task ID; process death mid-call is an ambiguous external
+  outcome, so recovery must not resubmit. Idempotency key: reuse the session's existing
+  `generationSignature` so double-taps join the active job instead of double-charging. The
+  handler also drives a `PaintingActivity` Live Activity session (Dynamic Island progress)
+  through the `BackgroundActivityManager` while executing.
 - `PaintingsModule` gains `startGeneration(input) → { jobId }` (receipt + `enqueueTx` atomically
   in one `withWriteTx`, with an idempotency pre-check so a duplicate signature joins the active
   job instead of orphaning a fresh receipt) and `cancelGeneration(jobId)`;
@@ -597,7 +603,10 @@ type + active statuses).
 
 ## Appendix: KeepAliveCoordinator (design draft)
 
-> Status: design only — implementation is blocked on PR #473 merging. Do not build before then.
+> Status: **as-built** — PR #473 grew to carry the extraction itself, so the "merge first,
+> extract later" sequencing this draft mandated is obsolete. The coordinator lives in
+> `src/backend/services/keepAlive/KeepAliveCoordinator.ts`; both consumers below are wired.
+> As-built deviations from the draft are flagged inline.
 
 Phase 1 ships `painting.generate` as `foreground-only`: backgrounding the app mid-generation
 suspends the JS runtime, and the job settles only on resume (or is abandoned by the next
@@ -631,15 +640,23 @@ type KeepAliveLease = { release(): void }; // 1→0 stops the session; idempoten
 ```
 
 - Owned by composition alongside `JobRuntime`; disposed with it; keeps #473's serial operation
-  queue and preference gate inside the coordinator.
-- Consumer 1 — chat: `BackgroundReplyService` keeps its turns and the Live Activity, and its
-  `reconcileAudio` collapses into acquire-on-generating / release-on-settle.
-- Consumer 2 — jobs: a handler opts in declaratively (a keep-alive flag derived from its
-  execution class); the dispatch loop wraps `execute` in acquire/release, so the coordinator
-  never observes job state and the runtime never owns audio.
-- `painting.generate` then moves `executionClass` to `'user-continued'`: the class states the
-  product promise ("keeps running while you do something else"), and keep-alive is the mechanism
-  honoring it on iOS today — Phase 3's honest leases (iOS 26 Continued Processing, Android FGS)
-  can replace the mechanism later without touching the class.
+  queue inside the coordinator. **As-built deviation: no preference gate.** The coordinator is a
+  pure counting primitive — gating moved to each consumer, because a coordinator-level
+  `chat.background_reply.enabled` gate would let the chat toggle silently kill painting's
+  background continuation, a cross-feature coupling no user could predict. Chat's gate now just
+  means "chat does not acquire when disabled".
+- Consumer 1 — chat: `BackgroundReplyService` keeps its turns; `reconcileAudio` collapsed into a
+  per-session `keepAlive` bit (generating phases → held, approval/terminal → released).
+  **As-built deviation:** the Live Activity half did not stay in the service — it was extracted
+  into the feature-agnostic `BackgroundActivityManager`
+  (`src/backend/services/backgroundActivities/`), which owns throttling, AppState handling,
+  orphan sweeps, and mirrors each session's keep-alive bit into a coordinator lease.
+- Consumer 2 — jobs (wired as designed): the dispatch loop wraps a `user-continued` handler's
+  `execute` in acquire/release, so the coordinator never observes job state and the runtime
+  never owns audio.
+- `painting.generate` moved `executionClass` to `'user-continued'` (landed): the class states
+  the product promise ("keeps running while you do something else"), and keep-alive is the
+  mechanism honoring it on iOS today — Phase 3's honest leases (iOS 26 Continued Processing,
+  Android FGS) can replace the mechanism later without touching the class.
 
 Android is out of scope for the extraction (it would be FGS + WakeLock, a Phase 3 concern).

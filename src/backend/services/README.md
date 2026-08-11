@@ -23,6 +23,13 @@ suffix.
   domain functions.
 - `file` owns the Expo managed-file storage adapter and file maintenance orchestration. File-entry
   and reference persistence remain in `src/backend/data/services`.
+- `keepAlive` owns the reference-counted silent-audio `KeepAliveCoordinator` (no preference gate —
+  each consumer decides when to acquire). `backgroundActivities` owns the feature-agnostic
+  `BackgroundActivityManager` session driver and the presenter seam over iOS Live Activities.
+  Domain meaning stays with the consumers: `backgroundReply` is chat's adapter (turn state
+  machine, content derivation), and the painting job handler drives its own session. Widget
+  layouts live in `src/frontend/features/<feature>/background`; their props contracts sit in
+  `src/shared/backgroundActivities`, and bootstrap/runtime injects the layouts into composition.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific
   transformations.
 - `src/backend/ai` remains reserved for AI SDK, provider, MCP runtime, message, and tool behavior.
