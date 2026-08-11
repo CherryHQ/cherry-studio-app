@@ -1,6 +1,7 @@
 # Lifecycle Migration
 
-> Status: Stage A in progress; B, D, C not started.
+> Status: Stage A landed — the framework exists and is tested, and the `services` registry is
+> empty, so no module runs through it yet. B, D, and C are not started.
 > Interfaces: [lifecycle-overview.md](./lifecycle-overview.md) ·
 > [resource-scope.md](./resource-scope.md)
 
@@ -65,29 +66,32 @@ lifecycle framework"), and the principles section of
 framework, service registry, or phase graph"). Leaving them in place would leave the repository
 contradicting itself.
 
-## Stage A commits
+## Stage A contents (landed)
 
-1. **Toolchain** — add `reflect-metadata` and `@babel/plugin-proposal-decorators` (legacy), enable
-   `experimentalDecorators`, import `reflect-metadata` once from preboot. Verify a decorator
-   compiles under both Metro and jest-expo before anything depends on it.
-2. **Primitives** — `event.ts` (`Disposable`, `Emitter`, `toDisposable`), `signal.ts`, `types.ts`
-   (`Phase`, `LifecycleState`, `TeardownOutcome`, `ServiceMetadata`, `Pausable`, `Activatable`).
-3. **Decorators** — `@Injectable`, `@DependsOn`, `@Priority`, `@ServicePhase`, `@ErrorHandling`,
-   `@AppStatePolicy`, plus their metadata readers.
-4. **BaseService** — desktop's, minus IPC sugar and the WeakSet guard, plus
-   `registerAppStateListener`.
-5. **DependencyResolver** — topological sort, cycle detection, layered parallelism, priority
-   ordering within a layer.
-6. **ServiceContainer** — registration, lazy singleton creation, constructor injection, one live
-   instance per host, dev-mode undeclared-dependency warning.
-7. **LifecycleManager** — phase startup, `stopAll`/`destroyAll` in reverse order, the 5s per-service
-   ceiling, `TeardownSummary`.
-8. **Application + ApplicationHost** — `get()`, serialized `install()`/`uninstall()`, two-stage
-   host construction, `HostProfile` overrides.
-9. **Lint + docs** — `backendCoreLayer`, the registry exemption, and this document's status line.
+| Piece | What shipped |
+| --- | --- |
+| Toolchain | `reflect-metadata` plus `@babel/plugin-proposal-decorators`. The installed plugin is v8, which takes `version: 'legacy'` — v7's `legacy: true` fails to load. `reflect-metadata` is imported by `decorators.ts` itself rather than from preboot, so no global setup ordering is implied |
+| Primitives | `types.ts` (`Phase`, `LifecycleState`, `TeardownOutcome`, `ServiceMetadata`, `Pausable`, `Activatable`), `event.ts` (`Disposable`, `Emitter`, `toDisposable`) |
+| Decorators | `@Injectable`, `@DependsOn`, `@Priority`, `@ServicePhase`, `@ErrorHandling`, `@AppStatePolicy` and their readers. The error strategy defaults from the phase, so most services declare none |
+| BaseService | Desktop's, minus IPC sugar and the WeakSet guard, plus `registerAppStateListener` |
+| DependencyResolver | Layered topological sort, cycle detection, priority ordering, `hoistGateDependencies` |
+| ServiceContainer | Registration, lazy singletons, constructor injection, overrides, dev-mode undeclared-dependency warning |
+| LifecycleManager | Phase startup, `runAllReady`, reverse-order `stopAll`/`destroyAll`, the 5s ceiling, `TeardownSummary` |
+| Application + ApplicationHost | `get()`, serialized `install()`/`uninstall()`, two-stage construction, `HostProfile` overrides |
+| Lint | `backendCoreLayer` plus the `serviceRegistry.ts` exemption |
 
-Every commit carries its own tests. Stage A ships an empty `services` object: the framework is
-present and tested, no module is registered, and the app's runtime graph is untouched.
+`signal.ts` was not ported: nothing consumes a one-shot signal yet. It comes with the first service
+that needs one, most likely `ChatRuntime`'s reconciliation gate in Stage B.
+
+68 unit tests cover the framework. The `services` object is empty, so the app's runtime graph is
+untouched — confirmed by a simulator cold start that reaches the topic list exactly as before.
+
+The toolchain was proven end to end rather than by a green build alone. A temporary decorated class
+wired into the app entry compiled to Hermes bytecode in a production export, and on a simulator it
+read its own `@Injectable` name, `@DependsOn` list, and default phase back out of
+`reflect-metadata`. That last leg is worth doing once: `reflect-metadata` falls back to the
+`Function` constructor to find a global object, and Hermes rejects that constructor — the fallback
+is unreachable only because `globalThis` is checked first.
 
 ## Stage B outline
 
@@ -169,6 +173,5 @@ Scenarios 1–5 are Stage D; 6–7 are Stage B; 8–9 hold today and gain the gu
 ## Verification per stage
 
 Each commit: `pnpm typecheck`, the targeted `pnpm test:app -- <pattern>`, lint, format. Full
-`pnpm test:app` once before opening each PR. Stage A additionally requires a cold start on a
-simulator to confirm the untouched runtime graph still boots — the framework being inert is the
-claim, and only running the app proves it.
+`pnpm test:app` once before opening each PR. Stage A additionally required a simulator cold start —
+the framework being inert is the claim, and only running the app proves it.
