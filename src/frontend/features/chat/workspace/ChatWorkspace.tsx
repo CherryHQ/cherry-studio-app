@@ -1,6 +1,7 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import * as Clipboard from 'expo-clipboard';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -8,6 +9,7 @@ import { useAlert } from '@/frontend/components/AlertProvider';
 import { useComposerDockLayout } from '@/frontend/components/composer';
 import {
   MessageList,
+  type AssistantMessageActions,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
@@ -29,6 +31,7 @@ import {
 } from './hooks/useMessageListInitialRenderGate';
 
 const logger = loggerService.withContext('ChatWorkspace');
+const COPIED_FEEDBACK_DURATION_MS = 1_200;
 // 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
 const gateLog = loggerService.withContext('ChatGate');
 
@@ -50,9 +53,12 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
   const chatTopic = useChatTopic(topicId);
+  const regenerateAssistantMessage = chatTopic.regenerate;
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const [copiedMessageId, setCopiedMessageId] = useState<string>();
+  const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
   const presentationMessages = useMemo(
@@ -78,6 +84,54 @@ export function ChatWorkspace({
     },
     [alert, chat, t, topicId],
   );
+  const handleCopyAssistantMessage = useCallback(
+    ({ messageId, text }: { messageId: string; text: string }) => {
+      void Clipboard.setStringAsync(text)
+        .then(() => {
+          if (copiedFeedbackTimerRef.current !== null) {
+            clearTimeout(copiedFeedbackTimerRef.current);
+          }
+
+          setCopiedMessageId(messageId);
+          copiedFeedbackTimerRef.current = setTimeout(() => {
+            copiedFeedbackTimerRef.current = null;
+            setCopiedMessageId(undefined);
+          }, COPIED_FEEDBACK_DURATION_MS);
+        })
+        .catch((error) => {
+          logger.error('Copy assistant message failed', error as Error);
+          alert.show({ title: t('chat.messageActions.copyFailed') });
+        });
+    },
+    [alert, t],
+  );
+  const handleRegenerateAssistantMessage = useCallback(
+    (messageId: string) => {
+      void regenerateAssistantMessage({ messageId }).catch((error) => {
+        logger.error('Regenerate assistant message failed', error as Error);
+        alert.show({ title: t('chat.messageActions.regenerateFailed') });
+      });
+    },
+    [alert, regenerateAssistantMessage, t],
+  );
+  const assistantActions = useMemo<AssistantMessageActions | undefined>(
+    () =>
+      isPreview
+        ? undefined
+        : {
+            copiedMessageId,
+            isRegenerateDisabled: chatTopic.isBusy,
+            onCopy: handleCopyAssistantMessage,
+            onRegenerate: handleRegenerateAssistantMessage,
+          },
+    [
+      chatTopic.isBusy,
+      copiedMessageId,
+      handleCopyAssistantMessage,
+      handleRegenerateAssistantMessage,
+      isPreview,
+    ],
+  );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
     hasHistoryBeforePendingTurn: chatTopic.hasHistoryBeforePendingTurn,
     isLoadingInitial,
@@ -91,6 +145,15 @@ export function ChatWorkspace({
   const composerDockLayout = useComposerDockLayout();
   const contentBottomInset = isPreview ? 12 : composerDockLayout.contentBottomInset;
   const keyboardOffset = isPreview ? 0 : composerDockLayout.keyboardOffset;
+
+  useEffect(
+    () => () => {
+      if (copiedFeedbackTimerRef.current !== null) {
+        clearTimeout(copiedFeedbackTimerRef.current);
+      }
+    },
+    [],
+  );
 
   // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
   useEffect(() => {
@@ -106,6 +169,7 @@ export function ChatWorkspace({
     <View className="flex-1 bg-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <MessageList
+        assistantActions={assistantActions}
         key={listRenderKey}
         bottomAccessoryHeight={isPreview ? undefined : composerDockLayout.inputHeightShared}
         contentBottomInset={contentBottomInset}
