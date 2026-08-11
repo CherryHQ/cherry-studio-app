@@ -13,7 +13,7 @@ const mockInputHeightShared = {
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
 const mockRegenerate = jest.fn(async () => undefined);
-const mockSetStringAsync = jest.fn(async () => undefined);
+const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockAlertShow = jest.fn();
 const mockLoggerError = jest.fn();
 let mockCoverVisible: boolean | undefined;
