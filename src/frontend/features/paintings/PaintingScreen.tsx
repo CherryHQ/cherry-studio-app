@@ -25,10 +25,10 @@ export function PaintingScreen() {
   }>();
   const handoffToken = firstParam(params.handoff);
   const paintingId = firstParam(params.paintingId);
-  // Frozen at mount: once a generation started here writes its receipt id back
-  // into the route, re-entering the loading gate would tear the composer down
-  // mid-generation.
-  const [openedWithPaintingId] = useState(() => paintingId !== undefined);
+  // Frozen at mount: only the painting this screen opened with owns the loading
+  // gate. A generation writes a new receipt id into the route; letting that id
+  // re-enter the gate would tear the composer down mid-generation.
+  const [openedPaintingId] = useState(() => paintingId);
   const [handoff] = useState(() => consumePaintingDraftHandoff(handoffToken));
   const paintingQuery = usePainting(paintingId);
   const painting = paintingQuery.data;
@@ -39,7 +39,10 @@ export function PaintingScreen() {
   const filesQuery = useResolvedPaintingFiles(handoff ? undefined : painting);
   const paintingFiles = filesQuery.data ?? { inputs: [], outputs: [] };
   const insets = useSafeAreaInsets();
-  const isLoading = openedWithPaintingId && (paintingQuery.isLoading || filesQuery.isLoading);
+  const isLoading =
+    openedPaintingId !== undefined &&
+    paintingId === openedPaintingId &&
+    (paintingQuery.isLoading || filesQuery.isLoading);
   const backgroundColor = useThemeColor('background');
   const handleReceipt = useCallback(
     (receiptId: string | undefined) => navigation.setParams({ paintingId: receiptId }),
