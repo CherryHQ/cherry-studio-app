@@ -37,6 +37,7 @@ import { loggerService } from '@logger';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import type { InsertJobRow, JobRow } from '@/backend/data/db/schemas/job';
 import type { JobService, TerminalJobStatus } from '@/backend/data/services/JobService';
+import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 
 import type { JobPayloadOf, JobType } from './jobRegistry';
 import { computeBackoff } from './runtime/backoff';
@@ -65,17 +66,27 @@ const logger = loggerService.withContext('JobRuntime');
  * How many dispatch-ordered candidates one claim transaction inspects.
  *
  * TOMBSTONE — read before adding a second handler. If every candidate in the
- * window is filtered out (no handler / not `foreground-only` / queue at cap),
+ * window is filtered out (no handler / undispatchable class / queue at cap),
  * this claim returns null and the pump stops, *without ever seeing runnable
  * rows past the window*. Ordering is `priority ASC, scheduledAt ASC, id ASC`,
  * so 10 older background rows can permanently starve a newer foreground one.
- * Unreachable today: the production registry is empty and every test handler
- * is `foreground-only`.
+ * Unreachable today: every registered handler's class is dispatchable.
  * Fix before registering the first `bounded-background` handler: push the
  * executionClass filter down into SQL, or widen and retry when the whole
  * window is filtered.
  */
 const CLAIM_CANDIDATE_WINDOW = 10;
+
+/**
+ * `user-continued` states the product promise ("keeps running while you do
+ * something else"); a keep-alive lease around `execute` is the mechanism
+ * honoring it on iOS today. Honest OS leases (iOS Continued Processing,
+ * Android FGS) can replace the mechanism later without touching the class.
+ */
+const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<string> = new Set([
+  'foreground-only',
+  'user-continued',
+]);
 
 /**
  * Bounded drain on dispose: long enough for an aborted handler to reject and
@@ -106,6 +117,14 @@ export type JobRuntimeOptions = {
   /** Complete, immutable registry — assembled in composition, frozen here. */
   handlers: readonly (readonly [string, JobHandler])[];
   globalMaxConcurrency?: number;
+  /**
+   * Keep-alive lease source for `user-continued` handlers: the dispatch loop
+   * wraps their `execute` in acquire/release so the work survives
+   * backgrounding, and neither the coordinator observes job state nor the
+   * handler owns audio. Optional so tests without one keep exercising the
+   * pipeline.
+   */
+  keepAlive?: { acquire: (tag: string) => KeepAliveLease };
   /** Injectable clock for tests. */
   now?: () => number;
   /** Progress sink; defaults to a no-op until a consumer exists (Phase 2+). */
@@ -186,6 +205,7 @@ class JobRuntimeImpl implements JobRuntime {
   private readonly jobService: JobService;
   private readonly handlers: ReadonlyMap<string, JobHandler>;
   private readonly globalMaxConcurrency: number;
+  private readonly keepAlive?: { acquire: (tag: string) => KeepAliveLease };
   private readonly now: () => number;
   private readonly onProgress: (jobId: string, progress: JobProgress) => void;
 
@@ -223,6 +243,7 @@ class JobRuntimeImpl implements JobRuntime {
     }
     this.handlers = handlers;
     this.globalMaxConcurrency = options.globalMaxConcurrency ?? DEFAULT_GLOBAL_MAX_CONCURRENCY;
+    if (options.keepAlive) this.keepAlive = options.keepAlive;
     this.now = options.now ?? Date.now;
     this.onProgress = options.onProgress ?? (() => {});
 
@@ -535,9 +556,10 @@ class JobRuntimeImpl implements JobRuntime {
         const handler = this.handlers.get(candidate.type);
         // Orphan rows wait for recovery's sweep; never execute without a handler.
         if (!handler) continue;
-        // Phase 1 runs a foreground window only; other classes stay enqueued
-        // until their platform adapters exist.
-        if (handler.executionClass !== 'foreground-only') continue;
+        // The dispatch window covers foreground work plus `user-continued`
+        // work (kept schedulable after backgrounding by a keep-alive lease);
+        // remaining classes stay enqueued until their platform adapters exist.
+        if (!DISPATCHABLE_EXECUTION_CLASSES.has(handler.executionClass)) continue;
         if (this.inFlightExecuted.has(candidate.id)) continue;
         const queueCap = handler.defaultConcurrency ?? 1;
         if ((runningPerQueue.get(candidate.queue) ?? 0) >= queueCap) continue;
@@ -654,6 +676,11 @@ class JobRuntimeImpl implements JobRuntime {
     });
     this.inFlightExecuted.set(row.id, executed);
 
+    const keepAliveLease =
+      handler.executionClass === 'user-continued' && this.keepAlive
+        ? this.keepAlive.acquire(`job.${row.type}`)
+        : undefined;
+
     if (row.timeoutMs !== null && row.timeoutMs > 0) {
       const handle = setTimeout(
         () => controller.abort(new JobHandlerTimeoutError()),
@@ -723,6 +750,7 @@ class JobRuntimeImpl implements JobRuntime {
           ]);
         }
       } finally {
+        keepAliveLease?.release();
         this.clearTimeoutHandle(row.id);
         this.abortControllers.delete(row.id);
         this.inFlightExecuted.delete(row.id);

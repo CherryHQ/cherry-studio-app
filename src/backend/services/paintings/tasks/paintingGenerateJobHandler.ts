@@ -80,7 +80,9 @@ export function createPaintingGenerateJobHandler(
     defaultQueue: () => PAINTING_JOB_QUEUE,
     defaultRetryPolicy: { backoff: 'none', baseDelayMs: 0, maxAttempts: 1, maxDelayMs: 0 },
     defaultTimeoutMs: GENERATE_TIMEOUT_MS,
-    executionClass: 'foreground-only',
+    // The class states the product promise ("keeps generating while you do
+    // something else"); the dispatch loop honors it with a keep-alive lease.
+    executionClass: 'user-continued',
     recovery: 'abandon',
     async execute(ctx): Promise<PaintingGenerationResult> {
       const { images, mode, modelId, paintingId, paramValues, prompt } = ctx.input;

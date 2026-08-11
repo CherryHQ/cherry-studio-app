@@ -360,7 +360,7 @@ describe('JobRuntime', () => {
     expect(orphan?.error?.message).toContain('Orphan job');
   });
 
-  it('leaves non-foreground execution classes pending (Phase 1 window filter)', async () => {
+  it('leaves undispatchable execution classes pending (window filter)', async () => {
     const { jobService, runtime } = setup([
       ['internal.bg', makeEchoHandler({ executionClass: 'bounded-background' })],
     ]);
@@ -368,6 +368,56 @@ describe('JobRuntime', () => {
     expect((await runtime.pump({ reason: 'manual' })).claimed).toBe(0);
     expect((await jobService.getById(handle.id))?.status).toBe('pending');
     expect(await settlesWithin(handle.finished, 50)).toBe(false);
+  });
+
+  it('wraps user-continued handlers in a keep-alive lease for the duration of execute', async () => {
+    const gate = makeGate();
+    const leases: { release: jest.Mock }[] = [];
+    const acquire = jest.fn((_tag: string) => {
+      const lease = { release: jest.fn() };
+      leases.push(lease);
+      return lease;
+    });
+    const { runtime } = setup(
+      [['internal.uc', makeHoldHandler(gate, { executionClass: 'user-continued' })]],
+      { keepAlive: { acquire } },
+    );
+
+    const handle = await enqueueTest(runtime, 'internal.uc', {});
+    await waitFor(() => acquire.mock.calls.length === 1);
+    expect(acquire).toHaveBeenCalledWith('job.internal.uc');
+    expect(leases[0]?.release).not.toHaveBeenCalled();
+
+    gate.release();
+    const finished = await handle.finished;
+    expect(finished.status).toBe('completed');
+    // finished resolves inside finalizeJob; the lease is released one
+    // microtask later in the execute pipeline's finally.
+    await waitFor(() => (leases[0]?.release.mock.calls.length ?? 0) === 1);
+    expect(leases[0]?.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the keep-alive lease when a user-continued handler fails', async () => {
+    const leases: { release: jest.Mock }[] = [];
+    const acquire = jest.fn((_tag: string) => {
+      const lease = { release: jest.fn() };
+      leases.push(lease);
+      return lease;
+    });
+    const failing = makeEchoHandler({
+      executionClass: 'user-continued',
+      async execute() {
+        throw new Error('boom');
+      },
+    });
+    const { runtime } = setup([['internal.ucFail', failing]], { keepAlive: { acquire } });
+
+    const handle = await enqueueTest(runtime, 'internal.ucFail', {}, { maxAttempts: 1 });
+    const finished = await handle.finished;
+    expect(finished.status).toBe('failed');
+    expect(acquire).toHaveBeenCalledTimes(1);
+    await waitFor(() => (leases[0]?.release.mock.calls.length ?? 0) === 1);
+    expect(leases[0]?.release).toHaveBeenCalledTimes(1);
   });
 
   it('resolves finished before onSettled completes, and swallows onSettled errors', async () => {

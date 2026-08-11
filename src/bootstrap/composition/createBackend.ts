@@ -166,6 +166,9 @@ export function createBackend(
       ),
     ],
     jobService: services.job,
+    keepAlive: {
+      acquire: (tag) => keepAlive.acquire(tag),
+    },
   });
   const paintings = createPaintingsModule({
     db: { withWriteTx: (fn) => dbService.withWriteTx(fn) },

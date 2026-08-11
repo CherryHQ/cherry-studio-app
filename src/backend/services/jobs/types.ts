@@ -23,11 +23,12 @@ import type { JobPayloadOf, JobType } from './jobRegistry';
 
 /**
  * What guarantee a handler's work actually requires from the OS execution
- * window. Mobile-only (desktop always has a live process). Phase 1 dispatches
- * only `foreground-only`; other classes stay claimable-in-principle but are
- * filtered out of the pump window until their platform adapters exist.
- * `server-required` is intentionally not a class — such work must never be
- * enqueued locally.
+ * window. Mobile-only (desktop always has a live process). The pump
+ * dispatches `foreground-only` and `user-continued` (the latter wrapped in a
+ * KeepAliveCoordinator lease so it survives backgrounding); other classes
+ * stay claimable-in-principle but are filtered out of the pump window until
+ * their platform adapters exist. `server-required` is intentionally not a
+ * class — such work must never be enqueued locally.
  */
 export type JobExecutionClass =
   | 'foreground-only'
