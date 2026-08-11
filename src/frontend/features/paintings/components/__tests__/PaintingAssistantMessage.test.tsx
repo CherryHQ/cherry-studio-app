@@ -114,7 +114,6 @@ describe('PaintingAssistantMessage', () => {
       expect(loader.props).toMatchObject({
         height,
         label: 'painting.status.generating',
-        presentation: 'message',
         resolution: '1664 \u00d7 928',
         width,
       });

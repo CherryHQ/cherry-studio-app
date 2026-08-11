@@ -26,8 +26,7 @@ export type ImageGenerationLoaderProps = Omit<ViewProps, 'children'> &
     height?: number;
     /** Visible status text. Pass a translated value at product call sites. */
     label?: string;
-    /** Message treatment by default, or a canvas-only thumbnail. */
-    presentation?: 'message' | 'thumbnail';
+    /** Badge text; omitted when the requested size is not known. */
     resolution?: string;
     /** Square fallback used when `width` or `height` is not provided. */
     size?: number;
@@ -37,21 +36,17 @@ export type ImageGenerationLoaderProps = Omit<ViewProps, 'children'> &
 
 export function ImageGenerationLoader({
   accessibilityLabel,
-  accessible,
   active = true,
   className,
   height,
   label = 'Generating image',
-  presentation = 'message',
-  resolution = '1024 \u00d7 1024',
+  resolution,
   size = DEFAULT_SIZE,
   width,
   ...props
 }: ImageGenerationLoaderProps) {
   const reducedMotion = useReducedMotion();
   const isAnimating = active && !reducedMotion;
-  const isThumbnail = presentation === 'thumbnail';
-  const isAccessible = accessible ?? !isThumbnail;
   const previewHeight = height ?? size;
   const previewWidth = width ?? size;
   const time = useLoaderClock(isAnimating);
@@ -78,7 +73,7 @@ export function ImageGenerationLoader({
     [baseColor, glowColor, isAnimating, previewHeight, previewWidth, time],
   );
 
-  const spokenLabel = accessibilityLabel ?? `${label}. ${resolution}`;
+  const spokenLabel = accessibilityLabel ?? (resolution ? `${label}. ${resolution}` : label);
 
   return (
     <View
@@ -86,7 +81,6 @@ export function ImageGenerationLoader({
       accessibilityLabel={spokenLabel}
       accessibilityRole="progressbar"
       accessibilityState={{ busy: active }}
-      accessible={isAccessible}
       className={cn('items-center', className)}
     >
       <View
@@ -99,20 +93,18 @@ export function ImageGenerationLoader({
             <Shader source={dotFieldEffect} uniforms={uniforms} />
           </Rect>
         </Canvas>
-        {isThumbnail ? null : (
+        {resolution ? (
           <View className="absolute right-2 top-2 rounded-full border border-border bg-background/75 px-2 py-0.5">
             <Text className="font-mono text-xs text-foreground" numberOfLines={1} selectable>
               {resolution}
             </Text>
           </View>
-        )}
-        {isThumbnail ? null : (
-          <View className="absolute bottom-2 left-2">
-            <ShimmerText active={active} className="font-mono text-xs" numberOfLines={1}>
-              {label}
-            </ShimmerText>
-          </View>
-        )}
+        ) : null}
+        <View className="absolute bottom-2 left-2">
+          <ShimmerText active={active} className="font-mono text-xs" numberOfLines={1}>
+            {label}
+          </ShimmerText>
+        </View>
       </View>
     </View>
   );

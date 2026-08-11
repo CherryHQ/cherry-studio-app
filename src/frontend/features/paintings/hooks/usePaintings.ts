@@ -26,7 +26,7 @@ import {
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
 
-import { imageParamsAspectRatio } from '../utils/imageGenerationParams';
+import { imageParamsAspectRatio, imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import {
   paintingJobFailureMessage,
   paintingJobParamValues,
@@ -58,6 +58,8 @@ export type PaintingPendingGalleryItem = {
   /** Provider failure text; absent when there is nothing user-facing to say. */
   message?: string;
   painting: Painting;
+  /** Requested size, when the params that asked for it name one. */
+  resolution?: string;
 };
 
 export type PaintingGalleryItem = PaintingOutputGalleryItem | PaintingPendingGalleryItem;
@@ -273,6 +275,7 @@ export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
           kind: activeJob ? 'generating' : 'interrupted',
           message: activeJob ? undefined : paintingJobFailureMessage(interruptedJob),
           painting,
+          resolution: imageParamsResolutionLabel(paramValues),
         },
       ];
     });

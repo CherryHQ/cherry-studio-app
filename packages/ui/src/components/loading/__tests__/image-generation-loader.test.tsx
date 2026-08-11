@@ -94,9 +94,8 @@ describe('ImageGenerationLoader', () => {
 
     expect(root.props.accessibilityRole).toBe('progressbar');
     expect(root.props.accessibilityState).toEqual({ busy: true });
-    expect(root.props.accessibilityLabel).toBe('Generating image. 1024 \u00d7 1024');
+    expect(root.props.accessibilityLabel).toBe('Generating image');
     expect(text).toContain('Generating image');
-    expect(text).toContain('1024 \u00d7 1024');
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(true);
   });
 
@@ -149,37 +148,38 @@ describe('ImageGenerationLoader', () => {
     expect(mockSetFrameActive).toHaveBeenLastCalledWith(false);
   });
 
-  it('renders a canvas-only thumbnail without a second accessibility target', () => {
+  it('drops the size badge when the request never named a size', () => {
     act(() => {
-      renderer = create(
-        <ImageGenerationLoader
-          presentation="thumbnail"
-          resolution={'1536 \u00d7 1024'}
-          size={96}
-          testID="loader"
-        />,
-      );
+      renderer = create(<ImageGenerationLoader label="Rendering" size={96} testID="loader" />);
     });
 
     const root = findHostRoot(renderer!);
     const preview = renderer!.root
       .findAllByType(View)
       .find((node) => node.props.pointerEvents === 'none');
+    const resolutionBadge = renderer!.root
+      .findAllByType(View)
+      .find((node) => node.props.className?.includes('absolute right-2 top-2'));
 
-    expect(root.props.accessible).toBe(false);
+    expect(resolutionBadge).toBeUndefined();
+    expect(root.props.accessibilityLabel).toBe('Rendering');
     expect(StyleSheet.flatten(preview?.props.style)).toMatchObject({ height: 96, width: 96 });
-    expect(collectText(renderer!)).toEqual([]);
+    // The status text still speaks for the loader on its own.
+    expect(collectText(renderer!)).toContain('Rendering');
+  });
+
+  it('leaves the host to own the accessibility target when asked', () => {
+    act(() => {
+      renderer = create(<ImageGenerationLoader accessible={false} testID="loader" />);
+    });
+
+    expect(findHostRoot(renderer!).props.accessible).toBe(false);
   });
 
   it('renders the message shimmer at the canvas bottom-left', () => {
     act(() => {
       renderer = create(
-        <ImageGenerationLoader
-          label="Rendering"
-          presentation="message"
-          resolution={'1536 \u00d7 1024'}
-          testID="loader"
-        />,
+        <ImageGenerationLoader label="Rendering" resolution={'1536 \u00d7 1024'} testID="loader" />,
       );
     });
 

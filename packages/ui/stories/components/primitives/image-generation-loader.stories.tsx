@@ -47,8 +47,9 @@ export const Static: Story = {
   ),
 };
 
-export const Thumbnail: Story = {
-  args: { presentation: 'thumbnail', size: 128 },
+/** One masonry column of the drawings gallery, at the ratio that was requested. */
+export const Tile: Story = {
+  args: { height: 99, resolution: '1664 × 928', width: 177 },
   render: (args) => (
     <View className="flex-1 items-center justify-center bg-background p-4">
       <ImageGenerationLoader {...args} />

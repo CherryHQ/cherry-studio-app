@@ -164,7 +164,6 @@ export function PaintingAssistantMessage({
               active={status === 'generating'}
               height={previewWidth / aspectRatio}
               label={t('painting.status.generating')}
-              presentation="message"
               resolution={resolution}
               testID="painting-generation-loader"
               width={previewWidth}

@@ -19,6 +19,7 @@ type MockGalleryItem = {
   kind: 'generating' | 'interrupted' | 'output';
   message?: string;
   painting: Painting;
+  resolution?: string;
   uri?: string;
 };
 const defaultGalleryItems: MockGalleryItem[] = [
@@ -279,19 +280,43 @@ describe('DrawingList', () => {
         key: 'painting-3:pending',
         kind: 'generating',
         painting: mockPaintingPending,
+        resolution: '1664 × 928',
       },
     ];
 
     const tree = await render();
 
+    // The tile carries the whole item's label, so the loader stays silent to
+    // screen readers while still showing its own status copy and size badge.
     const [loader] = findHostsByTestID(tree, 'painting-history-loader-painting-3');
-    expect(loader.props).toMatchObject({ presentation: 'thumbnail' });
+    expect(loader.props).toMatchObject({
+      accessible: false,
+      label: 'painting.status.generating',
+      resolution: '1664 × 928',
+    });
     // No image to zoom into: the tile links to the composer, not the viewer.
     expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(0);
     expect(findHostsByTestID(tree, 'painting-composer-link')[0]?.props.testProps).toEqual({
       params: { paintingId: 'painting-3' },
       pathname: '/paintings',
     });
+  });
+
+  it('sizes the running loader to the shape the request asked for', async () => {
+    mockGalleryItems = [
+      {
+        aspectRatio: 1664 / 928,
+        key: 'painting-3:pending',
+        kind: 'generating',
+        painting: mockPaintingPending,
+      },
+    ];
+
+    const tree = await render();
+
+    // A square loader centred in a landscape tile previews the wrong image.
+    const [loader] = findHostsByTestID(tree, 'painting-history-loader-painting-3');
+    expect(loader.props.width / loader.props.height).toBeCloseTo(1664 / 928, 5);
   });
 
   it("puts the provider's own words on an interrupted tile", async () => {
