@@ -108,7 +108,7 @@ describe('AssistantMessageRow', () => {
         />,
       );
     });
-    expect(renderer.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);
+    expect(renderer!.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);
 
     act(() => {
       renderer?.update(
@@ -117,7 +117,7 @@ describe('AssistantMessageRow', () => {
         />,
       );
     });
-    expect(renderer.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);
+    expect(renderer!.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);
   });
 
   test('omits copy without visible text and disables regenerate when requested', () => {
@@ -130,9 +130,9 @@ describe('AssistantMessageRow', () => {
       );
     });
 
-    expect(renderer.root.findAllByProps({ testID: 'assistant-message-copy' })).toHaveLength(0);
+    expect(renderer!.root.findAllByProps({ testID: 'assistant-message-copy' })).toHaveLength(0);
     expect(
-      renderer.root.findByProps({ testID: 'assistant-message-regenerate' }).props.disabled,
+      renderer!.root.findByProps({ testID: 'assistant-message-regenerate' }).props.disabled,
     ).toBe(true);
   });
 
@@ -147,7 +147,7 @@ describe('AssistantMessageRow', () => {
     });
 
     expect(
-      renderer.root.findByProps({ testID: 'assistant-message-copy' }).props.accessibilityLabel,
+      renderer!.root.findByProps({ testID: 'assistant-message-copy' }).props.accessibilityLabel,
     ).toBe('chat.messageActions.copied');
   });
 });
