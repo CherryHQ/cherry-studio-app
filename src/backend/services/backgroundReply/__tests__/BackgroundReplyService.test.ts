@@ -236,6 +236,23 @@ describe('BackgroundReplyService', () => {
     await flushOperations();
   });
 
+  test('ends the activity and stops audio when disposed during an active turn', async () => {
+    const service = createService();
+    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    await turn.ready;
+    appStateListener?.('background');
+    await flushOperations();
+    const activity = mockActivityInstances[0];
+
+    service.dispose();
+    await flushOperations();
+
+    expect(activity?.end).toHaveBeenCalledWith('immediate', expect.any(Object), expect.any(Date));
+    expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
+    expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
+    expect(mockPlayerStatusRemove).toHaveBeenCalledTimes(1);
+  });
+
   test('retries audio when the app enters the background after startup failed', async () => {
     mockSetAudioModeAsync.mockRejectedValueOnce(new Error('audio session busy'));
     const service = createService();

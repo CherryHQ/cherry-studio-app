@@ -107,7 +107,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createJobHandlers(dependencies.jobs),
     ...createKnowledgeHandlers(dependencies.knowledgeBases, dependencies.knowledgeItems),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
-    ...createMessageHandlers(dependencies.messages),
+    ...createMessageHandlers(dependencies.messages, dependencies.onTopicsDeleted),
     ...createMiniAppHandlers(dependencies.miniApps),
     ...createModelHandlers(dependencies.models),
     ...createNoteHandlers(dependencies.notes),

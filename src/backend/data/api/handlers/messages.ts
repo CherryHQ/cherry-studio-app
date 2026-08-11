@@ -16,11 +16,18 @@ type MessageData = Pick<
   | 'update'
 >;
 
-export function createMessageHandlers(service: MessageData): HandlersFor<MessageSchemas> {
+export function createMessageHandlers(
+  service: MessageData,
+  onTopicsDeleted: (topicIds: readonly string[]) => void,
+): HandlersFor<MessageSchemas> {
   return {
     '/messages/:id': {
-      DELETE: ({ params, query }) =>
-        service.delete(params.id, query?.cascade, query?.activeNodeStrategy),
+      DELETE: async ({ params, query }) => {
+        const message = await service.getById(params.id);
+        const result = await service.delete(params.id, query?.cascade, query?.activeNodeStrategy);
+        onTopicsDeleted([message.topicId]);
+        return result;
+      },
       GET: ({ params }) => service.getById(params.id),
       PATCH: ({ body, params }) => service.update(params.id, body),
     },
@@ -28,7 +35,11 @@ export function createMessageHandlers(service: MessageData): HandlersFor<Message
       POST: ({ body, params }) => service.createSibling(params.id, body),
     },
     '/topics/:topicId/messages': {
-      DELETE: ({ params }) => service.clearTopicMessages(params.topicId),
+      DELETE: async ({ params }) => {
+        const result = await service.clearTopicMessages(params.topicId);
+        onTopicsDeleted([params.topicId]);
+        return result;
+      },
       GET: ({ params, query }) => service.getBranchMessages(params.topicId, query),
       POST: ({ body, params }) => service.create(params.topicId, body),
     },

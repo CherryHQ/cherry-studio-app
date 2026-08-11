@@ -3,7 +3,11 @@ import type {
   CherryUIMessage,
 } from '@cherrystudio/universal/data/types/message';
 
-import type { BackgroundReplyContent, BackgroundReplyPhase } from './backgroundReplyTypes';
+import type {
+  BackgroundReplyContent,
+  BackgroundReplyOutcome,
+  BackgroundReplyPhase,
+} from './backgroundReplyTypes';
 
 const PREVIEW_CHARACTER_LIMIT = 160;
 const WEB_SEARCH_TOOL_NAMES = new Set([
@@ -84,7 +88,7 @@ export function getBackgroundReplyCompactLabel(
 }
 
 export function getTerminalBackgroundReplyContent(
-  outcome: 'cancelled' | 'completed' | 'failed',
+  outcome: BackgroundReplyOutcome,
   preview: string | undefined,
   t: BackgroundReplyTranslate,
 ): BackgroundReplyContent {
