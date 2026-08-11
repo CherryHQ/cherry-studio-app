@@ -1,6 +1,6 @@
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
-import { PreferenceService } from '@/backend/data/PreferenceService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { AgentChannelService } from '@/backend/data/services/AgentChannelService';
 import { AgentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
 import { AgentService } from '@/backend/data/services/AgentService';
@@ -38,11 +38,13 @@ export type DataServices = ReturnType<typeof createDataServices>;
 export function createDataServices({
   cache,
   dbService,
+  preference,
 }: {
   cache: CacheService;
   dbService: DbService;
+  /** Lifecycle-owned: the host constructs and initializes it, this only wires it. */
+  preference: PreferenceService;
 }) {
-  const preference = new PreferenceService(dbService);
   const aiUsageRecord = new AiUsageRecordService(dbService);
   const pin = new PinService(dbService);
   const provider = new ProviderService(dbService, pin, cache);

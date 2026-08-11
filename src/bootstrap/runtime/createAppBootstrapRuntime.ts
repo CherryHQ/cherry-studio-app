@@ -8,6 +8,7 @@ import { createDataApiHandlers } from '@/backend/data/api/handlers/apiHandlers';
 import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
@@ -33,9 +34,10 @@ export function createAppBootstrapRuntime(
   // resolutions only construct — the connection opens in `DbService.onInit`,
   // inside `start()`.
   const host = new ApplicationHost({ overrides, services: serviceList });
-  const cacheService = host.container.get<CacheService>('CacheService');
+  const cache = host.container.get<CacheService>('CacheService');
   const dbService = host.container.get<DbService>('DbService');
-  const services = createBackendServices(dbService, cacheService);
+  const preference = host.container.get<PreferenceService>('PreferenceService');
+  const services = createBackendServices({ cache, dbService, preference });
   const {
     backend,
     dataApiDependencies,
@@ -101,10 +103,9 @@ export function createAppBootstrapRuntime(
       return disposePromise;
     },
     initialize: async () => {
-      // Runs the Gate phase: CacheService.onInit, then DbService.onInit, ordered
+      // Runs the Gate phase — cache, then database, then preferences — ordered
       // by the dependency graph rather than by the order written here.
       await application.install(host);
-      await services.preference.init();
       await initializeAppRuntime(services);
     },
     runPostReadyTasks: () => runPostReadyTasks(services, { jobRuntime }),

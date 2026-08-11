@@ -10,6 +10,7 @@ import {
 } from '@cherrystudio/universal/data/preference';
 import { eq } from 'drizzle-orm';
 
+import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { DbService } from '@/backend/data/db/DbService';
 import { preferenceTable } from '@/backend/data/db/schemas';
 
@@ -41,18 +42,27 @@ const defaultUpdateOptions: PreferenceUpdateOptions = {
  * - Batch operations for multiple preferences
  * - Integration with React's useSyncExternalStore
  */
-export class PreferenceService implements PreferenceClient {
+@Injectable('PreferenceService')
+@DependsOn(['DbService'])
+export class PreferenceService extends BaseService implements PreferenceClient {
   private cache: PreferenceUpdateMap = { ...PreferenceDefaults.default };
   private listeners = new Map<PreferenceKeyType, Set<PreferenceListener>>();
   private updateTail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly dbService: DbService) {}
+  constructor(private readonly dbService: DbService) {
+    super();
+  }
 
   private get db() {
     return this.dbService.getDb();
   }
 
-  async init() {
+  /**
+   * Loads every stored preference into the cache. This is a `Gate` service
+   * because first paint reads theme, font size, and language straight out of
+   * that cache — see `initializeAppRuntime`.
+   */
+  protected async onInit() {
     this.cache = { ...PreferenceDefaults.default };
 
     const rows = await this.db

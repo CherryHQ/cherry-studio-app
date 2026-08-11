@@ -2,6 +2,7 @@ import { fetch as expoFetch } from 'expo/fetch';
 
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { createOAuthFlowRegistry } from '@/backend/services/oauth/authorization/createOAuthFlowRegistry';
 import { OAuthApiKeyStore } from '@/backend/services/oauth/authorization/OAuthApiKeyStore';
 import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
@@ -15,8 +16,19 @@ import { createPlatformAdapters } from './createPlatformAdapters';
 
 export type BackendServices = ReturnType<typeof createBackendServices>;
 
-export function createBackendServices(dbService: DbService, cache: CacheService) {
-  const dataServices = createDataServices({ cache, dbService });
+/**
+ * Infrastructure the host owns. Named rather than positional because all three
+ * are opaque service objects, and a positional list of those is a swap waiting
+ * to happen.
+ */
+export type BackendInfrastructure = {
+  cache: CacheService;
+  dbService: DbService;
+  preference: PreferenceService;
+};
+
+export function createBackendServices({ cache, dbService, preference }: BackendInfrastructure) {
+  const dataServices = createDataServices({ cache, dbService, preference });
   const platformAdapters = createPlatformAdapters({
     fileEntry: dataServices.fileEntry,
     fileRef: dataServices.fileRef,

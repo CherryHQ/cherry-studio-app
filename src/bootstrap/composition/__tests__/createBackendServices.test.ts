@@ -1,5 +1,6 @@
 import type { CacheService } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 
 import { createBackendServices } from '../createBackendServices';
 
@@ -74,10 +75,11 @@ describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
     const cache = { kind: 'cache' } as unknown as CacheService;
     const dbService = { kind: 'database' } as unknown as DbService;
+    const preference = { kind: 'preference' } as unknown as PreferenceService;
 
-    const services = createBackendServices(dbService, cache);
+    const services = createBackendServices({ cache, dbService, preference });
 
-    expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, dbService });
+    expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, dbService, preference });
     expect(mockCreatePlatformAdapters).toHaveBeenCalledWith({
       fileEntry: mockDataServices.fileEntry,
       fileRef: mockDataServices.fileRef,

@@ -35,7 +35,7 @@ describe('PreferenceService', () => {
     ]);
     const service = new PreferenceService(dbService);
 
-    await service.init();
+    await service._doInit();
 
     await expect(service.get('chat.default_model_id')).resolves.toBe('provider:model');
     await expect(service.get('app.language')).resolves.toBeNull();
@@ -57,7 +57,7 @@ describe('PreferenceService', () => {
     ]);
     const service = new PreferenceService(dbService);
 
-    await service.init();
+    await service._doInit();
 
     await expect(service.get('chat.web_search.provider_overrides')).resolves.toEqual({
       tavily: {
@@ -73,7 +73,7 @@ describe('PreferenceService', () => {
     const service = new PreferenceService(dbService);
     const listener = jest.fn();
 
-    await service.init();
+    await service._doInit();
     service.subscribeChange('permissions.calendar_write')(listener);
 
     await service.set('permissions.calendar_write', 'ask');
@@ -97,7 +97,7 @@ describe('PreferenceService', () => {
     ]);
     const service = new PreferenceService(dbService);
 
-    await service.init();
+    await service._doInit();
 
     expect(
       service.getMultipleCached({
@@ -119,7 +119,7 @@ describe('PreferenceService', () => {
     const service = new PreferenceService(dbService);
     const listener = jest.fn();
 
-    await service.init();
+    await service._doInit();
     service.subscribeChange('chat.default_model_id')(listener);
 
     await service.set('chat.default_model_id', 'provider:model');
@@ -155,7 +155,7 @@ describe('PreferenceService', () => {
     const primitiveListener = jest.fn();
     const objectListener = jest.fn();
 
-    await service.init();
+    await service._doInit();
     service.subscribeChange('chat.default_model_id')(primitiveListener);
     service.subscribeChange('chat.web_search.provider_overrides')(objectListener);
 
@@ -178,7 +178,7 @@ describe('PreferenceService', () => {
     const service = new PreferenceService(dbService);
     const listener = jest.fn();
 
-    await service.init();
+    await service._doInit();
     service.subscribeChange('chat.default_model_id')(listener);
     dbService.failNextWrite = true;
 
@@ -198,7 +198,7 @@ describe('PreferenceService', () => {
     ]);
     const service = new PreferenceService(dbService);
 
-    await service.init();
+    await service._doInit();
 
     const firstWrite = service.set('chat.default_model_id', 'first:model');
     await dbService.waitForNextWrite();

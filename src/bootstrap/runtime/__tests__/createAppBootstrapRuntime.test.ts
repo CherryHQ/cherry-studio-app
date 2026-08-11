@@ -8,7 +8,7 @@ const mockDataApiHandlers = { kind: 'handlers' };
 const mockCache = { kind: 'cache' };
 const mockDb = { kind: 'db' };
 const mockMcpRuntime = { dispose: jest.fn() };
-const mockPreference = { init: jest.fn(async () => undefined) };
+const mockPreference = { kind: 'preference' };
 const mockWebSearch = { dispose: jest.fn() };
 const mockServices = {
   cache: mockCache,
@@ -18,7 +18,7 @@ const mockServices = {
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
-const mockCreateBackendServices = jest.fn((_db: unknown, _cache: unknown) => mockServices);
+const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockDisposeBackend = jest.fn<Promise<void>, []>(async () => undefined);
 const mockCreateBackend = jest.fn((_services: unknown) => ({
   backend: mockBackend,
@@ -39,7 +39,7 @@ jest.mock('@/bootstrap/runtime/runPostReadyTasks', () => ({
   runPostReadyTasks: (services: unknown) => mockRunPostReadyTasks(services),
 }));
 jest.mock('@/bootstrap/composition/createBackendServices', () => ({
-  createBackendServices: (db: unknown, cache: unknown) => mockCreateBackendServices(db, cache),
+  createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),
 }));
 jest.mock('@/bootstrap/composition/createBackend', () => ({
   createBackend: (services: unknown) => mockCreateBackend(services),
@@ -55,7 +55,11 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
  * still hand-writes.
  */
 const createRuntime = () =>
-  createAppBootstrapRuntime({ CacheService: mockCache, DbService: mockDb });
+  createAppBootstrapRuntime({
+    CacheService: mockCache,
+    DbService: mockDb,
+    PreferenceService: mockPreference,
+  });
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -71,8 +75,11 @@ describe('createAppBootstrapRuntime', () => {
 
     await runtime.initialize();
 
-    expect(mockCreateBackendServices).toHaveBeenCalledWith(mockDb, mockCache);
-    expect(mockPreference.init).toHaveBeenCalledTimes(1);
+    expect(mockCreateBackendServices).toHaveBeenCalledWith({
+      cache: mockCache,
+      dbService: mockDb,
+      preference: mockPreference,
+    });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);

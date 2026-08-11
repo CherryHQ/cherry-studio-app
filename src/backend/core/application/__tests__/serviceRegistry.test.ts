@@ -42,19 +42,44 @@ describe('service registry', () => {
     expect(missing).toEqual([]);
   });
 
-  test('the gate graph is acyclic and orders infrastructure first', () => {
+  test.each([Phase.Gate, Phase.PostReady])(
+    'the %s graph is acyclic and puts every dependency in an earlier layer',
+    (phase) => {
+      const container = new ServiceContainer();
+      container.registerAll(serviceList);
+      const nodes = container.buildDependencyGraph(phase);
+      // Throws on a cycle, which is the other half of what this asserts.
+      const layers = new DependencyResolver().resolveLayered(nodes);
+
+      const inPhase = new Set(nodes.map((node) => node.name));
+      const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
+
+      for (const node of nodes) {
+        for (const dependency of node.dependencies) {
+          // A dependency in an earlier phase is already initialized and imposes
+          // no ordering on this one.
+          if (!inPhase.has(dependency)) continue;
+          expect(layerOf(dependency)).toBeLessThan(layerOf(node.name));
+        }
+      }
+    },
+  );
+
+  test('the gate boots cache, then database, then preferences', () => {
     const container = new ServiceContainer();
     container.registerAll(serviceList);
     const layers = new DependencyResolver().resolveLayered(
       container.buildDependencyGraph(Phase.Gate),
     );
-
     const layerOf = (name: string) => layers.findIndex((layer) => layer.includes(name));
 
-    // The database is seeded through the cache, so the cache has to be ready
-    // first. Before the lifecycle framework this was a hand-written statement
-    // order in `createAppBootstrapRuntime`; now it is a declared edge.
+    // Spelled out rather than left to the generic check above, because this
+    // particular chain is what first paint depends on: the database is seeded
+    // through the cache, and the theme and language come out of preferences.
+    // Before the lifecycle framework it was statement order in
+    // `createAppBootstrapRuntime`; now it is three declared edges.
     expect(layerOf('CacheService')).toBeGreaterThanOrEqual(0);
     expect(layerOf('CacheService')).toBeLessThan(layerOf('DbService'));
+    expect(layerOf('DbService')).toBeLessThan(layerOf('PreferenceService'));
   });
 });
