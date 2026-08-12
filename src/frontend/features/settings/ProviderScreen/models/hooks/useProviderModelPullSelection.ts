@@ -8,8 +8,6 @@ export type ProviderModelPullApplyChange = (change: {
   toRemove?: UniqueModelId[];
 }) => Promise<boolean>;
 
-const noneSelected: ReadonlySet<UniqueModelId> = new Set();
-
 /**
  * What a pull will apply once it is confirmed.
  *
@@ -25,7 +23,9 @@ export function useProviderModelPullSelection({
   applyModelChange: ProviderModelPullApplyChange;
   preview: ProviderModelPullPreview;
 }) {
-  const [selectedIds, setSelectedIds] = useState<ReadonlySet<UniqueModelId>>(noneSelected);
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<UniqueModelId>>(() =>
+    getDefaultSelection(preview),
+  );
   const [isApplying, setIsApplying] = useState(false);
   const previewKey = useMemo(() => getPreviewKey(preview), [preview]);
   // A fresh pull invalidates a selection made against the previous one. Reset
@@ -34,7 +34,7 @@ export function useProviderModelPullSelection({
 
   if (lastPreviewKey !== previewKey) {
     setLastPreviewKey(previewKey);
-    setSelectedIds(noneSelected);
+    setSelectedIds(getDefaultSelection(preview));
   }
 
   const applySelection = useCallback(async () => {
@@ -89,6 +89,18 @@ export function useProviderModelPullSelection({
       });
     }, []),
   };
+}
+
+/**
+ * Every model the provider has gained, and none of the ones it has dropped.
+ *
+ * Taking the whole catalogue is what a pull is usually for, so ticking the new
+ * models one by one is work the screen can do for the user. The other half is
+ * left alone: dropping a model the user has been chatting with is not a thing
+ * to arm on their behalf, and an unread confirmation would do exactly that.
+ */
+function getDefaultSelection(preview: ProviderModelPullPreview): ReadonlySet<UniqueModelId> {
+  return new Set(preview.added.map((model) => model.id));
 }
 
 function getPreviewKey(preview: ProviderModelPullPreview): string {

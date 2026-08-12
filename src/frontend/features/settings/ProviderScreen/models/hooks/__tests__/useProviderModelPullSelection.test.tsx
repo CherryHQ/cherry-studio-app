@@ -54,26 +54,34 @@ describe('useProviderModelPullSelection', () => {
     selection = undefined;
   });
 
+  // Taking the whole catalogue is the usual answer, so the additions arrive
+  // ticked. The removals do not: nothing gets deleted unless the user said so.
+  it('starts with the new models ticked and no removal armed', () => {
+    mount(jest.fn().mockResolvedValue(true));
+
+    expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id]);
+  });
+
   // Nothing is written until the pull is confirmed, so ticking a row is just
   // a tick — the tap that deletes a model is the one on "Apply".
   it('writes nothing while models are being ticked', () => {
     const applyModelChange = jest.fn().mockResolvedValue(true);
     mount(applyModelChange);
 
-    act(() => current().toggleModel(newModel.id));
     act(() => current().toggleModel(goneModel.id));
+    act(() => current().toggleModel(newModel.id));
 
     expect(applyModelChange).not.toHaveBeenCalled();
-    expect([...current().selectedIds]).toEqual([newModel.id, goneModel.id]);
+    expect([...current().selectedIds]).toEqual([otherNewModel.id, goneModel.id]);
   });
 
   it('unticks a model on the second tap', () => {
     mount(jest.fn().mockResolvedValue(true));
 
-    act(() => current().toggleModel(newModel.id));
-    act(() => current().toggleModel(newModel.id));
+    act(() => current().toggleModel(goneModel.id));
+    act(() => current().toggleModel(goneModel.id));
 
-    expect(current().selectedIds.size).toBe(0);
+    expect(current().selectedIds.has(goneModel.id)).toBe(false);
   });
 
   // Both halves of the reconcile go in one call: ticked `added` rows are the
@@ -82,7 +90,7 @@ describe('useProviderModelPullSelection', () => {
     const applyModelChange = jest.fn().mockResolvedValue(true);
     mount(applyModelChange);
 
-    act(() => current().toggleModel(newModel.id));
+    act(() => current().toggleModel(otherNewModel.id));
     act(() => current().toggleModel(goneModel.id));
     await act(async () => {
       await current().applySelection();
@@ -97,6 +105,8 @@ describe('useProviderModelPullSelection', () => {
   it('applies nothing when nothing is ticked', async () => {
     const applyModelChange = jest.fn().mockResolvedValue(true);
     mount(applyModelChange);
+
+    act(() => current().toggleAll([newModel.id, otherNewModel.id]));
 
     let didApply: boolean | undefined;
     await act(async () => {
@@ -117,7 +127,6 @@ describe('useProviderModelPullSelection', () => {
     );
     mount(applyModelChange);
 
-    act(() => current().toggleModel(newModel.id));
     act(() => {
       void current().applySelection();
     });
@@ -134,43 +143,37 @@ describe('useProviderModelPullSelection', () => {
   it('selects the ids it is given, then unselects them once they are all in', () => {
     mount(jest.fn().mockResolvedValue(true));
 
-    act(() => current().toggleModel(goneModel.id));
-    act(() => current().toggleAll([newModel.id, otherNewModel.id]));
+    act(() => current().toggleAll([goneModel.id]));
 
-    expect([...current().selectedIds]).toEqual([goneModel.id, newModel.id, otherNewModel.id]);
+    expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id, goneModel.id]);
 
-    act(() => current().toggleAll([newModel.id, otherNewModel.id]));
+    act(() => current().toggleAll([goneModel.id]));
 
-    expect([...current().selectedIds]).toEqual([goneModel.id]);
+    expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id]);
   });
 
   it('completes a partial selection rather than clearing it', () => {
     mount(jest.fn().mockResolvedValue(true));
 
-    act(() => current().toggleModel(newModel.id));
+    act(() => current().toggleModel(otherNewModel.id));
     act(() => current().toggleAll([newModel.id, otherNewModel.id]));
 
     expect([...current().selectedIds]).toEqual([newModel.id, otherNewModel.id]);
   });
 
-  it('forgets a selection made against the previous pull', () => {
+  it('starts the next pull from its own default rather than the last one', () => {
     const applyModelChange = jest.fn().mockResolvedValue(true);
+    const nextModel = model('gpt-5');
     mount(applyModelChange);
 
-    act(() => current().toggleModel(newModel.id));
-
-    expect(current().selectedIds.size).toBe(1);
-
+    act(() => current().toggleModel(goneModel.id));
     act(() => {
       renderer?.update(
-        <Probe
-          applyModelChange={applyModelChange}
-          preview={{ added: [model('gpt-5')], missing: [] }}
-        />,
+        <Probe applyModelChange={applyModelChange} preview={{ added: [nextModel], missing: [] }} />,
       );
     });
 
-    expect(current().selectedIds.size).toBe(0);
+    expect([...current().selectedIds]).toEqual([nextModel.id]);
   });
 });
 

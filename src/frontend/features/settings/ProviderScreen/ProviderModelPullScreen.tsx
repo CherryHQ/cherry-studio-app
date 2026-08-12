@@ -232,8 +232,10 @@ function ProviderModelPullPreviewPage({
         }
         ListHeaderComponent={
           // One gap for the whole screen: the Android search field, the filter
-          // bar and the first section are all 12 apart.
-          <View className="gap-3 px-4 pb-3">
+          // bar and the first section are all 12 apart. iOS pads nothing above
+          // the filter bar — its search field belongs to the navigation bar,
+          // which already leaves a gap of its own below itself.
+          <View className={process.env.EXPO_OS === 'ios' ? 'gap-3 px-4 pb-3' : 'gap-3 px-4 py-3'}>
             {process.env.EXPO_OS === 'ios' ? null : (
               <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
             )}
@@ -393,6 +395,5 @@ const styles = StyleSheet.create({
   // the select-all/apply bar, which floats over the list.
   listContent: {
     paddingBottom: 96,
-    paddingTop: 12,
   },
 });
