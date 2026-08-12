@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.cherry-ai.cherry-studio-app",
       "appleTeamId": "87242QY66T",
       "entitlements": {
-        "com.apple.developer.healthkit": true
+        "com.apple.developer.healthkit": true,
+        "com.apple.security.application-groups": ["group.com.cherry-ai.cherry-studio-app"]
       },
       "infoPlist": {
         "NSCalendarsWriteOnlyAccessUsageDescription": "Allow Cherry Studio to add and update calendar events when you ask the assistant.",
@@ -146,7 +147,24 @@
     },
     "extra": {
       "eas": {
-        "projectId": "80096eaf-3ad0-4b87-a466-15f04da1bacc"
+        "projectId": "80096eaf-3ad0-4b87-a466-15f04da1bacc",
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "targetName": "ExpoWidgetsTarget",
+                  "bundleIdentifier": "com.cherry-ai.cherry-studio-app.ExpoWidgetsTarget",
+                  "entitlements": {
+                    "com.apple.security.application-groups": [
+                      "group.com.cherry-ai.cherry-studio-app"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        }
       }
     }
   }
