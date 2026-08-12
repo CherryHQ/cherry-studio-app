@@ -62,7 +62,7 @@
   "chat.providerConfig.catalog": "Model catalog",
   "chat.providerConfig.catalogSkipped": "Model catalog was skipped",
   "chat.providerConfig.configured": "Configured",
-  "chat.providerConfig.continue": "Continue",
+  "chat.providerConfig.next": "Next",
   "chat.providerConfig.invalidInput": "This provider configuration request is invalid.",
   "chat.providerConfig.manualModels": "Manual models",
   "chat.providerConfig.modelsAdded": "Models to add",

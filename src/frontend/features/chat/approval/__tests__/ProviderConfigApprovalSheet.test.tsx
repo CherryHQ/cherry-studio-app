@@ -258,11 +258,25 @@ describe('ProviderConfigApprovalSheet', () => {
     expect(onRespond).not.toHaveBeenCalled();
   });
 
+  test('uses a compact floating next action without a footer', () => {
+    renderSheet();
+
+    expect(action('chat.providerConfig.next').props).toMatchObject({
+      className: 'min-w-24',
+      size: 'sm',
+    });
+    expect(
+      renderer!.root.findByProps({ testID: 'provider-config-floating-action' }).props,
+    ).toMatchObject({
+      className: 'absolute right-4 bottom-3 z-10 items-end gap-2',
+    });
+  });
+
   test('saves a generated stable id and default model selection through updatedInput', async () => {
     const onRespond = renderSheet();
 
     await act(async () => {
-      action('chat.providerConfig.continue').props.onPress();
+      action('chat.providerConfig.next').props.onPress();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -271,7 +285,7 @@ describe('ProviderConfigApprovalSheet', () => {
       expect.objectContaining({ aborted: false }),
     );
 
-    act(() => action('chat.providerConfig.continue').props.onPress());
+    act(() => action('chat.providerConfig.next').props.onPress());
     await act(async () => {
       action('common.save').props.onPress();
       await Promise.resolve();
@@ -301,7 +315,7 @@ describe('ProviderConfigApprovalSheet', () => {
     );
     const onRespond = renderSheet();
 
-    act(() => action('chat.providerConfig.continue').props.onPress());
+    act(() => action('chat.providerConfig.next').props.onPress());
     expect(previewSignal?.aborted).toBe(false);
     expect(renderer!.root.findByProps({ testID: 'bottom-sheet' }).props.isCloseDisabled).toBe(
       false,
@@ -335,7 +349,7 @@ describe('ProviderConfigApprovalSheet', () => {
     renderSheet();
 
     await act(async () => {
-      action('chat.providerConfig.continue').props.onPress();
+      action('chat.providerConfig.next').props.onPress();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -367,11 +381,11 @@ describe('ProviderConfigApprovalSheet', () => {
     renderSheet(onRespond);
 
     await act(async () => {
-      action('chat.providerConfig.continue').props.onPress();
+      action('chat.providerConfig.next').props.onPress();
       await Promise.resolve();
       await Promise.resolve();
     });
-    act(() => action('chat.providerConfig.continue').props.onPress());
+    act(() => action('chat.providerConfig.next').props.onPress());
     act(() => action('common.save').props.onPress());
 
     expect(renderer!.root.findByProps({ testID: 'bottom-sheet' }).props.isCloseDisabled).toBe(true);
@@ -389,7 +403,7 @@ describe('ProviderConfigApprovalSheet', () => {
     const onRespond = renderSheet();
 
     await act(async () => {
-      action('chat.providerConfig.continue').props.onPress();
+      action('chat.providerConfig.next').props.onPress();
       await Promise.resolve();
       await Promise.resolve();
     });
@@ -400,7 +414,7 @@ describe('ProviderConfigApprovalSheet', () => {
         .props.controller.updateModelId('remote-model');
     });
     act(() => action('settings.provider.models.addSubmit').props.onPress());
-    act(() => action('chat.providerConfig.continue').props.onPress());
+    act(() => action('chat.providerConfig.next').props.onPress());
     await act(async () => {
       action('common.save').props.onPress();
       await Promise.resolve();
@@ -468,11 +482,11 @@ describe('ProviderConfigApprovalSheet', () => {
     });
 
     await act(async () => {
-      action('chat.providerConfig.continue').props.onPress();
+      action('chat.providerConfig.next').props.onPress();
       await Promise.resolve();
       await Promise.resolve();
     });
-    act(() => action('chat.providerConfig.continue').props.onPress());
+    act(() => action('chat.providerConfig.next').props.onPress());
     await act(async () => {
       action('common.save').props.onPress();
       await Promise.resolve();

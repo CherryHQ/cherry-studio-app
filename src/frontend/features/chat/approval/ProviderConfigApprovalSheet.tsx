@@ -318,8 +318,7 @@ export function ProviderConfigApprovalSheet({
   }, []);
 
   const title = t(`chat.providerConfig.step.${step}`);
-  const actionLabel =
-    step === 'confirmation' ? t('common.save') : t('chat.providerConfig.continue');
+  const actionLabel = step === 'confirmation' ? t('common.save') : t('chat.providerConfig.next');
 
   if (!draft) {
     return (
@@ -358,45 +357,52 @@ export function ProviderConfigApprovalSheet({
       testID="provider-config-approval"
       title={title}
     >
-      <BottomSheet.PageTransition depth={stepIndex} pageKey={step} testID="provider-config-page">
-        {step === 'configuration' ? (
-          <ProviderConfigConfigurationPage
-            draft={draft}
-            error={previewError}
-            isDisabled={isPreviewLoading || isSubmitting}
-            providerSnapshot={preview ?? builtinSnapshot}
-            onChange={setDraft}
-          />
-        ) : step === 'models' ? (
-          <ProviderConfigModelsPage
-            draft={draft}
-            isDisabled={isPreviewLoading || isSubmitting}
-            preview={preview}
-            removedModelIds={removedModelIds}
-            selectedModelIds={selectedModelIds}
-            onAddManualModels={addManualModels}
-            onRemoveManualModel={removeManualModel}
-            onRemovedModelIdsChange={setRemovedModelIds}
-            onRetry={retryPreview}
-            onSelectedModelIdsChange={setSelectedModelIds}
-          />
-        ) : (
-          <ProviderConfigConfirmationPage draft={draft} preview={preview} />
-        )}
-      </BottomSheet.PageTransition>
-      <View className="border-border border-t px-4 py-3">
-        <Button
-          disabled={step !== 'confirmation' && !canContinueProviderConfig(step, draft, preview)}
-          loading={isPreviewLoading || isSubmitting}
-          onPress={goForward}
+      <View className="relative min-h-0 flex-1">
+        <BottomSheet.PageTransition depth={stepIndex} pageKey={step} testID="provider-config-page">
+          {step === 'configuration' ? (
+            <ProviderConfigConfigurationPage
+              draft={draft}
+              error={previewError}
+              isDisabled={isPreviewLoading || isSubmitting}
+              providerSnapshot={preview ?? builtinSnapshot}
+              onChange={setDraft}
+            />
+          ) : step === 'models' ? (
+            <ProviderConfigModelsPage
+              draft={draft}
+              isDisabled={isPreviewLoading || isSubmitting}
+              preview={preview}
+              removedModelIds={removedModelIds}
+              selectedModelIds={selectedModelIds}
+              onAddManualModels={addManualModels}
+              onRemoveManualModel={removeManualModel}
+              onRemovedModelIdsChange={setRemovedModelIds}
+              onRetry={retryPreview}
+              onSelectedModelIdsChange={setSelectedModelIds}
+            />
+          ) : (
+            <ProviderConfigConfirmationPage draft={draft} preview={preview} />
+          )}
+        </BottomSheet.PageTransition>
+        <View
+          className="absolute right-4 bottom-3 z-10 items-end gap-2"
+          testID="provider-config-floating-action"
         >
-          {actionLabel}
-        </Button>
-        {approvalCount > 1 ? (
-          <Text className="pt-2 text-center text-foreground-tertiary text-xs">
-            {t('chat.tool.approval.pendingCount', { count: approvalCount })}
-          </Text>
-        ) : null}
+          {approvalCount > 1 ? (
+            <Text className="text-foreground-tertiary text-xs">
+              {t('chat.tool.approval.pendingCount', { count: approvalCount })}
+            </Text>
+          ) : null}
+          <Button
+            className="min-w-24"
+            disabled={step !== 'confirmation' && !canContinueProviderConfig(step, draft, preview)}
+            loading={isPreviewLoading || isSubmitting}
+            onPress={goForward}
+            size="sm"
+          >
+            {actionLabel}
+          </Button>
+        </View>
       </View>
     </BottomSheet>
   );

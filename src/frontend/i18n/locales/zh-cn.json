@@ -62,7 +62,7 @@
   "chat.providerConfig.catalog": "模型目录",
   "chat.providerConfig.catalogSkipped": "已跳过模型目录拉取",
   "chat.providerConfig.configured": "已配置",
-  "chat.providerConfig.continue": "继续",
+  "chat.providerConfig.next": "下一步",
   "chat.providerConfig.invalidInput": "服务商配置请求无效。",
   "chat.providerConfig.manualModels": "手动添加的模型",
   "chat.providerConfig.modelsAdded": "将添加的模型",

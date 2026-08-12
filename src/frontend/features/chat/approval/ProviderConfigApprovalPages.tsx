@@ -57,7 +57,7 @@ export function ProviderConfigConfigurationPage({
     return (
       <KeyboardAwareScrollView
         bottomOffset={160}
-        contentContainerClassName="px-4 pb-8 pt-2"
+        contentContainerClassName="px-4 pb-20 pt-2"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         mode="layout"
@@ -114,7 +114,7 @@ function BuiltinProviderConfigurationForm({
   return (
     <KeyboardAwareScrollView
       bottomOffset={120}
-      contentContainerClassName="gap-5 px-4 pb-8 pt-2"
+      contentContainerClassName="gap-5 px-4 pb-20 pt-2"
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       mode="layout"
@@ -663,7 +663,7 @@ export function ProviderConfigConfirmationPage({
   return (
     <ScrollView
       className="flex-1"
-      contentContainerClassName="gap-5 px-4 pb-8 pt-2"
+      contentContainerClassName="gap-5 px-4 pb-20 pt-2"
       showsVerticalScrollIndicator={false}
     >
       <SummaryRow label={t('chat.providerConfig.provider')} value={providerName} />
@@ -720,7 +720,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modelListContent: {
-    paddingBottom: 32,
+    paddingBottom: 80,
     paddingHorizontal: 16,
     paddingTop: 8,
   },
