@@ -99,6 +99,7 @@ describe('PaintingAssistantMessage', () => {
             aspectRatio={aspectRatio}
             error={null}
             interruption={null}
+            outputs={[]}
             resolution={'1664 \u00d7 928'}
             status="generating"
           />,
@@ -128,7 +129,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={16 / 9}
           error={null}
           interruption={null}
-          output={{ fileEntryId: 'output-1', uri: 'file:///output.png' }}
+          outputs={[{ fileEntryId: 'output-1', uri: 'file:///output.png' }]}
           paintingId="painting-1"
           resolution={'1664 \u00d7 928'}
           status="idle"
@@ -153,6 +154,48 @@ describe('PaintingAssistantMessage', () => {
     expect(renderer!.root.findAllByType(ScrollView)).toHaveLength(0);
   });
 
+  it('renders every result in order as a full-width viewer link', () => {
+    const outputs = [
+      { fileEntryId: 'output-1', uri: 'file:///output-1.png' },
+      { fileEntryId: 'output-2', uri: 'file:///output-2.png' },
+      { fileEntryId: 'output-3', uri: 'file:///output-3.png' },
+    ];
+    act(() => {
+      renderer = create(
+        <PaintingAssistantMessage
+          aspectRatio={4 / 3}
+          error={null}
+          interruption={null}
+          outputs={outputs}
+          paintingId="painting-1"
+          resolution={'1024 \u00d7 768'}
+          status="idle"
+        />,
+      );
+    });
+
+    const links = renderer!.root.findAll(
+      (node) => node.type === View && node.props.testID === 'painting-zoom-link',
+    );
+    const images = outputs.map((output) =>
+      renderer!.root.findByProps({ testID: `painting-result-image-${output.fileEntryId}` }),
+    );
+    const frames = renderer!.root.findAll(
+      (node) => node.type === View && StyleSheet.flatten(node.props.style)?.aspectRatio === 4 / 3,
+    );
+    const resultList = renderer!.root.find((node) => node.props.className === 'w-full gap-3');
+
+    expect(links.map(({ props }) => [props.paintingId, props.fileEntryId])).toEqual([
+      ['painting-1', 'output-1'],
+      ['painting-1', 'output-2'],
+      ['painting-1', 'output-3'],
+    ]);
+    expect(images.map(({ props }) => props.source)).toEqual(outputs.map((output) => output.uri));
+    expect(images.every(({ props }) => props.contentFit === 'contain')).toBe(true);
+    expect(frames).toHaveLength(3);
+    expect(resultList).toBeDefined();
+  });
+
   it('keeps the stopped loader under a live result until the image fades in', () => {
     act(() => {
       renderer = create(
@@ -161,6 +204,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={16 / 9}
           error={null}
           interruption={null}
+          outputs={[{ fileEntryId: 'old-output', uri: 'file:///old-output.png' }]}
           resolution={'1664 \u00d7 928'}
           status="generating"
         />,
@@ -170,6 +214,7 @@ describe('PaintingAssistantMessage', () => {
     act(() => {
       measurement.props.onLayout({ nativeEvent: { layout: { height: 0, width: 320 } } });
     });
+    expect(renderer!.root.findAllByProps({ testID: 'painting-output-old-output' })).toHaveLength(0);
 
     act(() => {
       renderer?.update(
@@ -178,7 +223,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={16 / 9}
           error={null}
           interruption={null}
-          output={{ fileEntryId: 'output-1', uri: 'file:///output.png' }}
+          outputs={[{ fileEntryId: 'output-1', uri: 'file:///output.png' }]}
           paintingId="painting-1"
           resolution={'1664 \u00d7 928'}
           status="idle"
@@ -189,7 +234,7 @@ describe('PaintingAssistantMessage', () => {
     expect(renderer!.root.findByProps({ testID: 'painting-generation-loader' }).props.active).toBe(
       false,
     );
-    const image = renderer!.root.findByProps({ testID: 'painting-result-image' });
+    const image = renderer!.root.findByProps({ testID: 'painting-result-image-output-1' });
     expect(image.props.transition).toBeUndefined();
     expect(
       renderer!.root.findByProps({ testID: 'painting-output-output-1' }).props.pointerEvents,
@@ -214,6 +259,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={1}
           error={null}
           interruption={null}
+          outputs={[]}
           resolution={'1024 \u00d7 1024'}
           status="generating"
         />,
@@ -228,7 +274,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={1}
           error={null}
           interruption={null}
-          output={{ fileEntryId: 'output-1', uri: 'file:///output.png' }}
+          outputs={[{ fileEntryId: 'output-1', uri: 'file:///output.png' }]}
           paintingId="painting-1"
           resolution={'1024 \u00d7 1024'}
           status="idle"
@@ -236,7 +282,9 @@ describe('PaintingAssistantMessage', () => {
       );
     });
 
-    act(() => renderer!.root.findByProps({ testID: 'painting-result-image' }).props.onDisplay());
+    act(() =>
+      renderer!.root.findByProps({ testID: 'painting-result-image-output-1' }).props.onDisplay(),
+    );
     expect(renderer!.root.findAllByProps({ testID: 'painting-generation-loader' })).toHaveLength(0);
   });
 
@@ -248,6 +296,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={1}
           error={null}
           interruption={null}
+          outputs={[]}
           resolution={'1024 \u00d7 1024'}
           status="generating"
         />,
@@ -262,7 +311,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={1}
           error={null}
           interruption={null}
-          output={{ fileEntryId: 'output-1', uri: 'file:///missing.png' }}
+          outputs={[{ fileEntryId: 'output-1', uri: 'file:///missing.png' }]}
           paintingId="painting-1"
           resolution={'1024 \u00d7 1024'}
           status="idle"
@@ -270,7 +319,9 @@ describe('PaintingAssistantMessage', () => {
       );
     });
 
-    act(() => renderer!.root.findByProps({ testID: 'painting-result-image' }).props.onError());
+    act(() =>
+      renderer!.root.findByProps({ testID: 'painting-result-image-output-1' }).props.onError(),
+    );
     expect(renderer!.root.findAllByProps({ testID: 'painting-generation-loader' })).toHaveLength(0);
   });
 
@@ -281,6 +332,7 @@ describe('PaintingAssistantMessage', () => {
           aspectRatio={1}
           error={new Error('provider unavailable')}
           interruption={null}
+          outputs={[]}
           resolution={'1024 \u00d7 1024'}
           status="idle"
         />,

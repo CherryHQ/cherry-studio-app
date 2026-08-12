@@ -70,10 +70,11 @@ export function PaintingComposer({
   const generationResolution =
     imageParamsResolutionLabel(generation.paramValues ?? initialParamValues) ??
     t('painting.settings.option.auto');
-  const output = generation.outputs[0] ?? initialFiles.outputs[0];
+  const outputs = generation.outputs.length > 0 ? generation.outputs : initialFiles.outputs;
+  const firstOutput = outputs[0];
   const failure = generation.error ?? generation.interruption;
   const assistantStatus =
-    generation.status === 'generating' || (!output && !failure)
+    generation.status === 'generating' || (!firstOutput && !failure)
       ? 'pending'
       : failure
         ? 'error'
@@ -95,13 +96,13 @@ export function PaintingComposer({
     }
 
     return createPaintingMessages({
-      assistantMessageId: output?.fileEntryId ?? `${painting.id}:assistant`,
+      assistantMessageId: firstOutput?.fileEntryId ?? `${painting.id}:assistant`,
       assistantStatus,
       attachments: initialFiles.inputs,
       prompt: painting.prompt,
       userMessageId: painting.id,
     });
-  }, [activeTurn, assistantStatus, initialFiles.inputs, output, painting, showPersistedTurn]);
+  }, [activeTurn, assistantStatus, firstOutput, initialFiles.inputs, painting, showPersistedTurn]);
 
   const handleGenerate = useCallback(
     async (input: PaintingGenerationInput) => {
@@ -129,13 +130,13 @@ export function PaintingComposer({
     (_message: MessagePresentationItem) => (
       <PaintingAssistantMessage
         animateOutput={
-          output?.fileEntryId !== undefined &&
-          output.fileEntryId !== initialFiles.outputs[0]?.fileEntryId
+          firstOutput?.fileEntryId !== undefined &&
+          firstOutput.fileEntryId !== initialFiles.outputs[0]?.fileEntryId
         }
         aspectRatio={generation.aspectRatio}
         error={generation.error}
         interruption={generation.interruption}
-        output={output}
+        outputs={outputs}
         paintingId={activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined)}
         resolution={generationResolution}
         status={generation.status}
@@ -149,16 +150,17 @@ export function PaintingComposer({
       generation.status,
       generationResolution,
       initialFiles.outputs,
-      output,
+      firstOutput,
+      outputs,
       painting?.id,
       showPersistedTurn,
     ],
   );
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useComposerDockLayout();
-  const composerKey = output?.fileEntryId ?? 'painting-composer';
-  const composerInitialAttachments = output ? [] : initialAttachments;
-  const composerInitialDraft = output ? '' : initialDraft;
+  const composerKey = firstOutput?.fileEntryId ?? 'painting-composer';
+  const composerInitialAttachments = firstOutput ? [] : initialAttachments;
+  const composerInitialDraft = firstOutput ? '' : initialDraft;
 
   return (
     <View className="flex-1 bg-background">
