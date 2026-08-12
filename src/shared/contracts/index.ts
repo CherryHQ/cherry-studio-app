@@ -9,4 +9,5 @@ export * from './paintings';
 export * from './permissions';
 export * from './profile';
 export * from './providers';
+export * from './providerSetup';
 export * from './webSearch';

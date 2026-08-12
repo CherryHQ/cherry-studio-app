@@ -8,6 +8,7 @@ import type { PaintingsModule } from './paintings';
 import type { PermissionsModule } from './permissions';
 import type { ProfileModule } from './profile';
 import type { ProvidersModule } from './providers';
+import type { ProviderSetupModule } from './providerSetup';
 import type { WebSearchModule } from './webSearch';
 
 export interface Backend {
@@ -21,6 +22,7 @@ export interface Backend {
   readonly permissions: PermissionsModule;
   readonly profile: ProfileModule;
   readonly providers: ProvidersModule;
+  readonly providerSetup: ProviderSetupModule;
   readonly webSearch: WebSearchModule;
 }
 

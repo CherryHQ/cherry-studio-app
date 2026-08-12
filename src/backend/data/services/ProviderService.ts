@@ -19,6 +19,7 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import type {
   InsertUserProviderRow,
@@ -329,6 +330,19 @@ export class ProviderService {
     return row ?? null;
   }
 
+  async getRowByProviderIdTx(tx: Database, providerId: string): Promise<UserProviderRow | null> {
+    const [row] = await tx
+      .select()
+      .from(userProviderTable)
+      .where(eq(userProviderTable.providerId, providerId))
+      .limit(1);
+    return row ?? null;
+  }
+
+  listRowsTx(tx: Database): Promise<UserProviderRow[]> {
+    return tx.select().from(userProviderTable).orderBy(asc(userProviderTable.orderKey));
+  }
+
   async listApiKeys(
     providerId: string,
     query: ListProviderApiKeysQuery = {},
@@ -402,16 +416,23 @@ export class ProviderService {
   }
 
   async create(input: CreateProviderInput): Promise<Provider> {
-    const row = (await this.dbService.withWriteTx((tx) =>
-      insertWithOrderKey(tx, userProviderTable, toInsert(input), {
-        pkColumn: userProviderTable.providerId,
-      }),
-    )) as UserProviderRow;
+    return this.dbService.withWriteTx((tx) => this.createTx(tx, input));
+  }
 
+  /** Rides a caller-owned write transaction. */
+  async createTx(tx: Database, input: CreateProviderInput): Promise<Provider> {
+    const row = (await insertWithOrderKey(tx, userProviderTable, toInsert(input), {
+      pkColumn: userProviderTable.providerId,
+    })) as UserProviderRow;
     return rowToProvider(row);
   }
 
   async update(providerId: string, input: UpdateProviderInput): Promise<Provider> {
+    return this.dbService.withWriteTx((tx) => this.updateTx(tx, providerId, input));
+  }
+
+  /** Rides a caller-owned write transaction. */
+  async updateTx(tx: Database, providerId: string, input: UpdateProviderInput): Promise<Provider> {
     const updates: Partial<InsertUserProviderRow> = {};
 
     if (input.apiFeatures !== undefined) {
@@ -434,34 +455,32 @@ export class ProviderService {
     if (input.name !== undefined) {
       updates.name = input.name;
     }
-    const [row] = await this.dbService.withWriteTx(async (tx) => {
-      if (input.providerSettings !== undefined) {
-        if (input.providerSettings === null) {
-          updates.providerSettings = null;
-        } else {
-          const [current] = await tx
-            .select({ providerSettings: userProviderTable.providerSettings })
-            .from(userProviderTable)
-            .where(eq(userProviderTable.providerId, providerId))
-            .limit(1);
+    if (input.providerSettings !== undefined) {
+      if (input.providerSettings === null) {
+        updates.providerSettings = null;
+      } else {
+        const [current] = await tx
+          .select({ providerSettings: userProviderTable.providerSettings })
+          .from(userProviderTable)
+          .where(eq(userProviderTable.providerId, providerId))
+          .limit(1);
 
-          if (!current) {
-            throw DataApiErrorFactory.notFound('Provider', providerId);
-          }
-
-          updates.providerSettings = {
-            ...(current.providerSettings as Partial<ProviderSettings> | null),
-            ...input.providerSettings,
-          };
+        if (!current) {
+          throw DataApiErrorFactory.notFound('Provider', providerId);
         }
-      }
 
-      return tx
-        .update(userProviderTable)
-        .set(updates)
-        .where(eq(userProviderTable.providerId, providerId))
-        .returning();
-    });
+        updates.providerSettings = {
+          ...(current.providerSettings as Partial<ProviderSettings> | null),
+          ...input.providerSettings,
+        };
+      }
+    }
+
+    const [row] = await tx
+      .update(userProviderTable)
+      .set(updates)
+      .where(eq(userProviderTable.providerId, providerId))
+      .returning();
 
     if (!row) {
       throw DataApiErrorFactory.notFound('Provider', providerId);
@@ -471,14 +490,21 @@ export class ProviderService {
   }
 
   async replaceApiKeys(providerId: string, apiKeys: ApiKeyEntry[]): Promise<Provider> {
+    return this.dbService.withWriteTx((tx) => this.replaceApiKeysTx(tx, providerId, apiKeys));
+  }
+
+  /** Rides a caller-owned write transaction. */
+  async replaceApiKeysTx(
+    tx: Database,
+    providerId: string,
+    apiKeys: ApiKeyEntry[],
+  ): Promise<Provider> {
     const normalizedApiKeys = normalizeApiKeys(apiKeys);
-    const [row] = await this.dbService.withWriteTx((tx) =>
-      tx
-        .update(userProviderTable)
-        .set({ apiKeys: normalizedApiKeys })
-        .where(eq(userProviderTable.providerId, providerId))
-        .returning(),
-    );
+    const [row] = await tx
+      .update(userProviderTable)
+      .set({ apiKeys: normalizedApiKeys })
+      .where(eq(userProviderTable.providerId, providerId))
+      .returning();
 
     if (!row) {
       throw DataApiErrorFactory.notFound('Provider', providerId);

@@ -1,12 +1,15 @@
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
+import { ModelCatalogAdapter } from '@/backend/ai/provider/ModelCatalogAdapter';
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import { ModelCatalogService } from '@/backend/services/models/ModelCatalogService';
 import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
+import { ProviderSetupService } from '@/backend/services/providers/ProviderSetupService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -36,6 +39,9 @@ export const services = {
   McpRuntimeService,
   OAuthRuntimeService,
   ProviderOAuthService,
+  ModelCatalogAdapter,
+  ModelCatalogService,
+  ProviderSetupService,
   AiService,
   ChatRuntime,
   JobRuntime,

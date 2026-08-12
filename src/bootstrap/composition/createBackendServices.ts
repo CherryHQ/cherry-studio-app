@@ -5,6 +5,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { ModelCatalogService } from '@/backend/services/models/ModelCatalogService';
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { devicePermissions } from '@/backend/services/permissions';
@@ -26,6 +27,7 @@ export type BackendInfrastructure = {
   chat: ChatRuntime;
   jobRuntime: JobRuntime;
   mcpRuntime: McpRuntimeService;
+  modelCatalog: ModelCatalogService;
   oauth: ProviderOAuthService;
   oauthSession: OAuthRuntimeService;
   preference: PreferenceService;
@@ -38,6 +40,7 @@ export function createBackendServices({
   chat,
   jobRuntime,
   mcpRuntime,
+  modelCatalog,
   oauth,
   oauthSession,
   preference,
@@ -52,6 +55,7 @@ export function createBackendServices({
     fileContent,
     jobRuntime,
     mcpRuntime,
+    modelCatalog,
     oauth,
     oauthSession,
     webSearch,

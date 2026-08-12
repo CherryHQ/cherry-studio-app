@@ -2,7 +2,6 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import type { DbService } from '@/backend/data/db/DbService';
-import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
@@ -20,6 +19,7 @@ import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
+import type { ProviderSetupService } from '@/backend/services/providers/ProviderSetupService';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 
@@ -32,9 +32,9 @@ export type BackendComposition = {
 
 export function createBackend(
   services: BackendServices,
-  infrastructure: { dbService: DbService },
+  infrastructure: { dbService: DbService; providerSetup: ProviderSetupService },
 ): BackendComposition {
-  const { dbService } = infrastructure;
+  const { dbService, providerSetup } = infrastructure;
   const cherryin = new CherryInClient({
     oauth: {
       authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
@@ -44,7 +44,7 @@ export function createBackend(
   });
   const models = createModelsModule({
     ai: services.ai,
-    materializeRemoteModels,
+    catalog: services.modelCatalog,
     models: {
       get: (id) => services.model.getById(id),
       list: (query) => services.model.list(query),
@@ -138,6 +138,7 @@ export function createBackend(
       permissions,
       profile,
       providers,
+      providerSetup,
       webSearch: services.webSearch,
     },
     dataApiDependencies: {

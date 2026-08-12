@@ -5,6 +5,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { ModelCatalogService } from '@/backend/services/models/ModelCatalogService';
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { devicePermissions } from '@/backend/services/permissions';
@@ -39,6 +40,7 @@ describe('createBackendServices', () => {
     const chat = { kind: 'chat' } as unknown as ChatRuntime;
     const jobRuntime = { kind: 'job-runtime' } as unknown as JobRuntime;
     const mcpRuntime = { kind: 'mcp-runtime' } as unknown as McpRuntimeService;
+    const modelCatalog = { kind: 'model-catalog' } as unknown as ModelCatalogService;
     // Both OAuth services arrive from the host now, like the four above them.
     const oauth = { kind: 'oauth' } as unknown as ProviderOAuthService;
     const oauthSession = { kind: 'oauth-session' } as unknown as OAuthRuntimeService;
@@ -51,6 +53,7 @@ describe('createBackendServices', () => {
       chat,
       jobRuntime,
       mcpRuntime,
+      modelCatalog,
       oauth,
       oauthSession,
       preference,
@@ -68,6 +71,7 @@ describe('createBackendServices', () => {
       fileContent,
       jobRuntime,
       mcpRuntime,
+      modelCatalog,
       oauth,
       oauthSession,
       webSearch,

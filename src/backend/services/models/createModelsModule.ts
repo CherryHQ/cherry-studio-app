@@ -13,14 +13,13 @@ import type {
   ReconcileModelsInput,
   ReconcileModelsResult,
 } from '@/shared/contracts';
-import { ModelPullTimeoutError } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-const defaultPullTimeoutMs = 10_000;
+import { buildModelPullPreview } from './buildModelPullPreview';
+import type { ModelCatalogService } from './ModelCatalogService';
+
 const defaultHealthTimeoutMs = 15_000;
 const logger = loggerService.withContext('ModelsModule');
-
-type RemoteModel = Partial<Model>;
 
 type ModelWorkflowData = {
   get(id: UniqueModelId): Promise<Model | null>;
@@ -44,19 +43,13 @@ type ModelsAi = {
     timeout?: number;
     uniqueModelId: UniqueModelId;
   }): Promise<{ latency: number }>;
-  listModels(input: {
-    providerId: string;
-    requestOptions: { signal: AbortSignal };
-    throwOnError: true;
-  }): Promise<RemoteModel[]>;
 };
 
 export type ModelsModuleDependencies = {
   ai: ModelsAi;
-  materializeRemoteModels(provider: Provider, models: readonly RemoteModel[]): Model[];
+  catalog: Pick<ModelCatalogService, 'list'>;
   models: ModelWorkflowData;
   providers: ProviderWorkflowData;
-  pullTimeoutMs?: number;
 };
 
 export function createModelsModule(dependencies: ModelsModuleDependencies): ModelsModule {
@@ -87,35 +80,6 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
         source,
       });
       return false;
-    }
-  };
-
-  const runPullRequest = async <T>(
-    signal: AbortSignal | undefined,
-    request: (signal: AbortSignal) => Promise<T>,
-  ): Promise<T> => {
-    throwIfAborted(signal);
-
-    const controller = new AbortController();
-    const timeoutMs = dependencies.pullTimeoutMs ?? defaultPullTimeoutMs;
-    const forwardAbort = () => controller.abort(signal?.reason);
-    signal?.addEventListener('abort', forwardAbort, { once: true });
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutHandle = setTimeout(() => {
-        const error = new ModelPullTimeoutError(timeoutMs);
-        controller.abort(error);
-        reject(error);
-      }, timeoutMs);
-    });
-
-    try {
-      return await Promise.race([request(controller.signal), timeout]);
-    } finally {
-      if (timeoutHandle) {
-        clearTimeout(timeoutHandle);
-      }
-      signal?.removeEventListener('abort', forwardAbort);
     }
   };
 
@@ -157,18 +121,11 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
 
   const pull = async (providerId: string, signal?: AbortSignal): Promise<ModelPullResult> => {
     const provider = await dependencies.providers.get(providerId);
-    const [localModels, remoteModels] = await runPullRequest(signal, (requestSignal) =>
-      Promise.all([
-        dependencies.models.list({ providerId }),
-        dependencies.ai.listModels({
-          providerId,
-          requestOptions: { signal: requestSignal },
-          throwOnError: true,
-        }),
-      ]),
-    );
-    const normalizedRemoteModels = dependencies.materializeRemoteModels(provider, remoteModels);
-    const preview = buildPullPreview(providerId, localModels, normalizedRemoteModels);
+    const [localModels, catalog] = await Promise.all([
+      dependencies.models.list({ providerId }),
+      dependencies.catalog.list({ provider, signal }),
+    ]);
+    const preview = buildModelPullPreview(providerId, localModels, catalog.models);
 
     if (preview.added.length > 0 || preview.missing.length > 0) {
       return { preview, status: 'changes' };
@@ -207,27 +164,7 @@ export function createModelsModule(dependencies: ModelsModuleDependencies): Mode
   return { checkHealth, pull, reconcile };
 }
 
-function buildPullPreview(
-  providerId: string,
-  localModels: readonly Model[],
-  remoteModels: readonly Model[],
-) {
-  const localIds = new Set(localModels.map((model) => model.id));
-  const remoteIds = new Set(remoteModels.map((model) => model.id));
-
-  return {
-    added: remoteModels.filter((model) => !localIds.has(model.id)),
-    missing: localModels.filter(
-      (model) =>
-        model.providerId === providerId &&
-        !remoteIds.has(model.id) &&
-        model.presetModelId != null &&
-        model.presetModelId !== '',
-    ),
-  };
-}
-
-function modelToAddInput(model: Model): AddModelInput {
+export function modelToAddInput(model: Model): AddModelInput {
   return {
     capabilities: model.capabilities,
     contextWindow: model.contextWindow,

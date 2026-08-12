@@ -51,6 +51,8 @@ export type RuntimeApiKey = Omit<ApiKeyEntry, 'key'>;
 
 export type AuthType = 'api-key' | 'oauth' | 'iam-aws' | 'api-key-aws' | 'iam-gcp' | 'iam-azure';
 
+const EDITABLE_ENDPOINT_AUTH_TYPES = new Set<AuthType>(['api-key', 'iam-azure']);
+
 export type AuthConfig =
   | {
       headerName?: string;
@@ -185,6 +187,22 @@ export type Provider = {
   settings: ProviderSettings;
   websites?: ProviderWebsites;
 };
+
+export function canEditProviderEndpoint(provider?: Pick<Provider, 'authType'> | null): boolean {
+  return provider != null && EDITABLE_ENDPOINT_AUTH_TYPES.has(provider.authType);
+}
+
+export function isValidProviderEndpointUrl(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed)) return false;
+
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 type ProviderTypeSource = Pick<
   Provider,

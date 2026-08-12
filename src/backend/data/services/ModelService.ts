@@ -20,6 +20,7 @@ import {
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 
@@ -327,6 +328,15 @@ export class ModelService {
     return row ? enrichModelFromRegistry(row) : null;
   }
 
+  async listByProviderTx(tx: Database, providerId: string): Promise<Model[]> {
+    const rows = await tx
+      .select()
+      .from(userModelTable)
+      .where(eq(userModelTable.providerId, providerId))
+      .orderBy(asc(userModelTable.orderKey));
+    return rows.map(enrichModelFromRegistry);
+  }
+
   async getByKey(providerId: string, modelId: string): Promise<Model> {
     const [row] = await this.db
       .select()
@@ -541,6 +551,23 @@ export class ModelService {
     };
   }
 
+  /** Rides a caller-owned write transaction. */
+  async reconcileProviderModelsTx(
+    tx: Database,
+    providerId: string,
+    input: ReconcileProviderModelsInput,
+    providerConfig?: {
+      defaultChatEndpoint?: EndpointType | null;
+      presetProviderId?: string | null;
+    },
+  ): Promise<ReconcileProviderModelsResult> {
+    const result = await this.applyReconcile(providerId, input, providerConfig, false, tx);
+    return {
+      added: result.inserted.map(enrichModelFromRegistry),
+      removedIds: result.removedIds,
+    };
+  }
+
   async reconcileForProvider(
     providerId: string,
     input: { toAdd: CreateModelDto[]; toRemove: string[] },
@@ -637,6 +664,7 @@ export class ModelService {
         }
       | undefined,
     includeAllRows: boolean,
+    transaction?: Database,
   ): Promise<{ allRows?: UserModelRow[]; inserted: UserModelRow[]; removedIds: string[] }> {
     const toAdd = input.toAdd ?? [];
     const requestedRemoveIds = Array.from(new Set(input.toRemove ?? []));
@@ -652,7 +680,7 @@ export class ModelService {
     });
     const defaultIds = await this.getUserDefaultModelIds();
 
-    return this.dbService.withWriteTx(async (tx) => {
+    const write = async (tx: Database) => {
       const existingRows: Pick<UserModelRow, 'id' | 'presetModelId'>[] = [];
       for (const idChunk of chunks(requestedRemoveIds, sqliteBatchSize)) {
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
@@ -713,7 +741,9 @@ export class ModelService {
             .orderBy(asc(userModelTable.orderKey))) as UserModelRow[])
         : undefined;
       return { allRows, inserted, removedIds };
-    });
+    };
+
+    return transaction ? write(transaction) : this.dbService.withWriteTx(write);
   }
 
   private assertManagedDefaultPatchAllowed(

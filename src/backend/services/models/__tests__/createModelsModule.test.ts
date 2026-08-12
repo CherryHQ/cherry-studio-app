@@ -6,7 +6,6 @@ import {
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import type { ModelsModule } from '@/shared/contracts';
-import { ModelPullTimeoutError } from '@/shared/contracts';
 
 import { createModelsModule, type ModelsModuleDependencies } from '../createModelsModule';
 
@@ -34,9 +33,10 @@ function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
   const dependencies: ModelsModuleDependencies = {
     ai: {
       checkModel: jest.fn(async () => ({ latency: 12 })),
-      listModels: jest.fn(async () => []),
     },
-    materializeRemoteModels: (_provider, models) => models as Model[],
+    catalog: {
+      list: jest.fn(async () => ({ models: [], remotelyProbed: true, source: 'api' as const })),
+    },
     models: {
       get: jest.fn(async (id: UniqueModelId) => model(id.split('::')[1] ?? id)),
       list: jest.fn(async () => []),
@@ -61,7 +61,11 @@ describe('createModelsModule', () => {
     const remote = model('new');
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.models.list).mockResolvedValue([local]);
-    jest.mocked(dependencies.ai.listModels).mockResolvedValue([remote]);
+    jest.mocked(dependencies.catalog.list).mockResolvedValue({
+      models: [remote],
+      remotelyProbed: true,
+      source: 'api',
+    });
 
     await expect(backend.pull('openai')).resolves.toEqual({
       preview: { added: [remote], missing: [local] },
@@ -75,7 +79,11 @@ describe('createModelsModule', () => {
     const remote = model('remote');
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.models.list).mockResolvedValue([local]);
-    jest.mocked(dependencies.ai.listModels).mockResolvedValue([remote]);
+    jest.mocked(dependencies.catalog.list).mockResolvedValue({
+      models: [remote],
+      remotelyProbed: true,
+      source: 'api',
+    });
 
     await expect(backend.pull('openai')).resolves.toEqual({
       preview: { added: [remote], missing: [] },
@@ -87,7 +95,11 @@ describe('createModelsModule', () => {
     const current = model('current');
     const { backend, dependencies } = createSubject();
     jest.mocked(dependencies.models.list).mockResolvedValue([current]);
-    jest.mocked(dependencies.ai.listModels).mockResolvedValue([current]);
+    jest.mocked(dependencies.catalog.list).mockResolvedValue({
+      models: [current],
+      remotelyProbed: true,
+      source: 'api',
+    });
 
     await expect(backend.pull('openai')).resolves.toEqual({
       providerEnabled: true,
@@ -168,15 +180,15 @@ describe('createModelsModule', () => {
     expect(dependencies.providers.update).not.toHaveBeenCalled();
   });
 
-  it('rejects a stalled pull with the stable contract error', async () => {
-    const { backend } = createSubject({
-      ai: {
-        checkModel: jest.fn(async () => ({ latency: 1 })),
-        listModels: jest.fn(() => new Promise(() => {})),
-      },
-      pullTimeoutMs: 1,
-    });
+  it('passes the stored provider and cancellation signal to the catalog', async () => {
+    const controller = new AbortController();
+    const { backend, dependencies } = createSubject();
 
-    await expect(backend.pull('openai')).rejects.toBeInstanceOf(ModelPullTimeoutError);
+    await backend.pull('openai', controller.signal);
+
+    expect(dependencies.catalog.list).toHaveBeenCalledWith({
+      provider,
+      signal: controller.signal,
+    });
   });
 });

@@ -18,6 +18,12 @@ import {
   WEB_SEARCH_TOOL_NAME,
   webFetchInputSchema,
 } from '../builtinTools';
+import {
+  CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME,
+  configureBuiltinProviderInputSchema,
+  CREATE_CUSTOM_PROVIDER_TOOL_NAME,
+  createCustomProviderInputSchema,
+} from '../providerConfigurationTools';
 
 function expectDirectPropertyTypes(schema: z.ZodType) {
   const json = z.toJSONSchema(schema) as {
@@ -38,6 +44,22 @@ describe('builtin tool contracts', () => {
     expect(WEB_SEARCH_TOOL_NAME).toBe('web_search');
     expect(WEB_FETCH_TOOL_NAME).toBe('web_fetch');
     expect(REPORT_ARTIFACTS_TOOL_NAME).toBe('report_artifacts');
+    expect(CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME).toBe('configure_builtin_provider');
+    expect(CREATE_CUSTOM_PROVIDER_TOOL_NAME).toBe('create_custom_provider');
+  });
+
+  it.each([
+    ['built-in provider', configureBuiltinProviderInputSchema],
+    ['custom provider', createCustomProviderInputSchema],
+  ])('keeps every %s configuration field required and directly typed', async (_label, schema) => {
+    const json = z.toJSONSchema(schema) as {
+      properties?: Record<string, { type?: unknown; anyOf?: unknown }>;
+      required?: string[];
+    };
+
+    expect((json.required ?? []).sort()).toEqual(Object.keys(json.properties ?? {}).sort());
+    expectDirectPropertyTypes(schema);
+    expect(JSON.stringify(json)).not.toContain('"default"');
   });
 
   it('references the public knowledge list tool name from search input metadata', () => {

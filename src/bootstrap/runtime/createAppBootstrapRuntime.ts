@@ -13,8 +13,10 @@ import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { ModelCatalogService } from '@/backend/services/models/ModelCatalogService';
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
+import type { ProviderSetupService } from '@/backend/services/providers/ProviderSetupService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -47,7 +49,9 @@ export function createAppBootstrapRuntime(
   const dbService = host.container.get<DbService>('DbService');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
+  const modelCatalog = host.container.get<ModelCatalogService>('ModelCatalogService');
   const oauth = host.container.get<ProviderOAuthService>('ProviderOAuthService');
+  const providerSetup = host.container.get<ProviderSetupService>('ProviderSetupService');
   const oauthSession = host.container.get<OAuthRuntimeService>('OAuthRuntimeService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
@@ -57,12 +61,13 @@ export function createAppBootstrapRuntime(
     chat,
     jobRuntime,
     mcpRuntime,
+    modelCatalog,
     oauth,
     oauthSession,
     preference,
     webSearch,
   });
-  const { backend, dataApiDependencies } = createBackend(services, { dbService });
+  const { backend, dataApiDependencies } = createBackend(services, { dbService, providerSetup });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({

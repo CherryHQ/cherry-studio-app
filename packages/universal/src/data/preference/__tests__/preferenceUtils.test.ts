@@ -9,7 +9,7 @@ import {
 describe('preference defaults', () => {
   test('keeps the desktop preference surface and mobile permission policies', () => {
     expect(getPreferenceKeys()).toEqual(Object.keys(PreferenceDefaults.default));
-    expect(getPreferenceKeys()).toHaveLength(243);
+    expect(getPreferenceKeys()).toHaveLength(244);
 
     expect(getPreferenceKeys()).toEqual(
       expect.arrayContaining([
@@ -18,6 +18,7 @@ describe('preference defaults', () => {
         'app.user.avatar',
         'chat.default_model_id',
         'chat.input.send_message_shortcut',
+        'chat.tools.provider_configuration.enabled',
         'feature.quick_assistant.model_id',
         'feature.translate.model_prompt',
         'permissions.calendar_read',
@@ -42,6 +43,7 @@ describe('preference defaults', () => {
     expect(getDefaultValue('chat.default_model_id')).toBeNull();
     expect(getDefaultValue('chat.input.send_message_shortcut')).toBe('Enter');
     expect(getDefaultValue('chat.message.math.single_dollar')).toBe(true);
+    expect(getDefaultValue('chat.tools.provider_configuration.enabled')).toBe(true);
     expect(getDefaultValue('chat.web_search.compression.cutoff_limit')).toBe(2000);
     expect(getDefaultValue('chat.web_search.compression.method')).toBe('none');
     expect(getDefaultValue('chat.web_search.default_fetch_urls_provider')).toBe('jina');
@@ -69,7 +71,7 @@ describe('preference defaults', () => {
     expect(isPreferenceKey('feature.translate.model_prompt')).toBe(true);
     expect(isPreferenceKey('permissions.location_read')).toBe(true);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
-    expect(Object.keys(PreferenceDefaults.default)).toHaveLength(243);
+    expect(Object.keys(PreferenceDefaults.default)).toHaveLength(244);
   });
 
   test('keeps permission preferences safe by default', () => {
