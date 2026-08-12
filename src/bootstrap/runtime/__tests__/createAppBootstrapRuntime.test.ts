@@ -117,6 +117,7 @@ describe('createAppBootstrapRuntime', () => {
     });
     expect(mockBackgroundActivityEnvironment.configure).toHaveBeenCalledWith({
       assistantPresenter: expect.any(Object),
+      getColorScheme: expect.any(Function),
       paintingPresenter: expect.any(Object),
       translate: expect.any(Function),
     });

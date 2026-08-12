@@ -84,6 +84,7 @@ describe('BackgroundActivityManager', () => {
     expect(presenter.start).toHaveBeenCalledTimes(1);
     expect(presenter.start).toHaveBeenCalledWith(
       expect.objectContaining({
+        colorScheme: 'dark',
         detail: 'preparing',
         logoUri: 'file:///widgets/cherry-studio-logo.png',
       }),
@@ -278,7 +279,10 @@ describe('BackgroundActivityManager', () => {
   });
 
   async function createManager(presenters: readonly { clearOrphans(): Promise<number> }[]) {
-    const manager = new BackgroundActivityManager({ acquire: mockAcquire }, { presenters });
+    const manager = new BackgroundActivityManager(
+      { acquire: mockAcquire },
+      { getColorScheme: () => 'dark', presenters },
+    );
     await manager._doInit();
     return manager;
   }

@@ -8,12 +8,14 @@ export type BackgroundActivityTranslate = (key: string) => string;
 
 export type BackgroundActivityEnvironmentConfig = {
   assistantPresenter: BackgroundActivityPresenter<BackgroundReplyActivityProps>;
+  getColorScheme: () => 'dark' | 'light';
   paintingPresenter: BackgroundActivityPresenter<PaintingActivityProps>;
   translate: BackgroundActivityTranslate;
 };
 
 const defaultConfig = (): BackgroundActivityEnvironmentConfig => ({
   assistantPresenter: noopBackgroundActivityPresenter(),
+  getColorScheme: () => 'light',
   paintingPresenter: noopBackgroundActivityPresenter(),
   translate: (key) => key,
 });
@@ -38,6 +40,8 @@ export class BackgroundActivityEnvironment extends BaseService {
   get assistantPresenter(): BackgroundActivityPresenter<BackgroundReplyActivityProps> {
     return this.config.assistantPresenter;
   }
+
+  getColorScheme = (): 'dark' | 'light' => this.config.getColorScheme();
 
   get paintingPresenter(): BackgroundActivityPresenter<PaintingActivityProps> {
     return this.config.paintingPresenter;

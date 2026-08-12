@@ -65,6 +65,7 @@ type KeepAlivePort = { acquire: (tag: string) => KeepAliveLease };
 type BackgroundActivityEnvironmentPort = {
   /** Every presenter whose orphaned surfaces must be swept at cold start. */
   presenters: readonly { clearOrphans(): Promise<number> }[];
+  getColorScheme(): 'dark' | 'light';
 };
 
 /**
@@ -249,8 +250,11 @@ export class BackgroundActivityManager extends BaseService {
   }
 
   private toNativeProps(record: SessionRecord): BackgroundActivityBaseProps {
-    if (!this.logoUri || record.props.logoUri) return record.props;
-    return { ...record.props, logoUri: this.logoUri };
+    return {
+      ...record.props,
+      colorScheme: this.environment.getColorScheme(),
+      ...(this.logoUri && !record.props.logoUri ? { logoUri: this.logoUri } : {}),
+    };
   }
 
   /** Mirrors the session's keep-alive bit into a coordinator lease. */

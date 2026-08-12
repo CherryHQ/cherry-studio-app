@@ -1,5 +1,6 @@
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
+import { Uniwind } from 'uniwind';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
@@ -51,6 +52,7 @@ export function createAppBootstrapRuntime(
   );
   backgroundActivityEnvironment.configure({
     assistantPresenter: createLiveActivityPresenter(AssistantActivity),
+    getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
     paintingPresenter: createLiveActivityPresenter(PaintingActivity),
     translate: (key) => i18n.t(key),
   });

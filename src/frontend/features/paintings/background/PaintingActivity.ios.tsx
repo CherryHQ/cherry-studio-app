@@ -10,6 +10,7 @@ import {
   padding,
   resizable,
   truncationMode,
+  widgetAccentedRenderingMode,
 } from '@expo/ui/swift-ui/modifiers';
 import { createLiveActivity, type LiveActivityEnvironment } from 'expo-widgets';
 
@@ -19,9 +20,10 @@ function PaintingActivity(props: PaintingActivityProps, environment: LiveActivit
   'widget';
   // Widget layouts execute as isolated function strings, so runtime values must be local.
   const brandColor = '#F65D5D';
-  const foreground = environment.colorScheme === 'dark' ? '#FFFFFF' : '#151515';
-  const secondary = environment.colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
-  const background = environment.colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
+  const colorScheme = props.colorScheme ?? environment.colorScheme;
+  const foreground = colorScheme === 'dark' ? '#FFFFFF' : '#151515';
+  const secondary = colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
+  const background = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
   const finishedAt = props.finishedAtEpochMs ? new Date(props.finishedAtEpochMs) : undefined;
   const isTerminal =
     props.phase === 'completed' || props.phase === 'failed' || props.phase === 'cancelled';
@@ -39,17 +41,26 @@ function PaintingActivity(props: PaintingActivityProps, environment: LiveActivit
       <HStack
         alignment="center"
         spacing={10}
-        modifiers={[activityBackgroundTint(background), padding({ all: 14 })]}
+        modifiers={[
+          activityBackgroundTint(background),
+          padding({ all: 14 }),
+          frame({ maxWidth: Infinity, alignment: 'leading' }),
+        ]}
       >
         {props.logoUri ? (
           <Image
             uiImage={props.logoUri}
-            modifiers={[resizable(), frame({ height: 36, width: 36 }), cornerRadius(8)]}
+            modifiers={[
+              resizable(),
+              frame({ height: 36, width: 36 }),
+              cornerRadius(8),
+              widgetAccentedRenderingMode('fullColor'),
+            ]}
           />
         ) : (
           <Image color={brandColor} size={24} systemName="paintbrush.pointed.fill" />
         )}
-        <VStack alignment="leading" spacing={3} modifiers={[frame({ maxWidth: Infinity })]}>
+        <VStack alignment="leading" spacing={3}>
           <Text
             modifiers={[
               font({ size: 15, weight: 'semibold' }),
@@ -111,7 +122,12 @@ function PaintingActivity(props: PaintingActivityProps, environment: LiveActivit
         {props.logoUri ? (
           <Image
             uiImage={props.logoUri}
-            modifiers={[resizable(), frame({ height: 28, width: 28 }), cornerRadius(6)]}
+            modifiers={[
+              resizable(),
+              frame({ height: 28, width: 28 }),
+              cornerRadius(6),
+              widgetAccentedRenderingMode('fullColor'),
+            ]}
           />
         ) : null}
         <Text

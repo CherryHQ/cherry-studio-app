@@ -9,11 +9,13 @@
 export type BackgroundActivityEndPolicy = 'default' | 'immediate';
 
 /**
- * Base shape of every feature's activity props. The manager injects `logoUri`
- * once the shared app logo is staged and stamps `finishedAtEpochMs` when a
- * session finishes; features own everything else.
+ * Base shape of every feature's activity props. The manager injects the
+ * resolved app `colorScheme` and `logoUri`, and stamps `finishedAtEpochMs`
+ * when a session finishes; features own everything else.
  */
 export type BackgroundActivityBaseProps = {
+  /** Resolved app theme injected by BackgroundActivityManager. */
+  colorScheme?: 'dark' | 'light';
   finishedAtEpochMs?: number;
   logoUri?: string;
   startedAtEpochMs: number;
