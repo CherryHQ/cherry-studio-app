@@ -7,7 +7,6 @@ import { PullSpinner } from './PullSpinner';
 
 export function ProviderDetailChrome({
   canDelete,
-  checkAction,
   isActive,
   isDisabled,
   onDelete,
@@ -60,13 +59,9 @@ export function ProviderDetailChrome({
           tintColor={Color.ios.systemRed}
         />
       ) : null}
+      {/* Holds the actions against the leading edge. Without it a lone toggle
+          button gets centred by the native toolbar. */}
       <Stack.Toolbar.Spacer />
-      <Stack.Toolbar.Button
-        accessibilityLabel={t('settings.provider.models.check')}
-        disabled={checkAction.isDisabled || checkAction.isLoading}
-        icon="waveform.path.ecg"
-        onPress={checkAction.onPress}
-      />
     </Stack.Toolbar>
   );
 }

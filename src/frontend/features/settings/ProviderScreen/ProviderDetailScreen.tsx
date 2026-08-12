@@ -36,6 +36,7 @@ import { useProviderDetailSettings } from './detail';
 import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
 import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
+import { ProviderModelCheckSection } from './models/components/ProviderModelCheckSection';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
@@ -195,19 +196,6 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/model-add',
     });
   }, [provider, providerId, router]);
-  const openModelCheckSettings = useCallback(() => {
-    if (!providerId || models.length === 0) {
-      return;
-    }
-
-    router.push({
-      params: {
-        ...(provider?.name ? { providerName: provider.name } : {}),
-        providerId,
-      },
-      pathname: '/settings/provider/[providerId]/model-check',
-    });
-  }, [models.length, provider, providerId, router]);
   const openModelPullSettings = useCallback(async () => {
     if (!providerId) {
       return;
@@ -253,14 +241,6 @@ export default function ProviderDetailSettingsScreen() {
       },
     ],
     [openModelAddSettings, provider, t],
-  );
-  const checkAction = useMemo(
-    () => ({
-      isDisabled: models.length === 0,
-      isLoading: false,
-      onPress: openModelCheckSettings,
-    }),
-    [models.length, openModelCheckSettings],
   );
   const pullAction = useMemo(
     () =>
@@ -344,17 +324,25 @@ export default function ProviderDetailSettingsScreen() {
             // Still gated as one commit: #467 kept the Base URL / API keys blocks
             // out until all three queries land so the content never grows under a
             // finger that already aimed at the toolbar.
-            <ProviderApiManagementSection
-              apiKeysInput={apiKeysInput}
-              baseUrl={getProviderPrimaryBaseUrl(provider)}
-              provider={provider}
-              showApiKeys={showApiKeys}
-              showBaseUrl={canEditEndpoint}
-              onApiKeysCommit={commitApiKeys}
-              onApiKeysManagePress={openApiKeySettings}
-              onBaseUrlCommit={commitBaseUrl}
-              onBaseUrlManagePress={openEndpointSettings}
-            />
+            <>
+              <ProviderApiManagementSection
+                apiKeysInput={apiKeysInput}
+                baseUrl={getProviderPrimaryBaseUrl(provider)}
+                provider={provider}
+                showApiKeys={showApiKeys}
+                showBaseUrl={canEditEndpoint}
+                onApiKeysCommit={commitApiKeys}
+                onApiKeysManagePress={openApiKeySettings}
+                onBaseUrlCommit={commitBaseUrl}
+                onBaseUrlManagePress={openEndpointSettings}
+              />
+              <ProviderModelCheckSection
+                apiKeys={apiKeys}
+                isLoading={modelsQuery.isPending}
+                models={models}
+                providerId={providerId}
+              />
+            </>
           )}
         </ScrollView>
       ) : (
@@ -369,7 +357,6 @@ export default function ProviderDetailSettingsScreen() {
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
         canDelete={provider ? providers.canRemove(provider) : false}
-        checkAction={checkAction}
         isActive={provider?.isEnabled ?? false}
         isDisabled={
           !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isLoading

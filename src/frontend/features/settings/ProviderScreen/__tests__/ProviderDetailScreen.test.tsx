@@ -48,6 +48,7 @@ let mockAuthConfigQuery: QueryState;
 let mockRedirectHref: unknown;
 let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
+let mockCheckSectionRenderCount: number;
 let mockSectionRenders: SectionProps[];
 const mockReplaceApiKeys = jest.fn(async () => undefined);
 const mockSaveProvider = jest.fn(async () => undefined);
@@ -161,6 +162,13 @@ jest.mock('../components/ProviderModelList', () => ({
   ProviderModelList: ({ header }: { header?: ReactElement }) => header ?? null,
 }));
 
+jest.mock('../models/components/ProviderModelCheckSection', () => ({
+  ProviderModelCheckSection: () => {
+    mockCheckSectionRenderCount += 1;
+    return null;
+  },
+}));
+
 jest.mock('../models/hooks/useProviderModelPull', () => ({
   useProviderModelPull: () => ({ isPreviewLoading: false, loadPullPreview: jest.fn() }),
 }));
@@ -212,6 +220,7 @@ describe('ProviderDetailScreen', () => {
     mockRedirectHref = undefined;
     mockSpinnerRenderCount = 0;
     mockChromeRenderCount = 0;
+    mockCheckSectionRenderCount = 0;
     mockSectionRenders = [];
     mockReplaceApiKeys.mockClear();
     mockSaveProvider.mockClear();
@@ -228,6 +237,15 @@ describe('ProviderDetailScreen', () => {
 
     expect(mockSpinnerRenderCount).toBe(1);
     expect(mockSectionRenders).toEqual([]);
+    expect(mockCheckSectionRenderCount).toBe(0);
+  });
+
+  // The connectivity check used to live behind a toolbar button on its own route.
+  it('renders the connectivity check inline under the API management section', () => {
+    loadEverything();
+    render();
+
+    expect(mockCheckSectionRenderCount).toBe(1);
   });
 
   // The spinner used to replace the whole screen, so the scroll view and the bottom

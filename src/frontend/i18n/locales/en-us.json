@@ -507,7 +507,6 @@
   "settings.provider.models.addSubmit": "Add model",
   "settings.provider.models.addSuccess": "Added {{count}} model(s).",
   "settings.provider.models.addTitle": "Add model",
-  "settings.provider.models.check": "Check",
   "settings.provider.models.checkApiKeyFallback": "Key {{index}} ({{key}})",
   "settings.provider.models.checkApiKeySection": "API key",
   "settings.provider.models.checkChecking": "Checking",

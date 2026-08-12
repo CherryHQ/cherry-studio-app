@@ -1,26 +1,19 @@
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import ProviderModelCheckScreen from '../ProviderModelCheckScreen';
+import { ProviderModelCheckSection } from '../ProviderModelCheckSection';
 
 const mockSetSelectedApiKeyId = jest.fn();
 const mockSetSelectedModelId = jest.fn();
 const mockStartCheck = jest.fn(async () => undefined);
-
-jest.mock('expo-router', () => ({
-  Redirect: () => null,
-  useLocalSearchParams: () => ({ providerId: 'provider-1', providerName: 'Provider One' }),
-}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 jest.mock('lucide-uniwind/png', () => ({
-  ChevronRightIcon: () => null,
+  ChevronDownIcon: () => null,
 }));
-
-jest.mock('@/frontend/components/headers', () => ({ BackHeader: () => null }));
 
 jest.mock('@/frontend/components/selectionSheet', () => {
   const { createElement } = jest.requireActual('react');
@@ -33,29 +26,14 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   const Button = (props: object) => createElement('Button', props);
   const Section = (props: object) => createElement('Section', props);
+  Section.Header = (props: object) => createElement('SectionHeader', props);
   Section.Item = (props: object) => createElement('SectionItem', props);
   return { Button, Section };
 });
 
 const mockModel = { id: 'provider-1::model-1', name: 'Model One' } as unknown as Model;
 
-jest.mock('../apiService', () => ({
-  useProviderApiServiceQueries: () => ({
-    apiKeys: [],
-    apiKeysQuery: { isPending: false },
-  }),
-}));
-
-jest.mock('../detail', () => ({
-  useProviderDetailSettings: () => ({
-    models: [mockModel],
-    modelsQuery: { isPending: false },
-    provider: { id: 'provider-1', name: 'Provider One' },
-    providerQuery: { isError: false, isPending: false },
-  }),
-}));
-
-jest.mock('../models/hooks/useProviderModelCheck', () => ({
+jest.mock('../../hooks/useProviderModelCheck', () => ({
   useProviderModelCheck: () => ({
     apiKeyOptions: [{ label: 'Default configuration', value: '__default__' }],
     isChecking: false,
@@ -68,13 +46,15 @@ jest.mock('../models/hooks/useProviderModelCheck', () => ({
   }),
 }));
 
-describe('ProviderModelCheckScreen', () => {
+describe('ProviderModelCheckSection', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
     act(() => {
-      renderer = create(<ProviderModelCheckScreen />);
+      renderer = create(
+        <ProviderModelCheckSection apiKeys={[]} models={[mockModel]} providerId="provider-1" />,
+      );
     });
   });
 
@@ -83,7 +63,7 @@ describe('ProviderModelCheckScreen', () => {
     renderer = undefined;
   });
 
-  test('opens model and API key selection sheets from the page', () => {
+  test('opens model and API key selection sheets from the configuration tab', () => {
     const rows = renderer!.root.findAllByType('SectionItem');
     let sheets = renderer!.root.findAllByType('SingleSelectionSheet');
 
@@ -98,7 +78,7 @@ describe('ProviderModelCheckScreen', () => {
     expect(mockSetSelectedModelId).toHaveBeenCalledWith(mockModel.id);
   });
 
-  test('starts the check from the independent page', async () => {
+  test('starts the check without leaving the configuration tab', async () => {
     const button = renderer!.root.findByType('Button');
 
     await act(async () => button.props.onPress());

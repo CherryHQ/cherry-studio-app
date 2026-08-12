@@ -21,7 +21,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('lucide-uniwind/png', () => ({
-  ChevronRightIcon: () => null,
+  ChevronDownIcon: () => null,
 }));
 
 jest.mock('heroui-native/toast', () => ({

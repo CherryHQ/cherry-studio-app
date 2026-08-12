@@ -82,7 +82,14 @@ function SectionItem({
           )}
           {description ? renderTextSlot(description, 'text-sm text-muted-foreground') : null}
         </View>
-        {trailing ? <View className="shrink-0 items-center justify-center">{trailing}</View> : null}
+        {/* Shrinkable, because a trailing value is often a variable-length string
+            (a model id, a language name). The label side is `flex-1` off a zero
+            basis, so it never claims width the trailing side needs — an overflow
+            here can only come from the trailing content, which is what should
+            give. Pair a text value with `numberOfLines` to get an ellipsis. */}
+        {trailing ? (
+          <View className="min-w-0 shrink items-center justify-center">{trailing}</View>
+        ) : null}
         {shouldShowChevron ? (
           <View className="shrink-0" testID="section-chevron">
             <ChevronRightIcon className="size-5 text-muted-foreground" strokeWidth={2} />

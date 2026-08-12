@@ -9,7 +9,7 @@ import {
 import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
+import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -153,14 +153,14 @@ export default function WebSearchCheckScreen() {
             label={t('settings.websearch.provider.checkApiKeySection')}
             onPress={() => setIsApiKeySheetOpen(true)}
             trailing={
-              <View className="min-w-0 max-w-56 flex-row items-center justify-end gap-1">
+              <View className="min-w-0 flex-row items-center justify-end gap-1">
                 <Text
                   className="min-w-0 shrink text-right text-base text-foreground"
                   numberOfLines={1}
                 >
                   {selectedApiKey?.label ?? t('settings.websearch.provider.checkNoApiKeys')}
                 </Text>
-                <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
+                <ChevronDownIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
               </View>
             }
           />

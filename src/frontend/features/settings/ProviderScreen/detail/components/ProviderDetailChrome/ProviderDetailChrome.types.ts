@@ -2,11 +2,6 @@ import type { ProviderModelAction } from '../../../models/types';
 
 export type ProviderDetailChromeProps = {
   canDelete: boolean;
-  /**
-   * Model health check. Sits alone on the trailing side, away from the actions
-   * that mutate the provider. Available from both provider detail tabs.
-   */
-  checkAction: ProviderModelAction;
   isActive: boolean;
   isDisabled: boolean;
   onDelete: () => void;

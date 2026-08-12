@@ -80,6 +80,32 @@ describe('Section', () => {
     ).toContain('mt-2');
   });
 
+  // A trailing value is usually a variable-length string, so the slot that holds it
+  // has to give before the row overflows. It used to be `shrink-0`, which forced
+  // every caller to guess a max width and clip long values early.
+  test('lets trailing content shrink instead of overflowing the row', () => {
+    const tree = render(
+      <Section>
+        <Section.Item
+          label="Model"
+          trailing={<Text testID="row-value">a-very-long-model-id</Text>}
+        />
+      </Section>,
+    );
+
+    const slots = tree.root.findAll(
+      (node) =>
+        node.type === View &&
+        typeof node.props.className === 'string' &&
+        node.props.className.includes('items-center justify-center') &&
+        node.findAllByProps({ testID: 'row-value' }).length > 0,
+    );
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0].props.className).toContain('min-w-0 shrink');
+    expect(slots[0].props.className).not.toContain('shrink-0');
+  });
+
   test('renders a standalone header with optional trailing content', () => {
     const tree = render(
       <Section.Header title="Models" testID="section-header">

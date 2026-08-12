@@ -506,7 +506,6 @@
   "settings.provider.models.addSubmit": "添加模型",
   "settings.provider.models.addSuccess": "已添加 {{count}} 个模型。",
   "settings.provider.models.addTitle": "添加模型",
-  "settings.provider.models.check": "检查",
   "settings.provider.models.checkApiKeyFallback": "Key {{index}} ({{key}})",
   "settings.provider.models.checkApiKeySection": "API 密钥",
   "settings.provider.models.checkChecking": "检查中",
