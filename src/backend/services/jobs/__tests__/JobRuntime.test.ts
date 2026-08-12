@@ -8,7 +8,7 @@ import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
 import { JobService } from '@/backend/data/services/JobService';
 
-import { createJobRuntime } from '../JobRuntime';
+import { JobRuntime } from '../JobRuntime';
 import { GC_TERMINAL_TTL_MS, type JobHandler, MAX_INPUT_BYTES } from '../types';
 import {
   createTestDb,
@@ -17,6 +17,7 @@ import {
   makeEchoHandler,
   makeGate,
   makeHoldHandler,
+  noAiService,
   settlesWithin,
   type TestRuntime,
   waitFor,
@@ -70,7 +71,7 @@ describe('JobRuntime', () => {
   }
 
   afterEach(async () => {
-    await ctx?.runtime.dispose();
+    await ctx?.runtime._doStop();
     await uninstallTestHost();
     sqlite?.close();
     ctx = undefined;
@@ -83,16 +84,28 @@ describe('JobRuntime', () => {
     // Built directly rather than through `createTestRuntime`: the point is that
     // the throw happens synchronously while constructing, and the harness is
     // async because it installs a host first.
-    expect(() =>
-      createJobRuntime({
-        dbService: createTestDb(db).dbService,
-        handlers: [
-          ['internal.echo', makeEchoHandler()],
-          ['internal.echo', makeEchoHandler()],
-        ],
-        jobService: new JobService(),
-      }),
+    expect(
+      () =>
+        new JobRuntime(createTestDb(db).dbService, noAiService, {
+          handlers: [
+            ['internal.echo', makeEchoHandler()],
+            ['internal.echo', makeEchoHandler()],
+          ],
+          jobService: new JobService(),
+        }),
     ).toThrow(/Duplicate job handler/);
+  });
+
+  it('pumps the job runtime with the cold-start reason', async () => {
+    // Moved here from `runPostReadyTasks`: the cold start — lazy recovery over
+    // prior-process leftovers plus the GC sweep — is this service's own
+    // `PostReady` initialization now.
+    const { runtime } = await setup([['internal.echo', makeEchoHandler()]]);
+    const pump = jest.spyOn(runtime, 'pump');
+
+    await runtime._doInit();
+
+    expect(pump).toHaveBeenCalledWith({ reason: 'cold-start' });
   });
 
   it('runs an echo job end to end and persists the terminal snapshot', async () => {

@@ -2341,7 +2341,7 @@ describe('ChatRuntime', () => {
     const signal = (services.ai.streamText as jest.Mock).mock.calls[0][0].requestOptions
       .signal as AbortSignal;
 
-    const disposePromise = runtime.dispose();
+    const disposePromise = runtime._doStop();
     let disposeCompleted = false;
     void disposePromise.then(() => {
       disposeCompleted = true;
@@ -2362,7 +2362,9 @@ describe('ChatRuntime', () => {
     await Promise.all([turn, disposePromise]);
 
     expect(disposeCompleted).toBe(true);
-    expect(runtime.dispose()).toBe(disposePromise);
+    // The memoized `dispose()` promise went with the method: `stopAll` runs once
+    // per host, so a repeated stop only has to be harmless.
+    await expect(runtime._doStop()).resolves.toBeUndefined();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 });
@@ -2548,6 +2550,9 @@ function createRuntime(input: {
   services: ChatRuntimeServices;
 }) {
   const runtime = new ChatRuntime(
+    // The container injects `AiService` here to build the production dependency
+    // set; this suite supplies that set whole, so the slot is never read.
+    undefined as never,
     {
       files: {
         createParts: (parts) => mockCreateMessageParts(parts),

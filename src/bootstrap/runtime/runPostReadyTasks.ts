@@ -1,6 +1,5 @@
 import { loggerService } from '@logger';
 
-import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 
 const logger = loggerService.withContext('runPostReadyTasks');
@@ -9,20 +8,15 @@ const logger = loggerService.withContext('runPostReadyTasks');
  * critical path. The gate waits only for database readiness and initial/boot
  * preferences — data repair and diagnostics belong here, not
  * in `initializeAppRuntime`. Best-effort: callers fire-and-forget and a failure
- * must not surface to the user. */
-export async function runPostReadyTasks(
-  services: BackendServices,
-  runtime: { jobRuntime: JobRuntime },
-) {
+ * must not surface to the user.
+ *
+ * What is left here is the work no service owns. A `PostReady` service starts
+ * itself — `JobRuntime.onInit` is where the cold-start pump lives now. */
+export async function runPostReadyTasks(services: BackendServices) {
   // The catch lives here, not in callers: they `void` this promise, so a task
   // added below without its own handling would become an unhandled rejection.
   try {
-    await Promise.all([
-      reconcileStalePendingMessages(services),
-      // The first pump also runs lazy startup recovery (abandon/retry/singleton
-      // sweeps over prior-process leftovers) and the cold-start GC sweep.
-      runtime.jobRuntime.pump({ reason: 'cold-start' }),
-    ]);
+    await reconcileStalePendingMessages(services);
   } catch (error) {
     logger.error('Post-ready tasks failed', error as Error);
   }

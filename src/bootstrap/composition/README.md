@@ -8,11 +8,10 @@ dependency interfaces. It is wiring code, not a service locator and not a home f
 - `createDataServices.ts` names the private desktop-aligned persistence singletons.
 - `createBackendServices.ts` assembles those ownership modules into the private backend graph. The
   device-permission and managed-file adapters are backend module singletons it spreads in
-  (`backend/services/permissions`, `backend/services/file/fileContent`); AI, MCP, and web-search
-  runtimes are lifecycle services the host resolves and hands in.
-- `createBackend.ts` creates the app-owned `ChatRuntime`, builds factory-shaped workflow modules,
-  adapts the graph into the workflow-only `Backend` interface, and supplies the MCP mutation
-  coordinator required by Data API handlers.
+  (`backend/services/permissions`, `backend/services/file/fileContent`); the AI, MCP, web-search,
+  chat, and job runtimes are lifecycle services the host resolves and hands in.
+- `createBackend.ts` builds factory-shaped workflow modules, adapts the graph into the workflow-only
+  `Backend` interface, and supplies the MCP mutation coordinator required by Data API handlers.
 
 `createAppBootstrapRuntime()` owns the top-level `CacheService`, `DbService`, and `DataApiService`
 instances and calls these composition functions. Concrete classes never enter frontend React state.

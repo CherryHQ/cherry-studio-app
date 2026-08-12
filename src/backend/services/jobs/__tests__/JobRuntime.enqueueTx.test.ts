@@ -33,7 +33,7 @@ describe('JobRuntime.enqueueTx', () => {
   }
 
   afterEach(async () => {
-    await ctx?.runtime.dispose();
+    await ctx?.runtime._doStop();
     await uninstallTestHost();
     sqlite?.close();
     ctx = undefined;

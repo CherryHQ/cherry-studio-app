@@ -1,8 +1,10 @@
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
+import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { devicePermissions } from '@/backend/services/permissions';
@@ -21,6 +23,8 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
 export type BackendInfrastructure = {
   ai: AiService;
   cache: CacheService;
+  chat: ChatRuntime;
+  jobRuntime: JobRuntime;
   mcpRuntime: McpRuntimeService;
   oauth: ProviderOAuthService;
   oauthSession: OAuthRuntimeService;
@@ -31,6 +35,8 @@ export type BackendInfrastructure = {
 export function createBackendServices({
   ai,
   cache,
+  chat,
+  jobRuntime,
   mcpRuntime,
   oauth,
   oauthSession,
@@ -40,9 +46,11 @@ export function createBackendServices({
   return {
     ...createDataServices({ cache, preference }),
     ai,
+    chat,
     // Module singletons, spread here only so the routing table reads one object.
     devicePermissions,
     fileContent,
+    jobRuntime,
     mcpRuntime,
     oauth,
     oauthSession,

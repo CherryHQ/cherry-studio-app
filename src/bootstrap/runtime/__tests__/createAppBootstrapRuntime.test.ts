@@ -7,7 +7,9 @@ const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
 const mockAi = { kind: 'ai' };
 const mockCache = { kind: 'cache' };
+const mockChat = { kind: 'chat' };
 const mockDb = { kind: 'db' };
+const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
 const mockOauth = { kind: 'oauth' };
 const mockOauthSession = { kind: 'oauth-session' };
@@ -16,6 +18,8 @@ const mockWebSearch = { kind: 'web-search' };
 const mockServices = {
   ai: mockAi,
   cache: mockCache,
+  chat: mockChat,
+  jobRuntime: mockJobRuntime,
   mcpRuntime: mockMcpRuntime,
   oauth: mockOauth,
   oauthSession: mockOauthSession,
@@ -25,11 +29,9 @@ const mockServices = {
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
-const mockDisposeBackend = jest.fn<Promise<void>, []>(async () => undefined);
 const mockCreateBackend = jest.fn((_services: unknown) => ({
   backend: mockBackend,
   dataApiDependencies: mockDataApiDependencies,
-  dispose: mockDisposeBackend,
 }));
 
 jest.mock('@/backend/data/DataApiService', () => ({
@@ -64,7 +66,9 @@ const createRuntime = () =>
   createAppBootstrapRuntime({
     AiService: mockAi,
     CacheService: mockCache,
+    ChatRuntime: mockChat,
     DbService: mockDb,
+    JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
     OAuthRuntimeService: mockOauthSession,
     PreferenceService: mockPreference,
@@ -91,6 +95,8 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockCreateBackendServices).toHaveBeenCalledWith({
       ai: mockAi,
       cache: mockCache,
+      chat: mockChat,
+      jobRuntime: mockJobRuntime,
       mcpRuntime: mockMcpRuntime,
       oauth: mockOauth,
       oauthSession: mockOauthSession,
@@ -113,23 +119,20 @@ describe('createAppBootstrapRuntime', () => {
     expect(application.get('DbService')).toBe(mockDb);
   });
 
-  test('waits for chat before tearing down the host and is idempotent', async () => {
-    const backendDisposed = createDeferred();
-    mockDisposeBackend.mockImplementationOnce(() => backendDisposed.promise);
+  test('tears the host down once and is idempotent', async () => {
     const runtime = createRuntime();
     await runtime.initialize();
+    expect(application.hasHost).toBe(true);
 
     const firstDispose = runtime.dispose();
     const secondDispose = runtime.dispose();
 
     expect(secondDispose).toBe(firstDispose);
-    expect(mockDisposeBackend).toHaveBeenCalledTimes(1);
-    expect(application.hasHost).toBe(true);
-
-    backendDisposed.resolve();
     await firstDispose;
 
-    // The host goes last: everything above it is still reachable while it drains.
+    // Nothing is sequenced ahead of the host any more. The chat and job runtimes
+    // used to drain here by hand; they are services now, and reverse-order
+    // teardown stops them before the database they write through.
     expect(application.hasHost).toBe(false);
   });
 
@@ -154,12 +157,3 @@ describe('createAppBootstrapRuntime', () => {
     expect(mockRunPostReadyTasks).toHaveBeenCalledWith(mockServices);
   });
 });
-
-function createDeferred() {
-  let resolve: () => void = () => undefined;
-  const promise = new Promise<void>((nextResolve) => {
-    resolve = nextResolve;
-  });
-
-  return { promise, resolve };
-}

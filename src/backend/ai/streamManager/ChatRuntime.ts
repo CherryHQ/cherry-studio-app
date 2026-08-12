@@ -14,6 +14,7 @@ import type {
   TopicStatusSnapshotEntry,
   TopicStreamStatus,
 } from '@cherrystudio/universal/ai/transport';
+import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
 import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
@@ -30,8 +31,18 @@ import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
 } from '@cherrystudio/universal/utils/conversationTitle';
-import { isToolUIPart, type UIMessageChunk } from 'ai';
+import { isToolUIPart, readUIMessageStream, type UIMessageChunk } from 'ai';
 
+import type { AiService } from '@/backend/ai/AiService';
+import { application } from '@/backend/core/application/Application';
+import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { assistantService } from '@/backend/data/services/AssistantService';
+import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import { messageService } from '@/backend/data/services/MessageService';
+import { modelService } from '@/backend/data/services/ModelService';
+import { providerService } from '@/backend/data/services/ProviderService';
+import { topicService } from '@/backend/data/services/TopicService';
+import { createMessageParts, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type {
   ChatCancelExecutionInput,
   ChatEditAndResendInput,
@@ -50,7 +61,7 @@ import type {
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { ChatRuntimeDependencies } from './ChatRuntimeDependencies';
+import type { ChatRuntimeDependencies, ChatRuntimeServices } from './ChatRuntimeDependencies';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
 type ActiveExecution = {
@@ -97,11 +108,64 @@ const defaultChatRuntimeConfig: ChatRuntimeConfig = {
   idleTimeoutMs: 30 * 60 * 1000,
 };
 
-export class ChatRuntime implements ChatModule {
+/**
+ * Everything a turn touches, bound to the installed host.
+ *
+ * Only `preference` is resolved per call: the rest are module singletons that
+ * reach the current host themselves, and `AiService` arrives through
+ * `@DependsOn`, so capturing it cannot outlive the generation that injected it.
+ */
+function createHostDependencies(aiService: AiService): ChatRuntimeDependencies {
+  const preference: ChatRuntimeServices['preference'] = {
+    get: <K extends PreferenceKeyType>(key: K) => application.get('PreferenceService').get(key),
+  };
+
+  return {
+    files: {
+      createParts: (parts) => createMessageParts(fileEntryService, parts),
+      discard: (entries) => discardInternalEntries(fileEntryService, entries),
+    },
+    services: {
+      ai: {
+        generateText: (input) => aiService.generateText(input),
+        // The accumulator is the SDK's, not the service's — it turns the chunk
+        // stream the service returns into successive message snapshots.
+        readMessageStream: ({ message, stream }) =>
+          readUIMessageStream<CherryUIMessage>({ message, stream, terminateOnError: true }),
+        streamText: (input) => aiService.streamText(input),
+      },
+      assistant: assistantService,
+      message: messageService,
+      model: modelService,
+      preference,
+      provider: providerService,
+      topic: topicService,
+    },
+  };
+}
+
+/**
+ * Owns every in-flight chat turn: reservation, streaming, terminal persistence,
+ * and the snapshots the chat screen renders from.
+ *
+ * `PostReady` rather than `Gate`: no first paint reads a turn, and hoisting it
+ * would drag `AiService` onto the gate with it. Construction still happens at
+ * composition time, so the service exists long before a user can send anything;
+ * only its (empty) initialization waits for the gate to open.
+ *
+ * It declares `AiService` and takes it positionally, unlike `AiService` itself,
+ * because `onStop` is what aborts live turns: reverse-order teardown has to stop
+ * this service before the one it streams through, and only a declared edge
+ * orders that. The cost is one placeholder argument in the suite, which replaces
+ * the whole dependency set anyway.
+ */
+@Injectable('ChatRuntime')
+@ServicePhase(Phase.PostReady)
+@DependsOn(['AiService'])
+export class ChatRuntime extends BaseService implements ChatModule {
   private activeTasks = new Set<Promise<unknown>>();
   private activeTurns = new Map<string, ActiveTurn>();
   private continuingTopics = new Set<string>();
-  private disposePromise: Promise<void> | undefined;
   private isDisposed = false;
   private listeners = new Set<ChatListener>();
   private newTopicHandoffTopicId: string | undefined;
@@ -110,11 +174,19 @@ export class ChatRuntime implements ChatModule {
   private topicSnapshots = new Map<string, ChatTopicSnapshot>();
 
   private readonly config: ChatRuntimeConfig;
+  private readonly dependencies: ChatRuntimeDependencies;
 
+  /**
+   * The container passes only `aiService`; a test passes the whole dependency
+   * set instead, which is why `aiService` is then never read.
+   */
   constructor(
-    private readonly dependencies: ChatRuntimeDependencies,
+    aiService: AiService,
+    dependencies?: ChatRuntimeDependencies,
     config: Partial<ChatRuntimeConfig> = {},
   ) {
+    super();
+    this.dependencies = dependencies ?? createHostDependencies(aiService);
     this.config = { ...defaultChatRuntimeConfig, ...config };
   }
 
@@ -171,15 +243,6 @@ export class ChatRuntime implements ChatModule {
     execution.abortController.abort(new Error('Chat execution aborted'));
   }
 
-  dispose(): Promise<void> {
-    if (!this.disposePromise) {
-      this.isDisposed = true;
-      this.disposePromise = this.disposeRuntime();
-    }
-
-    return this.disposePromise;
-  }
-
   sendText(input: ChatSendTextInput): Promise<void> {
     return this.startTask(() => this.sendTextTask(input));
   }
@@ -220,7 +283,18 @@ export class ChatRuntime implements ChatModule {
     return this.startTask(() => this.respondToolApprovalTask(input));
   }
 
-  private async disposeRuntime(): Promise<void> {
+  /**
+   * Abort every live turn, then wait for the tasks settling their rows.
+   *
+   * The flag is set before the first await so a send racing teardown is refused
+   * rather than reserving a row nothing will ever finish. The wait is unbounded
+   * on purpose: every task here honors its abort signal, so the only thing left
+   * to finish is the terminal write, and giving up on that would strand the row
+   * `pending`.
+   */
+  protected async onStop(): Promise<void> {
+    this.isDisposed = true;
+
     for (const activeTurn of this.activeTurns.values()) {
       const reason = new Error('Chat runtime disposed');
       activeTurn.abortController.abort(reason);

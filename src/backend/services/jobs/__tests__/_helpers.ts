@@ -9,7 +9,7 @@ import type { Database } from '@/backend/data/db/DbService';
 import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
 import { JobService } from '@/backend/data/services/JobService';
 
-import { createJobRuntime, type JobRuntime, type JobRuntimeOptions } from '../JobRuntime';
+import { JobRuntime, type JobRuntimeOptions } from '../JobRuntime';
 import type { EnqueueOptions, JobHandle, JobHandler } from '../types';
 
 export {
@@ -25,6 +25,13 @@ export type TestRuntime = {
 };
 
 /**
+ * The container injects `AiService` so the runtime can build its production
+ * handler registry; every suite here supplies its own handlers, so the slot is
+ * never read.
+ */
+export const noAiService = undefined as never;
+
+/**
  * Async because `JobService` resolves `DbService` through `application`: the
  * harness database has to be serving from an installed host before the runtime
  * exists, since startup recovery reaches the job table on the first pump. Pair
@@ -33,13 +40,12 @@ export type TestRuntime = {
 export async function createTestRuntime(
   sqlite: DatabaseSync,
   handlers: readonly (readonly [string, JobHandler])[],
-  overrides: Partial<Omit<JobRuntimeOptions, 'dbService' | 'handlers' | 'jobService'>> = {},
+  overrides: Omit<JobRuntimeOptions, 'handlers' | 'jobService'> = {},
 ): Promise<TestRuntime> {
   const db = createTestDb(sqlite);
   await installTestHost({ DbService: db.dbService });
   const jobService = new JobService();
-  const runtime = createJobRuntime({
-    dbService: db.dbService,
+  const runtime = new JobRuntime(db.dbService, noAiService, {
     handlers,
     jobService,
     ...overrides,

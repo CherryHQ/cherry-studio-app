@@ -5,7 +5,7 @@ import { JOB_ERROR_CODES } from '@cherrystudio/universal/data/api/schemas/jobs';
 
 import { uninstallTestHost } from '@/backend/core/application/testHost';
 
-import { createJobRuntime, DISPOSE_DRAIN_TIMEOUT_MS } from '../JobRuntime';
+import { DISPOSE_DRAIN_TIMEOUT_MS } from '../JobRuntime';
 import { MAX_CANCEL_REASON_CHARS } from '../types';
 import {
   createTestRuntime,
@@ -37,7 +37,7 @@ describe('JobRuntime cancel & dispose', () => {
   afterEach(async () => {
     // Await: dispose now drains in-flight handlers, and closing SQLite out from
     // under that drain is exactly the teardown race the drain exists to prevent.
-    await ctx?.runtime.dispose();
+    await ctx?.runtime._doStop();
     await uninstallTestHost();
     sqlite?.close();
     ctx = undefined;
@@ -172,8 +172,8 @@ describe('JobRuntime cancel & dispose', () => {
     const handle = await enqueueTest(runtime, 'internal.hold', {});
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
 
-    runtime.dispose();
-    runtime.dispose(); // idempotent
+    runtime._doStop();
+    runtime._doStop(); // idempotent
 
     // The abort classifies as cancel and still lands the terminal row…
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'cancelled');
@@ -192,7 +192,7 @@ describe('JobRuntime cancel & dispose', () => {
     const handle = await enqueueTest(runtime, 'internal.hold', {});
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
 
-    await runtime.dispose();
+    await runtime._doStop();
 
     // Deliberately not `waitFor`: the row must ALREADY be terminal the moment
     // dispose resolves. Polling here would pass even without a drain, and the
@@ -209,7 +209,7 @@ describe('JobRuntime cancel & dispose', () => {
     // Fake timers only from here: `waitFor` above needs the real clock.
     jest.useFakeTimers();
     try {
-      const disposed = runtime.dispose();
+      const disposed = runtime._doStop();
       await jest.advanceTimersByTimeAsync(DISPOSE_DRAIN_TIMEOUT_MS + 10);
       await expect(disposed).resolves.toBeUndefined();
     } finally {
@@ -219,16 +219,6 @@ describe('JobRuntime cancel & dispose', () => {
     // The stubborn handler never settled, so its row stays `running` — that is
     // the documented hand-off to the next cold start's recovery strategy.
     expect((await jobService.getById(handle.id))?.status).toBe('running');
-  });
-
-  it('refuses a second runtime on the same database', async () => {
-    const { db, jobService } = await setup([['internal.echo', makeEchoHandler()]]);
-    // The claim fence isolates by state, not by attempt, so it is only sound
-    // while one runtime owns the database. `<StrictMode>` double-invoking a
-    // `useMemo` factory is the realistic way to break that silently.
-    expect(() => createJobRuntime({ dbService: db.dbService, handlers: [], jobService })).toThrow(
-      'JobRuntime is already live for this database',
-    );
   });
 
   it('dispose clears the delayed-promotion timer', async () => {
@@ -246,7 +236,7 @@ describe('JobRuntime cancel & dispose', () => {
       // guarantees the timer exists.
       await runtime.pump({ reason: 'manual' });
       expect(jest.getTimerCount()).toBeGreaterThan(0);
-      runtime.dispose();
+      runtime._doStop();
       expect(jest.getTimerCount()).toBe(0);
     } finally {
       jest.useRealTimers();

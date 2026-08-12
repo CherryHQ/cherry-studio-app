@@ -1,8 +1,10 @@
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
+import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { devicePermissions } from '@/backend/services/permissions';
@@ -32,6 +34,10 @@ describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
     const ai = { kind: 'ai' } as unknown as AiService;
     const cache = { kind: 'cache' } as unknown as CacheService;
+    // The chat and job runtimes arrive from the host too, as of stage B's last
+    // two services.
+    const chat = { kind: 'chat' } as unknown as ChatRuntime;
+    const jobRuntime = { kind: 'job-runtime' } as unknown as JobRuntime;
     const mcpRuntime = { kind: 'mcp-runtime' } as unknown as McpRuntimeService;
     // Both OAuth services arrive from the host now, like the four above them.
     const oauth = { kind: 'oauth' } as unknown as ProviderOAuthService;
@@ -42,6 +48,8 @@ describe('createBackendServices', () => {
     const services = createBackendServices({
       ai,
       cache,
+      chat,
+      jobRuntime,
       mcpRuntime,
       oauth,
       oauthSession,
@@ -55,8 +63,10 @@ describe('createBackendServices', () => {
     expect(services).toEqual({
       ...mockDataServices,
       ai,
+      chat,
       devicePermissions,
       fileContent,
+      jobRuntime,
       mcpRuntime,
       oauth,
       oauthSession,

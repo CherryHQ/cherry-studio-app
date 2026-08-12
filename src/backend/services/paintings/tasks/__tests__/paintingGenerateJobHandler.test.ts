@@ -172,7 +172,7 @@ describe('createPaintingGenerateJobHandler', () => {
     let ctx: TestRuntime | undefined;
 
     afterEach(async () => {
-      await ctx?.runtime.dispose();
+      await ctx?.runtime._doStop();
       await uninstallTestHost();
       sqlite?.close();
       ctx = undefined;

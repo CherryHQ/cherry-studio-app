@@ -3,6 +3,7 @@ import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import { application } from '@/backend/core/application/Application';
 import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
 import { serviceList } from '@/backend/core/application/serviceRegistry';
@@ -11,6 +12,7 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -41,7 +43,9 @@ export function createAppBootstrapRuntime(
   const host = new ApplicationHost({ overrides, services: serviceList });
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
+  const chat = host.container.get<ChatRuntime>('ChatRuntime');
   const dbService = host.container.get<DbService>('DbService');
+  const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
   const oauth = host.container.get<ProviderOAuthService>('ProviderOAuthService');
   const oauthSession = host.container.get<OAuthRuntimeService>('OAuthRuntimeService');
@@ -50,18 +54,15 @@ export function createAppBootstrapRuntime(
   const services = createBackendServices({
     ai,
     cache,
+    chat,
+    jobRuntime,
     mcpRuntime,
     oauth,
     oauthSession,
     preference,
     webSearch,
   });
-  const {
-    backend,
-    dataApiDependencies,
-    dispose: disposeBackend,
-    jobRuntime,
-  } = createBackend(services, { dbService });
+  const { backend, dataApiDependencies } = createBackend(services, { dbService });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
@@ -105,11 +106,12 @@ export function createAppBootstrapRuntime(
     dataApi,
     preference: services.preference,
     dispose: () => {
+      // Nothing to drain ahead of the host any more: `ChatRuntime` and
+      // `JobRuntime` are services, so reverse-order teardown settles them before
+      // the database they write through. Uninstalling is only correct while this
+      // is still the installed host — a runtime disposed out of order must not
+      // take down whichever host replaced it.
       disposePromise ??= (async () => {
-        await disposeBackend();
-        // Tear down this generation's host. Uninstalling is only correct while
-        // it is still the installed one — a runtime disposed out of order must
-        // not take down whichever host replaced it.
         if (application.current === host) {
           await application.uninstall();
         } else {
@@ -129,7 +131,7 @@ export function createAppBootstrapRuntime(
       // best-effort and off the first-paint path; the host logs its own
       // failures rather than surfacing them here.
       host.runPostReady();
-      await runPostReadyTasks(services, { jobRuntime });
+      await runPostReadyTasks(services);
     },
   };
 }
