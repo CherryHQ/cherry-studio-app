@@ -1,4 +1,5 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import type { ReactNode } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 
 export type MessagePresentationItem = Readonly<
@@ -8,6 +9,7 @@ export type MessagePresentationItem = Readonly<
 >;
 
 export type MessageListProps = {
+  animateFirstEnteringMessage?: boolean;
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
@@ -16,4 +18,5 @@ export type MessageListProps = {
   messages: readonly MessagePresentationItem[];
   onLoadOlder?: () => Promise<void>;
   onReady?: () => void;
+  renderAssistantMessage?: (message: MessagePresentationItem) => ReactNode;
 };

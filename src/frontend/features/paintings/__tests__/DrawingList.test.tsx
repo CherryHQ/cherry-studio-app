@@ -11,7 +11,7 @@ let mockSelectedIds: ReadonlySet<string> = new Set();
 
 const mockPaintingOne = { id: 'painting-1' } as Painting;
 const mockPaintingTwo = { id: 'painting-2' } as Painting;
-const mockPaintingPending = { id: 'painting-3' } as Painting;
+const mockPaintingPending = { id: 'painting-3', prompt: 'draw a cherry orchard' } as Painting;
 type MockGalleryItem = {
   aspectRatio: number;
   fileEntryId?: string;
@@ -19,6 +19,7 @@ type MockGalleryItem = {
   kind: 'generating' | 'interrupted' | 'output';
   message?: string;
   painting: Painting;
+  resolution?: string;
   uri?: string;
 };
 const defaultGalleryItems: MockGalleryItem[] = [
@@ -84,10 +85,12 @@ jest.mock('lucide-uniwind/png', () => ({
   RotateCcwIcon: () => null,
 }));
 
-jest.mock('@/frontend/components/paintingSkeleton', () => {
+jest.mock('@cherrystudio/ui/components', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
-  return { PaintingSkeleton: ({ testID }: { testID?: string }) => <MockView testID={testID} /> };
+  return {
+    ImageGenerationLoader: (props: { testID?: string }) => <MockView {...props} />,
+  };
 });
 
 jest.mock('react-i18next', () => ({
@@ -270,10 +273,39 @@ describe('DrawingList', () => {
     expect(findHostsByTestID(tree, 'painting-history-painting-2:file-3')).toHaveLength(1);
   });
 
-  it('shows a running generation as a skeleton tile that leads back to the composer', async () => {
+  it('shows a running generation loader that leads back to the composer', async () => {
     mockGalleryItems = [
       {
         aspectRatio: 1,
+        key: 'painting-3:pending',
+        kind: 'generating',
+        painting: mockPaintingPending,
+        resolution: '1664 × 928',
+      },
+    ];
+
+    const tree = await render();
+
+    // The tile carries the whole item's label, so the loader stays silent to
+    // screen readers while still showing its own status copy and size badge.
+    const [loader] = findHostsByTestID(tree, 'painting-history-loader-painting-3');
+    expect(loader.props).toMatchObject({
+      accessible: false,
+      label: 'painting.status.generating',
+      resolution: '1664 × 928',
+    });
+    // No image to zoom into: the tile links to the composer, not the viewer.
+    expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(0);
+    expect(findHostsByTestID(tree, 'painting-composer-link')[0]?.props.testProps).toEqual({
+      params: { paintingId: 'painting-3' },
+      pathname: '/paintings',
+    });
+  });
+
+  it('sizes the running loader to the shape the request asked for', async () => {
+    mockGalleryItems = [
+      {
+        aspectRatio: 1664 / 928,
         key: 'painting-3:pending',
         kind: 'generating',
         painting: mockPaintingPending,
@@ -282,13 +314,9 @@ describe('DrawingList', () => {
 
     const tree = await render();
 
-    expect(findHostsByTestID(tree, 'painting-history-skeleton-painting-3')).toHaveLength(1);
-    // No image to zoom into: the tile links to the composer, not the viewer.
-    expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(0);
-    expect(findHostsByTestID(tree, 'painting-composer-link')[0]?.props.testProps).toEqual({
-      params: { paintingId: 'painting-3' },
-      pathname: '/paintings',
-    });
+    // A square loader centred in a landscape tile previews the wrong image.
+    const [loader] = findHostsByTestID(tree, 'painting-history-loader-painting-3');
+    expect(loader.props.width / loader.props.height).toBeCloseTo(1664 / 928, 5);
   });
 
   it("puts the provider's own words on an interrupted tile", async () => {

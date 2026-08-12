@@ -92,21 +92,27 @@ let api: GenerationApi | undefined;
 let renderer: ReactTestRenderer | undefined;
 let queryClient: QueryClient;
 
-function Probe({ paintingId }: { paintingId?: string }) {
-  const generation = usePaintingGeneration({ initialOutputs: [], paintingId });
+function Probe({
+  initialAspectRatio,
+  paintingId,
+}: {
+  initialAspectRatio?: number;
+  paintingId?: string;
+}) {
+  const generation = usePaintingGeneration({ initialAspectRatio, initialOutputs: [], paintingId });
   useEffect(() => {
     api = generation;
   }, [generation]);
   return null;
 }
 
-async function mountProbe(paintingId?: string) {
+async function mountProbe(paintingId?: string, initialAspectRatio?: number) {
   await act(async () => {
     renderer = create(
       <QueryClientProvider client={queryClient}>
         <DataApiProvider dataApi={dataApi}>
           <BackendProvider backend={backend}>
-            <Probe paintingId={paintingId} />
+            <Probe initialAspectRatio={initialAspectRatio} paintingId={paintingId} />
           </BackendProvider>
         </DataApiProvider>
       </QueryClientProvider>,
@@ -167,7 +173,23 @@ afterEach(async () => {
 });
 
 describe('usePaintingGeneration', () => {
-  it('enqueues via the backend and reveals the outputs from the terminal job', async () => {
+  it('restores the initial output ratio until a new request replaces it', async () => {
+    await mountProbe(undefined, 1664 / 928);
+
+    expect(api?.aspectRatio).toBeCloseTo(1664 / 928);
+
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await act(async () => {
+      await api?.generate({ ...request, paramValues: { size: '928x1664' } });
+    });
+
+    expect(api?.aspectRatio).toBeCloseTo(928 / 1664);
+  });
+
+  it('enqueues via the backend and displays outputs from the terminal job', async () => {
     jobById.set(
       'job-1',
       jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
@@ -196,11 +218,12 @@ describe('usePaintingGeneration', () => {
     });
     expect(result).toEqual({ outputs: [output], painting });
     expect(api?.outputs).toEqual([output]);
-    expect(api?.status).toBe('revealing');
+    expect(api?.paramValues).toEqual({});
+    expect(api?.status).toBe('idle');
     expect(mockSyncPaintingQueries).toHaveBeenCalledWith(painting);
   });
 
-  it('keeps the requested aspect ratio through the reveal', async () => {
+  it('keeps the requested aspect ratio when the output arrives', async () => {
     jobById.set(
       'job-1',
       jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
@@ -212,7 +235,7 @@ describe('usePaintingGeneration', () => {
     });
 
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
-    expect(api?.status).toBe('revealing');
+    expect(api?.status).toBe('idle');
   });
 
   it('surfaces a failed job as frontend error state and allows a retry', async () => {
@@ -251,7 +274,7 @@ describe('usePaintingGeneration', () => {
     await act(async () => {
       await retry;
     });
-    expect(api?.status).toBe('revealing');
+    expect(api?.status).toBe('idle');
     expect(mockStartGeneration).toHaveBeenCalledTimes(2);
   });
 
@@ -268,7 +291,7 @@ describe('usePaintingGeneration', () => {
     expect(api?.status).toBe('idle');
   });
 
-  it('cancels through the backend and settles when the job reports cancelled', async () => {
+  it('cancels an active job as a non-error outcome and deletes its receipt', async () => {
     jobById.set('job-1', jobSnapshot({ status: 'running' }));
     await mountProbe();
 
@@ -279,28 +302,85 @@ describe('usePaintingGeneration', () => {
     });
     expect(api?.status).toBe('generating');
 
-    jobById.set(
-      'job-1',
-      jobSnapshot({
-        error: { code: 'JOB_CANCELLED', message: 'Cancelled by user', retryable: false },
-        status: 'cancelled',
-      }),
-    );
+    let result: unknown;
     await act(async () => {
       api?.cancel();
+      result = await settled;
+    });
+
+    expect(mockCancelGeneration).toHaveBeenCalledWith('job-1');
+    expect(mockDeletePaintings).toHaveBeenCalledWith(['painting-1']);
+    expect(result).toBeNull();
+    expect(api?.error).toBeNull();
+    expect(api?.status).toBe('idle');
+  });
+
+  it('honors cancellation while the enqueue request is still pending', async () => {
+    let resolveStart: ((value: { jobId: string; paintingId: string }) => void) | undefined;
+    mockStartGeneration.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveStart = resolve;
+        }),
+    );
+    await mountProbe();
+
+    let settled: Promise<unknown> | undefined;
+    let result: unknown;
+    await act(async () => {
+      settled = api?.generate(request);
+      await Promise.resolve();
+      api?.cancel();
+      resolveStart?.({ jobId: 'job-enqueue', paintingId: 'painting-enqueue' });
+      result = await settled;
+    });
+
+    expect(mockCancelGeneration).toHaveBeenCalledWith('job-enqueue');
+    expect(mockDeletePaintings).toHaveBeenCalledWith(['painting-enqueue']);
+    expect(result).toBeNull();
+    expect(api?.status).toBe('idle');
+  });
+
+  it('keeps polling when the cancellation request fails', async () => {
+    mockCancelGeneration.mockRejectedValueOnce(new Error('cancel unavailable'));
+    jobById.set('job-1', jobSnapshot({ status: 'running' }));
+    await mountProbe();
+
+    let settled: Promise<unknown> | undefined;
+    await act(async () => {
+      settled = api?.generate(request);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      api?.cancel();
+    });
+    await waitForCondition(() => api?.error?.message === 'cancel unavailable');
+
+    expect(api?.error).toEqual(new Error('cancel unavailable'));
+    expect(api?.status).toBe('generating');
+    expect(mockDeletePaintings).not.toHaveBeenCalled();
+
+    jobById.set(
+      'job-1',
+      jobSnapshot({ output: { outputs: [output], painting }, status: 'completed' }),
+    );
+    await act(async () => {
       await queryClient.refetchQueries();
       await settled;
     });
 
-    expect(mockCancelGeneration).toHaveBeenCalledWith('job-1');
-    expect(api?.error).toEqual(new Error('Cancelled by user'));
+    expect(api?.outputs).toEqual([output]);
     expect(api?.status).toBe('idle');
   });
 
-  it("adopts this painting's still-active generation on mount and reveals its result", async () => {
+  it("adopts this painting's still-active generation on mount and displays its result", async () => {
     activeJobs = [
       jobSnapshot({
-        input: { paintingId: 'painting-1', paramValues: { aspectRatio: '3:4' } },
+        input: {
+          paintingId: 'painting-1',
+          paramValues: { aspectRatio: '3:4', resolution: '2K' },
+          prompt: 'adopt this request',
+        },
         status: 'running',
       }),
     ];
@@ -309,6 +389,7 @@ describe('usePaintingGeneration', () => {
     await waitForCondition(() => api?.status === 'generating');
 
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
+    expect(api?.paramValues).toEqual({ aspectRatio: '3:4', resolution: '2K' });
 
     jobById.set(
       'job-1',
@@ -317,7 +398,7 @@ describe('usePaintingGeneration', () => {
     await act(async () => {
       await queryClient.refetchQueries();
     });
-    await waitForCondition(() => api?.status === 'revealing');
+    await waitForCondition(() => api?.status === 'idle');
 
     expect(api?.outputs).toEqual([output]);
     expect(api?.aspectRatio).toBeCloseTo(3 / 4);
@@ -412,31 +493,5 @@ describe('usePaintingGeneration', () => {
     expect(mockStartGeneration).toHaveBeenCalledWith(
       expect.not.objectContaining({ paintingId: expect.anything() }),
     );
-  });
-
-  it('discards the receipt when the user cancels, so no interrupted tile is left behind', async () => {
-    jobById.set('job-1', jobSnapshot({ status: 'running' }));
-    await mountProbe();
-
-    let settled: Promise<unknown> | undefined;
-    await act(async () => {
-      settled = api?.generate(request).catch((error) => error);
-      await Promise.resolve();
-    });
-
-    jobById.set(
-      'job-1',
-      jobSnapshot({
-        error: { code: 'JOB_CANCELLED', message: 'Cancelled by user', retryable: false },
-        status: 'cancelled',
-      }),
-    );
-    await act(async () => {
-      api?.cancel();
-      await queryClient.refetchQueries();
-      await settled;
-    });
-
-    expect(mockDeletePaintings).toHaveBeenCalledWith(['painting-1']);
   });
 });

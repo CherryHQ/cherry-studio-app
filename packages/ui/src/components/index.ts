@@ -11,6 +11,7 @@ export * from './surface';
 export * from './search-field';
 export * from './scroll-shadow';
 export * from './section';
+export * from './shimmer-text';
 export * from './slider';
 export * from './switch';
 export * from './tabs';

@@ -1,3 +1,4 @@
+import { ImageGenerationLoader } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
@@ -30,7 +31,6 @@ import {
 } from '@/frontend/components/messageTabs';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
-import { PaintingSkeleton } from '@/frontend/components/paintingSkeleton';
 
 import {
   type PaintingGalleryItem,
@@ -264,6 +264,7 @@ export function DrawingList() {
                   key={item.key}
                   label={t('painting.history.item')}
                   onToggle={toggleId}
+                  width={columnWidth}
                 />
               ))}
             </View>
@@ -288,6 +289,7 @@ type DrawingGridItemProps = {
   item: PaintingGalleryItem;
   label: string;
   onToggle: (paintingId: string) => void;
+  width: number;
 };
 
 function DrawingGridItem({
@@ -299,14 +301,22 @@ function DrawingGridItem({
   item,
   label,
   onToggle,
+  width,
 }: DrawingGridItemProps) {
-  const content = renderTileContent(item, generatingLabel, interruptedLabel);
+  const content = renderTileContent({ generatingLabel, height, interruptedLabel, item, width });
   const accessibilityLabel =
     item.kind === 'output'
       ? label
       : item.kind === 'generating'
         ? generatingLabel
         : interruptedLabel;
+  // A generating tile is the loader card itself — its own surface, rounding and
+  // border. Wrapping that in the placeholder tile would show a card inside a
+  // card, so the wrapper only carries the press feedback.
+  const surfaceClassName =
+    item.kind === 'generating'
+      ? 'active:opacity-75'
+      : 'overflow-hidden rounded-md bg-secondary active:opacity-75';
 
   // A Link navigates on tap regardless of onPress, so editing mode must drop
   // the link wrapper entirely to turn taps into selection.
@@ -316,7 +326,7 @@ function DrawingGridItem({
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: isSelected }}
-        className="overflow-hidden rounded-md bg-secondary active:opacity-75"
+        className={surfaceClassName}
         onPress={() => onToggle(item.painting.id)}
         style={{ height }}
         testID={`painting-history-${item.key}`}
@@ -343,7 +353,7 @@ function DrawingGridItem({
     <Pressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
-      className="overflow-hidden rounded-md bg-secondary active:opacity-75"
+      className={surfaceClassName}
       style={{ height }}
       testID={`painting-history-${item.key}`}
     >
@@ -365,11 +375,19 @@ function DrawingGridItem({
   );
 }
 
-function renderTileContent(
-  item: PaintingGalleryItem,
-  generatingLabel: string,
-  interruptedLabel: string,
-) {
+function renderTileContent({
+  generatingLabel,
+  height,
+  interruptedLabel,
+  item,
+  width,
+}: {
+  generatingLabel: string;
+  height: number;
+  interruptedLabel: string;
+  item: PaintingGalleryItem;
+  width: number;
+}) {
   if (item.kind === 'output') {
     return (
       <Image
@@ -383,10 +401,18 @@ function renderTileContent(
   }
 
   if (item.kind === 'generating') {
+    // The tile is already sized to the ratio the request asked for, so the
+    // loader fills it outright: the dot field previews the shape of the image
+    // being generated instead of a square standing in for it. The tile speaks
+    // for the whole item, so the loader is not a second target for it.
     return (
-      <PaintingSkeleton
-        accessibilityLabel={generatingLabel}
-        testID={`painting-history-skeleton-${item.painting.id}`}
+      <ImageGenerationLoader
+        accessible={false}
+        height={height}
+        label={generatingLabel}
+        resolution={item.resolution}
+        testID={`painting-history-loader-${item.painting.id}`}
+        width={width}
       />
     );
   }

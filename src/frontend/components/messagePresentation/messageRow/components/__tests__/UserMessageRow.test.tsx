@@ -1,6 +1,6 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement, ReactNode } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessagePresentationItem } from '../../../types';
@@ -62,12 +62,15 @@ describe('UserMessageRow', () => {
     const message = createMessage([textPart('Hello'), first, second]);
     const renderer = render(<UserMessageRow message={message} />);
     const scrollView = renderer.root.findByType(ScrollView);
+    const attachmentContainer = renderer.root.findByProps({ className: 'max-w-full self-end' });
     const renderedContent = renderer.root.findAll(
       (node) => node.type === 'FilePart' || node.type === 'MessageParts',
     );
 
     expect(scrollView.props.horizontal).toBe(true);
     expect(scrollView.props.showsHorizontalScrollIndicator).toBe(false);
+    expect(StyleSheet.flatten(attachmentContainer.props.style)?.height).toBe(112);
+    expect(StyleSheet.flatten(scrollView.props.style)?.height).toBe(112);
     expect(renderer.root.findAllByType('FilePart').map((node) => node.props.part)).toEqual([
       first,
       second,

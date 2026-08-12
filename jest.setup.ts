@@ -91,6 +91,7 @@ jest.mock('@shopify/react-native-skia', () => {
     // thinkingPixelField.ts compiles its SkSL at module scope, so RuntimeEffect.Make
     // must return a truthy stub or the ChatInputSurface import chain throws under test.
     Skia: {
+      Color: (color: number | string) => color,
       RuntimeEffect: {
         Make: () => ({}),
       },

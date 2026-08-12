@@ -126,6 +126,22 @@ describe('usePaintingJobs', () => {
     expect(api?.activeByPaintingId.get('painting-1')?.id).toBe('job-new');
   });
 
+  it('refreshes the gallery when a generation enters the active set', async () => {
+    await mountProbe();
+    await settle();
+    const invalidate = jest.spyOn(queryClient, 'invalidateQueries');
+
+    // Enqueueing writes the receipt straight into the database, but the list
+    // the gallery renders from is a cached page that nothing else refetches.
+    activeJobs = [jobSnapshot({ id: 'job-a', input: { paintingId: 'painting-1' } })];
+    await act(async () => {
+      await queryClient.refetchQueries();
+    });
+    await settle();
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['/paintings'] });
+  });
+
   it('refreshes the gallery when a generation leaves the active set', async () => {
     activeJobs = [jobSnapshot({ id: 'job-a', input: { paintingId: 'painting-1' } })];
     await mountProbe();
