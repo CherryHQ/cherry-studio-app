@@ -80,6 +80,15 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
     },
     mcpRuntime: { getToolEntriesForAssistant },
     preference: preference as never,
+    providerSetup: {
+      executeBuiltin: jest.fn(),
+      executeCustom: jest.fn(),
+      resolveBuiltin: jest.fn(async () => ({
+        candidates: [],
+        message: 'Provider is required.',
+        status: 'provider-required' as const,
+      })),
+    },
     webSearch: webSearch as never,
   });
   const resolveApiKey = jest.fn(async (_providerId: string, override?: string) => ({

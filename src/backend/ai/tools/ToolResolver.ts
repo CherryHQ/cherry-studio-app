@@ -7,6 +7,7 @@ import { Platform } from 'react-native';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { DevicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import type { ProviderSetupModule } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { McpRuntimeService } from '../mcp';
@@ -28,6 +29,7 @@ export type ToolResolverDependencies = {
   devicePermissions: Pick<DevicePermissions, 'getStatusForPreference'>;
   mcpRuntime: Pick<McpRuntimeService, 'getToolEntriesForAssistant'>;
   preference: Pick<PreferenceService, 'get'>;
+  providerSetup: Pick<ProviderSetupModule, 'executeBuiltin' | 'executeCustom' | 'resolveBuiltin'>;
   webSearch: WebSearchService;
 };
 
@@ -43,14 +45,16 @@ export class ToolResolver {
     contextWindow?: number;
     mcpToolIds?: readonly string[];
   }): Promise<{ deferredEntries: ToolEntry[]; hasMcpTools: boolean; tools: ToolSet | undefined }> {
-    const [deviceAccess, mcpEntries] = await Promise.all([
+    const [deviceAccess, mcpEntries, providerConfigurationEnabled] = await Promise.all([
       this.getDeviceAccess(),
       this.deps.mcpRuntime.getToolEntriesForAssistant(input.assistant, input.mcpToolIds),
+      this.getProviderConfigurationEnabled(),
     ]);
     const activeBuiltins = this.builtinRegistry.selectActive({
       assistant: input.assistant,
       deviceAccess,
       platform: Platform.OS,
+      providerConfigurationEnabled,
     });
 
     const requestRegistry = new ToolRegistry<ToolApplyScope>(reportToolRuntimeDiagnostic);
@@ -81,6 +85,15 @@ export class ToolResolver {
       }),
     );
     return Object.fromEntries(entries) as DeviceToolAccess;
+  }
+
+  private async getProviderConfigurationEnabled(): Promise<boolean> {
+    try {
+      return await this.deps.preference.get('chat.tools.provider_configuration.enabled');
+    } catch (error) {
+      logger.warn('Provider configuration preference lookup failed; disabling tools', { error });
+      return false;
+    }
   }
 }
 

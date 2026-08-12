@@ -31,6 +31,8 @@ describe('ToolResolver', () => {
         'calendar_list_collections',
         'calendar_list_events',
         'calendar_update_event',
+        'configure_builtin_provider',
+        'create_custom_provider',
         'health_get_summary',
         'health_list_workouts',
         'location_get_current',
@@ -54,6 +56,26 @@ describe('ToolResolver', () => {
     });
     expect(result.tools).not.toHaveProperty('location_get_current');
     expect(result.tools).toHaveProperty('calendar_list_events');
+  });
+
+  test('fails closed when the provider configuration preference lookup fails', async () => {
+    const resolver = createResolver({
+      failingKey: 'chat.tools.provider_configuration.enabled',
+    });
+    const result = await resolver.resolveForRequest({ assistant: assistant() });
+
+    expect(result.tools).not.toHaveProperty('configure_builtin_provider');
+    expect(result.tools).not.toHaveProperty('create_custom_provider');
+    expect(result.tools).toHaveProperty('calendar_list_events');
+  });
+
+  test('filters both provider configuration tools with their shared preference', async () => {
+    const result = await createResolver({ providerConfigurationEnabled: false }).resolveForRequest({
+      assistant: assistant(),
+    });
+
+    expect(result.tools).not.toHaveProperty('configure_builtin_provider');
+    expect(result.tools).not.toHaveProperty('create_custom_provider');
   });
 
   test('does not register web search when the assistant disables it', async () => {
@@ -85,6 +107,7 @@ function createResolver(options: {
   getStatus?: jest.Mock;
   mcpEntries?: ToolEntry[];
   neverKey?: string;
+  providerConfigurationEnabled?: boolean;
 }) {
   return new ToolResolver({
     devicePermissions: {
@@ -95,8 +118,20 @@ function createResolver(options: {
       get: jest.fn(async (key: string) => {
         if (key === options.failingKey) throw new Error('db unavailable');
         if (key === options.neverKey) return 'never';
+        if (key === 'chat.tools.provider_configuration.enabled') {
+          return options.providerConfigurationEnabled ?? true;
+        }
         return 'always';
       }),
+    },
+    providerSetup: {
+      executeBuiltin: jest.fn(),
+      executeCustom: jest.fn(),
+      resolveBuiltin: jest.fn(async () => ({
+        candidates: [],
+        message: 'Provider is required.',
+        status: 'provider-required' as const,
+      })),
     },
     webSearch: { searchKeywords: jest.fn() },
   } as never);

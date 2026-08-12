@@ -21,6 +21,7 @@ export interface ToolApplyScope {
   readonly assistant?: Assistant;
   readonly deviceAccess: DeviceToolAccess;
   readonly platform: string;
+  readonly providerConfigurationEnabled: boolean;
 }
 
 export type ToolEntry = RuntimeToolEntry<ToolApplyScope>;
