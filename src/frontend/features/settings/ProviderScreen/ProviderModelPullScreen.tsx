@@ -12,6 +12,7 @@ import { BackHeader } from '@/frontend/components/headers';
 
 import { useProviderDetailSettings } from './detail';
 import {
+  getProviderModelRowItemType,
   ProviderModelRow,
   providerModelRowEstimatedHeight,
 } from './models/components/ProviderModelRow';
@@ -241,7 +242,9 @@ function pullListKeyExtractor(item: ProviderModelPullListItem) {
 }
 
 function getPullListItemType(item: ProviderModelPullListItem) {
-  return item.type;
+  // A model with no capabilities to show draws one line instead of two, so model
+  // rows come in two heights and the virtualizer has to size them separately.
+  return item.type === 'model' ? `model:${getProviderModelRowItemType(item.model)}` : item.type;
 }
 
 function renderPullListItem({

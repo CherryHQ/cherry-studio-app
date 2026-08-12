@@ -4,19 +4,28 @@ import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { type ReactNode, useState } from 'react';
 import { Text, View } from 'react-native';
 
+import { ModelAvatar } from '@/frontend/components/ModelAvatar';
 import {
   getModelPickerTags,
   isFreeModel,
-  ModelPickerIcon,
   type ModelPickerTag,
   ModelPickerTagChip,
 } from '@/frontend/components/modelPicker';
 
 import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
 
-export const providerModelRowEstimatedHeight = 48;
-// Past this the capability strip starts squeezing the model name off the row.
-const providerModelRowMaxTags = 4;
+/**
+ * Squared off against the text beside it: the name line is 24 (`text-base`'s
+ * line height), the capability chips are 20, and `Section.Item` puts 4 between
+ * them. Anything smaller floats in the middle of the two lines.
+ */
+const providerModelRowAvatarSize = 48;
+/**
+ * The avatar plus the row's vertical padding. Rows without capabilities are
+ * shorter; the lists tell the two apart through
+ * {@link getProviderModelRowItemType} so the virtualizer measures each kind.
+ */
+export const providerModelRowEstimatedHeight = providerModelRowAvatarSize + 24;
 
 /**
  * One model, as both screens that list models draw it: the provider's own tab
@@ -53,14 +62,16 @@ export function ProviderModelRow({
 }) {
   const tags = getProviderModelRowTags(model);
   const [isPressed, setIsPressed] = useState(false);
-
-  const trailing =
-    tags.length > 0 || children ? (
-      <View className="flex-row items-center gap-1">
-        {tags.slice(0, providerModelRowMaxTags).map((tag) => (
+  // Its own line rather than the trailing slot, which the capabilities used to
+  // share with the action button — a model with many of them pushed the name off
+  // the row. Down here the strip has the width the name is not using, and what
+  // still overflows is clipped rather than pushing anything.
+  const capabilities =
+    tags.length > 0 ? (
+      <View className="flex-row items-center gap-1 overflow-hidden">
+        {tags.map((tag) => (
           <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
         ))}
-        {children}
       </View>
     ) : undefined;
 
@@ -74,6 +85,7 @@ export function ProviderModelRow({
       <Section.Item
         accessibilityLabel={model.name}
         accessibilityState={{ busy: isDisabled, disabled: isDisabled }}
+        description={capabilities}
         disabled={isDisabled}
         label={
           tone === 'struck' ? (
@@ -84,15 +96,25 @@ export function ProviderModelRow({
             model.name
           )
         }
-        leading={<ModelPickerIcon model={model} provider={provider} />}
+        leading={
+          <ModelAvatar model={model} provider={provider} size={providerModelRowAvatarSize} />
+        }
         onPress={onPress}
         onPressIn={() => setIsPressed(true)}
         onPressOut={() => setIsPressed(false)}
         showChevron={false}
-        trailing={trailing}
+        trailing={children}
       />
     </SettingsGroupedSurface>
   );
+}
+
+/**
+ * Which of the two heights a model's row will take. A list mixing both has to
+ * tell them apart for its virtualizer, which sizes by item type.
+ */
+export function getProviderModelRowItemType(model: Model): 'capabilities' | 'compact' {
+  return getProviderModelRowTags(model).length > 0 ? 'capabilities' : 'compact';
 }
 
 // `getModelPickerTags` only covers capabilities; free is inferred, so it is not

@@ -7,7 +7,11 @@ import { memo, type ReactElement, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
 
-import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
+import {
+  getProviderModelRowItemType,
+  ProviderModelRow,
+  providerModelRowEstimatedHeight,
+} from './ProviderModelRow';
 
 type ProviderModelListItem = {
   itemKey: string;
@@ -82,6 +86,13 @@ export function ProviderModelListContent({
     [handleItemPressedChange],
   );
   const keyExtractor = useCallback((item: ProviderModelListItem) => item.itemKey, []);
+  // A model with no capabilities to show draws one line instead of two, so the
+  // list holds two heights. Typing them keeps the virtualizer from sizing every
+  // row off whichever kind it measured first.
+  const getItemType = useCallback(
+    (item: ProviderModelListItem) => getProviderModelRowItemType(item.model),
+    [],
+  );
 
   return (
     <LegendList
@@ -91,6 +102,7 @@ export function ProviderModelListContent({
       data={listItems}
       estimatedItemSize={providerModelRowEstimatedHeight}
       extraData={extraData}
+      getItemType={getItemType}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       keyExtractor={keyExtractor}

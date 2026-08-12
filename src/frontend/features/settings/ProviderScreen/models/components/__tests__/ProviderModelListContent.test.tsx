@@ -52,9 +52,10 @@ jest.mock('../ProviderModelRow', () => {
   const React = jest.requireActual('react');
 
   return {
+    getProviderModelRowItemType: () => 'capabilities',
     ProviderModelRow: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ProviderModelRow', props, children),
-    providerModelRowEstimatedHeight: 48,
+    providerModelRowEstimatedHeight: 68,
   };
 });
 
