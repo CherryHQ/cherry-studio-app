@@ -4,20 +4,20 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { customSqlStatements } from '@/backend/data/db/customSql';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
-import { AgentGlobalSkillService } from '../AgentGlobalSkillService';
-import { AiUsageRecordService } from '../AiUsageRecordService';
-import { ContentSearchService } from '../ContentSearchService';
-import { EntitySearchService } from '../EntitySearchService';
-import { TemporaryChatService } from '../TemporaryChatService';
+import { agentGlobalSkillService } from '../AgentGlobalSkillService';
+import { contentSearchService } from '../ContentSearchService';
+import { entitySearchService } from '../EntitySearchService';
+import { temporaryChatService } from '../TemporaryChatService';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 jest.mock('@logger', () => ({
   loggerService: {
-    withContext: () => ({ error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
+    withContext: () => ({ debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
   },
 }));
 jest.mock('fractional-indexing', () => ({
@@ -39,7 +39,7 @@ describe('auxiliary Data API integration', () => {
   let sqlite: DatabaseSync;
   let dbService: DbService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
@@ -76,29 +76,34 @@ describe('auxiliary Data API integration', () => {
         }
       },
     } as unknown as DbService;
+    // Data services resolve `DbService` from `application`, so the fake is
+    // installed as a host override instead of being passed to constructors.
+    await installTestHost({ DbService: dbService });
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+  });
 
   test('persists a temporary chat and reads it through entity and content search', async () => {
-    const temporaryChats = new TemporaryChatService(dbService, new AiUsageRecordService(dbService));
-    const topic = temporaryChats.createTopic({ name: 'Needle topic' });
-    const first = temporaryChats.appendMessage(topic.id, {
+    const topic = temporaryChatService.createTopic({ name: 'Needle topic' });
+    const first = temporaryChatService.appendMessage(topic.id, {
       data: { parts: [{ text: 'first question', type: 'text' }] },
       role: 'user',
     });
-    const last = temporaryChats.appendMessage(topic.id, {
+    const last = temporaryChatService.appendMessage(topic.id, {
       data: { parts: [{ text: '**needle** answer', type: 'text' }] },
       role: 'assistant',
     });
 
-    await expect(temporaryChats.persist(topic.id)).resolves.toEqual({
+    await expect(temporaryChatService.persist(topic.id)).resolves.toEqual({
       messageCount: 2,
       topicId: topic.id,
     });
-    expect(temporaryChats.hasTopic(topic.id)).toBe(false);
+    expect(temporaryChatService.hasTopic(topic.id)).toBe(false);
 
-    const entityResult = await new EntitySearchService(dbService).search({
+    const entityResult = await entitySearchService.search({
       q: 'Needle',
       types: ['topic'],
     });
@@ -108,7 +113,7 @@ describe('auxiliary Data API integration', () => {
       type: 'topic',
     });
 
-    const contentResult = await new ContentSearchService(dbService).search({
+    const contentResult = await contentSearchService.search({
       q: 'needle',
       sources: ['topic-message'],
     });
@@ -130,8 +135,7 @@ describe('auxiliary Data API integration', () => {
   });
 
   test('projects global skill enablement per agent without changing stored defaults', async () => {
-    const skills = new AgentGlobalSkillService(dbService);
-    const row = await skills.insert({
+    const row = await agentGlobalSkillService.insert({
       contentHash: 'hash-1',
       folderName: 'builtin-skill',
       isEnabled: true,
@@ -152,18 +156,18 @@ describe('auxiliary Data API integration', () => {
       });
     const [agent] = await dbService.getDb().select().from(schema.agentTable).limit(1);
 
-    await expect(skills.list()).resolves.toEqual([
+    await expect(agentGlobalSkillService.list()).resolves.toEqual([
       expect.objectContaining({ id: row.id, isEnabled: false, name: 'Builtin Skill' }),
     ]);
-    await expect(skills.list({ agentId: agent.id })).resolves.toEqual([
+    await expect(agentGlobalSkillService.list({ agentId: agent.id })).resolves.toEqual([
       expect.objectContaining({ id: row.id, isEnabled: true }),
     ]);
-    await skills.upsertJoin(agent.id, row.id, false);
-    await expect(skills.list({ agentId: agent.id })).resolves.toEqual([
+    await agentGlobalSkillService.upsertJoin(agent.id, row.id, false);
+    await expect(agentGlobalSkillService.list({ agentId: agent.id })).resolves.toEqual([
       expect.objectContaining({ id: row.id, isEnabled: false }),
     ]);
 
-    const search = await new EntitySearchService(dbService).search({
+    const search = await entitySearchService.search({
       q: 'Diagnose issues',
       types: ['agent'],
     });

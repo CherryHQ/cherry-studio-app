@@ -52,7 +52,8 @@ import {
 } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import {
   type AiUsageRecordRow,
   aiUsageRecordTable,
@@ -1056,7 +1057,14 @@ async function getAiUsageRecordTimeline(
 }
 
 export class AiUsageRecordService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async getMessageUsageProjection(ref: MessageRef): Promise<MessageUsageProjection> {
     return await getMessageUsageProjectionTx(this.dbService.getDb(), ref);
@@ -1137,3 +1145,5 @@ function sameImmutablePayload(
   const { id: _incomingId, ...incomingPayload } = incoming;
   return JSON.stringify(existingPayload) === JSON.stringify(incomingPayload);
 }
+
+export const aiUsageRecordService = new AiUsageRecordService();

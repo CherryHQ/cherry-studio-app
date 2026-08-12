@@ -7,7 +7,7 @@ import type {
 import type { Note } from '@cherrystudio/universal/data/types/note';
 import { and, asc, eq, inArray, not, sql } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { type NoteRow, noteTable } from '@/backend/data/db/schemas/note';
 
 import { timestampToISO } from './utils/rowMappers';
@@ -33,7 +33,14 @@ function pathCondition(path: string, recursive = false) {
 }
 
 export class NoteService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async listByRoot(rootPath: string): Promise<Note[]> {
     const rows = await this.dbService
@@ -141,3 +148,5 @@ export class NoteService {
     });
   }
 }
+
+export const noteService = new NoteService();

@@ -1,4 +1,4 @@
-export { DevicePermissions } from './DevicePermissions';
+export { DevicePermissions, devicePermissions } from './DevicePermissions';
 export type {
   DevicePermission,
   DevicePermissionAccess,

@@ -12,10 +12,10 @@ import { loggerService } from '@logger';
 import { eq, isNull } from 'drizzle-orm';
 import { v4 as uuidv4, v7 as uuidv7 } from 'uuid';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { messageTable, topicTable } from '@/backend/data/db/schemas';
 
-import { type AiUsageRecordService, mergeMessageUsageProjection } from './AiUsageRecordService';
+import { aiUsageRecordService, mergeMessageUsageProjection } from './AiUsageRecordService';
 import { createRootMessageTx } from './MessageService';
 import { insertWithOrderKey } from './utils/orderKey';
 
@@ -52,10 +52,14 @@ export class TemporaryChatService {
   private readonly messages = new Map<string, TemporaryMessageRow[]>();
   private readonly topics = new Map<string, TemporaryTopicRow>();
 
-  constructor(
-    private readonly dbService: DbService,
-    private readonly aiUsageRecordService: AiUsageRecordService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   createTopic(dto: CreateTopicDto): Topic {
     const now = Date.now();
@@ -92,7 +96,7 @@ export class TemporaryChatService {
     runtimeStats: MessageRuntimeStatsInput | undefined,
     messageId: string,
   ): Promise<Message> {
-    const projection = await this.aiUsageRecordService.getMessageUsageProjection({
+    const projection = await aiUsageRecordService.getMessageUsageProjection({
       id: messageId,
       kind: 'chat',
     });
@@ -173,7 +177,7 @@ export class TemporaryChatService {
 
     for (const message of messages) {
       if (message.role !== 'assistant') continue;
-      await this.aiUsageRecordService.refreshMessageProjection({
+      await aiUsageRecordService.refreshMessageProjection({
         id: message.id,
         kind: 'chat',
       });
@@ -238,3 +242,5 @@ export class TemporaryChatService {
     if (Object.keys(errors).length > 0) throw DataApiErrorFactory.validation(errors);
   }
 }
+
+export const temporaryChatService = new TemporaryChatService();

@@ -19,7 +19,7 @@ import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Tag } from '@cherrystudio/universal/data/types/tag';
 import { and, asc, desc, eq, gte, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import {
   type AssistantRow,
   assistantKnowledgeBaseTable,
@@ -28,13 +28,12 @@ import {
   pinTable,
   userModelTable,
 } from '@/backend/data/db/schemas';
-import type { PreferenceService } from '@/backend/data/PreferenceService';
 
-import type { GroupService } from './GroupService';
-import type { ModelService } from './ModelService';
-import type { PinService } from './PinService';
-import type { TagService } from './TagService';
-import type { TopicService } from './TopicService';
+import { groupService } from './GroupService';
+import { modelService } from './ModelService';
+import { pinService } from './PinService';
+import { tagService } from './TagService';
+import { topicService } from './TopicService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
@@ -74,15 +73,18 @@ function rowToAssistant(
 }
 
 export class AssistantService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly groupService: GroupService,
-    private readonly topicService: TopicService,
-    private readonly modelService: ModelService,
-    private readonly preferenceService: PreferenceService,
-    private readonly tagService: TagService,
-    private readonly pinService: PinService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
+
+  private get preferenceService() {
+    return application.get('PreferenceService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -107,7 +109,7 @@ export class AssistantService {
 
     const [relations, tags] = await Promise.all([
       this.getRelationIdsByAssistantIds(this.db, [id]),
-      this.tagService.getTagsByEntitiesTx(this.db, 'assistant', [id]),
+      tagService.getTagsByEntitiesTx(this.db, 'assistant', [id]),
     ]);
 
     return rowToAssistant(row.assistant, relations.get(id), tags.get(id), row.modelName ?? null);
@@ -146,7 +148,7 @@ export class AssistantService {
     }
 
     if (query.tagIds && query.tagIds.length > 0) {
-      const assistantIds = await this.tagService.getEntityIdsByTagsTx(
+      const assistantIds = await tagService.getEntityIdsByTagsTx(
         this.db,
         'assistant',
         query.tagIds,
@@ -198,7 +200,7 @@ export class AssistantService {
     const assistantIds = rows.map((row) => row.assistant.id);
     const [relations, tags] = await Promise.all([
       this.getRelationIdsByAssistantIds(this.db, assistantIds),
-      this.tagService.getTagsByEntitiesTx(this.db, 'assistant', assistantIds),
+      tagService.getTagsByEntitiesTx(this.db, 'assistant', assistantIds),
     ]);
 
     return {
@@ -236,7 +238,7 @@ export class AssistantService {
 
     const { row, tags } = await this.dbService.withWriteTx(async (tx) => {
       const group = groupName
-        ? await this.groupService.findOrCreateByNameTx(tx, 'assistant', groupName)
+        ? await groupService.findOrCreateByNameTx(tx, 'assistant', groupName)
         : null;
       return this.createTx(tx, {
         ...assistantDto,
@@ -304,13 +306,13 @@ export class AssistantService {
       }
 
       if (hasTagUpdates) {
-        await this.tagService.syncEntityTagsTx(tx, 'assistant', id, tagIds);
+        await tagService.syncEntityTagsTx(tx, 'assistant', id, tagIds);
       }
 
       await this.syncRelationsTx(tx, id, { mcpServerIds });
 
       const nextTags = hasTagUpdates
-        ? ((await this.tagService.getTagsByEntitiesTx(tx, 'assistant', [id])).get(id) ?? [])
+        ? ((await tagService.getTagsByEntitiesTx(tx, 'assistant', [id])).get(id) ?? [])
         : current.tags;
       const nextModelName =
         dto.modelId !== undefined && dto.modelId !== current.modelId
@@ -346,10 +348,10 @@ export class AssistantService {
         return false;
       }
 
-      await this.tagService.purgeForEntityTx(tx, 'assistant', id);
-      await this.pinService.purgeForEntityTx(tx, 'assistant', id);
+      await tagService.purgeForEntityTx(tx, 'assistant', id);
+      await pinService.purgeForEntityTx(tx, 'assistant', id);
       if (options.deleteTopics === true) {
-        deletedTopicIds = await this.topicService.deleteByAssistantIdTx(tx, id, {
+        deletedTopicIds = await topicService.deleteByAssistantIdTx(tx, id, {
           validateAssistant: false,
         });
       }
@@ -427,11 +429,11 @@ export class AssistantService {
     )) as AssistantRow;
 
     if (tagIds !== undefined) {
-      await this.tagService.syncEntityTagsTx(tx, 'assistant', row.id, tagIds);
+      await tagService.syncEntityTagsTx(tx, 'assistant', row.id, tagIds);
     }
     await this.syncRelationsTx(tx, row.id, { mcpServerIds });
 
-    const tagMap = await this.tagService.getTagsByEntitiesTx(tx, 'assistant', [row.id]);
+    const tagMap = await tagService.getTagsByEntitiesTx(tx, 'assistant', [row.id]);
     return { row, tags: tagMap.get(row.id) ?? [] };
   }
 
@@ -468,7 +470,7 @@ export class AssistantService {
       return null;
     }
 
-    const model = await this.modelService.getById(modelId);
+    const model = await modelService.getById(modelId);
     return model?.name ?? null;
   }
 
@@ -480,7 +482,7 @@ export class AssistantService {
       return;
     }
 
-    const group = await this.groupService.findByIdTx(tx, groupId);
+    const group = await groupService.findByIdTx(tx, groupId);
     if (!group) {
       throw DataApiErrorFactory.validation({
         groupId: [`Assistant group not found: ${groupId}`],
@@ -594,3 +596,5 @@ export class AssistantService {
     }
   }
 }
+
+export const assistantService = new AssistantService();

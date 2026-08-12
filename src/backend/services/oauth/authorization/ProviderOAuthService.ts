@@ -1,5 +1,7 @@
 import { randomUUID } from 'expo-crypto';
+import { fetch as expoFetch } from 'expo/fetch';
 
+import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { OAuthModule, StartOAuthAuthorizationInput } from '@/shared/contracts/oauth';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { describeOAuthError, OAuthServiceError } from '@/shared/oauth';
@@ -11,6 +13,12 @@ import type {
   OAuthProviderStatus,
 } from '@/shared/oauth';
 
+import { oauthProviderRepository } from '../providerRepository';
+import type { OAuthRuntimeService } from '../runtime/OAuthRuntimeService';
+import { oauthTokenStore } from '../runtime/OAuthTokenStore';
+import { createOAuthProviderDefinitions } from '../runtime/providerDefinitions';
+import { createOAuthFlowRegistry } from './createOAuthFlowRegistry';
+import { OAuthApiKeyStore } from './OAuthApiKeyStore';
 import type { OAuthFlowRegistry } from './OAuthFlowRegistry';
 import type { ActiveOAuthFlow, OAuthFlowAdapter } from './types';
 import { toCompletionPayload } from './types';
@@ -18,13 +26,36 @@ import { toCompletionPayload } from './types';
 const logger = loggerService.withContext('ProviderOAuthService');
 const DEFAULT_AUTHORIZATION_TIMEOUT_MS = 10 * 60 * 1000;
 
-export class ProviderOAuthService implements OAuthModule {
+@Injectable('ProviderOAuthService')
+@DependsOn(['OAuthRuntimeService'])
+export class ProviderOAuthService extends BaseService implements OAuthModule {
   private readonly activeFlows = new Map<string, ActiveOAuthFlow>();
   private readonly pendingStarts = new Map<string, AbortController>();
+  private readonly registry: OAuthFlowRegistry;
 
-  constructor(private readonly registry: OAuthFlowRegistry) {}
+  /**
+   * The container passes only `runtime`; a test may pass a registry of fake
+   * adapters instead of the real provider set.
+   */
+  constructor(runtime: OAuthRuntimeService, registry?: OAuthFlowRegistry) {
+    super();
+    if (registry) {
+      this.registry = registry;
+      return;
+    }
 
-  dispose(): void {
+    const fetch = expoFetch as typeof globalThis.fetch;
+    this.registry = createOAuthFlowRegistry({
+      apiKeys: new OAuthApiKeyStore(oauthProviderRepository),
+      definitions: createOAuthProviderDefinitions(fetch),
+      fetch,
+      providers: oauthProviderRepository,
+      runtime,
+      tokenStore: oauthTokenStore,
+    }).registry;
+  }
+
+  protected onStop(): void {
     for (const controller of this.pendingStarts.values()) {
       controller.abort(new Error('OAuth service disposed'));
     }
@@ -34,6 +65,31 @@ export class ProviderOAuthService implements OAuthModule {
       this.deleteFlow(flow);
       flow.controller.abort(new Error('OAuth service disposed'));
     }
+  }
+
+  /**
+   * Mint the short-lived token a provider's API expects, for the providers whose
+   * adapter offers that capability.
+   *
+   * Named by provider id rather than by provider, so this stays a generic
+   * surface: the caller supplies the id, and an adapter without the capability
+   * is refused the same way an unregistered one is. Returning nothing instead
+   * would only fail further downstream, as a malformed Authorization header.
+   */
+  getServingToken(
+    providerId: string,
+    headers: Record<string, string>,
+    signal?: AbortSignal,
+  ): Promise<string> {
+    const adapter = this.getAdapter(providerId);
+    if (!adapter.getServingToken) {
+      throw new OAuthServiceError(
+        `OAuth provider ${providerId} does not mint serving tokens`,
+        undefined,
+        'UnknownOAuthProvider',
+      );
+    }
+    return adapter.getServingToken(headers, signal);
   }
 
   async startAuthorization(input: StartOAuthAuthorizationInput): Promise<OAuthFlowPresentation> {

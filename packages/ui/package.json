@@ -77,6 +77,8 @@
   },
   "peerDependencies": {
     "@expo/ui": "*",
+    "@react-native-masked-view/masked-view": "*",
+    "@shopify/react-native-skia": "*",
     "@swmansion/react-native-bottom-sheet": "*",
     "expo-blur": "*",
     "expo-glass-effect": "*",

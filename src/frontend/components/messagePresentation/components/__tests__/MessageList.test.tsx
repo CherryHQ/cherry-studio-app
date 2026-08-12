@@ -16,6 +16,7 @@ type AnchoredEndSpaceConfig = {
 };
 
 type MockLegendListProps = {
+  alignItemsAtEnd?: boolean;
   applyWorkaroundForContentInsetHitTestBug?: boolean;
   anchoredEndSpace?: AnchoredEndSpaceConfig;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
@@ -27,6 +28,7 @@ type MockLegendListProps = {
   maintainScrollAtEndThreshold?: number;
   maintainVisibleContentPosition?: unknown;
   onEndVisible?: (visible: boolean) => void;
+  onContentSizeChange?: (width: number, height: number) => void;
   onItemSizeChanged?: () => void;
   onLayout?: (event: LayoutChangeEvent) => void;
   onMomentumScrollBegin?: () => void;
@@ -231,6 +233,35 @@ describe('MessageList anchored tail following', () => {
           frameCallbacks.delete(frameId);
         }
       });
+  });
+
+  test('uses an assistant renderer override without changing user rows', () => {
+    const user = createMessage('user-1', 'user', [textPart('hello')]);
+    const assistant = createMessage('assistant-1', 'assistant');
+    const renderAssistantMessage = jest.fn(() => null);
+
+    act(() => {
+      renderer = create(
+        <MessageList
+          {...listProps([user, assistant])}
+          renderAssistantMessage={renderAssistantMessage}
+        />,
+      );
+    });
+
+    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: user });
+    expect(renderAssistantMessage).toHaveBeenCalledWith(assistant);
+    expect(mockAssistantMessageRow).not.toHaveBeenCalled();
+  });
+
+  test('does not show the scroll control for an empty message list', () => {
+    act(() => {
+      renderer = create(
+        <MessageList {...listProps([])} bottomAccessoryHeight={{ value: 80 } as never} />,
+      );
+    });
+
+    expect(mockScrollButtonProps).toBeUndefined();
   });
 
   afterEach(() => {
@@ -558,6 +589,37 @@ describe('MessageList anchored tail following', () => {
     expect(mockScrollMessageToEnd).toHaveBeenLastCalledWith({
       animated: false,
       closeKeyboard: false,
+    });
+  });
+
+  test('stages the first live turn at the list end before animating it to the anchor', () => {
+    const firstTurn = [
+      createMessage('user-1', 'user', [textPart('hello')]),
+      createMessage('assistant-1', 'assistant'),
+    ];
+    act(() => {
+      renderer = create(<MessageList {...listProps([])} animateFirstEnteringMessage />);
+    });
+    act(() => {
+      renderer?.update(
+        <MessageList {...listProps(firstTurn, 'user-1')} animateFirstEnteringMessage />,
+      );
+    });
+
+    expect(mockLatestListProps?.anchoredEndSpace).toBeUndefined();
+    expect(mockLatestListProps?.alignItemsAtEnd).toBe(true);
+
+    act(() => mockLatestListProps?.onContentSizeChange?.(320, 260));
+    act(() => flushAnimationFrames());
+
+    expect(mockLatestListProps?.anchoredEndSpace?.anchorIndex).toBe(0);
+    expect(mockLatestListProps?.alignItemsAtEnd).toBe(false);
+    act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
+    act(() => flushAnimationFrames());
+
+    expect(mockScrollMessageToEnd).toHaveBeenCalledWith({
+      animated: true,
+      closeKeyboard: true,
     });
   });
 });

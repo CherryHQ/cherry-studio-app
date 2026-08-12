@@ -9,6 +9,7 @@ import {
 } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
@@ -23,7 +24,7 @@ describe('AI usage analytics', () => {
   let sqlite: DatabaseSync;
   let service: AiUsageRecordService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     applyMigrations(sqlite);
     const database = drizzle(
@@ -57,10 +58,16 @@ describe('AI usage analytics', () => {
         }
       },
     } as unknown as DbService;
-    service = new AiUsageRecordService(dbService);
+    // Data services resolve `DbService` from `application`, so the fake is
+    // installed as a host override instead of being passed to constructors.
+    await installTestHost({ DbService: dbService });
+    service = new AiUsageRecordService();
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+  });
 
   test('uses stable keyset pagination for derived token and performance metrics', async () => {
     await service.recordInvocations([

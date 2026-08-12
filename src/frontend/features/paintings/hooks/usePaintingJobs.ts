@@ -62,22 +62,31 @@ export function usePaintingJobs(): PaintingJobs {
     [interruptedQuery.data],
   );
 
-  // A job leaving the active set is the only signal the gallery gets that a
-  // generation landed — nothing else invalidates `/paintings` while the user
-  // sits on the list, so without this the finished image never appears.
+  // The active set changing is the only signal the gallery gets — nothing else
+  // invalidates `/paintings` while the user sits on the list. Both edges matter:
+  // a job entering means a receipt was just written that has to show up as
+  // generating, and a job leaving means its images (or its failure) have landed.
+  // Refetching once the active list is in hand also keeps the two in step, so a
+  // fresh receipt is never read as interrupted for want of its job.
   const previousActiveIds = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
     if (!activeJobs) {
       return;
     }
     const currentIds = new Set(activeJobs.map((job) => job.id));
-    const settled = [...previousActiveIds.current].some((id) => !currentIds.has(id));
+    const previousIds = previousActiveIds.current;
+    const settled = [...previousIds].some((id) => !currentIds.has(id));
+    const started = [...currentIds].some((id) => !previousIds.has(id));
     previousActiveIds.current = currentIds;
-    if (!settled) {
+    if (!settled && !started) {
       return;
     }
     void queryClient.invalidateQueries({ queryKey: queryKeys.paintings.all() });
-    void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+    if (settled) {
+      // Only a terminal row explains an interruption, and the active poll never
+      // carries one.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.jobs.all() });
+    }
   }, [activeJobs, queryClient]);
 
   return {

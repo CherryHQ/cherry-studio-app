@@ -14,6 +14,7 @@ import type {
   TopicStatusSnapshotEntry,
   TopicStreamStatus,
 } from '@cherrystudio/universal/ai/transport';
+import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
 import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
@@ -30,8 +31,19 @@ import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
 } from '@cherrystudio/universal/utils/conversationTitle';
-import { isToolUIPart, type UIMessageChunk } from 'ai';
+import { isToolUIPart, readUIMessageStream, type UIMessageChunk } from 'ai';
 
+import type { AiService } from '@/backend/ai/AiService';
+import { application } from '@/backend/core/application/Application';
+import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import type { OperationHandle } from '@/backend/core/resources/types';
+import { assistantService } from '@/backend/data/services/AssistantService';
+import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import { messageService } from '@/backend/data/services/MessageService';
+import { modelService } from '@/backend/data/services/ModelService';
+import { providerService } from '@/backend/data/services/ProviderService';
+import { topicService } from '@/backend/data/services/TopicService';
+import { createMessageParts, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type {
   ChatCancelExecutionInput,
   ChatEditAndResendInput,
@@ -50,7 +62,7 @@ import type {
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import type { ChatRuntimeDependencies } from './ChatRuntimeDependencies';
+import type { ChatRuntimeDependencies, ChatRuntimeServices } from './ChatRuntimeDependencies';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
 
 type ActiveExecution = {
@@ -78,6 +90,12 @@ type PendingSteer = {
   userMessageId: string;
 };
 
+/** Scope registrations held for one task, released together when it settles. */
+type TaskScopeBinding = {
+  handles: OperationHandle[];
+  settled: Promise<void>;
+};
+
 const idleTopicSnapshot: ChatTopicSnapshot = Object.freeze({ status: 'idle' });
 const logger = loggerService.withContext('ChatRuntime');
 
@@ -97,11 +115,64 @@ const defaultChatRuntimeConfig: ChatRuntimeConfig = {
   idleTimeoutMs: 30 * 60 * 1000,
 };
 
-export class ChatRuntime implements ChatModule {
+/**
+ * Everything a turn touches, bound to the installed host.
+ *
+ * Only `preference` is resolved per call: the rest are module singletons that
+ * reach the current host themselves, and `AiService` arrives through
+ * `@DependsOn`, so capturing it cannot outlive the generation that injected it.
+ */
+function createHostDependencies(aiService: AiService): ChatRuntimeDependencies {
+  const preference: ChatRuntimeServices['preference'] = {
+    get: <K extends PreferenceKeyType>(key: K) => application.get('PreferenceService').get(key),
+  };
+
+  return {
+    files: {
+      createParts: (parts) => createMessageParts(fileEntryService, parts),
+      discard: (entries) => discardInternalEntries(fileEntryService, entries),
+    },
+    services: {
+      ai: {
+        generateText: (input) => aiService.generateText(input),
+        // The accumulator is the SDK's, not the service's — it turns the chunk
+        // stream the service returns into successive message snapshots.
+        readMessageStream: ({ message, stream }) =>
+          readUIMessageStream<CherryUIMessage>({ message, stream, terminateOnError: true }),
+        streamText: (input) => aiService.streamText(input),
+      },
+      assistant: assistantService,
+      message: messageService,
+      model: modelService,
+      preference,
+      provider: providerService,
+      topic: topicService,
+    },
+  };
+}
+
+/**
+ * Owns every in-flight chat turn: reservation, streaming, terminal persistence,
+ * and the snapshots the chat screen renders from.
+ *
+ * `PostReady` rather than `Gate`: no first paint reads a turn, and hoisting it
+ * would drag `AiService` onto the gate with it. Construction still happens at
+ * composition time, so the service exists long before a user can send anything;
+ * only its (empty) initialization waits for the gate to open.
+ *
+ * It declares `AiService` and takes it positionally, unlike `AiService` itself,
+ * because `onStop` is what aborts live turns: reverse-order teardown has to stop
+ * this service before the one it streams through, and only a declared edge
+ * orders that. The cost is one placeholder argument in the suite, which replaces
+ * the whole dependency set anyway.
+ */
+@Injectable('ChatRuntime')
+@ServicePhase(Phase.PostReady)
+@DependsOn(['AiService'])
+export class ChatRuntime extends BaseService implements ChatModule {
   private activeTasks = new Set<Promise<unknown>>();
   private activeTurns = new Map<string, ActiveTurn>();
   private continuingTopics = new Set<string>();
-  private disposePromise: Promise<void> | undefined;
   private isDisposed = false;
   private listeners = new Set<ChatListener>();
   private newTopicHandoffTopicId: string | undefined;
@@ -109,12 +180,39 @@ export class ChatRuntime implements ChatModule {
   private followUpQueues = new Map<string, ChatFollowUpInput['payload'][]>();
   private topicSnapshots = new Map<string, ChatTopicSnapshot>();
 
-  private readonly config: ChatRuntimeConfig;
+  /**
+   * The scope binding of the new-topic task currently between "send" and "topic
+   * created", so the handoff can extend it to the real id.
+   *
+   * Single-valued for the same reason `newTopicHandoffTopicId` is: the sentinel
+   * key admits one new-topic flow at a time.
+   */
+  private newTopicScopeBinding: TaskScopeBinding | undefined;
 
+  private readonly config: ChatRuntimeConfig;
+  private readonly dependencies: ChatRuntimeDependencies;
+
+  /**
+   * Resolved per call so no task pins a host generation. Not a declared
+   * dependency: the coordinator is `Gate` and this is `PostReady`, so it is
+   * always ready before a turn can start, and shutdown deliberately routes
+   * around it — `onStop` drains this runtime's own tasks.
+   */
+  private get scopes() {
+    return application.get('ResourceScopeCoordinator');
+  }
+
+  /**
+   * The container passes only `aiService`; a test passes the whole dependency
+   * set instead, which is why `aiService` is then never read.
+   */
   constructor(
-    private readonly dependencies: ChatRuntimeDependencies,
+    aiService: AiService,
+    dependencies?: ChatRuntimeDependencies,
     config: Partial<ChatRuntimeConfig> = {},
   ) {
+    super();
+    this.dependencies = dependencies ?? createHostDependencies(aiService);
     this.config = { ...defaultChatRuntimeConfig, ...config };
   }
 
@@ -171,56 +269,58 @@ export class ChatRuntime implements ChatModule {
     execution.abortController.abort(new Error('Chat execution aborted'));
   }
 
-  dispose(): Promise<void> {
-    if (!this.disposePromise) {
-      this.isDisposed = true;
-      this.disposePromise = this.disposeRuntime();
-    }
-
-    return this.disposePromise;
-  }
-
   sendText(input: ChatSendTextInput): Promise<void> {
-    return this.startTask(() => this.sendTextTask(input));
+    return this.startTask(input.topicId, () => this.sendTextTask(input));
   }
 
   sendMultiModelText(input: ChatSendMultiModelTextInput): Promise<void> {
-    return this.startTask(() => this.sendMultiModelTextTask(input));
+    return this.startTask(input.topicId, () => this.sendMultiModelTextTask(input));
   }
 
   steer(input: ChatFollowUpInput): Promise<void> {
-    return this.startTask(() => this.steerTask(input));
+    return this.startTask(input.topicId, () => this.steerTask(input));
   }
 
   queueFollowUp(input: ChatFollowUpInput): Promise<void> {
-    return this.startTask(() => this.queueFollowUpTask(input));
+    return this.startTask(input.topicId, () => this.queueFollowUpTask(input));
   }
 
   regenerate(input: ChatRegenerateInput): Promise<void> {
-    return this.startTask(() => this.regenerateTask(input));
+    return this.startTask(input.topicId, () => this.regenerateTask(input));
   }
 
   editAndResend(input: ChatEditAndResendInput): Promise<void> {
-    return this.startTask(() => this.editAndResendTask(input));
+    return this.startTask(input.topicId, () => this.editAndResendTask(input));
   }
 
   setActiveBranch(input: ChatSetActiveBranchInput): Promise<void> {
-    return this.startTask(() => this.setActiveBranchTask(input));
+    return this.startTask(input.topicId, () => this.setActiveBranchTask(input));
   }
 
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void> {
-    return this.startTask(() => this.sendNewTopicTextTask(input));
+    return this.startTask(NEW_TOPIC_SNAPSHOT_KEY, () => this.sendNewTopicTextTask(input));
   }
 
   sendNewTopicMultiModelText(input: ChatSendNewTopicMultiModelTextInput): Promise<void> {
-    return this.startTask(() => this.sendNewTopicMultiModelTextTask(input));
+    return this.startTask(NEW_TOPIC_SNAPSHOT_KEY, () => this.sendNewTopicMultiModelTextTask(input));
   }
 
   respondToolApproval(input: ChatToolApprovalInput): Promise<void> {
-    return this.startTask(() => this.respondToolApprovalTask(input));
+    return this.startTask(input.topicId, () => this.respondToolApprovalTask(input));
   }
 
-  private async disposeRuntime(): Promise<void> {
+  /**
+   * Abort every live turn, then wait for the tasks settling their rows.
+   *
+   * The flag is set before the first await so a send racing teardown is refused
+   * rather than reserving a row nothing will ever finish. The wait is unbounded
+   * on purpose: every task here honors its abort signal, so the only thing left
+   * to finish is the terminal write, and giving up on that would strand the row
+   * `pending`.
+   */
+  protected async onStop(): Promise<void> {
+    this.isDisposed = true;
+
     for (const activeTurn of this.activeTurns.values()) {
       const reason = new Error('Chat runtime disposed');
       activeTurn.abortController.abort(reason);
@@ -623,6 +723,7 @@ export class ChatRuntime implements ChatModule {
 
       this.activeTurns.delete(NEW_TOPIC_SNAPSHOT_KEY);
       this.newTopicHandoffTopicId = topic.id;
+      this.bindCreatedTopicScope(topic.id);
       this.activateTurn(topic.id, activeTurn);
       this.setTurnSnapshot(topic.id, { status: 'reserving' });
       await this.emitAndWait({ type: 'invalidate-topics' });
@@ -1835,14 +1936,92 @@ export class ChatRuntime implements ChatModule {
     this.emit({ topicId, type: 'snapshot-changed' });
   }
 
-  private startTask(run: () => Promise<void>): Promise<void> {
+  /**
+   * Run one chat task under its topic's scope.
+   *
+   * The task, not the turn, is the unit registered: `finishTurn` awaits
+   * `startNextPendingTurn`, so a queued steer or follow-up runs inside this same
+   * promise. Registering per turn would let the drain see a topic go quiet
+   * between two turns of one continuous chain and delete underneath it.
+   *
+   * Throws `ScopeFencedError` — as a rejection — when the topic is being
+   * deleted. That is the intended answer: the send is refused rather than
+   * reserving a row in a topic about to disappear.
+   */
+  private startTask(topicId: string, run: () => Promise<void>): Promise<void> {
     if (this.isDisposed) {
       return Promise.reject(new Error('Chat runtime is disposed.'));
     }
 
-    const task = run();
+    let settle!: () => void;
+    const binding: TaskScopeBinding = {
+      handles: [],
+      settled: new Promise<void>((resolve) => {
+        settle = resolve;
+      }),
+    };
+
+    try {
+      binding.handles.push(this.registerTopicScope(topicId, binding.settled));
+    } catch (error) {
+      settle();
+      return Promise.reject(error as Error);
+    }
+
+    if (topicId === NEW_TOPIC_SNAPSHOT_KEY) {
+      this.newTopicScopeBinding = binding;
+    }
+
+    const task = run().finally(() => {
+      if (this.newTopicScopeBinding === binding) {
+        this.newTopicScopeBinding = undefined;
+      }
+      // Released before `settled` resolves, so a drain waiting on this task does
+      // not then find it still registered.
+      for (const handle of binding.handles) handle.release();
+      settle();
+    });
     this.trackTask(task);
     return task;
+  }
+
+  private registerTopicScope(topicId: string, settled: Promise<void>): OperationHandle {
+    return this.scopes.register({
+      cancel: () => this.cancelTopicWork(topicId),
+      kind: 'chat.turn',
+      scopes: [{ id: topicId, kind: 'topic' }],
+      settled,
+    });
+  }
+
+  /**
+   * Extend the running new-topic task's scope to the topic it just created.
+   *
+   * Until this runs the task is registered only under the sentinel key, so a
+   * delete naming the real id would find nothing to cancel. It cannot be fenced:
+   * the topic did not exist a moment ago, so no pass can already name it.
+   */
+  private bindCreatedTopicScope(topicId: string): void {
+    const binding = this.newTopicScopeBinding;
+    if (!binding) return;
+    this.newTopicScopeBinding = undefined;
+    binding.handles.push(this.registerTopicScope(topicId, binding.settled));
+  }
+
+  /**
+   * Stop everything this topic has running or queued.
+   *
+   * The queues are cleared first: `abort` ends the live turn, but a queued steer
+   * or follow-up would start a fresh one inside the same task, and the drain
+   * would then wait on work the cancellation existed to stop. It also covers the
+   * window where the topic is `continuing` with no active turn at all, which
+   * `abort` alone treats as a silent no-op.
+   */
+  private cancelTopicWork(topicId: string): void {
+    const runtimeTopicId = this.resolveRuntimeTopicId(topicId);
+    this.pendingSteers.delete(runtimeTopicId);
+    this.followUpQueues.delete(runtimeTopicId);
+    this.abort(topicId);
   }
 
   private trackTask(task: Promise<unknown>): void {

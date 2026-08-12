@@ -154,7 +154,7 @@ Still by default. Motion is justified in three cases: explaining a state change,
 
 No scroll-triggered reveals, no decorative pulsing, no parallax, no hover displacement. **The base experience must be complete with zero motion**, and `useReducedMotion` must actually be wired, not merely imported.
 
-Existing heavy animations (the thinking pixel field, the logo draw-on, the settings droplet collapse) are deliberate one-off investments. `useReducedMotion` is currently wired in `PrismSweep`, `PaintingSkeleton`, `SlotText`, and `EffortSlider` — follow those when adding anything at that scale, and first say what it explains.
+Existing heavy animations (the thinking pixel field, the logo draw-on, the settings droplet collapse) are deliberate one-off investments. `useReducedMotion` is currently wired in `PrismSweep`, `ImageGenerationLoader`, `SlotText`, and `EffortSlider` — follow those when adding anything at that scale, and first say what it explains.
 
 ## Icons
 

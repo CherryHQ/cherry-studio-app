@@ -16,7 +16,7 @@ import type {
 } from '@cherrystudio/universal/data/types/prompt';
 import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { type PromptRow, promptTable } from '@/backend/data/db/schemas';
 
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
@@ -54,7 +54,14 @@ function collectAnchorIds(anchors: OrderRequest[]): string[] {
 }
 
 export class PromptService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -181,3 +188,5 @@ export class PromptService {
     }
   }
 }
+
+export const promptService = new PromptService();

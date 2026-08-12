@@ -30,13 +30,28 @@ import {
  * Invariant: at most ONE live JobRuntime per process per database. Recovery
  * treats every active row outside this instance's in-flight and
  * startup-created sets as a prior-process leftover, so a second live instance
- * would reset/cancel the first one's active work.
+ * would reset/cancel the first one's active work. The container now holds that
+ * invariant — see the class comment.
  */
 import { loggerService } from '@logger';
 
+import { application } from '@/backend/core/application/Application';
+import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import type { OperationHandle } from '@/backend/core/resources/types';
+import { ScopeFencedError } from '@/backend/core/resources/types';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import type { InsertJobRow, JobRow } from '@/backend/data/db/schemas/job';
-import type { JobService, TerminalJobStatus } from '@/backend/data/services/JobService';
+import {
+  jobService as hostJobService,
+  type JobService,
+  type TerminalJobStatus,
+} from '@/backend/data/services/JobService';
+import { paintingService } from '@/backend/data/services/PaintingService';
+import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
+import {
+  createPaintingGenerateJobHandler,
+  type PaintingAi,
+} from '@/backend/services/paintings/tasks/paintingGenerateJobHandler';
 
 import type { JobPayloadOf, JobType } from './jobRegistry';
 import { computeBackoff } from './runtime/backoff';
@@ -78,7 +93,7 @@ const logger = loggerService.withContext('JobRuntime');
 const CLAIM_CANDIDATE_WINDOW = 10;
 
 /**
- * Bounded drain on dispose: long enough for an aborted handler to reject and
+ * Bounded drain on teardown: long enough for an aborted handler to reject and
  * write one terminal transaction, short enough not to stall a Fast Refresh
  * unmount. Handlers may legitimately ignore the signal, so this can never be
  * an unbounded wait (unlike `ChatRuntime`, whose tasks all honor abort).
@@ -100,45 +115,16 @@ export class JobHandlerTimeoutError extends Error {
   }
 }
 
+/** Every entry is optional so the container can construct this with two arguments. */
 export type JobRuntimeOptions = {
-  dbService: DbService;
-  jobService: JobService;
-  /** Complete, immutable registry — assembled in composition, frozen here. */
-  handlers: readonly (readonly [string, JobHandler])[];
+  /** Complete, immutable registry — frozen at construction. Defaults to {@link createHostHandlers}. */
+  handlers?: readonly (readonly [string, JobHandler])[];
+  jobService?: JobService;
   globalMaxConcurrency?: number;
   /** Injectable clock for tests. */
   now?: () => number;
   /** Progress sink; defaults to a no-op until a consumer exists (Phase 2+). */
   onProgress?: (jobId: string, progress: JobProgress) => void;
-};
-
-export type JobRuntime = {
-  cancel(id: string, reason?: string): Promise<JobCancelResult>;
-  /**
-   * Abort every in-flight handler, then wait (bounded) for them to write their
-   * terminal rows before the caller closes SQLite. Rows still `running` when
-   * the drain times out are left for the next cold start's recovery.
-   */
-  dispose(): Promise<void>;
-  enqueue<K extends JobType>(
-    type: K,
-    input: JobPayloadOf<K>,
-    opts?: EnqueueOptions,
-  ): Promise<JobHandle>;
-  /**
-   * Transactional enqueue: the INSERT rides the caller's `withWriteTx`
-   * transaction so a business write and the job commit atomically. On
-   * rollback the row never existed — the handle's `finished` never settles
-   * (the next pump drops the resolver) and an idempotency-key collision
-   * aborts the whole caller transaction.
-   */
-  enqueueTx<K extends JobType>(
-    tx: Database,
-    type: K,
-    input: JobPayloadOf<K>,
-    opts?: EnqueueOptions,
-  ): Promise<JobHandle>;
-  pump(request: PumpRequest): Promise<PumpResult>;
 };
 
 type FinishedResolver = {
@@ -151,20 +137,25 @@ function makeError(code: string, message: string, params?: Record<string, unknow
 }
 
 /**
- * Enforces "at most one live runtime per database".
+ * The production registry. Assembled here rather than in composition because
+ * every piece a handler needs is reachable from the host: the AI capability
+ * through `@DependsOn`, the rest as module singletons.
  *
- * This is not defensive programming — it is the sole support for the claim
- * fence. The fence is a conditional `UPDATE ... WHERE status IN (...)`, which
- * isolates by *state*, not by attempt; two runtimes sharing a database would
- * both see `pending` and both claim, and nothing would report it. Since we
- * deliberately did not build a `job_claim` sidecar, the invariant has to fail
- * loudly on its own. The realistic breaker is `<StrictMode>` double-invoking
- * the `useMemo` factory that builds the bootstrap runtime.
+ * It is typed as the handler's own narrow port, not as `AiService`: this layer
+ * receives AI capabilities as interfaces, and the container's positional
+ * injection hands over whatever `AiService` resolves to regardless.
  */
-const liveRuntimesByDb = new WeakMap<DbService, JobRuntimeImpl>();
-
-export function createJobRuntime(options: JobRuntimeOptions): JobRuntime {
-  return new JobRuntimeImpl(options);
+function createHostHandlers(ai: PaintingAi): readonly (readonly [string, JobHandler])[] {
+  return [
+    jobHandlerEntry(
+      'painting.generate',
+      createPaintingGenerateJobHandler({
+        ai,
+        paintings: paintingService,
+        storage: paintingFileStorage,
+      }),
+    ),
+  ];
 }
 
 /**
@@ -181,7 +172,23 @@ export function jobHandlerEntry<K extends JobType>(
   return [type, handler as JobHandler];
 }
 
-class JobRuntimeImpl implements JobRuntime {
+/**
+ * `PostReady`: the cold-start pump runs recovery and a GC sweep over the whole
+ * ledger, which must never sit in front of first paint. The Data API reaches
+ * `enqueueTx`/`cancel` synchronously, but those need only the instance — which
+ * composition resolves before the gate opens — not its initialization.
+ *
+ * `liveRuntimesByDb`, the WeakMap that used to reject a second runtime over one
+ * database, is gone. The container memoizes one instance per host, and
+ * `application.install()` disposes the outgoing host to completion before the
+ * incoming one starts, so two live runtimes can no longer reach the same
+ * ledger. The guard could not have caught the cross-host case anyway once
+ * `DbService` itself became per-host: two hosts key two different instances.
+ */
+@Injectable('JobRuntime')
+@ServicePhase(Phase.PostReady)
+@DependsOn(['DbService', 'AiService'])
+export class JobRuntime extends BaseService {
   private readonly dbService: DbService;
   private readonly jobService: JobService;
   private readonly handlers: ReadonlyMap<string, JobHandler>;
@@ -203,6 +210,17 @@ class JobRuntimeImpl implements JobRuntime {
    */
   private startupLocalIds: Set<string> | null = new Set();
 
+  /**
+   * Resolved per call rather than injected, so no execution pins a host
+   * generation. Not a declared dependency either: the coordinator is a `Gate`
+   * service and this one is `PostReady`, so it is always Ready by the time an
+   * execution spawns, and shutdown deliberately does not route through it — the
+   * edge would order nothing.
+   */
+  private get scopes() {
+    return application.get('ResourceScopeCoordinator');
+  }
+
   private pumpRunning = false;
   private pumpDirty = false;
   private gcRequested = false;
@@ -211,11 +229,17 @@ class JobRuntimeImpl implements JobRuntime {
   private delayedTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
-  constructor(options: JobRuntimeOptions) {
-    this.dbService = options.dbService;
-    this.jobService = options.jobService;
+  /**
+   * The container passes `dbService` and the resolved `AiService`; a suite adds
+   * its own handlers, which is why `ai` — needed only to build the production
+   * registry — is then never read.
+   */
+  constructor(dbService: DbService, ai: PaintingAi, options: JobRuntimeOptions = {}) {
+    super();
+    this.dbService = dbService;
+    this.jobService = options.jobService ?? hostJobService;
     const handlers = new Map<string, JobHandler>();
-    for (const [type, handler] of options.handlers) {
+    for (const [type, handler] of options.handlers ?? createHostHandlers(ai)) {
       if (handlers.has(type)) {
         throw new Error(`Duplicate job handler registration for type "${type}"`);
       }
@@ -225,14 +249,14 @@ class JobRuntimeImpl implements JobRuntime {
     this.globalMaxConcurrency = options.globalMaxConcurrency ?? DEFAULT_GLOBAL_MAX_CONCURRENCY;
     this.now = options.now ?? Date.now;
     this.onProgress = options.onProgress ?? (() => {});
+  }
 
-    if (liveRuntimesByDb.has(this.dbService)) {
-      throw new Error(
-        'A JobRuntime is already live for this database. The claim fence assumes ' +
-          'exactly one runtime per database — dispose the previous one first.',
-      );
-    }
-    liveRuntimesByDb.set(this.dbService, this);
+  /**
+   * The cold-start pump: lazy startup recovery over prior-process leftovers,
+   * the terminal-row GC sweep, and whatever is already runnable.
+   */
+  protected async onInit(): Promise<void> {
+    await this.pump({ reason: 'cold-start' });
   }
 
   async enqueue<K extends JobType>(
@@ -260,6 +284,13 @@ class JobRuntimeImpl implements JobRuntime {
     return handle;
   }
 
+  /**
+   * Transactional enqueue: the INSERT rides the caller's `withWriteTx`
+   * transaction so a business write and the job commit atomically. On rollback
+   * the row never existed — the handle's `finished` never settles (the next
+   * pump drops the resolver) and an idempotency-key collision aborts the whole
+   * caller transaction.
+   */
   async enqueueTx<K extends JobType>(
     tx: Database,
     type: K,
@@ -361,10 +392,15 @@ class JobRuntimeImpl implements JobRuntime {
     return this.currentLoop;
   }
 
-  async dispose(): Promise<void> {
+  /**
+   * Abort every in-flight handler, then wait (bounded) for them to write their
+   * terminal rows before `DbService` — a declared dependency, so it stops
+   * later — closes SQLite. Rows still `running` when the drain times out are
+   * left for the next cold start's recovery.
+   */
+  protected async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    liveRuntimesByDb.delete(this.dbService);
     if (this.delayedTimer) {
       clearTimeout(this.delayedTimer);
       this.delayedTimer = null;
@@ -625,6 +661,41 @@ class JobRuntimeImpl implements JobRuntime {
   // Execution
   // -------------------------------------------------------------------------
 
+  /**
+   * Put this execution on the coordinator's registry, if its handler belongs to
+   * any deletable resource.
+   *
+   * `settled` is the execution promise rather than anything `cancel()` returns,
+   * because that promise resolves only after the terminal row is written — which
+   * is exactly the guarantee a deleting caller is waiting for. A handler that
+   * ignores its signal therefore fails the drain and blocks the delete instead
+   * of letting it proceed over work still in flight.
+   *
+   * Throws {@link ScopeFencedError} when the resource is already being deleted.
+   */
+  private registerScopes(
+    handler: JobHandler,
+    row: JobRow,
+    settled: Promise<void>,
+  ): OperationHandle | undefined {
+    const scopes = handler.scopes?.(row.input);
+    if (!scopes || scopes.length === 0) return undefined;
+
+    return this.scopes.register({
+      // Fire-and-forget by contract: `cancel` is synchronous, and `cancel()`
+      // already does its own bounded wait plus force-finalization. The drain
+      // above is what actually waits.
+      cancel: (reason) => {
+        void this.cancel(row.id, reason).catch((error: unknown) => {
+          logger.error('scope cancel failed', error as Error, { jobId: row.id });
+        });
+      },
+      kind: `job.${row.type}`,
+      scopes,
+      settled,
+    });
+  }
+
   private spawnExecute(row: JobRow): void {
     const handler = this.handlers.get(row.type);
     if (!handler) {
@@ -647,11 +718,36 @@ class JobRuntimeImpl implements JobRuntime {
     }
 
     const controller = new AbortController();
-    this.abortControllers.set(row.id, controller);
     let resolveExecuted!: () => void;
     const executed = new Promise<void>((resolve) => {
       resolveExecuted = resolve;
     });
+
+    // Claimed before anything observable happens: the resource this job writes
+    // through may be mid-deletion, and an execution that started first would be
+    // invisible to the pass draining that scope.
+    let scopeHandle: OperationHandle | undefined;
+    try {
+      scopeHandle = this.registerScopes(handler, row, executed);
+    } catch (error) {
+      if (!(error instanceof ScopeFencedError)) throw error;
+      // The resource is being deleted. Running would write through a row that is
+      // about to disappear, so the job ends here rather than racing the delete.
+      logger.info('spawnExecute: scope fenced — cancelling instead of running', {
+        jobId: row.id,
+        scope: `${error.scope.kind}:${error.scope.id}`,
+      });
+      void this.finalizeJob(
+        row.id,
+        'cancelled',
+        undefined,
+        { code: JOB_ERROR_CODES.CANCELLED, message: error.message, retryable: false },
+        ['running'],
+      );
+      return;
+    }
+
+    this.abortControllers.set(row.id, controller);
     this.inFlightExecuted.set(row.id, executed);
 
     if (row.timeoutMs !== null && row.timeoutMs > 0) {
@@ -726,6 +822,9 @@ class JobRuntimeImpl implements JobRuntime {
         this.clearTimeoutHandle(row.id);
         this.abortControllers.delete(row.id);
         this.inFlightExecuted.delete(row.id);
+        // Released before `executed` settles, so a drain that was waiting on
+        // this execution does not then see it still registered.
+        scopeHandle?.release();
         resolveExecuted();
       }
     })();

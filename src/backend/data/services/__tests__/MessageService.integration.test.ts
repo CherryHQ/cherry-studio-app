@@ -5,14 +5,16 @@ import { DatabaseSync } from 'node:sqlite';
 import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
 import { AiUsageRecordService } from '../AiUsageRecordService';
-import { MessageService } from '../MessageService';
-import { PinService } from '../PinService';
-import { TagService } from '../TagService';
-import { TopicService } from '../TopicService';
+import { messageService } from '../MessageService';
+// Importing the singleton is also what registers `TopicService` in the data
+// service registry, which is how `MessageService` reaches it without closing an
+// import cycle.
+import { topicService } from '../TopicService';
 
 // Rows are inserted in bulk here, so unlike the fixed-id mocks elsewhere these
 // have to be distinct. `expo-crypto` is already mocked the same way globally.
@@ -45,11 +47,8 @@ type MigrationJournal = { entries: { tag: string }[] };
  */
 describe('MessageService integration', () => {
   let sqlite: DatabaseSync;
-  let dbService: DbService;
-  let service: MessageService;
-  let topicService: TopicService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
@@ -71,7 +70,7 @@ describe('MessageService integration', () => {
       { casing: 'snake_case', schema },
     ) as unknown as Database;
     let writeTail: Promise<void> = Promise.resolve();
-    dbService = {
+    const dbService = {
       getDb: () => database,
       withWriteTx: async <T>(callback: (tx: Database) => Promise<T>) => {
         const previous = writeTail;
@@ -93,28 +92,33 @@ describe('MessageService integration', () => {
         }
       },
     } as unknown as DbService;
-    topicService = new TopicService(
-      dbService,
-      new PinService(dbService),
-      new TagService(dbService),
-    );
-    service = new MessageService(dbService, topicService);
+    // Data services resolve `DbService` from `application`, so the fake is
+    // installed as a host override instead of being passed to constructors. The
+    // services themselves are shared singletons; this database is what isolates
+    // one case from the next.
+    await installTestHost({ DbService: dbService });
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+  });
 
   // The approval resume hands the SDK the paused assistant message's own id and
   // expects the stream to continue that row. That only works while the row is
   // part of the history the path builds, so its own presence is the contract.
   test('getPathToNode ends at the requested node and drops the virtual root', async () => {
     const topic = await topicService.create({ name: 'path' });
-    const user = await service.create(topic.id, {
+    const user = await messageService.create(topic.id, {
       data: { parts: [{ text: 'hi', type: 'text' }] },
       role: 'user',
     });
-    const assistant = await service.create(topic.id, { data: { parts: [] }, role: 'assistant' });
+    const assistant = await messageService.create(topic.id, {
+      data: { parts: [] },
+      role: 'assistant',
+    });
 
-    const path = await service.getPathToNode(assistant.id);
+    const path = await messageService.getPathToNode(assistant.id);
 
     expect(path.map((message) => message.id)).toEqual([user.id, assistant.id]);
     expect(path.at(-1)?.id).toBe(assistant.id);
@@ -126,7 +130,7 @@ describe('MessageService integration', () => {
   test('findPendingAssistantMessageIds returns only live pending assistant rows', async () => {
     const topic = await topicService.create({ name: 'reconcile' });
     const create = (role: 'assistant' | 'user', status: Message['status']) =>
-      service.create(topic.id, { data: { parts: [] }, role, setAsActive: false, status });
+      messageService.create(topic.id, { data: { parts: [] }, role, setAsActive: false, status });
 
     const pending = await create('assistant', 'pending');
     await create('assistant', 'paused');
@@ -136,12 +140,12 @@ describe('MessageService integration', () => {
     const softDeleted = await create('assistant', 'pending');
     sqlite.prepare('UPDATE message SET deleted_at = 1 WHERE id = ?').run(softDeleted.id);
 
-    await expect(service.findPendingAssistantMessageIds()).resolves.toEqual([pending.id]);
+    await expect(messageService.findPendingAssistantMessageIds()).resolves.toEqual([pending.id]);
   });
 
   test('materializes assistant usage stats from durable invocation records', async () => {
     const topic = await topicService.create({ name: 'usage projection' });
-    const message = await service.create(topic.id, {
+    const message = await messageService.create(topic.id, {
       data: { parts: [] },
       role: 'assistant',
       status: 'pending',
@@ -149,7 +153,7 @@ describe('MessageService integration', () => {
     sqlite
       .prepare('UPDATE message SET stats = ? WHERE id = ?')
       .run(JSON.stringify({ timeFirstTokenMs: 12 }), message.id);
-    const usageService = new AiUsageRecordService(dbService);
+    const usageService = new AiUsageRecordService();
     const context = {
       providerId: 'openrouter',
       providerName: 'OpenRouter',
@@ -193,9 +197,9 @@ describe('MessageService integration', () => {
       metrics: { timeCompletionMs: 400 },
       completedAt: 1_785_427_201_000,
     });
-    await service.update(message.id, { data: { parts: [] }, status: 'success' });
+    await messageService.update(message.id, { data: { parts: [] }, status: 'success' });
 
-    await expect(service.getById(message.id)).resolves.toMatchObject({
+    await expect(messageService.getById(message.id)).resolves.toMatchObject({
       stats: {
         inputTokens: 150,
         outputTokens: 30,
@@ -227,7 +231,7 @@ describe('MessageService integration', () => {
 
   test('finalizes assistant runtime timing while preserving the durable usage projection', async () => {
     const topic = await topicService.create({ name: 'runtime timing' });
-    const message = await service.create(topic.id, {
+    const message = await messageService.create(topic.id, {
       data: { parts: [] },
       role: 'assistant',
       status: 'pending',
@@ -253,7 +257,7 @@ describe('MessageService integration', () => {
       message.id,
     );
 
-    await service.finalizeAssistantMessage(message.id, {
+    await messageService.finalizeAssistantMessage(message.id, {
       data: { parts: [{ text: 'done', type: 'text' }] },
       runtimeStats: {
         runtimeTiming: {
@@ -273,7 +277,7 @@ describe('MessageService integration', () => {
       status: 'success',
     });
 
-    await expect(service.getById(message.id)).resolves.toMatchObject({
+    await expect(messageService.getById(message.id)).resolves.toMatchObject({
       data: { parts: [{ text: 'done', type: 'text' }] },
       stats: {
         outputTokens: 20,
@@ -286,7 +290,7 @@ describe('MessageService integration', () => {
       },
       status: 'success',
     });
-    expect((await service.getById(message.id)).stats).not.toHaveProperty('timeFirstTokenMs');
+    expect((await messageService.getById(message.id)).stats).not.toHaveProperty('timeFirstTokenMs');
     expect(sqlite.prepare('SELECT COUNT(*) AS count FROM ai_usage_record').get()).toMatchObject({
       count: 0,
     });
@@ -294,14 +298,14 @@ describe('MessageService integration', () => {
 
   test('rejects runtime finalization for non-assistant messages', async () => {
     const topic = await topicService.create({ name: 'runtime timing role' });
-    const message = await service.create(topic.id, {
+    const message = await messageService.create(topic.id, {
       data: { parts: [] },
       role: 'user',
       status: 'success',
     });
 
     await expect(
-      service.finalizeAssistantMessage(message.id, {
+      messageService.finalizeAssistantMessage(message.id, {
         data: { parts: [] },
         status: 'error',
       }),
@@ -311,8 +315,12 @@ describe('MessageService integration', () => {
   describe('applyToolApprovalDecisions', () => {
     async function seedTip() {
       const topic = await topicService.create({ name: 'approval' });
-      await service.create(topic.id, { data: { parts: [] }, role: 'user', status: 'success' });
-      const tip = await service.create(topic.id, {
+      await messageService.create(topic.id, {
+        data: { parts: [] },
+        role: 'user',
+        status: 'success',
+      });
+      const tip = await messageService.create(topic.id, {
         data: { parts: [requestedPart('a1'), requestedPart('a2')] },
         role: 'assistant',
         status: 'success',
@@ -325,17 +333,17 @@ describe('MessageService integration', () => {
       const { tip } = await seedTip();
 
       const [first, second] = await Promise.all([
-        service.applyToolApprovalDecisions(tip.id, [
+        messageService.applyToolApprovalDecisions(tip.id, [
           { approvalId: 'a1', approved: true, updatedInput: { query: 'revised' } },
         ]),
-        service.applyToolApprovalDecisions(tip.id, [
+        messageService.applyToolApprovalDecisions(tip.id, [
           { approvalId: 'a2', approved: false, reason: 'not now' },
         ]),
       ]);
 
       expect(first?.appliedApprovalIds).toEqual(['a1']);
       expect(second?.appliedApprovalIds).toEqual(['a2']);
-      const settled = await service.getById(tip.id);
+      const settled = await messageService.getById(tip.id);
       expect(settled.status).toBe('pending');
       expect(settled.data.parts).toEqual([
         expect.objectContaining({
@@ -379,12 +387,14 @@ describe('MessageService integration', () => {
       const now = jest.spyOn(Date, 'now').mockReturnValue(2_000);
 
       try {
-        await service.applyToolApprovalDecisions(tip.id, [{ approvalId: 'a1', approved: true }]);
+        await messageService.applyToolApprovalDecisions(tip.id, [
+          { approvalId: 'a1', approved: true },
+        ]);
       } finally {
         now.mockRestore();
       }
 
-      await expect(service.getById(tip.id)).resolves.toMatchObject({
+      await expect(messageService.getById(tip.id)).resolves.toMatchObject({
         stats: {
           runtimeTiming: {
             spans: [
@@ -401,7 +411,7 @@ describe('MessageService integration', () => {
       sqlite.prepare('UPDATE message SET deleted_at = 1 WHERE id = ?').run(tip.id);
 
       await expect(
-        service.applyToolApprovalDecisions(tip.id, [{ approvalId: 'a1', approved: true }]),
+        messageService.applyToolApprovalDecisions(tip.id, [{ approvalId: 'a1', approved: true }]),
       ).resolves.toBeNull();
     });
   });

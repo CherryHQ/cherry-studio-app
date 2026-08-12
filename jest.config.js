@@ -42,9 +42,11 @@ module.exports = {
     '\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    // `fractional-indexing` is ESM-only (`"type": "module"`, no CJS build), so it
-    // needs transforming for any suite that imports it directly.
-    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing|voyage-ai-provider|@opeoginni)))',
+    // `fractional-indexing` and `uuid` are ESM-only (`"type": "module"`, no CJS
+    // build), so they need transforming for any suite that reaches them.
+    // `uuid` arrives transitively: the service registry names `DbService`, which
+    // pulls in the drizzle schemas, which generate ids.
+    '/node_modules/(?!((\\.pnpm/[^/]+/node_modules/)?(react-native|@react-native|@react-native-community|expo|@expo|@expo-google-fonts|react-navigation|@react-navigation|@sentry/react-native|native-base|tokenx|fractional-indexing|uuid|voyage-ai-provider|@opeoginni)))',
     '/node_modules/react-native-reanimated/plugin/',
   ],
 };

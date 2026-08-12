@@ -117,7 +117,7 @@ export function usePaintingViewerActions({
   const viewConversation = useCallback(() => {
     router.push({
       params: { paintingId: painting.id },
-      pathname: '/paintings/[paintingId]/conversation',
+      pathname: '/paintings',
     });
   }, [painting.id, router]);
 

@@ -126,7 +126,7 @@ describe('usePaintingViewerActions', () => {
 
     expect(mockRouterPush).toHaveBeenCalledWith({
       params: { paintingId: painting.id },
-      pathname: '/paintings/[paintingId]/conversation',
+      pathname: '/paintings',
     });
   });
 

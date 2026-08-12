@@ -6,7 +6,8 @@ import type {
 } from '@cherrystudio/universal/data/api/schemas/skills';
 import { and, asc, eq, inArray, or, type SQL, sql } from 'drizzle-orm';
 
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import {
   type AgentGlobalSkillRow,
   agentGlobalSkillTable,
@@ -23,7 +24,14 @@ type SkillPatch = Partial<Omit<InsertAgentGlobalSkillRow, 'createdAt' | 'id' | '
 
 /** Pure database access for global skills and their per-agent enablement rows. */
 export class AgentGlobalSkillService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -242,3 +250,5 @@ export class AgentGlobalSkillService {
     };
   }
 }
+
+export const agentGlobalSkillService = new AgentGlobalSkillService();

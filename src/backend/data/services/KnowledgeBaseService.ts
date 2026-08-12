@@ -17,10 +17,10 @@ import {
 } from '@cherrystudio/universal/data/types/knowledge';
 import { and, asc, count, desc, eq, gte, ne, sql, type SQL } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { knowledgeBaseTable, knowledgeItemTable } from '@/backend/data/db/schemas/knowledge';
 
-import type { GroupService } from './GroupService';
+import { groupService } from './GroupService';
 import { timestampToISO } from './utils/rowMappers';
 
 type KnowledgeBaseRow = typeof knowledgeBaseTable.$inferSelect;
@@ -69,10 +69,14 @@ function validateDimensions(modelId: string | null, dimensions: number | null): 
 }
 
 export class KnowledgeBaseService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly groups: GroupService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async list(
     query: ListKnowledgeBasesQuery,
@@ -224,7 +228,7 @@ export class KnowledgeBaseService {
     if (groupId == null) return;
     let group;
     try {
-      group = await this.groups.getById(groupId);
+      group = await groupService.getById(groupId);
     } catch {
       throw DataApiErrorFactory.validation({
         groupId: [`Knowledge base group not found: ${groupId}`],
@@ -237,3 +241,5 @@ export class KnowledgeBaseService {
     }
   }
 }
+
+export const knowledgeBaseService = new KnowledgeBaseService();

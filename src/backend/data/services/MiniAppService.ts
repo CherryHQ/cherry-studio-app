@@ -8,7 +8,7 @@ import { PRESETS_MINI_APPS } from '@cherrystudio/universal/data/presets/miniApps
 import type { MiniApp, MiniAppId, MiniAppStatus } from '@cherrystudio/universal/data/types/miniApp';
 import { and, asc, desc, eq, gt, inArray, lt, ne } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import {
   type InsertMiniAppRow,
   type MiniAppRow,
@@ -52,7 +52,14 @@ function rowToMiniApp(row: MiniAppRow): MiniApp {
 }
 
 export class MiniAppService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async getByAppId(appId: string): Promise<MiniApp> {
     const [row] = await this.dbService
@@ -223,3 +230,5 @@ export class MiniAppService {
     });
   }
 }
+
+export const miniAppService = new MiniAppService();
