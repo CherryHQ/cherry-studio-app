@@ -38,6 +38,11 @@ private class MenuFrameLayout(context: Context) : FrameLayout(context) {
         gestureDetector.onTouchEvent(event)
         return super.dispatchTouchEvent(event)
     }
+
+    override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+        // React Native's UIManager lays out children when the view manager does not opt into
+        // custom child layout. Letting FrameLayout run here would overwrite those Yoga positions.
+    }
 }
 
 @DoNotStrip
