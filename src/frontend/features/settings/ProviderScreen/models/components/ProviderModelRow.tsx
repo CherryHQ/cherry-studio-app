@@ -76,8 +76,13 @@ export function ProviderModelRow({
     ) : undefined;
 
   return (
+    // Transparent rather than the grouped card the surface normally paints: a
+    // model list is long enough that the card reads as one big slab. What is
+    // still wanted from here is the hairline between rows and the corner
+    // rounding the pull screen's applied-row tint sits on — the surface merges
+    // these classes, and that tint comes last, so it still wins.
     <SettingsGroupedSurface
-      className={surfaceClassName}
+      className={surfaceClassName ? `bg-transparent ${surfaceClassName}` : 'bg-transparent'}
       hideSeparator={hideSeparator || isPressed}
       isFirst={isFirst}
       isLast={isLast}
