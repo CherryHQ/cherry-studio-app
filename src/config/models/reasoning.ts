@@ -40,7 +40,8 @@ export const MODEL_SUPPORTED_REASONING_EFFORT: ReasoningEffortConfig = {
   hunyuan: ['auto'] as const,
   zhipu: ['auto'] as const,
   perplexity: ['low', 'medium', 'high'] as const,
-  deepseek_hybrid: ['auto'] as const
+  deepseek_hybrid: ['auto'] as const,
+  deepseek_v4: ['none', 'low', 'high', 'max', 'xhigh'] as const
 } as const
 
 // 模型类型到支持选项的映射表
@@ -65,7 +66,8 @@ export const MODEL_SUPPORTED_OPTIONS: ThinkingOptionConfig = {
   hunyuan: ['none', ...MODEL_SUPPORTED_REASONING_EFFORT.hunyuan] as const,
   zhipu: ['none', ...MODEL_SUPPORTED_REASONING_EFFORT.zhipu] as const,
   perplexity: MODEL_SUPPORTED_REASONING_EFFORT.perplexity,
-  deepseek_hybrid: ['none', ...MODEL_SUPPORTED_REASONING_EFFORT.deepseek_hybrid] as const
+  deepseek_hybrid: ['none', ...MODEL_SUPPORTED_REASONING_EFFORT.deepseek_hybrid] as const,
+  deepseek_v4: MODEL_SUPPORTED_REASONING_EFFORT.deepseek_v4
 } as const
 
 const withModelIdAndNameAsId = <T>(model: Model, fn: (model: Model) => T): { idResult: T; nameResult: T } => {
@@ -124,6 +126,7 @@ const _getThinkModelType = (model: Model): ThinkingModelType => {
   } else if (isSupportedThinkingTokenHunyuanModel(model)) thinkingModelType = 'hunyuan'
   else if (isSupportedReasoningEffortPerplexityModel(model)) thinkingModelType = 'perplexity'
   else if (isSupportedThinkingTokenZhipuModel(model)) thinkingModelType = 'zhipu'
+  else if (isDeepSeekV4Model(model)) thinkingModelType = 'deepseek_v4'
   else if (isDeepSeekHybridInferenceModel(model)) thinkingModelType = 'deepseek_hybrid'
   return thinkingModelType
 }
@@ -451,6 +454,16 @@ export const isDeepSeekHybridInferenceModel = (model: Model) => {
   return /deepseek-v3(?:\.\d|-\d)(?:(\.|-)\w+)?$/.test(modelId) || modelId.includes('deepseek-chat-v3.1')
 }
 
+/**
+ * DeepSeek V4 series (deepseek-v4-flash / deepseek-v4-pro / deepseek-v4-flash-latest).
+ * Unlike the V3 hybrid models, V4 is a single model with thinking enabled by default
+ * and a selectable `reasoning_effort` (none/low/high/max/xhigh) on the wire.
+ */
+export const isDeepSeekV4Model = (model: Model): boolean => {
+  const modelId = getLowerBaseModelName(model.id, '/')
+  return /deepseek-v4(?:-\w+)?(?:-latest)?$/.test(modelId) || modelId.includes('deepseek-chat-v4')
+}
+
 export const isLingReasoningModel = (model?: Model): boolean => {
   if (!model) {
     return false
@@ -518,6 +531,7 @@ export function isReasoningModel(model?: Model): boolean {
     isZhipuReasoningModel(model) ||
     isStepReasoningModel(model) ||
     isDeepSeekHybridInferenceModel(model) ||
+    isDeepSeekV4Model(model) ||
     isLingReasoningModel(model) ||
     isMiniMaxReasoningModel(model) ||
     modelId.includes('magistral') ||

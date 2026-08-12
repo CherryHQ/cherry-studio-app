@@ -51,10 +51,11 @@ const ThinkModelTypes = [
   'hunyuan',
   'zhipu',
   'perplexity',
-  'deepseek_hybrid'
+  'deepseek_hybrid',
+  'deepseek_v4'
 ] as const
 
-export type ReasoningEffortOption = NonNullable<OpenAI.ReasoningEffort> | 'auto' | 'none'
+export type ReasoningEffortOption = NonNullable<OpenAI.ReasoningEffort> | 'auto' | 'none' | 'max'
 export type ThinkingOption = ReasoningEffortOption | 'off'
 export type ThinkingModelType = (typeof ThinkModelTypes)[number]
 export type ThinkingOptionConfig = Record<ThinkingModelType, ThinkingOption[]>
@@ -72,6 +73,7 @@ export const EFFORT_RATIO: EffortRatio = {
   medium: 0.5,
   high: 0.8,
   xhigh: 0.9,
+  max: 0.95,
   auto: 2
 }
 export type AssistantSettings = {
