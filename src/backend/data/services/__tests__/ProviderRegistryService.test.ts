@@ -96,6 +96,26 @@ describe('provider-registry-service', () => {
     ]);
   });
 
+  test('projects a preset provider catalog onto a copied provider id', () => {
+    const models = providerRegistryService.listProviderRegistryModels({
+      presetProviderId: 'zhipu',
+      providerId: 'copied-zhipu',
+    });
+
+    expect(models.length).toBeGreaterThan(0);
+    expect(models.every((model) => model.providerId === 'copied-zhipu')).toBe(true);
+    expect(models.every((model) => model.id.startsWith('copied-zhipu::'))).toBe(true);
+  });
+
+  test('does not inherit a catalog for a fully custom provider', () => {
+    expect(
+      providerRegistryService.listProviderRegistryModels({
+        presetProviderId: null,
+        providerId: 'fully-custom',
+      }),
+    ).toEqual([]);
+  });
+
   test('loads Radeon Cloud after CherryIN', () => {
     const providerIds = providerRegistryService.loadProviders().map(({ id }) => id);
 

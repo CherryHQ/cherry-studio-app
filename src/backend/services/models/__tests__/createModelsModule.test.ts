@@ -70,6 +70,19 @@ describe('createModelsModule', () => {
     expect(dependencies.models.reconcile).not.toHaveBeenCalled();
   });
 
+  it('reports a remote addition when the only local model is custom', async () => {
+    const local = model('custom');
+    const remote = model('remote');
+    const { backend, dependencies } = createSubject();
+    jest.mocked(dependencies.models.list).mockResolvedValue([local]);
+    jest.mocked(dependencies.ai.listModels).mockResolvedValue([remote]);
+
+    await expect(backend.pull('openai')).resolves.toEqual({
+      preview: { added: [remote], missing: [] },
+      status: 'changes',
+    });
+  });
+
   it('enables a disabled provider after an up-to-date pull with local models', async () => {
     const current = model('current');
     const { backend, dependencies } = createSubject();

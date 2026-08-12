@@ -124,6 +124,84 @@ describe('AiService.listModels authentication adapters', () => {
   });
 });
 
+describe('AiService.listModels catalog merge', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('returns the registry catalog without requesting the upstream API', async () => {
+    const provider = createProvider({
+      id: 'login-provider',
+      modelListSource: 'registry',
+      presetProviderId: 'login-provider',
+    });
+    const registryModel = createModel('registry-model', { providerId: provider.id });
+    const listProviderRegistryModels = jest.fn(() => [registryModel]);
+    const fetchSpy = jest.spyOn(globalThis, 'fetch');
+    const services = {
+      ...createServices({ provider }),
+      providerRegistry: { listProviderRegistryModels },
+    } as unknown as AiServiceDependencies;
+
+    await expect(new AiService(services).listModels({ providerId: provider.id })).resolves.toEqual([
+      registryModel,
+    ]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(listProviderRegistryModels).toHaveBeenCalledWith({
+      presetProviderId: 'login-provider',
+      providerId: 'login-provider',
+    });
+  });
+
+  it('appends registry-only models and deduplicates publisher-prefixed twins', async () => {
+    const provider = createProvider({ id: 'ppio', presetProviderId: 'ppio' });
+    const registryTwin = createModel('qwen/qwen3', {
+      apiModelId: 'qwen/qwen3',
+      providerId: provider.id,
+    });
+    const registryOnly = createModel('z-image-turbo', {
+      apiModelId: 'z-image-turbo',
+      providerId: provider.id,
+    });
+    const listProviderRegistryModels = jest.fn(() => [registryTwin, registryOnly]);
+    jest.spyOn(globalThis, 'fetch').mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            data: [{ id: 'qwen3', name: 'Qwen3 from API' }],
+          }),
+          { status: 200 },
+        ),
+    );
+    const services = {
+      ...createServices({ provider }),
+      providerRegistry: { listProviderRegistryModels },
+    } as unknown as AiServiceDependencies;
+
+    const result = await new AiService(services).listModels({
+      providerId: provider.id,
+      throwOnError: true,
+    });
+
+    expect(result.map((model) => model.apiModelId)).toEqual(['qwen3', 'z-image-turbo']);
+    expect(result[0]?.name).toBe('qwen3');
+  });
+
+  it('preserves upstream failures instead of falling back to the registry catalog', async () => {
+    const provider = createProvider({ id: 'openai', presetProviderId: 'openai' });
+    const registryModel = createModel('registry-model', { providerId: provider.id });
+    jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('upstream unavailable'));
+    const services = {
+      ...createServices({ provider }),
+      providerRegistry: { listProviderRegistryModels: jest.fn(() => [registryModel]) },
+    } as unknown as AiServiceDependencies;
+
+    await expect(
+      new AiService(services).listModels({ providerId: provider.id, throwOnError: true }),
+    ).rejects.toThrow('upstream unavailable');
+  });
+});
+
 describe('AiService.generateImage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -1115,6 +1193,9 @@ function createServices({
           ? { attribution: 'unknown' as const }
           : { attribution: 'explicit' as const, id: 'key-1', masked: 'ro****ey' },
       })),
+    },
+    providerRegistry: {
+      listProviderRegistryModels: jest.fn(() => []),
     },
     tools,
     vertexAuth: {
