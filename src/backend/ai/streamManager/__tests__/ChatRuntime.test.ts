@@ -12,6 +12,9 @@ import type {
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { UIMessageChunk } from 'ai';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
+import { ScopeFencedError } from '@/backend/core/resources/types';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -32,7 +35,15 @@ const mockDiscardInternalEntries = jest.fn(
 );
 
 describe('ChatRuntime', () => {
-  beforeEach(() => {
+  let scopes: ResourceScopeCoordinator;
+
+  afterEach(uninstallTestHost);
+
+  beforeEach(async () => {
+    // A real coordinator, not a stub: every task registers with whatever the
+    // host serves, so the fencing these cases rely on is the production one.
+    scopes = new ResourceScopeCoordinator();
+    await installTestHost({ ResourceScopeCoordinator: scopes });
     mockReadUIMessageStream.mockReset();
     mockCreateMessageParts.mockClear();
     mockCreateMessageParts.mockImplementation(async (parts: readonly CherryMessagePart[]) => ({
@@ -2366,6 +2377,121 @@ describe('ChatRuntime', () => {
     // per host, so a repeated stop only has to be harmless.
     await expect(runtime._doStop()).resolves.toBeUndefined();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  describe('resource scopes', () => {
+    const TOPIC = { id: 'topic-1', kind: 'topic' } as const;
+
+    test('deleting a topic aborts its live turn and lands the terminal write first', async () => {
+      const services = createServices();
+      let streamSignal: AbortSignal | undefined;
+      services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
+        streamSignal = request.requestOptions.signal;
+        return new ReadableStream<UIMessageChunk>();
+      });
+      mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+        abortableAsyncIterable(createUiMessage(message.id, 'partial'), streamSignal!),
+      );
+      const runtime = createRuntime({ services });
+
+      const turn = runtime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'hi',
+        topicId: 'topic-1',
+      });
+      await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+
+      let finalizedBeforeMutation = false;
+      await scopes.delete([TOPIC], async () => {
+        // Read inside the mutation: this is the whole guarantee. By the time the
+        // delete transaction would open, the aborted turn has already written
+        // its terminal row, so it cannot write into a topic that is gone.
+        finalizedBeforeMutation =
+          (services.message.finalizeAssistantMessage as jest.Mock).mock.calls.length > 0;
+      });
+
+      expect(finalizedBeforeMutation).toBe(true);
+      await turn;
+      expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+    });
+
+    test('refuses a send into a topic that is being deleted', async () => {
+      const services = createServices();
+      const runtime = createRuntime({ services });
+      const mutation = createDeferred();
+
+      const deletion = scopes.delete([TOPIC], () => mutation.promise);
+      await waitUntil(() => scopes.listActive(TOPIC).length === 0);
+
+      await expect(
+        runtime.sendText({
+          selectedModelId: 'provider::model' as UniqueModelId,
+          text: 'hi',
+          topicId: 'topic-1',
+        }),
+      ).rejects.toThrow(ScopeFencedError);
+      // Refused before anything was reserved — no row is left behind in a topic
+      // that is about to disappear.
+      expect(services.message.createUserMessageWithPlaceholders).not.toHaveBeenCalled();
+
+      mutation.resolve();
+      await deletion;
+    });
+
+    test('drops queued follow-ups so no new turn starts inside the cancelled task', async () => {
+      const services = createServices();
+      configureDynamicReservation(services);
+      let streamSignal: AbortSignal | undefined;
+      services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
+        streamSignal = request.requestOptions.signal;
+        return new ReadableStream<UIMessageChunk>();
+      });
+      mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+        abortableAsyncIterable(createUiMessage(message.id, 'partial'), streamSignal!),
+      );
+      const runtime = createRuntime({ services });
+
+      const turn = runtime.sendText({ text: 'initial', topicId: 'topic-1' });
+      await waitUntil(() => runtime.getTopicSnapshot('topic-1').status === 'streaming');
+      await runtime.queueFollowUp({
+        payload: createFollowUpPayload('should never run'),
+        topicId: 'topic-1',
+      });
+
+      await scopes.delete([TOPIC], async () => undefined);
+      await turn;
+
+      // Aborting alone leaves the follow-up queued — the failure-path test above
+      // pins exactly that. Cancelling the scope has to drop it too, or it sits
+      // there waiting for a topic that no longer exists.
+      expect(runtime.getTopicSnapshot('topic-1').queuedMessages).toBeUndefined();
+      expect(services.message.createUserMessageWithPlaceholders).toHaveBeenCalledTimes(1);
+    });
+
+    test('registers a new-topic turn under the id it creates, not only the sentinel', async () => {
+      const services = createServices();
+      const streamGate = createDeferred();
+      mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+        gatedAsyncIterable([createUiMessage(message.id, 'partial')], streamGate.promise),
+      );
+      const runtime = createRuntime({ services });
+
+      const turn = runtime.sendNewTopicText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'hi',
+      });
+      await waitUntil(
+        () => runtime.getTopicSnapshot(NEW_TOPIC_SNAPSHOT_KEY).status === 'streaming',
+      );
+
+      // The task started before the topic existed, so without the handoff
+      // binding a delete naming the created id would find nothing to cancel.
+      expect(scopes.listActive(TOPIC)).toHaveLength(1);
+
+      streamGate.resolve();
+      await turn;
+      expect(scopes.listActive(TOPIC)).toHaveLength(0);
+    });
   });
 });
 
