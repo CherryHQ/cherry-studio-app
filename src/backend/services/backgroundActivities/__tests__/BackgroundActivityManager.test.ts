@@ -10,6 +10,7 @@ jest.mock('expo-file-system', () => ({
     exists = true;
     uri = 'file:///widgets/cherry-studio-logo.png';
     copy = jest.fn(async () => {});
+    write = jest.fn(() => {});
   },
 }));
 jest.mock('expo-widgets', () => ({ widgetsDirectory: 'file:///widgets' }));
@@ -101,7 +102,10 @@ describe('BackgroundActivityManager', () => {
 
     session.cancel();
     await flushOperations();
-    expect(handles[0]?.end).toHaveBeenCalledWith('immediate', expect.any(Object));
+    expect(handles[0]?.end).toHaveBeenCalledWith(
+      'immediate',
+      expect.objectContaining({ finishedAtEpochMs: expect.any(Number) }),
+    );
     await manager._doStop();
   });
 
@@ -265,7 +269,10 @@ describe('BackgroundActivityManager', () => {
     await session.ready;
 
     await manager._doStop();
-    expect(handles[0]?.end).toHaveBeenCalledWith('immediate', expect.any(Object));
+    expect(handles[0]?.end).toHaveBeenCalledWith(
+      'immediate',
+      expect.objectContaining({ finishedAtEpochMs: expect.any(Number) }),
+    );
     expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
 
     const late = manager.startSession({

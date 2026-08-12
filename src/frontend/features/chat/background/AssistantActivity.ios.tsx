@@ -1,11 +1,11 @@
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
   activityBackgroundTint,
-  cornerRadius,
   font,
   foregroundStyle,
   frame,
   lineLimit,
+  monospacedDigit,
   multilineTextAlignment,
   padding,
   resizable,
@@ -28,6 +28,10 @@ function AssistantActivity(
   const secondary = colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
   const background = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
   const finishedAt = props.finishedAtEpochMs ? new Date(props.finishedAtEpochMs) : undefined;
+  const timerInterval = {
+    lower: new Date(props.startedAtEpochMs),
+    upper: new Date(props.startedAtEpochMs + 24 * 60 * 60 * 1000),
+  };
   const isTerminal =
     props.phase === 'completed' || props.phase === 'failed' || props.phase === 'cancelled';
   const phaseSymbol =
@@ -64,7 +68,6 @@ function AssistantActivity(
             modifiers={[
               resizable(),
               frame({ height: 36, width: 36 }),
-              cornerRadius(8),
               widgetAccentedRenderingMode('fullColor'),
             ]}
           />
@@ -98,10 +101,14 @@ function AssistantActivity(
         </VStack>
         <Spacer />
         <Text
-          date={new Date(props.startedAtEpochMs)}
-          dateStyle="timer"
+          countsDown={false}
           pauseTime={finishedAt}
-          modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle(secondary)]}
+          timerInterval={timerInterval}
+          modifiers={[
+            font({ size: 13, weight: 'medium' }),
+            monospacedDigit(),
+            foregroundStyle(secondary),
+          ]}
         />
       </HStack>
     ),
@@ -121,10 +128,14 @@ function AssistantActivity(
       <Image color={brandColor} size={16} systemName={phaseSymbol} />
     ) : (
       <Text
-        date={new Date(props.startedAtEpochMs)}
-        dateStyle="timer"
+        countsDown={false}
         pauseTime={finishedAt}
-        modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle('#FFFFFF')]}
+        timerInterval={timerInterval}
+        modifiers={[
+          font({ size: 13, weight: 'medium' }),
+          monospacedDigit(),
+          foregroundStyle('#FFFFFF'),
+        ]}
       />
     ),
     minimal: <Image color={brandColor} size={16} systemName={phaseSymbol} />,
@@ -136,7 +147,6 @@ function AssistantActivity(
             modifiers={[
               resizable(),
               frame({ height: 28, width: 28 }),
-              cornerRadius(6),
               widgetAccentedRenderingMode('fullColor'),
             ]}
           />
@@ -156,10 +166,14 @@ function AssistantActivity(
     expandedTrailing: (
       <HStack modifiers={[padding({ top: 10, trailing: 12 })]}>
         <Text
-          date={new Date(props.startedAtEpochMs)}
-          dateStyle="timer"
+          countsDown={false}
           pauseTime={finishedAt}
-          modifiers={[font({ size: 13, weight: 'medium' }), foregroundStyle('#C7C7CC')]}
+          timerInterval={timerInterval}
+          modifiers={[
+            font({ size: 13, weight: 'medium' }),
+            monospacedDigit(),
+            foregroundStyle('#C7C7CC'),
+          ]}
         />
       </HStack>
     ),
