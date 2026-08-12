@@ -191,6 +191,7 @@
     "jest-expo": "^57.0.2",
     "lucide": "^1.14.0",
     "node-addon-api": "^8.9.1",
+    "node-gyp": "^11.5.0",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
     "sf-symbols-typescript": "^2.2.0",
