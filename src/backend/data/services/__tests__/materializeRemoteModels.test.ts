@@ -51,6 +51,29 @@ describe('materializeRemoteModels', () => {
     });
   });
 
+  it('uses apiModelId as the persisted provider model id when modelId is absent', () => {
+    const result = materializeRemoteModels(provider, [
+      {
+        apiModelId: 'vendor/model-v1',
+        name: 'Model V1',
+      },
+    ]);
+
+    expect(result).toEqual([
+      expect.objectContaining({
+        apiModelId: 'vendor/model-v1',
+        id: 'cherryin::vendor/model-v1',
+        modelId: 'vendor/model-v1',
+        name: 'Model V1',
+      }),
+    ]);
+    expect(providerRegistryService.lookupModel).toHaveBeenCalledWith(
+      'cherryin',
+      'vendor/model-v1',
+      expect.any(Object),
+    );
+  });
+
   it('enriches remote rows with registry metadata', () => {
     jest.mocked(providerRegistryService.lookupModel).mockReturnValue({
       presetModel: {

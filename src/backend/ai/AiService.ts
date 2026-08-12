@@ -38,6 +38,10 @@ import {
 } from '@/backend/data/services/AiUsageRecordService';
 import { assistantService, type AssistantService } from '@/backend/data/services/AssistantService';
 import { modelService, type ModelService } from '@/backend/data/services/ModelService';
+import {
+  providerRegistryService,
+  type ProviderRegistryService,
+} from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { COPILOT_PROVIDER_ID } from '@/backend/services/oauth/authorization/adapters/CopilotOAuthAdapter';
@@ -92,7 +96,23 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   model: Pick<ModelService, 'getById'>;
   provider: BuildAgentParamsDependencies['provider'] &
     Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
+  providerRegistry: Pick<ProviderRegistryService, 'listProviderRegistryModels'>;
   vertexAuth: Pick<VertexAuthClient, 'getAuthorizationHeaders'>;
+}
+
+function bareModelKey(model: Partial<Model>): string {
+  const modelId = model.apiModelId ?? model.modelId ?? '';
+  const afterSlash = modelId.includes('/') ? modelId.slice(modelId.lastIndexOf('/') + 1) : modelId;
+  return afterSlash.toLowerCase();
+}
+
+export function mergeProviderModelsWithRegistry(
+  remote: Partial<Model>[],
+  registry: Model[],
+): Partial<Model>[] {
+  const seen = new Set(remote.map(bareModelKey));
+  const missing = registry.filter((model) => !seen.has(bareModelKey(model)));
+  return missing.length > 0 ? [...remote, ...missing] : remote;
 }
 
 /** `auto` is the picker's "let the model decide" sentinel, not a wire value. */
@@ -219,6 +239,7 @@ export class AiService extends BaseService {
       oauth: overrides.oauth ?? hostOAuth,
       preference: overrides.preference ?? application.get('PreferenceService'),
       provider: overrides.provider ?? providerService,
+      providerRegistry: overrides.providerRegistry ?? providerRegistryService,
       tools: overrides.tools ?? this.getToolResolver(),
       vertexAuth: overrides.vertexAuth ?? this.getVertexAuth(),
     };
@@ -370,7 +391,15 @@ export class AiService extends BaseService {
 
   async listModels(request: ListModelsRequest): Promise<Partial<Model>[]> {
     const provider = await this.getProviderForListModels(request);
-    return listProviderModels(
+    const registryModels = this.services.providerRegistry.listProviderRegistryModels({
+      presetProviderId: provider.presetProviderId ?? null,
+      providerId: provider.id,
+    });
+    if (provider.modelListSource === 'registry') {
+      return registryModels;
+    }
+
+    const remoteModels = await listProviderModels(
       provider,
       {
         getAuthConfig: async (providerId) =>
@@ -383,6 +412,7 @@ export class AiService extends BaseService {
       request.requestOptions?.signal,
       { throwOnError: request.throwOnError },
     );
+    return mergeProviderModelsWithRegistry(remoteModels, registryModels);
   }
 
   // ── Image generation ──
