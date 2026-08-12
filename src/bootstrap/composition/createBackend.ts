@@ -1,34 +1,14 @@
-import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { readUIMessageStream } from 'ai';
-import type { LiveActivityFactory } from 'expo-widgets';
 
-import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
-import { BackgroundActivityManager } from '@/backend/services/backgroundActivities/BackgroundActivityManager';
-import { createLiveActivityPresenter } from '@/backend/services/backgroundActivities/liveActivityPresenter';
-import { BackgroundReplyService } from '@/backend/services/backgroundReply';
 import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
-import {
-  createInternalEntry,
-  createMessageParts,
-  discardInternalEntries,
-  getInternalFileUri,
-  imageUriToDataUrl,
-} from '@/backend/services/file/fileStorage';
-import {
-  createJobRuntime,
-  jobHandlerEntry,
-  type JobRuntime,
-} from '@/backend/services/jobs/JobRuntime';
-import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
-import { createPaintingGenerateJobHandler } from '@/backend/services/paintings/tasks/paintingGenerateJobHandler';
+import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { createPermissionsModule } from '@/backend/services/permissions/createPermissionsModule';
 import { createProfileModule } from '@/backend/services/profile/createProfileModule';
 import {
@@ -41,93 +21,25 @@ import {
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
-import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivities/chatReply';
-import type { PaintingActivityProps } from '@/shared/backgroundActivities/painting';
 import type { Backend } from '@/shared/contracts';
 
 export type BackendComposition = {
   backend: Backend;
   dataApiDependencies: {
     mcpServerMutations: McpServerMutations;
-    onTopicsDeleted: (topicIds: readonly string[]) => void;
   };
-  jobRuntime: JobRuntime;
-  dispose(): Promise<void>;
-};
-
-type BackendCompositionDependencies = {
-  /**
-   * Frontend-owned widget layouts, handed in by bootstrap/runtime (this layer
-   * must not import frontend itself). `undefined` on platforms without the
-   * surface — the presenter degrades to a no-op.
-   */
-  activities: {
-    assistantActivity: LiveActivityFactory<BackgroundReplyActivityProps> | undefined;
-    paintingActivity: LiveActivityFactory<PaintingActivityProps> | undefined;
-  };
-  dbService: DbService;
-  translate: (key: string) => string;
 };
 
 export function createBackend(
   services: BackendServices,
-  dependencies: BackendCompositionDependencies,
+  infrastructure: { dbService: DbService },
 ): BackendComposition {
-  const { dbService } = dependencies;
+  const { dbService } = infrastructure;
   const cherryin = new CherryInClient({
     oauth: {
       authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
         services.oauthSession.authenticatedFetch(providerId, buildRequest, doFetch, options),
       hasToken: (providerId) => services.oauthSession.hasToken(providerId),
-    },
-  });
-  const keepAlive = new KeepAliveCoordinator();
-  const assistantActivityPresenter = createLiveActivityPresenter(
-    dependencies.activities.assistantActivity,
-  );
-  const paintingActivityPresenter = createLiveActivityPresenter(
-    dependencies.activities.paintingActivity,
-  );
-  const backgroundActivities = new BackgroundActivityManager({
-    keepAlive: {
-      acquire: (tag) => keepAlive.acquire(tag),
-    },
-    presenters: [assistantActivityPresenter, paintingActivityPresenter],
-  });
-  const backgroundReply = new BackgroundReplyService({
-    activities: {
-      startSession: (input) =>
-        backgroundActivities.startSession({ ...input, presenter: assistantActivityPresenter }),
-    },
-    preference: {
-      readCached: (key) => services.preference.readCached(key),
-      subscribeChange: (key) => services.preference.subscribeChange(key),
-    },
-    translate: dependencies.translate,
-  });
-  const chat = new ChatRuntime({
-    backgroundReply,
-    files: {
-      createParts: (parts) => createMessageParts(services.fileEntry, parts),
-      discard: (entries) => discardInternalEntries(services.fileEntry, entries),
-    },
-    services: {
-      ai: {
-        generateText: (input) => services.ai.generateText(input),
-        readMessageStream: ({ message, stream }) =>
-          readUIMessageStream<CherryUIMessage>({
-            message,
-            stream,
-            terminateOnError: true,
-          }),
-        streamText: (input) => services.ai.streamText(input),
-      },
-      assistant: services.assistant,
-      message: services.message,
-      model: services.model,
-      preference: services.preference,
-      provider: services.provider,
-      topic: services.topic,
     },
   });
   const models = createModelsModule({
@@ -150,50 +62,20 @@ export function createBackend(
       update: (id, input) => services.provider.update(id, input),
     },
   });
-  const paintingStorage = {
-    createInternalEntry: (input: Parameters<typeof createInternalEntry>[1]) =>
-      createInternalEntry(services.fileEntry, input),
-    discard: (entries: Parameters<typeof discardInternalEntries>[1]) =>
-      discardInternalEntries(services.fileEntry, entries),
-    readDataUrl: imageUriToDataUrl,
-    getUri: getInternalFileUri,
-  };
-  const jobRuntime = createJobRuntime({
-    dbService,
-    handlers: [
-      jobHandlerEntry(
-        'painting.generate',
-        createPaintingGenerateJobHandler({
-          activities: {
-            startSession: (input) =>
-              backgroundActivities.startSession({ ...input, presenter: paintingActivityPresenter }),
-          },
-          ai: services.ai,
-          paintings: services.painting,
-          storage: paintingStorage,
-          translate: dependencies.translate,
-        }),
-      ),
-    ],
-    jobService: services.job,
-    keepAlive: {
-      acquire: (tag) => keepAlive.acquire(tag),
-    },
-  });
   const paintings = createPaintingsModule({
     db: { withWriteTx: (fn) => dbService.withWriteTx(fn) },
     files: services.fileContent,
     jobs: {
       cancelGenerate: async (jobId) => {
-        await jobRuntime.cancel(jobId);
+        await services.jobRuntime.cancel(jobId);
       },
       enqueueGenerateTx: (tx, input, opts) =>
-        jobRuntime.enqueueTx(tx, 'painting.generate', input, opts),
+        services.jobRuntime.enqueueTx(tx, 'painting.generate', input, opts),
       findActiveGenerateTx: (tx, idempotencyKey) =>
         services.job.findActiveByIdempotencyKeyTx(tx, idempotencyKey),
     },
     paintings: services.painting,
-    storage: paintingStorage,
+    storage: paintingFileStorage,
   });
   const mcp = createMcpModule({
     runtime: {
@@ -242,7 +124,7 @@ export function createBackend(
 
   return {
     backend: {
-      chat,
+      chat: services.chat,
       cherryin,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
@@ -260,23 +142,6 @@ export function createBackend(
     },
     dataApiDependencies: {
       mcpServerMutations: mcp,
-      onTopicsDeleted: (topicIds) => {
-        for (const topicId of topicIds) backgroundReply.clearTopic(topicId);
-      },
-    },
-    jobRuntime,
-    dispose: async () => {
-      // Jobs first: the drain gives in-flight handlers a bounded chance to land
-      // their terminal rows before the caller closes SQLite, and it keeps the
-      // oauth session alive for any authenticated request still in flight.
-      await jobRuntime.dispose();
-      services.oauth.dispose();
-      services.oauthSession.dispose();
-      await chat.dispose();
-      // Last: chat and jobs release their sessions/leases during their own
-      // disposal; the mechanism layers go down after their consumers.
-      backgroundActivities.dispose();
-      keepAlive.dispose();
     },
   };
 }

@@ -19,6 +19,8 @@ import type {
  */
 import type { LoggerService } from '@logger';
 
+import type { ResourceScope } from '@/backend/core/resources/types';
+
 import type { JobPayloadOf, JobType } from './jobRegistry';
 
 /**
@@ -92,6 +94,20 @@ export interface JobHandler<TPayload = unknown> {
   defaultTimeoutMs?: number;
   /** Grace after cancel before the row is force-finalized. Defaults to 30 s. */
   cancelTimeoutMs?: number;
+  /**
+   * Which domain resources this job's work belongs to, derived from its input.
+   *
+   * Mobile-only, and the whole reason the runtime can be cancelled by a
+   * deletion: declaring it makes the runtime register each execution with
+   * `ResourceScopeCoordinator`, so deleting the resource cancels the job and
+   * waits for its terminal row before the delete transaction opens. A handler
+   * that omits it runs uncoordinated, which is correct for work owned by
+   * nothing deletable.
+   *
+   * Called with the persisted input, so it must be pure and total — a throw
+   * here would fail an execution that was otherwise ready to run.
+   */
+  scopes?(input: TPayload): readonly ResourceScope[];
   /** Throw to fail; reject with the abort reason to cancel. */
   execute(ctx: JobContext<TPayload>): Promise<unknown>;
   // NOTE: keep onSettled as a method-shorthand signature. Method syntax stays

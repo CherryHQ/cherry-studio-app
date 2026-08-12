@@ -159,6 +159,27 @@ describe('PaintingInput', () => {
     expect(mockOnGenerated).toHaveBeenCalledWith(generationResult);
   });
 
+  it('treats cancellation as a completed send without publishing a result', async () => {
+    mockOnGenerate.mockResolvedValueOnce(null);
+    await act(async () => {
+      renderer = create(
+        <PaintingInput
+          onCancel={jest.fn()}
+          onGenerate={mockOnGenerate}
+          onGenerated={mockOnGenerated}
+          painting={painting}
+          status="idle"
+        />,
+      );
+    });
+
+    await act(async () => {
+      await mockComposerProps?.onSend({ attachments: [], text: 'draw a cherry' });
+    });
+
+    expect(mockOnGenerated).not.toHaveBeenCalled();
+  });
+
   it('exposes Registry settings and permits a promptless generation when configured', async () => {
     mockSelectedModel.imageGeneration = {
       modes: {

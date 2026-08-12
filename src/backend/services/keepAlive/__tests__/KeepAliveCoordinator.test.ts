@@ -57,6 +57,7 @@ describe('KeepAliveCoordinator', () => {
 
   test('shares one audio session across holders and stops on the last release', async () => {
     const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
     const first = coordinator.acquire('chat');
     const second = coordinator.acquire('jobs');
     await flushOperations();
@@ -77,11 +78,12 @@ describe('KeepAliveCoordinator', () => {
     expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
     expect(mockPlayerStatusRemove).toHaveBeenCalledTimes(1);
 
-    coordinator.dispose();
+    await coordinator._doStop();
   });
 
   test('treats release as idempotent per lease', async () => {
     const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
     const first = coordinator.acquire('chat');
     const second = coordinator.acquire('jobs');
     await flushOperations();
@@ -95,11 +97,12 @@ describe('KeepAliveCoordinator', () => {
     await flushOperations();
     expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
 
-    coordinator.dispose();
+    await coordinator._doStop();
   });
 
   test('resumes playback after an interruption while a lease is held', async () => {
     const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
     const lease = coordinator.acquire('chat');
     await flushOperations();
 
@@ -111,12 +114,13 @@ describe('KeepAliveCoordinator', () => {
     mockPlaybackStatusListener?.({ isBuffering: false, isLoaded: true, playing: false });
     expect(mockPlayer.play).toHaveBeenCalledTimes(2);
 
-    coordinator.dispose();
+    await coordinator._doStop();
   });
 
   test('retries a failed session start when the app enters the background', async () => {
     mockSetAudioModeAsync.mockRejectedValueOnce(new Error('audio session busy'));
     const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
     const lease = coordinator.acquire('chat');
     await flushOperations();
     expect(mockCreateAudioPlayer).not.toHaveBeenCalled();
@@ -128,11 +132,12 @@ describe('KeepAliveCoordinator', () => {
     expect(mockPlayer.play).toHaveBeenCalledTimes(1);
 
     lease.release();
-    coordinator.dispose();
+    await coordinator._doStop();
   });
 
   test('removes the audio player even when pause throws', async () => {
     const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
     const lease = coordinator.acquire('chat');
     await flushOperations();
     mockPlayer.pause.mockImplementationOnce(() => {
@@ -144,17 +149,17 @@ describe('KeepAliveCoordinator', () => {
     expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
     expect(mockPlayerStatusRemove).toHaveBeenCalledTimes(1);
 
-    coordinator.dispose();
+    await coordinator._doStop();
   });
 
-  test('stops audio on dispose and no-ops later acquires', async () => {
+  test('stops audio on stop and no-ops later acquires', async () => {
     const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
     coordinator.acquire('chat');
     await flushOperations();
     expect(mockPlayer.play).toHaveBeenCalledTimes(1);
 
-    coordinator.dispose();
-    await flushOperations();
+    await coordinator._doStop();
     expect(mockPlayer.pause).toHaveBeenCalledTimes(1);
     expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
 
@@ -167,17 +172,22 @@ describe('KeepAliveCoordinator', () => {
   test('no-ops off iOS', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
     const lease = coordinator.acquire('chat');
     await flushOperations();
 
     expect(AppState.addEventListener).not.toHaveBeenCalled();
     expect(mockSetAudioModeAsync).not.toHaveBeenCalled();
     lease.release();
-    coordinator.dispose();
+    await coordinator._doStop();
   });
 });
 
 async function flushOperations() {
-  await new Promise((resolve) => setImmediate(resolve));
-  await new Promise((resolve) => setImmediate(resolve));
+  // KeepAliveCoordinator loads expo-audio only on first use so importing the
+  // service registry does not initialize a native module. Give that import and
+  // the serialized reconciliation queue enough turns to settle.
+  for (let index = 0; index < 4; index += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
 }

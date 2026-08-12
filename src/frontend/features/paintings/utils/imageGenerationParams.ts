@@ -57,6 +57,24 @@ export function imageParamsAspectRatio(values: ParamValues | undefined): number 
   return size ?? 1;
 }
 
+/** Human-readable resolution for the generation loader's badge. */
+export function imageParamsResolutionLabel(values: ParamValues | undefined): string | undefined {
+  for (const value of [values?.size, values?.imageResolution, values?.resolution]) {
+    if (typeof value !== 'string') {
+      continue;
+    }
+    const normalized = value.trim();
+    if (
+      normalized.length > 0 &&
+      normalized.toLowerCase() !== 'auto' &&
+      normalized.toLowerCase() !== 'custom'
+    ) {
+      return normalized.replace(/^(\d+)\s*[x\u00d7]\s*(\d+)$/i, '$1 \u00d7 $2');
+    }
+  }
+  return undefined;
+}
+
 function parseRatio(value: unknown): number | undefined {
   return typeof value === 'string' ? toRatio(value.split(':')) : undefined;
 }

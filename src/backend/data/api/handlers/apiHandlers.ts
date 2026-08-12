@@ -81,7 +81,6 @@ export type DataApiDependencies = {
   miniApps: MiniAppService;
   models: import('../../services/ModelService').ModelService;
   notes: NoteService;
-  onTopicsDeleted: (topicIds: readonly string[]) => void;
   paintings: PaintingService;
   pins: PinService;
   prompts: PromptService;
@@ -101,13 +100,13 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createAgentSessionHandlers(dependencies.agentSessions),
     ...createAgentWorkspaceHandlers(dependencies.agentWorkspaces, dependencies.agentSessions),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
-    ...createAssistantHandlers(dependencies.assistants, dependencies.onTopicsDeleted),
+    ...createAssistantHandlers(dependencies.assistants),
     ...createFileHandlers(dependencies.files, dependencies.fileRefs),
     ...createGroupHandlers(dependencies.groups),
     ...createJobHandlers(dependencies.jobs),
     ...createKnowledgeHandlers(dependencies.knowledgeBases, dependencies.knowledgeItems),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
-    ...createMessageHandlers(dependencies.messages, dependencies.onTopicsDeleted),
+    ...createMessageHandlers(dependencies.messages),
     ...createMiniAppHandlers(dependencies.miniApps),
     ...createModelHandlers(dependencies.models),
     ...createNoteHandlers(dependencies.notes),
@@ -119,7 +118,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createSkillHandlers(dependencies.agentGlobalSkills),
     ...createTagHandlers(dependencies.tags),
     ...createTemporaryChatHandlers(dependencies.temporaryChats),
-    ...createTopicHandlers(dependencies.topics, dependencies.onTopicsDeleted),
+    ...createTopicHandlers(dependencies.topics),
     ...createTranslateHandlers(dependencies.translateHistories, dependencies.translateLanguages),
   };
 }

@@ -64,17 +64,17 @@ describe('BackgroundActivityManager', () => {
     const first = createMockPresenter();
     const second = createMockPresenter();
     first.presenter.clearOrphans.mockResolvedValueOnce(2);
-    const manager = createManager([first.presenter, second.presenter]);
+    const manager = await createManager([first.presenter, second.presenter]);
     await flushOperations();
 
     expect(first.presenter.clearOrphans).toHaveBeenCalledTimes(1);
     expect(second.presenter.clearOrphans).toHaveBeenCalledTimes(1);
-    manager.dispose();
+    await manager._doStop();
   });
 
   test('starts the surface only in the background and injects the staged logo', async () => {
     const { handles, presenter } = createMockPresenter();
-    const manager = createManager([presenter]);
+    const manager = await createManager([presenter]);
     const session = manager.startSession({
       deepLinkUrl: 'cherrystudio://topics?topicId=t-1',
       presenter,
@@ -104,12 +104,12 @@ describe('BackgroundActivityManager', () => {
     expect(presenter.start).toHaveBeenCalledTimes(2);
 
     session.cancel();
-    manager.dispose();
+    await manager._doStop();
   });
 
   test('mirrors the keepAlive bit into coordinator leases', async () => {
     const { presenter } = createMockPresenter();
-    const manager = createManager([presenter]);
+    const manager = await createManager([presenter]);
     const session = manager.startSession({
       keepAlive: true,
       presenter,
@@ -126,14 +126,14 @@ describe('BackgroundActivityManager', () => {
     session.update(makeProps('generating-again'), { keepAlive: true });
     expect(mockAcquire).toHaveBeenCalledTimes(2);
 
-    session.finish(makeProps('completed'));
+    session.cancel();
     expect(mockLeases[1]?.release).toHaveBeenCalledTimes(1);
-    manager.dispose();
+    await manager._doStop();
   });
 
   test('applies urgent updates immediately and throttles the rest', async () => {
     const { handles, presenter } = createMockPresenter();
-    const manager = createManager([presenter]);
+    const manager = await createManager([presenter]);
     const session = manager.startSession({
       presenter,
       props: makeProps('one'),
@@ -160,12 +160,12 @@ describe('BackgroundActivityManager', () => {
     expect(handles[0]?.update).toHaveBeenCalledTimes(2);
 
     session.cancel();
-    manager.dispose();
+    await manager._doStop();
   });
 
   test('skips native work when nothing visible changed', async () => {
     const { handles, presenter } = createMockPresenter();
-    const manager = createManager([presenter]);
+    const manager = await createManager([presenter]);
     const props = makeProps('same');
     const session = manager.startSession({ presenter, props, tag: 'chat.topic-1' });
     await session.ready;
@@ -177,12 +177,12 @@ describe('BackgroundActivityManager', () => {
     expect(handles[0]?.update).not.toHaveBeenCalled();
 
     session.cancel();
-    manager.dispose();
+    await manager._doStop();
   });
 
   test('finish stamps finishedAtEpochMs and ends under the default policy', async () => {
     const { handles, presenter } = createMockPresenter();
-    const manager = createManager([presenter]);
+    const manager = await createManager([presenter]);
     const session = manager.startSession({
       presenter,
       props: makeProps('running'),
@@ -202,7 +202,7 @@ describe('BackgroundActivityManager', () => {
     session.update(makeProps('after-finish'), { urgent: true });
     await flushOperations();
     expect(handles[0]?.update).not.toHaveBeenCalled();
-    manager.dispose();
+    await manager._doStop();
   });
 
   test('isolates presenter failures from the session lifecycle', async () => {
@@ -210,7 +210,7 @@ describe('BackgroundActivityManager', () => {
     presenter.start.mockImplementationOnce(() => {
       throw new Error('activities unavailable');
     });
-    const manager = createManager([presenter]);
+    const manager = await createManager([presenter]);
     const session = manager.startSession({
       presenter,
       props: makeProps('start'),
@@ -223,12 +223,12 @@ describe('BackgroundActivityManager', () => {
     expect(presenter.start).toHaveBeenCalledTimes(1);
 
     session.cancel();
-    manager.dispose();
+    await manager._doStop();
   });
 
-  test('dispose ends every session, releases leases, and no-ops later sessions', async () => {
+  test('stop ends every session, releases leases, and no-ops later sessions', async () => {
     const { handles, presenter } = createMockPresenter();
-    const manager = createManager([presenter]);
+    const manager = await createManager([presenter]);
     const session = manager.startSession({
       keepAlive: true,
       presenter,
@@ -239,8 +239,7 @@ describe('BackgroundActivityManager', () => {
     appStateListener?.('background');
     await flushOperations();
 
-    manager.dispose();
-    await flushOperations();
+    await manager._doStop();
     expect(handles[0]?.end).toHaveBeenCalledWith('immediate', expect.any(Object));
     expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
 
@@ -254,11 +253,10 @@ describe('BackgroundActivityManager', () => {
     expect(mockAcquire).toHaveBeenCalledTimes(1);
   });
 
-  function createManager(presenters: readonly { clearOrphans(): Promise<number> }[]) {
-    return new BackgroundActivityManager({
-      keepAlive: { acquire: mockAcquire },
-      presenters,
-    });
+  async function createManager(presenters: readonly { clearOrphans(): Promise<number> }[]) {
+    const manager = new BackgroundActivityManager({ acquire: mockAcquire }, { presenters });
+    await manager._doInit();
+    return manager;
   }
 });
 

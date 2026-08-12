@@ -1,10 +1,23 @@
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 
+import type { AiService } from '@/backend/ai/AiService';
+import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
+import { application } from '@/backend/core/application/Application';
+import { ApplicationHost, type HostProfile } from '@/backend/core/application/ApplicationHost';
+import { serviceList } from '@/backend/core/application/serviceRegistry';
 import { createDataApiHandlers } from '@/backend/data/api/handlers/apiHandlers';
-import { CacheService } from '@/backend/data/CacheService';
+import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
-import { DbService } from '@/backend/data/db/DbService';
+import type { DbService } from '@/backend/data/db/DbService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivities/BackgroundActivityEnvironment';
+import { createLiveActivityPresenter } from '@/backend/services/backgroundActivities/liveActivityPresenter';
+import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
+import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
@@ -23,20 +36,46 @@ export type AppBootstrapRuntime = {
   runPostReadyTasks(): Promise<void>;
 };
 
-export function createAppBootstrapRuntime(): AppBootstrapRuntime {
-  const cacheService = new CacheService();
-  const dbService = new DbService();
-  const services = createBackendServices(dbService, cacheService);
-  const {
-    backend,
-    dataApiDependencies,
-    dispose: disposeBackend,
-    jobRuntime,
-  } = createBackend(services, {
-    activities: { assistantActivity: AssistantActivity, paintingActivity: PaintingActivity },
-    dbService,
+export function createAppBootstrapRuntime(
+  /** Test seam. Overridden services are supplied ready-made and receive no lifecycle callbacks. */
+  overrides?: HostProfile['overrides'],
+): AppBootstrapRuntime {
+  // Resolved straight from the host's container rather than through
+  // `application.get()`: the React provider reads `backend`/`dataApi` during
+  // render, so the graph has to be assembled before `install()` can run. Both
+  // resolutions only construct — the connection opens in `DbService.onInit`,
+  // inside `start()`.
+  const host = new ApplicationHost({ overrides, services: serviceList });
+  const backgroundActivityEnvironment = host.container.get<BackgroundActivityEnvironment>(
+    'BackgroundActivityEnvironment',
+  );
+  backgroundActivityEnvironment.configure({
+    assistantPresenter: createLiveActivityPresenter(AssistantActivity),
+    paintingPresenter: createLiveActivityPresenter(PaintingActivity),
     translate: (key) => i18n.t(key),
   });
+  const ai = host.container.get<AiService>('AiService');
+  const cache = host.container.get<CacheService>('CacheService');
+  const chat = host.container.get<ChatRuntime>('ChatRuntime');
+  const dbService = host.container.get<DbService>('DbService');
+  const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
+  const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
+  const oauth = host.container.get<ProviderOAuthService>('ProviderOAuthService');
+  const oauthSession = host.container.get<OAuthRuntimeService>('OAuthRuntimeService');
+  const preference = host.container.get<PreferenceService>('PreferenceService');
+  const webSearch = host.container.get<WebSearchService>('WebSearchService');
+  const services = createBackendServices({
+    ai,
+    cache,
+    chat,
+    jobRuntime,
+    mcpRuntime,
+    oauth,
+    oauthSession,
+    preference,
+    webSearch,
+  });
+  const { backend, dataApiDependencies } = createBackend(services, { dbService });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({
@@ -63,7 +102,6 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
       miniApps: services.miniApp,
       models: services.model,
       notes: services.note,
-      onTopicsDeleted: dataApiDependencies.onTopicsDeleted,
       paintings: services.painting,
       pins: services.pin,
       prompts: services.prompt,
@@ -81,21 +119,32 @@ export function createAppBootstrapRuntime(): AppBootstrapRuntime {
     dataApi,
     preference: services.preference,
     dispose: () => {
+      // Nothing to drain ahead of the host any more: `ChatRuntime` and
+      // `JobRuntime` are services, so reverse-order teardown settles them before
+      // the database they write through. Uninstalling is only correct while this
+      // is still the installed host — a runtime disposed out of order must not
+      // take down whichever host replaced it.
       disposePromise ??= (async () => {
-        await disposeBackend();
-        services.mcpRuntime.dispose();
-        services.webSearch.dispose();
-        services.cache.dispose();
-        dbService.dispose();
+        if (application.current === host) {
+          await application.uninstall();
+        } else {
+          await host.dispose();
+        }
       })();
       return disposePromise;
     },
     initialize: async () => {
-      services.cache.init();
-      await dbService.init(services.cache);
-      await services.preference.init();
+      // Runs the Gate phase — cache, then database, then preferences — ordered
+      // by the dependency graph rather than by the order written here.
+      await application.install(host);
       await initializeAppRuntime(services);
     },
-    runPostReadyTasks: () => runPostReadyTasks(services, { jobRuntime }),
+    runPostReadyTasks: async () => {
+      // Starts the PostReady phase alongside the hand-run tasks. Both are
+      // best-effort and off the first-paint path; the host logs its own
+      // failures rather than surfacing them here.
+      host.runPostReady();
+      await runPostReadyTasks(services);
+    },
   };
 }

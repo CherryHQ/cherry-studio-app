@@ -6,7 +6,8 @@ import type {
 import { allSourceTypes, FileRefSchema } from '@cherrystudio/universal/data/types/file';
 import { asc, count, eq, inArray } from 'drizzle-orm';
 
-import type { Database, DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
 import { persistentFileRefTablesBySourceType } from '@/backend/data/db/schemas/fileRelations';
 
 export type FileRefSourceKey = {
@@ -18,7 +19,14 @@ const SQLITE_IN_ARRAY_CHUNK = 500;
 type PersistentFileRefTable = (typeof persistentFileRefTablesBySourceType)[FileRefSourceType];
 
 export class FileRefService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -109,3 +117,5 @@ export class FileRefService {
 function compareRefs(left: FileRef, right: FileRef): number {
   return left.createdAt - right.createdAt || left.id.localeCompare(right.id);
 }
+
+export const fileRefService = new FileRefService();

@@ -5,7 +5,7 @@ import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivities
 
 import { BackgroundReplyService } from '../BackgroundReplyService';
 
-type SessionInput = Omit<BackgroundActivitySessionInput<BackgroundReplyActivityProps>, 'presenter'>;
+type SessionInput = BackgroundActivitySessionInput<BackgroundReplyActivityProps>;
 
 type MockSession = {
   cancel: jest.Mock;
@@ -45,7 +45,7 @@ describe('BackgroundReplyService', () => {
   });
 
   test('opens one keep-alive session per topic with derived initial content', async () => {
-    const service = createService();
+    const service = await createService();
     const first = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     const second = service.startTurn({ assistantName: 'Beta', topicId: 'topic-2' });
     expect(first).not.toBe(second);
@@ -59,21 +59,21 @@ describe('BackgroundReplyService', () => {
       tag: 'chat.backgroundReply',
     });
 
-    service.dispose();
+    await service._doStop();
   });
 
   test('uses the localized assistant fallback when no assistant or model name is available', async () => {
-    const service = createService();
+    const service = await createService();
     const turn = service.startTurn({ assistantName: ' ', topicId: 'topic-1' });
     await turn.ready;
 
     expect(mockSessions[0]?.input.props).toMatchObject({ assistantName: 'Localized assistant' });
 
-    service.dispose();
+    await service._doStop();
   });
 
   test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
-    const service = createService();
+    const service = await createService();
     const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await turn.ready;
     const session = mockSessions[0];
@@ -103,11 +103,11 @@ describe('BackgroundReplyService', () => {
     turn.finish('completed');
     await flushOperations();
     expect(session?.finish).toHaveBeenCalledWith(expect.objectContaining({ phase: 'completed' }));
-    service.dispose();
+    await service._doStop();
   });
 
   test('does not let an older finish end the session inherited by a newer turn', async () => {
-    const service = createService();
+    const service = await createService();
     const first = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await first.ready;
     const session = mockSessions[0];
@@ -127,11 +127,11 @@ describe('BackgroundReplyService', () => {
     second.finish('completed');
     await flushOperations();
     expect(session?.finish).toHaveBeenCalledTimes(1);
-    service.dispose();
+    await service._doStop();
   });
 
   test('clearTopic cancels the session so approval records cannot recreate it later', async () => {
-    const service = createService();
+    const service = await createService();
     const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await turn.ready;
 
@@ -141,11 +141,11 @@ describe('BackgroundReplyService', () => {
 
     turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'late' }], role: 'assistant' });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
-    service.dispose();
+    await service._doStop();
   });
 
   test('cancels sessions when the preference turns off and restores them on re-enable', async () => {
-    const service = createService();
+    const service = await createService();
     const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await turn.ready;
 
@@ -161,43 +161,41 @@ describe('BackgroundReplyService', () => {
     expect(mockStartSession).toHaveBeenCalledTimes(2);
     expect(mockSessions[1]?.input.props).toMatchObject({ phase: 'responding' });
 
-    service.dispose();
+    await service._doStop();
   });
 
-  test('ends sessions when disposed during an active turn and disposes idempotently', async () => {
-    const service = createService();
+  test('ends sessions when stopped during an active turn and stops idempotently', async () => {
+    const service = await createService();
     const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await turn.ready;
 
-    expect(() => {
-      service.dispose();
-      service.dispose();
-    }).not.toThrow();
+    await expect(service._doStop()).resolves.toBeUndefined();
+    await expect(service._doStop()).resolves.toBeUndefined();
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
   });
 
   test('uses no-op turns on Android and when the preference is disabled at startup', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
-    const androidService = createService();
+    const androidService = await createService();
     const androidTurn = androidService.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     await androidTurn.ready;
     expect(mockStartSession).not.toHaveBeenCalled();
-    androidService.dispose();
+    await androidService._doStop();
 
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     enabled = false;
-    const disabledService = createService();
+    const disabledService = await createService();
     const disabledTurn = disabledService.startTurn({
       assistantName: 'Alpha',
       topicId: 'topic-2',
     });
     await disabledTurn.ready;
     expect(mockStartSession).not.toHaveBeenCalled();
-    disabledService.dispose();
+    await disabledService._doStop();
   });
 
   test('keeps turn callbacks non-throwing when content derivation fails', async () => {
-    const service = createService((key) => {
+    const service = await createService((key) => {
       if (
         key === 'chat.backgroundReply.awaitingApproval' ||
         key === 'chat.backgroundReply.completed' ||
@@ -220,24 +218,29 @@ describe('BackgroundReplyService', () => {
     expect(() => turn.awaitApproval()).not.toThrow();
     expect(() => turn.finish('completed')).not.toThrow();
 
-    service.dispose();
+    await service._doStop();
   });
 
-  function createService(
+  async function createService(
     translate: (key: string) => string = (key) =>
       key === 'chat.backgroundReply.assistant' ? 'Localized assistant' : key,
   ) {
-    return new BackgroundReplyService({
-      activities: { startSession: mockStartSession },
-      preference: {
+    const service = new BackgroundReplyService(
+      { startSession: mockStartSession },
+      {
         readCached: jest.fn(() => enabled),
         subscribeChange: jest.fn(() => (listener: () => void) => {
           preferenceListener = listener;
           return jest.fn();
         }),
       },
-      translate,
-    });
+      {
+        assistantPresenter: undefined as never,
+        translate,
+      },
+    );
+    await service._doInit();
+    return service;
   }
 });
 

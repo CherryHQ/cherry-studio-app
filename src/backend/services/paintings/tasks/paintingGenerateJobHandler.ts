@@ -101,6 +101,10 @@ export function createPaintingGenerateJobHandler(
     // something else"); the dispatch loop honors it with a keep-alive lease.
     executionClass: 'user-continued',
     recovery: 'abandon',
+    // Deleting the receipt this job writes through must cancel it first. The
+    // input already carries the id, so no `paintingId -> jobId` index is needed:
+    // the registration is that index, for as long as the execution lives.
+    scopes: (input) => [{ id: input.paintingId, kind: 'painting' }],
     async execute(ctx): Promise<PaintingGenerationResult> {
       const { images, mode, modelId, paintingId, paramValues, prompt } = ctx.input;
       const { ai, paintings, storage } = dependencies;

@@ -1,9 +1,11 @@
 import type { Message, MessageData } from '@cherrystudio/universal/data/types/message';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 import { chatMessageFileRefTable, messageTable } from '@/backend/data/db/schemas';
 
-import { MessageService } from '../MessageService';
+import { registerDataService } from '../dataServiceRegistry';
+import { messageService } from '../MessageService';
 
 jest.mock('@/backend/data/db/schemas', () => ({
   chatMessageFileRefTable: {
@@ -27,9 +29,15 @@ jest.mock('@/backend/data/db/schemas', () => ({
   },
 }));
 
+afterEach(async () => {
+  await uninstallTestHost();
+  // The service under test is a module singleton, so a spy left on it would
+  // follow the next case in this file instead of dying with its instance.
+  jest.restoreAllMocks();
+});
+
 describe('MessageService', () => {
   test('reserveAssistantTurn delegates to createUserMessageWithPlaceholders', async () => {
-    const service = new MessageService({} as never, {} as never);
     const result = {
       placeholders: [createMessage('650e8400-e29b-41d4-a716-446655440000', 'assistant')],
       userMessage: createMessage('550e8400-e29b-41d4-a716-446655440000', 'user'),
@@ -51,10 +59,10 @@ describe('MessageService', () => {
       },
     };
     const createTurn = jest
-      .spyOn(service, 'createUserMessageWithPlaceholders')
+      .spyOn(messageService, 'createUserMessageWithPlaceholders')
       .mockResolvedValue(result);
 
-    await expect(service.reserveAssistantTurn(input)).resolves.toBe(result);
+    await expect(messageService.reserveAssistantTurn(input)).resolves.toBe(result);
     expect(createTurn).toHaveBeenCalledWith(input);
   });
 
@@ -69,13 +77,13 @@ describe('MessageService', () => {
         }),
       }),
     } as unknown as DbService;
-    const service = new MessageService(dbService, {} as never);
+    await installTestHost({ DbService: dbService });
 
-    await expect(service.findPendingAssistantMessageIds()).resolves.toEqual(['a', 'b']);
+    await expect(messageService.findPendingAssistantMessageIds()).resolves.toEqual(['a', 'b']);
   });
 
   describe('settleCrashedMessages', () => {
-    function makeSettleService(rows: Record<string, unknown>[]) {
+    async function installSettleHost(rows: Record<string, unknown>[]) {
       const updates: Record<string, unknown>[] = [];
       const tx = {
         select: () => ({ from: () => ({ where: async () => rows }) }),
@@ -92,25 +100,22 @@ describe('MessageService', () => {
         callback(tx),
       );
       const dbService = { withWriteTx } as unknown as DbService;
+      await installTestHost({ DbService: dbService });
 
-      return {
-        service: new MessageService(dbService, {} as never),
-        updates,
-        withWriteTx,
-      };
+      return { updates, withWriteTx };
     }
 
     test('flips the given ids to error status', async () => {
-      const { service, updates, withWriteTx } = makeSettleService([]);
+      const { updates, withWriteTx } = await installSettleHost([]);
 
-      await service.settleCrashedMessages(['a', 'b']);
+      await messageService.settleCrashedMessages(['a', 'b']);
 
       expect(withWriteTx).toHaveBeenCalledTimes(1);
       expect(updates).toEqual([{ status: 'error' }]);
     });
 
     test('settles unresolved tool approvals so the branch stays replayable', async () => {
-      const { service, updates } = makeSettleService([
+      const { updates } = await installSettleHost([
         {
           data: {
             parts: [
@@ -134,7 +139,7 @@ describe('MessageService', () => {
         },
       ]);
 
-      await service.settleCrashedMessages(['assistant-1']);
+      await messageService.settleCrashedMessages(['assistant-1']);
 
       // The status flip is the half that always applies; the per-row catch is
       // what keeps one bad part from rolling it back with the transaction.
@@ -154,24 +159,24 @@ describe('MessageService', () => {
       // Parts come back as JSON off disk: a shape the types promise can still
       // be missing in an old or restored row. Losing the status flip over it
       // would leave the message generating forever, relaunch after relaunch.
-      const { service, updates } = makeSettleService([
+      const { updates } = await installSettleHost([
         {
           data: { parts: [{ state: 'approval-requested', type: 'dynamic-tool' }] },
           id: 'assistant-1',
         },
       ]);
 
-      await expect(service.settleCrashedMessages(['assistant-1'])).resolves.toBeUndefined();
+      await expect(messageService.settleCrashedMessages(['assistant-1'])).resolves.toBeUndefined();
 
       expect(updates).toEqual([{ status: 'error' }]);
     });
 
     test('leaves parts untouched when nothing was awaiting approval', async () => {
-      const { service, updates } = makeSettleService([
+      const { updates } = await installSettleHost([
         { data: { parts: [{ text: 'hi', type: 'text' }] }, id: 'assistant-1' },
       ]);
 
-      await service.settleCrashedMessages(['assistant-1']);
+      await messageService.settleCrashedMessages(['assistant-1']);
 
       expect(updates).toEqual([{ status: 'error' }]);
     });
@@ -179,9 +184,9 @@ describe('MessageService', () => {
     test('is a no-op for an empty id list', async () => {
       const withWriteTx = jest.fn();
       const dbService = { withWriteTx } as unknown as DbService;
-      const service = new MessageService(dbService, {} as never);
+      await installTestHost({ DbService: dbService });
 
-      await service.settleCrashedMessages([]);
+      await messageService.settleCrashedMessages([]);
 
       expect(withWriteTx).not.toHaveBeenCalled();
     });
@@ -203,7 +208,7 @@ describe('MessageService', () => {
       state: 'approval-responded',
     });
 
-    function makeApprovalService(row?: Record<string, unknown>) {
+    async function installApprovalHost(row?: Record<string, unknown>) {
       const updates: Record<string, unknown>[] = [];
       const tx = {
         select: jest.fn(() => ({
@@ -224,7 +229,8 @@ describe('MessageService', () => {
           callback(tx),
         ),
       } as unknown as DbService;
-      return { service: new MessageService(dbService, {} as never), updates };
+      await installTestHost({ DbService: dbService });
+      return { updates };
     }
 
     const baseRow = {
@@ -245,13 +251,13 @@ describe('MessageService', () => {
     };
 
     test('applies updated input and atomically marks the final approval pending', async () => {
-      const { service, updates } = makeApprovalService({
+      const { updates } = await installApprovalHost({
         ...baseRow,
         data: { parts: [requestedPart('a1')] },
         status: 'success',
       });
 
-      const result = await service.applyToolApprovalDecisions('assistant-1', [
+      const result = await messageService.applyToolApprovalDecisions('assistant-1', [
         { approvalId: 'a1', approved: true, updatedInput: { query: 'revised' } },
       ]);
 
@@ -268,12 +274,12 @@ describe('MessageService', () => {
     });
 
     test('keeps the status while other approvals are still pending', async () => {
-      const { service, updates } = makeApprovalService({
+      const { updates } = await installApprovalHost({
         ...baseRow,
         data: { parts: [requestedPart('a1'), requestedPart('a2')] },
       });
 
-      const result = await service.applyToolApprovalDecisions('assistant-1', [
+      const result = await messageService.applyToolApprovalDecisions('assistant-1', [
         { approvalId: 'a1', approved: false, reason: 'no' },
       ]);
 
@@ -282,12 +288,12 @@ describe('MessageService', () => {
     });
 
     test('reports an already-settled duplicate without writing', async () => {
-      const { service, updates } = makeApprovalService({
+      const { updates } = await installApprovalHost({
         ...baseRow,
         data: { parts: [respondedPart('a1')] },
       });
 
-      const result = await service.applyToolApprovalDecisions('assistant-1', [
+      const result = await messageService.applyToolApprovalDecisions('assistant-1', [
         { approvalId: 'a1', approved: false },
       ]);
 
@@ -299,12 +305,12 @@ describe('MessageService', () => {
     });
 
     test('leaves the row untouched when no decision matches', async () => {
-      const { service, updates } = makeApprovalService({
+      const { updates } = await installApprovalHost({
         ...baseRow,
         data: { parts: [requestedPart('a1')] },
       });
 
-      const result = await service.applyToolApprovalDecisions('assistant-1', [
+      const result = await messageService.applyToolApprovalDecisions('assistant-1', [
         { approvalId: 'other', approved: true },
       ]);
 
@@ -313,23 +319,25 @@ describe('MessageService', () => {
     });
 
     test('returns null when the message no longer exists', async () => {
-      const { service, updates } = makeApprovalService();
+      const { updates } = await installApprovalHost();
 
       await expect(
-        service.applyToolApprovalDecisions('missing', [{ approvalId: 'a1', approved: true }]),
+        messageService.applyToolApprovalDecisions('missing', [
+          { approvalId: 'a1', approved: true },
+        ]),
       ).resolves.toBeNull();
       expect(updates).toEqual([]);
     });
 
     test('does not gate decisions by message role or status', async () => {
-      const { service, updates } = makeApprovalService({
+      const { updates } = await installApprovalHost({
         ...baseRow,
         data: { parts: [requestedPart('a1')] },
         role: 'user',
         status: 'success',
       });
 
-      await service.applyToolApprovalDecisions('assistant-1', [
+      await messageService.applyToolApprovalDecisions('assistant-1', [
         { approvalId: 'a1', approved: true },
       ]);
 
@@ -371,11 +379,15 @@ describe('MessageService', () => {
         callback(tx),
       ),
     } as unknown as DbService;
+    await installTestHost({ DbService: dbService });
     const topicService = { setActiveNodeTx: jest.fn() };
-    const service = new MessageService(dbService, topicService as never);
-    jest.spyOn(service, 'getById').mockResolvedValue(message);
+    // `MessageService` locates its sibling lazily to break the import cycle
+    // between the two, so a stand-in goes through the registry rather than a
+    // constructor argument. Leaving it unregistered would throw on first reach.
+    registerDataService('TopicService', topicService as never);
+    jest.spyOn(messageService, 'getById').mockResolvedValue(message);
 
-    await expect(service.delete(message.id, true, 'parent')).resolves.toEqual({
+    await expect(messageService.delete(message.id, true, 'parent')).resolves.toEqual({
       deletedIds: [message.id],
       newActiveNodeId: null,
     });
@@ -401,10 +413,11 @@ describe('MessageService', () => {
         callback(tx),
       ),
     } as unknown as DbService;
+    await installTestHost({ DbService: dbService });
     const topicService = { clearActiveNodeTx: jest.fn(async () => undefined) };
-    const service = new MessageService(dbService, topicService as never);
+    registerDataService('TopicService', topicService as never);
 
-    await expect(service.clearTopicMessages('topic-1')).resolves.toEqual({
+    await expect(messageService.clearTopicMessages('topic-1')).resolves.toEqual({
       deletedIds: ['message-1', 'message-2'],
     });
     expect(deleteWhere).toHaveBeenCalledTimes(1);
@@ -426,10 +439,11 @@ describe('MessageService', () => {
         callback(tx),
       ),
     } as unknown as DbService;
+    await installTestHost({ DbService: dbService });
     const topicService = { clearActiveNodeTx: jest.fn() };
-    const service = new MessageService(dbService, topicService as never);
+    registerDataService('TopicService', topicService as never);
 
-    await expect(service.clearTopicMessages('topic-1')).resolves.toEqual({ deletedIds: [] });
+    await expect(messageService.clearTopicMessages('topic-1')).resolves.toEqual({ deletedIds: [] });
     expect(tx.delete).not.toHaveBeenCalled();
     expect(topicService.clearActiveNodeTx).not.toHaveBeenCalled();
   });
@@ -477,11 +491,12 @@ describe('MessageService', () => {
         callback(tx),
       ),
     } as unknown as DbService;
+    await installTestHost({ DbService: dbService });
     const topicService = { setActiveNodeTx: jest.fn() };
-    const service = new MessageService(dbService, topicService as never);
-    jest.spyOn(service, 'getById').mockResolvedValue(message);
+    registerDataService('TopicService', topicService as never);
+    jest.spyOn(messageService, 'getById').mockResolvedValue(message);
 
-    await expect(service.delete(message.id, false, 'parent')).resolves.toEqual({
+    await expect(messageService.delete(message.id, false, 'parent')).resolves.toEqual({
       deletedIds: [message.id],
       reparentedIds: ['child-1', 'child-2', 'child-3'],
     });
@@ -535,10 +550,11 @@ describe('MessageService', () => {
         callback(tx),
       ),
     } as unknown as DbService;
+    await installTestHost({ DbService: dbService });
     const topicService = { setActiveNodeTx: jest.fn() };
-    const service = new MessageService(dbService, topicService as never);
+    registerDataService('TopicService', topicService as never);
 
-    const sibling = await service.createSibling('source-1', { parts: [] });
+    const sibling = await messageService.createSibling('source-1', { parts: [] });
 
     expect(insertedValues).toEqual([expect.objectContaining({ status: expectedStatus })]);
     expect(sibling.status).toBe(expectedStatus);
@@ -571,10 +587,12 @@ describe('MessageService', () => {
         callback(tx),
       ),
     } as unknown as DbService;
-    const topicService = { setActiveNodeTx: jest.fn(async () => undefined) };
-    const service = new MessageService(dbService, topicService as never);
+    await installTestHost({ DbService: dbService });
+    registerDataService('TopicService', {
+      setActiveNodeTx: jest.fn(async () => undefined),
+    } as never);
 
-    await service.createUserMessageWithPlaceholders({
+    await messageService.createUserMessageWithPlaceholders({
       placeholders: [{ data: placeholderData, role: 'assistant' }],
       topicId: 'topic-1',
       userMessage: { dto: { data: userData, role: 'user' }, mode: 'create' },
@@ -601,9 +619,9 @@ describe('MessageService', () => {
       insertRows: [createdRow],
       selectResults: [[{ activeNodeId: 'active-1', id: 'topic-1' }], [{ id: fileEntryId }]],
     });
-    const createService = createMessageService(createTx.tx);
+    await installMessageServiceHost(createTx.tx);
 
-    await createService.create('topic-1', { data, role: 'user' });
+    await messageService.create('topic-1', { data, role: 'user' });
 
     expect(createTx.insertCalls).toContainEqual({
       table: chatMessageFileRefTable,
@@ -616,9 +634,11 @@ describe('MessageService', () => {
       insertRows: [siblingRow],
       selectResults: [[sourceRow], [{ id: fileEntryId }]],
     });
-    const siblingService = createMessageService(siblingTx.tx);
+    // The singleton keeps no connection of its own, so the second half of this
+    // case swaps the host rather than building a second service.
+    await installMessageServiceHost(siblingTx.tx);
 
-    await siblingService.createSibling('source-1', data);
+    await messageService.createSibling('source-1', data);
 
     expect(siblingTx.insertCalls).toContainEqual({
       table: chatMessageFileRefTable,
@@ -635,9 +655,9 @@ describe('MessageService', () => {
       selectResults: [[previous], [{ id: fileEntryId }]],
       updateRows: [updated],
     });
-    const service = createMessageService(tx);
+    await installMessageServiceHost(tx);
 
-    await service.update('message-1', { data });
+    await messageService.update('message-1', { data });
 
     expect(deleteCalls).toContain(chatMessageFileRefTable);
     expect(insertCalls).toContainEqual({
@@ -699,16 +719,16 @@ function createMessageRow(
   };
 }
 
-function createMessageService(tx: ReturnType<typeof createWriteTx>['tx']) {
-  return new MessageService(
-    {
+async function installMessageServiceHost(tx: ReturnType<typeof createWriteTx>['tx']) {
+  await installTestHost({
+    DbService: {
       getDb: () => ({ all: jest.fn(async () => []) }),
       withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
         callback(tx),
       ),
     } as unknown as DbService,
-    { setActiveNodeTx: jest.fn(async () => undefined) } as never,
-  );
+  });
+  registerDataService('TopicService', { setActiveNodeTx: jest.fn(async () => undefined) } as never);
 }
 
 function createWriteTx({

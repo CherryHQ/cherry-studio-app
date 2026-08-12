@@ -11,6 +11,7 @@ import type {
   WebSearchSearchKeywordsRequest,
 } from '@cherrystudio/universal/data/types/webSearch';
 
+import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -40,12 +41,16 @@ type PreparedWebSearchContext = {
   capability: WebSearchCapability;
 };
 
-export class WebSearchService {
+@Injectable('WebSearchService')
+@DependsOn(['PreferenceService'])
+export class WebSearchService extends BaseService {
   private readonly apiKeyRotationState = new ApiKeyRotationState();
 
-  constructor(private readonly preferenceService: PreferenceService) {}
+  constructor(private readonly preferenceService: PreferenceService) {
+    super();
+  }
 
-  dispose(): void {
+  protected onStop(): void {
     this.apiKeyRotationState.clear();
   }
 

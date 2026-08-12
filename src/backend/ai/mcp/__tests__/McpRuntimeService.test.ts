@@ -4,6 +4,8 @@ import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/a
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import type { ToolSet } from 'ai';
 
+import { mcpServerService } from '@/backend/data/services/McpServerService';
+
 import { McpRuntimeService } from '../McpRuntimeService';
 
 jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
@@ -128,19 +130,19 @@ function makeClient(tools: ToolSet): FakeClient {
 }
 
 function makeService(servers: StreamableHttpMcpServer[]) {
-  const mcpServer = {
-    // Hand out a copy: sharing the row object with the caller would let a test
-    // mutate what production code already captured, and pass without the code
-    // ever re-reading anything.
-    getById: jest.fn(async (id: string) => {
-      const found = servers.find((server) => server.id === id);
-      if (!found) throw DataApiErrorFactory.notFound('McpServer', id);
-      return { ...found };
-    }),
-    list: jest.fn(async () => ({ items: servers, total: servers.length })),
-  };
-  const service = new McpRuntimeService({ mcpServer: mcpServer as never });
-  return { mcpServer, service };
+  // The rows come from the `mcpServerService` module singleton now, so they are
+  // spied rather than injected. Hand out a copy: sharing the row object with the
+  // caller would let a test mutate what production code already captured, and
+  // pass without the code ever re-reading anything.
+  const getById = jest.spyOn(mcpServerService, 'getById').mockImplementation(async (id) => {
+    const found = servers.find((server) => server.id === id);
+    if (!found) throw DataApiErrorFactory.notFound('McpServer', id);
+    return { ...found };
+  });
+  const list = jest
+    .spyOn(mcpServerService, 'list')
+    .mockImplementation(async () => ({ items: servers, total: servers.length }) as never);
+  return { mcpServer: { getById, list }, service: new McpRuntimeService() };
 }
 
 /** Cold cache → warm it the way the chat path does, then read it back. */
@@ -163,6 +165,12 @@ async function getProjectedToolSet(
 
 beforeEach(() => {
   mockCreateMCPClient.mockReset();
+});
+
+afterEach(() => {
+  // The server-row spies live on a module singleton, so an unrestored one would
+  // follow the next test in this file.
+  jest.restoreAllMocks();
 });
 
 describe('assistant tool preparation', () => {
@@ -337,9 +345,8 @@ describe('assistant tool preparation', () => {
   it('returns undefined instead of rejecting when the server list read fails', async () => {
     // AiService awaits this with no try/catch of its own, so a throw here would
     // take the whole send down rather than just the tools.
-    const service = new McpRuntimeService({
-      mcpServer: { list: jest.fn(async () => Promise.reject(new Error('db locked'))) } as never,
-    });
+    jest.spyOn(mcpServerService, 'list').mockRejectedValue(new Error('db locked'));
+    const service = new McpRuntimeService();
 
     await expect(getProjectedToolSet(service, makeAssistant())).resolves.toBeUndefined();
   });
@@ -640,9 +647,8 @@ describe('prewarmActiveServers', () => {
   });
 
   it('never rejects when listing servers fails', async () => {
-    const service = new McpRuntimeService({
-      mcpServer: { list: jest.fn(async () => Promise.reject(new Error('db down'))) } as never,
-    });
+    jest.spyOn(mcpServerService, 'list').mockRejectedValue(new Error('db down'));
+    const service = new McpRuntimeService();
 
     await expect(service.prewarmActiveServers()).resolves.toBeUndefined();
   });
@@ -1280,7 +1286,7 @@ describe('dispose', () => {
     const { service } = makeService([makeServer()]);
     await warmedToolSet(service);
 
-    service.dispose();
+    await service._doStop();
 
     expect(client.close).toHaveBeenCalled();
   });
@@ -1301,7 +1307,7 @@ describe('dispose', () => {
       await flush();
       expect(jest.getTimerCount()).toBe(2);
 
-      service.dispose();
+      await service._doStop();
       await request;
 
       expect(jest.getTimerCount()).toBe(0);
@@ -1323,7 +1329,7 @@ describe('dispose', () => {
     service.invalidateServer(server.id, { preserveSnapshot: true });
     expect(retainedFingerprints(service)).not.toEqual([]);
 
-    service.dispose();
+    await service._doStop();
 
     expect(retainedFingerprints(service)).toEqual([]);
   });

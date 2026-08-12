@@ -1,5 +1,3 @@
-import type { CacheService } from '@/backend/data/CacheService';
-
 import type { DbService } from '../DbService';
 import { CherryAiDefaultModelSeeder } from './seeders/CherryAiDefaultModelSeeder';
 import { DefaultAssistantSeeder } from './seeders/DefaultAssistantSeeder';
@@ -9,16 +7,16 @@ import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
 import { SeedRunner } from './SeedRunner';
 import type { DatabaseSeeder } from './types';
 
-export async function seedDatabase(dbService: DbService, cacheService: CacheService) {
-  await new SeedRunner(dbService).runAll(await createSeeders(cacheService));
+export async function seedDatabase(dbService: DbService) {
+  await new SeedRunner(dbService).runAll(await createSeeders());
 }
 
-async function createSeeders(cacheService: CacheService): Promise<DatabaseSeeder[]> {
+async function createSeeders(): Promise<DatabaseSeeder[]> {
   const seeders: DatabaseSeeder[] = [
     new CherryAiDefaultModelSeeder(),
     new DefaultAssistantSeeder(),
     new PreferenceSeeder(),
-    new PresetProviderSeeder(cacheService),
+    new PresetProviderSeeder(),
   ];
 
   if (isDevelopmentBuild()) {

@@ -4,11 +4,13 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 
+import { installTestHost } from '@/backend/core/application/testHost';
+import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import type { Database } from '@/backend/data/db/DbService';
 import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
 import { JobService } from '@/backend/data/services/JobService';
 
-import { createJobRuntime, type JobRuntime, type JobRuntimeOptions } from '../JobRuntime';
+import { JobRuntime, type JobRuntimeOptions } from '../JobRuntime';
 import type { EnqueueOptions, JobHandle, JobHandler } from '../types';
 
 export {
@@ -20,23 +22,51 @@ export {
 export type TestRuntime = {
   db: TestDb;
   jobService: JobService;
+  /** The same instance the runtime resolves, so a suite can fence a scope. */
+  scopes: ResourceScopeCoordinator;
   runtime: JobRuntime;
 };
 
-export function createTestRuntime(
+/**
+ * The container injects `AiService` so the runtime can build its production
+ * handler registry; every suite here supplies its own handlers, so the slot is
+ * never read.
+ */
+export const noAiService = undefined as never;
+export const noBackgroundActivities = undefined as never;
+export const noBackgroundActivityEnvironment = undefined as never;
+export const noKeepAliveCoordinator = { acquire: () => ({ release: () => {} }) };
+
+/**
+ * Async because `JobService` resolves `DbService` through `application`: the
+ * harness database has to be serving from an installed host before the runtime
+ * exists, since startup recovery reaches the job table on the first pump. Pair
+ * with `uninstallTestHost` in `afterEach`.
+ */
+export async function createTestRuntime(
   sqlite: DatabaseSync,
   handlers: readonly (readonly [string, JobHandler])[],
-  overrides: Partial<Omit<JobRuntimeOptions, 'dbService' | 'handlers' | 'jobService'>> = {},
-): TestRuntime {
+  overrides: Omit<JobRuntimeOptions, 'handlers' | 'jobService'> = {},
+): Promise<TestRuntime> {
   const db = createTestDb(sqlite);
-  const jobService = new JobService(db.dbService);
-  const runtime = createJobRuntime({
-    dbService: db.dbService,
-    handlers,
-    jobService,
-    ...overrides,
-  });
-  return { db, jobService, runtime };
+  // A real coordinator, not a stub: an execution registers with whatever the
+  // host serves, and the fencing behaviour under test is the real one.
+  const scopes = new ResourceScopeCoordinator();
+  await installTestHost({ DbService: db.dbService, ResourceScopeCoordinator: scopes });
+  const jobService = new JobService();
+  const runtime = new JobRuntime(
+    db.dbService,
+    noAiService,
+    noBackgroundActivities,
+    noBackgroundActivityEnvironment,
+    noKeepAliveCoordinator,
+    {
+      handlers,
+      jobService,
+      ...overrides,
+    },
+  );
+  return { db, jobService, runtime, scopes };
 }
 
 /**

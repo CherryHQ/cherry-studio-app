@@ -496,6 +496,16 @@
         "targetSha256": "45a81a6a0872080790766900e33f47c7df11cba236b2c3771c017b2b6f63f977"
       },
       {
+        "classification": "mobile-extension",
+        "evidence": [
+          "mobile:src/backend/services/oauth/runtime/OAuthTokenStore.ts",
+          "mobile:src/backend/services/oauth/runtime/OAuthRuntimeService.ts"
+        ],
+        "reason": "Binds the module's four provider-row calls to the data service. Desktop's stores reach providerService inline; mobile needs one object because the repository contract is split between the runtime and the token store.",
+        "target": "src/backend/services/oauth/providerRepository.ts",
+        "targetSha256": "fe8a12024c90d5c169d6012302f1ce0d04cb1f478307b83e5353206927557410"
+      },
+      {
         "classification": "semantic-port",
         "desktopSources": ["src/main/services/oauth/runtime/OAuthRuntimeService.ts"],
         "evidence": ["desktop:src/main/services/oauth/runtime/OAuthRuntimeService.ts"],
@@ -549,13 +559,6 @@
         "reason": "Guards composition through narrow OAuth and Copilot dependencies.",
         "target": "src/bootstrap/composition/__tests__/createBackendServices.test.ts",
         "targetSha256": "025bee72b54b3f0dbc6938dfa646c8e6ef1b42ead61c2e95accef3a197baf351"
-      },
-      {
-        "classification": "mobile-extension",
-        "evidence": ["mobile:src/backend/ai/AiService.ts"],
-        "reason": "Injects only authenticated fetch and Copilot serving-token capabilities into AI services.",
-        "target": "src/bootstrap/composition/createAiServices.ts",
-        "targetSha256": "57fba83b658441830fce3de67567a6e393aca87c1d719d2a32083570290f1b49"
       },
       {
         "classification": "mobile-extension",
@@ -750,7 +753,6 @@
       "src/backend/services/cherryin/CherryInClient.ts",
       "src/backend/services/cherryin/__tests__/CherryInClient.test.ts",
       "src/bootstrap/composition/__tests__/createBackendServices.test.ts",
-      "src/bootstrap/composition/createAiServices.ts",
       "src/bootstrap/composition/createBackend.ts",
       "src/bootstrap/composition/createBackendServices.ts",
       "src/frontend/features/settings/ProviderScreen/ProviderApiKeySettingsScreen.tsx",

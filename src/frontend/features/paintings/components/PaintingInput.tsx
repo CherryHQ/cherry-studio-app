@@ -47,7 +47,7 @@ type PaintingInputProps = {
    */
   initialParamValues?: ImageParamDraft;
   onCancel: () => void;
-  onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult>;
+  onGenerate: (input: PaintingGenerationInput) => Promise<PaintingGenerationResult | null>;
   onGenerated?: (result: PaintingGenerationResult) => void;
   painting?: Painting;
   status: PaintingGenerationStatus;
@@ -208,7 +208,9 @@ export function PaintingInput({
         paramValues: submittedValues,
         prompt: text,
       });
-      onGenerated?.(result);
+      if (result) {
+        onGenerated?.(result);
+      }
     },
     [
       isSelectedModelAvailable,

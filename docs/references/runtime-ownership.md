@@ -6,7 +6,9 @@ Terms follow [Domain Language](./domain-language.md).
 
 ## Principles
 
-- Mobile does not port the desktop lifecycle framework, service registry, or phase graph.
+- Mobile adopts the desktop lifecycle framework, service registry, and a mobile-specific phase pair;
+  see [Lifecycle](./lifecycle/README.md). `ApplicationHost` owns each service generation while
+  bootstrap remains the composition and installation boundary.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
 - Backgrounding is not a reliable execution window for chat or painting generation.
@@ -22,12 +24,13 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 
 `AppBootstrapProvider` owns one `AppBootstrapRuntime`. The production runtime:
 
-- creates `CacheService`, `DbService`, and the private backend service graph;
+- creates an `ApplicationHost` and configures its platform-facing activity environment;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
-- initializes the backend cache before SQLite seeding, then preferences, boot theme, and i18n;
+- installs the host, whose dependency graph initializes cache before SQLite seeding and preferences,
+  then applies boot theme and i18n;
 - starts best-effort post-ready tasks after the gate opens;
-- disposes the Chat Runtime first, then MCP and web-search state, the backend cache, and SQLite on
-  unmount.
+- uninstalls the host on unmount; reverse dependency order drains consumers before their
+  infrastructure.
 
 The provider's own React context exposes only `loading`, `ready`, or `error`. Concrete backend
 services never enter React state or frontend code. Its children receive three stable, narrow
@@ -47,10 +50,11 @@ for workflows that are not ordinary resource queries or mutations.
 
 ## Chat Runtime
 
-Bootstrap creates one `ChatRuntime` and exposes its narrow `ChatModule` interface through
-`Backend.chat`. The runtime is app-owned, not route-owned: `ChatProvider` subscribes on mount and
-unsubscribes on unmount, but it never creates or disposes a backend object. Route unmount therefore
-does not terminate an active turn, and a later subscription reads the current snapshot.
+The service registry creates one `ChatRuntime` per `ApplicationHost` generation and composition
+exposes its narrow `ChatModule` interface through `Backend.chat`. The runtime is app-owned, not
+route-owned: `ChatProvider` subscribes on mount and unsubscribes on unmount, but it never creates or
+disposes a backend object. Route unmount therefore does not terminate an active turn, and a later
+subscription reads the current snapshot.
 
 The runtime owns active turn state, AbortControllers, assistant placeholder identity, stream
 reading, terminal persistence, and `ChatEvent` fan-out. It tracks turns by Topic: different Topics
@@ -80,10 +84,10 @@ sessions never share receipt state.
 
 ## Other Long-Lived Resources
 
-- `McpRuntimeService` owns MCP clients and tool caches; app bootstrap disposes it.
-- `WebSearchService` owns API-key rotation state; app bootstrap disposes it.
+- `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
+- `WebSearchService` owns API-key rotation state; the host stops it.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
-  app bootstrap initializes and disposes it.
+  the host initializes and stops it.
 - Frontend cache owns subscriptions and MMKV-backed UI persistence.
 - Screen and component listeners, timers, and native sessions remain with their React owner.
 

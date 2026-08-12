@@ -3,6 +3,7 @@ import { drizzle, type ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import * as SQLite from 'expo-sqlite';
 
+import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { CacheService } from '@/backend/data/CacheService';
 
 import { customSqlStatements } from './customSql';
@@ -19,50 +20,78 @@ const logger = loggerService.withContext('DbService');
 
 export type Database = ExpoSQLiteDatabase<DatabaseSchema>;
 
-export class DbService {
-  private readonly sqlite: SQLite.SQLiteDatabase;
-  private readonly db: Database;
+@Injectable('DbService')
+@DependsOn(['CacheService'])
+export class DbService extends BaseService {
+  private connection: { db: Database; sqlite: SQLite.SQLiteDatabase } | null = null;
   private disposed = false;
-  private ready = false;
   private writeTail: Promise<void> = Promise.resolve();
 
-  constructor() {
-    this.sqlite = SQLite.openDatabaseSync(databaseName);
-    this.db = createDrizzleDatabase(this.sqlite);
+  /**
+   * The cache is declared but never read here. Seeding reaches it through the
+   * data-service singletons (`ProviderService` resolves `CacheService` from
+   * `application`), and those run inside `onInit` — so the dependency edge is
+   * what orders cache initialization ahead of this service, nothing more.
+   */
+  constructor(_cache: CacheService) {
+    super();
   }
 
-  async init(cacheService: CacheService): Promise<void> {
+  /**
+   * The connection is opened here, not in the constructor.
+   *
+   * Construction has to stay free of resource claims for host replacement to be
+   * safe: React builds the incoming generation during render, before the
+   * outgoing one's cleanup runs, so a connection opened in the constructor would
+   * briefly have two live handles on `cherry.db`. `application.install()`
+   * serializes disposal ahead of `start()`, and this hook runs inside `start()`.
+   */
+  protected async onInit(): Promise<void> {
     this.assertOpen();
+
+    const sqlite = SQLite.openDatabaseSync(databaseName);
+    this.connection = { db: createDrizzleDatabase(sqlite), sqlite };
 
     await this.configurePragmas();
     await migrate(this.db, migrations);
     this.runCustomMigrations();
-    await seedDatabase(this, cacheService);
-    this.ready = true;
+    await seedDatabase(this);
   }
 
-  dispose(): void {
+  protected onStop(): void {
     if (this.disposed) {
       return;
     }
 
-    this.sqlite.closeSync();
+    this.connection?.sqlite.closeSync();
+    this.connection = null;
     this.disposed = true;
-    this.ready = false;
   }
 
   getDb(): Database {
-    this.assertOpen();
     return this.db;
   }
 
   getSqlite(): SQLite.SQLiteDatabase {
-    this.assertOpen();
     return this.sqlite;
   }
 
-  isReady(): boolean {
-    return this.ready;
+  private get db(): Database {
+    return this.openConnection.db;
+  }
+
+  private get sqlite(): SQLite.SQLiteDatabase {
+    return this.openConnection.sqlite;
+  }
+
+  private get openConnection(): { db: Database; sqlite: SQLite.SQLiteDatabase } {
+    this.assertOpen();
+
+    if (!this.connection) {
+      throw new Error('Database service has not been initialized');
+    }
+
+    return this.connection;
   }
 
   async withWriteTx<TValue>(fn: (tx: Database) => Promise<TValue>): Promise<TValue> {

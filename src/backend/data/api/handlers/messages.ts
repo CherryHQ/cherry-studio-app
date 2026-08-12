@@ -1,6 +1,8 @@
 import type { MessageSchemas } from '@cherrystudio/universal/data/api/schemas/messages';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
+import { application } from '@/backend/core/application/Application';
+import type { ResourceScope } from '@/backend/core/resources/types';
 import type { MessageService } from '@/backend/data/services/MessageService';
 
 type MessageData = Pick<
@@ -16,17 +18,26 @@ type MessageData = Pick<
   | 'update'
 >;
 
-export function createMessageHandlers(
-  service: MessageData,
-  onTopicsDeleted: (topicIds: readonly string[]) => void,
-): HandlersFor<MessageSchemas> {
+/**
+ * Message deletes `invalidate` rather than `delete`: the rows go but the topic
+ * survives, so its scope reopens once the mutation lands. What the pass buys is
+ * the same as for a topic — a turn streaming into this thread is cancelled and
+ * has written its terminal row before the delete transaction opens, instead of
+ * racing it.
+ */
+export function createMessageHandlers(service: MessageData): HandlersFor<MessageSchemas> {
+  const scopes = () => application.get('ResourceScopeCoordinator');
+  const topicScope = (topicId: string): ResourceScope[] => [{ id: topicId, kind: 'topic' }];
+
   return {
     '/messages/:id': {
       DELETE: async ({ params, query }) => {
-        const message = await service.getById(params.id);
-        const result = await service.delete(params.id, query?.cascade, query?.activeNodeStrategy);
-        onTopicsDeleted([message.topicId]);
-        return result;
+        // Only the row knows which topic it belongs to, and the scope is needed
+        // before the mutation.
+        const { topicId } = await service.getById(params.id);
+        return scopes().invalidate(topicScope(topicId), () =>
+          service.delete(params.id, query?.cascade, query?.activeNodeStrategy),
+        );
       },
       GET: ({ params }) => service.getById(params.id),
       PATCH: ({ body, params }) => service.update(params.id, body),
@@ -35,11 +46,10 @@ export function createMessageHandlers(
       POST: ({ body, params }) => service.createSibling(params.id, body),
     },
     '/topics/:topicId/messages': {
-      DELETE: async ({ params }) => {
-        const result = await service.clearTopicMessages(params.topicId);
-        onTopicsDeleted([params.topicId]);
-        return result;
-      },
+      DELETE: ({ params }) =>
+        scopes().invalidate(topicScope(params.topicId), () =>
+          service.clearTopicMessages(params.topicId),
+        ),
       GET: ({ params, query }) => service.getBranchMessages(params.topicId, query),
       POST: ({ body, params }) => service.create(params.topicId, body),
     },

@@ -1,5 +1,14 @@
 import { Platform } from 'react-native';
 
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
+import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivities/BackgroundActivityEnvironment';
 import type {
   BackgroundActivitySession,
   BackgroundActivitySessionInput,
@@ -39,16 +48,19 @@ type TurnRecord = {
   topicId: string;
 };
 
-type BackgroundReplyServiceDependencies = {
-  activities: {
-    startSession: (
-      input: Omit<BackgroundActivitySessionInput<BackgroundReplyActivityProps>, 'presenter'>,
-    ) => ChatActivitySession;
-  };
-  preference: {
-    readCached: (key: typeof PREFERENCE_KEY) => boolean;
-    subscribeChange: (key: typeof PREFERENCE_KEY) => (listener: () => void) => () => void;
-  };
+type BackgroundActivityPort = {
+  startSession<Props extends BackgroundReplyActivityProps>(
+    input: BackgroundActivitySessionInput<Props>,
+  ): BackgroundActivitySession<Props>;
+};
+
+type PreferencePort = {
+  readCached(key: typeof PREFERENCE_KEY): boolean;
+  subscribeChange(key: typeof PREFERENCE_KEY): (listener: () => void) => () => void;
+};
+
+type EnvironmentPort = {
+  assistantPresenter: BackgroundActivityEnvironment['assistantPresenter'];
   translate: BackgroundReplyTranslate;
 };
 
@@ -59,22 +71,32 @@ type BackgroundReplyServiceDependencies = {
  * Throttling, AppState handling, orphan sweeps, and keep-alive audio all live
  * behind the injected session manager.
  */
-export class BackgroundReplyService implements BackgroundReplyLifecycle {
+@Injectable('BackgroundReplyService')
+@ServicePhase(Phase.PostReady)
+@DependsOn(['BackgroundActivityManager', 'PreferenceService', 'BackgroundActivityEnvironment'])
+@AppStatePolicy('background-presentation')
+export class BackgroundReplyService extends BaseService implements BackgroundReplyLifecycle {
   private disposed = false;
-  private enabled: boolean;
+  private enabled = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
-  private preferenceUnsubscribe?: () => void;
   private turns = new Map<string, TurnRecord>();
 
-  constructor(private readonly dependencies: BackgroundReplyServiceDependencies) {
-    this.enabled = Platform.OS === 'ios' && dependencies.preference.readCached(PREFERENCE_KEY);
+  constructor(
+    private readonly activities: BackgroundActivityPort,
+    private readonly preference: PreferencePort,
+    private readonly environment: EnvironmentPort,
+  ) {
+    super();
+  }
 
+  protected onInit(): void {
     if (Platform.OS !== 'ios') return;
 
-    this.preferenceUnsubscribe = dependencies.preference.subscribeChange(PREFERENCE_KEY)(() => {
-      this.handlePreferenceChange();
-    });
+    this.enabled = this.preference.readCached(PREFERENCE_KEY);
+    this.registerDisposable(
+      this.preference.subscribeChange(PREFERENCE_KEY)(() => this.handlePreferenceChange()),
+    );
   }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
@@ -82,10 +104,10 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
 
     const existing = this.turns.get(input.topicId);
     const generation = ++this.generation;
-    const content = deriveBackgroundReplyContent(undefined, this.dependencies.translate);
+    const content = deriveBackgroundReplyContent(undefined, this.environment.translate);
     const record: TurnRecord = {
       assistantName:
-        input.assistantName.trim() || this.dependencies.translate('chat.backgroundReply.assistant'),
+        input.assistantName.trim() || this.environment.translate('chat.backgroundReply.assistant'),
       content,
       generation,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
@@ -102,9 +124,9 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
           if (!this.isCurrent(input.topicId, generation)) return;
           const current = this.turns.get(input.topicId);
           if (!current) return;
-          const latest = deriveBackgroundReplyContent(message, this.dependencies.translate);
+          const latest = deriveBackgroundReplyContent(message, this.environment.translate);
           current.content = {
-            detail: this.dependencies.translate('chat.backgroundReply.awaitingApproval'),
+            detail: this.environment.translate('chat.backgroundReply.awaitingApproval'),
             phase: 'awaiting-approval',
             ...(latest.preview ? { preview: latest.preview } : {}),
           };
@@ -133,10 +155,9 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     record.session = undefined;
   };
 
-  dispose(): void {
+  protected onStop(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.preferenceUnsubscribe?.();
 
     const records = [...this.turns.values()];
     this.turns.clear();
@@ -147,7 +168,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
   }
 
   private handlePreferenceChange(): void {
-    this.enabled = this.dependencies.preference.readCached(PREFERENCE_KEY);
+    this.enabled = this.preference.readCached(PREFERENCE_KEY);
     if (!this.enabled) {
       for (const record of this.turns.values()) {
         record.session?.cancel();
@@ -167,7 +188,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     const record = this.turns.get(topicId);
     if (!record) return;
 
-    const nextContent = deriveBackgroundReplyContent(message, this.dependencies.translate);
+    const nextContent = deriveBackgroundReplyContent(message, this.environment.translate);
     const phaseChanged = nextContent.phase !== record.content.phase;
     record.content = nextContent;
     record.session?.update(this.toActivityProps(record), {
@@ -184,7 +205,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
     record.content = getTerminalBackgroundReplyContent(
       outcome,
       record.content.preview,
-      this.dependencies.translate,
+      this.environment.translate,
     );
     // Deferred so a continuation turn started in the same tick (approval
     // resume, regenerate) inherits the live session instead of watching it
@@ -206,9 +227,10 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
       record.session.update(this.toActivityProps(record), { keepAlive, urgent: true });
       return;
     }
-    record.session = this.dependencies.activities.startSession({
+    record.session = this.activities.startSession({
       deepLinkUrl: `cherrystudio://topics?topicId=${encodeURIComponent(record.topicId)}`,
       keepAlive,
+      presenter: this.environment.assistantPresenter,
       props: this.toActivityProps(record),
       tag: SESSION_TAG,
     });
@@ -220,7 +242,7 @@ export class BackgroundReplyService implements BackgroundReplyLifecycle {
       assistantName: record.assistantName,
       compactLabel: getBackgroundReplyCompactLabel(
         record.content.phase,
-        this.dependencies.translate,
+        this.environment.translate,
       ),
       startedAtEpochMs: record.startedAtEpochMs,
     };

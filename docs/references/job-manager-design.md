@@ -119,7 +119,7 @@ sits on the list.
   can span a backgrounding or a Phase 2 window exists. Add it with Phase 2.
 - **Image-less receipts are visible, and that is what makes the durability observable.**
   `PaintingService` no longer filters the list on having outputs: the receipt row *is* the tile
-  for a generation in flight (a `PaintingSkeleton`, tapping back into its progress) and for one
+  for a generation in flight (an `ImageGenerationLoader`, tapping back into its progress) and for one
   that never landed ("interrupted", with the provider's own failure text, tapping into a
   prefilled composer). Select-all sees them too, and deleting one cancels its running job first.
   A user-initiated cancel deletes its receipt on the spot — being stopped on purpose is not the

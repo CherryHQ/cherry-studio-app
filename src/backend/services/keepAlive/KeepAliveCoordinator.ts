@@ -1,11 +1,13 @@
-import {
-  type AudioPlayer,
-  type AudioStatus,
-  createAudioPlayer,
-  setAudioModeAsync,
-} from 'expo-audio';
-import { AppState, type AppStateStatus, Platform } from 'react-native';
+import type { AudioPlayer, AudioStatus } from 'expo-audio';
+import { type AppStateStatus, Platform } from 'react-native';
 
+import {
+  AppStatePolicy,
+  BaseService,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const KEEP_ALIVE_VOLUME = 0.001;
@@ -24,19 +26,21 @@ export type KeepAliveLease = {
  * primitive: it carries no preference gate — each consumer decides for itself
  * when staying alive is warranted. No-ops off iOS.
  */
-export class KeepAliveCoordinator {
-  private appStateSubscription?: ReturnType<typeof AppState.addEventListener>;
+@Injectable('KeepAliveCoordinator')
+@ServicePhase(Phase.PostReady)
+@AppStatePolicy('background-presentation')
+export class KeepAliveCoordinator extends BaseService {
   private disposed = false;
   private holderCount = 0;
   private operationTail: Promise<void> = Promise.resolve();
   private player?: AudioPlayer;
   private playerStatusSubscription?: { remove: () => void };
 
-  constructor() {
+  protected onInit(): void {
     if (Platform.OS !== 'ios') return;
     // A failed session start (audio hardware busy) must retry once the app is
     // actually backgrounded, or a held lease would silently protect nothing.
-    this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
+    this.registerAppStateListener(this.handleAppStateChange);
   }
 
   acquire(tag: string): KeepAliveLease {
@@ -58,12 +62,11 @@ export class KeepAliveCoordinator {
     };
   }
 
-  dispose(): void {
+  protected async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    this.appStateSubscription?.remove();
     this.holderCount = 0;
-    void this.enqueue(() => this.stopAudio());
+    await this.enqueue(() => this.stopAudio());
   }
 
   private readonly handleAppStateChange = (nextState: AppStateStatus) => {
@@ -80,6 +83,12 @@ export class KeepAliveCoordinator {
 
     let player: AudioPlayer | undefined;
     try {
+      // `expo-audio` initializes native classes at module evaluation time.
+      // Resolve it only when an iOS lease actually needs audio so the service
+      // registry remains importable in non-native runtimes and tests.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
+      const { createAudioPlayer, setAudioModeAsync } =
+        require('expo-audio') as typeof import('expo-audio');
       await setAudioModeAsync({
         allowsRecording: false,
         interruptionMode: 'mixWithOthers',

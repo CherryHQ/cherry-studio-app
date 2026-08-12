@@ -18,8 +18,7 @@ import {
 import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
-import type { CacheService } from '@/backend/data/CacheService';
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import type {
   InsertUserProviderRow,
@@ -27,7 +26,7 @@ import type {
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 
-import type { PinService } from './PinService';
+import { pinService } from './PinService';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
@@ -277,11 +276,18 @@ function toInsert(input: CreateProviderInput): ProviderInputWithoutOrderKey {
 }
 
 export class ProviderService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly pinService: PinService,
-    private readonly cacheService: CacheService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
+
+  private get cacheService() {
+    return application.get('CacheService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -539,7 +545,7 @@ export class ProviderService {
         .from(userModelTable)
         .where(eq(userModelTable.providerId, providerId));
 
-      await this.pinService.purgeForEntitiesTx(
+      await pinService.purgeForEntitiesTx(
         tx,
         'model',
         models.map((model) => model.id),
@@ -609,6 +615,8 @@ export class ProviderService {
     });
   }
 }
+
+export const providerService = new ProviderService();
 
 function apiKeyRotationCacheKey(providerId: string) {
   return `settings.provider.${providerId}.last_used_key_id` as const;

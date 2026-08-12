@@ -160,6 +160,16 @@ const backendDataLayer = {
   message: 'Backend data modules must not depend on AI or general backend services.',
 };
 
+// The lifecycle core sits below every backend module: data services resolve
+// `DbService` through `application`, so anything the core imported would become
+// a cycle. `serviceRegistry.ts` is exempted below because registration *is*
+// assembly — it is the one place that names concrete classes.
+const backendCoreLayer = {
+  group: aliasRoots(['backend/ai', 'backend/data', 'backend/services']),
+  message:
+    'The lifecycle core must not depend on the modules it manages. Register concrete services in serviceRegistry.ts instead.',
+};
+
 const frontendLayer = layerPattern(
   ['app', 'backend', 'bootstrap'],
   'Frontend may depend only on frontend and shared modules. Use Data API hooks for resources, preference hooks for settings, and useBackendModule() for workflows.',
@@ -277,6 +287,10 @@ module.exports = defineConfig([
   restrictedImports(['src/backend/**/*.{ts,tsx}'], [backendLayer]),
   restrictedImports(['src/backend/services/**/*.{ts,tsx}'], [backendLayer, backendServicesLayer]),
   restrictedImports(['src/backend/data/**/*.{ts,tsx}'], [backendLayer, backendDataLayer]),
+  restrictedImports(['src/backend/core/**/*.{ts,tsx}'], [backendLayer, backendCoreLayer]),
+  // Registration is assembly: this file names every concrete service class, so
+  // it keeps only the outer backend layer rule.
+  restrictedImports(['src/backend/core/application/serviceRegistry.ts'], [backendLayer]),
   restrictedImports(['src/frontend/**/*.{ts,tsx}'], [frontendLayer]),
   restrictedImports(sharedFrontendDirectories, [frontendLayer, frontendSharedLayer]),
   restrictedImports(['src/frontend/features/**/*.{ts,tsx}'], [frontendLayer, frontendFeatureLayer]),

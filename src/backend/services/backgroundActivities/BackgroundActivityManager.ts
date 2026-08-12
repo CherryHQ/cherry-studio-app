@@ -1,8 +1,15 @@
 import { Asset } from 'expo-asset';
 import { File } from 'expo-file-system';
-import { widgetsDirectory } from 'expo-widgets';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivities/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -49,10 +56,8 @@ type SessionRecord = {
   updateTimer?: ReturnType<typeof setTimeout>;
 };
 
-type BackgroundActivityManagerDependencies = {
-  keepAlive: {
-    acquire: (tag: string) => KeepAliveLease;
-  };
+type KeepAlivePort = { acquire: (tag: string) => KeepAliveLease };
+type BackgroundActivityEnvironmentPort = {
   /** Every presenter whose orphaned surfaces must be swept at cold start. */
   presenters: readonly { clearOrphans(): Promise<number> }[];
 };
@@ -66,20 +71,30 @@ type BackgroundActivityManagerDependencies = {
  * meaning (what a session represents, when it is urgent, when to stay alive)
  * belongs to the feature services driving the sessions.
  */
-export class BackgroundActivityManager {
+@Injectable('BackgroundActivityManager')
+@ServicePhase(Phase.PostReady)
+@DependsOn(['KeepAliveCoordinator', 'BackgroundActivityEnvironment'])
+@AppStatePolicy('background-presentation')
+export class BackgroundActivityManager extends BaseService {
   private appState: AppStateStatus = AppState.currentState;
-  private appStateSubscription?: ReturnType<typeof AppState.addEventListener>;
   private disposed = false;
   private logoUri?: string;
   private operationTail: Promise<void> = Promise.resolve();
   private sessions = new Set<SessionRecord>();
 
-  constructor(private readonly dependencies: BackgroundActivityManagerDependencies) {
+  constructor(
+    private readonly keepAlive: KeepAlivePort,
+    private readonly environment: BackgroundActivityEnvironmentPort,
+  ) {
+    super();
+  }
+
+  protected onInit(): void {
     // The native surface (and the widget logo staging directory) is iOS-only
     // today; session bookkeeping still works elsewhere via no-op presenters.
     if (Platform.OS !== 'ios') return;
 
-    this.appStateSubscription = AppState.addEventListener('change', this.handleAppStateChange);
+    this.registerAppStateListener(this.handleAppStateChange);
     void this.enqueue(async () => {
       await this.clearOrphanedSurfaces();
       await this.prepareLogo();
@@ -122,10 +137,9 @@ export class BackgroundActivityManager {
     };
   }
 
-  dispose(): void {
+  protected async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
-    this.appStateSubscription?.remove();
 
     const records = [...this.sessions];
     this.sessions.clear();
@@ -133,7 +147,7 @@ export class BackgroundActivityManager {
       this.clearUpdateTimer(record);
       this.reconcileLease(record);
     }
-    void this.enqueue(async () => {
+    await this.enqueue(async () => {
       await Promise.all(records.map((record) => this.endNative(record, 'immediate')));
     });
   }
@@ -235,7 +249,7 @@ export class BackgroundActivityManager {
   private reconcileLease(record: SessionRecord): void {
     const shouldHold = !this.disposed && !record.terminal && record.keepAlive;
     if (shouldHold && !record.lease) {
-      record.lease = this.dependencies.keepAlive.acquire(record.tag);
+      record.lease = this.keepAlive.acquire(record.tag);
     } else if (!shouldHold && record.lease) {
       record.lease.release();
       record.lease = undefined;
@@ -243,7 +257,7 @@ export class BackgroundActivityManager {
   }
 
   private async clearOrphanedSurfaces(): Promise<void> {
-    for (const presenter of this.dependencies.presenters) {
+    for (const presenter of this.environment.presenters) {
       try {
         const count = await presenter.clearOrphans();
         if (count > 0) logger.info('Cleared orphaned background activities', { count });
@@ -255,6 +269,11 @@ export class BackgroundActivityManager {
 
   private async prepareLogo(): Promise<void> {
     try {
+      // `expo-widgets` resolves its iOS native module at import time. Loading it
+      // here keeps the service registry importable on platforms and in tests
+      // where that native module does not exist; this method only runs on iOS.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
+      const { widgetsDirectory } = require('expo-widgets') as typeof import('expo-widgets');
       const destination = new File(widgetsDirectory, 'cherry-studio-logo.png');
       if (!destination.exists) {
         const asset = await Asset.fromModule(

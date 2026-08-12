@@ -18,6 +18,8 @@ import { deepEqual } from '@cherrystudio/universal/data/cache/cacheUtils';
 import { loggerService } from '@logger';
 import { createMMKV } from 'react-native-mmkv';
 
+import { BaseService, Injectable } from '@/backend/core/lifecycle';
+
 const logger = loggerService.withContext('BackendCacheService');
 
 interface BackendCacheStorage {
@@ -66,7 +68,8 @@ type PersistSubscriber<K extends BackendPersistCacheKey> = (
 
 type Subscriber = (newValue: unknown, oldValue: unknown) => void;
 
-export class CacheService {
+@Injectable('CacheService')
+export class CacheService extends BaseService {
   private readonly memory = new Map<string, CacheEntry>();
   private readonly persist = new Map<BackendPersistCacheKey, unknown>();
   private readonly memorySubscribers = new Map<string, Set<Subscriber>>();
@@ -74,9 +77,16 @@ export class CacheService {
   private initialized = false;
   private disposed = false;
 
-  constructor(private readonly storage: BackendCacheStorage = createBackendCacheStorage()) {}
+  /**
+   * The default storage is resolved here rather than injected because MMKV is
+   * process-wide: a second instance would read the same file, so there is
+   * nothing for the container to own. Tests pass an in-memory storage directly.
+   */
+  constructor(private readonly storage: BackendCacheStorage = createBackendCacheStorage()) {
+    super();
+  }
 
-  init(): void {
+  protected onInit(): void {
     if (this.initialized) {
       return;
     }
@@ -88,7 +98,12 @@ export class CacheService {
     this.initialized = true;
   }
 
-  dispose(): void {
+  /**
+   * Every other service reads the cache, so this must not run until they have
+   * all stopped — which reverse-order teardown guarantees, since everything that
+   * uses the cache depends on it.
+   */
+  protected onStop(): void {
     if (this.disposed) {
       return;
     }

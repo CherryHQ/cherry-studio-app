@@ -1,3 +1,4 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 
 import { FileEntryService } from '../FileEntryService';
@@ -6,6 +7,8 @@ jest.mock('uuid', () => ({
   v4: jest.fn(() => '00000000-0000-4000-8000-000000000000'),
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
 }));
+
+afterEach(uninstallTestHost);
 
 describe('FileEntryService', () => {
   test.each([
@@ -61,13 +64,13 @@ describe('FileEntryService', () => {
       },
     ],
   ])('maps %s database rows to file entries', async (row, expected) => {
-    const service = createServiceWithRows([row]);
+    const service = await createServiceWithRows([row]);
 
     await expect(service.findById(row.id)).resolves.toEqual(expected);
   });
 });
 
-function createServiceWithRows(rows: unknown[]) {
+async function createServiceWithRows(rows: unknown[]) {
   const db = {
     select: jest.fn(() => ({
       from: jest.fn(() => ({
@@ -75,5 +78,7 @@ function createServiceWithRows(rows: unknown[]) {
       })),
     })),
   };
-  return new FileEntryService({ getDb: () => db } as unknown as DbService);
+  return installTestHost({ DbService: { getDb: () => db } as unknown as DbService }).then(
+    () => new FileEntryService(),
+  );
 }

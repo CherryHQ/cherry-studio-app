@@ -35,6 +35,5 @@ export type BackgroundReplyTurnInput = {
 
 export type BackgroundReplyLifecycle = {
   clearTopic: (topicId: string) => void;
-  dispose: () => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
 };

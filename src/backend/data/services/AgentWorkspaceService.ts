@@ -8,7 +8,7 @@ import {
 } from '@cherrystudio/universal/data/api/schemas/agentWorkspaces';
 import { and, asc, eq } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import {
   type AgentWorkspaceRow,
   agentWorkspaceTable,
@@ -57,7 +57,14 @@ function defaultWorkspaceName(workspacePath: string): string {
 }
 
 export class AgentWorkspaceService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async list(options: LookupOptions = {}): Promise<AgentWorkspaceEntity[]> {
     const rows = await this.dbService
@@ -201,3 +208,5 @@ export class AgentWorkspaceService {
     });
   }
 }
+
+export const agentWorkspaceService = new AgentWorkspaceService();

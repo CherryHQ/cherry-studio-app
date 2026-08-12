@@ -1,5 +1,6 @@
 import type { AuthConfig } from '@cherrystudio/universal/data/types/provider';
 
+import { oauthProviderRepository } from '../providerRepository';
 import type { OAuthTokenStore, OAuthTokenStoreData } from './types';
 
 type OAuthAuthConfig = Extract<AuthConfig, { type: 'oauth' }>;
@@ -25,7 +26,9 @@ export type OAuthTokenStoreProviderRepository = {
 export class ProviderAuthConfigOAuthTokenStore implements OAuthTokenStore {
   private readonly writeQueues = new Map<string, Promise<unknown>>();
 
-  constructor(private readonly providers: OAuthTokenStoreProviderRepository) {}
+  constructor(
+    private readonly providers: OAuthTokenStoreProviderRepository = oauthProviderRepository,
+  ) {}
 
   async get(providerId: string): Promise<OAuthTokenStoreData | null> {
     const authConfig = await this.providers.getAuthConfig(providerId);
@@ -117,3 +120,16 @@ export class ProviderAuthConfigOAuthTokenStore implements OAuthTokenStore {
     return next;
   }
 }
+
+/**
+ * The one store the app writes through.
+ *
+ * Single by necessity, not by convention: `writeQueues` above lives on the
+ * instance, so two stores would serialize against two different queues and a
+ * refresh on one could still interleave a logout on the other — the exact race
+ * the queue exists to close. Desktop keeps one instance too, as a field
+ * initializer on its `OAuthRuntimeService`; here it has to be a module singleton
+ * because the authorization side reaches it as well, through the adapters
+ * `ProviderOAuthService` builds.
+ */
+export const oauthTokenStore = new ProviderAuthConfigOAuthTokenStore();

@@ -15,7 +15,7 @@ import {
 import { loggerService } from '@logger';
 import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import {
   agentSessionTable,
   agentTable,
@@ -66,7 +66,14 @@ function agentDescription(
 }
 
 export class EntitySearchService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -290,3 +297,5 @@ export class EntitySearchService {
     );
   }
 }
+
+export const entitySearchService = new EntitySearchService();

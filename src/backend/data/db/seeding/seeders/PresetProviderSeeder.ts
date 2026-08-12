@@ -2,10 +2,8 @@ import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
 import { buildRuntimeEndpointConfigs, ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { ApiFeatures, AuthConfig } from '@cherrystudio/universal/data/types/provider';
 
-import type { CacheService } from '@/backend/data/CacheService';
-import { PinService } from '@/backend/data/services/PinService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
-import { type CreateProviderInput, ProviderService } from '@/backend/data/services/ProviderService';
+import { type CreateProviderInput, providerService } from '@/backend/data/services/ProviderService';
 
 import type { DatabaseSeeder } from '../types';
 
@@ -70,8 +68,6 @@ function toProviderInput(provider: ProtoProviderConfig): CreateProviderInput {
 }
 
 export class PresetProviderSeeder implements DatabaseSeeder {
-  constructor(private readonly cacheService: CacheService) {}
-
   readonly name = 'preset-provider';
   readonly description = 'Insert preset provider configurations';
 
@@ -79,7 +75,7 @@ export class PresetProviderSeeder implements DatabaseSeeder {
     return `${providerRegistryService.getProvidersVersion()}+adapter-family.1+cherryai-enabled.1`;
   }
 
-  async run(dbService: Parameters<DatabaseSeeder['run']>[0]) {
+  async run(_dbService: Parameters<DatabaseSeeder['run']>[0]) {
     const rows = providerRegistryService.loadProviders().map(toProviderInput);
     rows.push({
       authConfig: null,
@@ -94,11 +90,6 @@ export class PresetProviderSeeder implements DatabaseSeeder {
       providerId: cherryAiProviderId,
     });
 
-    const providerService = new ProviderService(
-      dbService,
-      new PinService(dbService),
-      this.cacheService,
-    );
     await providerService.batchUpsert(rows);
 
     // CherryAI is Cherry's own built-in service rather than something the user

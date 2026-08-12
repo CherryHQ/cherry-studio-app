@@ -3,16 +3,24 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { JOB_ERROR_CODES, type JobProgress } from '@cherrystudio/universal/data/api/schemas/jobs';
 
+import { uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
+import { JobService } from '@/backend/data/services/JobService';
 
+import { JobRuntime } from '../JobRuntime';
 import { GC_TERMINAL_TTL_MS, type JobHandler, MAX_INPUT_BYTES } from '../types';
 import {
+  createTestDb,
   createTestRuntime,
   enqueueTest,
   makeEchoHandler,
   makeGate,
   makeHoldHandler,
+  noAiService,
+  noBackgroundActivities,
+  noBackgroundActivityEnvironment,
+  noKeepAliveCoordinator,
   settlesWithin,
   type TestRuntime,
   waitFor,
@@ -56,17 +64,18 @@ describe('JobRuntime', () => {
   let sqlite: DatabaseSync | undefined;
   let ctx: TestRuntime | undefined;
 
-  function setup(
+  async function setup(
     handlers: Parameters<typeof createTestRuntime>[1],
     overrides?: Parameters<typeof createTestRuntime>[2],
   ) {
     sqlite = new DatabaseSync(':memory:');
-    ctx = createTestRuntime(sqlite, handlers, overrides);
+    ctx = await createTestRuntime(sqlite, handlers, overrides);
     return ctx;
   }
 
-  afterEach(() => {
-    ctx?.runtime.dispose();
+  afterEach(async () => {
+    await ctx?.runtime._doStop();
+    await uninstallTestHost();
     sqlite?.close();
     ctx = undefined;
     sqlite = undefined;
@@ -75,17 +84,43 @@ describe('JobRuntime', () => {
   it('rejects duplicate handler registrations at construction', () => {
     const db = new DatabaseSync(':memory:');
     sqlite = db;
-    expect(() =>
-      createTestRuntime(db, [
-        ['internal.echo', makeEchoHandler()],
-        ['internal.echo', makeEchoHandler()],
-      ]),
+    // Built directly rather than through `createTestRuntime`: the point is that
+    // the throw happens synchronously while constructing, and the harness is
+    // async because it installs a host first.
+    expect(
+      () =>
+        new JobRuntime(
+          createTestDb(db).dbService,
+          noAiService,
+          noBackgroundActivities,
+          noBackgroundActivityEnvironment,
+          noKeepAliveCoordinator,
+          {
+            handlers: [
+              ['internal.echo', makeEchoHandler()],
+              ['internal.echo', makeEchoHandler()],
+            ],
+            jobService: new JobService(),
+          },
+        ),
     ).toThrow(/Duplicate job handler/);
+  });
+
+  it('pumps the job runtime with the cold-start reason', async () => {
+    // Moved here from `runPostReadyTasks`: the cold start — lazy recovery over
+    // prior-process leftovers plus the GC sweep — is this service's own
+    // `PostReady` initialization now.
+    const { runtime } = await setup([['internal.echo', makeEchoHandler()]]);
+    const pump = jest.spyOn(runtime, 'pump');
+
+    await runtime._doInit();
+
+    expect(pump).toHaveBeenCalledWith({ reason: 'cold-start' });
   });
 
   it('runs an echo job end to end and persists the terminal snapshot', async () => {
     const progressEvents: JobProgress[] = [];
-    const { jobService, runtime } = setup([['internal.echo', makeEchoHandler()]], {
+    const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]], {
       onProgress: (_jobId, progress) => progressEvents.push(progress),
     });
 
@@ -107,7 +142,7 @@ describe('JobRuntime', () => {
   });
 
   it('validates type, payload size, and numeric options at enqueue', async () => {
-    const { runtime } = setup([['internal.echo', makeEchoHandler()]]);
+    const { runtime } = await setup([['internal.echo', makeEchoHandler()]]);
     await expect(enqueueTest(runtime, 'internal.ghost', {})).rejects.toMatchObject({
       code: JOB_ERROR_CODES.UNKNOWN_TYPE,
     });
@@ -124,7 +159,7 @@ describe('JobRuntime', () => {
 
   it('keeps a future job delayed until the clock reaches scheduledAt', async () => {
     let clock = 1_000_000;
-    const { jobService, runtime } = setup([['internal.echo', makeEchoHandler()]], {
+    const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]], {
       now: () => clock,
     });
 
@@ -146,7 +181,7 @@ describe('JobRuntime', () => {
 
   it('deduplicates by idempotency key: same id, shared finished promise', async () => {
     let clock = 1_000_000;
-    const { runtime } = setup([['internal.echo', makeEchoHandler()]], { now: () => clock });
+    const { runtime } = await setup([['internal.echo', makeEchoHandler()]], { now: () => clock });
     const opts = { idempotencyKey: 'once', scheduledAt: clock + 60_000 };
     const first = await enqueueTest(runtime, 'internal.echo', { message: 'a' }, opts);
     const second = await enqueueTest(runtime, 'internal.echo', { message: 'b' }, opts);
@@ -156,7 +191,7 @@ describe('JobRuntime', () => {
 
   it('caps running jobs globally and refills the freed slot on settle', async () => {
     const gate = makeGate();
-    const { jobService, runtime } = setup([['internal.hold', makeHoldHandler(gate)]]);
+    const { jobService, runtime } = await setup([['internal.hold', makeHoldHandler(gate)]]);
     const handles = await Promise.all(
       ['q1', 'q2', 'q3'].map((queue) => enqueueTest(runtime, 'internal.hold', {}, { queue })),
     );
@@ -177,7 +212,7 @@ describe('JobRuntime', () => {
 
   it('serializes jobs sharing a queue at defaultConcurrency 1', async () => {
     const gate = makeGate();
-    const { jobService, runtime } = setup([['internal.hold', makeHoldHandler(gate)]]);
+    const { jobService, runtime } = await setup([['internal.hold', makeHoldHandler(gate)]]);
     const first = await enqueueTest(runtime, 'internal.hold', {});
     const second = await enqueueTest(runtime, 'internal.hold', {});
 
@@ -195,7 +230,7 @@ describe('JobRuntime', () => {
 
   it('retries with backoff, increments attempt, and succeeds on re-claim', async () => {
     let clock = 1_000_000;
-    const { jobService, runtime } = setup([['internal.flaky', makeFlakyHandler(1)]], {
+    const { jobService, runtime } = await setup([['internal.flaky', makeFlakyHandler(1)]], {
       now: () => clock,
     });
 
@@ -219,7 +254,7 @@ describe('JobRuntime', () => {
 
   it('fails terminally once attempts are exhausted', async () => {
     let clock = 1_000_000;
-    const { jobService, runtime } = setup([['internal.flaky', makeFlakyHandler(99)]], {
+    const { jobService, runtime } = await setup([['internal.flaky', makeFlakyHandler(99)]], {
       now: () => clock,
     });
 
@@ -236,7 +271,7 @@ describe('JobRuntime', () => {
   });
 
   it('classifies a handler timeout via the sentinel abort reason', async () => {
-    const { runtime } = setup([['internal.echo', makeEchoHandler()]]);
+    const { runtime } = await setup([['internal.echo', makeEchoHandler()]]);
     const handle = await enqueueTest(
       runtime,
       'internal.echo',
@@ -257,7 +292,7 @@ describe('JobRuntime', () => {
         throw new Error('request timeout');
       },
     } as JobHandler;
-    const { runtime } = setup([['internal.liar', liar]]);
+    const { runtime } = await setup([['internal.liar', liar]]);
     const handle = await enqueueTest(runtime, 'internal.liar', {}, { maxAttempts: 1 });
     const finished = await handle.finished;
     expect(finished.status).toBe('failed');
@@ -274,7 +309,7 @@ describe('JobRuntime', () => {
         throw new Error('boom');
       },
     } as JobHandler;
-    const { db, jobService, runtime } = setup([['internal.failing', failing]]);
+    const { db, jobService, runtime } = await setup([['internal.failing', failing]]);
 
     const handle = await enqueueTest(runtime, 'internal.failing', {});
     await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
@@ -292,7 +327,7 @@ describe('JobRuntime', () => {
   });
 
   it('coalesces concurrent pump requests into one loop plus one dirty rerun', async () => {
-    const { jobService, runtime } = setup([['internal.echo', makeEchoHandler()]]);
+    const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]]);
     const spy = jest.spyOn(jobService, 'promoteDelayedDueTx');
     await Promise.all([
       runtime.pump({ reason: 'manual' }),
@@ -304,7 +339,7 @@ describe('JobRuntime', () => {
 
   it('cold-start pump prunes terminal rows past the 7d TTL, keeping active ones', async () => {
     const clock = GC_TERMINAL_TTL_MS * 2;
-    const { db, jobService, runtime } = setup([['internal.echo', makeEchoHandler()]], {
+    const { db, jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]], {
       now: () => clock,
     });
     await insertJob(db.database, { finishedAt: 10, id: 'ancient', status: 'completed' });
@@ -324,7 +359,7 @@ describe('JobRuntime', () => {
   });
 
   it('runs startup recovery before the first claim', async () => {
-    const { db, jobService, runtime } = setup([
+    const { db, jobService, runtime } = await setup([
       ['internal.echo', makeEchoHandler({ recovery: 'retry' })],
     ]);
     await insertJob(db.database, {
@@ -361,7 +396,7 @@ describe('JobRuntime', () => {
   });
 
   it('leaves undispatchable execution classes pending (window filter)', async () => {
-    const { jobService, runtime } = setup([
+    const { jobService, runtime } = await setup([
       ['internal.bg', makeEchoHandler({ executionClass: 'bounded-background' })],
     ]);
     const handle = await enqueueTest(runtime, 'internal.bg', { message: 'later' });
@@ -378,7 +413,7 @@ describe('JobRuntime', () => {
       leases.push(lease);
       return lease;
     });
-    const { runtime } = setup(
+    const { runtime } = await setup(
       [['internal.uc', makeHoldHandler(gate, { executionClass: 'user-continued' })]],
       { keepAlive: { acquire } },
     );
@@ -410,7 +445,7 @@ describe('JobRuntime', () => {
         throw new Error('boom');
       },
     });
-    const { runtime } = setup([['internal.ucFail', failing]], { keepAlive: { acquire } });
+    const { runtime } = await setup([['internal.ucFail', failing]], { keepAlive: { acquire } });
 
     const handle = await enqueueTest(runtime, 'internal.ucFail', {}, { maxAttempts: 1 });
     const finished = await handle.finished;
@@ -423,7 +458,7 @@ describe('JobRuntime', () => {
   it('resolves finished before onSettled completes, and swallows onSettled errors', async () => {
     const settledGate = makeGate();
     const events: string[] = [];
-    const { runtime } = setup([
+    const { runtime } = await setup([
       [
         'internal.echo',
         makeEchoHandler({

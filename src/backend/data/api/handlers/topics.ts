@@ -13,34 +13,47 @@ import {
 } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
+import { application } from '@/backend/core/application/Application';
+import type { ResourceScope } from '@/backend/core/resources/types';
 import type { TopicService } from '@/backend/data/services/TopicService';
 
-export function createTopicHandlers(
-  service: TopicService,
-  onTopicsDeleted: (topicIds: readonly string[]) => void,
-): HandlersFor<TopicSchemas> {
+const topicScopes = (ids: readonly string[]): ResourceScope[] =>
+  ids.map((id) => ({ id, kind: 'topic' }));
+
+/**
+ * Deletes route through the scope coordinator so the work running under a topic
+ * is cancelled and drained before its rows go.
+ *
+ * Here rather than inside `TopicService` for two reasons: this is the boundary
+ * every caller crosses, so no future one can forget; and the cancellation must
+ * happen outside the write transaction the service opens — `withWriteTx` is not
+ * reentrant, and a cancelled turn needs the write lock to land its terminal row.
+ */
+export function createTopicHandlers(service: TopicService): HandlersFor<TopicSchemas> {
+  const scopes = () => application.get('ResourceScopeCoordinator');
+
   return {
     '/assistants/:assistantId/topics': {
       DELETE: async ({ params }) => {
-        const result = await service.deleteByAssistantId(params.assistantId);
-        onTopicsDeleted(result.deletedIds);
-        return result;
+        // Read first: the cascade discovers its own ids inside the transaction,
+        // which is too late to cancel anything.
+        const ids = await service.listIdsByAssistantId(params.assistantId);
+        return scopes().delete(topicScopes(ids), () =>
+          service.deleteByAssistantId(params.assistantId),
+        );
       },
     },
     '/topics': {
       DELETE: async ({ query }) => {
-        const result = await service.deleteByIds(DeleteTopicsQuerySchema.parse(query).ids);
-        onTopicsDeleted(result.deletedIds);
-        return result;
+        const { ids } = DeleteTopicsQuerySchema.parse(query);
+        return scopes().delete(topicScopes(ids), () => service.deleteByIds(ids));
       },
       GET: async ({ query }) => service.listByCursor(ListTopicsQuerySchema.parse(query ?? {})),
       POST: async ({ body }) => service.create(CreateTopicSchema.parse(body)),
     },
     '/topics/:id': {
-      DELETE: async ({ params }) => {
-        await service.delete(params.id);
-        onTopicsDeleted([params.id]);
-      },
+      DELETE: async ({ params }) =>
+        scopes().delete(topicScopes([params.id]), () => service.delete(params.id)),
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => service.update(params.id, UpdateTopicSchema.parse(body)),
     },

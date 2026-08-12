@@ -28,21 +28,28 @@ import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import type {
-  AiUsageCaptureContext,
-  AiUsageRecordService,
-  MessageRef,
+import { application } from '@/backend/core/application/Application';
+import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import {
+  aiUsageRecordService,
+  type AiUsageCaptureContext,
+  type AiUsageRecordService,
+  type MessageRef,
 } from '@/backend/data/services/AiUsageRecordService';
-import type { AssistantService } from '@/backend/data/services/AssistantService';
-import type { ModelService } from '@/backend/data/services/ModelService';
-import type { ProviderService } from '@/backend/data/services/ProviderService';
+import { assistantService, type AssistantService } from '@/backend/data/services/AssistantService';
+import { modelService, type ModelService } from '@/backend/data/services/ModelService';
+import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
+import { fileContent } from '@/backend/services/file/fileContent';
+import { COPILOT_PROVIDER_ID } from '@/backend/services/oauth/authorization/adapters/CopilotOAuthAdapter';
+import { devicePermissions } from '@/backend/services/permissions';
 
 import { createAiUsagePlugin } from './hooks/billingHook';
 import { resolveUIMessageFileUrls } from './messages/attachmentRouting';
 import { listModels as listProviderModels } from './provider/listModels';
-import type { VertexAuthClient } from './provider/VertexAuthClient';
+import { VertexAuthClient } from './provider/VertexAuthClient';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
+import { ToolResolver } from './tools';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -154,13 +161,85 @@ function createProviderCallHandler(
 }
 
 /**
+ * The two OAuth calls the AI runtime makes, bound to the installed host.
+ *
+ * Both services are resolved per call rather than captured, so a host
+ * replacement cannot leave this port serving a dead generation. The Copilot id
+ * lives here, with the consumer that needs a serving token, rather than in the
+ * OAuth module — its README keeps the generic runtime and public contract free
+ * of provider names.
+ */
+const hostOAuth: AiServiceDependencies['oauth'] = {
+  authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
+    application
+      .get('OAuthRuntimeService')
+      .authenticatedFetch(providerId, buildRequest, doFetch, options),
+  getCopilotServingToken: (headers, signal) =>
+    application.get('ProviderOAuthService').getServingToken(COPILOT_PROVIDER_ID, headers, signal),
+};
+
+/**
  * Lifecycle AI service. See `docs/references/ai/core-architecture.md` in desktop.
  *
  * Mobile keeps the desktop service name but does not register IPC handlers
  * or depend on Electron main-process lifecycle services.
+ *
+ * It declares no `@DependsOn`. Its container-owned collaborators —
+ * `PreferenceService`, `WebSearchService`, `McpRuntimeService`,
+ * `OAuthRuntimeService`, `ProviderOAuthService` — are resolved inside methods
+ * instead, because the single optional dependencies object is what every AI test
+ * injects through and positional injection would take that argument slot. The
+ * cost is that those edges do not appear in the graph; it is affordable because
+ * this service initializes nothing and stops nothing, so no ordering depends on
+ * them.
  */
-export class AiService {
-  constructor(private readonly services: AiServiceDependencies) {}
+@Injectable('AiService')
+@ServicePhase(Phase.PostReady)
+export class AiService extends BaseService {
+  private toolResolver: ToolResolver | undefined;
+  private vertexAuthClient: VertexAuthClient | undefined;
+
+  /** Every entry is optional so the container can construct this with no arguments. */
+  constructor(private readonly overrides: Partial<AiServiceDependencies> = {}) {
+    super();
+  }
+
+  /**
+   * Production defaults, per access. `??` keeps an overridden entry from
+   * resolving anything, so a unit test needs no installed host for the services
+   * it replaces.
+   */
+  private get services(): AiServiceDependencies {
+    const { overrides } = this;
+    return {
+      aiUsageRecord: overrides.aiUsageRecord ?? aiUsageRecordService,
+      assistant: overrides.assistant ?? assistantService,
+      fileContent: overrides.fileContent ?? fileContent,
+      model: overrides.model ?? modelService,
+      oauth: overrides.oauth ?? hostOAuth,
+      preference: overrides.preference ?? application.get('PreferenceService'),
+      provider: overrides.provider ?? providerService,
+      tools: overrides.tools ?? this.getToolResolver(),
+      vertexAuth: overrides.vertexAuth ?? this.getVertexAuth(),
+    };
+  }
+
+  /** Owns a built tool registry, so it is created once per service instance. */
+  private getToolResolver(): ToolResolver {
+    this.toolResolver ??= new ToolResolver({
+      devicePermissions,
+      mcpRuntime: application.get('McpRuntimeService'),
+      preference: application.get('PreferenceService'),
+      webSearch: application.get('WebSearchService'),
+    });
+    return this.toolResolver;
+  }
+
+  /** Caches minted service-account tokens, so it outlives a single request. */
+  private getVertexAuth(): VertexAuthClient {
+    this.vertexAuthClient ??= new VertexAuthClient({ fetch: expoFetch as typeof globalThis.fetch });
+    return this.vertexAuthClient;
+  }
 
   // ── Streaming chat (agent.stream) ──
 
