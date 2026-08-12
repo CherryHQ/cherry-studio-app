@@ -1,4 +1,5 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import { useQueryClient } from '@tanstack/react-query';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,13 +11,16 @@ import {
   MessageList,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
+import { refreshProviderConfigurationQueries } from '@/frontend/features/settings/providerConfigurationQueries';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { isIOS } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
+import type { ToolApprovalRespondInput } from '../approval/types';
 import { useChat, useChatTopic } from '../runtime/ChatProvider';
 import {
+  getApprovedProviderConfigurationIds,
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
 } from '../runtime/chatRuntimeProjection';
@@ -53,6 +57,7 @@ export function ChatWorkspace({
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { alert } = useAlert();
+  const queryClient = useQueryClient();
   const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
   const presentationMessages = useMemo(
@@ -68,15 +73,30 @@ export function ChatWorkspace({
   const pendingApprovals = getPendingToolApprovals(visibleMessages);
   const isApprovalSheetOpen = pendingApprovals.length > 0 && chatTopic.status !== 'streaming';
   const handleApprovalRespond = useCallback(
-    async (input: { approvalId: string; approved: boolean; messageId: string }) => {
+    async (input: ToolApprovalRespondInput) => {
+      const providerIds =
+        pendingApprovals.length === 1
+          ? getApprovedProviderConfigurationIds(visibleMessages, input)
+          : [];
       try {
         await chat.respondToolApproval({ ...input, topicId });
       } catch (error) {
         logger.error('Tool approval response failed', error as Error);
         alert.show({ title: t('chat.tool.approval.failed') });
+        return;
+      }
+
+      try {
+        await Promise.all(
+          providerIds.map((providerId) =>
+            refreshProviderConfigurationQueries(queryClient, providerId),
+          ),
+        );
+      } catch (error) {
+        logger.warn('Provider configuration query refresh failed', error as Error);
       }
     },
-    [alert, chat, t, topicId],
+    [alert, chat, pendingApprovals.length, queryClient, t, topicId, visibleMessages],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
     hasHistoryBeforePendingTurn: chatTopic.hasHistoryBeforePendingTurn,

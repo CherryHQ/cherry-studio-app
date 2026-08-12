@@ -6,6 +6,17 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { PendingToolApproval } from '../../runtime/chatRuntimeProjection';
 import { ToolApprovalSheet } from '../ToolApprovalSheet';
 
+jest.mock('../ProviderConfigApprovalSheet', () => {
+  const React = jest.requireActual('react');
+  return {
+    isProviderConfigurationApproval: (approval?: PendingToolApproval) =>
+      approval?.toolName === 'configure_builtin_provider' ||
+      approval?.toolName === 'create_custom_provider',
+    ProviderConfigApprovalSheet: (props: object) =>
+      React.createElement('ProviderConfigApprovalSheet', props),
+  };
+});
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     // Interpolation values are half of what this sheet gets right or wrong — a
@@ -220,5 +231,24 @@ describe('ToolApprovalSheet', () => {
 
     expect(renderedTexts()).toContain('chat.builtinTool.location.current');
     expect(renderedTexts()).not.toContain('location_get_current');
+  });
+
+  test('routes provider configuration approvals before the generic arguments sheet', () => {
+    const secret = 'sk-do-not-render';
+    const { onRespond } = render({
+      approvals: [
+        makeApproval({
+          input: { apiKey: secret, provider: 'CherryIN' },
+          toolName: 'configure_builtin_provider',
+          toolType: 'provider',
+        }),
+      ],
+    });
+
+    const specialized = renderer.root.findByType('ProviderConfigApprovalSheet');
+    expect(specialized.props.approval.toolName).toBe('configure_builtin_provider');
+    expect(specialized.props.onRespond).toBe(onRespond);
+    expect(renderer.root.findAllByType(BottomSheet)).toHaveLength(0);
+    expect(renderedTexts()).not.toContain(secret);
   });
 });

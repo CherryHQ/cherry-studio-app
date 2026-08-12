@@ -12,6 +12,7 @@ const mockInputHeightShared = {
 };
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
+const mockInvalidateQueries = jest.fn(async () => undefined);
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -20,6 +21,17 @@ let mockChatComposerProps:
       dismissKeyboardOnSend: boolean;
       onHeightChange: (height: number) => void;
       topicId: string;
+    }
+  | undefined;
+let mockToolApprovalSheetProps:
+  | {
+      approvals: readonly { approvalId: string }[];
+      isOpen: boolean;
+      onRespond: (input: {
+        approvalId: string;
+        approved: boolean;
+        messageId: string;
+      }) => Promise<void>;
     }
   | undefined;
 let mockChatTopic: {
@@ -35,6 +47,10 @@ jest.mock('expo-router/react-navigation', () => ({
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
 }));
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
@@ -68,7 +84,10 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 }));
 
 jest.mock('../../approval/ToolApprovalSheet', () => ({
-  ToolApprovalSheet: () => null,
+  ToolApprovalSheet: (props: NonNullable<typeof mockToolApprovalSheetProps>) => {
+    mockToolApprovalSheetProps = props;
+    return null;
+  },
 }));
 
 jest.mock('../../runtime/ChatProvider', () => ({
@@ -152,6 +171,7 @@ describe('ChatWorkspace message presentation integration', () => {
     mockCoverVisible = undefined;
     mockIsLoadingOlder = undefined;
     mockMessageListProps = undefined;
+    mockToolApprovalSheetProps = undefined;
     readyFrame = undefined;
     requestAnimationFrameSpy = jest
       .spyOn(global, 'requestAnimationFrame')
@@ -210,5 +230,58 @@ describe('ChatWorkspace message presentation integration', () => {
 
     act(() => readyFrame?.(0));
     expect(mockCoverVisible).toBe(false);
+  });
+
+  test('refreshes an earlier approved provider after the final approval resumes the turn', async () => {
+    const assistant = {
+      ...createMessage('assistant-1', 'assistant'),
+      data: {
+        parts: [
+          {
+            approval: { approved: true, id: 'provider-approval' },
+            input: {
+              apiKey: '',
+              baseUrl: '',
+              intent: 'configure',
+              manualModels: [],
+              provider: 'cherryin',
+              removedModelIds: [],
+              selectedModelIds: [],
+              skipModelPull: false,
+            },
+            state: 'approval-responded',
+            toolCallId: 'provider-call',
+            toolName: 'configure_builtin_provider',
+            type: 'dynamic-tool',
+          },
+          {
+            approval: { id: 'other-approval' },
+            input: { query: 'status' },
+            state: 'approval-requested',
+            toolCallId: 'other-call',
+            toolName: 'other_tool',
+            type: 'dynamic-tool',
+          },
+        ],
+      },
+    } as unknown as Message;
+    renderer = renderWorkspace(false, [createMessage('user-1', 'user'), assistant]);
+
+    await act(async () => {
+      await mockToolApprovalSheetProps?.onRespond({
+        approvalId: 'other-approval',
+        approved: true,
+        messageId: 'assistant-1',
+      });
+    });
+
+    expect(mockRespondToolApproval).toHaveBeenCalledWith({
+      approvalId: 'other-approval',
+      approved: true,
+      messageId: 'assistant-1',
+      topicId: 'topic-1',
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['/providers/cherryin'] });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['/providers'] });
   });
 });

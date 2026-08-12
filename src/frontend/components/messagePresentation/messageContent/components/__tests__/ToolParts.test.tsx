@@ -6,10 +6,17 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { McpToolPart } from '../McpToolPart';
 import { MetaToolPart } from '../MetaToolPart';
+import { ProviderConfigToolPart } from '../ProviderConfigToolPart';
 import { ToolPart } from '../ToolPart';
 import { WebSearchToolPart } from '../WebSearchToolPart';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
+
+const mockRouterPush = jest.fn();
+
+jest.mock('expo-router', () => ({
+  useRouter: () => ({ push: mockRouterPush }),
+}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -40,6 +47,7 @@ describe('tool message detail sheets', () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
     setPlatform(originalPlatform);
+    mockRouterPush.mockClear();
   });
 
   it('opens generic tool details from the message status row', async () => {
@@ -108,6 +116,46 @@ describe('tool message detail sheets', () => {
     await render(<ToolPart part={makeToolPart({ toolName: 'calculator' })} />);
 
     expect(findByTestID('tool-part-trigger').props.title).toBe('calculator');
+  });
+
+  it('shows a redacted provider configuration summary and opens full settings', async () => {
+    const secret = 'sk-secret-value';
+    await render(
+      <ProviderConfigToolPart
+        part={makeToolPart({
+          input: { apiKey: secret, baseUrl: 'https://api.example.com/v1' },
+          output: {
+            apiKeyAdded: true,
+            catalogSource: 'api',
+            modelsAdded: ['provider-1::model-a'],
+            modelsRemoved: [],
+            modelsSkipped: [],
+            origin: 'https://api.example.com',
+            providerId: 'provider-1',
+            providerName: 'Provider One',
+            status: 'configured',
+          },
+          toolMetadata: { cherry: { tool: { type: 'provider' } } },
+          toolName: 'configure_builtin_provider',
+        })}
+      />,
+    );
+
+    const trigger = findByTestID('provider-config-tool-part-trigger');
+    expect(trigger.props.title).toBe('Provider One');
+    expect(trigger.props.statusText).toBe('chat.providerConfig.configured');
+
+    await act(async () => trigger.props.onPress());
+    expect(findText(secret)).toHaveLength(0);
+    expect(findText('https://api.example.com')).toHaveLength(1);
+
+    await act(async () => {
+      findText('chat.providerConfig.openSettings')[0]?.props.onPress();
+    });
+    expect(mockRouterPush).toHaveBeenCalledWith({
+      params: { providerId: 'provider-1', providerName: 'Provider One' },
+      pathname: '/settings/provider/[providerId]',
+    });
   });
 
   it('opens MCP tool details with the server and tool name', async () => {

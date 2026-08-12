@@ -7,14 +7,13 @@ import { ScrollView, Text, View } from 'react-native';
 import { getBuiltInToolPresentation } from '@/frontend/components/messagePresentation/utils/builtInToolPresentation';
 
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
+import {
+  isProviderConfigurationApproval,
+  ProviderConfigApprovalSheet,
+} from './ProviderConfigApprovalSheet';
+import type { ToolApprovalRespondInput } from './types';
 
 const ignoreClose = () => undefined;
-
-type ToolApprovalRespondInput = {
-  approvalId: string;
-  approved: boolean;
-  messageId: string;
-};
 
 type ToolApprovalSheetProps = {
   approvals: readonly PendingToolApproval[];
@@ -32,6 +31,18 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
     setLastApproval(approvals[0]);
   }
   const approval = approvals[0] ?? lastApproval;
+
+  if (approval && isProviderConfigurationApproval(approval)) {
+    return (
+      <ProviderConfigApprovalSheet
+        approval={approval}
+        approvalCount={approvals.length || 1}
+        isOpen={isOpen}
+        key={approval.approvalId}
+        onRespond={onRespond}
+      />
+    );
+  }
 
   const submit = async (approved: boolean) => {
     if (!approval || isSubmitting) {

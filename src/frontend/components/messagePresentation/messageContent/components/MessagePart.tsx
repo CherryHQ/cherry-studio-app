@@ -8,6 +8,7 @@ import { FilePart } from './FilePart';
 import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import type { MessagePartRenderMode } from './MessageParts';
 import { isMetaToolPart, MetaToolPart } from './MetaToolPart';
+import { isProviderConfigToolPart, ProviderConfigToolPart } from './ProviderConfigToolPart';
 import { ReasoningPart } from './ReasoningPart';
 import { SourceDocumentPart } from './SourceDocumentPart';
 import { SourceUrlPart } from './SourceUrlPart';
@@ -44,6 +45,10 @@ export function MessagePart({
 
     if (isWebSearchToolPart(part)) {
       return <WebSearchToolPart part={part} />;
+    }
+
+    if (isProviderConfigToolPart(part)) {
+      return <ProviderConfigToolPart part={part} />;
     }
 
     if (isMetaToolPart(part)) {
