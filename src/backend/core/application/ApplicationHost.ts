@@ -39,6 +39,7 @@ export class ApplicationHost {
   private readonly lifecycle: LifecycleManager;
   private hostState: HostState = 'created';
   private disposal: Promise<TeardownSummary> | null = null;
+  private postReady: Promise<void> | null = null;
 
   constructor(profile: HostProfile) {
     this.container = new ServiceContainer(profile.overrides);
@@ -78,7 +79,10 @@ export class ApplicationHost {
       return;
     }
 
-    void (async () => {
+    // One phase run per generation. Keeping the promise is also what lets
+    // disposal serialize behind initialization instead of stopping a partial
+    // graph while another service is still becoming Ready.
+    this.postReady ??= (async () => {
       try {
         await this.lifecycle.startPhase(Phase.PostReady);
         await this.lifecycle.runAllReady();
@@ -101,6 +105,12 @@ export class ApplicationHost {
 
   private async runDisposal(): Promise<TeardownSummary> {
     this.hostState = 'disposing';
+
+    // PostReady is off the first-paint path, not outside the host lifetime. If
+    // it is already initializing, let it finish before deriving the reverse
+    // stop order; otherwise a service can become Ready after the stop pass and
+    // keep subscriptions, timers, or native resources from a dead generation.
+    await this.postReady;
 
     const stopped = await this.lifecycle.stopAll();
     const destroyed = await this.lifecycle.destroyAll();

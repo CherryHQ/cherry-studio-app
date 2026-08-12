@@ -19,7 +19,7 @@ describe('BackgroundReplyService', () => {
   let preferenceListener: (() => void) | undefined;
   let enabled: boolean;
   const mockSessions: MockSession[] = [];
-  const mockStartSession = jest.fn((input: SessionInput): MockSession => {
+  const createMockSession = (input: SessionInput): MockSession => {
     const session: MockSession = {
       cancel: jest.fn(),
       finish: jest.fn(),
@@ -29,7 +29,8 @@ describe('BackgroundReplyService', () => {
     };
     mockSessions.push(session);
     return session;
-  });
+  };
+  const mockStartSession = jest.fn(createMockSession);
 
   beforeEach(() => {
     enabled = true;
@@ -46,6 +47,7 @@ describe('BackgroundReplyService', () => {
 
   test('opens one keep-alive session per topic with derived initial content', async () => {
     const service = await createService();
+    expect(service.isActivated).toBe(true);
     const first = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
     const second = service.startTurn({ assistantName: 'Beta', topicId: 'topic-2' });
     expect(first).not.toBe(second);
@@ -151,6 +153,8 @@ describe('BackgroundReplyService', () => {
 
     enabled = false;
     preferenceListener?.();
+    await flushOperations();
+    expect(service.isActivated).toBe(false);
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
     turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'hi' }], role: 'assistant' });
@@ -158,9 +162,32 @@ describe('BackgroundReplyService', () => {
 
     enabled = true;
     preferenceListener?.();
+    await flushOperations();
+    expect(service.isActivated).toBe(true);
     expect(mockStartSession).toHaveBeenCalledTimes(2);
     expect(mockSessions[1]?.input.props).toMatchObject({ phase: 'responding' });
 
+    await service._doStop();
+  });
+
+  test('rolls back partially restored sessions when activation fails', async () => {
+    const service = await createService();
+    service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    service.startTurn({ assistantName: 'Beta', topicId: 'topic-2' });
+
+    enabled = false;
+    preferenceListener?.();
+    await flushOperations();
+    mockStartSession.mockImplementationOnce(createMockSession).mockImplementationOnce(() => {
+      throw new Error('presenter unavailable');
+    });
+
+    enabled = true;
+    preferenceListener?.();
+    await flushOperations();
+
+    expect(service.isActivated).toBe(false);
+    expect(mockSessions[2]?.cancel).toHaveBeenCalledTimes(1);
     await service._doStop();
   });
 
@@ -185,6 +212,7 @@ describe('BackgroundReplyService', () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     enabled = false;
     const disabledService = await createService();
+    expect(disabledService.isActivated).toBe(false);
     const disabledTurn = disabledService.startTurn({
       assistantName: 'Alpha',
       topicId: 'topic-2',

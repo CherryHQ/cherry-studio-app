@@ -70,17 +70,18 @@ shutdown marks the runtime disposed, rejects new tasks, aborts all active turns,
 tracked task to settle before MCP, web search, cache, or SQLite is closed. An active stream is still
 not guaranteed to continue, checkpoint, or resume after OS suspension or termination.
 
-## Painting Session
+## Painting Generation
 
-`usePaintingGeneration` owns one backend `PaintingGenerationSession` and UI-only
-generating/revealing/error state. The session owns its AbortController, file preparation, AI
-generation, persistence, incomplete receipt retry state, and failed-output cleanup. The frontend
-hook owns toast and query synchronization and disposes the session on unmount.
+`PaintingsModule.startGeneration()` atomically creates the receipt and enqueues a
+`painting.generate` row. The host-owned `JobRuntime` claims and executes it, owns cancellation and
+terminal persistence, and can continue after the initiating route unmounts. The handler owns file
+preparation, AI generation, output persistence, failed-output cleanup, and its feature-specific
+background Activity session.
 
-`cancel()` aborts only the active generation and retains an incomplete receipt so the same input can
-retry without creating another gallery item. `dispose()` aborts active work, clears the receipt,
-permanently closes that session, and prevents late async receipt creation from reviving it. Separate
-sessions never share receipt state.
+`usePaintingGeneration` owns only screen state, polling, toast/query synchronization, and the
+receipt currently shown by that route. Returning to a receipt adopts its active job from the durable
+ledger. Explicit cancel reaches `JobRuntime.cancel()` and then deletes the receipt; deleting a
+painting through any Data API caller first fences its scope and drains the job.
 
 ## Other Long-Lived Resources
 
@@ -96,9 +97,10 @@ sessions never share receipt state.
 `initializeAppRuntime()` reads cached boot preferences, applies the frontend theme, and initializes
 i18n. It must not refresh catalogs, prefetch history, repair data, or run diagnostics.
 
-`runPostReadyTasks()` starts after status becomes `ready`. It currently repairs crash-orphaned
-pending assistant messages and prewarms active MCP servers. It is fire-and-forget, best-effort, and
-must not block first paint.
+`runPostReadyTasks()` starts after status becomes `ready`. It repairs crash-orphaned pending
+assistant messages while the host's PostReady phase prewarms MCP and starts the job cold-start pump.
+Both are off the first-paint path. Host-owned PostReady initialization is retained and awaited if
+that generation is disposed before it finishes.
 
 Current topic, message history windows, provider queries, and feature state load at route level after
 the bootstrap gate.
@@ -108,6 +110,7 @@ the bootstrap gate.
 - App bootstrap unmount closes SQLite and disposes long-lived backend resources.
 - Route unmount only unsubscribes from Chat; app disposal aborts and awaits all Chat turns before
   closing infrastructure.
-- Painting owners cancel or dispose their own isolated generation session.
+- Painting route unmount does not stop generation; explicit cancel or resource deletion reaches the
+  host-owned job runtime.
 - Cold start does not wait for non-current history, provider/model refresh, or diagnostics.
 - Every new long-lived resource can identify its owner, release point, and background behavior.

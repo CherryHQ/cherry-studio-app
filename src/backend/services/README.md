@@ -39,8 +39,8 @@ suffix.
   `src/main/ai/streamManager` rather than anything under `src/main/services`.
 
 Workflow module factories accept narrow dependency objects. Concrete graph assembly and app-owned
-lifecycle remain in `src/bootstrap`; caller-owned `PaintingGenerationSession` instances are created
-through `PaintingsModule` and disposed by their frontend owner.
+lifecycle remain in `src/bootstrap`; `PaintingsModule` atomically creates receipts and enqueues work
+owned by the host-scoped `JobRuntime`.
 
 Direct desktop counterparts keep their `Service` names and public methods. Mobile additions use
 `Module`, `Runtime`, `Session`, `Client`, `Adapter`, or `Manager` according to ownership; do not add

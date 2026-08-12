@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 
 import {
+  type Activatable,
   AppStatePolicy,
   BaseService,
   DependsOn,
@@ -75,9 +76,11 @@ type EnvironmentPort = {
 @ServicePhase(Phase.PostReady)
 @DependsOn(['BackgroundActivityManager', 'PreferenceService', 'BackgroundActivityEnvironment'])
 @AppStatePolicy('background-presentation')
-export class BackgroundReplyService extends BaseService implements BackgroundReplyLifecycle {
+export class BackgroundReplyService
+  extends BaseService
+  implements Activatable, BackgroundReplyLifecycle
+{
   private disposed = false;
-  private enabled = false;
   private generation = 0;
   private operationTail: Promise<void> = Promise.resolve();
   private turns = new Map<string, TurnRecord>();
@@ -93,10 +96,35 @@ export class BackgroundReplyService extends BaseService implements BackgroundRep
   protected onInit(): void {
     if (Platform.OS !== 'ios') return;
 
-    this.enabled = this.preference.readCached(PREFERENCE_KEY);
     this.registerDisposable(
       this.preference.subscribeChange(PREFERENCE_KEY)(() => this.handlePreferenceChange()),
     );
+  }
+
+  protected async onReady(): Promise<void> {
+    if (Platform.OS === 'ios' && this.preference.readCached(PREFERENCE_KEY)) {
+      await this.activate();
+    }
+  }
+
+  onActivate(): void {
+    try {
+      for (const record of this.turns.values()) this.ensureSession(record, true);
+    } catch (error) {
+      this.cancelSessions();
+      throw error;
+    }
+  }
+
+  onDeactivate(): void {
+    this.cancelSessions();
+  }
+
+  private cancelSessions(): void {
+    for (const record of this.turns.values()) {
+      record.session?.cancel();
+      record.session = undefined;
+    }
   }
 
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
@@ -155,7 +183,7 @@ export class BackgroundReplyService extends BaseService implements BackgroundRep
     record.session = undefined;
   };
 
-  protected onStop(): void {
+  protected async onStop(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
 
@@ -165,18 +193,16 @@ export class BackgroundReplyService extends BaseService implements BackgroundRep
       record.session?.cancel();
       record.session = undefined;
     }
+    await this.operationTail;
   }
 
   private handlePreferenceChange(): void {
-    this.enabled = this.preference.readCached(PREFERENCE_KEY);
-    if (!this.enabled) {
-      for (const record of this.turns.values()) {
-        record.session?.cancel();
-        record.session = undefined;
-      }
-      return;
-    }
-    for (const record of this.turns.values()) this.ensureSession(record);
+    const transition = this.preference.readCached(PREFERENCE_KEY)
+      ? this.activate()
+      : this.deactivate();
+    void transition.catch((error: unknown) => {
+      logger.error('Background reply preference transition failed', error as Error);
+    });
   }
 
   private updateTurn(
@@ -219,8 +245,10 @@ export class BackgroundReplyService extends BaseService implements BackgroundRep
   }
 
   /** Starts the topic's session, or re-syncs an inherited one, when enabled. */
-  private ensureSession(record: TurnRecord): void {
-    if (!this.enabled || this.disposed) return;
+  private ensureSession(record: TurnRecord, activating = false): void {
+    // `onActivate` runs before BaseService flips `isActivated`; callers during
+    // normal operation use the public state as the preference gate.
+    if ((!activating && !this.isActivated) || this.disposed) return;
 
     const keepAlive = isGeneratingPhase(record.content.phase);
     if (record.session) {

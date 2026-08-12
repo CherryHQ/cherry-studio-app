@@ -153,6 +153,7 @@ export class BackgroundActivityManager extends BaseService {
   }
 
   private readonly handleAppStateChange = (nextState: AppStateStatus) => {
+    if (this.disposed) return;
     this.appState = nextState;
     void this.enqueue(async () => {
       if (nextState === 'active') {

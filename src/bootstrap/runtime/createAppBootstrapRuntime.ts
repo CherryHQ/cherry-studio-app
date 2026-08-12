@@ -121,15 +121,14 @@ export function createAppBootstrapRuntime(
     dispose: () => {
       // Nothing to drain ahead of the host any more: `ChatRuntime` and
       // `JobRuntime` are services, so reverse-order teardown settles them before
-      // the database they write through. Uninstalling is only correct while this
-      // is still the installed host — a runtime disposed out of order must not
-      // take down whichever host replaced it.
+      // the database they write through.
       disposePromise ??= (async () => {
-        if (application.current === host) {
-          await application.uninstall();
-        } else {
-          await host.dispose();
-        }
+        // The expected-host check runs inside Application's serialized
+        // transition, closing the replacement/dispose race. Calling the host
+        // directly afterwards also covers a runtime disposed before install;
+        // disposal is idempotent when Application already handled it.
+        await application.uninstall(host);
+        await host.dispose();
       })();
       return disposePromise;
     },

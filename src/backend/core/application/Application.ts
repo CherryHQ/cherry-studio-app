@@ -56,9 +56,12 @@ class Application {
   async install(host: ApplicationHost): Promise<void> {
     await this.enqueue(async () => {
       const outgoing = this.host;
-      this.host = null;
       if (outgoing) {
+        // Keep the outgoing generation installed until its teardown settles.
+        // Service hooks and the module-singleton data services they call must
+        // still resolve that generation's collaborators while draining.
         await outgoing.dispose();
+        this.host = null;
       }
 
       // Installed before starting, because startup work resolves through here:
@@ -78,15 +81,25 @@ class Application {
     });
   }
 
-  /** Dispose the installed host. Returns an empty summary when none is installed. */
-  async uninstall(): Promise<TeardownSummary> {
+  /**
+   * Dispose the installed host.
+   *
+   * `expectedHost` makes runtime cleanup conditional inside the serialized
+   * transition. A check performed before enqueueing is racy: a replacement can
+   * finish first and the old runtime would otherwise uninstall the new host.
+   */
+  async uninstall(expectedHost?: ApplicationHost): Promise<TeardownSummary> {
     let summary: TeardownSummary = { failed: [], timedOut: [] };
 
     await this.enqueue(async () => {
       const outgoing = this.host;
-      this.host = null;
+      if (expectedHost && outgoing !== expectedHost) return;
       if (outgoing) {
+        // `onStop` is part of the outgoing host's lifetime. Clearing this first
+        // would make its terminal writes lose the DbService they must drain
+        // against, despite teardown ordering the database last.
         summary = await outgoing.dispose();
+        this.host = null;
       }
     });
 

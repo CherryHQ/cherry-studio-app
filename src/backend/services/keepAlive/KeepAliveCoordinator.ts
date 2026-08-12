@@ -70,7 +70,7 @@ export class KeepAliveCoordinator extends BaseService {
   }
 
   private readonly handleAppStateChange = (nextState: AppStateStatus) => {
-    if (nextState === 'active') return;
+    if (this.disposed || nextState === 'active') return;
     void this.enqueue(() => this.reconcile());
   };
 

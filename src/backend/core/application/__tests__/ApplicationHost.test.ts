@@ -1,5 +1,5 @@
 import { BaseService } from '../../lifecycle/BaseService';
-import { Injectable, ServicePhase } from '../../lifecycle/decorators';
+import { DependsOn, Injectable, ServicePhase } from '../../lifecycle/decorators';
 import { Phase } from '../../lifecycle/types';
 import { application } from '../Application';
 import { ApplicationHost } from '../ApplicationHost';
@@ -32,6 +32,19 @@ class Connection extends BaseService {
 class LateWork extends BaseService {
   protected onInit(): void {
     journal.push('LateWork:init');
+  }
+}
+
+@Injectable('ResolveOnStop')
+@DependsOn(['Connection'])
+class ResolveOnStop extends BaseService {
+  constructor(_connection: Connection) {
+    super();
+  }
+
+  protected onStop(): void {
+    const connection = application.get('Connection' as never) as Connection;
+    journal.push(`ResolveOnStop:${connection.open ? 'open' : 'closed'}`);
   }
 }
 
@@ -92,6 +105,55 @@ describe('ApplicationHost construction', () => {
 
     expect(journal).toEqual(['Connection:open', 'LateWork:init']);
     await host.dispose();
+  });
+
+  it('waits for in-progress post-ready initialization before stopping it', async () => {
+    let finishInitialization!: () => void;
+    let markInitializationStarted!: () => void;
+    const initializationStarted = new Promise<void>((resolve) => {
+      markInitializationStarted = resolve;
+    });
+    const initializationGate = new Promise<void>((resolve) => {
+      finishInitialization = resolve;
+    });
+
+    @Injectable('SlowPostReady')
+    @ServicePhase(Phase.PostReady)
+    class SlowPostReady extends BaseService {
+      protected async onInit(): Promise<void> {
+        journal.push('SlowPostReady:init-started');
+        markInitializationStarted();
+        await initializationGate;
+        journal.push('SlowPostReady:init-finished');
+      }
+
+      protected onStop(): void {
+        journal.push('SlowPostReady:stop');
+      }
+    }
+
+    const host = new ApplicationHost({ services: [SlowPostReady] });
+    await host.start();
+    host.runPostReady();
+    await initializationStarted;
+
+    let disposalSettled = false;
+    const disposal = host.dispose().then((summary) => {
+      disposalSettled = true;
+      return summary;
+    });
+    await Promise.resolve();
+    const settledBeforeInitialization = disposalSettled;
+
+    finishInitialization();
+    await disposal;
+
+    expect(settledBeforeInitialization).toBe(false);
+    expect(journal).toEqual([
+      'SlowPostReady:init-started',
+      'SlowPostReady:init-finished',
+      'SlowPostReady:stop',
+    ]);
   });
 
   it('shares one promise across repeated disposals', async () => {
@@ -252,5 +314,28 @@ describe('application.uninstall', () => {
 
   it('is safe with no host installed', async () => {
     expect(await application.uninstall()).toEqual({ failed: [], timedOut: [] });
+  });
+
+  it('leaves a replacement alone when an old runtime uninstalls out of order', async () => {
+    const outgoing = new ApplicationHost({ services: [Connection] });
+    const incoming = new ApplicationHost({ services: [Connection] });
+    await application.install(outgoing);
+
+    const replacing = application.install(incoming);
+    const staleCleanup = application.uninstall(outgoing);
+    await Promise.all([replacing, staleCleanup]);
+
+    expect(application.current).toBe(incoming);
+    expect(incoming.state).toBe('ready');
+  });
+
+  it('keeps the outgoing host resolvable while its services stop', async () => {
+    await application.install(
+      new ApplicationHost({ services: [Connection, ResolveOnStop] as never }),
+    );
+
+    await application.uninstall();
+
+    expect(journal).toEqual(['Connection:open', 'ResolveOnStop:open', 'Connection:close']);
   });
 });

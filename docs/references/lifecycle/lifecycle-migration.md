@@ -1,7 +1,7 @@
 # Lifecycle Migration
 
-> Status: Stage A landed — the framework exists and is tested, and the `services` registry is
-> empty, so no module runs through it yet. B, D, and C are not started.
+> Status: Historical implementation plan. Stages A, B, D, and C are landed; the sections below
+> preserve the migration rationale and acceptance criteria.
 > Interfaces: [lifecycle-overview.md](./lifecycle-overview.md) ·
 > [resource-scope.md](./resource-scope.md)
 
@@ -103,10 +103,10 @@ Per module: extend `BaseService`, add decorators, move `initialize`-style work i
 `dispose()` into `onStop`/`onDestroy`, replace hand-rolled `AppState` subscriptions with
 `registerAppStateListener`, and delete the module's construction from `createBackend.ts`.
 
-Closing commits: `AppBootstrapProvider` builds and installs an `ApplicationHost` instead of calling
-`createAppBootstrapRuntime()`; factory-shaped modules (`createJobRuntime`, `createMcpModule`, …)
-become classes; `JobRuntime`'s `liveRuntimesByDb` WeakMap is removed in favour of the container
-guard; `providerRegistryService` stops being a module-level escape and registers as a service.
+Closing commits install an `ApplicationHost` through `createAppBootstrapRuntime`; runtime-shaped
+modules become classes and `JobRuntime`'s `liveRuntimesByDb` WeakMap is removed in favour of the
+container guard. `providerRegistryService` remains package-level because its immutable bundled
+catalog is already memoized below the host; wrapping it would not create per-generation ownership.
 
 ## Stage D outline
 

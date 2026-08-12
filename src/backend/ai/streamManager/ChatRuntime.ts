@@ -35,7 +35,14 @@ import { isToolUIPart, readUIMessageStream, type UIMessageChunk } from 'ai';
 
 import type { AiService } from '@/backend/ai/AiService';
 import { application } from '@/backend/core/application/Application';
-import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
 import type { OperationHandle } from '@/backend/core/resources/types';
 import { assistantService } from '@/backend/data/services/AssistantService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
@@ -188,6 +195,7 @@ function createHostDependencies(
 @Injectable('ChatRuntime')
 @ServicePhase(Phase.PostReady)
 @DependsOn(['AiService', 'BackgroundReplyService'])
+@AppStatePolicy('continue')
 export class ChatRuntime extends BaseService implements ChatModule {
   private activeTasks = new Set<Promise<unknown>>();
   private activeTurns = new Map<string, ActiveTurn>();

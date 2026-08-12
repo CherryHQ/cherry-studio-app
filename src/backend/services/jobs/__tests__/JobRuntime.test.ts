@@ -337,6 +337,41 @@ describe('JobRuntime', () => {
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
+  it('waits for an in-progress claim and does not start work after stop begins', async () => {
+    let clock = 1_000;
+    const claimEntered = makeGate();
+    const claimGate = makeGate();
+    const execute = jest.fn(async () => 'should-not-run');
+    const handler = makeEchoHandler({ execute });
+    const { jobService, runtime } = await setup([['internal.echo', handler]], {
+      now: () => clock,
+    });
+    const handle = await enqueueTest(
+      runtime,
+      'internal.echo',
+      { message: 'late' },
+      { scheduledAt: clock + 1_000 },
+    );
+    const claim = jobService.claimPendingByIdTx.bind(jobService);
+    jest.spyOn(jobService, 'claimPendingByIdTx').mockImplementation(async (...args) => {
+      claimEntered.release();
+      await claimGate.promise;
+      return claim(...args);
+    });
+
+    clock += 1_000;
+    const pumping = runtime.pump({ reason: 'manual' });
+    await claimEntered.promise;
+    const stopping = runtime._doStop();
+
+    expect(await settlesWithin(stopping, 20)).toBe(false);
+    claimGate.release();
+    await Promise.all([pumping, stopping]);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect((await jobService.getById(handle.id))?.status).toBe('cancelled');
+  });
+
   it('cold-start pump prunes terminal rows past the 7d TTL, keeping active ones', async () => {
     const clock = GC_TERMINAL_TTL_MS * 2;
     const { db, jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]], {

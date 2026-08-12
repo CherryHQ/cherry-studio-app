@@ -23,9 +23,12 @@ describe('JobRuntime resource scopes', () => {
   let sqlite: DatabaseSync | undefined;
   let ctx: TestRuntime | undefined;
 
-  async function setup(handlers: Parameters<typeof createTestRuntime>[1]) {
+  async function setup(
+    handlers: Parameters<typeof createTestRuntime>[1],
+    overrides?: Parameters<typeof createTestRuntime>[2],
+  ) {
     sqlite = new DatabaseSync(':memory:');
-    ctx = await createTestRuntime(sqlite, handlers);
+    ctx = await createTestRuntime(sqlite, handlers, overrides);
     return ctx;
   }
 
@@ -83,6 +86,45 @@ describe('JobRuntime resource scopes', () => {
     expect((await jobService.getById(handle.id))?.status).toBe('cancelled');
   });
 
+  it('registers the scope before claim so deletion can cancel the dispatch window', async () => {
+    let clock = 1_000;
+    const claimEntered = makeGate();
+    const claimGate = makeGate();
+    const execute = jest.fn(async () => 'should-not-run');
+    const { jobService, runtime, scopes } = await setup(
+      [['painting.generate', makeEchoHandler({ execute, scopes: () => [PAINTING] })]],
+      { now: () => clock },
+    );
+    const handle = await enqueueTest(
+      runtime,
+      'painting.generate',
+      { paintingId: 'p1' },
+      { scheduledAt: clock + 1_000 },
+    );
+    const claim = jobService.claimPendingByIdTx.bind(jobService);
+    jest.spyOn(jobService, 'claimPendingByIdTx').mockImplementation(async (...args) => {
+      claimEntered.release();
+      await claimGate.promise;
+      return claim(...args);
+    });
+
+    clock += 1_000;
+    const pumping = runtime.pump({ reason: 'manual' });
+    await claimEntered.promise;
+    let statusWhenMutating: string | undefined;
+    const deletion = scopes.delete([PAINTING], async () => {
+      statusWhenMutating = (await jobService.getById(handle.id))?.status;
+    });
+    await Promise.resolve();
+
+    expect(execute).not.toHaveBeenCalled();
+    claimGate.release();
+    await Promise.all([pumping, deletion]);
+
+    expect(statusWhenMutating).toBe('cancelled');
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('leaves a job whose handler declares no scopes uncoordinated', async () => {
     const gate = makeGate();
     const { jobService, runtime, scopes } = await setup([['internal.hold', makeHoldHandler(gate)]]);
@@ -116,5 +158,6 @@ describe('JobRuntime resource scopes', () => {
     expect(mutate).not.toHaveBeenCalled();
 
     gate.release();
+    expect((await handle.finished).status).toBe('cancelled');
   });
 });

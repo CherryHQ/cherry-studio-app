@@ -54,8 +54,9 @@ Do **not** register:
 | Per-screen listeners and timers | The React component that created them |
 
 Stateful data services are the exception to the CRUD rule: `PreferenceService` (cache plus async
-init) and `providerRegistryService` (catalog cache) hold per-generation state and therefore register
-as services.
+init) registers as a service. `providerRegistryService` deliberately does not: its package-level
+loader memoizes immutable bundled JSON below the app host, so a per-generation wrapper would add
+resolution churn without creating a new resource lifetime.
 
 ## Divergence from desktop
 

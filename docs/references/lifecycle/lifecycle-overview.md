@@ -76,8 +76,9 @@ Created → Initializing → Ready ⇄ Paused
 | `onActivate()` / `onDeactivate()` | Optional `Activatable` capability. Heavy resources behind a preference or feature gate |
 
 `Pausable` and `Activatable` stay type-guard capability interfaces rather than base-class members,
-as on desktop. Neither has a consumer in Stage A; `Activatable` is the intended home for the
-background-reply preference gate when that module migrates.
+as on desktop. Activation transitions are serialized with each other and with stop/destroy, so a
+preference event cannot reacquire resources after host teardown begins. `BackgroundReplyService`
+uses this capability for the `chat.background_reply.enabled` gate.
 
 ## BaseService
 
@@ -183,7 +184,7 @@ reserved for a future heavyweight service that must not even be constructed.
 class Application {
   get<K extends keyof ServiceRegistry>(name: K): ServiceRegistry[K]
   install(host: ApplicationHost): Promise<void>
-  uninstall(): Promise<TeardownSummary>
+  uninstall(expectedHost?: ApplicationHost): Promise<TeardownSummary>
   get hasHost(): boolean
 }
 
@@ -255,11 +256,12 @@ Construction allocates no resource: no database is opened, no job is claimed, no
 starts. Only `start()` does that. This formalizes a rule bootstrap already follows — composition
 builds, runtime starts — and it is what makes replacement safe.
 
-`application.install(host)` serializes generations internally: the previous host's `dispose()` is
-awaited to completion before the new host's `start()` begins. Two hosts therefore never hold the
-SQLite connection or a job claim at once, which is exactly the failure `JobRuntime`'s
-`liveRuntimesByDb` WeakMap was added to detect. That guard is removed once the container enforces
-one live instance per host.
+`application.install(host)` serializes generations internally: the previous host remains resolvable
+until its `dispose()` completes, then the new host starts. Two hosts therefore never hold the SQLite
+connection or a job claim at once, while an outgoing service can still land terminal writes through
+module singletons during `onStop()`. `uninstall(expectedHost)` makes stale runtime cleanup a no-op
+after another generation has replaced it; the comparison happens inside the same serialized
+transition, not against a racy pre-call snapshot.
 
 ### Who installs a host
 
@@ -290,18 +292,24 @@ AppBootstrapProvider mount
        └─ PostReady services initialize; failures are logged, never fatal
 ```
 
+Fire-and-forget describes the caller and first-paint path, not detached ownership. The host retains
+the PostReady promise; if disposal starts while that phase is initializing, disposal awaits it
+before deriving the reverse stop order. A service therefore cannot become `Ready` after the stop
+pass and leak resources from an obsolete generation.
+
 ### The `onAllReady` rule
 
 `onAllReady` must **schedule**, not perform. Desktop's `JobManager` sets a 60s timer there and
-returns synchronously; performing long work inside the hook stalls the phase and collides with the
-teardown ceiling. Mobile keeps the same rule: register the timer via `registerInterval` or a
-disposable `setTimeout`, and join it in `onStop`.
+returns synchronously; performing long work inside the hook stalls the phase and delays disposal,
+which waits for an in-progress PostReady phase before stopping it. Mobile keeps the same rule:
+register the timer via `registerInterval` or a disposable `setTimeout`, and join it in `onStop`.
 
 ## Shutdown sequence
 
 ```text
 application.uninstall()  (provider unmount, or install() of a replacement)
   └─ host.dispose()
+       ├─ await an in-progress PostReady initialization
        ├─ stopAll():    reverse initialization order, per service ceiling 5s
        │                 onStop() → release disposables → Stopped
        ├─ destroyAll(): reverse order again, same ceiling
@@ -317,12 +325,14 @@ Reverse-order teardown means consumers stop before the infrastructure they use: 
 | --- | --- |
 | Gate failure | `fail-fast`. Startup aborts; the provider surfaces the error. No `custom` strategy is ported — it has no mobile use |
 | PostReady failure | `graceful`. Logged, startup unaffected |
+| Dispose during PostReady initialization | Waits for initialization, then stops the complete graph in reverse order |
 | Circular dependency | `CircularDependencyError` naming the cycle, thrown during resolution |
-| Init timeout | None. A hung `Gate` service hangs startup, as it does today; a diagnostic watchdog logs the culprit but changes no behaviour |
+| Init timeout | None. A hung `Gate` service hangs startup. A hung `PostReady` service does not block first paint, but a later disposal waits for it rather than overlapping initialization and teardown |
 | Teardown timeout | 5s per service per pass. On expiry the framework stops *waiting* — it does not cancel. The hook keeps running and the service is reported as `timed_out` |
 | Destroy under an in-flight stop | Skipped, and reported as `failed`. Tearing down resources beneath live work is worse than leaking them during shutdown |
 | Overall shutdown fuse | Not ported. Desktop force-exits after 30s because Electron owns process death; mobile's OS does |
 | Concurrent `install()` | Serialized; the second waits for the first generation's disposal |
+| Stale runtime calls `uninstall(expectedHost)` | No-op if a newer host is installed |
 | `dispose()` called twice | Idempotent, returns the same promise — matches every existing mobile runtime |
 
 A `timed_out` outcome is reported honestly rather than folded into success: the summary distinguishes
