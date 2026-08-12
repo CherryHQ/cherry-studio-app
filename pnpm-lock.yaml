@@ -456,6 +456,9 @@ importers:
       lucide:
         specifier: ^1.14.0
         version: 1.14.0
+      node-addon-api:
+        specifier: ^8.9.1
+        version: 8.9.1
       oxfmt:
         specifier: ^0.61.0
         version: 0.61.0
@@ -7596,6 +7599,10 @@ packages:
   nitrogen@0.35.9:
     resolution: {integrity: sha512-Qbs45N/9VXYFg4u/nUF4EKw7qmbaVD0vABh5Rq6e3YT1MQP672/EBneMfNXvwOaTf8KW3pIxM01IlEdKS3f8JQ==}
     hasBin: true
+
+  node-addon-api@8.9.1:
+    resolution: {integrity: sha512-4eUQWVPCUUUiBjLnHS3cXWeC6ryoPUc0U3rP7IuzapoGbzMqd/r6KKO0clr0b+snQhsrueFEhCZDdK+LK7hxKg==}
+    engines: {node: ^18 || ^20 || >= 21}
 
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
@@ -16417,6 +16424,8 @@ snapshots:
     transitivePeerDependencies:
       - react
       - react-native
+
+  node-addon-api@8.9.1: {}
 
   node-domexception@1.0.0: {}
 
