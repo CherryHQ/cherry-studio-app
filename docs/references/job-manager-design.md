@@ -626,8 +626,9 @@ out; that ruling is revised on this evidence.
 - `reconcileAudio()` is reference counting in disguise: audio plays iff at least one turn is in
   a generating phase and stops when none is. Every async start/stop rides a serial operation
   queue (`operationTail`), so transitions cannot interleave.
-- The Live Activity half (expo-widgets, 1 s-throttled updates, ended on foregrounding, orphan
-  cleanup at construction) is a separate concern that merely shares the service today.
+- The Live Activity half (expo-widgets, foreground creation, 1 s-throttled updates across AppState
+  transitions, orphan cleanup during initialization) is a separate concern that merely shares the
+  service today.
 
 **Extraction shape** — split #473's service along that seam:
 

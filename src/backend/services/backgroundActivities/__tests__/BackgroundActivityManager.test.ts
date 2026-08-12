@@ -72,7 +72,7 @@ describe('BackgroundActivityManager', () => {
     await manager._doStop();
   });
 
-  test('starts the surface only in the background and injects the staged logo', async () => {
+  test('starts the surface synchronously in the foreground and keeps it across AppState changes', async () => {
     const { handles, presenter } = createMockPresenter();
     const manager = await createManager([presenter]);
     const session = manager.startSession({
@@ -81,11 +81,6 @@ describe('BackgroundActivityManager', () => {
       props: makeProps('preparing'),
       tag: 'chat.topic-1',
     });
-    await session.ready;
-    expect(presenter.start).not.toHaveBeenCalled();
-
-    appStateListener?.('background');
-    await flushOperations();
     expect(presenter.start).toHaveBeenCalledTimes(1);
     expect(presenter.start).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -94,15 +89,44 @@ describe('BackgroundActivityManager', () => {
       }),
       'cherrystudio://topics?topicId=t-1',
     );
+    await session.ready;
 
+    appStateListener?.('inactive');
+    appStateListener?.('background');
     appStateListener?.('active');
     await flushOperations();
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    expect(handles[0]?.end).not.toHaveBeenCalled();
+
+    session.cancel();
+    await flushOperations();
     expect(handles[0]?.end).toHaveBeenCalledWith('immediate', expect.any(Object));
+    await manager._doStop();
+  });
+
+  test('defers a background-created surface until foreground and starts with the latest props', async () => {
+    Object.defineProperty(AppState, 'currentState', { configurable: true, value: 'background' });
+    const { presenter } = createMockPresenter();
+    const manager = await createManager([presenter]);
+    const session = manager.startSession({
+      presenter,
+      props: makeProps('one'),
+      tag: 'chat.topic-1',
+    });
+    session.update(makeProps('two'), { urgent: true });
+    await session.ready;
+    expect(presenter.start).not.toHaveBeenCalled();
+
+    appStateListener?.('active');
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+    expect(presenter.start).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: 'two' }),
+      undefined,
+    );
 
     appStateListener?.('background');
-    await flushOperations();
-    expect(presenter.start).toHaveBeenCalledTimes(2);
-
+    appStateListener?.('active');
+    expect(presenter.start).toHaveBeenCalledTimes(1);
     session.cancel();
     await manager._doStop();
   });
@@ -131,7 +155,7 @@ describe('BackgroundActivityManager', () => {
     await manager._doStop();
   });
 
-  test('applies urgent updates immediately and throttles the rest', async () => {
+  test('applies urgent updates immediately and throttles updates across AppState changes', async () => {
     const { handles, presenter } = createMockPresenter();
     const manager = await createManager([presenter]);
     const session = manager.startSession({
@@ -140,8 +164,6 @@ describe('BackgroundActivityManager', () => {
       tag: 'chat.topic-1',
     });
     await session.ready;
-    appStateListener?.('background');
-    await flushOperations();
     expect(presenter.start).toHaveBeenCalledTimes(1);
 
     session.update(makeProps('two'));
@@ -152,6 +174,7 @@ describe('BackgroundActivityManager', () => {
     await flushOperations();
     expect(handles[0]?.update).toHaveBeenCalledTimes(1);
 
+    appStateListener?.('background');
     session.update(makeProps('four'));
     await flushOperations();
     expect(handles[0]?.update).toHaveBeenCalledTimes(1);
@@ -169,8 +192,6 @@ describe('BackgroundActivityManager', () => {
     const props = makeProps('same');
     const session = manager.startSession({ presenter, props, tag: 'chat.topic-1' });
     await session.ready;
-    appStateListener?.('background');
-    await flushOperations();
 
     session.update({ ...props }, { urgent: true });
     await flushOperations();
@@ -189,14 +210,17 @@ describe('BackgroundActivityManager', () => {
       tag: 'chat.topic-1',
     });
     await session.ready;
-    appStateListener?.('background');
-    await flushOperations();
 
     session.finish(makeProps('done'));
+    session.finish(makeProps('late-finish'));
     await flushOperations();
     expect(handles[0]?.end).toHaveBeenCalledWith(
       'default',
       expect.objectContaining({ detail: 'done', finishedAtEpochMs: expect.any(Number) }),
+    );
+    expect(handles[0]?.end).not.toHaveBeenCalledWith(
+      'default',
+      expect.objectContaining({ detail: 'late-finish' }),
     );
 
     session.update(makeProps('after-finish'), { urgent: true });
@@ -205,7 +229,7 @@ describe('BackgroundActivityManager', () => {
     await manager._doStop();
   });
 
-  test('isolates presenter failures from the session lifecycle', async () => {
+  test('isolates presenter failures and does not retry them on AppState changes', async () => {
     const { presenter } = createMockPresenter();
     presenter.start.mockImplementationOnce(() => {
       throw new Error('activities unavailable');
@@ -219,6 +243,8 @@ describe('BackgroundActivityManager', () => {
 
     await expect(session.ready).resolves.toBeUndefined();
     appStateListener?.('background');
+    appStateListener?.('active');
+    session.update(makeProps('update'), { urgent: true });
     await flushOperations();
     expect(presenter.start).toHaveBeenCalledTimes(1);
 
@@ -236,8 +262,6 @@ describe('BackgroundActivityManager', () => {
       tag: 'chat.topic-1',
     });
     await session.ready;
-    appStateListener?.('background');
-    await flushOperations();
 
     await manager._doStop();
     expect(handles[0]?.end).toHaveBeenCalledWith('immediate', expect.any(Object));
