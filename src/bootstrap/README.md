@@ -5,13 +5,18 @@ layer allowed to know both concrete backend implementations and frontend provide
 in-process runtime, makes that runtime ready before opening the app gate, and releases app-lifetime
 resources when the root provider unmounts.
 
-Mobile does not copy Cherry Desktop's Electron process, IoC container, or lifecycle phases. The
-directory aligns with Desktop by responsibility:
+Mobile now runs Desktop's lifecycle framework — container, dependency graph, and phases — from
+`src/backend/core`. What it does not copy is the Electron process model: two phases (`Gate`,
+`PostReady`) instead of Desktop's three, and an `ApplicationHost` that can be replaced in place so
+Fast Refresh and service tests get a fresh generation. See
+[docs/references/lifecycle/](../../docs/references/lifecycle/).
+
+This directory is what remains outside that framework: the composition root.
 
 | Mobile | Desktop responsibility |
 | --- | --- |
 | `preboot` | `main/core/preboot`: mandatory global setup before composition |
-| `composition` | service registry and dependency wiring performed during main bootstrap |
+| `composition` | the workflow surface assembled over host-resolved services |
 | `runtime` | application bootstrap/shutdown plus the renderer startup gate |
 
 ## Layout
@@ -30,25 +35,35 @@ restore flat `create*`, provider, runtime-task, or polyfill files beside `index.
 ## Startup Sequence
 
 1. `src/app/_layout.tsx` imports each required `preboot` module for side effects.
-2. `AppBootstrapProvider` creates one stable `AppBootstrapRuntime`.
-3. The runtime initializes cache, SQLite, preferences, boot theme, and i18n in order.
+2. `AppBootstrapProvider` creates one stable `AppBootstrapRuntime`, which constructs an
+   `ApplicationHost` and resolves the services the workflow surface is built over. Construction
+   claims nothing; the host is not installed yet.
+3. `initialize()` installs the host, running the `Gate` phase — cache, SQLite, preferences — ordered
+   by the dependency graph, not by the order written here. Boot theme and i18n follow.
 4. `AppBootstrapGate` opens after required startup work succeeds.
-5. Best-effort post-ready tasks start outside the first-paint critical path.
-6. Provider unmount starts one idempotent asynchronous shutdown: abort and await the Chat Runtime,
-   then dispose MCP, web-search state, backend cache, and SQLite in that order.
+5. Best-effort post-ready tasks start outside the first-paint critical path: the `PostReady` phase
+   plus the work no service owns.
+6. Provider unmount starts one idempotent asynchronous shutdown. It hand-orders nothing — the host
+   tears its services down in reverse dependency order, so the chat and job runtimes drain before
+   the database they write through.
 
 ## Ownership Rules
 
 - `preboot` owns only mandatory global setup that must run before the runtime is composed.
-- `composition` creates objects and connects dependencies; it does not start resources or implement
-  product behavior.
-- `runtime` owns startup ordering, status, the initial-render gate, post-ready work, and app-lifetime
-  disposal.
+- `composition` connects host-resolved services into the workflow surface; it does not start
+  resources or implement product behavior. A collaborator that owns a resource or needs ordered
+  teardown belongs in the container, not here.
+- `runtime` owns host construction and installation, the initial-render gate, status, post-ready
+  work, and app-lifetime disposal.
 - Backend business behavior stays in `src/backend`; frontend navigation, cache updates, translation,
   and user feedback stay in `src/frontend`.
 - Resource and workflow interfaces exposed to frontend remain in `src/shared/data` and
   `src/shared/contracts`.
-- Do not introduce service locators, lifecycle phase registries, IPC, or compatibility adapters.
+- Do not introduce IPC or compatibility adapters. The ban this line used to place on service
+  locators and lifecycle phase registries was lifted: both now exist deliberately, in
+  `src/backend/core`, for the reasons the lifecycle docs record.
+- Frontend must not call `application.get()`. It reaches the backend through the three providers
+  this directory installs, the mobile equivalent of Desktop's renderer/IPC boundary.
 
 `index.ts` exports only the root React integration. Internal composition and runtime functions are
 imported from their concrete paths so their ownership remains visible.
