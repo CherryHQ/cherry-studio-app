@@ -13,7 +13,9 @@ import {
 } from '@cherrystudio/universal/data/api/schemas/assistants';
 import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
 
+import { application } from '@/backend/core/application/Application';
 import type { AssistantService } from '@/backend/data/services/AssistantService';
+import { topicService } from '@/backend/data/services/TopicService';
 
 type AssistantData = Pick<
   AssistantService,
@@ -38,8 +40,21 @@ export function createAssistantHandlers(service: AssistantData): HandlersFor<Ass
     },
     '/assistants/:id': {
       DELETE: async ({ params, query }) => {
-        const parsed = DeleteAssistantQuerySchema.parse(query ?? {});
-        return service.delete(params.id, { deleteTopics: parsed.deleteTopics === true });
+        const deleteTopics = DeleteAssistantQuerySchema.parse(query ?? {}).deleteTopics === true;
+        if (!deleteTopics) {
+          // The assistant is soft-deleted and its topics stay; nothing running
+          // under them is invalidated by that.
+          return service.delete(params.id, { deleteTopics: false });
+        }
+
+        // The cascade runs inside the assistant's own write transaction, so the
+        // topic ids have to be read before it — same constraint, and the same
+        // sub-millisecond miss window, as `DELETE /assistants/:id/topics`.
+        const topicIds = await topicService.listIdsByAssistantId(params.id);
+        return application.get('ResourceScopeCoordinator').delete(
+          topicIds.map((id) => ({ id, kind: 'topic' })),
+          () => service.delete(params.id, { deleteTopics: true }),
+        );
       },
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => {

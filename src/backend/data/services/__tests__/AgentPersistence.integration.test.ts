@@ -4,16 +4,16 @@ import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { customSqlStatements } from '@/backend/data/db/customSql';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
-import { AgentChannelService } from '../AgentChannelService';
-import { AgentService } from '../AgentService';
-import { AgentSessionMessageService } from '../AgentSessionMessageService';
-import { AgentSessionService } from '../AgentSessionService';
-import { AgentWorkspaceService } from '../AgentWorkspaceService';
-import { PinService } from '../PinService';
+import { agentChannelService } from '../AgentChannelService';
+import { agentService } from '../AgentService';
+import { agentSessionMessageService } from '../AgentSessionMessageService';
+import { agentSessionService } from '../AgentSessionService';
+import { agentWorkspaceService } from '../AgentWorkspaceService';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 jest.mock('fractional-indexing', () => ({
@@ -35,13 +35,8 @@ describe('Agent persistence integration', () => {
   let sqlite: DatabaseSync;
   let database: Database;
   let dbService: DbService;
-  let channels: AgentChannelService;
-  let messages: AgentSessionMessageService;
-  let sessions: AgentSessionService;
-  let workspaces: AgentWorkspaceService;
-  let agents: AgentService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
@@ -78,16 +73,15 @@ describe('Agent persistence integration', () => {
         }
       },
     } as unknown as DbService;
-
-    const pins = new PinService(dbService);
-    workspaces = new AgentWorkspaceService(dbService);
-    sessions = new AgentSessionService(dbService, workspaces, pins);
-    messages = new AgentSessionMessageService(dbService);
-    channels = new AgentChannelService(dbService);
-    agents = new AgentService(dbService, sessions, pins);
+    // Data services resolve `DbService` from `application`, so the fake is
+    // installed as a host override instead of being passed to constructors.
+    await installTestHost({ DbService: dbService });
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+  });
 
   test('retains opaque Agent, Knowledge, non-HTTP MCP, and channel data across partial updates', async () => {
     await database.insert(schema.knowledgeBaseTable).values({
@@ -143,7 +137,7 @@ describe('Agent persistence integration', () => {
     });
 
     await expect(
-      agents.updateAgent('agent-opaque', {
+      agentService.updateAgent('agent-opaque', {
         configuration: { heartbeat_enabled: true },
         name: 'Renamed Agent',
       }),
@@ -158,7 +152,7 @@ describe('Agent persistence integration', () => {
       name: 'Renamed Agent',
     });
     await expect(
-      channels.updateChannel('channel-opaque', { name: 'Renamed Channel' }),
+      agentChannelService.updateChannel('channel-opaque', { name: 'Renamed Channel' }),
     ).resolves.toMatchObject({
       activeChatIds: ['desktop-chat'],
       config: {
@@ -207,10 +201,13 @@ describe('Agent persistence integration', () => {
       orderKey: 'a0',
     });
 
-    const firstSessions = await sessions.listByCursor({ agentId: 'agent-pages', limit: 2 });
+    const firstSessions = await agentSessionService.listByCursor({
+      agentId: 'agent-pages',
+      limit: 2,
+    });
     expect(firstSessions.items.map(({ id }) => id)).toEqual(['session-pinned', 'session-a']);
     expect(firstSessions.nextCursor).toBeDefined();
-    const secondSessions = await sessions.listByCursor({
+    const secondSessions = await agentSessionService.listByCursor({
       agentId: 'agent-pages',
       cursor: firstSessions.nextCursor,
       limit: 2,
@@ -224,10 +221,12 @@ describe('Agent persistence integration', () => {
         messageRow('message-b', 'session-a', 200),
         messageRow('message-c', 'session-a', 300),
       ]);
-    const firstMessages = await messages.listSessionMessages('session-a', { limit: 2 });
+    const firstMessages = await agentSessionMessageService.listSessionMessages('session-a', {
+      limit: 2,
+    });
     expect(firstMessages.items.map(({ id }) => id)).toEqual(['message-c', 'message-b']);
     expect(firstMessages.nextCursor).toBeDefined();
-    const secondMessages = await messages.listSessionMessages('session-a', {
+    const secondMessages = await agentSessionMessageService.listSessionMessages('session-a', {
       cursor: firstMessages.nextCursor,
       limit: 2,
     });
@@ -236,13 +235,15 @@ describe('Agent persistence integration', () => {
 
   test('cleans pins, messages, and system workspaces while retaining unrelated user workspaces', async () => {
     await seedAgent(database, 'agent-delete');
-    const userWorkspace = await workspaces.findOrCreateByPath('/tmp/retained-user-workspace');
-    const userSession = await sessions.create({
+    const userWorkspace = await agentWorkspaceService.findOrCreateByPath(
+      '/tmp/retained-user-workspace',
+    );
+    const userSession = await agentSessionService.create({
       agentId: 'agent-delete',
       name: 'User workspace session',
       workspace: { type: 'user', workspaceId: userWorkspace.id },
     });
-    const systemSession = await sessions.create({
+    const systemSession = await agentSessionService.create({
       agentId: 'agent-delete',
       name: 'System workspace session',
       workspace: { type: 'system' },
@@ -274,7 +275,9 @@ describe('Agent persistence integration', () => {
       },
     ]);
 
-    await expect(agents.deleteAgent('agent-delete', { deleteSessions: true })).resolves.toEqual({
+    await expect(
+      agentService.deleteAgent('agent-delete', { deleteSessions: true }),
+    ).resolves.toEqual({
       deleted: true,
       deletedSessionIds: expect.arrayContaining([userSession.id, systemSession.id]),
     });

@@ -7,7 +7,7 @@ import { parsePersistedLangCode } from '@cherrystudio/universal/data/preference/
 import type { TranslateLanguage } from '@cherrystudio/universal/data/types/translate';
 import { asc, eq } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { translateLanguageTable } from '@/backend/data/db/schemas/translateLanguage';
 
 import { timestampToISO } from './utils/rowMappers';
@@ -25,7 +25,14 @@ function rowToTranslateLanguage(
 }
 
 export class TranslateLanguageService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async list(): Promise<TranslateLanguage[]> {
     const rows = await this.dbService
@@ -91,3 +98,5 @@ export class TranslateLanguageService {
     });
   }
 }
+
+export const translateLanguageService = new TranslateLanguageService();

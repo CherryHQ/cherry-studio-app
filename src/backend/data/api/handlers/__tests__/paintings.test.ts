@@ -1,8 +1,19 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import type { PaintingService } from '@/backend/data/services/PaintingService';
 
 import { createPaintingHandlers } from '../paintings';
 
 describe('painting Data API handlers', () => {
+  let scopes: ResourceScopeCoordinator;
+
+  beforeEach(async () => {
+    scopes = new ResourceScopeCoordinator();
+    await installTestHost({ ResourceScopeCoordinator: scopes });
+  });
+
+  afterEach(uninstallTestHost);
+
   test('adapt the desktop-aligned PaintingService directly', async () => {
     const service = {
       deleteMany: jest.fn(async () => undefined),

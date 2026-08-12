@@ -61,8 +61,20 @@ class Application {
         await outgoing.dispose();
       }
 
-      await host.start();
+      // Installed before starting, because startup work resolves through here:
+      // `DbService.onInit` seeds the database, and the seeders reach their data
+      // services as module singletons, which resolve `DbService` from
+      // `application`. The outgoing host is already gone by this point, so the
+      // window never exposes two generations.
       this.host = host;
+      try {
+        await host.start();
+      } catch (error) {
+        // A host that failed to start is not installed — callers that catch the
+        // rejection must not find a half-initialized graph behind `get()`.
+        this.host = null;
+        throw error;
+      }
     });
   }
 

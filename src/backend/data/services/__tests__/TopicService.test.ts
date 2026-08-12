@@ -1,10 +1,11 @@
 import * as Crypto from 'expo-crypto';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
-import type { PinService } from '@/backend/data/services/PinService';
-import type { TagService } from '@/backend/data/services/TagService';
+import { pinService } from '@/backend/data/services/PinService';
+import { tagService } from '@/backend/data/services/TagService';
 
-import { TopicService } from '../TopicService';
+import { topicService } from '../TopicService';
 
 jest.mock('@/backend/data/db/schemas', () => ({
   messageTable: {
@@ -26,6 +27,11 @@ jest.mock('../utils/orderKey', () => ({
   applyMoves: jest.fn(),
   insertWithOrderKey: jest.fn(),
 }));
+
+afterEach(async () => {
+  await uninstallTestHost();
+  jest.restoreAllMocks();
+});
 
 describe('TopicService', () => {
   test('creates and persists a desktop-compatible trace id once', async () => {
@@ -52,9 +58,11 @@ describe('TopicService', () => {
         callback(tx),
       ),
     } as unknown as DbService;
-    const service = new TopicService(dbService, {} as PinService, {} as TagService);
+    // The service resolves `DbService` per call, so the fake is installed as a
+    // host override rather than handed to a constructor.
+    await installTestHost({ DbService: dbService });
 
-    await expect(service.ensureTraceId('550e8400-e29b-41d4-a716-446655440000')).resolves.toBe(
+    await expect(topicService.ensureTraceId('550e8400-e29b-41d4-a716-446655440000')).resolves.toBe(
       expectedTraceId,
     );
     expect(updates).toEqual([{ traceId: expectedTraceId }]);
@@ -90,31 +98,30 @@ describe('TopicService', () => {
     const dbService = {
       withWriteTx: async (callback: (tx: Tx) => Promise<void>) => callback(tx),
     } as unknown as DbService;
-    const pinService = {
-      purgeForEntitiesTx: jest.fn(async () => {
-        operations.push('pin');
-      }),
-    } as unknown as PinService;
-    const tagService = {
-      purgeForEntitiesTx: jest.fn(async () => {
-        operations.push('tag');
-      }),
-    } as unknown as TagService;
-    const service = new TopicService(dbService, pinService, tagService);
+    // The sibling purges are stubbed on the singletons the service imports: this
+    // suite mocks the schema module down to the three tables it drives, so the
+    // real purges have no `entityTagTable` to build a statement from.
+    const purgeTags = jest.spyOn(tagService, 'purgeForEntitiesTx').mockImplementation(async () => {
+      operations.push('tag');
+    });
+    const purgePins = jest.spyOn(pinService, 'purgeForEntitiesTx').mockImplementation(async () => {
+      operations.push('pin');
+    });
+    await installTestHost({ DbService: dbService });
     const ids = ['550e8400-e29b-41d4-a716-446655440000', '650e8400-e29b-41d4-a716-446655440000'];
 
-    await service.deleteMany([...ids, ids[0]]);
+    await topicService.deleteMany([...ids, ids[0]]);
 
-    expect(tagService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'topic', ids);
-    expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'topic', ids);
+    expect(purgeTags).toHaveBeenCalledWith(tx, 'topic', ids);
+    expect(purgePins).toHaveBeenCalledWith(tx, 'topic', ids);
     expect(operations).toEqual(['delete', 'tag', 'pin', 'delete']);
   });
 
   test('does not open a transaction for an empty batch delete', async () => {
     const dbService = { withWriteTx: jest.fn() } as unknown as DbService;
-    const service = new TopicService(dbService, {} as PinService, {} as TagService);
+    await installTestHost({ DbService: dbService });
 
-    await service.deleteMany([]);
+    await topicService.deleteMany([]);
 
     expect(dbService.withWriteTx).not.toHaveBeenCalled();
   });

@@ -58,6 +58,16 @@ export interface OAuthFlowAdapter {
   getStatus(): Promise<OAuthProviderStatusState>;
   logout(context?: OAuthProviderContext): Promise<void>;
   start(input: StartOAuthAuthorizationInput, signal: AbortSignal): Promise<OAuthFlowSession>;
+  /**
+   * Optional capability: mint the short-lived token this provider's API expects,
+   * from the session already stored for it.
+   *
+   * Declared on the contract rather than reached through the concrete adapter so
+   * that `ProviderOAuthService` can serve it without learning a provider's name
+   * — the rule this module's README states for the generic runtime and the
+   * public contract.
+   */
+  getServingToken?(headers: Record<string, string>, signal?: AbortSignal): Promise<string>;
 }
 
 export type ActiveOAuthFlow = {

@@ -109,10 +109,10 @@ beforeEach(() => {
   mockAfterPersist.mockReset();
 });
 
-afterEach(() => {
-  for (const service of services.splice(0)) {
-    service.dispose();
-  }
+afterEach(async () => {
+  // `_doStop` rather than a `dispose()` of its own: teardown is the lifecycle
+  // framework's entry point now, and it is what the host will call.
+  await Promise.all(services.splice(0).map((service) => service._doStop()));
 });
 
 async function completeCherryInAuthorization(service: OAuthRuntimeService): Promise<void> {

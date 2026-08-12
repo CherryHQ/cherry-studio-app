@@ -1,3 +1,5 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
 import { FileEntryService } from '../FileEntryService';
 import { FileRefService } from '../FileRefService';
@@ -20,13 +22,17 @@ describe('FileRefService', () => {
   let testDatabase: ReturnType<typeof createServiceTestDatabase>;
   let service: FileRefService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     testDatabase = createServiceTestDatabase();
-    service = new FileRefService(testDatabase.dbService);
+    await installTestHost({ DbService: testDatabase.dbService });
+    service = new FileRefService();
     seedFiveSources(testDatabase.sqlite);
   });
 
-  afterEach(() => testDatabase.sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    testDatabase.sqlite.close();
+  });
 
   it('projects and orders all five persistent reference variants', async () => {
     const refs = await service.findByEntryId(fileId);
@@ -58,7 +64,7 @@ describe('FileRefService', () => {
   });
 
   it('protects a cleanup candidate until every registered source releases it', async () => {
-    const entries = new FileEntryService(testDatabase.dbService);
+    const entries = new FileEntryService();
     await expect(
       entries.findCleanupCandidates({ graceMs: 60 * 60 * 1000, limit: 100 }),
     ).resolves.toEqual([]);

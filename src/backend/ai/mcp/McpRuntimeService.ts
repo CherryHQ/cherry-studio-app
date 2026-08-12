@@ -19,7 +19,8 @@ import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
 import type { ToolEntry } from '@/backend/ai/tools';
-import type { McpServerService } from '@/backend/data/services/McpServerService';
+import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import { mcpServerService } from '@/backend/data/services/McpServerService';
 import type {
   McpConnectionConfig,
   McpServerInfo,
@@ -215,9 +216,9 @@ function withTimeout<T>(
  * Background refresh preserves the last good cache and backs off after failure.
  * Explicit tool listings reconnect once; tool calls are never replayed.
  */
-export class McpRuntimeService {
-  constructor(private readonly deps: { mcpServer: McpServerService }) {}
-
+@Injectable('McpRuntimeService')
+@ServicePhase(Phase.PostReady)
+export class McpRuntimeService extends BaseService {
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
   private activePrewarmPromise?: Promise<void>;
@@ -235,7 +236,7 @@ export class McpRuntimeService {
   ): Promise<ToolEntry[]> {
     let activeServers: StreamableHttpMcpServer[];
     try {
-      ({ items: activeServers } = await this.deps.mcpServer.list({
+      ({ items: activeServers } = await mcpServerService.list({
         isActive: true,
         type: 'streamableHttp',
       }));
@@ -343,7 +344,7 @@ export class McpRuntimeService {
 
   private async prewarmActiveServerTools(): Promise<void> {
     try {
-      const { items } = await this.deps.mcpServer.list({
+      const { items } = await mcpServerService.list({
         isActive: true,
         type: 'streamableHttp',
       });
@@ -407,11 +408,19 @@ export class McpRuntimeService {
   }
 
   /**
-   * Drop every server's runtime. Called when the data layer goes away: without it
-   * the pooled clients stay open and the refresh timers keep firing against a
-   * service nothing will read again.
+   * Warming the caches is the whole of this service's startup, and it is
+   * deliberately not on the gate: the chat path reads tools cache-only, so a
+   * dead or slow server must never delay first paint.
    */
-  dispose(): void {
+  protected onInit(): Promise<void> {
+    return this.prewarmActiveServers();
+  }
+
+  /**
+   * Drop every server's runtime. Without it the pooled clients stay open and
+   * the refresh timers keep firing against a service nothing will read again.
+   */
+  protected onStop(): void {
     for (const state of [...this.runtimeStates.values()]) {
       this.retireState(state);
     }
@@ -777,7 +786,7 @@ export class McpRuntimeService {
   ): Promise<StreamableHttpMcpServer> {
     let current: StreamableHttpMcpServer;
     try {
-      current = await this.deps.mcpServer.getById(server.id, 'streamableHttp');
+      current = await mcpServerService.getById(server.id, 'streamableHttp');
     } catch (error) {
       if (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) {
         throw new Error(`MCP server ${server.name} is no longer registered`);
@@ -894,7 +903,7 @@ export class McpRuntimeService {
       needsApproval: async () => {
         let current: StreamableHttpMcpServer;
         try {
-          current = await this.deps.mcpServer.getById(server.id, 'streamableHttp');
+          current = await mcpServerService.getById(server.id, 'streamableHttp');
         } catch (error) {
           if (error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND) {
             // No server, no tool: let the call through to `wrappedExecute`,

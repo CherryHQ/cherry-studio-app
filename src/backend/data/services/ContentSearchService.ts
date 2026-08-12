@@ -23,7 +23,7 @@ import {
 import { loggerService } from '@logger';
 import { sql } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch';
 import { timestampToISO } from './utils/rowMappers';
@@ -90,7 +90,14 @@ function withSourceContext(sourceType: ContentSearchSourceType, error: unknown) 
 }
 
 export class ContentSearchService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -294,3 +301,5 @@ export class ContentSearchService {
     });
   }
 }
+
+export const contentSearchService = new ContentSearchService();

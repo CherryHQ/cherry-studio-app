@@ -11,10 +11,10 @@ import {
 } from '@cherrystudio/universal/data/types/knowledge';
 import { and, asc, count, desc, eq, gt, isNull, lt, ne, or, sql, type SQL } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { knowledgeItemTable } from '@/backend/data/db/schemas/knowledge';
 
-import type { KnowledgeBaseService } from './KnowledgeBaseService';
+import { knowledgeBaseService } from './KnowledgeBaseService';
 import { timestampToISO } from './utils/rowMappers';
 
 type KnowledgeItemRow = typeof knowledgeItemTable.$inferSelect;
@@ -57,13 +57,17 @@ function decodeCursor(raw?: string): Cursor | null {
 }
 
 export class KnowledgeItemService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly bases: KnowledgeBaseService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   async list(baseId: string, query: ListKnowledgeItemsQuery): Promise<KnowledgeItemListResponse> {
-    await this.bases.getById(baseId);
+    await knowledgeBaseService.getById(baseId);
     const filters: SQL[] = [
       eq(knowledgeItemTable.baseId, baseId),
       ne(knowledgeItemTable.status, 'deleting'),
@@ -134,7 +138,7 @@ export class KnowledgeItemService {
   }
 
   async create(baseId: string, dto: CreateKnowledgeItemDto): Promise<KnowledgeItem> {
-    await this.bases.getById(baseId);
+    await knowledgeBaseService.getById(baseId);
     if (dto.groupId) {
       const owner = await this.getById(dto.groupId);
       if (owner.baseId !== baseId || owner.type !== 'directory' || owner.status === 'deleting') {
@@ -188,3 +192,5 @@ export class KnowledgeItemService {
     if (!row) throw DataApiErrorFactory.notFound('KnowledgeItem', id);
   }
 }
+
+export const knowledgeItemService = new KnowledgeItemService();

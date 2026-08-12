@@ -9,7 +9,7 @@ import {
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { and, asc, count, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { type AgentRow, agentTable } from '@/backend/data/db/schemas/agent';
 import { agentGlobalSkillTable } from '@/backend/data/db/schemas/agentGlobalSkill';
 import { agentSkillTable } from '@/backend/data/db/schemas/agentSkill';
@@ -21,8 +21,8 @@ import { knowledgeBaseTable } from '@/backend/data/db/schemas/knowledge';
 import { pinTable } from '@/backend/data/db/schemas/pin';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 
-import type { AgentSessionService } from './AgentSessionService';
-import type { PinService } from './PinService';
+import { agentSessionService } from './AgentSessionService';
+import { pinService } from './PinService';
 import { applyMoves } from './utils/orderKey';
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 
@@ -73,11 +73,14 @@ function rowToAgent(
 }
 
 export class AgentService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly sessionService: AgentSessionService,
-    private readonly pinService: PinService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -299,9 +302,9 @@ export class AgentService {
       if (!agent) return { deleted: false };
       const deletedSessionIds =
         options.deleteSessions === true
-          ? await this.sessionService.deleteByAgentIdTx(tx, id, { validateAgent: false })
+          ? await agentSessionService.deleteByAgentIdTx(tx, id, { validateAgent: false })
           : undefined;
-      await this.pinService.purgeForEntityTx(tx, 'agent', id);
+      await pinService.purgeForEntityTx(tx, 'agent', id);
       await tx.delete(agentTable).where(eq(agentTable.id, id));
       return { deleted: true, deletedSessionIds };
     });
@@ -338,3 +341,5 @@ export class AgentService {
     });
   }
 }
+
+export const agentService = new AgentService();

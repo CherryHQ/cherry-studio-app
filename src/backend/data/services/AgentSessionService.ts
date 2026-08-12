@@ -15,15 +15,15 @@ import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/
 import { and, asc, desc, eq, gt, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { agentTable } from '@/backend/data/db/schemas/agent';
 import { agentSessionTable } from '@/backend/data/db/schemas/agentSession';
 import { agentSessionMessageTable } from '@/backend/data/db/schemas/agentSessionMessage';
 import { agentWorkspaceTable } from '@/backend/data/db/schemas/agentWorkspace';
 import { pinTable } from '@/backend/data/db/schemas/pin';
 
-import { type AgentWorkspaceService, rowToAgentWorkspace } from './AgentWorkspaceService';
-import type { PinService } from './PinService';
+import { agentWorkspaceService, rowToAgentWorkspace } from './AgentWorkspaceService';
+import { pinService } from './PinService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { nullsToUndefined, timestampToISO } from './utils/rowMappers';
 
@@ -66,11 +66,14 @@ function decodeCursor(value?: string): SessionCursor {
 }
 
 export class AgentSessionService {
-  constructor(
-    private readonly dbService: DbService,
-    private readonly workspaceService: AgentWorkspaceService,
-    private readonly pinService: PinService,
-  ) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -235,10 +238,10 @@ export class AgentSessionService {
       const createdAt = Date.now();
       let workspaceId: string;
       if (dto.workspace.type === AGENT_WORKSPACE_TYPE.USER) {
-        workspaceId = (await this.workspaceService.getRowByIdTx(tx, dto.workspace.workspaceId)).id;
+        workspaceId = (await agentWorkspaceService.getRowByIdTx(tx, dto.workspace.workspaceId)).id;
       } else {
         workspaceId = (
-          await this.workspaceService.createSystemWorkspaceForSessionTx(tx, {
+          await agentWorkspaceService.createSystemWorkspaceForSessionTx(tx, {
             createdAt,
             sessionId: id,
           })
@@ -297,10 +300,10 @@ export class AgentSessionService {
       }
       let workspaceId = current.session.workspaceId;
       if (source.type === AGENT_WORKSPACE_TYPE.USER) {
-        workspaceId = (await this.workspaceService.getRowByIdTx(tx, source.workspaceId)).id;
+        workspaceId = (await agentWorkspaceService.getRowByIdTx(tx, source.workspaceId)).id;
       } else if (current.workspace.type !== AGENT_WORKSPACE_TYPE.SYSTEM) {
         workspaceId = (
-          await this.workspaceService.createSystemWorkspaceForSessionTx(tx, {
+          await agentWorkspaceService.createSystemWorkspaceForSessionTx(tx, {
             createdAt: current.session.createdAt,
             sessionId: id,
           })
@@ -309,7 +312,7 @@ export class AgentSessionService {
       if (workspaceId === current.session.workspaceId) return;
       await tx.update(agentSessionTable).set({ workspaceId }).where(eq(agentSessionTable.id, id));
       if (current.workspace.type === AGENT_WORKSPACE_TYPE.SYSTEM) {
-        await this.workspaceService.deleteByIdTx(tx, current.workspace.id);
+        await agentWorkspaceService.deleteByIdTx(tx, current.workspace.id);
       }
     });
     return this.getById(id);
@@ -318,7 +321,7 @@ export class AgentSessionService {
   private async deleteJoinedRows(tx: DbOrTx, rows: JoinedRow[]): Promise<string[]> {
     const ids = rows.map(({ session }) => session.id);
     if (ids.length === 0) return [];
-    await this.pinService.purgeForEntitiesTx(tx, 'session', ids);
+    await pinService.purgeForEntitiesTx(tx, 'session', ids);
     await tx.delete(agentSessionTable).where(inArray(agentSessionTable.id, ids));
     const systemWorkspaceIds = rows
       .filter(({ workspace }) => workspace.type === AGENT_WORKSPACE_TYPE.SYSTEM)
@@ -382,14 +385,14 @@ export class AgentSessionService {
 
   async deleteWorkspaceCascade(workspaceId: string): Promise<DeleteAgentSessionsResult> {
     const deletedIds = await this.dbService.withWriteTx(async (tx) => {
-      await this.workspaceService.getRowByIdTx(tx, workspaceId);
+      await agentWorkspaceService.getRowByIdTx(tx, workspaceId);
       const sessions = await tx
         .select()
         .from(agentSessionTable)
         .where(eq(agentSessionTable.workspaceId, workspaceId));
       const rows = await this.hydrateSessions(tx, sessions);
       const ids = await this.deleteJoinedRows(tx, rows);
-      await this.workspaceService.deleteByIdTx(tx, workspaceId);
+      await agentWorkspaceService.deleteByIdTx(tx, workspaceId);
       return ids;
     });
     return { deletedIds };
@@ -409,3 +412,5 @@ export class AgentSessionService {
     );
   }
 }
+
+export const agentSessionService = new AgentSessionService();

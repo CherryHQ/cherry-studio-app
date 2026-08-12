@@ -6,6 +6,7 @@ import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { loggerService } from '@logger';
 
+import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
 import { jobHandlerEntry } from '@/backend/services/jobs/JobRuntime';
 import type { JobContext } from '@/backend/services/jobs/types';
@@ -171,7 +172,8 @@ describe('createPaintingGenerateJobHandler', () => {
     let ctx: TestRuntime | undefined;
 
     afterEach(async () => {
-      await ctx?.runtime.dispose();
+      await ctx?.runtime._doStop();
+      await uninstallTestHost();
       sqlite?.close();
       ctx = undefined;
       sqlite = undefined;
@@ -180,7 +182,7 @@ describe('createPaintingGenerateJobHandler', () => {
     it('completes an enqueued painting.generate job with the generation result', async () => {
       const dependencies = createDependencies();
       sqlite = new DatabaseSync(':memory:');
-      ctx = createTestRuntime(sqlite, [
+      ctx = await createTestRuntime(sqlite, [
         jobHandlerEntry('painting.generate', createPaintingGenerateJobHandler(dependencies)),
       ]);
 

@@ -1,3 +1,4 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 import { aiUsageRecordTable } from '@/backend/data/db/schemas';
 
@@ -9,10 +10,12 @@ jest.mock('uuid', () => ({
   v7: jest.fn(() => '00000000-0000-7000-8000-000000000000'),
 }));
 
+afterEach(uninstallTestHost);
+
 describe('AiUsageRecordService', () => {
   it('writes immutable identity, usage, metrics, and cache-aware computed cost', async () => {
-    const database = createDatabase();
-    const service = new AiUsageRecordService(database.dbService);
+    const database = await createDatabase();
+    const service = new AiUsageRecordService();
 
     await service.recordInvocation(
       invocation({
@@ -59,8 +62,8 @@ describe('AiUsageRecordService', () => {
   });
 
   it('trusts provider cost only when the frozen provider capability allows it', async () => {
-    const trustedDatabase = createDatabase();
-    const trustedService = new AiUsageRecordService(trustedDatabase.dbService);
+    const trustedDatabase = await createDatabase();
+    const trustedService = new AiUsageRecordService();
     await trustedService.recordInvocation(
       invocation({
         providerCost: { amount: 0.25, currency: 'USD', breakdown: { input: 0.25 } },
@@ -73,8 +76,8 @@ describe('AiUsageRecordService', () => {
       costBreakdown: { input: 0.25 },
     });
 
-    const untrustedDatabase = createDatabase();
-    const untrustedService = new AiUsageRecordService(untrustedDatabase.dbService);
+    const untrustedDatabase = await createDatabase();
+    const untrustedService = new AiUsageRecordService();
     await untrustedService.recordInvocation(
       invocation({
         context: { ...captureContext(), trustProviderReportedCost: false },
@@ -89,8 +92,8 @@ describe('AiUsageRecordService', () => {
   });
 
   it('is idempotent by request id', async () => {
-    const database = createDatabase();
-    const service = new AiUsageRecordService(database.dbService);
+    const database = await createDatabase();
+    const service = new AiUsageRecordService();
     const input = invocation();
 
     await service.recordInvocation(input);
@@ -100,8 +103,8 @@ describe('AiUsageRecordService', () => {
   });
 
   it('swallows invalid best-effort writes', async () => {
-    const database = createDatabase();
-    const service = new AiUsageRecordService(database.dbService);
+    const database = await createDatabase();
+    const service = new AiUsageRecordService();
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => undefined);
 
     try {
@@ -204,7 +207,7 @@ function invocation(overrides: Partial<RecordAiInvocationInput> = {}): RecordAiI
   };
 }
 
-function createDatabase() {
+async function createDatabase() {
   const rows: Record<string, unknown>[] = [];
   let pendingRow: Record<string, unknown> | undefined;
   const tx = {
@@ -239,5 +242,7 @@ function createDatabase() {
       callback(tx),
     ),
   } as unknown as DbService;
-  return { dbService, rows };
+  // Installed here so every case gets its own fake behind `application.get`;
+  // the service resolves `DbService` per call and takes no constructor.
+  return installTestHost({ DbService: dbService }).then(() => ({ dbService, rows }));
 }

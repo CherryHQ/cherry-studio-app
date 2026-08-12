@@ -1,3 +1,4 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 
 import { TagService } from '../TagService';
@@ -13,8 +14,10 @@ jest.mock('@/backend/data/db/schemas', () => ({
   },
 }));
 
+afterEach(uninstallTestHost);
+
 describe('TagService.setEntities', () => {
-  function createService(options: {
+  async function createService(options: {
     existing?: { entityId: string; entityType: string }[];
     tagExists?: boolean;
   }) {
@@ -42,16 +45,20 @@ describe('TagService.setEntities', () => {
       ),
     } as unknown as DbService;
 
+    // The service resolves `DbService` per call, so the fake is installed as a
+    // host override rather than handed to a constructor.
+    await installTestHost({ DbService: dbService });
+
     return {
       deleteWhere,
       insertValues,
-      service: new TagService(dbService),
+      service: new TagService(),
       tx,
     };
   }
 
   test('updates associations by diff without rewriting unchanged rows', async () => {
-    const { deleteWhere, insertValues, service } = createService({
+    const { deleteWhere, insertValues, service } = await createService({
       existing: [
         { entityId: 'assistant-1', entityType: 'assistant' },
         { entityId: 'topic-1', entityType: 'topic' },
@@ -72,7 +79,7 @@ describe('TagService.setEntities', () => {
   });
 
   test('rejects a missing tag before changing associations', async () => {
-    const { service, tx } = createService({ tagExists: false });
+    const { service, tx } = await createService({ tagExists: false });
 
     await expect(service.setEntities('missing', { entities: [] })).rejects.toMatchObject({
       code: 'NOT_FOUND',

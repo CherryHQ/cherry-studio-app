@@ -1,113 +1,87 @@
 import type { CacheService } from '@/backend/data/CacheService';
-import type { DbService } from '@/backend/data/db/DbService';
-import { PreferenceService } from '@/backend/data/PreferenceService';
-import { AgentChannelService } from '@/backend/data/services/AgentChannelService';
-import { AgentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
-import { AgentService } from '@/backend/data/services/AgentService';
-import { AgentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
-import { AgentSessionService } from '@/backend/data/services/AgentSessionService';
-import { AgentTaskService } from '@/backend/data/services/AgentTaskService';
-import { AgentWorkspaceService } from '@/backend/data/services/AgentWorkspaceService';
-import { AiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
-import { AssistantService } from '@/backend/data/services/AssistantService';
-import { ContentSearchService } from '@/backend/data/services/ContentSearchService';
-import { EntitySearchService } from '@/backend/data/services/EntitySearchService';
-import { FileEntryService } from '@/backend/data/services/FileEntryService';
-import { FileRefService } from '@/backend/data/services/FileRefService';
-import { GroupService } from '@/backend/data/services/GroupService';
-import { JobService } from '@/backend/data/services/JobService';
-import { KnowledgeBaseService } from '@/backend/data/services/KnowledgeBaseService';
-import { KnowledgeItemService } from '@/backend/data/services/KnowledgeItemService';
-import { McpServerService } from '@/backend/data/services/McpServerService';
-import { MessageService } from '@/backend/data/services/MessageService';
-import { MiniAppService } from '@/backend/data/services/MiniAppService';
-import { ModelService } from '@/backend/data/services/ModelService';
-import { NoteService } from '@/backend/data/services/NoteService';
-import { PaintingService } from '@/backend/data/services/PaintingService';
-import { PinService } from '@/backend/data/services/PinService';
-import { PromptService } from '@/backend/data/services/PromptService';
-import { ProviderService } from '@/backend/data/services/ProviderService';
-import { TagService } from '@/backend/data/services/TagService';
-import { TemporaryChatService } from '@/backend/data/services/TemporaryChatService';
-import { TopicService } from '@/backend/data/services/TopicService';
-import { TranslateHistoryService } from '@/backend/data/services/TranslateHistoryService';
-import { TranslateLanguageService } from '@/backend/data/services/TranslateLanguageService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { agentChannelService } from '@/backend/data/services/AgentChannelService';
+import { agentGlobalSkillService } from '@/backend/data/services/AgentGlobalSkillService';
+import { agentService } from '@/backend/data/services/AgentService';
+import { agentSessionMessageService } from '@/backend/data/services/AgentSessionMessageService';
+import { agentSessionService } from '@/backend/data/services/AgentSessionService';
+import { agentTaskService } from '@/backend/data/services/AgentTaskService';
+import { agentWorkspaceService } from '@/backend/data/services/AgentWorkspaceService';
+import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
+import { assistantService } from '@/backend/data/services/AssistantService';
+import { contentSearchService } from '@/backend/data/services/ContentSearchService';
+import { entitySearchService } from '@/backend/data/services/EntitySearchService';
+import { fileEntryService } from '@/backend/data/services/FileEntryService';
+import { fileRefService } from '@/backend/data/services/FileRefService';
+import { groupService } from '@/backend/data/services/GroupService';
+import { jobService } from '@/backend/data/services/JobService';
+import { knowledgeBaseService } from '@/backend/data/services/KnowledgeBaseService';
+import { knowledgeItemService } from '@/backend/data/services/KnowledgeItemService';
+import { mcpServerService } from '@/backend/data/services/McpServerService';
+import { messageService } from '@/backend/data/services/MessageService';
+import { miniAppService } from '@/backend/data/services/MiniAppService';
+import { modelService } from '@/backend/data/services/ModelService';
+import { noteService } from '@/backend/data/services/NoteService';
+import { paintingService } from '@/backend/data/services/PaintingService';
+import { pinService } from '@/backend/data/services/PinService';
+import { promptService } from '@/backend/data/services/PromptService';
+import { providerService } from '@/backend/data/services/ProviderService';
+import { tagService } from '@/backend/data/services/TagService';
+import { temporaryChatService } from '@/backend/data/services/TemporaryChatService';
+import { topicService } from '@/backend/data/services/TopicService';
+import { translateHistoryService } from '@/backend/data/services/TranslateHistoryService';
+import { translateLanguageService } from '@/backend/data/services/TranslateLanguageService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
 
+/**
+ * Names the data-service singletons for the routing table.
+ *
+ * Every service here is a module singleton that resolves `DbService` through
+ * `application` per call, so this builds nothing — it only gives the route
+ * registrations one object to read from. `cache` and `preference` are the two
+ * lifecycle-owned services the routes also expose; the host constructs those.
+ */
 export function createDataServices({
   cache,
-  dbService,
+  preference,
 }: {
   cache: CacheService;
-  dbService: DbService;
+  preference: PreferenceService;
 }) {
-  const preference = new PreferenceService(dbService);
-  const aiUsageRecord = new AiUsageRecordService(dbService);
-  const pin = new PinService(dbService);
-  const provider = new ProviderService(dbService, pin, cache);
-  const model = new ModelService(dbService, preference, pin);
-  const tag = new TagService(dbService);
-  const group = new GroupService(dbService);
-  const job = new JobService(dbService);
-  const agentWorkspace = new AgentWorkspaceService(dbService);
-  const agentSession = new AgentSessionService(dbService, agentWorkspace, pin);
-  const agentSessionMessage = new AgentSessionMessageService(dbService);
-  const agentChannel = new AgentChannelService(dbService);
-  const agentGlobalSkill = new AgentGlobalSkillService(dbService);
-  const agentTask = new AgentTaskService(dbService, agentChannel, job);
-  const agent = new AgentService(dbService, agentSession, pin);
-  const knowledgeBase = new KnowledgeBaseService(dbService, group);
-  const knowledgeItem = new KnowledgeItemService(dbService, knowledgeBase);
-  const miniApp = new MiniAppService(dbService);
-  const note = new NoteService(dbService);
-  const prompt = new PromptService(dbService);
-  const translateHistory = new TranslateHistoryService(dbService);
-  const translateLanguage = new TranslateLanguageService(dbService);
-  const fileEntry = new FileEntryService(dbService);
-  const fileRef = new FileRefService(dbService);
-  const painting = new PaintingService(dbService);
-  const mcpServer = new McpServerService(dbService);
-  const topic = new TopicService(dbService, pin, tag);
-  const assistant = new AssistantService(dbService, group, topic, model, preference, tag, pin);
-  const message = new MessageService(dbService, topic);
-  const contentSearch = new ContentSearchService(dbService);
-  const entitySearch = new EntitySearchService(dbService);
-  const temporaryChat = new TemporaryChatService(dbService, aiUsageRecord);
-
   return {
-    agent,
-    agentChannel,
-    agentGlobalSkill,
-    agentSession,
-    agentSessionMessage,
-    agentTask,
-    agentWorkspace,
-    aiUsageRecord,
-    assistant,
+    agent: agentService,
+    agentChannel: agentChannelService,
+    agentGlobalSkill: agentGlobalSkillService,
+    agentSession: agentSessionService,
+    agentSessionMessage: agentSessionMessageService,
+    agentTask: agentTaskService,
+    agentWorkspace: agentWorkspaceService,
+    aiUsageRecord: aiUsageRecordService,
+    assistant: assistantService,
     cache,
-    contentSearch,
-    entitySearch,
-    fileEntry,
-    fileRef,
-    group,
-    job,
-    knowledgeBase,
-    knowledgeItem,
-    mcpServer,
-    message,
-    miniApp,
-    model,
-    note,
-    painting,
-    pin,
+    contentSearch: contentSearchService,
+    entitySearch: entitySearchService,
+    fileEntry: fileEntryService,
+    fileRef: fileRefService,
+    group: groupService,
+    job: jobService,
+    knowledgeBase: knowledgeBaseService,
+    knowledgeItem: knowledgeItemService,
+    mcpServer: mcpServerService,
+    message: messageService,
+    miniApp: miniAppService,
+    model: modelService,
+    note: noteService,
+    painting: paintingService,
+    pin: pinService,
     preference,
-    prompt,
-    provider,
-    tag,
-    temporaryChat,
-    topic,
-    translateHistory,
-    translateLanguage,
+    prompt: promptService,
+    provider: providerService,
+    tag: tagService,
+    temporaryChat: temporaryChatService,
+    topic: topicService,
+    translateHistory: translateHistoryService,
+    translateLanguage: translateLanguageService,
   };
 }

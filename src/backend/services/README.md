@@ -21,8 +21,9 @@ suffix.
 - `cherryin` owns the mobile-only `CherryInClient` for that provider's external account REST
   surface. Device permissions are adapted by `DevicePermissions`; avatar storage remains a set of
   domain functions.
-- `file` owns the Expo managed-file storage adapter and file maintenance orchestration. File-entry
-  and reference persistence remain in `src/backend/data/services`.
+- `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it, and
+  file maintenance orchestration. File-entry and reference persistence remain in
+  `src/backend/data/services`.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific
   transformations.
 - `src/backend/ai` remains reserved for AI SDK, provider, MCP runtime, message, and tool behavior.

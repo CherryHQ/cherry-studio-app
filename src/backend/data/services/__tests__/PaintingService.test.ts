@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
@@ -26,7 +27,7 @@ describe('PaintingService integration', () => {
   let service: PaintingService;
   let database: Database;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     sqlite = new DatabaseSync(':memory:');
     sqlite.exec('PRAGMA foreign_keys = ON');
     applyMigrations(sqlite);
@@ -61,10 +62,16 @@ describe('PaintingService integration', () => {
         }
       },
     } as unknown as DbService;
-    service = new PaintingService(dbService);
+    // Data services resolve `DbService` from `application`, so the fake is
+    // installed as a host override instead of being passed to constructors.
+    await installTestHost({ DbService: dbService });
+    service = new PaintingService();
   });
 
-  afterEach(() => sqlite.close());
+  afterEach(async () => {
+    await uninstallTestHost();
+    sqlite.close();
+  });
 
   it('pages newest receipts first and keeps output-less ones so the gallery can show them', async () => {
     insertPainting(sqlite, 'painting-new', 'a0', 3);

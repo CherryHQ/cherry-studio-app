@@ -1,4 +1,16 @@
+import { AiService } from '@/backend/ai/AiService';
+import { McpRuntimeService } from '@/backend/ai/mcp';
+import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
+import { CacheService } from '@/backend/data/CacheService';
+import { DbService } from '@/backend/data/db/DbService';
+import { PreferenceService } from '@/backend/data/PreferenceService';
+import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
+import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
+import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+
 import type { ServiceConstructor } from '../lifecycle/types';
+import { ResourceScopeCoordinator } from '../resources/ResourceScopeCoordinator';
 
 /**
  * The central service registry.
@@ -11,11 +23,23 @@ import type { ServiceConstructor } from '../lifecycle/types';
  * `backend/services`, and `backend/data`: registration is assembly, so the layer
  * rule is relaxed here and nowhere else.
  *
- * Stage A registers nothing. The framework ships inert — present, tested, and
- * wired to no module — so that migrating the existing runtime graph is a
- * separate, reviewable change that cannot be conflated with framework bugs.
+ * Registration order is documentation only — the dependency graph decides what
+ * actually runs when. Keep it in dependency order anyway, so reading top to
+ * bottom matches startup.
  */
-export const services = {} as const;
+export const services = {
+  ResourceScopeCoordinator,
+  CacheService,
+  DbService,
+  PreferenceService,
+  WebSearchService,
+  McpRuntimeService,
+  OAuthRuntimeService,
+  ProviderOAuthService,
+  AiService,
+  ChatRuntime,
+  JobRuntime,
+} as const;
 
 /** Service name to instance type, derived from `services`. */
 export type ServiceRegistry = {

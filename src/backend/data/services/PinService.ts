@@ -26,7 +26,7 @@ import type { EntityType } from '@cherrystudio/universal/data/types/entityType';
 import type { CreatePinDto, Pin } from '@cherrystudio/universal/data/types/pin';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 
-import type { DbService } from '@/backend/data/db/DbService';
+import { application } from '@/backend/core/application/Application';
 import { pinTable } from '@/backend/data/db/schemas';
 import type { PinRow } from '@/backend/data/db/schemas/pin';
 
@@ -63,7 +63,14 @@ function isUniqueConstraintError(error: unknown): boolean {
 }
 
 export class PinService {
-  constructor(private readonly dbService: DbService) {}
+  /**
+   * Resolved per call rather than injected once, so the instance holds no
+   * reference to a particular host generation and a replaced host cannot leave
+   * this singleton writing to a closed connection.
+   */
+  private get dbService() {
+    return application.get('DbService');
+  }
 
   private get db() {
     return this.dbService.getDb();
@@ -227,3 +234,5 @@ export class PinService {
       .where(and(eq(pinTable.entityType, entityType), inArray(pinTable.entityId, entityIds)));
   }
 }
+
+export const pinService = new PinService();

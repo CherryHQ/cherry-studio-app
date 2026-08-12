@@ -1,8 +1,13 @@
+import { fetch as expoFetch } from 'expo/fetch';
+
+import { BaseService, Injectable } from '@/backend/core/lifecycle';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { describeOAuthError, OAuthServiceError, OAuthTransientError } from '@/shared/oauth';
 import type { OAuthAccount, OAuthProviderContext, OAuthTokenCredentials } from '@/shared/oauth';
 
 import { OAuthApiKeyStore, type OAuthApiKeyRepository } from '../authorization/OAuthApiKeyStore';
+import { oauthProviderRepository } from '../providerRepository';
+import { oauthTokenStore } from './OAuthTokenStore';
 import { OAuthHttpError, PkceOAuthClient } from './PkceOAuthClient';
 import { createOAuthProviderDefinitions } from './providerDefinitions';
 import type { OAuthRuntimeProviderDefinition, OAuthTokenStore } from './types';
@@ -29,31 +34,42 @@ export type OAuthRuntimeProviderRepository = OAuthApiKeyRepository & {
   update(providerId: string, input: { isEnabled?: boolean }): Promise<unknown>;
 };
 
+/** Every entry is optional so the container can construct this with no arguments. */
 export type OAuthRuntimeServiceDependencies = {
   apiKeys?: OAuthApiKeyStore;
   definitions?: Record<string, OAuthRuntimeProviderDefinition>;
   fetch?: typeof globalThis.fetch;
-  providers: OAuthRuntimeProviderRepository;
-  tokenStore: OAuthTokenStore;
+  providers?: OAuthRuntimeProviderRepository;
+  tokenStore?: OAuthTokenStore;
 };
 
 /**
  * Long-lived provider OAuth sessions. Authorization transports and one-shot
  * API-key flows live in ProviderOAuthService and its adapters.
  */
-export class OAuthRuntimeService {
+@Injectable('OAuthRuntimeService')
+export class OAuthRuntimeService extends BaseService {
   private readonly apiKeys: OAuthApiKeyStore;
   private readonly definitions: Record<string, OAuthRuntimeProviderDefinition>;
   private readonly fetch: typeof globalThis.fetch;
+  private readonly providers: OAuthRuntimeProviderRepository;
+  private readonly tokenStore: OAuthTokenStore;
   private readonly refreshPromises = new Map<string, Promise<RefreshResult>>();
 
-  constructor(private readonly dependencies: OAuthRuntimeServiceDependencies) {
-    this.fetch = dependencies.fetch ?? globalThis.fetch;
+  constructor(dependencies: OAuthRuntimeServiceDependencies = {}) {
+    super();
+    // Expo's fetch, not `globalThis.fetch`: this is what the composition passed
+    // before the container owned construction, and the two are different clients
+    // on this runtime. Defaulting to the global one would quietly change which
+    // stack every token request goes through.
+    this.fetch = dependencies.fetch ?? (expoFetch as typeof globalThis.fetch);
     this.definitions = dependencies.definitions ?? createOAuthProviderDefinitions(this.fetch);
-    this.apiKeys = dependencies.apiKeys ?? new OAuthApiKeyStore(dependencies.providers);
+    this.providers = dependencies.providers ?? oauthProviderRepository;
+    this.tokenStore = dependencies.tokenStore ?? oauthTokenStore;
+    this.apiKeys = dependencies.apiKeys ?? new OAuthApiKeyStore(this.providers);
   }
 
-  dispose(): void {
+  protected onStop(): void {
     this.refreshPromises.clear();
   }
 
@@ -88,7 +104,7 @@ export class OAuthRuntimeService {
         await this.apiKeys.replace(definition.providerId, sideEffect.apiKeys);
       }
 
-      await this.dependencies.providers.update(definition.providerId, { isEnabled: true });
+      await this.providers.update(definition.providerId, { isEnabled: true });
       logger.info(`${input.providerId} sign-in succeeded`);
     } catch (error) {
       logger.error(`${input.providerId} sign-in failed`, describeOAuthError(error));
@@ -100,13 +116,13 @@ export class OAuthRuntimeService {
 
   async getAccount(providerId: string): Promise<OAuthAccount> {
     this.getDefinition(providerId);
-    const config = await this.dependencies.tokenStore.get(providerId);
+    const config = await this.tokenStore.get(providerId);
     return { accountId: config?.accountId ?? null };
   }
 
   async hasToken(providerId: string): Promise<boolean> {
     const definition = this.getDefinition(providerId);
-    const config = await this.dependencies.tokenStore.get(providerId);
+    const config = await this.tokenStore.get(providerId);
     if (!config?.accessToken) return false;
 
     if (this.isExpired(config.expiresAt) && !config.refreshToken) {
@@ -120,7 +136,7 @@ export class OAuthRuntimeService {
     const definition = this.getDefinition(providerId);
 
     if (definition.revokeToken) {
-      const config = await this.dependencies.tokenStore.get(providerId);
+      const config = await this.tokenStore.get(providerId);
       if (config?.accessToken) {
         try {
           await definition.revokeToken(config.accessToken, context);
@@ -140,7 +156,7 @@ export class OAuthRuntimeService {
     context: OAuthProviderContext = {},
   ): Promise<OAuthTokenCredentials | null> {
     const definition = this.getDefinition(providerId);
-    const config = await this.dependencies.tokenStore.get(providerId);
+    const config = await this.tokenStore.get(providerId);
     if (!config?.accessToken) return null;
 
     if (!context.forceRefresh && !this.isExpired(config.expiresAt)) {
@@ -165,7 +181,7 @@ export class OAuthRuntimeService {
 
     // The conditional store rejects a stale refresh after logout or re-login.
     // Never return credentials that did not actually become the active session.
-    const refreshed = await this.dependencies.tokenStore.get(providerId);
+    const refreshed = await this.tokenStore.get(providerId);
     if (refreshed?.accessToken !== result.accessToken) return null;
     return { accessToken: result.accessToken, accountId: refreshed.accountId ?? null };
   }
@@ -226,10 +242,10 @@ export class OAuthRuntimeService {
     tokenData: { access_token: string; expires_in?: number; refresh_token?: string },
     options?: { expectedRefreshToken?: string },
   ): Promise<void> {
-    const current = await this.dependencies.tokenStore.get(definition.providerId);
+    const current = await this.tokenStore.get(definition.providerId);
     const accountId = definition.extractAccountId?.(tokenData.access_token) ?? current?.accountId;
 
-    await this.dependencies.tokenStore.set(
+    await this.tokenStore.set(
       definition.providerId,
       {
         accessToken: tokenData.access_token,
@@ -273,7 +289,7 @@ export class OAuthRuntimeService {
     definition: OAuthRuntimeProviderDefinition,
     expectedRefreshToken?: string,
   ): Promise<void> {
-    return this.dependencies.tokenStore.clear(definition.providerId, {
+    return this.tokenStore.clear(definition.providerId, {
       disableProvider: definition.clearDisablesProvider,
       ...(expectedRefreshToken !== undefined ? { expectedRefreshToken } : {}),
     });

@@ -1,5 +1,14 @@
+import type { AiService } from '@/backend/ai/AiService';
+import type { McpRuntimeService } from '@/backend/ai/mcp';
+import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import type { CacheService } from '@/backend/data/CacheService';
-import type { DbService } from '@/backend/data/db/DbService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { fileContent } from '@/backend/services/file/fileContent';
+import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
+import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
+import { devicePermissions } from '@/backend/services/permissions';
+import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import { createBackendServices } from '../createBackendServices';
 
@@ -14,96 +23,56 @@ const mockDataServices = {
   preference: { kind: 'preference' },
   provider: { kind: 'provider' },
 };
-const mockPlatformAdapters = {
-  devicePermissions: { kind: 'device-permissions' },
-  fileContent: { kind: 'file-content' },
-  platformOnly: { kind: 'platform-only' },
-};
-const mockAiServices = {
-  ai: { kind: 'ai' },
-  aiOnly: { kind: 'ai-only' },
-  mcpRuntime: { kind: 'mcp-runtime' },
-  tools: { kind: 'tools' },
-  webSearch: { kind: 'web-search' },
-};
-const mockOauth = { kind: 'oauth' };
-const mockOauthSession = {
-  authenticatedFetch: jest.fn(),
-  kind: 'oauth-session',
-};
-const mockCopilot = { getServingToken: jest.fn() };
-const mockApiKeys = { kind: 'oauth-api-keys' };
-const mockTokenStore = { kind: 'oauth-token-store' };
-const mockDefinitions = { cherryin: { providerId: 'cherryin' } };
-const mockAdapters = [{ providerId: 'cherryin' }];
 
 const mockCreateDataServices = jest.fn((_dependencies: unknown) => mockDataServices);
-const mockCreatePlatformAdapters = jest.fn((_dependencies: unknown) => mockPlatformAdapters);
-const mockCreateAiServices = jest.fn((_dependencies: unknown) => mockAiServices);
 
 jest.mock('../createDataServices', () => ({
   createDataServices: (dependencies: unknown) => mockCreateDataServices(dependencies),
 }));
-jest.mock('../createPlatformAdapters', () => ({
-  createPlatformAdapters: (dependencies: unknown) => mockCreatePlatformAdapters(dependencies),
-}));
-jest.mock('../createAiServices', () => ({
-  createAiServices: (dependencies: unknown) => mockCreateAiServices(dependencies),
-}));
-jest.mock('@/backend/services/oauth/runtime/OAuthRuntimeService', () => ({
-  OAuthRuntimeService: jest.fn().mockImplementation(() => mockOauthSession),
-}));
-jest.mock('@/backend/services/oauth/runtime/OAuthTokenStore', () => ({
-  ProviderAuthConfigOAuthTokenStore: jest.fn().mockImplementation(() => mockTokenStore),
-}));
-jest.mock('@/backend/services/oauth/runtime/providerDefinitions', () => ({
-  createOAuthProviderDefinitions: jest.fn(() => mockDefinitions),
-}));
-jest.mock('@/backend/services/oauth/authorization/OAuthApiKeyStore', () => ({
-  OAuthApiKeyStore: jest.fn().mockImplementation(() => mockApiKeys),
-}));
-jest.mock('@/backend/services/oauth/authorization/ProviderOAuthService', () => ({
-  ProviderOAuthService: jest.fn().mockImplementation(() => mockOauth),
-}));
-jest.mock('@/backend/services/oauth/authorization/createOAuthFlowRegistry', () => ({
-  createOAuthFlowRegistry: jest.fn(() => ({ copilot: mockCopilot, registry: mockAdapters })),
-}));
-jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
+    const ai = { kind: 'ai' } as unknown as AiService;
     const cache = { kind: 'cache' } as unknown as CacheService;
-    const dbService = { kind: 'database' } as unknown as DbService;
+    // The chat and job runtimes arrive from the host too, as of stage B's last
+    // two services.
+    const chat = { kind: 'chat' } as unknown as ChatRuntime;
+    const jobRuntime = { kind: 'job-runtime' } as unknown as JobRuntime;
+    const mcpRuntime = { kind: 'mcp-runtime' } as unknown as McpRuntimeService;
+    // Both OAuth services arrive from the host now, like the four above them.
+    const oauth = { kind: 'oauth' } as unknown as ProviderOAuthService;
+    const oauthSession = { kind: 'oauth-session' } as unknown as OAuthRuntimeService;
+    const preference = { kind: 'preference' } as unknown as PreferenceService;
+    const webSearch = { kind: 'web-search' } as unknown as WebSearchService;
 
-    const services = createBackendServices(dbService, cache);
-
-    expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, dbService });
-    expect(mockCreatePlatformAdapters).toHaveBeenCalledWith({
-      fileEntry: mockDataServices.fileEntry,
-      fileRef: mockDataServices.fileRef,
+    const services = createBackendServices({
+      ai,
+      cache,
+      chat,
+      jobRuntime,
+      mcpRuntime,
+      oauth,
+      oauthSession,
+      preference,
+      webSearch,
     });
-    expect(mockCreateAiServices).toHaveBeenCalledWith(
-      expect.objectContaining({
-        aiUsageRecord: mockDataServices.aiUsageRecord,
-        assistant: mockDataServices.assistant,
-        devicePermissions: mockPlatformAdapters.devicePermissions,
-        fileContent: mockPlatformAdapters.fileContent,
-        mcpServer: mockDataServices.mcpServer,
-        model: mockDataServices.model,
-        oauth: {
-          authenticatedFetch: expect.any(Function),
-          getCopilotServingToken: expect.any(Function),
-        },
-        preference: mockDataServices.preference,
-        provider: mockDataServices.provider,
-      }),
-    );
+
+    expect(mockCreateDataServices).toHaveBeenCalledWith({ cache, preference });
+    // The platform adapters are module singletons rather than constructed
+    // dependencies now, so the bundle must carry those exact instances.
     expect(services).toEqual({
       ...mockDataServices,
-      ...mockPlatformAdapters,
-      ...mockAiServices,
-      oauth: mockOauth,
-      oauthSession: mockOauthSession,
+      ai,
+      chat,
+      devicePermissions,
+      fileContent,
+      jobRuntime,
+      mcpRuntime,
+      oauth,
+      oauthSession,
+      webSearch,
     });
+    expect(services.devicePermissions).toBe(devicePermissions);
+    expect(services.fileContent).toBe(fileContent);
   });
 });

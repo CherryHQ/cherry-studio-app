@@ -1,5 +1,7 @@
 import { ContentHashSchema } from '@cherrystudio/universal/data/types/file';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
 import { FileEntryService } from '../FileEntryService';
 
@@ -16,13 +18,15 @@ describe('FileEntryService integration', () => {
   let testDatabase: ReturnType<typeof createServiceTestDatabase>;
   let service: FileEntryService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.spyOn(Date, 'now').mockReturnValue(now);
     testDatabase = createServiceTestDatabase();
-    service = new FileEntryService(testDatabase.dbService);
+    await installTestHost({ DbService: testDatabase.dbService });
+    service = new FileEntryService();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await uninstallTestHost();
     testDatabase.sqlite.close();
     jest.restoreAllMocks();
   });

@@ -1,10 +1,11 @@
 import type { ApiKeyEntry, ProviderSettings } from '@cherrystudio/universal/data/types/provider';
 
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
 
-import type { PinService } from '../PinService';
+import { pinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';
 import { canDeleteProvider, ProviderService } from '../ProviderService';
 
@@ -23,6 +24,18 @@ jest.mock('../ProviderRegistryService', () => ({
     isRegistryProvider: jest.fn(() => false),
   },
 }));
+
+// `delete` reaches `pinService` as a module singleton, so the purge is stubbed
+// on the real instance: letting it run would issue a second `tx.delete` against
+// the fake transactions below.
+const purgeForEntitiesTx = jest
+  .spyOn(pinService, 'purgeForEntitiesTx')
+  .mockResolvedValue(undefined);
+
+afterEach(async () => {
+  await uninstallTestHost();
+  purgeForEntitiesTx.mockClear();
+});
 
 describe('ProviderService', () => {
   test('projects unsupported preset providers out while retaining custom providers', async () => {
@@ -48,17 +61,11 @@ describe('ProviderService', () => {
     jest
       .mocked(providerRegistryService.isProviderExcluded)
       .mockImplementation((providerId) => ['grok-cli', 'openai-codex'].includes(providerId));
-    const service = new ProviderService(
-      {
-        getDb: () => ({
-          select: () => ({
-            from: () => ({ orderBy: async () => rows }),
-          }),
-        }),
-      } as unknown as DbService,
-      createPinServiceStub(),
-      createCacheService(),
-    );
+    const service = await createReadService({
+      select: () => ({
+        from: () => ({ orderBy: async () => rows }),
+      }),
+    });
 
     await expect(service.list()).resolves.toEqual([
       expect.objectContaining({ id: 'openrouter' }),
@@ -80,17 +87,11 @@ describe('ProviderService', () => {
       { name: 'OpenAI Codex', presetProviderId: 'openai-codex', providerId: 'openai-codex' },
     );
     jest.mocked(providerRegistryService.isProviderExcluded).mockReturnValue(true);
-    const service = new ProviderService(
-      {
-        getDb: () => ({
-          select: () => ({
-            from: () => ({ where: () => ({ limit: async () => [row] }) }),
-          }),
-        }),
-      } as unknown as DbService,
-      createPinServiceStub(),
-      createCacheService(),
-    );
+    const service = await createReadService({
+      select: () => ({
+        from: () => ({ where: () => ({ limit: async () => [row] }) }),
+      }),
+    });
 
     await expect(service.getByProviderId(row.providerId)).rejects.toMatchObject({
       code: 'NOT_FOUND',
@@ -110,17 +111,11 @@ describe('ProviderService', () => {
       },
     });
     const row = createProviderRow({});
-    const service = new ProviderService(
-      {
-        getDb: () => ({
-          select: () => ({
-            from: () => ({ where: () => ({ limit: async () => [row] }) }),
-          }),
-        }),
-      } as unknown as DbService,
-      createPinServiceStub(),
-      createCacheService(),
-    );
+    const service = await createReadService({
+      select: () => ({
+        from: () => ({ where: () => ({ limit: async () => [row] }) }),
+      }),
+    });
 
     await expect(service.getByProviderId(row.providerId)).resolves.toMatchObject({
       apiFeatures: { reportsActualCost: true },
@@ -163,14 +158,7 @@ describe('ProviderService', () => {
         }),
       })),
     };
-    const service = new ProviderService(
-      {
-        getDb: () => ({}),
-        withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
-      } as unknown as DbService,
-      createPinServiceStub(),
-      createCacheService(),
-    );
+    const service = await createService(tx);
 
     const provider = await service.update(row.providerId, {
       providerSettings: { serviceTier: null, timeout: 30_000, verbosity: null },
@@ -198,14 +186,11 @@ describe('ProviderService', () => {
       presetProviderId: null,
       providerId: 'custom-provider',
     });
-    const pinService = {
-      purgeForEntitiesTx: jest.fn(async () => undefined),
-    } as unknown as PinService;
-    const service = createService(tx, pinService);
+    const service = await createService(tx);
 
     await service.delete('custom-provider');
 
-    expect(pinService.purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', [
+    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', [
       'custom-provider::model-a',
       'custom-provider::model-b',
     ]);
@@ -218,14 +203,14 @@ describe('ProviderService', () => {
       presetProviderId: 'openai',
       providerId: 'openai-clone',
     });
-    const service = createService(tx);
+    const service = await createService(tx);
 
     await expect(service.delete('openai-clone')).resolves.toBeUndefined();
     expect(tx.delete).toHaveBeenCalledTimes(1);
   });
 
   test('rotates enabled API keys round-robin', async () => {
-    const service = createRotationService([
+    const service = await createRotationService([
       apiKey('a', 'key-a'),
       apiKey('b', 'key-b', false),
       apiKey('c', 'key-c'),
@@ -237,7 +222,7 @@ describe('ProviderService', () => {
   });
 
   test('returns the selected key with a non-secret identity receipt', async () => {
-    const service = createRotationService([
+    const service = await createRotationService([
       {
         id: 'primary',
         isEnabled: true,
@@ -260,8 +245,9 @@ describe('ProviderService', () => {
 
   test('matches overrides against every stored key without advancing rotation', async () => {
     const cacheService = createCacheService();
-    const service = createRotationService(
+    const service = await createRotationService(
       [apiKey('enabled', 'enabled-key'), apiKey('disabled', 'disabled-key', false)],
+      undefined,
       cacheService,
     );
 
@@ -277,7 +263,7 @@ describe('ProviderService', () => {
   });
 
   test('keeps unmatched overrides usable without persisting their identity', async () => {
-    const service = createRotationService([apiKey('primary', 'stored-key')]);
+    const service = await createRotationService([apiKey('primary', 'stored-key')]);
 
     const resolved = await service.resolveApiKey('custom-provider', 'caller-secret');
 
@@ -290,12 +276,14 @@ describe('ProviderService', () => {
 
   test('never snapshots a raw short key and reports missing keys as unknown', async () => {
     await expect(
-      createRotationService([apiKey('short', 'tiny')]).resolveApiKey('custom-provider'),
+      (await createRotationService([apiKey('short', 'tiny')])).resolveApiKey('custom-provider'),
     ).resolves.toEqual({
       value: 'tiny',
       apiKeySelection: { attribution: 'explicit', id: 'short', masked: '****' },
     });
-    await expect(createRotationService([]).resolveApiKey('custom-provider')).resolves.toEqual({
+    await expect(
+      (await createRotationService([])).resolveApiKey('custom-provider'),
+    ).resolves.toEqual({
       value: '',
       apiKeySelection: { attribution: 'unknown' },
     });
@@ -303,15 +291,17 @@ describe('ProviderService', () => {
 
   test('short-circuits rotation for zero or one enabled key', async () => {
     await expect(
-      createRotationService([apiKey('a', 'key-a', false)]).getRotatedApiKey('custom-provider'),
+      (await createRotationService([apiKey('a', 'key-a', false)])).getRotatedApiKey(
+        'custom-provider',
+      ),
     ).resolves.toBe('');
     await expect(
-      createRotationService([apiKey('a', 'key-a')]).getRotatedApiKey('custom-provider'),
+      (await createRotationService([apiKey('a', 'key-a')])).getRotatedApiKey('custom-provider'),
     ).resolves.toBe('key-a');
   });
 
   test('rotation state is scoped per provider', async () => {
-    const first = createRotationService([apiKey('a', 'key-a'), apiKey('b', 'key-b')]);
+    const first = await createRotationService([apiKey('a', 'key-a'), apiKey('b', 'key-b')]);
 
     await expect(first.getRotatedApiKey('provider-one')).resolves.toBe('key-a');
     await expect(first.getRotatedApiKey('provider-two')).resolves.toBe('key-a');
@@ -323,10 +313,10 @@ describe('ProviderService', () => {
     const keys = [apiKey('a', 'key-a'), apiKey('b', 'key-b')];
 
     await expect(
-      createRotationService(keys, undefined, cache).getRotatedApiKey('provider'),
+      (await createRotationService(keys, undefined, cache)).getRotatedApiKey('provider'),
     ).resolves.toBe('key-a');
     await expect(
-      createRotationService(keys, undefined, cache).getRotatedApiKey('provider'),
+      (await createRotationService(keys, undefined, cache)).getRotatedApiKey('provider'),
     ).resolves.toBe('key-b');
   });
 
@@ -336,7 +326,7 @@ describe('ProviderService', () => {
       presetProviderId: null,
       providerId: 'custom-provider',
     });
-    const rotation = createRotationService([apiKey('a', 'key-a'), apiKey('b', 'key-b')], tx);
+    const rotation = await createRotationService([apiKey('a', 'key-a'), apiKey('b', 'key-b')], tx);
 
     await expect(rotation.getRotatedApiKey('custom-provider')).resolves.toBe('key-a');
     await rotation.delete('custom-provider');
@@ -352,7 +342,7 @@ describe('ProviderService', () => {
     });
     jest.mocked(providerRegistryService.isRegistryProvider).mockReturnValueOnce(true);
 
-    await expect(createService(registryTx).delete('openai')).rejects.toThrow(
+    await expect((await createService(registryTx)).delete('openai')).rejects.toThrow(
       "Cannot delete preset provider 'openai'",
     );
     expect(registryTx.delete).not.toHaveBeenCalled();
@@ -362,22 +352,37 @@ describe('ProviderService', () => {
       presetProviderId: 'canonical',
       providerId: 'canonical',
     });
-    await expect(createService(canonicalTx).delete('canonical')).rejects.toThrow(
+    await expect((await createService(canonicalTx)).delete('canonical')).rejects.toThrow(
       "Cannot delete preset provider 'canonical'",
     );
     expect(canonicalTx.delete).not.toHaveBeenCalled();
   });
 });
 
-function createService(tx: object, pinService?: PinService): ProviderService {
-  return new ProviderService(
-    {
+/**
+ * Service whose db serves `db` to the read paths; writes are not wired.
+ *
+ * `ProviderService` resolves `DbService` and `CacheService` per call, so this
+ * helper and the ones below install the fakes as host overrides rather than
+ * handing them to a constructor.
+ */
+async function createReadService(db: object): Promise<ProviderService> {
+  await installTestHost({
+    CacheService: createCacheService(),
+    DbService: { getDb: () => db } as unknown as DbService,
+  });
+  return new ProviderService();
+}
+
+async function createService(tx: object): Promise<ProviderService> {
+  await installTestHost({
+    CacheService: createCacheService(),
+    DbService: {
       getDb: () => ({}),
       withWriteTx: async (callback: (transaction: object) => Promise<unknown>) => callback(tx),
     } as unknown as DbService,
-    pinService ?? createPinServiceStub(),
-    createCacheService(),
-  );
+  });
+  return new ProviderService();
 }
 
 function apiKey(id: string, key: string, isEnabled = true): ApiKeyEntry {
@@ -385,11 +390,11 @@ function apiKey(id: string, key: string, isEnabled = true): ApiKeyEntry {
 }
 
 /** Service whose db always resolves one provider row with the given API keys. */
-function createRotationService(
+async function createRotationService(
   apiKeys: ApiKeyEntry[],
   writeTransaction?: object,
   cacheService = createCacheService(),
-) {
+): Promise<ProviderService> {
   const db = {
     select: jest.fn(() => ({
       from: jest.fn(() => ({
@@ -400,27 +405,27 @@ function createRotationService(
     })),
   };
 
-  return new ProviderService(
-    {
+  await installTestHost({
+    CacheService: cacheService,
+    DbService: {
       getDb: () => db,
       withWriteTx: async (callback: (transaction: object) => Promise<unknown>) =>
         callback(writeTransaction ?? {}),
     } as unknown as DbService,
-    createPinServiceStub(),
-    cacheService,
-  );
+  });
+  return new ProviderService();
 }
 
 function createCacheService(): CacheService {
   const service = new CacheService(createInMemoryBackendCacheStorage());
-  service.init();
+  // Host overrides receive no lifecycle callbacks, so the cache is initialized
+  // here. `CacheService.onInit` is synchronous, so it is usable as soon as
+  // `_doInit()` has been called — which keeps this a plain function, usable as a
+  // default parameter value. If that hook ever turns async, these tests fail
+  // loudly on `CacheService is not initialized` rather than passing with a
+  // half-built cache.
+  void service._doInit();
   return service;
-}
-
-function createPinServiceStub(): PinService {
-  return {
-    purgeForEntitiesTx: jest.fn(async () => undefined),
-  } as unknown as PinService;
 }
 
 function createDeleteTransaction(input: {

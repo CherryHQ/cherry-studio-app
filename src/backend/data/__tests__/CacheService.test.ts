@@ -16,20 +16,24 @@ describe('backend CacheService', () => {
     mockLoggerError.mockClear();
   });
 
-  test('requires initialization and rejects use after disposal', () => {
+  test('requires initialization and rejects use after disposal', async () => {
     const service = new CacheService(createInMemoryBackendCacheStorage());
 
     expect(() => service.get(MEMORY_KEY)).toThrow('CacheService is not initialized');
-    service.init();
+    // Driven through the framework entry points rather than the hooks: `_doInit`
+    // and `_doStop` are what the LifecycleManager calls, so the state machine is
+    // exercised too. Desktop's equivalent test calls the protected hooks
+    // directly, which vitest permits because it does not typecheck.
+    await service._doInit();
     expect(service.get(MEMORY_KEY)).toBeUndefined();
 
-    service.dispose();
+    await service._doStop();
     expect(() => service.get(MEMORY_KEY)).toThrow('CacheService is not initialized');
-    expect(() => service.init()).toThrow('CacheService has been disposed');
+    await expect(service._doInit()).rejects.toThrow('CacheService has been disposed');
   });
 
-  test('stores memory values and notifies only on explicit value changes', () => {
-    const service = createService();
+  test('stores memory values and notifies only on explicit value changes', async () => {
+    const service = await createService();
     const subscriber = jest.fn();
     service.subscribeChange(MEMORY_KEY, subscriber);
 
@@ -45,10 +49,10 @@ describe('backend CacheService', () => {
     expect(subscriber).toHaveBeenLastCalledWith(undefined, 'key-a');
   });
 
-  test('silently evicts expired memory values', () => {
+  test('silently evicts expired memory values', async () => {
     jest.useFakeTimers({ now: 1_000 });
     try {
-      const service = createService();
+      const service = await createService();
       const subscriber = jest.fn();
       service.subscribeChange(MEMORY_KEY, subscriber);
       service.set(MEMORY_KEY, 'key-a', 100);
@@ -63,8 +67,8 @@ describe('backend CacheService', () => {
     }
   });
 
-  test('isolates subscriber failures', () => {
-    const service = createService();
+  test('isolates subscriber failures', async () => {
+    const service = await createService();
     const healthySubscriber = jest.fn();
     service.subscribeChange(MEMORY_KEY, () => {
       throw new Error('subscriber failed');
@@ -77,23 +81,23 @@ describe('backend CacheService', () => {
     expect(mockLoggerError).toHaveBeenCalledTimes(1);
   });
 
-  test('persists backend overrides independently of service lifetime', () => {
+  test('persists backend overrides independently of service lifetime', async () => {
     const storage = createInMemoryBackendCacheStorage();
-    const first = createService(storage);
+    const first = await createService(storage);
 
     expect(first.getPersist(PERSIST_KEY)).toBe(0);
     expect(first.hasPersist(PERSIST_KEY)).toBe(false);
     first.setPersist(PERSIST_KEY, 42);
-    first.dispose();
+    await first._doStop();
 
-    const reloaded = createService(storage);
+    const reloaded = await createService(storage);
     expect(reloaded.getPersist(PERSIST_KEY)).toBe(42);
     expect(reloaded.hasPersist(PERSIST_KEY)).toBe(true);
   });
 
-  test('persist subscriptions ignore same values and observe reset to default', () => {
+  test('persist subscriptions ignore same values and observe reset to default', async () => {
     const storage = createInMemoryBackendCacheStorage();
-    const service = createService(storage);
+    const service = await createService(storage);
     const subscriber = jest.fn();
     service.subscribePersistChange(PERSIST_KEY, subscriber);
 
@@ -109,12 +113,12 @@ describe('backend CacheService', () => {
     expect(storage.getString(PERSIST_KEY)).toBeUndefined();
   });
 
-  test('drops corrupt and unknown persisted entries without affecting defaults', () => {
+  test('drops corrupt and unknown persisted entries without affecting defaults', async () => {
     const storage = createInMemoryBackendCacheStorage();
     storage.set(PERSIST_KEY, '{not json');
     storage.set('removed.schema_key', JSON.stringify('stale'));
 
-    const service = createService(storage);
+    const service = await createService(storage);
 
     expect(service.getPersist(PERSIST_KEY)).toBe(0);
     expect(storage.getString(PERSIST_KEY)).toBeUndefined();
@@ -122,11 +126,11 @@ describe('backend CacheService', () => {
     expect(mockLoggerError).toHaveBeenCalledTimes(1);
   });
 
-  test('keeps physically separate backend stores independent', () => {
+  test('keeps physically separate backend stores independent', async () => {
     const firstStorage = createInMemoryBackendCacheStorage();
     const secondStorage = createInMemoryBackendCacheStorage();
-    const first = createService(firstStorage);
-    const second = createService(secondStorage);
+    const first = await createService(firstStorage);
+    const second = await createService(secondStorage);
 
     first.setPersist(PERSIST_KEY, 9);
 
@@ -135,12 +139,12 @@ describe('backend CacheService', () => {
   });
 });
 
-function createService(
+async function createService(
   storage: ReturnType<
     typeof createInMemoryBackendCacheStorage
   > = createInMemoryBackendCacheStorage(),
-): CacheService {
+): Promise<CacheService> {
   const service = new CacheService(storage);
-  service.init();
+  await service._doInit();
   return service;
 }

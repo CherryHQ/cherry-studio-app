@@ -81,7 +81,7 @@ function createSubject(
     secrets: options.secrets,
     tokenStore: tokenStore.store,
   });
-  const oauth = new ProviderOAuthService(registry.registry);
+  const oauth = new ProviderOAuthService(runtime, registry.registry);
   services.push({ oauth, runtime });
   return { copilot: registry.copilot, keys, providers, service: oauth, tokenStore };
 }
@@ -113,11 +113,10 @@ function encryptAiHubMixPayload(secret: string, apiKey: string) {
 }
 
 describe('Provider OAuth adapters', () => {
-  afterEach(() => {
-    for (const service of services.splice(0)) {
-      service.oauth.dispose();
-      service.runtime.dispose();
-    }
+  afterEach(async () => {
+    await Promise.all(
+      services.splice(0).flatMap((service) => [service.oauth._doStop(), service.runtime._doStop()]),
+    );
     jest.useRealTimers();
   });
 

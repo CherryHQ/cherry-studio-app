@@ -1,3 +1,4 @@
+import type { OAuthRuntimeService } from '../../runtime/OAuthRuntimeService';
 import { toOAuthFlowRegistry } from '../OAuthFlowRegistry';
 import { ProviderOAuthService } from '../ProviderOAuthService';
 import type { OAuthFlowAdapter, OAuthFlowCompletionPayload, OAuthFlowSession } from '../types';
@@ -9,8 +10,11 @@ jest.mock('expo-crypto', () => {
 
 const services: ProviderOAuthService[] = [];
 
+/** Only read when the service builds its own registry, and these cases supply one. */
+const unusedRuntime = {} as OAuthRuntimeService;
+
 function createService(adapters: readonly OAuthFlowAdapter[]): ProviderOAuthService {
-  const service = new ProviderOAuthService(toOAuthFlowRegistry(adapters));
+  const service = new ProviderOAuthService(unusedRuntime, toOAuthFlowRegistry(adapters));
   services.push(service);
   return service;
 }
@@ -27,6 +31,7 @@ function deferred<T>() {
 
 type MockOAuthFlowAdapter = {
   flowType: OAuthFlowAdapter['flowType'];
+  getServingToken?: jest.MockedFunction<NonNullable<OAuthFlowAdapter['getServingToken']>>;
   getStatus: jest.MockedFunction<OAuthFlowAdapter['getStatus']>;
   logout: jest.MockedFunction<OAuthFlowAdapter['logout']>;
   providerId: string;
@@ -58,8 +63,8 @@ function createAdapter(overrides: Partial<MockOAuthFlowAdapter> = {}): MockOAuth
 }
 
 describe('ProviderOAuthService', () => {
-  afterEach(() => {
-    for (const service of services.splice(0)) service.dispose();
+  afterEach(async () => {
+    await Promise.all(services.splice(0).map((service) => service._doStop()));
     jest.useRealTimers();
   });
 
@@ -73,6 +78,24 @@ describe('ProviderOAuthService', () => {
     await expect(service.getStatus('missing')).rejects.toMatchObject({
       code: 'UnknownOAuthProvider',
     });
+  });
+
+  it('serves a serving token only from an adapter that mints one', async () => {
+    const minting = createAdapter({
+      getServingToken: jest.fn(async (_headers, _signal) => 'serving-token'),
+      providerId: 'minting-provider',
+    });
+    const service = createService([minting, createAdapter()]);
+
+    await expect(service.getServingToken('minting-provider', { a: 'b' })).resolves.toBe(
+      'serving-token',
+    );
+    expect(minting.getServingToken).toHaveBeenCalledWith({ a: 'b' }, undefined);
+    // Refused the same way an unregistered provider is, rather than resolving
+    // nothing into an Authorization header.
+    expect(() => service.getServingToken('test-provider', {})).toThrow(
+      'does not mint serving tokens',
+    );
   });
 
   it('returns provider status through the registered adapter', async () => {
@@ -252,7 +275,7 @@ describe('ProviderOAuthService', () => {
     expect(adapter.logout).toHaveBeenCalledTimes(1);
 
     await service.startAuthorization({ providerId: adapter.providerId });
-    service.dispose();
+    await service._doStop();
     expect(signals[2].aborted).toBe(true);
   });
 });
