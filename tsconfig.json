@@ -2,6 +2,7 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "experimentalDecorators": true,
     "types": ["jest"],
     "paths": {
       "@cherrystudio/provider-registry": ["./packages/provider-registry/src/index.ts"],
