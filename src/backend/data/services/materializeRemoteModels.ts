@@ -18,7 +18,7 @@ export function materializeRemoteModels(
   const models: Model[] = [];
 
   for (const remoteModel of remoteModels) {
-    const modelId = remoteModel.modelId?.trim();
+    const modelId = (remoteModel.apiModelId ?? remoteModel.modelId)?.trim();
     if (!modelId) {
       continue;
     }

@@ -72,6 +72,7 @@ export type ProviderDisplayMetadata = {
 
 export type ListProviderRegistryModelsOptions = {
   disabled?: boolean;
+  presetProviderId?: string | null;
   providerId?: string;
 };
 
@@ -567,8 +568,16 @@ export class ProviderRegistryService {
   }
 
   listProviderRegistryModels(options: ListProviderRegistryModelsOptions = {}): Model[] {
-    const overrides = options.providerId
-      ? this.loader.getOverridesForProvider(options.providerId)
+    const targetProviderId = options.providerId;
+    const sourceProviderId = targetProviderId
+      ? (this.loader.findProvider(targetProviderId)?.id ?? options.presetProviderId)
+      : undefined;
+    if (targetProviderId && !sourceProviderId) {
+      return [];
+    }
+
+    const overrides = sourceProviderId
+      ? this.loader.getOverridesForProvider(sourceProviderId)
       : this.loader.loadProviderModels();
     const includeDisabled = options.disabled ?? false;
     const results: Model[] = [];
@@ -580,12 +589,13 @@ export class ProviderRegistryService {
 
       const presetModel =
         this.loader.findModel(override.modelId) ?? synthesizePresetFromOverride(override);
-      const provider = this.loader.findProvider(override.providerId);
+      const providerId = targetProviderId ?? override.providerId;
+      const provider = this.loader.findProvider(sourceProviderId ?? override.providerId);
       const reasoningProfile = this.resolveProfileForModelData(
         {
           defaultChatEndpoint: provider?.defaultChatEndpoint,
-          id: override.providerId,
-          presetProviderId: provider?.presetProviderId,
+          id: providerId,
+          presetProviderId: sourceProviderId ?? provider?.presetProviderId,
         },
         presetModel,
         override,
@@ -594,7 +604,7 @@ export class ProviderRegistryService {
       const model = mergePresetModel(
         presetModel,
         override,
-        override.providerId,
+        providerId,
         reasoningProfile.wire,
         reasoningProfile.support,
       );
@@ -602,8 +612,10 @@ export class ProviderRegistryService {
       results.push({
         ...model,
         apiModelId,
-        id: createUniqueModelId(override.providerId, apiModelId),
+        id: createUniqueModelId(providerId, apiModelId),
+        modelId: apiModelId,
         presetModelId: presetModel.id,
+        providerId,
       });
     }
 
