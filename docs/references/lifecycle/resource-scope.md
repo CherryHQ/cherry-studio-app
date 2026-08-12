@@ -1,8 +1,9 @@
 # Resource Scope Lifecycle
 
-> Status: Coordinator built and registered (`src/backend/core/resources/`); consumers wiring up in
-> Stage D. It lives under `backend/core` because it is the only place all three backend sub-layers
-> may import from, and it stays domain-neutral enough to belong there.
+> Status: Built and wired (`src/backend/core/resources/`). It lives under `backend/core` because
+> that is the only place all three backend sub-layers may import from, and it stays domain-neutral
+> enough to belong there. Consumers: `ChatRuntime` (per task), `JobRuntime` (per execution, via
+> `JobHandler.scopes`), and the topic/message/painting Data API delete routes.
 > Framework interfaces live in [lifecycle-overview.md](./lifecycle-overview.md).
 
 ## The gap
@@ -150,17 +151,18 @@ terminal path — success, error, cancellation, and host disposal alike.
 
 ### Chat turn
 
-```typescript
-// ChatRuntime, when a turn starts
-const handle = this.scopes.register({
-  kind: 'chat.turn',
-  scopes: [{ kind: 'topic', id: topicId }],
-  cancel: () => activeTurn.abortController.abort(),
-  settled: turnSettled
-})
-// every terminal path
-handle.release()
-```
+Registered per **task**, not per turn — `startTask` is the choke point. `finishTurn` awaits
+`startNextPendingTurn`, so a queued steer or follow-up runs inside the same promise; registering per
+turn would let a drain see the topic fall quiet between two turns of one continuous chain and delete
+underneath it.
+
+Cancelling clears the steer and follow-up queues before aborting. Abort alone ends the live turn but
+leaves the queues, and there is a window where a topic is `continuing` with no active turn at all,
+which abort treats as a silent no-op — either way the task would start a fresh turn the deletion
+existed to prevent.
+
+New-topic sends start under `NEW_TOPIC_SNAPSHOT_KEY` because the topic does not exist yet; the
+handoff that re-keys the turn extends the registration to the created id.
 
 The Live Activity and the keep-alive lease need no separate registration: they are owned by the
 turn, so aborting the turn releases them through the paths that already exist
@@ -169,15 +171,20 @@ awaiting `settled`, not by knowing what they are.
 
 ### Painting job
 
+Declared on the handler, registered by the runtime:
+
 ```typescript
-// the painting.generate handler, at execution start
-const handle = this.scopes.register({
-  kind: 'job.painting.generate',
-  scopes: [{ kind: 'painting', id: input.paintingId }],
-  cancel: () => this.jobRuntime.cancel(jobId, 'painting-deleted'),
-  settled: executionSettled
-})
+// paintingGenerateJobHandler
+scopes: (input) => [{ id: input.paintingId, kind: 'painting' }]
 ```
+
+`JobRuntime.spawnExecute` then registers each execution, using its in-flight promise as `settled` —
+that promise resolves only after the terminal row is written, so a handler ignoring its signal fails
+the drain rather than letting the delete proceed over it. A job that spawns into an already-sealed
+scope is finalized `cancelled` without executing.
+
+The registration is also the `paintingId → jobId` index. No such column exists, and none is needed:
+the mapping only has to exist while the execution does.
 
 ### Data API handlers
 
@@ -196,9 +203,17 @@ await coordinator.invalidate(
 ```
 
 This is the guarantee the current design lacks: every Data API caller gets cancellation, not just
-the ones that remembered to call a frontend hook first. `onTopicsDeleted` is deleted once the topic
-and message handlers route through the coordinator — renaming it or keeping it alongside would leave
-two cleanup paths, which is the defect being removed.
+the ones that remembered to call a frontend hook first.
+
+`DELETE /assistants/:assistantId/topics` needs one extra step. Its cascade discovers the topic ids
+inside its own write transaction, which is too late to cancel anything, so the route reads them
+first through `TopicService.listIdsByAssistantId`. A topic created between that read and the
+transaction is missed; the window is sub-millisecond and covered by leg 4, whereas cancelling inside
+the transaction would deadlock the drain against it.
+
+`onTopicsDeleted` — the hook quoted at the top — lives on the background-activity branch, not here.
+It is deleted when that branch rebases onto this one: keeping it alongside would leave two cleanup
+paths, which is the defect being removed.
 
 ## Correctness when the process is killed
 
@@ -212,14 +227,25 @@ teardown, so it is one leg of four:
 | 3. Cold-start sweep | Live Activity `clearOrphans()`, crash-orphaned pending message repair | Native surfaces and rows that outlived the process |
 | 4. Write-path guards | **Formalized here** | Late writes after the registry is gone |
 
-Leg 4 exists today by accident and becomes a contract. Topics are soft-deleted, and the message
-service's queries — including its write paths — filter on `isNull(deletedAt)`, so a late write
-against a deleted topic already fails in most paths. Nothing tests that, so any SQL edit can
-silently remove it.
+Leg 4 exists today by accident and becomes a contract.
 
-The contract: **a write targeting a deleted resource must fail or no-op, never resurrect it.**
-Guard tests delete the resource, then drive a late write, and assert nothing lands. Paintings are
-hard-deleted, so their equivalent guard is an existence check when a receipt is persisted.
+**Correction to this design's original premise.** It assumed topics were soft-deleted and that the
+message service's write paths were held by `isNull(deletedAt)` filters. They are not. `deletedAt`
+exists on the topic and message tables and is never written — only assistants are soft-deleted.
+Topics and their messages are hard-deleted, and paintings are too.
+
+So the mechanism is the cascade, not a tombstone filter. Deleting a topic removes its message rows,
+and every write then either re-checks the topic (`create`,
+`createUserMessageWithPlaceholders`, `delete`), re-checks its own row
+(`finalizeAssistantMessage`, `update`, `createSibling`), or matches nothing
+(`updateSiblingsGroupId`, `settleCrashedMessages`). Paintings are guarded by an existence check when
+a receipt's outputs are persisted.
+
+The contract is unchanged: **a write targeting a deleted resource must fail or no-op, never
+resurrect it.** What changes is what the guard tests defend. They are in
+`data/services/__tests__/deletedResourceWrites.integration.test.ts`, and they pin the cascade — so
+introducing a real tombstone phase for topics, where the message rows survive their topic, would
+fail them rather than silently opening the hole this leg exists to close.
 
 Legs 1 and 4 are complementary, not redundant: leg 1 makes deletion clean while the app is alive;
 leg 4 makes it safe after the app has died and restarted.
