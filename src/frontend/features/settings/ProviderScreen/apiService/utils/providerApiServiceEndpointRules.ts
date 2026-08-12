@@ -1,10 +1,13 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type {
-  AuthType,
   EndpointConfig,
   EndpointConfigs,
   Provider,
+} from '@cherrystudio/universal/data/types/provider';
+import {
+  canEditProviderEndpoint as canEditProviderEndpointShared,
+  isValidProviderEndpointUrl,
 } from '@cherrystudio/universal/data/types/provider';
 
 export const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES = [
@@ -38,7 +41,6 @@ const CONFIGURABLE_ENDPOINT_TYPE_SET = new Set<EndpointType>(CONFIGURABLE_ENDPOI
 const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPE_SET = new Set<EndpointType>(
   CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES,
 );
-const ENDPOINT_EDITABLE_AUTH_TYPES = new Set<AuthType>(['api-key', 'iam-azure']);
 
 export function getPrimaryEndpoint(provider?: Provider | null): EndpointType {
   return provider?.defaultChatEndpoint ?? defaultChatEndpoint;
@@ -63,11 +65,7 @@ export function isCustomProviderTextEndpointType(
 }
 
 export function canEditProviderEndpoint(provider?: Provider | null): boolean {
-  return (
-    provider !== null &&
-    provider !== undefined &&
-    ENDPOINT_EDITABLE_AUTH_TYPES.has(provider.authType)
-  );
+  return canEditProviderEndpointShared(provider);
 }
 
 export function getConfigurableEndpointTypesForProvider(
@@ -85,18 +83,7 @@ export function resolveVisibleEndpointTypes(provider?: Provider | null): Endpoin
 }
 
 export function isValidEndpointBaseUrl(value: string): boolean {
-  const trimmed = value.trim();
-
-  if (!trimmed || /\s/.test(trimmed)) {
-    return false;
-  }
-
-  try {
-    const url = new URL(trimmed);
-    return url.protocol === 'http:' || url.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return isValidProviderEndpointUrl(value);
 }
 
 export function buildCustomProviderCreationPayload({

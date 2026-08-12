@@ -16,7 +16,13 @@ function formatCurrency(value: number | null | undefined): string {
   return `$${value.toFixed(2)}`;
 }
 
-export function CherryInOauth({ provider }: { provider: Provider }) {
+export function CherryInOauth({
+  allowLogout = true,
+  provider,
+}: {
+  allowLogout?: boolean;
+  provider: Provider;
+}) {
   const { t } = useTranslation();
   const oauth = useCherryInOauth(provider.id);
   const handleTopup = useCallback(() => void openExternalUrl(CHERRYIN_TOPUP_URL), []);
@@ -33,6 +39,7 @@ export function CherryInOauth({ provider }: { provider: Provider }) {
   );
   return (
     <ProviderOauthSectionView
+      allowLogout={allowLogout}
       authenticatedContent={authenticatedContent}
       identityDetail={identityDetail}
       oauth={oauth}

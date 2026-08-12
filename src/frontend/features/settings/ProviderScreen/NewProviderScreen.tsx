@@ -1,11 +1,10 @@
-import { Button, Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
-import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
+import { Button, Menu, type MenuItem } from '@cherrystudio/ui/components';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
-import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -16,25 +15,23 @@ import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
-import { ProviderDefaultEndpointControl } from './apiService';
-import { normalizeApiKeySingleLine } from './apiService/utils/providerApiServiceApiKeys';
 import {
   buildCustomProviderCreationPayload,
   type CustomProviderEndpointUrls,
-  type CustomProviderTextEndpoint,
   findInvalidCustomProviderEndpointUrl,
-  isCustomProviderTextEndpointType,
 } from './apiService/utils/providerApiServiceEndpointRules';
+import {
+  createInitialCustomProviderFormValue,
+  CustomProviderForm,
+  type CustomProviderFormValue,
+  isCustomProviderFormComplete,
+} from './components/CustomProviderForm';
 
 const avatarPreviewSize = 96;
 
 type CreateProviderFormValues = {
-  apiKey: string;
   avatarUri: string | null;
-  defaultChatEndpoint: CustomProviderTextEndpoint;
-  endpointUrls: CustomProviderEndpointUrls;
-  name: string;
-};
+} & CustomProviderFormValue;
 
 export default function NewProviderScreen() {
   const { t } = useTranslation();
@@ -42,19 +39,8 @@ export default function NewProviderScreen() {
   const { alert } = useAlert();
   const providers = useBackendModule('providers');
 
-  const [name, setName] = useState('');
-  const [baseUrl, setBaseUrl] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [formValue, setFormValue] = useState(createInitialCustomProviderFormValue);
   const [avatarDraftUri, setAvatarDraftUri] = useState<string | null>(null);
-  const [anthropicUrl, setAnthropicUrl] = useState('');
-  const [defaultChatEndpoint, setDefaultChatEndpoint] = useState<CustomProviderTextEndpoint>(
-    ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-  );
-  const [geminiUrl, setGeminiUrl] = useState('');
-  const [imageEditUrl, setImageEditUrl] = useState('');
-  const [imageGenerationUrl, setImageGenerationUrl] = useState('');
-  const [openaiResponsesUrl, setOpenaiResponsesUrl] = useState('');
 
   const createProviderMutation = useMutation('POST', '/providers', {
     refresh: ['/providers'],
@@ -106,25 +92,13 @@ export default function NewProviderScreen() {
     [createProvider, enableProvider, providers],
   );
 
-  const canSubmit = name.trim().length > 0 && baseUrl.trim().length > 0;
-  const handleDefaultChatEndpointChange = useCallback((endpoint: EndpointType) => {
-    if (isCustomProviderTextEndpointType(endpoint)) {
-      setDefaultChatEndpoint(endpoint);
-    }
-  }, []);
+  const canSubmit = isCustomProviderFormComplete(formValue);
   const handleFinish = useCallback(() => {
     if (!canSubmit || isCreating) {
       return;
     }
 
-    const endpointUrls: CustomProviderEndpointUrls = {
-      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: baseUrl,
-      [ENDPOINT_TYPE.OPENAI_RESPONSES]: openaiResponsesUrl,
-      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: anthropicUrl,
-      [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: geminiUrl,
-      [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: imageGenerationUrl,
-      [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: imageEditUrl,
-    };
+    const endpointUrls: CustomProviderEndpointUrls = formValue.endpointUrls;
     if (findInvalidCustomProviderEndpointUrl(endpointUrls)) {
       alert.show({
         description: t('settings.provider.apiService.invalidBaseUrlMessage'),
@@ -135,13 +109,10 @@ export default function NewProviderScreen() {
 
     Keyboard.dismiss();
 
-    const trimmedName = name.trim();
+    const trimmedName = formValue.name.trim();
     void submitProvider({
-      apiKey,
       avatarUri: avatarDraftUri,
-      defaultChatEndpoint,
-      endpointUrls,
-      name,
+      ...formValue,
     })
       .then((providerId) => {
         router.replace({
@@ -156,24 +127,7 @@ export default function NewProviderScreen() {
       .catch(() => {
         alert.show({ title: t('settings.provider.add.error') });
       });
-  }, [
-    alert,
-    anthropicUrl,
-    apiKey,
-    avatarDraftUri,
-    baseUrl,
-    canSubmit,
-    defaultChatEndpoint,
-    geminiUrl,
-    imageEditUrl,
-    imageGenerationUrl,
-    isCreating,
-    name,
-    openaiResponsesUrl,
-    router,
-    submitProvider,
-    t,
-  ]);
+  }, [alert, avatarDraftUri, canSubmit, formValue, isCreating, router, submitProvider, t]);
 
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -205,116 +159,10 @@ export default function NewProviderScreen() {
         <View className="gap-6 px-6 py-8">
           <NewProviderAvatarSection
             avatarUri={avatarDraftUri}
-            name={name}
+            name={formValue.name}
             onAvatarChange={setAvatarDraftUri}
           />
-
-          <FormField label={t('settings.provider.add.name')} required>
-            <Input
-              accessibilityLabel={t('settings.provider.add.name')}
-              autoCapitalize="none"
-              autoCorrect={false}
-              onChangeText={setName}
-              placeholder={t('settings.provider.add.namePlaceholder')}
-              value={name}
-            />
-          </FormField>
-
-          <FormField
-            label={t('settings.provider.apiService.baseUrl')}
-            labelAccessory={
-              <ProviderDefaultEndpointControl
-                endpoint={ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS}
-                endpointLabel={t('settings.provider.apiService.baseUrl')}
-                isDefault={defaultChatEndpoint === ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS}
-                isSelectable={Boolean(baseUrl.trim())}
-                onChange={handleDefaultChatEndpointChange}
-              />
-            }
-            required
-          >
-            <Input
-              accessibilityLabel={t('settings.provider.apiService.baseUrl')}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              onChangeText={setBaseUrl}
-              placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-              value={baseUrl}
-            />
-          </FormField>
-
-          <FormField label={t('settings.provider.apiService.apiKey')}>
-            <View className="flex-row items-center gap-2">
-              <View className="min-w-0 flex-1 overflow-hidden">
-                <Input
-                  accessibilityLabel={t('settings.provider.apiService.apiKey')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  lineBreakModeIOS="clip"
-                  multiline={false}
-                  numberOfLines={1}
-                  onChangeText={(value) => setApiKey(normalizeApiKeySingleLine(value))}
-                  placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
-                  returnKeyType="done"
-                  scrollEnabled={false}
-                  secureTextEntry={!apiKeyVisible}
-                  value={apiKey}
-                />
-              </View>
-              <Button
-                accessibilityLabel={
-                  apiKeyVisible
-                    ? t('settings.provider.apiService.hideApiKeys')
-                    : t('settings.provider.apiService.showApiKeys')
-                }
-                hitSlop={6}
-                icon={apiKeyVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
-                onPress={() => setApiKeyVisible((visible) => !visible)}
-                variant="secondary"
-              />
-            </View>
-          </FormField>
-
-          <View className="gap-4">
-            <Text className="font-medium text-foreground text-sm">
-              {t('settings.provider.apiService.moreEndpoints')}
-            </Text>
-            <EndpointField
-              defaultChatEndpoint={defaultChatEndpoint}
-              endpoint={ENDPOINT_TYPE.ANTHROPIC_MESSAGES}
-              label={t('settings.provider.add.endpoint.anthropic')}
-              onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
-              onChangeText={setAnthropicUrl}
-              value={anthropicUrl}
-            />
-            <EndpointField
-              defaultChatEndpoint={defaultChatEndpoint}
-              endpoint={ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT}
-              label={t('settings.provider.add.endpoint.gemini')}
-              onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
-              onChangeText={setGeminiUrl}
-              value={geminiUrl}
-            />
-            <EndpointField
-              defaultChatEndpoint={defaultChatEndpoint}
-              endpoint={ENDPOINT_TYPE.OPENAI_RESPONSES}
-              label={t('settings.provider.add.endpoint.openaiResponses')}
-              onDefaultChatEndpointChange={handleDefaultChatEndpointChange}
-              onChangeText={setOpenaiResponsesUrl}
-              value={openaiResponsesUrl}
-            />
-            <EndpointField
-              label={t('settings.provider.add.endpoint.imageGeneration')}
-              onChangeText={setImageGenerationUrl}
-              value={imageGenerationUrl}
-            />
-            <EndpointField
-              label={t('settings.provider.add.endpoint.imageEdit')}
-              onChangeText={setImageEditUrl}
-              value={imageEditUrl}
-            />
-          </View>
+          <CustomProviderForm disabled={isCreating} onChange={setFormValue} value={formValue} />
         </View>
       </KeyboardAwareScrollView>
     </>
@@ -435,73 +283,5 @@ function AvatarPreview({ name, size, uri }: { name: string; size: number; uri: s
         {initial}
       </Text>
     </View>
-  );
-}
-
-function FormField({
-  children,
-  label,
-  labelAccessory,
-  required,
-}: {
-  children: ReactNode;
-  label: string;
-  labelAccessory?: ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <TextField isRequired={required}>
-      {labelAccessory ? (
-        <View className="h-9 flex-row items-center gap-2">
-          <Label className="min-w-0 flex-1">{label}</Label>
-          {labelAccessory}
-        </View>
-      ) : (
-        <Label>{label}</Label>
-      )}
-      {children}
-    </TextField>
-  );
-}
-
-function EndpointField({
-  defaultChatEndpoint,
-  endpoint,
-  label,
-  onDefaultChatEndpointChange,
-  onChangeText,
-  value,
-}: {
-  defaultChatEndpoint?: CustomProviderTextEndpoint;
-  endpoint?: CustomProviderTextEndpoint;
-  label: string;
-  onDefaultChatEndpointChange?: (endpoint: EndpointType) => void;
-  onChangeText: (value: string) => void;
-  value: string;
-}) {
-  return (
-    <TextField>
-      <View className="h-9 flex-row items-center gap-2">
-        <Label className="min-w-0 flex-1">{label}</Label>
-        {endpoint && defaultChatEndpoint && onDefaultChatEndpointChange ? (
-          <ProviderDefaultEndpointControl
-            endpoint={endpoint}
-            endpointLabel={label}
-            isDefault={endpoint === defaultChatEndpoint && Boolean(value.trim())}
-            isSelectable={Boolean(value.trim())}
-            onChange={onDefaultChatEndpointChange}
-          />
-        ) : null}
-      </View>
-      <Input
-        accessibilityLabel={label}
-        autoCapitalize="none"
-        autoCorrect={false}
-        keyboardType="url"
-        onChangeText={onChangeText}
-        placeholder="https://api.example.com"
-        value={value}
-      />
-    </TextField>
   );
 }

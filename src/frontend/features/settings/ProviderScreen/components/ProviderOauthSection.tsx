@@ -52,12 +52,13 @@ const PROVIDER_ACCOUNT_LINKS: Record<string, { bills: string; charge: string }> 
 };
 
 type ProviderOauthSectionProps = {
+  allowLogout?: boolean;
   provider: Provider;
 };
 
-export function ProviderOauthSection({ provider }: ProviderOauthSectionProps) {
+export function ProviderOauthSection({ allowLogout = true, provider }: ProviderOauthSectionProps) {
   const oauth = useProviderOauth(provider.id);
-  return <ProviderOauthSectionView oauth={oauth} provider={provider} />;
+  return <ProviderOauthSectionView allowLogout={allowLogout} oauth={oauth} provider={provider} />;
 }
 
 type ProviderOauthSectionViewProps = ProviderOauthSectionProps & {
@@ -67,6 +68,7 @@ type ProviderOauthSectionViewProps = ProviderOauthSectionProps & {
 };
 
 export function ProviderOauthSectionView({
+  allowLogout = true,
   authenticatedContent,
   identityDetail,
   oauth,
@@ -227,16 +229,18 @@ export function ProviderOauthSectionView({
             <ProviderIdentity detail={identityDetail} iconSource={iconSource} provider={provider} />
             <View className="flex-1" />
             {authenticatedContent}
-            <Button
-              accessibilityLabel={t('settings.provider.oauth.logout')}
-              disabled={oauth.isLoggingOut}
-              loading={oauth.isLoggingOut}
-              onPress={requestLogout}
-              size="sm"
-              variant="secondary"
-            >
-              {t('settings.provider.oauth.logout')}
-            </Button>
+            {allowLogout ? (
+              <Button
+                accessibilityLabel={t('settings.provider.oauth.logout')}
+                disabled={oauth.isLoggingOut}
+                loading={oauth.isLoggingOut}
+                onPress={requestLogout}
+                size="sm"
+                variant="secondary"
+              >
+                {t('settings.provider.oauth.logout')}
+              </Button>
+            ) : null}
           </View>
           {oauth.status.accountId ? (
             <Text selectable className="text-secondary-foreground text-sm">

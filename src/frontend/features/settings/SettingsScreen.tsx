@@ -10,6 +10,7 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   SunIcon,
+  WrenchIcon,
 } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -104,6 +105,11 @@ export default function SettingsScreen() {
                 ) : null
               }
               onPress={() => router.push('/settings/mcp')}
+            />
+            <Section.Item
+              label={t('settings.items.builtInTools')}
+              leading={<WrenchIcon className="size-5 text-foreground" strokeWidth={2} />}
+              onPress={() => router.push('/settings/built-in-tools')}
             />
           </Section>
           <Section>

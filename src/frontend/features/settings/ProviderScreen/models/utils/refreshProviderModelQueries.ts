@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
-import { queryKeys } from '@/frontend/data';
+import { queryKeys } from '@/frontend/data/queryKeys';
 
 /**
  * The three lists a change to one provider's models can show up in: the
