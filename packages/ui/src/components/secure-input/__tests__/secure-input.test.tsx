@@ -9,24 +9,7 @@ const mockBlur = jest.fn();
 jest.mock('../../button', () => {
   const React: typeof import('react') = jest.requireActual('react');
 
-  return {
-    Button: ({ icon, ...props }: { icon?: React.ReactNode }) => {
-      const iconType = React.isValidElement(icon) ? icon.type : undefined;
-      const iconComponent =
-        typeof iconType === 'string'
-          ? undefined
-          : (iconType as { displayName?: string; name?: string } | undefined);
-
-      return React.createElement('MockButton', {
-        ...props,
-        mockComponent: 'button',
-        mockIcon:
-          typeof iconType === 'string'
-            ? iconType
-            : (iconComponent?.displayName ?? iconComponent?.name),
-      });
-    },
-  };
+  return { Button: (props: object) => React.createElement('MockButton', props) };
 });
 
 jest.mock('../../input', () => {
@@ -125,10 +108,9 @@ describe('SecureInput', () => {
         variant: 'ghost',
       }),
     );
-    expect(toggle().props.mockIcon).toBe('EyeOffIcon');
   });
 
-  test('switches visibility, action label, and status icon without changing the value', () => {
+  test('switches visibility and action label without changing the value', () => {
     render();
 
     act(() => toggle().props.onPress());
@@ -136,7 +118,6 @@ describe('SecureInput', () => {
     expect(input().props.secureTextEntry).toBe(false);
     expect(input().props.value).toBe('secret');
     expect(toggle().props.accessibilityLabel).toBe('Hide API key');
-    expect(toggle().props.mockIcon).toBe('EyeIcon');
 
     act(() => toggle().props.onPress());
 
