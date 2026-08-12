@@ -247,6 +247,24 @@ export class TopicService {
     return this.deleteMany(ids);
   }
 
+  /**
+   * The ids `deleteByAssistantId` would cascade over, readable before it runs.
+   *
+   * Exists because that method discovers its own set inside the write
+   * transaction, and the scope coordinator has to cancel the work under each
+   * topic *before* any transaction opens. A topic created between this read and
+   * the delete is missed; that window is sub-millisecond and covered by the
+   * write-path guards, whereas cancelling inside the transaction would deadlock
+   * the drain against it.
+   */
+  async listIdsByAssistantId(assistantId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ id: topicTable.id })
+      .from(topicTable)
+      .where(and(eq(topicTable.assistantId, assistantId), isNull(topicTable.deletedAt)));
+    return rows.map((row: { id: string }) => row.id);
+  }
+
   async deleteByAssistantId(assistantId: string): Promise<DeleteTopicsResult> {
     const deletedIds = await this.dbService.withWriteTx((tx) =>
       this.deleteByAssistantIdTx(tx, assistantId),
