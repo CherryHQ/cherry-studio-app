@@ -1,6 +1,8 @@
 # Resource Scope Lifecycle
 
-> Status: Design complete, not yet wired. Lands in Stage D.
+> Status: Coordinator built and registered (`src/backend/core/resources/`); consumers wiring up in
+> Stage D. It lives under `backend/core` because it is the only place all three backend sub-layers
+> may import from, and it stays domain-neutral enough to belong there.
 > Framework interfaces live in [lifecycle-overview.md](./lifecycle-overview.md).
 
 ## The gap
@@ -109,10 +111,12 @@ export type MutationOptions = {
   readonly reason?: CancelReason
 }
 
-export type StragglerInfo = { readonly kind: string; readonly scopes: readonly ResourceScope[] }
-export class ScopeDrainTimeoutError extends Error { readonly stragglers: readonly StragglerInfo[] }
+export class ScopeDrainTimeoutError extends Error { readonly stragglers: readonly ActiveOperation[] }
 export class ScopeFencedError extends Error { readonly scope: ResourceScope }
 ```
+
+As built, a straggler and a live registration are reported with the same
+`ActiveOperation` shape rather than through two identically-shaped types.
 
 ### Transaction ordering
 

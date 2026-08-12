@@ -10,6 +10,7 @@ import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRunti
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
+import { ResourceScopeCoordinator } from '../resources/ResourceScopeCoordinator';
 
 /**
  * The central service registry.
@@ -27,6 +28,7 @@ import type { ServiceConstructor } from '../lifecycle/types';
  * bottom matches startup.
  */
 export const services = {
+  ResourceScopeCoordinator,
   CacheService,
   DbService,
   PreferenceService,
