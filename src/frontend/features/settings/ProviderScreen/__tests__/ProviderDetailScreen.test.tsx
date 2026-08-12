@@ -70,6 +70,7 @@ const dataApi = {
 } as unknown as ApiClient;
 
 jest.mock('expo-router', () => ({
+  Color: { ios: { systemRed: '#ff3b30' } },
   Redirect: ({ href }: { href: unknown }) => {
     mockRedirectHref = href;
     return null;
@@ -171,6 +172,15 @@ jest.mock('../models/components/ProviderModelCheckSection', () => ({
 
 jest.mock('../models/hooks/useProviderModelPull', () => ({
   useProviderModelPull: () => ({ isPreviewLoading: false, loadPullPreview: jest.fn() }),
+}));
+
+// Reads the chat default through `usePreference`, which needs a provider this
+// screen's tree does not install.
+jest.mock('../models/hooks/useProviderModelRemove', () => ({
+  useProviderModelRemove: () => ({
+    isDefaultModel: () => false,
+    removeModels: jest.fn(),
+  }),
 }));
 
 describe('ProviderDetailScreen', () => {

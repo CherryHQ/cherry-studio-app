@@ -2,29 +2,7 @@ import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { getProviderModelRowItemType, ProviderModelRow } from '../ProviderModelRow';
-
-jest.mock('@cherrystudio/ui/components', () => {
-  const { createElement } = jest.requireActual('react');
-  const Section = (props: object) => createElement('Section', props);
-  // The real item renders its slots; the stub has to as well, or nothing handed
-  // to `description`/`trailing` would ever appear in the tree.
-  Section.Item = (props: {
-    description?: unknown;
-    label?: unknown;
-    leading?: unknown;
-    trailing?: unknown;
-  }) =>
-    createElement(
-      'SectionItem',
-      props,
-      props.leading,
-      props.label,
-      props.description,
-      props.trailing,
-    );
-  return { Section };
-});
+import { ProviderModelRow } from '../ProviderModelRow';
 
 jest.mock('@/frontend/components/ModelAvatar', () => {
   const { createElement } = jest.requireActual('react');
@@ -40,12 +18,9 @@ jest.mock('@/frontend/components/modelPicker', () => {
   };
 });
 
-jest.mock('../../../../components/SettingsGroupedSurface', () => {
+jest.mock('lucide-uniwind/png', () => {
   const { createElement } = jest.requireActual('react');
-  return {
-    SettingsGroupedSurface: ({ children, ...props }: { children?: unknown }) =>
-      createElement('SettingsGroupedSurface', props, children),
-  };
+  return { CheckIcon: (props: object) => createElement('CheckIcon', props) };
 });
 
 function model(capabilities: string[]): Model {
@@ -75,54 +50,131 @@ describe('ProviderModelRow', () => {
     return renderer!;
   }
 
-  // Capabilities used to share the trailing slot with the action button, which
-  // squeezed the name off the row once a model had a few of them.
-  it('puts the capability chips on their own line, below the name', () => {
-    const tree = render(
-      <ProviderModelRow
-        isFirst
-        isLast
-        model={model(['reasoning', 'web-search'])}
-        provider={provider}
-      />,
-    );
-
-    const row = tree.root.findByType('SectionItem');
-
-    expect(row.props.label).toBe('Model One');
-    expect(row.props.description).toBeDefined();
-    expect(tree.root.findAllByType('ModelPickerTagChip')).toHaveLength(2);
-  });
-
-  it('drops the second line for a model with nothing to show there', () => {
-    const tree = render(<ProviderModelRow isFirst isLast model={model([])} provider={provider} />);
-
-    expect(tree.root.findByType('SectionItem').props.description).toBeUndefined();
-    expect(tree.root.findAllByType('ModelPickerTagChip')).toHaveLength(0);
-  });
-
-  it('leaves the trailing slot empty when the caller has no action for it', () => {
-    const tree = render(
-      <ProviderModelRow isFirst isLast model={model(['reasoning'])} provider={provider} />,
-    );
-
-    expect(tree.root.findByType('SectionItem').props.trailing).toBeUndefined();
-  });
-
-  it('hands the trailing slot straight to the caller', () => {
+  // One line: avatar, name, capabilities and the caller's action, in that order.
+  it('draws the capabilities and the action on the name’s own line', () => {
     const { createElement } = jest.requireActual('react');
     const tree = render(
-      <ProviderModelRow isFirst isLast model={model([])} provider={provider}>
+      <ProviderModelRow model={model(['reasoning', 'web-search'])} provider={provider}>
         {createElement('RemoveButton')}
       </ProviderModelRow>,
     );
 
+    expect(tree.root.findAllByType('ModelPickerTagChip')).toHaveLength(2);
     expect(tree.root.findAllByType('RemoveButton')).toHaveLength(1);
   });
 
-  // The lists mix one- and two-line rows, so their virtualizer sizes by type.
-  it('reports which of the two heights a model takes', () => {
-    expect(getProviderModelRowItemType(model(['reasoning']))).toBe('capabilities');
-    expect(getProviderModelRowItemType(model([]))).toBe('compact');
+  it('renders no chips for a model with no capabilities', () => {
+    const tree = render(<ProviderModelRow model={model([])} provider={provider} />);
+
+    expect(tree.root.findAllByType('ModelPickerTagChip')).toHaveLength(0);
+  });
+
+  // The name is the only part that gives, so it has to ellipsize rather than
+  // wrap — a wrapped name would make the row taller than the list estimates.
+  it('ellipsizes the model name', () => {
+    const tree = render(<ProviderModelRow model={model(['reasoning'])} provider={provider} />);
+    const name = tree.root.findByType('Text');
+
+    expect(name.props.numberOfLines).toBe(1);
+    expect(name.props.children).toBe('Model One');
+  });
+
+  it('strikes through a model the provider no longer serves', () => {
+    const tree = render(<ProviderModelRow model={model([])} provider={provider} tone="struck" />);
+
+    expect(tree.root.findByType('Text').props.className).toContain('line-through');
+  });
+
+  // The pull screen tints an applied row, and the row has no wrapper of its own
+  // left to hang that on.
+  it('merges the caller’s class into the row', () => {
+    const tree = render(
+      <ProviderModelRow className="bg-success/10" model={model([])} provider={provider} />,
+    );
+
+    expect(tree.root.findByType('View').props.className).toContain('bg-success/10');
+  });
+
+  describe('while selecting', () => {
+    // The `Pressable` element itself, rather than the host view it renders —
+    // only the former carries `onPress`.
+    function findCheckbox(tree: ReactTestRenderer) {
+      return tree.root.findAllByProps({ accessibilityRole: 'checkbox' })[0];
+    }
+
+    function findTickClassNames(tree: ReactTestRenderer) {
+      return tree.root
+        .findAll(
+          (node) =>
+            typeof node.type === 'string' &&
+            typeof node.props.className === 'string' &&
+            node.props.className.includes('size-6'),
+        )
+        .map((node) => node.props.className as string);
+    }
+
+    it('makes the whole row the control that ticks the checkbox', () => {
+      const onToggle = jest.fn();
+      const tree = render(
+        <ProviderModelRow
+          model={model([])}
+          provider={provider}
+          selection={{ isSelected: false, onToggle }}
+        />,
+      );
+      const row = findCheckbox(tree);
+
+      expect(row.props.accessibilityState).toMatchObject({ checked: false });
+
+      act(() => row.props.onPress());
+
+      expect(onToggle).toHaveBeenCalledTimes(1);
+    });
+
+    it('fills the checkbox for a selected model', () => {
+      const tree = render(
+        <ProviderModelRow
+          model={model([])}
+          provider={provider}
+          selection={{ isSelected: true, onToggle: jest.fn() }}
+        />,
+      );
+
+      expect(findCheckbox(tree).props.accessibilityState.checked).toBe(true);
+      expect(findTickClassNames(tree)[0]).toContain('bg-primary');
+    });
+
+    it('leaves the checkbox empty for an unselected model', () => {
+      const tree = render(
+        <ProviderModelRow
+          model={model([])}
+          provider={provider}
+          selection={{ isSelected: false, onToggle: jest.fn() }}
+        />,
+      );
+
+      expect(findTickClassNames(tree)[0]).toContain('border-border-strong');
+    });
+
+    // The chat default cannot be removed, so ticking it would only lead to a
+    // delete that skips it.
+    it('leaves a model that cannot be removed untickable', () => {
+      const tree = render(
+        <ProviderModelRow
+          model={model([])}
+          provider={provider}
+          selection={{ isDisabled: true, isSelected: false, onToggle: jest.fn() }}
+        />,
+      );
+
+      expect(findCheckbox(tree).props.disabled).toBe(true);
+    });
+
+    it('draws no checkbox at all outside a selection', () => {
+      const tree = render(<ProviderModelRow model={model([])} provider={provider} />);
+
+      expect(tree.root.findAllByProps({ accessibilityRole: 'checkbox' })).toHaveLength(0);
+      expect(findTickClassNames(tree)).toHaveLength(0);
+    });
   });
 });

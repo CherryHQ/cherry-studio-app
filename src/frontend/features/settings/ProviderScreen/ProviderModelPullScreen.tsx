@@ -12,7 +12,6 @@ import { BackHeader } from '@/frontend/components/headers';
 
 import { useProviderDetailSettings } from './detail';
 import {
-  getProviderModelRowItemType,
   ProviderModelRow,
   providerModelRowEstimatedHeight,
 } from './models/components/ProviderModelRow';
@@ -216,7 +215,7 @@ function ProviderModelPullPreviewPage({
         ListHeaderComponent={
           // One gap for the whole screen: the Android search field, the filter
           // bar and the first section are all 12 apart.
-          <View className="gap-3 pb-3">
+          <View className="gap-3 px-4 pb-3">
             {process.env.EXPO_OS === 'ios' ? null : (
               <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
             )}
@@ -242,9 +241,9 @@ function pullListKeyExtractor(item: ProviderModelPullListItem) {
 }
 
 function getPullListItemType(item: ProviderModelPullListItem) {
-  // A model with no capabilities to show draws one line instead of two, so model
-  // rows come in two heights and the virtualizer has to size them separately.
-  return item.type === 'model' ? `model:${getProviderModelRowItemType(item.model)}` : item.type;
+  // A section header is shorter than a model row, so the virtualizer sizes the
+  // two separately.
+  return item.type;
 }
 
 function renderPullListItem({
@@ -287,8 +286,6 @@ function renderPullListItem({
   return (
     <PullModelRow
       isApplied={listData.appliedIds.has(item.model.id)}
-      isFirst={item.isFirst}
-      isLast={item.isLast}
       isPending={listData.pendingIds.has(item.model.id)}
       model={item.model}
       provider={listData.provider}
@@ -312,7 +309,12 @@ function PullSectionHeader({
   title: string;
 }) {
   return (
-    <Section.Header className={isFirstSection ? 'pb-2' : 'mt-3 pb-2'} title={`${title} (${count})`}>
+    // `px-4` rather than the header's own `px-3`, so the title starts where the
+    // model names below it do.
+    <Section.Header
+      className={isFirstSection ? 'px-4 pb-2' : 'mt-3 px-4 pb-2'}
+      title={`${title} (${count})`}
+    >
       <Pressable
         accessibilityLabel={actionLabel}
         accessibilityRole="button"
@@ -329,8 +331,6 @@ function PullSectionHeader({
 
 const PullModelRow = memo(function PullModelRow({
   isApplied,
-  isFirst,
-  isLast,
   isPending,
   model,
   onToggleModel,
@@ -338,8 +338,6 @@ const PullModelRow = memo(function PullModelRow({
   section,
 }: {
   isApplied: boolean;
-  isFirst: boolean;
-  isLast: boolean;
   isPending: boolean;
   model: Model;
   onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
@@ -357,12 +355,10 @@ const PullModelRow = memo(function PullModelRow({
 
   return (
     <ProviderModelRow
-      isFirst={isFirst}
-      isLast={isLast}
+      // Desktop tints the whole row once the model is in the provider.
+      className={isApplied && !isMissing ? 'bg-success/10' : undefined}
       model={model}
       provider={provider}
-      // Desktop tints the whole row once the model is in the provider.
-      surfaceClassName={isApplied && !isMissing ? 'bg-success/10' : undefined}
       tone={isMissing && !isApplied ? 'struck' : 'default'}
     >
       <Button
@@ -391,8 +387,10 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
+  // No horizontal padding: the model rows carry their own (`Section.Item`'s
+  // `px-4`), so an outer inset would push their content twice as far in as the
+  // navigation chrome above them. Everything else here pads itself to match.
   listContent: {
-    paddingHorizontal: 16,
     paddingVertical: 12,
   },
 });

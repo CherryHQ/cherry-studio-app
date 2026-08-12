@@ -7,16 +7,34 @@ import { PullSpinner } from './PullSpinner';
 
 export function ProviderDetailChrome({
   canDelete,
+  editAction,
   isActive,
   isDisabled,
   onDelete,
   onToggleActive,
   pullAction,
+  selection,
 }: ProviderDetailChromeProps) {
   const { t } = useTranslation();
   const toggleLabel = t(
     isActive ? 'settings.provider.disableProvider' : 'settings.provider.enableProvider',
   );
+
+  if (selection) {
+    return (
+      <Stack.Toolbar placement="bottom">
+        <Stack.Toolbar.Button onPress={selection.onToggleAll}>
+          {t(
+            selection.isAllSelected
+              ? 'settings.provider.models.selection.deselectAll'
+              : 'settings.provider.models.selection.selectAll',
+          )}
+        </Stack.Toolbar.Button>
+        {/* Holds it against the leading edge; a lone button gets centred. */}
+        <Stack.Toolbar.Spacer />
+      </Stack.Toolbar>
+    );
+  }
 
   return (
     <Stack.Toolbar placement="bottom">
@@ -49,6 +67,14 @@ export function ProviderDetailChrome({
             onPress={pullAction.onPress}
           />
         )
+      ) : null}
+      {editAction ? (
+        <Stack.Toolbar.Button
+          accessibilityLabel={t('settings.provider.models.selection.start')}
+          disabled={editAction.isDisabled}
+          icon="checklist"
+          onPress={editAction.onPress}
+        />
       ) : null}
       {canDelete ? (
         <Stack.Toolbar.Button

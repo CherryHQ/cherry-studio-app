@@ -34,28 +34,13 @@ jest.mock('@legendapp/list/react-native', () => ({
   },
 }));
 
-jest.mock('@cherrystudio/ui/components', () => {
-  const React = jest.requireActual('react');
-
-  return {
-    Button: (props: object) => React.createElement('Button', props),
-  };
-});
-
-jest.mock('lucide-uniwind/png', () => ({ MinusIcon: () => null }));
-
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 jest.mock('../ProviderModelRow', () => {
   const React = jest.requireActual('react');
 
   return {
-    getProviderModelRowItemType: () => 'capabilities',
     ProviderModelRow: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ProviderModelRow', props, children),
-    providerModelRowEstimatedHeight: 68,
+    providerModelRowEstimatedHeight: 50,
   };
 });
 
@@ -72,45 +57,51 @@ describe('ProviderModelListContent', () => {
   });
 
   it('renders one flat recycled list containing only model rows', () => {
-    const onRemoveModel = jest.fn();
-
     act(() => {
       renderer = create(
         <ProviderModelListContent
           isDefaultModel={() => false}
           models={[firstModel, secondModel]}
           provider={undefined}
-          removingIds={new Set()}
-          onRemoveModel={onRemoveModel}
         />,
       );
     });
 
     expect(mockListProps.recycleItems).toBe(true);
-    expect(mockListProps.data).toEqual([
-      {
-        isFirst: true,
-        isLast: false,
-        itemKey: `model:${firstModel.id}`,
-        model: firstModel,
-        previousItemKey: undefined,
-      },
-      {
-        isFirst: false,
-        isLast: true,
-        itemKey: `model:${secondModel.id}`,
-        model: secondModel,
-        previousItemKey: `model:${firstModel.id}`,
-      },
-    ]);
+    // The models themselves: with no separators and no grouped card, a row needs
+    // nothing about its neighbours, so there is nothing to wrap them in.
+    expect(mockListProps.data).toEqual([firstModel, secondModel]);
 
     const rows = renderer!.root.findAllByType('ProviderModelRow');
     expect(rows).toHaveLength(2);
-    expect(rows[0].props).toMatchObject({ isFirst: true, isLast: false, model: firstModel });
-    expect(rows[1].props).toMatchObject({ isFirst: false, isLast: true, model: secondModel });
+    // No control of its own outside a selection: removing is the selection's job.
+    expect(rows[0].props).toMatchObject({ model: firstModel, selection: undefined });
+    expect(rows[1].props).toMatchObject({ model: secondModel, selection: undefined });
+  });
 
-    act(() => renderer!.root.findAllByType('Button')[1].props.onPress());
-    expect(onRemoveModel).toHaveBeenCalledWith(secondModel);
+  it('turns the rows into checkboxes while selecting', () => {
+    const onToggleModel = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <ProviderModelListContent
+          isDefaultModel={(candidate) => candidate === secondModel}
+          models={[firstModel, secondModel]}
+          provider={undefined}
+          selection={{ onToggleModel, selectedIds: new Set([firstModel.id]) }}
+        />,
+      );
+    });
+
+    const rows = renderer!.root.findAllByType('ProviderModelRow');
+
+    expect(rows[0].props.selection).toMatchObject({ isDisabled: false, isSelected: true });
+    // The chat default cannot be removed, so it cannot be ticked either.
+    expect(rows[1].props.selection).toMatchObject({ isDisabled: true, isSelected: false });
+
+    act(() => rows[0].props.selection.onToggle());
+
+    expect(onToggleModel).toHaveBeenCalledWith(firstModel.id);
   });
 });
 

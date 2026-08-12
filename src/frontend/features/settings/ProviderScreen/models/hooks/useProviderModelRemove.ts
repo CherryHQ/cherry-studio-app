@@ -1,57 +1,48 @@
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { useCallback, useState } from 'react';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { useMutation } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
-const emptyModelIdSet: ReadonlySet<UniqueModelId> = new Set();
-
 /**
- * Removing a model from its provider, one tap and no confirmation — the same
- * bargain desktop's list makes. What is undone by pulling the list again does
- * not warrant a dialog in the way deleting the provider does.
+ * Removing models from their provider. The list removes by selection rather
+ * than row by row, so this takes a set and sends one request — `DELETE /models`
+ * takes the ids as a query and the service deletes them in a single write.
  *
- * The chat default is the one row that cannot go: the service refuses it, and
- * `isDefaultModel` lets the list grey the affordance out rather than let the
- * tap fail.
+ * The chat default is the one model that cannot go: the service refuses it, and
+ * `isDefaultModel` lets the list leave its row untickable rather than let the
+ * delete fail halfway.
  */
 export function useProviderModelRemove() {
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const removeModelMutation = useMutation('DELETE', '/models/:uniqueModelId*', {
+  const removeModelsMutation = useMutation('DELETE', '/models', {
     refresh: ['/models'],
   });
-  const deleteModel = removeModelMutation.trigger;
+  const deleteModels = removeModelsMutation.trigger;
   const [defaultModelId] = usePreference('chat.default_model_id');
-  const [removingIds, setRemovingIds] = useState<ReadonlySet<UniqueModelId>>(emptyModelIdSet);
 
-  const removeModel = useCallback(
-    async (model: Model) => {
-      if (removingIds.has(model.id)) {
+  const removeModels = useCallback(
+    async (models: Model[]) => {
+      const ids = models.map((model) => model.id);
+
+      if (ids.length === 0) {
         return;
       }
 
-      setRemovingIds((current) => new Set(current).add(model.id));
       try {
-        await deleteModel({ params: { uniqueModelId: model.id } });
+        await deleteModels({ query: { ids } });
       } catch {
-        alert.show({ title: t('settings.provider.models.removeFailed') });
-      } finally {
-        setRemovingIds((current) => {
-          const next = new Set(current);
-          next.delete(model.id);
-          return next;
-        });
+        alert.show({ title: t('settings.provider.models.selection.removeFailed') });
       }
     },
-    [alert, deleteModel, removingIds, t],
+    [alert, deleteModels, t],
   );
 
   return {
     isDefaultModel: useCallback((model: Model) => model.id === defaultModelId, [defaultModelId]),
-    removeModel,
-    removingIds,
+    removeModels,
   };
 }

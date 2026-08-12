@@ -1,8 +1,8 @@
-import { Section } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { type ReactNode, useState } from 'react';
-import { Text, View } from 'react-native';
+import { CheckIcon } from 'lucide-uniwind/png';
+import type { ReactNode } from 'react';
+import { Pressable, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/ModelAvatar';
 import {
@@ -12,114 +12,122 @@ import {
   ModelPickerTagChip,
 } from '@/frontend/components/modelPicker';
 
-import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
-
 /**
- * Squared off against the text beside it: the name line is 24 (`text-base`'s
- * line height), the capability chips are 20, and `Section.Item` puts 4 between
- * them. Anything smaller floats in the middle of the two lines.
+ * `BrandAvatar`'s own size, the one a provider row uses — a model row is the
+ * same single line of text beside the same square frame.
  */
-const providerModelRowAvatarSize = 48;
+const providerModelRowAvatarSize = 26;
 /**
- * The avatar plus the row's vertical padding. Rows without capabilities are
- * shorter; the lists tell the two apart through
- * {@link getProviderModelRowItemType} so the virtualizer measures each kind.
+ * `py-2` around the tallest thing in the row. That is the caller's icon-only
+ * button (`p-2` around a 16 glyph, so 32), not the avatar.
  */
-export const providerModelRowEstimatedHeight = providerModelRowAvatarSize + 24;
+export const providerModelRowEstimatedHeight = 48;
 
 /**
  * One model, as both screens that list models draw it: the provider's own tab
  * and the pull preview. They differ only in what sits at the end of the row —
  * a remove button on one side, the pull's `+`/`-` on the other — so that is
  * what `children` is for.
+ *
+ * Laid out here rather than through `Section.Item`, whose `py-3` is fixed: a
+ * settings row holds one tappable line and can afford the height, but this one
+ * repeats down a list hundreds of models long. Nothing is drawn between rows
+ * either — a hairline every 48pt reads as a grid, and the avatars already give
+ * the eye a column to follow.
  */
 export function ProviderModelRow({
   children,
-  hideSeparator = false,
-  isDisabled = false,
-  isFirst,
-  isLast,
+  className,
   model,
-  onPress,
   provider,
-  surfaceClassName,
+  selection,
   tone = 'default',
 }: {
   /** The row's trailing action. */
   children?: ReactNode;
-  hideSeparator?: boolean;
-  isDisabled?: boolean;
-  isFirst: boolean;
-  isLast: boolean;
+  /** Applied last, so a row can tint itself. */
+  className?: string;
   model: Model;
-  /** Given only when the row itself is the action. */
-  onPress?: () => void;
   provider: Provider | undefined;
-  /** Applied last, so a row can tint its own surface. */
-  surfaceClassName?: string;
+  /**
+   * Given only while the list is selecting. The row then draws a checkbox and
+   * becomes the control that ticks it — nothing else on it is tappable.
+   */
+  selection?: {
+    isDisabled?: boolean;
+    isSelected: boolean;
+    onToggle: () => void;
+  };
   /** `struck` reads as "on its way out", the way the pull screen marks a model the provider no longer serves. */
   tone?: 'default' | 'struck';
 }) {
   const tags = getProviderModelRowTags(model);
-  const [isPressed, setIsPressed] = useState(false);
-  // Its own line rather than the trailing slot, which the capabilities used to
-  // share with the action button — a model with many of them pushed the name off
-  // the row. Down here the strip has the width the name is not using, and what
-  // still overflows is clipped rather than pushing anything.
-  const capabilities =
-    tags.length > 0 ? (
-      <View className="flex-row items-center gap-1 overflow-hidden">
-        {tags.map((tag) => (
-          <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
-        ))}
+  const rowClassName = className
+    ? `flex-row items-center gap-3 px-4 py-2 ${className}`
+    : 'flex-row items-center gap-3 px-4 py-2';
+  const content = (
+    <>
+      {selection ? <ProviderModelRowCheckbox isSelected={selection.isSelected} /> : null}
+      <ModelAvatar model={model} provider={provider} size={providerModelRowAvatarSize} />
+      {/* The one part of the row that gives: the capabilities and the action
+          keep their natural width, so a long model id ellipsizes rather than
+          pushing them off the end. */}
+      <Text
+        className={
+          tone === 'struck'
+            ? 'min-w-0 flex-1 text-base text-foreground line-through'
+            : 'min-w-0 flex-1 text-base text-foreground'
+        }
+        numberOfLines={1}
+      >
+        {model.name}
+      </Text>
+      {tags.length > 0 ? (
+        <View className="flex-row items-center gap-1">
+          {tags.map((tag) => (
+            <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
+          ))}
+        </View>
+      ) : null}
+      {children}
+    </>
+  );
+
+  if (!selection) {
+    return (
+      <View accessibilityLabel={model.name} accessible className={rowClassName}>
+        {content}
       </View>
-    ) : undefined;
+    );
+  }
 
   return (
-    // Transparent rather than the grouped card the surface normally paints: a
-    // model list is long enough that the card reads as one big slab. What is
-    // still wanted from here is the hairline between rows and the corner
-    // rounding the pull screen's applied-row tint sits on — the surface merges
-    // these classes, and that tint comes last, so it still wins.
-    <SettingsGroupedSurface
-      className={surfaceClassName ? `bg-transparent ${surfaceClassName}` : 'bg-transparent'}
-      hideSeparator={hideSeparator || isPressed}
-      isFirst={isFirst}
-      isLast={isLast}
+    <Pressable
+      accessibilityLabel={model.name}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selection.isSelected, disabled: selection.isDisabled }}
+      className={`${rowClassName} active:bg-foreground/5`}
+      disabled={selection.isDisabled}
+      onPress={selection.onToggle}
     >
-      <Section.Item
-        accessibilityLabel={model.name}
-        accessibilityState={{ busy: isDisabled, disabled: isDisabled }}
-        description={capabilities}
-        disabled={isDisabled}
-        label={
-          tone === 'struck' ? (
-            <Text className="text-foreground text-base line-through" numberOfLines={1}>
-              {model.name}
-            </Text>
-          ) : (
-            model.name
-          )
-        }
-        leading={
-          <ModelAvatar model={model} provider={provider} size={providerModelRowAvatarSize} />
-        }
-        onPress={onPress}
-        onPressIn={() => setIsPressed(true)}
-        onPressOut={() => setIsPressed(false)}
-        showChevron={false}
-        trailing={children}
-      />
-    </SettingsGroupedSurface>
+      {content}
+    </Pressable>
   );
 }
 
-/**
- * Which of the two heights a model's row will take. A list mixing both has to
- * tell them apart for its virtualizer, which sizes by item type.
- */
-export function getProviderModelRowItemType(model: Model): 'capabilities' | 'compact' {
-  return getProviderModelRowTags(model).length > 0 ? 'capabilities' : 'compact';
+/** The same tick the topic list draws, since both lists select the same way. */
+function ProviderModelRowCheckbox({ isSelected }: { isSelected: boolean }) {
+  return (
+    <View
+      className={
+        isSelected
+          ? 'size-6 items-center justify-center rounded-full bg-primary'
+          : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
+      }
+    >
+      {isSelected ? <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} /> : null}
+    </View>
+  );
 }
 
 // `getModelPickerTags` only covers capabilities; free is inferred, so it is not
