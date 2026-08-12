@@ -258,17 +258,16 @@ describe('ProviderConfigApprovalSheet', () => {
     expect(onRespond).not.toHaveBeenCalled();
   });
 
-  test('uses a compact floating next action without a footer', () => {
+  test('uses a full-width pill action without a footer', () => {
     renderSheet();
 
     expect(action('chat.providerConfig.next').props).toMatchObject({
-      className: 'min-w-24',
-      size: 'sm',
+      className: 'self-stretch rounded-full',
     });
     expect(
       renderer!.root.findByProps({ testID: 'provider-config-floating-action' }).props,
     ).toMatchObject({
-      className: 'absolute right-4 bottom-3 z-10 items-end gap-2',
+      className: 'absolute inset-x-4 bottom-3 z-10 items-center gap-2',
     });
   });
 

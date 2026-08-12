@@ -385,7 +385,7 @@ export function ProviderConfigApprovalSheet({
           )}
         </BottomSheet.PageTransition>
         <View
-          className="absolute right-4 bottom-3 z-10 items-end gap-2"
+          className="absolute inset-x-4 bottom-3 z-10 items-center gap-2"
           testID="provider-config-floating-action"
         >
           {approvalCount > 1 ? (
@@ -394,11 +394,10 @@ export function ProviderConfigApprovalSheet({
             </Text>
           ) : null}
           <Button
-            className="min-w-24"
+            className="self-stretch rounded-full"
             disabled={step !== 'confirmation' && !canContinueProviderConfig(step, draft, preview)}
             loading={isPreviewLoading || isSubmitting}
             onPress={goForward}
-            size="sm"
           >
             {actionLabel}
           </Button>
