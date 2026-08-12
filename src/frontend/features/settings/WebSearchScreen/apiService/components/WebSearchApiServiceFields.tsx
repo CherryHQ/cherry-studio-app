@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Keyboard, Pressable, Text, View } from 'react-native';
+import { useCallback, useMemo } from 'react';
+import { Pressable, Text, View } from 'react-native';
 
 import { useWebSearchApiManagementContext } from '../../context/WebSearchApiManagementContext';
 import {
@@ -59,7 +59,6 @@ function ApiKeysSection() {
     actions: { onProviderOverrideChange, openApiKeySettings },
     state: { provider, providerOverride },
   } = useWebSearchApiManagementContext();
-  const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const apiKeysInput = useMemo(
     () => buildWebSearchApiKeysInput(providerOverride?.apiKeys ?? []),
     [providerOverride?.apiKeys],
@@ -74,17 +73,11 @@ function ApiKeysSection() {
     [onProviderOverrideChange, provider.id],
   );
 
-  const handleApiKeysVisibilityToggle = useCallback(() => {
-    Keyboard.dismiss();
-    setApiKeysVisible((visible) => !visible);
-  }, []);
   return (
     <WebSearchApiServiceApiKeysField
       apiKeysInput={apiKeysInput}
-      apiKeysVisible={apiKeysVisible}
       onApiKeysInputChange={handleApiKeysCommit}
       onManagePress={openApiKeySettings}
-      onToggleVisible={handleApiKeysVisibilityToggle}
     />
   );
 }

@@ -1,10 +1,18 @@
-import { Button, Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
+import {
+  Button,
+  Input,
+  Label,
+  Menu,
+  type MenuItem,
+  SecureInput,
+  TextField,
+} from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { EyeIcon, EyeOffIcon, ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
+import { ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
@@ -45,7 +53,6 @@ export default function NewProviderScreen() {
   const [name, setName] = useState('');
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [avatarDraftUri, setAvatarDraftUri] = useState<string | null>(null);
   const [anthropicUrl, setAnthropicUrl] = useState('');
   const [defaultChatEndpoint, setDefaultChatEndpoint] = useState<CustomProviderTextEndpoint>(
@@ -245,35 +252,20 @@ export default function NewProviderScreen() {
           </FormField>
 
           <FormField label={t('settings.provider.apiService.apiKey')}>
-            <View className="flex-row items-center gap-2">
-              <View className="min-w-0 flex-1 overflow-hidden">
-                <Input
-                  accessibilityLabel={t('settings.provider.apiService.apiKey')}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  lineBreakModeIOS="clip"
-                  multiline={false}
-                  numberOfLines={1}
-                  onChangeText={(value) => setApiKey(normalizeApiKeySingleLine(value))}
-                  placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
-                  returnKeyType="done"
-                  scrollEnabled={false}
-                  secureTextEntry={!apiKeyVisible}
-                  value={apiKey}
-                />
-              </View>
-              <Button
-                accessibilityLabel={
-                  apiKeyVisible
-                    ? t('settings.provider.apiService.hideApiKeys')
-                    : t('settings.provider.apiService.showApiKeys')
-                }
-                hitSlop={6}
-                icon={apiKeyVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
-                onPress={() => setApiKeyVisible((visible) => !visible)}
-                variant="secondary"
-              />
-            </View>
+            <SecureInput
+              accessibilityLabel={t('settings.provider.apiService.apiKey')}
+              lineBreakModeIOS="clip"
+              numberOfLines={1}
+              onChangeText={(value) => setApiKey(normalizeApiKeySingleLine(value))}
+              placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
+              returnKeyType="done"
+              scrollEnabled={false}
+              value={apiKey}
+              visibilityAccessibilityLabels={{
+                hide: t('settings.provider.apiService.hideApiKeys'),
+                show: t('settings.provider.apiService.showApiKeys'),
+              }}
+            />
           </FormField>
 
           <View className="gap-4">

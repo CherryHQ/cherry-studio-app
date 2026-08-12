@@ -7,11 +7,9 @@ import { ProviderOauthSection } from './ProviderOauthSection';
 
 type ProviderApiManagementSectionProps = {
   apiKeysInput?: string;
-  apiKeysVisible: boolean;
   baseUrl?: string;
   onApiKeysCommit: (value: string) => void;
   onApiKeysManagePress: () => void;
-  onApiKeysVisibleToggle: () => void;
   onBaseUrlCommit: (value: string) => Promise<boolean>;
   onBaseUrlManagePress: () => void;
   provider?: Provider;
@@ -21,11 +19,9 @@ type ProviderApiManagementSectionProps = {
 
 export function ProviderApiManagementSection({
   apiKeysInput = '',
-  apiKeysVisible,
   baseUrl = '',
   onApiKeysCommit,
   onApiKeysManagePress,
-  onApiKeysVisibleToggle,
   onBaseUrlCommit,
   onBaseUrlManagePress,
   provider,
@@ -56,10 +52,8 @@ export function ProviderApiManagementSection({
       {showApiKeys ? (
         <ProviderApiServiceApiKeysField
           apiKeysInput={apiKeysInput}
-          apiKeysVisible={apiKeysVisible}
           onCommit={onApiKeysCommit}
           onManagePress={onApiKeysManagePress}
-          onToggleVisible={onApiKeysVisibleToggle}
         />
       ) : null}
     </View>
