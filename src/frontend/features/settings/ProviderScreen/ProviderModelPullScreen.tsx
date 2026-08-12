@@ -1,9 +1,8 @@
-import { Button, Section, Spinner } from '@cherrystudio/ui/components';
+import { Section, Spinner } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { MinusIcon, PlusIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -11,6 +10,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BackHeader } from '@/frontend/components/headers';
 
 import { useProviderDetailSettings } from './detail';
+import { ProviderModelPullChrome } from './models/components/ProviderModelPullChrome/ProviderModelPullChrome';
 import {
   ProviderModelRow,
   providerModelRowEstimatedHeight,
@@ -20,8 +20,8 @@ import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTyp
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import {
   type ProviderModelPullApplyChange,
-  useProviderModelPullApply,
-} from './models/hooks/useProviderModelPullApply';
+  useProviderModelPullSelection,
+} from './models/hooks/useProviderModelPullSelection';
 import {
   buildProviderModelPullListItems,
   filterProviderModelPullPreview,
@@ -39,12 +39,12 @@ import {
 type PullTranslator = ReturnType<typeof useTranslation>['t'];
 
 type PullListExtraData = {
-  appliedIds: ReadonlySet<UniqueModelId>;
   displayedPreview: ProviderModelPullPreview;
-  onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
-  onToggleSection: (models: readonly Model[], section: ProviderModelPullSectionKey) => void;
-  pendingIds: ReadonlySet<UniqueModelId>;
+  isApplying: boolean;
+  onToggleAll: (ids: readonly UniqueModelId[]) => void;
+  onToggleModel: (id: UniqueModelId) => void;
   provider: Provider | undefined;
+  selectedIds: ReadonlySet<UniqueModelId>;
   t: PullTranslator;
 };
 
@@ -114,6 +114,7 @@ export default function ProviderModelPullScreen() {
           applyModelChange={applyModelChange}
           preview={preview}
           provider={provider}
+          onApplied={leavePullScreen}
         />
       ) : (
         <View className="flex-1 items-center justify-center gap-3 px-4">
@@ -131,10 +132,13 @@ export default function ProviderModelPullScreen() {
 
 function ProviderModelPullPreviewPage({
   applyModelChange,
+  onApplied,
   preview,
   provider,
 }: {
   applyModelChange: ProviderModelPullApplyChange;
+  /** The pull is over once its changes land, so the screen has nothing left to show. */
+  onApplied: () => void;
   preview: ProviderModelPullPreview;
   provider: Provider | undefined;
 }) {
@@ -160,10 +164,11 @@ function ProviderModelPullPreviewPage({
     () => getProviderModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
     [searchedPreview],
   );
-  const { appliedIds, pendingIds, toggleModel, toggleSection } = useProviderModelPullApply({
-    applyModelChange,
-    preview,
-  });
+  const { applySelection, isApplying, selectedIds, toggleAll, toggleModel } =
+    useProviderModelPullSelection({
+      applyModelChange,
+      preview,
+    });
   const visibleSections = useMemo<ProviderModelPullSectionKey[]>(
     () => (missingCount > 0 ? ['added', 'missing'] : ['added']),
     [missingCount],
@@ -174,17 +179,30 @@ function ProviderModelPullPreviewPage({
   );
   const listExtraData = useMemo<PullListExtraData>(
     () => ({
-      appliedIds,
       displayedPreview,
+      isApplying,
+      onToggleAll: toggleAll,
       onToggleModel: toggleModel,
-      onToggleSection: toggleSection,
-      pendingIds,
       provider,
+      selectedIds,
       t,
     }),
-    [appliedIds, displayedPreview, pendingIds, provider, t, toggleModel, toggleSection],
+    [displayedPreview, isApplying, provider, selectedIds, t, toggleAll, toggleModel],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
+  // Everything on screen, which is what the search and the type filter left of
+  // the pull — selecting all of a filtered list should not reach past it.
+  const displayedIds = useMemo(
+    () => [...displayedPreview.added, ...displayedPreview.missing].map((model) => model.id),
+    [displayedPreview],
+  );
+  const handleApply = useCallback(() => {
+    void applySelection().then((didApply) => {
+      if (didApply) {
+        onApplied();
+      }
+    });
+  }, [applySelection, onApplied]);
 
   return (
     <>
@@ -232,6 +250,13 @@ function ProviderModelPullPreviewPage({
         showsVerticalScrollIndicator={false}
         style={styles.list}
       />
+      <ProviderModelPullChrome
+        isAllSelected={displayedIds.length > 0 && displayedIds.every((id) => selectedIds.has(id))}
+        isApplying={isApplying}
+        selectedCount={selectedIds.size}
+        onApply={handleApply}
+        onToggleAll={() => toggleAll(displayedIds)}
+      />
     </>
   );
 }
@@ -257,20 +282,19 @@ function renderPullListItem({
     const sectionModels = isAddedSection
       ? listData.displayedPreview.added
       : listData.displayedPreview.missing;
-    const isEverythingApplied =
-      sectionModels.length > 0 && sectionModels.every((model) => listData.appliedIds.has(model.id));
-    // Both sections offer the same undo, they just start from opposite ends.
-    const actionLabelKey = isAddedSection
-      ? isEverythingApplied
-        ? 'settings.provider.models.pullRemoveAll'
-        : 'settings.provider.models.pullAddAll'
-      : isEverythingApplied
-        ? 'settings.provider.models.pullRestoreAll'
-        : 'settings.provider.models.pullRemoveAll';
+    const sectionIds = sectionModels.map((model) => model.id);
+    // The two sections pull in opposite directions — one adds models, the other
+    // drops them — so each keeps its own select-all beside the toolbar's.
+    const isSectionSelected =
+      sectionIds.length > 0 && sectionIds.every((id) => listData.selectedIds.has(id));
 
     return (
       <PullSectionHeader
-        actionLabel={listData.t(actionLabelKey)}
+        actionLabel={listData.t(
+          isSectionSelected
+            ? 'settings.provider.models.selection.deselectAll'
+            : 'settings.provider.models.selection.selectAll',
+        )}
         count={sectionModels.length}
         isFirstSection={item.isFirstSection}
         title={listData.t(
@@ -278,15 +302,15 @@ function renderPullListItem({
             ? 'settings.provider.models.pullAddedSection'
             : 'settings.provider.models.pullMissingSection',
         )}
-        onActionPress={() => listData.onToggleSection(sectionModels, item.section)}
+        onActionPress={() => listData.onToggleAll(sectionIds)}
       />
     );
   }
 
   return (
     <PullModelRow
-      isApplied={listData.appliedIds.has(item.model.id)}
-      isPending={listData.pendingIds.has(item.model.id)}
+      isApplying={listData.isApplying}
+      isSelected={listData.selectedIds.has(item.model.id)}
       model={item.model}
       provider={listData.provider}
       section={item.section}
@@ -330,56 +354,32 @@ function PullSectionHeader({
 }
 
 const PullModelRow = memo(function PullModelRow({
-  isApplied,
-  isPending,
+  isApplying,
+  isSelected,
   model,
   onToggleModel,
   provider,
   section,
 }: {
-  isApplied: boolean;
-  isPending: boolean;
+  isApplying: boolean;
+  isSelected: boolean;
   model: Model;
-  onToggleModel: (model: Model, section: ProviderModelPullSectionKey) => void;
+  onToggleModel: (id: UniqueModelId) => void;
   provider: Provider | undefined;
   section: ProviderModelPullSectionKey;
 }) {
-  const { t } = useTranslation();
-  const isMissing = section === 'missing';
   const handleToggle = useCallback(() => {
-    onToggleModel(model, section);
-  }, [model, onToggleModel, section]);
-  // `added` rows start out absent and gain a model; `missing` rows start out
-  // present and lose one. Either way "applied" means the tap already landed.
-  const showsMinus = isMissing ? !isApplied : isApplied;
+    onToggleModel(model.id);
+  }, [model.id, onToggleModel]);
 
   return (
     <ProviderModelRow
-      // Desktop tints the whole row once the model is in the provider.
-      className={isApplied && !isMissing ? 'bg-success/10' : undefined}
       model={model}
       provider={provider}
-      tone={isMissing && !isApplied ? 'struck' : 'default'}
-    >
-      <Button
-        accessibilityLabel={t(
-          showsMinus ? 'settings.provider.models.remove' : 'settings.provider.models.add',
-        )}
-        accessibilityState={{ busy: isPending }}
-        disabled={isPending}
-        hitSlop={6}
-        icon={
-          showsMinus ? (
-            <MinusIcon className="text-destructive" strokeWidth={2} />
-          ) : (
-            <PlusIcon className="text-primary" strokeWidth={2} />
-          )
-        }
-        onPress={handleToggle}
-        size="sm"
-        variant="ghost"
-      />
-    </ProviderModelRow>
+      selection={{ isDisabled: isApplying, isSelected, onToggle: handleToggle }}
+      // The provider no longer serves it, whether or not the row is ticked.
+      tone={section === 'missing' ? 'struck' : 'default'}
+    />
   );
 });
 
@@ -387,10 +387,12 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
-  // No horizontal padding: the model rows carry their own (`Section.Item`'s
-  // `px-4`), so an outer inset would push their content twice as far in as the
-  // navigation chrome above them. Everything else here pads itself to match.
+  // No horizontal padding: the model rows carry their own `px-4`, so an outer
+  // inset would push their content twice as far in as the navigation chrome
+  // above them. Everything else here pads itself to match. The bottom clears
+  // the select-all/apply bar, which floats over the list.
   listContent: {
-    paddingVertical: 12,
+    paddingBottom: 96,
+    paddingTop: 12,
   },
 });

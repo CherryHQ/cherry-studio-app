@@ -35,9 +35,12 @@ export function ProviderModelList({
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
+  // A selection covers every model the provider has, so the list has to show
+  // every one of them — select-all reaching past what a leftover search term
+  // left on screen is how a model nobody can see gets deleted.
   const displayedModels = useMemo(
-    () => filterModelsByKeywords(deferredSearchText, models),
-    [deferredSearchText, models],
+    () => (selection ? models : filterModelsByKeywords(deferredSearchText, models)),
+    [deferredSearchText, models, selection],
   );
   const isSearching = searchText.trim().length > 0;
 
