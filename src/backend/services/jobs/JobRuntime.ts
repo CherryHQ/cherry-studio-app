@@ -35,7 +35,10 @@ import {
  */
 import { loggerService } from '@logger';
 
+import { application } from '@/backend/core/application/Application';
 import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import type { OperationHandle } from '@/backend/core/resources/types';
+import { ScopeFencedError } from '@/backend/core/resources/types';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import type { InsertJobRow, JobRow } from '@/backend/data/db/schemas/job';
 import {
@@ -206,6 +209,17 @@ export class JobRuntime extends BaseService {
    * prior-process leftover.) Cleared once recovery settles.
    */
   private startupLocalIds: Set<string> | null = new Set();
+
+  /**
+   * Resolved per call rather than injected, so no execution pins a host
+   * generation. Not a declared dependency either: the coordinator is a `Gate`
+   * service and this one is `PostReady`, so it is always Ready by the time an
+   * execution spawns, and shutdown deliberately does not route through it — the
+   * edge would order nothing.
+   */
+  private get scopes() {
+    return application.get('ResourceScopeCoordinator');
+  }
 
   private pumpRunning = false;
   private pumpDirty = false;
@@ -647,6 +661,41 @@ export class JobRuntime extends BaseService {
   // Execution
   // -------------------------------------------------------------------------
 
+  /**
+   * Put this execution on the coordinator's registry, if its handler belongs to
+   * any deletable resource.
+   *
+   * `settled` is the execution promise rather than anything `cancel()` returns,
+   * because that promise resolves only after the terminal row is written — which
+   * is exactly the guarantee a deleting caller is waiting for. A handler that
+   * ignores its signal therefore fails the drain and blocks the delete instead
+   * of letting it proceed over work still in flight.
+   *
+   * Throws {@link ScopeFencedError} when the resource is already being deleted.
+   */
+  private registerScopes(
+    handler: JobHandler,
+    row: JobRow,
+    settled: Promise<void>,
+  ): OperationHandle | undefined {
+    const scopes = handler.scopes?.(row.input);
+    if (!scopes || scopes.length === 0) return undefined;
+
+    return this.scopes.register({
+      // Fire-and-forget by contract: `cancel` is synchronous, and `cancel()`
+      // already does its own bounded wait plus force-finalization. The drain
+      // above is what actually waits.
+      cancel: (reason) => {
+        void this.cancel(row.id, reason).catch((error: unknown) => {
+          logger.error('scope cancel failed', error as Error, { jobId: row.id });
+        });
+      },
+      kind: `job.${row.type}`,
+      scopes,
+      settled,
+    });
+  }
+
   private spawnExecute(row: JobRow): void {
     const handler = this.handlers.get(row.type);
     if (!handler) {
@@ -669,11 +718,36 @@ export class JobRuntime extends BaseService {
     }
 
     const controller = new AbortController();
-    this.abortControllers.set(row.id, controller);
     let resolveExecuted!: () => void;
     const executed = new Promise<void>((resolve) => {
       resolveExecuted = resolve;
     });
+
+    // Claimed before anything observable happens: the resource this job writes
+    // through may be mid-deletion, and an execution that started first would be
+    // invisible to the pass draining that scope.
+    let scopeHandle: OperationHandle | undefined;
+    try {
+      scopeHandle = this.registerScopes(handler, row, executed);
+    } catch (error) {
+      if (!(error instanceof ScopeFencedError)) throw error;
+      // The resource is being deleted. Running would write through a row that is
+      // about to disappear, so the job ends here rather than racing the delete.
+      logger.info('spawnExecute: scope fenced — cancelling instead of running', {
+        jobId: row.id,
+        scope: `${error.scope.kind}:${error.scope.id}`,
+      });
+      void this.finalizeJob(
+        row.id,
+        'cancelled',
+        undefined,
+        { code: JOB_ERROR_CODES.CANCELLED, message: error.message, retryable: false },
+        ['running'],
+      );
+      return;
+    }
+
+    this.abortControllers.set(row.id, controller);
     this.inFlightExecuted.set(row.id, executed);
 
     if (row.timeoutMs !== null && row.timeoutMs > 0) {
@@ -748,6 +822,9 @@ export class JobRuntime extends BaseService {
         this.clearTimeoutHandle(row.id);
         this.abortControllers.delete(row.id);
         this.inFlightExecuted.delete(row.id);
+        // Released before `executed` settles, so a drain that was waiting on
+        // this execution does not then see it still registered.
+        scopeHandle?.release();
         resolveExecuted();
       }
     })();

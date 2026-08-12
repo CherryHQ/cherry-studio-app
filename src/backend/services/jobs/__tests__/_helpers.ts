@@ -5,6 +5,7 @@
 import type { DatabaseSync } from 'node:sqlite';
 
 import { installTestHost } from '@/backend/core/application/testHost';
+import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import type { Database } from '@/backend/data/db/DbService';
 import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
 import { JobService } from '@/backend/data/services/JobService';
@@ -21,6 +22,8 @@ export {
 export type TestRuntime = {
   db: TestDb;
   jobService: JobService;
+  /** The same instance the runtime resolves, so a suite can fence a scope. */
+  scopes: ResourceScopeCoordinator;
   runtime: JobRuntime;
 };
 
@@ -43,14 +46,17 @@ export async function createTestRuntime(
   overrides: Omit<JobRuntimeOptions, 'handlers' | 'jobService'> = {},
 ): Promise<TestRuntime> {
   const db = createTestDb(sqlite);
-  await installTestHost({ DbService: db.dbService });
+  // A real coordinator, not a stub: an execution registers with whatever the
+  // host serves, and the fencing behaviour under test is the real one.
+  const scopes = new ResourceScopeCoordinator();
+  await installTestHost({ DbService: db.dbService, ResourceScopeCoordinator: scopes });
   const jobService = new JobService();
   const runtime = new JobRuntime(db.dbService, noAiService, {
     handlers,
     jobService,
     ...overrides,
   });
-  return { db, jobService, runtime };
+  return { db, jobService, runtime, scopes };
 }
 
 /**
