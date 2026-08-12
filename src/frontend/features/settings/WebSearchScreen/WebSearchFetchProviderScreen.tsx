@@ -3,19 +3,24 @@ import { useRouter } from 'expo-router';
 import { CheckIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
+import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
+import { Image } from '@/frontend/components/nativePrimitives';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
+import { resolveWebSearchProviderIcon } from './utils/providerIcons';
 
-export default function WebSearchCompressionMethodScreen() {
+export default function WebSearchFetchProviderScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { compressionMethod } = useWebSearchProviderPreferences();
+  const { theme } = useUniwind();
+  const { fetchUrls } = useWebSearchProviderPreferences();
+  const iconTheme = theme === 'dark' ? 'dark' : 'light';
 
   return (
     <>
-      <BackHeader title={t('settings.websearch.compressionMethod')} />
+      <BackHeader title={t('settings.websearch.fetchUrlsProvider')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -24,8 +29,9 @@ export default function WebSearchCompressionMethodScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Section>
-          {compressionMethod.options.map((option) => {
-            const selected = option.value === compressionMethod.value;
+          {fetchUrls.options.map((option) => {
+            const selected = option.value === fetchUrls.value;
+            const imageSource = resolveWebSearchProviderIcon(option.value)?.[iconTheme];
 
             return (
               <Section.Item
@@ -33,9 +39,20 @@ export default function WebSearchCompressionMethodScreen() {
                 accessibilityState={{ checked: selected }}
                 key={option.value}
                 label={option.label}
+                leading={
+                  imageSource ? (
+                    <Image
+                      cachePolicy="memory-disk"
+                      className="size-5"
+                      contentFit="contain"
+                      recyclingKey={option.value}
+                      source={imageSource}
+                    />
+                  ) : null
+                }
                 onPress={() => {
                   if (!selected) {
-                    compressionMethod.onValueChange(option.value);
+                    fetchUrls.onValueChange(option.value);
                     router.back();
                   }
                 }}

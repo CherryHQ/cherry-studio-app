@@ -8,34 +8,48 @@ import {
   TextField,
 } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { CopyIcon, KeyRoundIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { ActivityIcon, CopyIcon, KeyRoundIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
 import { View } from 'react-native';
 
-import type { WebSearchApiKeyEntry } from '../utils/webSearchApiServiceApiKeys';
+import {
+  parseWebSearchApiKeysInput,
+  type WebSearchApiKeyEntry,
+} from '../utils/webSearchApiServiceApiKeys';
 
 export function WebSearchApiServiceApiKeysField({
   apiKeysInput,
   onApiKeysInputChange,
   onManagePress,
+  onCheck,
+  isChecking,
 }: {
   apiKeysInput: string;
   onApiKeysInputChange: (value: string) => void;
   onManagePress: () => void;
+  onCheck: (apiKey: string) => void;
+  isChecking: boolean;
 }) {
   const { t } = useTranslation();
+  const [currentInput, setCurrentInput] = useState(apiKeysInput);
+  const [sourceInput, setSourceInput] = useState(apiKeysInput);
+
+  if (sourceInput !== apiKeysInput) {
+    setSourceInput(apiKeysInput);
+    setCurrentInput(apiKeysInput);
+  }
 
   return (
     <TextField>
-      <Label>{t('settings.websearch.provider.apiKeys')}</Label>
       <View className="flex-row items-center gap-2">
         <View className="min-w-0 flex-1 overflow-hidden">
           <ApiKeysCommitInput
             accessibilityLabel={t('settings.websearch.provider.apiKeys')}
             blurOnVisibilityToggle
             onCommit={onApiKeysInputChange}
+            onDraftChange={setCurrentInput}
             placeholder={t('settings.websearch.provider.apiKeysPlaceholder')}
             value={apiKeysInput}
             visibilityAccessibilityLabels={{
@@ -51,6 +65,19 @@ export function WebSearchApiServiceApiKeysField({
           onPress={onManagePress}
           variant="secondary"
         />
+        <Button
+          accessibilityLabel={t('settings.websearch.provider.check')}
+          disabled={!currentInput.trim()}
+          hitSlop={2}
+          icon={<ActivityIcon strokeWidth={2} />}
+          loading={isChecking}
+          onPress={() => {
+            const apiKeys = parseWebSearchApiKeysInput(currentInput);
+            onApiKeysInputChange(currentInput);
+            onCheck(apiKeys[0] ?? '');
+          }}
+          variant="secondary"
+        />
       </View>
     </TextField>
   );
@@ -60,6 +87,7 @@ type ApiKeysCommitInputProps = {
   accessibilityLabel: string;
   blurOnVisibilityToggle?: boolean;
   onCommit: (value: string) => void;
+  onDraftChange: (value: string) => void;
   placeholder: string;
   value: string;
   visibilityAccessibilityLabels: SecureInputVisibilityAccessibilityLabels;
@@ -69,6 +97,7 @@ function ApiKeysCommitInput({
   accessibilityLabel,
   blurOnVisibilityToggle,
   onCommit,
+  onDraftChange,
   placeholder,
   value,
   visibilityAccessibilityLabels,
@@ -108,10 +137,14 @@ function ApiKeysCommitInput({
     [commitValue],
   );
 
-  const handleChangeText = useCallback((nextValue: string) => {
-    draftValueRef.current = nextValue;
-    setDraftValue(nextValue);
-  }, []);
+  const handleChangeText = useCallback(
+    (nextValue: string) => {
+      draftValueRef.current = nextValue;
+      setDraftValue(nextValue);
+      onDraftChange(nextValue);
+    },
+    [onDraftChange],
+  );
 
   const handleEndEditing = useCallback(
     (event: TextInputEndEditingEvent) => {
