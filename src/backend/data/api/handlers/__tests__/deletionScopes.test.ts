@@ -2,13 +2,22 @@ import { installTestHost, uninstallTestHost } from '@/backend/core/application/t
 import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import type { ResourceScope } from '@/backend/core/resources/types';
 import { ScopeFencedError } from '@/backend/core/resources/types';
+import type { AssistantService } from '@/backend/data/services/AssistantService';
 import type { MessageService } from '@/backend/data/services/MessageService';
 import type { PaintingService } from '@/backend/data/services/PaintingService';
 import type { TopicService } from '@/backend/data/services/TopicService';
 
+import { createAssistantHandlers } from '../assistants';
 import { createMessageHandlers } from '../messages';
 import { createPaintingHandlers } from '../paintings';
 import { createTopicHandlers } from '../topics';
+
+// The assistant route reaches the topic singleton directly — it is the only
+// handler here that does not receive its collaborator — so the id set it
+// cascades over is stubbed rather than read from a database.
+jest.mock('@/backend/data/services/TopicService', () => ({
+  topicService: { listIdsByAssistantId: async () => ['topic-1', 'topic-2'] },
+}));
 
 /**
  * The Data API is the boundary every deletion crosses, so this asserts the one
@@ -90,6 +99,33 @@ describe('Data API deletion scopes', () => {
       });
 
       expect(trace).toEqual(['cancel', 'settled', 'deleteByAssistantId']);
+    });
+
+    it('drains an assistant’s topics when deleting the assistant cascades into them', async () => {
+      registerWork({ id: 'topic-2', kind: 'topic' });
+
+      await createAssistantHandlers({
+        delete: jest.fn(mutation('deleteAssistant')),
+      } as unknown as AssistantService)['/assistants/:id'].DELETE({
+        params: { id: 'assistant-1' },
+        query: { deleteTopics: true },
+      });
+
+      expect(trace).toEqual(['cancel', 'settled', 'deleteAssistant']);
+    });
+
+    it('leaves the topics alone when the assistant is deleted without them', async () => {
+      registerWork({ id: 'topic-2', kind: 'topic' });
+
+      await createAssistantHandlers({
+        delete: jest.fn(mutation('deleteAssistant')),
+      } as unknown as AssistantService)['/assistants/:id'].DELETE({
+        params: { id: 'assistant-1' },
+        query: {},
+      });
+
+      // The topics survive, so the work running under them must not be touched.
+      expect(trace).toEqual(['deleteAssistant']);
     });
 
     it('seals a deleted topic so nothing can register against it again', async () => {

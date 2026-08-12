@@ -1,6 +1,16 @@
+import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import type { AssistantService } from '@/backend/data/services/AssistantService';
 
 import { createAssistantHandlers } from '../assistants';
+
+// Deleting an assistant *with* its topics drains those topics first, so the
+// route reaches the topic singleton for their ids. This suite is about query
+// parsing and forwarding, so that read is stubbed; the drain itself is covered
+// in `deletionScopes.test.ts`.
+jest.mock('@/backend/data/services/TopicService', () => ({
+  topicService: { listIdsByAssistantId: async () => [] },
+}));
 
 const ASSISTANT_ID = '00000000-0000-4000-8000-000000000001';
 const GROUP_ID = '11111111-1111-4111-8111-111111111111';
@@ -19,6 +29,12 @@ function createService() {
 }
 
 describe('assistant handlers', () => {
+  beforeEach(async () => {
+    await installTestHost({ ResourceScopeCoordinator: new ResourceScopeCoordinator() });
+  });
+
+  afterEach(uninstallTestHost);
+
   test('parses and forwards desktop list query fields', async () => {
     const service = createService();
     const handlers = createAssistantHandlers(service as unknown as AssistantService);
