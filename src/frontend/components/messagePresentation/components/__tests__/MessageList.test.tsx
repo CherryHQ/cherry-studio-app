@@ -32,7 +32,12 @@ type MockLegendListProps = {
   maintainVisibleContentPosition?: unknown;
   onEndVisible?: (visible: boolean) => void;
   onContentSizeChange?: (width: number, height: number) => void;
-  onItemSizeChanged?: () => void;
+  onItemSizeChanged?: (info: {
+    index: number;
+    itemKey: string;
+    previous: number;
+    size: number;
+  }) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
   onMomentumScrollBegin?: () => void;
   onMomentumScrollEnd?: () => void;
@@ -128,6 +133,10 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 }));
 
 jest.mock('react-native-reanimated', () => ({
+  // 探针用 useAnimatedReaction 从 UI 线程回抛按钮显隐；这里只需存在即可，
+  // 本套件不断言探针输出。
+  runOnJS: (fn: unknown) => fn,
+  useAnimatedReaction: () => undefined,
   useSharedValue: () => mockIsAtBottom,
 }));
 
@@ -479,7 +488,14 @@ describe('MessageList anchored tail following', () => {
     });
     expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
 
-    act(() => mockLatestListProps?.onItemSizeChanged?.());
+    act(() =>
+      mockLatestListProps?.onItemSizeChanged?.({
+        index: 1,
+        itemKey: 'assistant-1',
+        previous: 120,
+        size: 180,
+      }),
+    );
     act(() => flushAnimationFrames());
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
 

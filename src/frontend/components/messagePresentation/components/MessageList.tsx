@@ -16,11 +16,12 @@ import {
   type NativeSyntheticEvent,
   View,
 } from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
+import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { emitLayoutBenchProbe, isLayoutBenchProbeArmed } from '@/shared/devBench/layoutBenchProbe';
 
 import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
 import type { MessageListProps, MessagePresentationItem } from '../types';
@@ -106,6 +107,16 @@ function getMessageRowType(item: MessagePresentationItem) {
   return item.data.parts?.length ? 'assistant' : 'assistant-empty';
 }
 
+// 「滚动到底部」按钮的显隐完全由 UI 线程的 shared value 驱动（opacity/pointerEvents 都是
+// worklet 计算），JS 侧看不到状态变化，所以只能从 worklet 里回抛。
+function emitButtonVisibility(visible: boolean) {
+  emitLayoutBenchProbe('button', { visible });
+}
+
+function emitScrollOffset(y: number) {
+  emitLayoutBenchProbe('scroll', { y: Math.round(y) });
+}
+
 function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[]) {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index].role === 'user') {
@@ -130,6 +141,14 @@ export function MessageList({
 }: MessageListProps) {
   const listRef = useRef<LegendListRef | null>(null);
   const isAtBottom = useSharedValue(true);
+  // 位移轨迹的来源。注意**不能**用 `onScroll`：本列表经 KeyboardAwareLegendList →
+  // AnimatedLegendList 渲染，滚动被 reanimated 的 `useScrollViewOffset` 接管，JS 侧的
+  // `onScroll` 回调实测一次都不触发。`sharedValues.scrollOffset` 才是这套组件栈支持的
+  // 读法，且它在 UI 线程逐帧更新，比 JS 回调更贴近真实位移。
+  const scrollOffset = useSharedValue(0);
+  // arm 发生在假模型被构造时（晚于本组件挂载），worklet 读不到 JS 侧的模块变量，
+  // 因此每次渲染把 arm 状态同步进 shared value，未 arm 时连 runOnJS 都不发生。
+  const probeArmed = useSharedValue(false);
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const [contentBaseHeight, setContentBaseHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -200,9 +219,34 @@ export function MessageList({
     [contentBottomInset],
   );
 
+  useEffect(() => {
+    probeArmed.set(isLayoutBenchProbeArmed());
+  });
+
+  useAnimatedReaction(
+    () => isAtBottom.get(),
+    (current, previous) => {
+      if (previous !== null && current !== previous) {
+        runOnJS(emitButtonVisibility)(!current);
+      }
+    },
+  );
+
+  useAnimatedReaction(
+    () => scrollOffset.get(),
+    (current, previous) => {
+      if (probeArmed.get() && previous !== null && current !== previous) {
+        runOnJS(emitScrollOffset)(current);
+      }
+    },
+  );
+
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;
-  }, [tailFollowPhase]);
+    // 相位决定同一条位移轨迹该被判成合格还是缺陷（钉顶期应静止、尾随期应跟随），
+    // 所以它必须作为独立信号进日志，否则 harness 无从判定。
+    emitLayoutBenchProbe('phase', { anchorId: anchorMessageId, phase: tailFollowPhase });
+  }, [anchorMessageId, tailFollowPhase]);
 
   // Read from size and layout callbacks, which the platform dispatches well
   // after commit, so mirroring the staged anchor here is soon enough.
@@ -253,6 +297,7 @@ export function MessageList({
         | { scrollToEnd?: (options: { animated?: boolean }) => void }
         | null
         | undefined;
+      emitLayoutBenchProbe('progScroll', { src: 'tailFollow' });
       nativeScrollRef?.scrollToEnd?.({ animated: false });
     });
   }, [listRef]);
@@ -338,6 +383,7 @@ export function MessageList({
       const isEnteringMessage = info.anchorKey === enteringMessageId;
       const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
+        emitLayoutBenchProbe('progScroll', { animated: shouldAnimate, src: 'anchorReady' });
         // 收键盘与钉顶滚动同时发起，别试着把它挪到滚动之后：实测「先钉顶、动画结束再收
         // 键盘」会把位移搬到动画终点、还要再被尾随滚动拉一次，反转从 1 处 310px 变 2 处
         // 334px，更差。
@@ -389,6 +435,8 @@ export function MessageList({
 
   const handleScrollBeginDrag = useCallback(() => {
     isDraggingListRef.current = true;
+    // 交互窗口的边界：harness 用它圈出「手势期间」，窗口内出现任何 progScroll 即为冲突。
+    emitLayoutBenchProbe('interaction', { kind: 'drag', state: 'begin' });
     beginUserInteraction();
 
     if (!anchorMessageId) {
@@ -409,33 +457,48 @@ export function MessageList({
 
   const handleScrollEndDrag = useCallback(() => {
     isDraggingListRef.current = false;
+    emitLayoutBenchProbe('interaction', { kind: 'drag', state: 'end' });
     scheduleInteractionEnd();
   }, [scheduleInteractionEnd]);
 
   const handleMomentumScrollBegin = useCallback(() => {
     isMomentumScrollingRef.current = true;
+    emitLayoutBenchProbe('interaction', { kind: 'momentum', state: 'begin' });
     beginUserInteraction();
   }, [beginUserInteraction]);
 
   const handleMomentumScrollEnd = useCallback(() => {
     isMomentumScrollingRef.current = false;
+    emitLayoutBenchProbe('interaction', { kind: 'momentum', state: 'end' });
     scheduleInteractionEnd();
   }, [scheduleInteractionEnd]);
 
   const handleTouchStart = useCallback(() => {
     isTouchingListRef.current = true;
+    emitLayoutBenchProbe('interaction', { kind: 'touch', state: 'begin' });
     beginUserInteraction();
   }, [beginUserInteraction]);
 
   const handleTouchEnd = useCallback(() => {
     isTouchingListRef.current = false;
+    emitLayoutBenchProbe('interaction', { kind: 'touch', state: 'end' });
     scheduleInteractionEnd();
   }, [scheduleInteractionEnd]);
 
-  const handleItemSizeChanged = useCallback(() => {
-    releaseStagedFirstAnchor();
-    scheduleTailFollow();
-  }, [releaseStagedFirstAnchor, scheduleTailFollow]);
+  const handleItemSizeChanged = useCallback(
+    (info: { index: number; itemKey: string; previous: number; size: number }) => {
+      // 同一行的高度反复变化 = 渲染抖动，是「流式期间内容上下弹」最直接的量化指标。
+      emitLayoutBenchProbe('itemSize', {
+        index: info.index,
+        key: info.itemKey,
+        prev: Math.round(info.previous),
+        size: Math.round(info.size),
+      });
+      releaseStagedFirstAnchor();
+      scheduleTailFollow();
+    },
+    [releaseStagedFirstAnchor, scheduleTailFollow],
+  );
 
   // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
   const anchoredEndSpace = useMemo(
@@ -464,21 +527,13 @@ export function MessageList({
     ? followingMaintainVisibleContentPosition
     : MAINTAIN_VISIBLE_CONTENT_POSITION;
   // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
-  const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
+  const sharedValues = useMemo(
+    () => ({ isAtEnd: isAtBottom, scrollOffset }),
+    [isAtBottom, scrollOffset],
+  );
   const handleScrollToEnd = useCallback(() => {
+    emitLayoutBenchProbe('progScroll', { src: 'button' });
     void listRef.current?.scrollToEnd({ animated: true });
-  }, []);
-
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    // 滚动位移轨迹：y=当前滚动偏移，ch=内容总高，vh=视口高。逐帧连成时间-位移曲线后，
-    // 「跳动」= y 的非单调突变。scrollEventThrottle 见下方 props（诊断期设 16 取每帧）。
-    scrollLog.debug('[SCROLL] scroll', {
-      y: Math.round(contentOffset.y),
-      ch: Math.round(contentSize.height),
-      vh: Math.round(layoutMeasurement.height),
-      t: Date.now(),
-    });
   }, []);
 
   const cancelPendingReadyFrame = useCallback(() => {
@@ -509,6 +564,10 @@ export function MessageList({
         h: Math.round(height),
         ready: didReportReadyRef.current,
         t: Date.now(),
+      });
+      emitLayoutBenchProbe('content', {
+        h: Math.round(height),
+        ready: didReportReadyRef.current,
       });
       setContentBaseHeight(Math.max(0, height - contentBottomInset));
       releaseStagedFirstAnchor();
@@ -580,6 +639,7 @@ export function MessageList({
             viewportHeight: Math.round(viewportHeight),
             t: Date.now(),
           });
+          emitLayoutBenchProbe('progScroll', { src: 'readyGate' });
           void listRef.current?.scrollToEnd({ animated: false }).finally(reportReadyAfterSettle);
           return;
         }
@@ -644,7 +704,6 @@ export function MessageList({
             onLayout={handleLayout}
             onMomentumScrollBegin={handleMomentumScrollBegin}
             onMomentumScrollEnd={handleMomentumScrollEnd}
-            onScroll={handleScroll}
             onScrollBeginDrag={handleScrollBeginDrag}
             onScrollEndDrag={handleScrollEndDrag}
             onStartReached={onLoadOlder ? handleStartReached : undefined}

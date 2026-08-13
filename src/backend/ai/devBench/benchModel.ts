@@ -16,6 +16,8 @@ import type {
 import { simulateReadableStream } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 
+import { armLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
+
 import { chunkText, parseBenchRequest } from './benchRequest';
 import { BENCH_FIXTURE_IDS, BENCH_FIXTURES } from './fixtures';
 
@@ -101,6 +103,10 @@ function buildStreamParts(prompt: LanguageModelV3Prompt): {
 }
 
 export function createBenchLanguageModel(modelId: string): LanguageModelV3 {
+  // 在模型被构造时就 arm 探针（而不是等 doStream），这样第一条 bench 消息的钉顶阶段也能
+  // 被记录到——Agent 构造发生在助手占位行渲染之前。
+  armLayoutBenchProbe();
+
   return new MockLanguageModelV3({
     doGenerate: async ({ prompt }: LanguageModelV3CallOptions) => {
       const request = parseBenchRequest(extractLatestUserText(prompt));
