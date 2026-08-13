@@ -1,5 +1,5 @@
+import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -11,9 +11,10 @@ const mockAlertShow = jest.fn();
 const mockTopic = {
   assistantId: 'assistant-1',
   id: 'topic-1',
+  latestMessageText: 'The latest\nmessage preview',
   name: 'Pinned topic',
   updatedAt: '2026-07-21T12:00:00.000Z',
-} as Topic;
+} as TopicListItem;
 const mockAssistant = {
   emoji: '🍒',
   id: 'assistant-1',
@@ -33,8 +34,8 @@ jest.mock('@legendapp/list/react-native', () => {
       renderItem,
       showsVerticalScrollIndicator,
     }: {
-      data: readonly Topic[];
-      renderItem: (info: { index: number; item: Topic }) => ReactNode;
+      data: readonly TopicListItem[];
+      renderItem: (info: { index: number; item: TopicListItem }) => ReactNode;
       showsVerticalScrollIndicator?: boolean;
     }) => {
       mockShowsVerticalScrollIndicator = showsVerticalScrollIndicator;
@@ -229,6 +230,21 @@ describe('TopicList context actions', () => {
     );
 
     expect(divider?.length).toBeGreaterThan(0);
+  });
+
+  it('shows the latest message on one line instead of the model name', async () => {
+    await act(async () => {
+      renderer = create(<TopicList />);
+    });
+
+    const preview = renderer?.root
+      .findAllByType(Text)
+      .find((node) => node.props.children === 'The latest message preview');
+
+    expect(preview?.props.numberOfLines).toBe(1);
+    expect(
+      renderer?.root.findAllByType(Text).some((node) => node.props.children === 'Mock Chat Model'),
+    ).toBe(false);
   });
 
   it('hides the vertical scroll indicator', async () => {

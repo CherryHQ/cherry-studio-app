@@ -1,4 +1,5 @@
 import { CheckIcon } from '@cherrystudio/app-icons';
+import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -37,12 +38,12 @@ type TopicRowProps = {
   onRename: (topic: Topic) => void;
   onTogglePin: (topicId: string) => void;
   onToggle: (topicId: string) => void;
-  topic: Topic;
+  topic: TopicListItem;
 };
 
 const TOPIC_ITEM_ESTIMATED_HEIGHT = 60;
 
-function topicKeyExtractor(item: Topic) {
+function topicKeyExtractor(item: TopicListItem) {
   return item.id;
 }
 
@@ -125,7 +126,7 @@ const TopicListView = memo(function TopicListView() {
   );
 
   const renderItem = useCallback(
-    ({ item }: LegendListRenderItemProps<Topic>) => (
+    ({ item }: LegendListRenderItemProps<TopicListItem>) => (
       <TopicRow
         assistant={item.assistantId ? assistantsById.get(item.assistantId) : undefined}
         isEditing={isEditing}
@@ -220,6 +221,7 @@ const TopicRow = memo(function TopicRow({
     i18n.resolvedLanguage,
     t('topic.updatedAt.yesterday'),
   );
+  const latestMessageText = topic.latestMessageText.replace(/\s+/g, ' ').trim();
 
   const handleRenamePress = useCallback(() => {
     onRename(topic);
@@ -358,7 +360,7 @@ const TopicRow = memo(function TopicRow({
               </Text>
             </View>
             <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
-              {assistant?.modelName ?? t('assistant.model.none')}
+              {latestMessageText}
             </Text>
           </View>
         </View>

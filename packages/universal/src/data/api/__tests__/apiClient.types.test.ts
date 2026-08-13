@@ -1,10 +1,10 @@
 import type { Painting } from '@shared/data/types/painting';
-import type { Topic } from '@shared/data/types/topic';
 
+import type { TopicListItem } from '../schemas/topics';
 import type { ApiClient, CursorPaginationResponse } from '../types';
 
 function compileTimeContract(client: ApiClient) {
-  const topics: Promise<CursorPaginationResponse<Topic>> = client.get('/topics', {
+  const topics: Promise<CursorPaginationResponse<TopicListItem>> = client.get('/topics', {
     query: { limit: 20, q: 'work' },
   });
   const painting: Promise<Painting> = client.get('/paintings/painting-1');
