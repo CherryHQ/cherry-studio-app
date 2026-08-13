@@ -80,10 +80,11 @@ describe('Section', () => {
     ).toContain('mt-2');
   });
 
-  // A trailing value is usually a variable-length string, so the slot that holds it
-  // has to give before the row overflows. It used to be `shrink-0`, which forced
-  // every caller to guess a max width and clip long values early.
-  test('lets trailing content shrink instead of overflowing the row', () => {
+  // A trailing value is usually a variable-length string, so the slot that holds
+  // it is the side that gives: it shrinks, and past a share of the row it stops
+  // growing so the label keeps a column to itself. Callers used to cap it one by
+  // one, and the ones that forgot rendered their label a character per line.
+  test('caps trailing content and lets it shrink rather than squeeze the label', () => {
     const tree = render(
       <Section>
         <Section.Item
@@ -102,7 +103,9 @@ describe('Section', () => {
     );
 
     expect(slots).toHaveLength(1);
-    expect(slots[0].props.className).toContain('min-w-0 shrink');
+    expect(slots[0].props.className).toContain('min-w-0');
+    expect(slots[0].props.className).toContain('max-w-[62%]');
+    expect(slots[0].props.className).toContain('shrink');
     expect(slots[0].props.className).not.toContain('shrink-0');
   });
 

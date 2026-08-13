@@ -82,13 +82,15 @@ function SectionItem({
           )}
           {description ? renderTextSlot(description, 'text-sm text-muted-foreground') : null}
         </View>
-        {/* Shrinkable, because a trailing value is often a variable-length string
-            (a model id, a language name). The label side is `flex-1` off a zero
-            basis, so it never claims width the trailing side needs — an overflow
-            here can only come from the trailing content, which is what should
-            give. Pair a text value with `numberOfLines` to get an ellipsis. */}
+        {/* Shrinkable and capped, because a trailing value is often a
+            variable-length string (a model id, a language name). The label side
+            is `flex-1` off a zero basis, so it claims no width of its own and a
+            long value would otherwise take the whole row, squeezing the label
+            into a column of one character per line. Past this share of the row
+            the value is the one that gives. Pair a text value with
+            `numberOfLines` to get an ellipsis rather than a wrap. */}
         {trailing ? (
-          <View className="min-w-0 shrink items-center justify-center">{trailing}</View>
+          <View className="min-w-0 max-w-[62%] shrink items-center justify-center">{trailing}</View>
         ) : null}
         {shouldShowChevron ? (
           <View className="shrink-0" testID="section-chevron">
