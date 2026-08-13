@@ -10,7 +10,7 @@ import {
 
 /**
  * The reasoning effort, shown after the model name inside the composer's model
- * pill. `max` stands out in Cherry's brand green — deliberately `brand` and not
+ * pill. `max` stands out in Cherry's brand color — deliberately `brand` and not
  * `primary`, which is the user's colour and would recolour this mark.
  */
 export function ChatInputEffortBadge({

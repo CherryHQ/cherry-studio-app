@@ -3,7 +3,7 @@
  * flattened into the layouts the shader uniforms expect.
  *
  * The web original (claude-model-selector) is purple; this port hue-rotates
- * every chromatic value onto the app's brand green (--primary,
+ * every chromatic value onto the app's brand color (--primary,
  * oklch hue 146) in OKLCH, preserving each color's lightness and chroma so
  * the field keeps the original's tonal structure. The dark palette keeps the
  * same hue relationships but flips the luminance structure: bases are pushed

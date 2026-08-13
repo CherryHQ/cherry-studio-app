@@ -79,7 +79,7 @@ Two consequences to take seriously:
 - [ ] The icon falls back to the label's first character uppercased, or `M`.
 - [ ] The reasoning-effort label appears only when the model has reasoning stops.
 - [ ] The effort label is muted (`text-foreground`) at every stop except `max`, which is
-      `text-brand` — Cherry's green, deliberately not `text-primary`, which the theme setting
+      `text-brand` — Cherry's Logo red, deliberately not `text-primary`, which the theme setting
       recolours.
 
 ### The selected-tool row

@@ -88,7 +88,7 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '品牌',
-    hint: '--primary 是「用户的颜色」，主题色偏好会实时改写它；--brand 是「产品的颜色」，偏好动不了它，但跟着主题走（= green-900）。两者默认都是绿的，正因如此最容易混用：判断标准是「用户把主题色调成紫色后，这里该不该变紫」。',
+    hint: '--primary 是主操作颜色；--brand 是固定的 Cherry Studio Logo 红（#ff5757）。两者当前取值相同，但语义仍分开。',
     kind: 'surface',
     variables: ['--primary', '--primary-foreground', '--brand'],
   },
