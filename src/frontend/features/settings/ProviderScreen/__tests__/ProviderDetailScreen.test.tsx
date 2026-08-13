@@ -6,7 +6,7 @@ import type {
 } from '@cherrystudio/universal/data/types/provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
-import { ScrollView } from 'react-native';
+import { Dimensions, ScrollView, StyleSheet } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
@@ -29,6 +29,7 @@ type PagerProps = {
   children?: ReactNode;
   onPageSelected?: (event: { nativeEvent: { position: number } }) => void;
   scrollEnabled?: boolean;
+  style?: unknown;
 };
 type TabsProps = {
   onTabChange: (tab: 'configuration' | 'models') => void;
@@ -306,6 +307,10 @@ describe('ProviderDetailScreen', () => {
     loadEverything();
     render();
 
+    expect(StyleSheet.flatten(mockPagerProps?.style)).toMatchObject({
+      flex: 1,
+      width: Dimensions.get('window').width,
+    });
     expect(mockTabsProps?.tab).toBe('configuration');
     act(() => mockTabsProps?.onTabChange('models'));
     expect(mockSetPage).toHaveBeenCalledWith(1);

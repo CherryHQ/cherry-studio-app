@@ -7,7 +7,7 @@ import { Color, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
@@ -57,6 +57,7 @@ export default function ProviderDetailSettingsScreen() {
   const { toast } = useToast();
   const { alert } = useAlert();
   const providers = useBackendModule('providers');
+  const { width: windowWidth } = useWindowDimensions();
   const pagerRef = useRef<PagerViewRef>(null);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
@@ -421,7 +422,7 @@ export default function ProviderDetailSettingsScreen() {
         initialPage={0}
         ref={pagerRef}
         scrollEnabled={!modelSelection.isEditing}
-        style={styles.screen}
+        style={[styles.screen, { width: windowWidth }]}
         testID="provider-detail-pager"
         onPageSelected={handlePageSelected}
       >
