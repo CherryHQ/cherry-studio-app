@@ -246,6 +246,10 @@ export default function ProviderDetailSettingsScreen() {
     ],
     [openModelAddSettings, provider, t],
   );
+  const addAction = useMemo(
+    () => ({ isDisabled: !provider, onPress: openModelAddSettings }),
+    [openModelAddSettings, provider],
+  );
   const pullAction = useMemo(
     () =>
       activeTab === 'models'
@@ -438,6 +442,7 @@ export default function ProviderDetailSettingsScreen() {
         </ScrollView>
       ) : (
         <ProviderModelList
+          addAction={addAction}
           isDefaultModel={isDefaultModel}
           isLoading={modelsQuery.isPending}
           models={models}

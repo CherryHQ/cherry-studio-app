@@ -1,4 +1,5 @@
 import {
+  CircleHalfIcon,
   CloudIcon,
   DatabaseIcon,
   InfoIcon,
@@ -6,7 +7,6 @@ import {
   NetworkIcon,
   PersonCropSquareOnSquareAngledIcon,
   SparklesIcon,
-  SunIcon,
 } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
@@ -121,7 +121,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.appearance.title')}
-              leading={<SunIcon className="size-5 text-foreground" />}
+              leading={<CircleHalfIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
             />
           </Section>

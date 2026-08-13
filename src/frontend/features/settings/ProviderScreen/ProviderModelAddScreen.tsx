@@ -340,7 +340,7 @@ function ProviderModelAddTextField({
 }) {
   return (
     <TextField isDisabled={isDisabled} isInvalid={Boolean(errorMessage)}>
-      <Label>{label}</Label>
+      <Label className="text-foreground">{label}</Label>
       <Input
         accessibilityLabel={accessibilityLabel}
         autoCapitalize="none"

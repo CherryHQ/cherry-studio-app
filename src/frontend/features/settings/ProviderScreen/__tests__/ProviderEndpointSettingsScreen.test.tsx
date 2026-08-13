@@ -7,8 +7,16 @@ import ProviderEndpointSettingsScreen from '../ProviderEndpointSettingsScreen';
 type EndpointFormProps = {
   baseUrlByEndpoint: Partial<Record<EndpointType, string>>;
   defaultChatEndpoint: EndpointType;
+  onBaseUrlChange: (endpoint: EndpointType, value: string) => void;
   onBaseUrlCommit: (endpoint: EndpointType, value: string) => void;
   onDefaultChatEndpointChange: (endpoint: EndpointType) => void;
+};
+
+type HeaderAction = {
+  disabled?: boolean;
+  key: string;
+  label?: string;
+  onPress?: () => void;
 };
 
 const provider = {
@@ -24,6 +32,7 @@ const provider = {
 } as unknown as Provider;
 
 let mockEndpointFormProps: EndpointFormProps | undefined;
+let mockRightActions: readonly HeaderAction[] = [];
 const mockSaveEndpointConfigs = jest.fn<
   Promise<unknown>,
   [{ defaultChatEndpoint: EndpointType; endpointConfigs: EndpointConfigs }]
@@ -35,7 +44,10 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@/frontend/components/headers', () => ({
-  BackHeader: () => null,
+  BackHeader: ({ rightActions }: { rightActions?: readonly HeaderAction[] }) => {
+    mockRightActions = rightActions ?? [];
+    return null;
+  },
 }));
 
 jest.mock('react-i18next', () => ({
@@ -73,6 +85,7 @@ describe('ProviderEndpointSettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockEndpointFormProps = undefined;
+    mockRightActions = [];
     mockSaveEndpointConfigs.mockResolvedValue(undefined);
   });
 
@@ -142,6 +155,35 @@ describe('ProviderEndpointSettingsScreen', () => {
     });
 
     expect(endpointForm().defaultChatEndpoint).toBe('openai-chat-completions');
+  });
+
+  it('saves the complete endpoint draft from the header action', async () => {
+    act(() => {
+      renderer = create(<ProviderEndpointSettingsScreen />);
+    });
+
+    expect(mockRightActions).toEqual([
+      expect.objectContaining({ disabled: true, key: 'save-endpoints', label: 'common.save' }),
+    ]);
+
+    act(() => {
+      endpointForm().onBaseUrlChange('anthropic-messages', 'https://next.example.com');
+    });
+
+    const saveAction = mockRightActions.find((action) => action.key === 'save-endpoints');
+    expect(saveAction?.disabled).toBe(false);
+    await act(async () => {
+      saveAction?.onPress?.();
+      await Promise.resolve();
+    });
+
+    expect(mockSaveEndpointConfigs).toHaveBeenCalledWith({
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'anthropic-messages': { baseUrl: 'https://next.example.com' },
+        'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
+      },
+    });
   });
 });
 

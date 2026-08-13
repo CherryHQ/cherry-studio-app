@@ -34,6 +34,7 @@ let mockProvider: Provider | undefined;
 let mockProviderQuery: { isError: boolean; isPending: boolean };
 let mockRedirectHref: unknown;
 let mockHookProviders: (Provider | undefined)[];
+let mockLabelClassNames: (string | undefined)[];
 
 jest.mock('expo-router', () => ({
   Redirect: ({ href }: { href: unknown }) => {
@@ -55,7 +56,10 @@ jest.mock('@cherrystudio/ui/components', () => {
   return {
     FieldError: (props: Record<string, unknown>) => React.createElement(Text, props),
     Input: () => null,
-    Label: (props: Record<string, unknown>) => React.createElement(Text, props),
+    Label: (props: { className?: string }) => {
+      mockLabelClassNames.push(props.className);
+      return React.createElement(Text, props);
+    },
     TextField: (props: Record<string, unknown>) => React.createElement(View, props),
   };
 });
@@ -151,6 +155,7 @@ describe('ProviderModelAddScreen', () => {
     mockProviderQuery = { isError: false, isPending: true };
     mockRedirectHref = undefined;
     mockHookProviders = [];
+    mockLabelClassNames = [];
   });
 
   afterEach(() => {
@@ -227,6 +232,15 @@ describe('ProviderModelAddScreen', () => {
     expect(renderedLabels()).toContain(purposeLabel);
     expect(renderedLabels()).toContain('settings.provider.models.addPurpose.imageGeneration');
     expect(renderedLabels()).toContain('settings.provider.models.addPurpose.imageEdit');
+  });
+
+  it('keeps text-field labels visually consistent while fields gain focus', () => {
+    mockProvider = plainProvider;
+    mockProviderQuery = { isError: false, isPending: false };
+    render();
+
+    expect(mockLabelClassNames).not.toHaveLength(0);
+    expect(mockLabelClassNames.every((className) => className === 'text-foreground')).toBe(true);
   });
 
   it('redirects to the provider list when the route has no provider id', () => {

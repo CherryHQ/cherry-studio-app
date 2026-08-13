@@ -49,6 +49,7 @@ export const iconRegistry = {
   CircleArrowDownIcon: { sf: 'arrow.down.circle', material: 'arrow_circle_down' },
   CircleArrowUpIcon: { sf: 'arrow.up.circle', material: 'arrow_circle_up' },
   CircleDollarSignIcon: { sf: 'dollarsign.circle', material: 'paid' },
+  CircleHalfIcon: { sf: 'circle.lefthalf.filled', material: 'contrast' },
   CircleUserRoundIcon: { sf: 'person.crop.circle', material: 'account_circle' },
   CloudIcon: { sf: 'cloud', material: 'cloud' },
   Code2Icon: { sf: 'chevron.left.forwardslash.chevron.right', material: 'code' },

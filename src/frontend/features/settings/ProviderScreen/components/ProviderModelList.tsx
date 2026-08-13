@@ -1,10 +1,10 @@
+import { Button } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
-import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 import {
   ProviderModelListContent,
   type ProviderModelListSelection,
@@ -14,6 +14,7 @@ import type { ProviderModelAction } from '../models/types';
 import { filterModelsByKeywords } from '../models/utils/providerModelSearch';
 
 type ProviderModelListProps = {
+  addAction?: ProviderModelAction;
   isDefaultModel: (model: Model) => boolean;
   isLoading: boolean;
   models: Model[];
@@ -25,6 +26,7 @@ type ProviderModelListProps = {
 };
 
 export function ProviderModelList({
+  addAction,
   isDefaultModel,
   isLoading,
   models,
@@ -58,8 +60,8 @@ export function ProviderModelList({
       <ProviderModelListContent
         isDefaultModel={isDefaultModel}
         ListEmptyComponent={
-          hasNoModels && pullAction ? (
-            <ProviderModelPullCta action={pullAction} />
+          hasNoModels && pullAction && addAction ? (
+            <ProviderModelEmptyActions addAction={addAction} pullAction={pullAction} />
           ) : (
             <ProviderModelEmptyState
               title={
@@ -92,18 +94,38 @@ export function ProviderModelList({
   );
 }
 
-function ProviderModelPullCta({ action }: { action: ProviderModelAction }) {
+function ProviderModelEmptyActions({
+  addAction,
+  pullAction,
+}: {
+  addAction: ProviderModelAction;
+  pullAction: ProviderModelAction;
+}) {
   const { t } = useTranslation();
 
   return (
-    <View className="items-center px-4 py-5">
-      <SettingsDialogActionButton
-        isDisabled={action.isDisabled || action.isLoading}
-        isLoading={action.isLoading}
-        isPrimary
-        label={t('settings.provider.models.emptyAction')}
-        onPress={action.onPress}
-      />
+    <View className="flex-1 items-center justify-center gap-4 px-6 pb-24">
+      <Text className="text-center text-base text-foreground">
+        {t('settings.provider.models.empty')}
+      </Text>
+      <View className="flex-row gap-3">
+        <Button
+          disabled={pullAction.isDisabled}
+          loading={pullAction.isLoading}
+          onPress={pullAction.onPress}
+          variant="default"
+        >
+          <Button.Label>{t('settings.provider.models.emptyAction')}</Button.Label>
+        </Button>
+        <Button
+          disabled={addAction.isDisabled}
+          loading={addAction.isLoading}
+          onPress={addAction.onPress}
+          variant="secondary"
+        >
+          <Button.Label>{t('settings.provider.models.addSubmit')}</Button.Label>
+        </Button>
+      </View>
     </View>
   );
 }

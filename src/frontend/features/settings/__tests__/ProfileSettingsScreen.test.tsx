@@ -5,7 +5,13 @@ import type { Backend } from '@/shared/contracts';
 
 import ProfileSettingsScreen from '../ProfileSettingsScreen';
 
-type HeaderAction = { key: string; onPress?: () => void };
+type HeaderAction = {
+  androidIcon?: unknown;
+  icon?: string;
+  key: string;
+  label?: string;
+  onPress?: () => void;
+};
 
 const mockBack = jest.fn();
 const mockSetAvatar = jest.fn();
@@ -70,10 +76,6 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: jest.fn() } }),
-}));
-
-jest.mock('@cherrystudio/app-icons', () => ({
-  SaveIcon: () => null,
 }));
 
 jest.mock('@/frontend/components/headers', () => ({
@@ -143,6 +145,9 @@ describe('ProfileSettingsScreen', () => {
     );
 
     const saveAction = mockRightActions.find((action) => action.key === 'finish-profile-edit');
+    expect(saveAction).toMatchObject({ label: 'Save' });
+    expect(saveAction?.icon).toBeUndefined();
+    expect(saveAction?.androidIcon).toBeUndefined();
     saveAction?.onPress?.();
 
     expect(mockSetUserName).toHaveBeenCalledTimes(1);

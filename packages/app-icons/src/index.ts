@@ -23,6 +23,7 @@ export { default as CircleAlertIcon } from './generated/circle-alert';
 export { default as CircleArrowDownIcon } from './generated/circle-arrow-down';
 export { default as CircleArrowUpIcon } from './generated/circle-arrow-up';
 export { default as CircleDollarSignIcon } from './generated/circle-dollar-sign';
+export { default as CircleHalfIcon } from './generated/circle-half';
 export { default as CircleUserRoundIcon } from './generated/circle-user-round';
 export { default as CloudIcon } from './generated/cloud';
 export { default as Code2Icon } from './generated/code2';
