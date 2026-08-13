@@ -1,4 +1,5 @@
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import { ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
@@ -20,6 +21,18 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('@cherrystudio/app-icons', () => ({ PlusIcon: () => null }));
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+
+  function Button({ children, ...props }: { children?: React.ReactNode }) {
+    return React.createElement('Button', props, children);
+  }
+  Button.Label = ({ children }: { children?: React.ReactNode }) =>
+    React.createElement('ButtonLabel', null, children);
+
+  return { Button };
+});
 
 jest.mock('@/frontend/components/headers', () => ({
   BackHeader: ({ rightActions }: { rightActions?: readonly HeaderAction[] }) => {
@@ -62,7 +75,8 @@ jest.mock('react-i18next', () => ({
       ({
         'settings.mcp.addServer': 'Add server',
         'settings.mcp.defaultName': 'MCP Server',
-        'settings.mcp.emptyAction': 'Add MCP server',
+        'settings.mcp.empty': 'No MCP providers yet. Add one first.',
+        'settings.mcp.emptyAction': 'Add MCP',
         'settings.mcp.list.status.connected': 'Enabled',
         'settings.mcp.list.status.connecting': 'Connecting',
         'settings.mcp.list.status.disabled': 'Disabled',
@@ -102,11 +116,17 @@ describe('McpScreen empty state', () => {
       throw new Error('McpScreen test renderer was not created.');
     }
 
-    const [emptyAction] = renderer.root.findAll(
-      (node) =>
-        node.props.accessibilityLabel === 'Add MCP server' &&
-        typeof node.props.onPress === 'function',
+    expect(
+      renderer.root.findAll(
+        (node) => node.props.children === 'No MCP providers yet. Add one first.',
+      ),
+    ).not.toHaveLength(0);
+    expect(renderer.root.findByType(ScrollView).props.contentContainerClassName).toContain(
+      'flex-grow',
     );
+
+    const emptyAction = renderer.root.findByProps({ testID: 'mcp-empty-create' });
+    expect(emptyAction.props.variant).toBe('default');
     emptyAction.props.onPress();
 
     const headerAction = mockRightActions.find((action) => action.key === 'create-mcp-server');
@@ -130,7 +150,7 @@ describe('McpScreen empty state', () => {
       renderer = create(<McpScreen />);
     });
 
-    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Add MCP server' })).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'mcp-empty-create' })).toHaveLength(0);
     expect(
       renderer?.root.findAll((node) => node.props.children === 'Loading MCP servers...'),
     ).not.toHaveLength(0);
@@ -143,7 +163,7 @@ describe('McpScreen empty state', () => {
       renderer = create(<McpScreen />);
     });
 
-    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Add MCP server' })).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'mcp-empty-create' })).toHaveLength(0);
     expect(
       renderer?.root.findAll((node) => node.props.children === 'database unavailable'),
     ).not.toHaveLength(0);
