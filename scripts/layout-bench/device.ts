@@ -10,8 +10,33 @@ import { execFileSync } from 'child_process';
 
 export const APP_BUNDLE_ID = 'com.cherry-ai.cherry-studio-app';
 
+/** dev client 启动页上「打开」按钮的文案；系统弹窗在无障碍树里是可见的，能按文案点。 */
+const OPEN_IN_APP_LABEL = '打开';
+
 export class Device {
   constructor(private readonly udid: string) {}
+
+  /**
+   * 把 app 拉回「正在跑我们的 bundle」的状态。
+   *
+   * 必须有这一步：每个场景开头的 `logs clear --restart` 会重启 app，而 dev client 重启后
+   * 常常停在自己的启动页（服务器列表）而不是自动接回 Metro。这时后续所有坐标点击都落在
+   * 启动页上，`type` 会以一句无从诊断的 XCTest 失败告终——整轮报错，却看不出是环境掉了。
+   *
+   * 从 app 外面打开 dev client 的 URL 会先弹一个「在 App 中打开？」的系统确认框，所以紧接着
+   * 按文案点一次「打开」；已经在正确状态时这一步会自然失败，忽略即可。
+   */
+  ensureDevClientAttached(metroUrl: string): void {
+    this.openUrl(`${APP_BUNDLE_ID}://expo-development-client/?url=${encodeURIComponent(metroUrl)}`);
+
+    try {
+      // 静音 stderr：没有确认框时 agent-device 会打一条 "Selector did not match"，
+      // 而那是正常路径之一，让它出现在报告里只会误导。
+      this.agentDevice(['press', `label=${OPEN_IN_APP_LABEL}`, '--settle'], 'ignore');
+    } catch {
+      // 同上。
+    }
+  }
 
   /** dev menu 的悬浮按钮会吞掉右上角点击；与 `e2e:ios:prepare` 用同一种关法。 */
   disableDevMenuFloatingButton(): void {
@@ -84,10 +109,11 @@ export class Device {
     this.agentDevice(['type', text]);
   }
 
-  private agentDevice(args: string[]): string {
+  private agentDevice(args: string[], stderr: 'inherit' | 'ignore' = 'inherit'): string {
     return execFileSync('agent-device', [...args, '--udid', this.udid], {
       encoding: 'utf8',
       maxBuffer: 16 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', stderr],
     });
   }
 }

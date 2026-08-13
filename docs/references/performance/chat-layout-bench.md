@@ -150,6 +150,30 @@ effect 在列表挂载时就跑完了，按 armed 判断等于永远不订阅（
 一帧抽掉 336px 底部 inset 触发的 contentOffset 夹回，但两条候选修法一条更差、一条是产品行为
 变更，所以留账等决策。签名、判别实验与两条修法的实测数字见该文件。
 
+## 确定性
+
+同一 commit 连跑三轮（全场景）的结果，用来判断哪些数字可以当基线、哪些只是噪声：
+
+| 指标 | send-anchor | stream-scroll | follow-up-turn |
+| --- | --- | --- | --- |
+| `estimate-collapse` 修正 | 252 / 252 / 252 | 252 / 252 / 252 | **5 / 5 / 5** |
+| `offset-reversal` 峰值 | 48 / 24 / 58 | 40 / 40 / 24 | **310 / 310 / 310** |
+| `gesture-conflict` 窗口 | 0 / 0 / 0 | 2 / 2 / 2 | 0 / 0 / 0 |
+| `viewport-blank` 峰值 | 53 / 53 / 59 | 50 / 50 / 45 | 38 / 40 / 40 |
+
+结论：`follow-up-turn` 的 310px 逐像素可复现，是确定性缺陷而非噪声；非交互期位移噪声在
+24-58px 之间，`offsetReversalPx=100` 的阈值有足够余量。
+
+这轮也逼出了一个判据自身的缺陷：`scroll-button-chatter` 在 stream-scroll 上三轮报 2/4/2 次
+翻转，第二轮变红。原因是一次上滑天然会翻两次（离开底部→显示、惯性回底→隐藏），前后各带
+一次就压在「1 秒 4 次」的边界上。**会自己 flake 的判据当不了回归基线**，现已排除手势窗口
+（及 `interactionEchoMs` 的惯性余波）内的翻转，三轮回放稳定为 `toggles=1`，方差全部落到
+`userDrivenToggles`（1/3/1）这个只作记录、不参与判定的指标上。
+
+每轮开头都会先 `ensureDevClientAttached` 重新接回 Metro：dev client 被重启或断连后会停在
+自己的服务器列表页，此后所有坐标点击都打在启动页上，最后以一句无从诊断的 XCTest 失败收场。
+顺带把冷启动固定成每轮起点，跨轮对比才有可比性。Metro 地址用 `LAYOUT_BENCH_METRO_URL` 覆盖。
+
 ## 用录像做交叉验证
 
 判据只看得到 offset 数字，而「offset 变了」不等于「画面动了」——底部 padding 同时缩掉同样的
