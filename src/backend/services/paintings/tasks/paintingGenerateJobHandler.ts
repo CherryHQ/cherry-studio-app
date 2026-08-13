@@ -193,7 +193,12 @@ function paintingActivityProps(
   startedAtEpochMs: number,
 ): PaintingActivityProps {
   return {
-    compactLabel: translate('painting.backgroundActivity.title'),
+    compactIcon: 'paintbrush',
+    compactLabel: translate(
+      phase === 'completed'
+        ? 'backgroundActivity.completed'
+        : `painting.backgroundActivity.${phase}`,
+    ),
     detail: translate(`painting.backgroundActivity.${phase}`),
     icon: paintingActivityIcon(phase),
     phase,

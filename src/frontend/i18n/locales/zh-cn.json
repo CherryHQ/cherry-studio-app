@@ -29,6 +29,7 @@
   "aiUsage.weekChartAccessibility": "按模型展示的每周 Token 用量",
   "aiUsage.weekOverWeek": "与上周比浮动",
   "aiUsage.weekTotal": "周累计",
+  "backgroundActivity.completed": "已完成",
   "chat.actions.createImage": "创建图片",
   "chat.actions.webSearch": "网络搜索",
   "chat.backgroundReply.assistant": "助手",

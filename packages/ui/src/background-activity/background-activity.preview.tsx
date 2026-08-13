@@ -12,6 +12,7 @@ import {
   type PngIconProps,
 } from 'lucide-uniwind/png';
 import type { ComponentType } from 'react';
+import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import type {
@@ -26,6 +27,9 @@ export type BackgroundActivityPreviewProps = Omit<
   BackgroundActivityPresentation,
   'colorScheme' | 'finishedAtEpochMs' | 'logoUri' | 'startedAtEpochMs'
 > & {
+  elapsedSeconds: number;
+  finished: boolean;
+  liveTimer: boolean;
   showLogo: boolean;
   theme: 'dark' | 'light';
 };
@@ -43,6 +47,16 @@ const ICONS: Record<BackgroundActivityIcon, ComponentType<PngIconProps>> = {
 };
 
 export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps) {
+  const [elapsedSeconds, setElapsedSeconds] = useState(props.elapsedSeconds);
+
+  useEffect(() => {
+    if (!props.liveTimer || props.finished) return;
+
+    const timer = setInterval(() => setElapsedSeconds((current) => current + 1), 1000);
+    return () => clearInterval(timer);
+  }, [props.finished, props.liveTimer]);
+
+  const elapsed = formatElapsedTime(elapsedSeconds);
   const colors =
     props.theme === 'dark'
       ? {
@@ -77,7 +91,7 @@ export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps)
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Compact" labelColor={colors.label}>
-        <CompactPreview {...props} />
+        <CompactPreview elapsed={elapsed} {...props} />
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Expanded" labelColor={colors.label}>
@@ -101,6 +115,18 @@ export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps)
       </PreviewSurface>
     </ScrollView>
   );
+}
+
+export function formatElapsedTime(elapsedSeconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(elapsedSeconds));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 type PreviewColors = {
@@ -152,7 +178,12 @@ function BannerPreview({
   );
 }
 
-function CompactPreview({ compactLabel, icon }: BackgroundActivityPreviewProps) {
+function CompactPreview({
+  compactIcon,
+  compactLabel,
+  elapsed,
+  finished,
+}: BackgroundActivityPreviewProps & { elapsed: string }) {
   return (
     <View
       style={{
@@ -166,20 +197,36 @@ function CompactPreview({ compactLabel, icon }: BackgroundActivityPreviewProps) 
         width: 280,
       }}
     >
-      <Text
-        numberOfLines={1}
-        style={{
-          color: '#FFFFFF',
-          flexShrink: 1,
-          fontSize: 12,
-          fontWeight: '600',
-          letterSpacing: 0,
-        }}
-      >
-        {compactLabel}
-      </Text>
-      <ActivityIcon icon={icon} size={16} />
+      <ActivityIcon icon={compactIcon} size={16} />
+      {finished ? (
+        <Text
+          numberOfLines={1}
+          style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600', letterSpacing: 0 }}
+        >
+          {compactLabel}
+        </Text>
+      ) : (
+        <Timer elapsed={elapsed} />
+      )}
     </View>
+  );
+}
+
+function Timer({ elapsed }: { elapsed: string }) {
+  return (
+    <Text
+      style={{
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontVariant: ['tabular-nums'],
+        fontWeight: '500',
+        letterSpacing: 0,
+        minWidth: 44,
+        textAlign: 'right',
+      }}
+    >
+      {elapsed}
+    </Text>
   );
 }
 

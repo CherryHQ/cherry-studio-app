@@ -57,7 +57,12 @@ describe('BackgroundReplyService', () => {
     expect(mockSessions[0]?.input).toMatchObject({
       deepLinkUrl: 'cherrystudio://topics?topicId=topic-1',
       keepAlive: true,
-      props: expect.objectContaining({ icon: 'hourglass', phase: 'preparing', title: 'Alpha' }),
+      props: expect.objectContaining({
+        compactIcon: 'bubble-ellipsis',
+        icon: 'hourglass',
+        phase: 'preparing',
+        title: 'Alpha',
+      }),
       tag: 'chat.backgroundReply',
     });
 
@@ -105,7 +110,12 @@ describe('BackgroundReplyService', () => {
     turn.finish('completed');
     await flushOperations();
     expect(session?.finish).toHaveBeenCalledWith(
-      expect.objectContaining({ icon: 'check-circle', phase: 'completed' }),
+      expect.objectContaining({
+        compactIcon: 'bubble-ellipsis',
+        compactLabel: '已完成',
+        icon: 'check-circle',
+        phase: 'completed',
+      }),
     );
     await service._doStop();
   });
@@ -253,7 +263,11 @@ describe('BackgroundReplyService', () => {
 
   async function createService(
     translate: (key: string) => string = (key) =>
-      key === 'chat.backgroundReply.assistant' ? 'Localized assistant' : key,
+      key === 'chat.backgroundReply.assistant'
+        ? 'Localized assistant'
+        : key === 'backgroundActivity.completed'
+          ? '已完成'
+          : key,
   ) {
     const service = new BackgroundReplyService(
       { startSession: mockStartSession },

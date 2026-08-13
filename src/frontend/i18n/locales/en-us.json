@@ -29,6 +29,7 @@
   "aiUsage.weekChartAccessibility": "Weekly Token usage by model",
   "aiUsage.weekOverWeek": "vs last week",
   "aiUsage.weekTotal": "Week total",
+  "backgroundActivity.completed": "Completed",
   "chat.actions.createImage": "Create image",
   "chat.actions.webSearch": "Web search",
   "chat.backgroundReply.assistant": "Assistant",

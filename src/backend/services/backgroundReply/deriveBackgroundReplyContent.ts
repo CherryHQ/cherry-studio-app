@@ -64,30 +64,6 @@ export function deriveBackgroundReplyContent(
   return createContent('preparing', t('chat.backgroundReply.preparing'));
 }
 
-export function getBackgroundReplyCompactLabel(
-  phase: BackgroundReplyPhase,
-  t: BackgroundReplyTranslate,
-): string {
-  switch (phase) {
-    case 'awaiting-approval':
-      return t('chat.backgroundReply.awaitingApproval');
-    case 'cancelled':
-      return t('chat.backgroundReply.cancelled');
-    case 'completed':
-      return t('chat.backgroundReply.completed');
-    case 'failed':
-      return t('chat.backgroundReply.failed');
-    case 'preparing':
-      return t('chat.backgroundReply.preparing');
-    case 'responding':
-      return t('chat.backgroundReply.responding');
-    case 'thinking':
-      return t('chat.backgroundReply.thinking');
-    case 'using-tool':
-      return t('chat.backgroundReply.tool.generic');
-  }
-}
-
 export function getTerminalBackgroundReplyContent(
   outcome: BackgroundReplyOutcome,
   preview: string | undefined,

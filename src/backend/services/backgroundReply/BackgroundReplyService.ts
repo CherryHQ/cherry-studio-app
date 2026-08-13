@@ -31,7 +31,6 @@ import type {
 import {
   type BackgroundReplyTranslate,
   deriveBackgroundReplyContent,
-  getBackgroundReplyCompactLabel,
   getTerminalBackgroundReplyContent,
 } from './deriveBackgroundReplyContent';
 
@@ -268,10 +267,11 @@ export class BackgroundReplyService
   private toActivityProps(record: TurnRecord): BackgroundReplyActivityProps {
     return {
       ...record.content,
-      compactLabel: getBackgroundReplyCompactLabel(
-        record.content.phase,
-        this.environment.translate,
-      ),
+      compactIcon: 'bubble-ellipsis',
+      compactLabel:
+        record.content.phase === 'completed'
+          ? this.environment.translate('backgroundActivity.completed')
+          : record.content.detail,
       icon: backgroundReplyIcon(record.content.phase),
       startedAtEpochMs: record.startedAtEpochMs,
       title: record.assistantName,

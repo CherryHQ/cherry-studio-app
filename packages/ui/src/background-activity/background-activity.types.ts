@@ -24,6 +24,7 @@ export type BackgroundActivityBasePresentation = {
 };
 
 export type BackgroundActivityPresentation = BackgroundActivityBasePresentation & {
+  compactIcon: BackgroundActivityIcon;
   compactLabel: string;
   detail: string;
   icon: BackgroundActivityIcon;

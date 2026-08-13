@@ -5,6 +5,7 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
+  monospacedDigit,
   multilineTextAlignment,
   padding,
   resizable,
@@ -26,6 +27,11 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
   const foreground = colorScheme === 'dark' ? '#FFFFFF' : '#151515';
   const secondary = colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
   const background = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
+  const isTerminal = props.finishedAtEpochMs !== undefined;
+  const timerInterval = {
+    lower: new Date(props.startedAtEpochMs),
+    upper: new Date(props.startedAtEpochMs + 24 * 60 * 60 * 1000),
+  };
   const iconSymbol =
     props.icon === 'brain'
       ? 'brain.head.profile'
@@ -42,6 +48,24 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
                 : props.icon === 'warning-triangle'
                   ? 'exclamationmark.triangle.fill'
                   : props.icon === 'wrench'
+                    ? 'wrench.and.screwdriver.fill'
+                    : 'xmark.circle.fill';
+  const compactIconSymbol =
+    props.compactIcon === 'brain'
+      ? 'brain.head.profile'
+      : props.compactIcon === 'bubble-ellipsis'
+        ? 'ellipsis.bubble.fill'
+        : props.compactIcon === 'bubble-exclamation'
+          ? 'exclamationmark.bubble.fill'
+          : props.compactIcon === 'check-circle'
+            ? 'checkmark.circle.fill'
+            : props.compactIcon === 'hourglass'
+              ? 'hourglass'
+              : props.compactIcon === 'paintbrush'
+                ? 'paintbrush.pointed.fill'
+                : props.compactIcon === 'warning-triangle'
+                  ? 'exclamationmark.triangle.fill'
+                  : props.compactIcon === 'wrench'
                     ? 'wrench.and.screwdriver.fill'
                     : 'xmark.circle.fill';
 
@@ -96,7 +120,8 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
         <Spacer />
       </HStack>
     ),
-    compactLeading: (
+    compactLeading: <Image color={brandColor} size={16} systemName={compactIconSymbol} />,
+    compactTrailing: isTerminal ? (
       <Text
         modifiers={[
           font({ size: 12, weight: 'semibold' }),
@@ -107,8 +132,17 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
       >
         {props.compactLabel}
       </Text>
+    ) : (
+      <Text
+        countsDown={false}
+        timerInterval={timerInterval}
+        modifiers={[
+          font({ size: 13, weight: 'medium' }),
+          monospacedDigit(),
+          foregroundStyle('#FFFFFF'),
+        ]}
+      />
     ),
-    compactTrailing: <Image color={brandColor} size={16} systemName={iconSymbol} />,
     minimal: <Image color={brandColor} size={16} systemName={iconSymbol} />,
     expandedLeading: (
       <HStack spacing={8} modifiers={[padding({ leading: 12, top: 10 })]}>

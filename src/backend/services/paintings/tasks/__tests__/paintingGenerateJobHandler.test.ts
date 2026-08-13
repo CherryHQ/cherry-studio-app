@@ -187,6 +187,7 @@ describe('createPaintingGenerateJobHandler', () => {
 
     it('opens a session while generating and finishes it as completed', async () => {
       const { dependencies, sessions, startSession } = createSessionDependencies();
+      dependencies.translate = (key) => (key === 'backgroundActivity.completed' ? '已完成' : key);
       const handler = createPaintingGenerateJobHandler(dependencies);
 
       await handler.execute(createContext());
@@ -196,6 +197,7 @@ describe('createPaintingGenerateJobHandler', () => {
           deepLinkUrl: 'cherrystudio://paintings/painting-1',
           keepAlive: false,
           props: expect.objectContaining({
+            compactIcon: 'paintbrush',
             icon: 'paintbrush',
             phase: 'generating',
             preview: 'draw',
@@ -204,7 +206,12 @@ describe('createPaintingGenerateJobHandler', () => {
         }),
       );
       expect(sessions[0]?.finish).toHaveBeenCalledWith(
-        expect.objectContaining({ icon: 'check-circle', phase: 'completed' }),
+        expect.objectContaining({
+          compactIcon: 'paintbrush',
+          compactLabel: '已完成',
+          icon: 'check-circle',
+          phase: 'completed',
+        }),
       );
     });
 

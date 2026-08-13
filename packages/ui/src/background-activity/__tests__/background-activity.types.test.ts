@@ -18,6 +18,9 @@ type ForbiddenVisualOverrides = Extract<
 const hasNoVisualOverrides: ForbiddenVisualOverrides extends never ? true : false = true;
 const hasControlledIcons: string extends BackgroundActivityPresentation['icon'] ? false : true =
   true;
+const hasControlledCompactIcons: string extends BackgroundActivityPresentation['compactIcon']
+  ? false
+  : true = true;
 
 describe('BackgroundActivityPresentation', () => {
   test('does not expose visual override props', () => {
@@ -26,5 +29,6 @@ describe('BackgroundActivityPresentation', () => {
 
   test('limits callers to registered icons', () => {
     expect(hasControlledIcons).toBe(true);
+    expect(hasControlledCompactIcons).toBe(true);
   });
 });

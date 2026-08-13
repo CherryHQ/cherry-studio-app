@@ -11,11 +11,13 @@ describe.each([
   ['assistant', AssistantActivity],
   ['painting', PaintingActivity],
 ] as const)('%s iOS activity layout', (_name, activity) => {
-  test('does not render elapsed time', () => {
+  test('renders elapsed time only in the running compact surface', () => {
     const layout = (activity as unknown as { layout: string }).layout;
 
-    expect(layout).not.toContain('timerInterval');
-    expect(layout).not.toContain('countsDown');
+    expect(layout).toContain('timerInterval');
+    expect(layout.match(/countsDown:false/g)).toHaveLength(1);
+    expect(layout).toContain('compactLabel');
+    expect(layout).toContain('expandedTrailing:null');
     expect(layout).not.toContain('pauseTime');
     expect(layout).not.toContain('dateStyle:"timer"');
   });
