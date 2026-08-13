@@ -62,6 +62,7 @@ import type { OAuthAuthenticatedFetch } from '@/backend/services/oauth/runtime/t
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolResolver } from '../../../tools';
+import { resolveProviderConfigurationToolName } from '../../../tools/providerConfigurationIntent';
 import { reportToolRuntimeDiagnostic } from '../../../tools/toolRuntimeDiagnostics';
 import type { RequestContext } from '../../../tools/types';
 import { replacePromptVariables } from '../../../utils/promptVariables';
@@ -78,7 +79,12 @@ export interface BuildAgentParamsDependencies {
 }
 
 export interface BuildAgentParamsInput {
-  request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string; messageId?: string };
+  request: AiBaseRequest & {
+    apiKeyOverride?: string;
+    chatId?: string;
+    messageId?: string;
+    messages?: unknown[];
+  };
   services: BuildAgentParamsDependencies;
   provider: Provider;
   model: Model;
@@ -206,7 +212,7 @@ export async function buildAgentParams({
           }),
         }
       : undefined;
-  const shouldLoadTools = shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
+  const shouldLoadTools = shouldIncludeExternalTools && isFunctionCallingModel(model);
   const resolvedTools = shouldLoadTools
     ? await services.tools.resolveForRequest({
         assistant,
@@ -227,6 +233,13 @@ export async function buildAgentParams({
     webSearchPluginConfig: capabilities?.webSearchPluginConfig,
   });
   const tools = mergeToolSets(resolvedTools.tools, request.callOverrides?.tools);
+  const routedProviderTool = request.callOverrides?.toolChoice
+    ? undefined
+    : resolveProviderConfigurationToolName({
+        messages: request.messages,
+        providers: providerRegistryService.loadProviders(),
+        tools,
+      });
   const baseSystem = assistant?.prompt
     ? await replacePromptVariables(assistant.prompt, model.name, services.preference)
     : undefined;
@@ -299,6 +312,9 @@ export async function buildAgentParams({
     repairToolCall,
     tools,
     options: {
+      ...(routedProviderTool && {
+        firstStepToolChoice: { toolName: routedProviderTool, type: 'tool' as const },
+      }),
       maxRetries: request.requestOptions?.maxRetries ?? 0,
       timeout: request.requestOptions?.timeout ?? getTimeout(model),
       ...(headers && { headers }),

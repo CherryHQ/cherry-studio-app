@@ -49,6 +49,22 @@ describe('ToolResolver', () => {
     expect(result.hasMcpTools).toBe(true);
   });
 
+  test('exposes only provider configuration tools without an assistant', async () => {
+    const getStatus = jest.fn(async () => 'granted');
+    const getMcpEntries = jest.fn(async () => []);
+    const resolver = createResolver({ getMcpEntries, getStatus });
+
+    const result = await resolver.resolveForRequest({});
+
+    expect(Object.keys(result.tools ?? {}).sort()).toEqual([
+      'configure_builtin_provider',
+      'create_custom_provider',
+    ]);
+    expect(result.hasMcpTools).toBe(false);
+    expect(getStatus).not.toHaveBeenCalled();
+    expect(getMcpEntries).not.toHaveBeenCalled();
+  });
+
   test('fails closed when a preference lookup fails', async () => {
     const resolver = createResolver({ failingKey: 'permissions.location_read' });
     const result = await resolver.resolveForRequest({
@@ -104,6 +120,7 @@ describe('ToolResolver', () => {
 
 function createResolver(options: {
   failingKey?: string;
+  getMcpEntries?: jest.Mock;
   getStatus?: jest.Mock;
   mcpEntries?: ToolEntry[];
   neverKey?: string;
@@ -113,7 +130,10 @@ function createResolver(options: {
     devicePermissions: {
       getStatusForPreference: options.getStatus ?? jest.fn(async () => 'granted'),
     },
-    mcpRuntime: { getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []) },
+    mcpRuntime: {
+      getToolEntriesForAssistant:
+        options.getMcpEntries ?? jest.fn(async () => options.mcpEntries ?? []),
+    },
     preference: {
       get: jest.fn(async (key: string) => {
         if (key === options.failingKey) throw new Error('db unavailable');

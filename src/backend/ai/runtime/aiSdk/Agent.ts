@@ -41,6 +41,7 @@ const logger = loggerService.withContext('agentLoop');
 
 export interface AgentOptions {
   activeTools?: string[];
+  firstStepToolChoice?: ToolChoice<ToolSet>;
   frequencyPenalty?: number;
   headers?: Record<string, string | undefined>;
   maxOutputTokens?: number;
@@ -85,6 +86,14 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
   private async buildAiSdkAgent(hooks: AgentLoopHooks) {
     const { options = {}, params } = { options: this.params.options, params: this.params };
     const tools = wrapToolsWithExecutionHooks(params.tools, hooks);
+    const forwardedPrepareStep = wrapForwardedHook('prepareStep', hooks.prepareStep);
+    const prepareStep: AgentLoopHooks['prepareStep'] = options.firstStepToolChoice
+      ? async (input) => {
+          const prepared = await forwardedPrepareStep?.(input);
+          if (input.stepNumber !== 0) return prepared;
+          return { ...prepared, toolChoice: options.firstStepToolChoice };
+        }
+      : forwardedPrepareStep;
     return createAgent<AppProviderSettingsMap, Key, ToolSet>({
       agentSettings: {
         activeTools: options.activeTools as Array<keyof ToolSet> | undefined,
@@ -96,7 +105,7 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
         maxOutputTokens: options.maxOutputTokens,
         maxRetries: options.maxRetries,
         onStepFinish: wrapForwardedHook('onStepFinish', hooks.onStepFinish),
-        prepareStep: wrapForwardedHook('prepareStep', hooks.prepareStep),
+        prepareStep,
         presencePenalty: options.presencePenalty,
         providerOptions: options.providerOptions,
         seed: options.seed,

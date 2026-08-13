@@ -41,10 +41,23 @@ export class ToolResolver {
   }
 
   async resolveForRequest(input: {
-    assistant: Assistant;
+    assistant?: Assistant;
     contextWindow?: number;
     mcpToolIds?: readonly string[];
   }): Promise<{ deferredEntries: ToolEntry[]; hasMcpTools: boolean; tools: ToolSet | undefined }> {
+    if (!input.assistant) {
+      const providerConfigurationEnabled = await this.getProviderConfigurationEnabled();
+      const activeBuiltins = this.builtinRegistry.selectActive({
+        deviceAccess: unavailableDeviceAccess(),
+        platform: Platform.OS,
+        providerConfigurationEnabled,
+      });
+      return materializeTools(
+        activeBuiltins.filter((entry) => entry.namespace === 'provider-configuration'),
+        input.contextWindow,
+      );
+    }
+
     const [deviceAccess, mcpEntries, providerConfigurationEnabled] = await Promise.all([
       this.getDeviceAccess(),
       this.deps.mcpRuntime.getToolEntriesForAssistant(input.assistant, input.mcpToolIds),
@@ -57,15 +70,11 @@ export class ToolResolver {
       providerConfigurationEnabled,
     });
 
-    const requestRegistry = new ToolRegistry<ToolApplyScope>(reportToolRuntimeDiagnostic);
-    for (const entry of [...activeBuiltins, ...mcpEntries]) requestRegistry.register(entry);
-    const tools = toToolSet(requestRegistry.getAll());
-    return {
-      ...applyDeferExposition(tools, requestRegistry, input.contextWindow),
+    return materializeTools([...activeBuiltins, ...mcpEntries], input.contextWindow, {
       // MOBILE SYNC DIVERGENCE: desktop gates OVMS `/no_think` on selected MCP ids. Mobile uses
       // materialized entries so a missing or filtered tool cannot change the model prompt.
       hasMcpTools: mcpEntries.length > 0,
-    };
+    });
   }
 
   private async getDeviceAccess(): Promise<DeviceToolAccess> {
@@ -95,6 +104,29 @@ export class ToolResolver {
       return false;
     }
   }
+}
+
+function materializeTools(
+  entries: readonly ToolEntry[],
+  contextWindow?: number,
+  options: { hasMcpTools?: boolean } = {},
+): { deferredEntries: ToolEntry[]; hasMcpTools: boolean; tools: ToolSet | undefined } {
+  const requestRegistry = new ToolRegistry<ToolApplyScope>(reportToolRuntimeDiagnostic);
+  for (const entry of entries) requestRegistry.register(entry);
+  const tools = toToolSet(requestRegistry.getAll());
+  return {
+    ...applyDeferExposition(tools, requestRegistry, contextWindow),
+    hasMcpTools: options.hasMcpTools ?? false,
+  };
+}
+
+function unavailableDeviceAccess(): DeviceToolAccess {
+  return Object.fromEntries(
+    DEVICE_PREFERENCE_KEYS.map((key) => [
+      key,
+      { mode: 'never' as const, status: 'unavailable' as const },
+    ]),
+  ) as DeviceToolAccess;
 }
 
 function toToolSet(entries: readonly ToolEntry[]): ToolSet | undefined {

@@ -77,6 +77,34 @@ describe('registerBuiltinTools', () => {
     }
   });
 
+  test('describes provider intent routing before collecting missing details', () => {
+    const registry = createRegistry();
+    const builtin = registry.getByName('configure_builtin_provider');
+    const custom = registry.getByName('create_custom_provider');
+
+    expect(builtin?.description).toBe(builtin?.tool.description);
+    for (const description of [builtin?.description, builtin?.tool.description]) {
+      expect(description?.length).toBeLessThanOrEqual(260);
+      expect(description).toContain('Call immediately');
+      expect(description).toContain('configure or update');
+      expect(description).toContain('OpenAI, Gemini, CherryIN');
+      expect(description).toContain('pull, sync, add, or manage models');
+      expect(description).toContain('provider, key, or URL is missing');
+      expect(description).toContain('pass empty values');
+      expect(description).toContain('tool handles clarification');
+    }
+
+    expect(custom?.description).toBe(custom?.tool.description);
+    for (const description of [custom?.description, custom?.tool.description]) {
+      expect(description?.length).toBeLessThanOrEqual(200);
+      expect(description).toContain('Call immediately');
+      expect(description).toContain('create or add a new provider');
+      expect(description).toContain('name, key, or URL is missing');
+      expect(description).toContain('pass empty values');
+      expect(description).toContain('built-in provider configuration, updates, or models');
+    }
+  });
+
   test('only approves a built-in provider after it resolves uniquely', async () => {
     const deps = dependencies('always');
     const registry = new ToolRegistry<ToolApplyScope>();

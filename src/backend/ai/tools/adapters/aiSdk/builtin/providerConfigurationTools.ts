@@ -12,6 +12,10 @@ import type { ProviderSetupModule } from '@/shared/contracts';
 import type { ToolEntry } from '../../../types';
 
 const PROVIDER_CONFIGURATION_NAMESPACE = 'provider-configuration';
+const CONFIGURE_BUILTIN_PROVIDER_DESCRIPTION =
+  'Call immediately to configure or update a built-in provider (OpenAI, Gemini, CherryIN), or pull, sync, add, or manage models. If provider, key, or URL is missing, pass empty values; the tool handles clarification. For a new provider use create_custom_provider.';
+const CREATE_CUSTOM_PROVIDER_DESCRIPTION =
+  'Call immediately only to create or add a new provider. If name, key, or URL is missing, pass empty values. For built-in provider configuration, updates, or models use configure_builtin_provider.';
 
 export function createProviderConfigurationToolEntries(
   providerSetup: Pick<ProviderSetupModule, 'executeBuiltin' | 'executeCustom' | 'resolveBuiltin'>,
@@ -20,13 +24,11 @@ export function createProviderConfigurationToolEntries(
     {
       applies: (scope) => scope.providerConfigurationEnabled,
       defer: 'never',
-      description:
-        'Configure credentials, endpoint, or models for an existing built-in provider. Ask for a provider when the result requests one.',
+      description: CONFIGURE_BUILTIN_PROVIDER_DESCRIPTION,
       name: CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME,
       namespace: PROVIDER_CONFIGURATION_NAMESPACE,
       tool: tool({
-        description:
-          'Configure an existing built-in provider, pull its model catalog, or add model drafts.',
+        description: CONFIGURE_BUILTIN_PROVIDER_DESCRIPTION,
         inputSchema: configureBuiltinProviderInputSchema,
         outputSchema: providerConfigurationToolOutputSchema,
         strict: true,
@@ -43,12 +45,11 @@ export function createProviderConfigurationToolEntries(
     {
       applies: (scope) => scope.providerConfigurationEnabled,
       defer: 'never',
-      description: 'Create and configure a new custom API provider after user review.',
+      description: CREATE_CUSTOM_PROVIDER_DESCRIPTION,
       name: CREATE_CUSTOM_PROVIDER_TOOL_NAME,
       namespace: PROVIDER_CONFIGURATION_NAMESPACE,
       tool: tool({
-        description:
-          'Create a custom provider with a user-supplied name, API key, endpoints, and models.',
+        description: CREATE_CUSTOM_PROVIDER_DESCRIPTION,
         inputSchema: createCustomProviderInputSchema,
         outputSchema: providerConfigurationToolOutputSchema,
         strict: true,
