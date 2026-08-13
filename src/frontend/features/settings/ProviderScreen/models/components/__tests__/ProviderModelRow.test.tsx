@@ -12,8 +12,7 @@ jest.mock('@/frontend/components/ModelAvatar', () => {
 jest.mock('@/frontend/components/modelPicker', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    getModelPickerTags: (model: { capabilities?: string[] }) => model.capabilities ?? [],
-    isFreeModel: () => false,
+    getModelPickerRowTags: (model: { capabilities?: string[] }) => model.capabilities ?? [],
     ModelPickerTagChip: (props: object) => createElement('ModelPickerTagChip', props),
   };
 });

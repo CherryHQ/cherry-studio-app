@@ -16,9 +16,9 @@ type ModelAvatarProps = {
  * A model's logo in the same square, hairline-framed shape a provider gets, so a
  * list of models and a list of providers read as the same kind of thing.
  *
- * The round {@link ModelPickerIcon} still draws the model picker sheet and the
- * assistant screens; the two shapes coexist rather than becoming one component
- * with a shape switch.
+ * The round `ModelPickerIcon` still draws the assistant screens, where a model
+ * appears one at a time rather than in a column; the two shapes coexist rather
+ * than becoming one component with a shape switch.
  */
 export function ModelAvatar({ model, provider, size }: ModelAvatarProps) {
   const { theme } = useUniwind();
