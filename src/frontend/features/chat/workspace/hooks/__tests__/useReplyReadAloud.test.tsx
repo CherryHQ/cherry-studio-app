@@ -1,4 +1,4 @@
-import type { SpeechOptions } from 'expo-speech';
+import { type SpeechOptions, type Voice, VoiceQuality } from 'expo-speech';
 import { type EffectCallback, useEffect } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -18,14 +18,20 @@ type Utterance = {
 
 const mockSpeak = jest.fn();
 const mockStop = jest.fn();
+const mockGetAvailableVoicesAsync = jest.fn();
 const mockLoggerError = jest.fn();
 const mockOnError = jest.fn();
 let mockFocusCleanup: (() => void) | undefined;
 
 jest.mock('expo-speech', () => ({
+  getAvailableVoicesAsync: (...args: unknown[]) => mockGetAvailableVoicesAsync(...args),
   maxSpeechInputLength: 112,
   speak: (...args: unknown[]) => mockSpeak(...args),
   stop: (...args: unknown[]) => mockStop(...args),
+  VoiceQuality: {
+    Default: 'Default',
+    Enhanced: 'Enhanced',
+  },
 }));
 
 jest.mock('expo-router', () => ({
@@ -60,6 +66,7 @@ let latest: HookResult | undefined;
 let renderer: ReactTestRenderer | undefined;
 let stopRequests: Deferred<void>[] = [];
 let utterances: Utterance[] = [];
+let voiceRequests: Deferred<Voice[]>[] = [];
 
 function deferred<TValue>(): Deferred<TValue> {
   let reject!: (reason: unknown) => void;
@@ -69,6 +76,19 @@ function deferred<TValue>(): Deferred<TValue> {
     resolve = resolvePromise;
   });
   return { promise, reject, resolve };
+}
+
+function voice(
+  identifier: string,
+  language: string,
+  quality: VoiceQuality = VoiceQuality.Default,
+): Voice {
+  return {
+    identifier,
+    language,
+    name: identifier,
+    quality,
+  };
 }
 
 function Probe(props: UseReplyReadAloudOptions) {
@@ -126,6 +146,20 @@ async function rejectStop(index: number, error: Error) {
   });
 }
 
+async function resolveVoiceRequest(index: number, voices: Voice[]) {
+  await act(async () => {
+    voiceRequests[index].resolve(voices);
+    await Promise.resolve();
+  });
+}
+
+async function rejectVoiceRequest(index: number, error: Error) {
+  await act(async () => {
+    voiceRequests[index].reject(error);
+    await Promise.resolve();
+  });
+}
+
 describe('useReplyReadAloud', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -135,7 +169,13 @@ describe('useReplyReadAloud', () => {
     renderer = undefined;
     stopRequests = [];
     utterances = [];
+    voiceRequests = [];
 
+    mockGetAvailableVoicesAsync.mockImplementation(() => {
+      const request = deferred<Voice[]>();
+      voiceRequests.push(request);
+      return request.promise;
+    });
     mockStop.mockImplementation(() => {
       const request = deferred<void>();
       stopRequests.push(request);
@@ -175,6 +215,9 @@ describe('useReplyReadAloud', () => {
       'onStart',
       'onStopped',
     ]);
+    expect(mockGetAvailableVoicesAsync).not.toHaveBeenCalled();
+    expect(utterances[0].options).not.toHaveProperty('language');
+    expect(utterances[0].options).not.toHaveProperty('voice');
 
     act(() => utterances[0].options.onStart?.());
     expect(current().activeMessageId).toBe('a');
@@ -271,19 +314,150 @@ describe('useReplyReadAloud', () => {
     expect(utterances).toHaveLength(1);
   });
 
-  it('passes only a provided language setting to every chunk', async () => {
+  it('waits for the initial stop, queries once, and selects a concrete same-locale voice', async () => {
+    await renderHook();
+    readAloud('a', 'Reply a', 'zh-CN');
+
+    expect(mockGetAvailableVoicesAsync).not.toHaveBeenCalled();
+    expect(mockSpeak).not.toHaveBeenCalled();
+
+    await resolveStop(0);
+
+    expect(mockGetAvailableVoicesAsync).toHaveBeenCalledTimes(1);
+    expect(voiceRequests).toHaveLength(1);
+    expect(mockSpeak).not.toHaveBeenCalled();
+
+    await resolveVoiceRequest(0, [
+      voice('zh-tw-enhanced', 'zh-TW', VoiceQuality.Enhanced),
+      voice('zh-cn-default', 'zh-CN'),
+      voice('zh-cn-enhanced', 'zh-CN', VoiceQuality.Enhanced),
+    ]);
+
+    expect(utterances).toHaveLength(1);
+    expect(utterances[0].options.voice).toBe('zh-cn-enhanced');
+    expect(utterances[0].options).not.toHaveProperty('language');
+  });
+
+  it('queries once and reuses the selected voice for every chunk without tuning options', async () => {
     await renderHook();
     readAloud('a', 'abcdefghijklmnop', 'zh-CN');
     await resolveStop(0);
+    expect(voiceRequests).toHaveLength(1);
+    await resolveVoiceRequest(0, [voice('zh-cn-voice', 'zh-CN')]);
 
-    expect(utterances[0].options.language).toBe('zh-CN');
+    expect(utterances.map(({ text }) => text)).toEqual(['abcdefghijkl']);
+
     act(() => utterances[0].options.onDone?.());
-    expect(utterances[1].options.language).toBe('zh-CN');
-    expect(utterances[1].options).not.toEqual(
-      expect.objectContaining({ pitch: expect.anything(), rate: expect.anything() }),
-    );
-    expect(utterances[1].options).not.toHaveProperty('voice');
-    expect(utterances[1].options).not.toHaveProperty('volume');
+
+    expect(utterances.map(({ text }) => text)).toEqual(['abcdefghijkl', 'mnop']);
+    expect(mockGetAvailableVoicesAsync).toHaveBeenCalledTimes(1);
+    for (const { options } of utterances) {
+      expect(options.voice).toBe('zh-cn-voice');
+      expect(options).not.toHaveProperty('language');
+      expect(options).not.toHaveProperty('pitch');
+      expect(options).not.toHaveProperty('rate');
+      expect(options).not.toHaveProperty('volume');
+    }
+  });
+
+  it('reports voice-unavailable once and does not speak when no same-base voice exists', async () => {
+    await renderHook();
+    readAloud('a', 'Reply a', 'zh-CN');
+    await resolveStop(0);
+    expect(voiceRequests).toHaveLength(1);
+    await resolveVoiceRequest(0, [voice('english-voice', 'en-US')]);
+
+    expect(current().activeMessageId).toBeUndefined();
+    expect(mockSpeak).not.toHaveBeenCalled();
+    expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('voice-unavailable');
+    expect(stopRequests).toHaveLength(1);
+  });
+
+  it('reports a current voice-query rejection once and logs cleanup rejection only', async () => {
+    await renderHook();
+    readAloud('a', 'Reply a', 'zh-CN');
+    await resolveStop(0);
+    expect(voiceRequests).toHaveLength(1);
+
+    const queryError = new Error('voice query failed');
+    await rejectVoiceRequest(0, queryError);
+
+    expect(current().activeMessageId).toBeUndefined();
+    expect(mockSpeak).not.toHaveBeenCalled();
+    expect(mockLoggerError).toHaveBeenCalledWith(expect.any(String), queryError);
+    expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('speech-failed');
+    expect(stopRequests).toHaveLength(2);
+
+    await rejectStop(1, new Error('cleanup failed'));
+    expect(mockOnError).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not speak after stopReadAloud invalidates a pending voice query', async () => {
+    await renderHook();
+    readAloud('a', 'Reply a', 'zh-CN');
+    await resolveStop(0);
+    expect(voiceRequests).toHaveLength(1);
+
+    act(() => current().stopReadAloud());
+
+    expect(current().activeMessageId).toBeUndefined();
+    await resolveVoiceRequest(0, [voice('zh-cn-voice', 'zh-CN')]);
+    await resolveStop(1);
+
+    expect(mockSpeak).not.toHaveBeenCalled();
+    expect(mockOnError).not.toHaveBeenCalled();
+  });
+
+  it('lets only the latest A/B/C intent speak when voice queries complete out of order', async () => {
+    await renderHook();
+
+    readAloud('a', 'Reply a', 'zh-CN');
+    await resolveStop(0);
+    expect(voiceRequests).toHaveLength(1);
+    readAloud('b', 'Reply b', 'ja-JP');
+    await resolveStop(1);
+    expect(voiceRequests).toHaveLength(2);
+    readAloud('c', 'Reply c', 'ko-KR');
+    await resolveStop(2);
+
+    expect(voiceRequests).toHaveLength(3);
+
+    await resolveVoiceRequest(1, [voice('ja-voice', 'ja-JP')]);
+    await resolveVoiceRequest(0, [voice('zh-voice', 'zh-CN')]);
+    expect(mockSpeak).not.toHaveBeenCalled();
+
+    await resolveVoiceRequest(2, [voice('ko-voice', 'ko-KR')]);
+
+    expect(utterances.map(({ options, text }) => [text, options.voice])).toEqual([
+      ['Reply c', 'ko-voice'],
+    ]);
+    expect(mockGetAvailableVoicesAsync).toHaveBeenCalledTimes(3);
+  });
+
+  it('logs a stale voice-query rejection without clearing or notifying the current session', async () => {
+    await renderHook();
+
+    readAloud('a', 'Reply a', 'zh-CN');
+    await resolveStop(0);
+    expect(voiceRequests).toHaveLength(1);
+    readAloud('b', 'Reply b', 'ja-JP');
+    await resolveStop(1);
+    expect(voiceRequests).toHaveLength(2);
+
+    const staleQueryError = new Error('stale voice query failed');
+    await rejectVoiceRequest(0, staleQueryError);
+
+    expect(current().activeMessageId).toBe('b');
+    expect(mockOnError).not.toHaveBeenCalled();
+    expect(mockLoggerError).toHaveBeenCalledWith(expect.any(String), staleQueryError);
+
+    await resolveVoiceRequest(1, [voice('ja-voice', 'ja-JP')]);
+
+    expect(current().activeMessageId).toBe('b');
+    expect(utterances.map(({ text }) => text)).toEqual(['Reply b']);
+    expect(mockOnError).not.toHaveBeenCalled();
   });
 
   it('reports an initial stop rejection once and logs cleanup rejection only', async () => {
@@ -296,6 +470,7 @@ describe('useReplyReadAloud', () => {
     expect(current().activeMessageId).toBeUndefined();
     expect(mockSpeak).not.toHaveBeenCalled();
     expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('speech-failed');
     expect(mockLoggerError).toHaveBeenCalledWith(expect.any(String), initialError);
     expect(stopRequests).toHaveLength(2);
 
@@ -315,6 +490,7 @@ describe('useReplyReadAloud', () => {
 
     expect(current().activeMessageId).toBeUndefined();
     expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('speech-failed');
     expect(mockLoggerError).toHaveBeenCalledWith(expect.any(String), speakError);
     expect(stopRequests).toHaveLength(2);
 
@@ -332,6 +508,7 @@ describe('useReplyReadAloud', () => {
 
     expect(current().activeMessageId).toBeUndefined();
     expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('speech-failed');
     expect(mockLoggerError).toHaveBeenCalledWith(expect.any(String), speechError);
     expect(stopRequests).toHaveLength(2);
 
@@ -340,6 +517,7 @@ describe('useReplyReadAloud', () => {
       utterances[0].options.onDone?.();
     });
     expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('speech-failed');
     expect(utterances).toHaveLength(1);
   });
 
@@ -355,6 +533,7 @@ describe('useReplyReadAloud', () => {
     await rejectStop(1, stopError);
 
     expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('speech-failed');
     expect(mockLoggerError).toHaveBeenCalledWith(expect.any(String), stopError);
     act(() => utterances[0].options.onDone?.());
     expect(utterances).toHaveLength(1);
@@ -378,6 +557,7 @@ describe('useReplyReadAloud', () => {
     stopRequests[1].reject(new Error('matching stop failed'));
     await act(async () => stopping);
     expect(mockOnError).toHaveBeenCalledTimes(1);
+    expect(mockOnError).toHaveBeenCalledWith('speech-failed');
   });
 
   it('does not stop global speech for idle app, focus, or unmount cleanup', async () => {

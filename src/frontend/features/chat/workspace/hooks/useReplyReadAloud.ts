@@ -6,6 +6,7 @@ import { AppState } from 'react-native';
 import type { AssistantReadAloudInput } from '@/frontend/components/messagePresentation';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
+import { resolveReplyReadAloudVoice } from '../utils/resolveReplyReadAloudVoice';
 import {
   resolveReplyReadAloudChunkLength,
   splitReplyReadAloudText,
@@ -22,10 +23,13 @@ type ReplyReadAloudSession = {
   language?: string;
   messageId: string;
   status: ReplyReadAloudStatus;
+  voice?: string;
 };
 
+export type ReplyReadAloudErrorReason = 'speech-failed' | 'voice-unavailable';
+
 export type UseReplyReadAloudOptions = {
-  onError: () => void;
+  onError: (reason: ReplyReadAloudErrorReason) => void;
   topicId: string;
   visibleMessageIds: readonly string[];
 };
@@ -103,7 +107,7 @@ export function useReplyReadAloud({
       }
 
       invalidateCurrentSession();
-      onErrorRef.current();
+      onErrorRef.current('speech-failed');
       stopSpeechForCleanup('Failed to stop speech after a read-aloud error');
     },
     [invalidateCurrentSession, stopSpeechForCleanup],
@@ -156,8 +160,8 @@ export function useReplyReadAloud({
         },
       };
 
-      if (session.language) {
-        speechOptions.language = session.language;
+      if (session.voice) {
+        speechOptions.voice = session.voice;
       }
 
       try {
@@ -186,7 +190,7 @@ export function useReplyReadAloud({
       } catch (error) {
         logSpeechError('Failed to stop reply read-aloud', error);
         if (intentSequenceRef.current === stopIntentId) {
-          onErrorRef.current();
+          onErrorRef.current('speech-failed');
         }
       }
     })();
@@ -228,6 +232,33 @@ export function useReplyReadAloud({
         if (activeSessionRef.current?.id !== sessionId) {
           return;
         }
+
+        if (session.language) {
+          let voices: Awaited<ReturnType<typeof Speech.getAvailableVoicesAsync>>;
+          try {
+            voices = await Speech.getAvailableVoicesAsync();
+          } catch (error) {
+            failCurrentSession(
+              sessionId,
+              'Failed to get available voices while reading a reply aloud',
+              error,
+            );
+            return;
+          }
+
+          if (activeSessionRef.current?.id !== sessionId) {
+            return;
+          }
+
+          const voice = resolveReplyReadAloudVoice(session.language, voices);
+          if (!voice) {
+            invalidateCurrentSession();
+            onErrorRef.current('voice-unavailable');
+            return;
+          }
+          session.voice = voice.identifier;
+        }
+
         if (session.chunks.length === 0) {
           invalidateCurrentSession();
           return;
@@ -254,7 +285,7 @@ export function useReplyReadAloud({
       } catch (error) {
         logSpeechError('Failed to stop the active reply read-aloud', error);
         if (intentSequenceRef.current === stopIntentId) {
-          onErrorRef.current();
+          onErrorRef.current('speech-failed');
         }
       }
     },
