@@ -14,13 +14,13 @@ type ReasoningEffortOverride = {
 };
 
 /**
- * The reasoning effort behind the model pill: the value to show and to send,
- * and whether the user picked it themselves rather than inheriting it from the
+ * The reasoning effort behind the composer gauge and the next message, plus
+ * whether the user picked it themselves rather than inheriting it from the
  * assistant. It is chat's own state, not the composer's — painting has no such
- * concept — so it lives here and reaches the composer as a badge.
+ * concept — so it lives here and reaches the overlay as a value.
  *
  * Only the user's pick is state. Everything else is derived on read, which is
- * what keeps the pill and the next message from ever disagreeing: the model's
+ * what keeps the gauge and the next message from ever disagreeing: the model's
  * stops change asynchronously, and a value mirrored into state through an
  * effect would be stale for exactly as long as it takes React to catch up.
  */

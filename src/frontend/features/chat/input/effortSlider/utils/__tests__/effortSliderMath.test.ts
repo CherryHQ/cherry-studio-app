@@ -1,4 +1,10 @@
-import { clamp01, magnetize, nearestStopIndex, stopFraction } from '../effortSliderMath';
+import {
+  clamp01,
+  effortGaugeNeedleAngle,
+  magnetize,
+  nearestStopIndex,
+  stopFraction,
+} from '../effortSliderMath';
 
 describe('clamp01', () => {
   it('clamps to the unit interval', () => {
@@ -23,6 +29,20 @@ describe('stopFraction', () => {
   it('collapses degenerate tracks to 0', () => {
     expect(stopFraction(0, 1)).toBe(0);
     expect(stopFraction(0, 0)).toBe(0);
+  });
+});
+
+describe('effortGaugeNeedleAngle', () => {
+  it('maps the first, middle, and last stops across the gauge sweep', () => {
+    expect(effortGaugeNeedleAngle(0, 5)).toBeCloseTo(-Math.PI / 3);
+    expect(effortGaugeNeedleAngle(2, 5)).toBeCloseTo(0);
+    expect(effortGaugeNeedleAngle(4, 5)).toBeCloseTo(Math.PI / 3);
+  });
+
+  it('clamps invalid indices and collapses a single stop to the start angle', () => {
+    expect(effortGaugeNeedleAngle(-1, 5)).toBeCloseTo(-Math.PI / 3);
+    expect(effortGaugeNeedleAngle(9, 5)).toBeCloseTo(Math.PI / 3);
+    expect(effortGaugeNeedleAngle(0, 1)).toBeCloseTo(-Math.PI / 3);
   });
 });
 

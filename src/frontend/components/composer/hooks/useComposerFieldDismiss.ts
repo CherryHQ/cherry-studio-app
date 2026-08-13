@@ -15,7 +15,8 @@ export function useComposerFieldDismiss() {
   const { inputRef } = useComposerMeta();
 
   return useCallback(() => {
-    void KeyboardController.dismiss();
+    const dismissal = KeyboardController.dismiss();
     inputRef.current?.blur();
+    return dismissal;
   }, [inputRef]);
 }
