@@ -236,7 +236,14 @@ describe('ProviderSetupService', () => {
       expect.objectContaining({
         apiKey: 'draft-key',
         authConfig: { type: 'api-key' },
-        provider: expect.objectContaining({ id: 'custom-transient' }),
+        provider: expect.objectContaining({
+          endpointConfigs: expect.objectContaining({
+            [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: expect.objectContaining({
+              baseUrl: 'https://api.example.com',
+            }),
+          }),
+          id: 'custom-transient',
+        }),
       }),
     );
     await expect(providerService.getByProviderId('custom-transient')).rejects.toMatchObject({
@@ -417,6 +424,13 @@ describe('ProviderSetupService', () => {
     });
     await expect(providerService.listApiKeys('custom-example')).resolves.toMatchObject({
       keys: [expect.objectContaining({ key: 'new-key' })],
+    });
+    await expect(providerService.getByProviderId('custom-example')).resolves.toMatchObject({
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: expect.objectContaining({
+          baseUrl: 'https://api.example.com',
+        }),
+      },
     });
   });
 

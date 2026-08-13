@@ -16,6 +16,7 @@ import {
   DEFAULT_PROVIDER_SETTINGS,
   type EndpointConfigs,
   isValidProviderEndpointUrl,
+  normalizeCustomProviderBaseUrl,
   type Provider,
 } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
@@ -104,11 +105,12 @@ function createCustomEndpointConfigs(input: CreateCustomProviderInput): Endpoint
     openaiResponsesUrl: input.openaiResponsesUrl,
   };
   for (const [field, value] of Object.entries(values)) {
-    if (value.trim() && !isValidProviderEndpointUrl(value)) {
+    const baseUrl = normalizeCustomProviderBaseUrl(value);
+    if (baseUrl && !isValidProviderEndpointUrl(baseUrl)) {
       throw new Error(`${field} must be an absolute HTTP URL.`);
     }
   }
-  if (!input.baseUrl.trim()) throw new Error('Base URL is required.');
+  if (!normalizeCustomProviderBaseUrl(input.baseUrl)) throw new Error('Base URL is required.');
 
   return Object.fromEntries(
     [
@@ -118,7 +120,10 @@ function createCustomEndpointConfigs(input: CreateCustomProviderInput): Endpoint
       [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, input.geminiUrl],
       [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, input.imageGenerationUrl],
       [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT, input.imageEditUrl],
-    ].flatMap(([endpoint, value]) => (value.trim() ? [[endpoint, { baseUrl: value.trim() }]] : [])),
+    ].flatMap(([endpoint, value]) => {
+      const baseUrl = normalizeCustomProviderBaseUrl(value);
+      return baseUrl ? [[endpoint, { baseUrl }]] : [];
+    }),
   ) as EndpointConfigs;
 }
 

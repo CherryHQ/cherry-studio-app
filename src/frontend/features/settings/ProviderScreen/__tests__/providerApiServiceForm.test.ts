@@ -132,6 +132,22 @@ describe('provider API service form helpers', () => {
     });
   });
 
+  it('stores custom provider roots without a conventional trailing `/v1`', () => {
+    expect(
+      buildCustomProviderCreationPayload({
+        endpointUrls: {
+          'openai-chat-completions': 'https://api.example.com/v1',
+          'openai-responses': 'https://responses.example.com/v1/',
+        },
+      }),
+    ).toMatchObject({
+      endpointConfigs: {
+        'openai-chat-completions': { baseUrl: 'https://api.example.com' },
+        'openai-responses': { baseUrl: 'https://responses.example.com' },
+      },
+    });
+  });
+
   it('validates every configured custom provider endpoint URL', () => {
     expect(
       findInvalidCustomProviderEndpointUrl({

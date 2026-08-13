@@ -8,6 +8,7 @@ import type {
 import {
   canEditProviderEndpoint as canEditProviderEndpointShared,
   isValidProviderEndpointUrl,
+  normalizeCustomProviderBaseUrl,
 } from '@cherrystudio/universal/data/types/provider';
 
 export const CUSTOM_PROVIDER_TEXT_ENDPOINT_TYPES = [
@@ -96,7 +97,7 @@ export function buildCustomProviderCreationPayload({
   const endpointConfigs: EndpointConfigs = {};
 
   for (const endpointType of CONFIGURABLE_ENDPOINT_TYPES) {
-    const baseUrl = endpointUrls[endpointType]?.trim();
+    const baseUrl = normalizeCustomProviderBaseUrl(endpointUrls[endpointType] ?? '');
     if (baseUrl) {
       endpointConfigs[endpointType] = { baseUrl };
     }

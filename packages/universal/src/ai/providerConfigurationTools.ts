@@ -87,7 +87,13 @@ export const createCustomProviderInputSchema = z
   .object({
     anthropicUrl: z.string().trim().max(4000),
     apiKey: z.string().max(20_000),
-    baseUrl: z.string().trim().max(4000),
+    baseUrl: z
+      .string()
+      .trim()
+      .max(4000)
+      .describe(
+        'Service root URL for the custom provider. Do not append the conventional /v1 API version; the app adds it when required.',
+      ),
     defaultChatEndpoint: z.enum([
       ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
       ENDPOINT_TYPE.OPENAI_RESPONSES,

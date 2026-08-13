@@ -62,6 +62,12 @@ describe('builtin tool contracts', () => {
     expect(JSON.stringify(json)).not.toContain('"default"');
   });
 
+  it('tells models to provide a custom provider service root without `/v1`', () => {
+    expect(createCustomProviderInputSchema.shape.baseUrl.description).toContain(
+      'Do not append the conventional /v1 API version',
+    );
+  });
+
   it('references the public knowledge list tool name from search input metadata', () => {
     const description = kbSearchInputSchema.shape.baseIds.description;
 

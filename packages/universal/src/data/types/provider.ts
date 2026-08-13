@@ -204,6 +204,15 @@ export function isValidProviderEndpointUrl(value: string): boolean {
   }
 }
 
+/**
+ * Custom providers store the service root. The runtime appends the endpoint's
+ * API version when it builds a request, so a conventional trailing `/v1`
+ * would only duplicate transport-level configuration.
+ */
+export function normalizeCustomProviderBaseUrl(value: string): string {
+  return value.trim().replace(/\/v1\/?(?=[?#]|$)/i, '');
+}
+
 type ProviderTypeSource = Pick<
   Provider,
   'authType' | 'defaultChatEndpoint' | 'id' | 'presetProviderId'
