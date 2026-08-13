@@ -119,6 +119,18 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('removes numeric citation links while preserving ordinary link labels', () => {
+    const message = createMessage([
+      textPart(
+        'Read [the guide](https://example.com/guide) [2](https://example.com/source), then continue.',
+      ),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'Read the guide, then continue.',
+    });
+  });
+
   test('removes block markers and emphasis while preserving line and paragraph order', () => {
     const message = createMessage([
       textPart(
