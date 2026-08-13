@@ -1,13 +1,14 @@
-import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
-import * as Clipboard from 'expo-clipboard';
 import {
-  CopyIcon,
-  EyeIcon,
-  EyeOffIcon,
-  KeyRoundIcon,
-  PlusIcon,
-  Trash2Icon,
-} from 'lucide-uniwind/png';
+  Button,
+  FieldError,
+  Input,
+  Label,
+  SecureInput,
+  type SecureInputVisibilityAccessibilityLabels,
+  TextField,
+} from '@cherrystudio/ui/components';
+import * as Clipboard from 'expo-clipboard';
+import { CopyIcon, KeyRoundIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
@@ -17,16 +18,12 @@ import type { WebSearchApiKeyEntry } from '../utils/webSearchApiServiceApiKeys';
 
 export function WebSearchApiServiceApiKeysField({
   apiKeysInput,
-  apiKeysVisible,
   onApiKeysInputChange,
   onManagePress,
-  onToggleVisible,
 }: {
   apiKeysInput: string;
-  apiKeysVisible: boolean;
   onApiKeysInputChange: (value: string) => void;
   onManagePress: () => void;
-  onToggleVisible: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -37,23 +34,16 @@ export function WebSearchApiServiceApiKeysField({
         <View className="min-w-0 flex-1 overflow-hidden">
           <ApiKeysCommitInput
             accessibilityLabel={t('settings.websearch.provider.apiKeys')}
+            blurOnVisibilityToggle
             onCommit={onApiKeysInputChange}
             placeholder={t('settings.websearch.provider.apiKeysPlaceholder')}
-            secureTextEntry={!apiKeysVisible}
             value={apiKeysInput}
+            visibilityAccessibilityLabels={{
+              hide: t('settings.websearch.provider.hideApiKeys'),
+              show: t('settings.websearch.provider.showApiKeys'),
+            }}
           />
         </View>
-        <Button
-          accessibilityLabel={
-            apiKeysVisible
-              ? t('settings.websearch.provider.hideApiKeys')
-              : t('settings.websearch.provider.showApiKeys')
-          }
-          hitSlop={2}
-          icon={apiKeysVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
-          onPress={onToggleVisible}
-          variant="secondary"
-        />
         <Button
           accessibilityLabel={t('settings.websearch.provider.manageApiKeys')}
           hitSlop={2}
@@ -68,18 +58,20 @@ export function WebSearchApiServiceApiKeysField({
 
 type ApiKeysCommitInputProps = {
   accessibilityLabel: string;
+  blurOnVisibilityToggle?: boolean;
   onCommit: (value: string) => void;
   placeholder: string;
-  secureTextEntry: boolean;
   value: string;
+  visibilityAccessibilityLabels: SecureInputVisibilityAccessibilityLabels;
 };
 
 function ApiKeysCommitInput({
   accessibilityLabel,
+  blurOnVisibilityToggle,
   onCommit,
   placeholder,
-  secureTextEntry,
   value,
+  visibilityAccessibilityLabels,
 }: ApiKeysCommitInputProps) {
   const [draftValue, setDraftValue] = useState(value);
   const [sourceValue, setSourceValue] = useState(value);
@@ -134,12 +126,10 @@ function ApiKeysCommitInput({
   }, [commitValue]);
 
   return (
-    <Input
+    <SecureInput
       accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
+      blurOnVisibilityToggle={blurOnVisibilityToggle}
       lineBreakModeIOS="clip"
-      multiline={false}
       numberOfLines={1}
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
@@ -148,8 +138,8 @@ function ApiKeysCommitInput({
       placeholder={placeholder}
       returnKeyType="done"
       selectTextOnFocus
-      secureTextEntry={secureTextEntry}
       value={draftValue}
+      visibilityAccessibilityLabels={visibilityAccessibilityLabels}
     />
   );
 }

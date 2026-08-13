@@ -50,7 +50,6 @@ export default function ProviderDetailSettingsScreen() {
   const { toast } = useToast();
   const { alert } = useAlert();
   const providers = useBackendModule('providers');
-  const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
@@ -347,14 +346,12 @@ export default function ProviderDetailSettingsScreen() {
             // finger that already aimed at the toolbar.
             <ProviderApiManagementSection
               apiKeysInput={apiKeysInput}
-              apiKeysVisible={apiKeysVisible}
               baseUrl={getProviderPrimaryBaseUrl(provider)}
               provider={provider}
               showApiKeys={showApiKeys}
               showBaseUrl={canEditEndpoint}
               onApiKeysCommit={commitApiKeys}
               onApiKeysManagePress={openApiKeySettings}
-              onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
               onBaseUrlCommit={commitBaseUrl}
               onBaseUrlManagePress={openEndpointSettings}
             />
