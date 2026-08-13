@@ -48,6 +48,7 @@ function cleanMarkdownForSpeech(markdown: string): string {
 
   text = text.replace(/!\[[^\]]*\]\((?:\\.|[^)])*\)/g, '');
   text = text.replace(/!\[[^\]]*\]\[[^\]]*\]/g, '');
+  text = text.replace(/\[\d+\]\((?:\\.|[^)])*\)/g, '');
   text = text.replace(/\[([^\]]+)\]\((?:\\.|[^)])*\)/g, '$1');
   text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1');
   text = text.replace(/\[(?:cite:[^\]]+|\d+)\]/giu, '');
