@@ -1,4 +1,5 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
+import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
@@ -194,11 +195,25 @@ function paintingActivityProps(
   return {
     compactLabel: translate('painting.backgroundActivity.title'),
     detail: translate(`painting.backgroundActivity.${phase}`),
+    icon: paintingActivityIcon(phase),
     phase,
     startedAtEpochMs,
     title: translate('painting.backgroundActivity.title'),
     ...(preview.trim() ? { preview: preview.trim() } : {}),
   };
+}
+
+function paintingActivityIcon(phase: PaintingActivityPhase): BackgroundActivityIcon {
+  switch (phase) {
+    case 'cancelled':
+      return 'x-circle';
+    case 'completed':
+      return 'check-circle';
+    case 'failed':
+      return 'warning-triangle';
+    case 'generating':
+      return 'paintbrush';
+  }
 }
 
 function throwIfAborted(signal: AbortSignal): void {

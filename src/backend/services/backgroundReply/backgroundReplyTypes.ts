@@ -2,9 +2,9 @@ import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message
 
 import type { BackgroundReplyPhase } from '@/shared/backgroundActivities/chatReply';
 
-// The presentation contract (phase/content/props) lives in
-// src/shared/backgroundActivities/chatReply so the frontend widget layout can
-// share it; these re-exports keep the service-local import surface stable.
+// The feature contract lives in shared so the service and activity
+// registration agree on props; these re-exports keep the service-local import
+// surface stable.
 export type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,

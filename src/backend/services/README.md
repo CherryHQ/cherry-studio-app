@@ -28,8 +28,9 @@ suffix.
   each consumer decides when to acquire). `backgroundActivities` owns the feature-agnostic
   `BackgroundActivityManager` session driver and the presenter seam over iOS Live Activities.
   Domain meaning stays with the consumers: `backgroundReply` is chat's adapter (turn state
-  machine, content derivation), and the painting job handler drives its own session. Widget
-  layouts live in `src/frontend/features/<feature>/background`; their props contracts sit in
+  machine, content and icon derivation), and the painting job handler drives its own session.
+  CherryUI owns the fixed platform layout and visual policy; feature modules only register that
+  renderer with their typed activity name. Feature props contracts sit in
   `src/shared/backgroundActivities`, and bootstrap/runtime configures the host-scoped activity
   environment before lifecycle services initialize.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific

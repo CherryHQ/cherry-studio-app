@@ -25,7 +25,12 @@ module.exports = {
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
   ],
+  // Local build/export artifacts can contain copied workspace packages. Keep
+  // them out of the Haste map so package names remain unique during tests.
+  modulePathIgnorePatterns: ['<rootDir>/.context/', '<rootDir>/.local/'],
   moduleNameMapper: {
+    '^@cherrystudio/ui/background-activity/ios$':
+      '<rootDir>/packages/ui/src/background-activity/background-activity.ios.tsx',
     '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
     '^lucide-uniwind/png/generated/(.*)$':
       '<rootDir>/packages/lucide-uniwind/src/png-icons/generated/$1',

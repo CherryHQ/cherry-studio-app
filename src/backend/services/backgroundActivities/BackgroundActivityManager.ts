@@ -1,3 +1,4 @@
+import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activity';
 import { File } from 'expo-file-system';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
@@ -10,7 +11,6 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@/shared/backgroundActivities/logo';
 import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivities/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 

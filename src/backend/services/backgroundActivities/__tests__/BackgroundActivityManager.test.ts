@@ -1,6 +1,6 @@
+import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activity';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
-import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@/shared/backgroundActivities/logo';
 import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivities/types';
 
 import { BackgroundActivityManager } from '../BackgroundActivityManager';

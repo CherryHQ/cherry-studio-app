@@ -1,3 +1,4 @@
+import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { Platform } from 'react-native';
 
 import {
@@ -267,12 +268,13 @@ export class BackgroundReplyService
   private toActivityProps(record: TurnRecord): BackgroundReplyActivityProps {
     return {
       ...record.content,
-      assistantName: record.assistantName,
       compactLabel: getBackgroundReplyCompactLabel(
         record.content.phase,
         this.environment.translate,
       ),
+      icon: backgroundReplyIcon(record.content.phase),
       startedAtEpochMs: record.startedAtEpochMs,
+      title: record.assistantName,
     };
   }
 
@@ -313,4 +315,25 @@ function isGeneratingPhase(phase: BackgroundReplyPhase): boolean {
     phase === 'using-tool' ||
     phase === 'responding'
   );
+}
+
+function backgroundReplyIcon(phase: BackgroundReplyPhase): BackgroundActivityIcon {
+  switch (phase) {
+    case 'awaiting-approval':
+      return 'bubble-exclamation';
+    case 'cancelled':
+      return 'x-circle';
+    case 'completed':
+      return 'check-circle';
+    case 'failed':
+      return 'warning-triangle';
+    case 'preparing':
+      return 'hourglass';
+    case 'responding':
+      return 'bubble-ellipsis';
+    case 'thinking':
+      return 'brain';
+    case 'using-tool':
+      return 'wrench';
+  }
 }

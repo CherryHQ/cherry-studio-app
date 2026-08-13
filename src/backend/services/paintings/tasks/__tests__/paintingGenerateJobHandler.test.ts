@@ -195,12 +195,16 @@ describe('createPaintingGenerateJobHandler', () => {
         expect.objectContaining({
           deepLinkUrl: 'cherrystudio://paintings/painting-1',
           keepAlive: false,
-          props: expect.objectContaining({ phase: 'generating', preview: 'draw' }),
+          props: expect.objectContaining({
+            icon: 'paintbrush',
+            phase: 'generating',
+            preview: 'draw',
+          }),
           tag: 'painting.generate',
         }),
       );
       expect(sessions[0]?.finish).toHaveBeenCalledWith(
-        expect.objectContaining({ phase: 'completed' }),
+        expect.objectContaining({ icon: 'check-circle', phase: 'completed' }),
       );
     });
 
@@ -211,7 +215,7 @@ describe('createPaintingGenerateJobHandler', () => {
 
       await expect(handler.execute(createContext())).rejects.toThrow('provider down');
       expect(sessions[0]?.finish).toHaveBeenCalledWith(
-        expect.objectContaining({ phase: 'failed' }),
+        expect.objectContaining({ icon: 'warning-triangle', phase: 'failed' }),
       );
     });
 
@@ -225,7 +229,7 @@ describe('createPaintingGenerateJobHandler', () => {
         'Job cancelled: user',
       );
       expect(sessions[0]?.finish).toHaveBeenCalledWith(
-        expect.objectContaining({ phase: 'cancelled' }),
+        expect.objectContaining({ icon: 'x-circle', phase: 'cancelled' }),
       );
     });
   });

@@ -5,10 +5,9 @@ import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivities/
 import { type BackgroundActivityPresenter, noopBackgroundActivityPresenter } from './presenter';
 
 /**
- * Wraps a frontend-owned expo-widgets Live Activity factory as a presenter.
- * The factory arrives through composition (bootstrap/runtime imports the
- * feature's layout and passes it down); platforms whose layout module resolves
- * to `undefined` fall back to the no-op presenter.
+ * Wraps a feature-registered expo-widgets Live Activity factory as a presenter.
+ * The factory arrives through composition; platforms whose activity module
+ * resolves to `undefined` fall back to the no-op presenter.
  */
 export function createLiveActivityPresenter<Props extends BackgroundActivityBaseProps & object>(
   factory: LiveActivityFactory<Props> | undefined,

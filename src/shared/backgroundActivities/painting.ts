@@ -1,4 +1,4 @@
-import type { BackgroundActivityBaseProps } from './types';
+import type { BackgroundActivityPresentation } from '@cherrystudio/ui/background-activity';
 
 /**
  * Painting background-generation activity contract, shared between the widget
@@ -7,11 +7,6 @@ import type { BackgroundActivityBaseProps } from './types';
 
 export type PaintingActivityPhase = 'cancelled' | 'completed' | 'failed' | 'generating';
 
-export type PaintingActivityProps = BackgroundActivityBaseProps & {
-  compactLabel: string;
-  detail: string;
+export type PaintingActivityProps = BackgroundActivityPresentation & {
   phase: PaintingActivityPhase;
-  /** Prompt excerpt shown in the expanded island. */
-  preview?: string;
-  title: string;
 };

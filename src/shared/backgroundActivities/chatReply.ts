@@ -1,4 +1,4 @@
-import type { BackgroundActivityBaseProps } from './types';
+import type { BackgroundActivityPresentation } from '@cherrystudio/ui/background-activity';
 
 /**
  * Chat background-reply activity contract. Shared because the widget layout
@@ -22,8 +22,4 @@ export type BackgroundReplyContent = {
   preview?: string;
 };
 
-export type BackgroundReplyActivityProps = BackgroundActivityBaseProps &
-  BackgroundReplyContent & {
-    assistantName: string;
-    compactLabel: string;
-  };
+export type BackgroundReplyActivityProps = BackgroundActivityPresentation & BackgroundReplyContent;

@@ -57,7 +57,7 @@ describe('BackgroundReplyService', () => {
     expect(mockSessions[0]?.input).toMatchObject({
       deepLinkUrl: 'cherrystudio://topics?topicId=topic-1',
       keepAlive: true,
-      props: expect.objectContaining({ assistantName: 'Alpha', phase: 'preparing' }),
+      props: expect.objectContaining({ icon: 'hourglass', phase: 'preparing', title: 'Alpha' }),
       tag: 'chat.backgroundReply',
     });
 
@@ -69,7 +69,7 @@ describe('BackgroundReplyService', () => {
     const turn = service.startTurn({ assistantName: ' ', topicId: 'topic-1' });
     await turn.ready;
 
-    expect(mockSessions[0]?.input.props).toMatchObject({ assistantName: 'Localized assistant' });
+    expect(mockSessions[0]?.input.props).toMatchObject({ title: 'Localized assistant' });
 
     await service._doStop();
   });
@@ -82,7 +82,7 @@ describe('BackgroundReplyService', () => {
 
     turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'hello' }], role: 'assistant' });
     expect(session?.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ phase: 'responding', preview: 'hello' }),
+      expect.objectContaining({ icon: 'bubble-ellipsis', phase: 'responding', preview: 'hello' }),
       { keepAlive: true, urgent: true },
     );
 
@@ -98,13 +98,15 @@ describe('BackgroundReplyService', () => {
 
     turn.awaitApproval({ id: 'assistant-1', parts: [], role: 'assistant' });
     expect(session?.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ phase: 'awaiting-approval' }),
+      expect.objectContaining({ icon: 'bubble-exclamation', phase: 'awaiting-approval' }),
       { keepAlive: false, urgent: true },
     );
 
     turn.finish('completed');
     await flushOperations();
-    expect(session?.finish).toHaveBeenCalledWith(expect.objectContaining({ phase: 'completed' }));
+    expect(session?.finish).toHaveBeenCalledWith(
+      expect.objectContaining({ icon: 'check-circle', phase: 'completed' }),
+    );
     await service._doStop();
   });
 
