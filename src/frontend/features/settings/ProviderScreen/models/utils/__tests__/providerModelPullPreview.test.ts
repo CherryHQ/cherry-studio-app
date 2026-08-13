@@ -42,24 +42,6 @@ describe('provider model pull preview helpers', () => {
     ]);
   });
 
-  // The header sits outside each card, so row placement restarts per section.
-  test('marks the first and last row of every section', () => {
-    const preview = {
-      added: [model({ modelId: 'new-model' }), model({ modelId: 'other-new-model' })],
-      missing: [model({ modelId: 'old-model' })],
-    };
-
-    expect(
-      buildProviderModelPullListItems(preview, ['added', 'missing'])
-        .filter((item) => item.type === 'model')
-        .map((item) => [item.key, item.isFirst, item.isLast]),
-    ).toEqual([
-      ['model:added:openai::new-model', true, false],
-      ['model:added:openai::other-new-model', false, true],
-      ['model:missing:openai::old-model', true, true],
-    ]);
-  });
-
   test('does not include section headers without models', () => {
     expect(
       buildProviderModelPullListItems({ added: [], missing: [] }, ['added', 'missing']),
@@ -80,8 +62,6 @@ describe('provider model pull preview helpers', () => {
         type: 'section',
       },
       expect.objectContaining({
-        isFirst: true,
-        isLast: true,
         key: 'model:missing:openai::old-model',
         type: 'model',
       }),

@@ -9,6 +9,11 @@ import { HeaderIconButton } from '../components/HeaderIconButton';
 import type { HeaderToolbarAction } from './BackHeader.types';
 
 export type BackHeaderProps = {
+  /**
+   * Replaces the back button. For modes that suspend navigation — a selection's
+   * "Done" — where going back would strand the mode's own state.
+   */
+  leftActions?: readonly HeaderToolbarAction[];
   onBack?: () => void;
   rightActions?: readonly HeaderToolbarAction[];
   title?: string;
@@ -60,7 +65,13 @@ function renderAndroidHeaderAction(action: HeaderToolbarAction): ReactNode {
   );
 }
 
-export function BackHeader({ onBack, rightActions, title = '', titleElement }: BackHeaderProps) {
+export function BackHeader({
+  leftActions,
+  onBack,
+  rightActions,
+  title = '',
+  titleElement,
+}: BackHeaderProps) {
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -76,11 +87,14 @@ export function BackHeader({ onBack, rightActions, title = '', titleElement }: B
   const options = useMemo(
     () => ({
       headerBackVisible: false,
-      headerLeft: () => (
-        <HeaderIconButton accessibilityLabel={t('navigation.back')} onPress={goBack}>
-          <ChevronLeftIcon className="size-6 text-foreground" />
-        </HeaderIconButton>
-      ),
+      headerLeft:
+        leftActions && leftActions.length > 0
+          ? () => leftActions.map((action) => renderAndroidHeaderAction(action))
+          : () => (
+              <HeaderIconButton accessibilityLabel={t('navigation.back')} onPress={goBack}>
+                <ChevronLeftIcon className="size-6 text-foreground" />
+              </HeaderIconButton>
+            ),
       headerRight:
         rightActions && rightActions.length > 0
           ? () => rightActions.map((action) => renderAndroidHeaderAction(action))
@@ -88,7 +102,7 @@ export function BackHeader({ onBack, rightActions, title = '', titleElement }: B
       headerTitle: titleElement ? () => titleElement : undefined,
       title: titleElement ? '' : title,
     }),
-    [goBack, rightActions, t, title, titleElement],
+    [goBack, leftActions, rightActions, t, title, titleElement],
   );
 
   return <Stack.Screen options={options} />;

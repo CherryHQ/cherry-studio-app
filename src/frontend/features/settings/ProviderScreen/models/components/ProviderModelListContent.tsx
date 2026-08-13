@@ -1,94 +1,75 @@
-import { MinusIcon } from '@cherrystudio/app-icons';
-import { Button } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { memo, type ReactElement, useCallback, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { memo, type ReactElement, useCallback, useMemo } from 'react';
 import { StyleSheet } from 'react-native';
 
 import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
 
-type ProviderModelListItem = {
-  itemKey: string;
-  isFirst: boolean;
-  isLast: boolean;
-  model: Model;
-  previousItemKey?: string;
+/**
+ * Given while the list is selecting. `selectedIds` changing is what re-renders
+ * the rows, which is why it travels through `extraData` rather than a closure.
+ */
+export type ProviderModelListSelection = {
+  onToggleModel: (id: UniqueModelId) => void;
+  selectedIds: ReadonlySet<UniqueModelId>;
 };
 
 type ProviderModelListExtraData = {
   isDefaultModel: (model: Model) => boolean;
-  onRemoveModel: (model: Model) => void;
-  pressedItemKey?: string;
   provider: Provider | undefined;
-  removingIds: ReadonlySet<UniqueModelId>;
+  selection: ProviderModelListSelection | undefined;
 };
 
+/**
+ * Removing is the selection's job, so a row carries no control of its own — it
+ * is a label until the screen starts selecting, and a checkbox after.
+ */
 export function ProviderModelListContent({
   isDefaultModel,
   ListEmptyComponent,
   ListHeaderComponent,
   models,
-  onRemoveModel,
   onScrollBeginDrag,
   provider,
-  removingIds,
+  selection,
 }: {
   isDefaultModel: (model: Model) => boolean;
   ListEmptyComponent?: ReactElement;
   ListHeaderComponent?: ReactElement;
   models: Model[];
-  onRemoveModel: (model: Model) => void;
   onScrollBeginDrag?: () => void;
   provider: Provider | undefined;
-  removingIds: ReadonlySet<UniqueModelId>;
+  selection?: ProviderModelListSelection;
 }) {
-  const listItems = useMemo(() => buildProviderModelListItems(models), [models]);
-  const [pressedItemKey, setPressedItemKey] = useState<string>();
-  const handleItemPressedChange = useCallback((itemKey: string, isPressed: boolean) => {
-    setPressedItemKey((currentKey) =>
-      isPressed ? itemKey : currentKey === itemKey ? undefined : currentKey,
-    );
-  }, []);
   const extraData = useMemo<ProviderModelListExtraData>(
     () => ({
       isDefaultModel,
-      onRemoveModel,
-      pressedItemKey,
       provider,
-      removingIds,
+      selection,
     }),
-    [isDefaultModel, onRemoveModel, pressedItemKey, provider, removingIds],
+    [isDefaultModel, provider, selection],
   );
   const renderItem = useCallback(
-    ({ extraData: itemExtraData, item }: LegendListRenderItemProps<ProviderModelListItem>) => (
+    ({ extraData: itemExtraData, item }: LegendListRenderItemProps<Model>) => (
       <ModelRow
-        canRemove={!itemExtraData.isDefaultModel(item.model)}
-        hideSeparator={
-          itemExtraData.pressedItemKey === item.itemKey ||
-          itemExtraData.pressedItemKey === item.previousItemKey
-        }
-        itemKey={item.itemKey}
-        isFirst={item.isFirst}
-        isLast={item.isLast}
-        isRemoving={itemExtraData.removingIds.has(item.model.id)}
-        model={item.model}
+        canRemove={!itemExtraData.isDefaultModel(item)}
+        isSelected={itemExtraData.selection?.selectedIds.has(item.id) ?? false}
+        model={item}
         provider={itemExtraData.provider}
-        onRemove={itemExtraData.onRemoveModel}
-        onPressedChange={handleItemPressedChange}
+        onToggleSelected={itemExtraData.selection?.onToggleModel}
       />
     ),
-    [handleItemPressedChange],
+    [],
   );
-  const keyExtractor = useCallback((item: ProviderModelListItem) => item.itemKey, []);
+  const keyExtractor = useCallback((item: Model) => item.id, []);
 
   return (
     <LegendList
       automaticallyAdjustsScrollIndicatorInsets
       contentContainerStyle={styles.contentContainer}
       contentInsetAdjustmentBehavior="automatic"
-      data={listItems}
+      data={models}
       estimatedItemSize={providerModelRowEstimatedHeight}
       extraData={extraData}
       keyboardDismissMode="on-drag"
@@ -106,66 +87,34 @@ export function ProviderModelListContent({
   );
 }
 
-function buildProviderModelListItems(models: Model[]): ProviderModelListItem[] {
-  return models.map((model, index) => ({
-    itemKey: `model:${model.id}`,
-    isFirst: index === 0,
-    isLast: index === models.length - 1,
-    model,
-    previousItemKey: index > 0 ? `model:${models[index - 1].id}` : undefined,
-  }));
-}
-
 const ModelRow = memo(function ModelRow({
   canRemove,
-  hideSeparator,
-  itemKey,
-  isFirst,
-  isLast,
-  isRemoving,
+  isSelected,
   model,
-  onRemove,
-  onPressedChange,
+  onToggleSelected,
   provider,
 }: {
   canRemove: boolean;
-  hideSeparator: boolean;
-  itemKey: string;
-  isFirst: boolean;
-  isLast: boolean;
-  isRemoving: boolean;
+  isSelected: boolean;
   model: Model;
-  onRemove: (model: Model) => void;
-  onPressedChange: (itemKey: string, isPressed: boolean) => void;
+  /** Given only while selecting; its absence is what leaves the row a plain label. */
+  onToggleSelected?: (id: UniqueModelId) => void;
   provider: Provider | undefined;
 }) {
-  const { t } = useTranslation();
-  const handleRemove = useCallback(() => {
-    onRemove(model);
-  }, [model, onRemove]);
+  const handleToggleSelected = useCallback(() => {
+    onToggleSelected?.(model.id);
+  }, [model.id, onToggleSelected]);
 
   return (
     <ProviderModelRow
-      hideSeparator={hideSeparator}
-      isFirst={isFirst}
-      isLast={isLast}
       model={model}
       provider={provider}
-      surfaceClassName="mx-4"
-    >
-      <Button
-        accessibilityLabel={t('settings.provider.models.remove')}
-        accessibilityState={{ busy: isRemoving }}
-        disabled={!canRemove || isRemoving}
-        hitSlop={6}
-        icon={<MinusIcon className="text-destructive" />}
-        onPress={handleRemove}
-        onPressIn={() => onPressedChange(itemKey, true)}
-        onPressOut={() => onPressedChange(itemKey, false)}
-        size="sm"
-        variant="ghost"
-      />
-    </ProviderModelRow>
+      selection={
+        onToggleSelected
+          ? { isDisabled: !canRemove, isSelected, onToggle: handleToggleSelected }
+          : undefined
+      }
+    />
   );
 });
 

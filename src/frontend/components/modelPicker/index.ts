@@ -1,14 +1,14 @@
 export { ModelPickerBottomSheet } from './components/ModelPickerBottomSheet';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
-export { ModelPickerSheetContent } from './components/ModelPickerSheetContent';
+export { ModelPickerList } from './components/ModelPickerList';
 export { ModelPickerTagChip } from './components/ModelPickerTagChip';
 export { useModelPickerData } from './hooks/useModelPickerData';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export {
   filterModelsByModelPickerTags,
   getAvailableModelPickerFilterTagsForModels,
-  getModelPickerTags,
-  isFreeModel,
+  getModelPickerRowTags,
+  type ModelPickerGroup,
   type ModelPickerModelItem,
   type ModelPickerTag,
 } from './utils/modelPickerData';

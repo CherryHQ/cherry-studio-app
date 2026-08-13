@@ -1,4 +1,3 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
 import { cn } from '@cherrystudio/ui/utils';
 import {
   LegendList,
@@ -9,18 +8,25 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { ModelPickerGroup, ModelPickerModelItem } from '../utils/modelPickerData';
+import { ModelAvatar } from '@/frontend/components/ModelAvatar';
+
+import {
+  getModelPickerRowTags,
+  type ModelPickerGroup,
+  type ModelPickerModelItem,
+} from '../utils/modelPickerData';
 import type { ModelPickerListItem } from '../utils/modelPickerListItems';
-import { ModelPickerIcon } from './ModelPickerIcon';
+import { ModelPickerTagChip } from './ModelPickerTagChip';
 
-const modelPickerEstimatedItemSize = 48;
+/** `py-2` around the tallest thing in a row, which is the 26 avatar. */
+const modelPickerEstimatedItemSize = 42;
 
-type ModelPickerSheetContentProps = {
+type ModelPickerListProps = {
   emptyText?: string;
   hasMoreItems?: boolean;
   isLoading?: boolean;
+  /** Whether the picker is on screen; it scrolls to the selection once per showing. */
   isOpen?: boolean;
-  isSearching: boolean;
   listItems: readonly ModelPickerListItem[];
   loadingText?: string;
   onEndReached?: () => void;
@@ -29,12 +35,17 @@ type ModelPickerSheetContentProps = {
   selectedModelId: string | null;
 };
 
-type ModelPickerSheetContentExtraData = {
+type ModelPickerListExtraData = {
   pinnedModelIdSet: ReadonlySet<string>;
   selectedModelId: string | null;
 };
 
-export function ModelPickerSheetContent({
+/**
+ * Every model on the device, grouped by provider under a pinned group. Drawn
+ * for both surfaces that pick one — the sheet the composer opens and the
+ * pushed screen the model settings use — so the two cannot drift apart.
+ */
+export function ModelPickerList({
   emptyText,
   hasMoreItems = false,
   isLoading = false,
@@ -45,7 +56,7 @@ export function ModelPickerSheetContent({
   onSelect,
   pinnedModelIds,
   selectedModelId,
-}: ModelPickerSheetContentProps) {
+}: ModelPickerListProps) {
   const listRef = useRef<LegendListRef>(null);
   const hasScrolledToSelectedRef = useRef(false);
   const selectedRowIndex = useMemo(() => {
@@ -82,7 +93,7 @@ export function ModelPickerSheetContent({
     return () => cancelAnimationFrame(frame);
   }, [isOpen, selectedRowIndex]);
   const pinnedModelIdSet = useMemo(() => new Set(pinnedModelIds), [pinnedModelIds]);
-  const listExtraData = useMemo<ModelPickerSheetContentExtraData>(
+  const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({
       pinnedModelIdSet,
       selectedModelId,
@@ -171,7 +182,7 @@ function ModelPickerGroupHeader({
   const { t } = useTranslation();
 
   return (
-    <View className={cn('flex-row items-center gap-2 pb-1', !isFirstGroup && 'mt-3')}>
+    <View className={cn('flex-row items-center gap-2 px-2 pb-1', !isFirstGroup && 'mt-3')}>
       <Text className="text-foreground text-lg">{groupKind === 'pinned' ? t(title) : title}</Text>
       {groupKind === 'pinned' ? <Text className="text-foreground text-lg">{count}</Text> : null}
     </View>
@@ -192,27 +203,44 @@ const ModelPickerRow = memo(function ModelPickerRow({
   const handleSelect = useCallback(() => {
     onSelect(item);
   }, [item, onSelect]);
+  const tags = getModelPickerRowTags(item.model);
 
   return (
     <Pressable
       accessibilityLabel={item.model.name}
       accessibilityRole="button"
       accessibilityState={{ selected: isSelected }}
-      className="flex-row items-center gap-3 py-2 active:opacity-60"
+      className={cn(
+        // `px-2` against the list's own 8, so the fill runs to within 8 of the
+        // sheet edge while the text keeps the 16 the group headings are set to.
+        // The fill is the only mark of the selection — it reads at a glance
+        // down a long list in a way a tick at the far end of the row does not.
+        'flex-row items-center gap-3 rounded-xl px-2 py-2 active:opacity-60',
+        isSelected && 'bg-secondary',
+      )}
       onPress={handleSelect}
     >
+      <ModelAvatar model={item.model} provider={item.provider} />
+      {/* The one part of the row that gives, so the capabilities keep their
+          natural width and a long model id ellipsizes instead. */}
       <View className="min-w-0 flex-1 flex-row items-center gap-2">
-        <ModelPickerIcon model={item.model} provider={item.provider} size={24} />
         <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
           {item.model.name}
         </Text>
+        {/* A pinned group mixes providers, so the row has to say which one. */}
         {isPinned ? (
           <Text className="shrink text-base text-foreground" numberOfLines={1}>
             | {item.provider.name}
           </Text>
         ) : null}
       </View>
-      {isSelected ? <CheckIcon className="size-5 text-primary" /> : null}
+      {tags.length > 0 ? (
+        <View className="flex-row items-center gap-1">
+          {tags.map((tag) => (
+            <ModelPickerTagChip key={`${item.modelId}:${tag}`} tag={tag} />
+          ))}
+        </View>
+      ) : null}
     </Pressable>
   );
 });
@@ -221,9 +249,12 @@ const styles = StyleSheet.create({
   list: {
     flex: 1,
   },
+  // 8 rather than the 16 everything here lines up on: the rows and the group
+  // headings carry the other 8 themselves, which is what leaves the selected
+  // row's fill room to sit outside its own text.
   listContentContainer: {
     paddingBottom: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
     paddingTop: 12,
   },
 });

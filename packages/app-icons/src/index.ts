@@ -49,6 +49,7 @@ export { default as InfoIcon } from './generated/info';
 export { default as KeyRoundIcon } from './generated/key-round';
 export { default as LanguagesIcon } from './generated/languages';
 export { default as LightbulbIcon } from './generated/lightbulb';
+export { default as ListChecksIcon } from './generated/list-checks';
 export { default as MailIcon } from './generated/mail';
 export { default as MapPinIcon } from './generated/map-pin';
 export { default as MessageCircleIcon } from './generated/message-circle';

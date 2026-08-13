@@ -156,6 +156,7 @@ function SelectionSheetOptions<TValue extends string>({
       contentContainerStyle={styles.listContent}
       data={options}
       estimatedItemSize={estimatedOptionHeight}
+      extraData={selectedValue}
       keyExtractor={keyExtractor}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"

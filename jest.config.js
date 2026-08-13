@@ -23,6 +23,11 @@ module.exports = {
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
   ],
+  // Conductor's gitignored scratch directory, where agents park git worktrees of
+  // this same repo. A second copy of the tree is a second copy of every module,
+  // which makes haste map reject the run over duplicate package names — so it
+  // has to be off the module map, not just out of the test list.
+  modulePathIgnorePatterns: ['<rootDir>/.context/'],
   moduleNameMapper: {
     '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
     '^vitest$': '<rootDir>/packages/provider-registry/vitestJestShim.ts',

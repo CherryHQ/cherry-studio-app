@@ -9,7 +9,7 @@ import { SelectionSheetSearchField } from '@/frontend/components/selectionSheet'
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
-import { ModelPickerSheetContent } from './ModelPickerSheetContent';
+import { ModelPickerList } from './ModelPickerList';
 
 const initialModelPickerListItemCount = 24;
 const modelPickerListItemBatchSize = 24;
@@ -50,7 +50,6 @@ export function ModelPickerBottomSheet({
   const sheetHeight = (windowHeight - insets.top - insets.bottom) * modelPickerSnapPointFraction;
   const [searchText, setSearchText] = useState('');
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
-  const isSearching = searchText.trim().length > 0;
   const { groups, isLoading, pinnedModelIds } = useModelPickerData({
     searchText,
     selectedTags,
@@ -128,12 +127,11 @@ export function ModelPickerBottomSheet({
           <SelectionSheetSearchField onChange={handleSearchTextChange} value={searchText} />
         </View>
         <View style={styles.modelListViewport}>
-          <ModelPickerSheetContent
+          <ModelPickerList
             emptyText={t('settings.provider.models.search.empty')}
             hasMoreItems={hasMoreListItems}
             isLoading={isLoading}
             isOpen={isOpen ?? true}
-            isSearching={isSearching}
             listItems={listItems}
             loadingText={t('settings.provider.models.loading')}
             onEndReached={handleListEndReached}

@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { ProviderDetailChrome } from '../ProviderDetailChrome.android';
 
 jest.mock('@cherrystudio/app-icons', () => ({
-  ActivityIcon: () => null,
   PauseIcon: () => null,
   PlayIcon: () => null,
   RefreshCcwIcon: () => null,
@@ -36,7 +35,6 @@ jest.mock('react-i18next', () => ({
         'settings.provider.deleteProvider': 'Delete provider',
         'settings.provider.disableProvider': 'Disable provider',
         'settings.provider.enableProvider': 'Enable provider',
-        'settings.provider.models.check': 'Check models',
         'settings.provider.models.pull': 'Pull models',
       })[key] ?? key,
   }),
@@ -57,7 +55,6 @@ describe('ProviderDetailChrome.android', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete
-          checkAction={{ onPress: jest.fn() }}
           isActive={false}
           isDisabled={false}
           onDelete={onDelete}
@@ -94,7 +91,6 @@ describe('ProviderDetailChrome.android', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
-          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -111,15 +107,13 @@ describe('ProviderDetailChrome.android', () => {
     ).not.toHaveLength(0);
   });
 
-  it('wires pull and check when the models tab supplies them', async () => {
-    const onCheck = jest.fn();
+  it('wires pull when the models tab supplies it', async () => {
     const onPull = jest.fn();
 
     await act(async () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
-          checkAction={{ onPress: onCheck }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -137,24 +131,15 @@ describe('ProviderDetailChrome.android', () => {
       (node) =>
         node.props.accessibilityLabel === 'Pull models' && typeof node.props.onPress === 'function',
     );
-    const [check] = renderer.root.findAll(
-      (node) =>
-        node.props.accessibilityLabel === 'Check models' &&
-        typeof node.props.onPress === 'function',
-    );
-
-    check.props.onPress();
 
     expect(pull.props.disabled).toBe(true);
-    expect(onCheck).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps check visible when pull is omitted outside the models tab', async () => {
+  it('omits pull outside the models tab', async () => {
     await act(async () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
-          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -164,8 +149,5 @@ describe('ProviderDetailChrome.android', () => {
     });
 
     expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Pull models' })).toHaveLength(0);
-    expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Check models' })).not.toHaveLength(
-      0,
-    );
   });
 });

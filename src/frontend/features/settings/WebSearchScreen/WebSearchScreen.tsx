@@ -1,8 +1,6 @@
 import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
-import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -10,36 +8,19 @@ import { useUniwind } from 'uniwind';
 import { BackHeader } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
 
-import { SettingNumberInput } from '../components/SettingNumberInput';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
+import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import { resolveWebSearchProviderIcon } from './utils/providerIcons';
+import { getWebSearchProviderPreset } from './utils/providerSettings';
 
 export default function WebSearchSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { theme } = useUniwind();
-  const iconTheme = theme === 'dark' ? 'dark' : 'light';
   const webSearchProviders = useWebSearchProviderPreferences();
-  const selectedSearchProvider = webSearchProviders.searchKeywords.options.find(
-    (option) => option.value === webSearchProviders.searchKeywords.value,
-  );
-  const selectedCompressionMethod = webSearchProviders.compressionMethod.options.find(
-    (option) => option.value === webSearchProviders.compressionMethod.value,
-  );
-  const webSearchProviderItems = useMemo(
-    () =>
-      MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS.map((provider) => ({
-        id: provider.id,
-        imageSource: resolveWebSearchProviderIcon(provider.id)?.[iconTheme],
-        name: provider.name,
-        onPress: () =>
-          router.push({
-            pathname: './websearch/[providerId]',
-            params: { providerId: provider.id },
-          }),
-      })),
-    [iconTheme, router],
-  );
+  const searchProvider = getWebSearchProviderPreset(webSearchProviders.searchKeywords.value);
+  const fetchProvider = getWebSearchProviderPreset(webSearchProviders.fetchUrls.value);
+  const iconTheme = theme === 'dark' ? 'dark' : 'light';
 
   return (
     <>
@@ -49,94 +30,71 @@ export default function WebSearchSettingsScreen() {
         className="flex-1"
         contentContainerClassName="gap-6 px-4 py-5"
         contentInsetAdjustmentBehavior="automatic"
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Section title={t('settings.websearch.general.title')}>
+        <WebSearchApiManagementSection
+          afterItems={
+            <Section.Item
+              label={t('settings.websearch.advanced.title')}
+              onPress={() => router.push('/settings/websearch/advanced')}
+            />
+          }
+          capability="searchKeywords"
+          provider={searchProvider}
+          providerOverrides={webSearchProviders.providerOverrides.value}
+          onCapabilityApiHostChange={webSearchProviders.providerOverrides.onCapabilityApiHostChange}
+          onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
+        >
           <Section.Item
-            label={t('settings.websearch.defaultProvider')}
+            label={t('settings.websearch.provider.selection')}
             onPress={() => router.push('/settings/websearch/default-provider')}
-            trailing={
-              <SelectionValue
-                imageSource={
-                  resolveWebSearchProviderIcon(webSearchProviders.searchKeywords.value)?.[iconTheme]
-                }
-                label={selectedSearchProvider?.label ?? t('settings.select.placeholder')}
-              />
-            }
+            trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={searchProvider} />}
           />
+        </WebSearchApiManagementSection>
+
+        <WebSearchApiManagementSection
+          capability="fetchUrls"
+          provider={fetchProvider}
+          providerOverrides={webSearchProviders.providerOverrides.value}
+          onCapabilityApiHostChange={webSearchProviders.providerOverrides.onCapabilityApiHostChange}
+          onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
+        >
           <Section.Item
-            label={t('settings.websearch.maxResults')}
-            trailing={
-              <SettingNumberInput
-                accessibilityLabel={t('settings.websearch.maxResults')}
-                value={webSearchProviders.maxResults.value}
-                onValueChange={webSearchProviders.maxResults.onValueChange}
-              />
-            }
+            label={t('settings.websearch.fetchUrlsProvider')}
+            onPress={() => router.push('/settings/websearch/fetch-provider')}
+            trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={fetchProvider} />}
           />
-          <Section.Item
-            label={t('settings.websearch.compressionMethod')}
-            onPress={() => router.push('/settings/websearch/compression-method')}
-            trailing={
-              <SelectionValue
-                label={selectedCompressionMethod?.label ?? t('settings.select.placeholder')}
-              />
-            }
-          />
-          {webSearchProviders.compressionMethod.value === 'cutoff' ? (
-            <Section.Item
-              label={t('settings.websearch.compressionCutoffLimit')}
-              trailing={
-                <SettingNumberInput
-                  accessibilityLabel={t('settings.websearch.compressionCutoffLimit')}
-                  value={webSearchProviders.compressionCutoffLimit.value}
-                  onValueChange={webSearchProviders.compressionCutoffLimit.onValueChange}
-                />
-              }
-            />
-          ) : null}
-        </Section>
-        <Section title={t('settings.websearch.apiProviders.title')}>
-          {webSearchProviderItems.map((item) => (
-            <Section.Item
-              key={item.id}
-              label={item.name}
-              leading={
-                item.imageSource ? (
-                  <Image
-                    cachePolicy="memory-disk"
-                    className="size-5"
-                    contentFit="contain"
-                    recyclingKey={item.id}
-                    source={item.imageSource}
-                  />
-                ) : null
-              }
-              onPress={item.onPress}
-            />
-          ))}
-        </Section>
+        </WebSearchApiManagementSection>
       </ScrollView>
     </>
   );
 }
 
-function SelectionValue({
-  imageSource,
-  label,
+function ProviderSelectionValue({
+  iconTheme,
+  provider,
 }: {
-  imageSource?: React.ComponentProps<typeof Image>['source'];
-  label: string;
+  iconTheme: 'dark' | 'light';
+  provider: ReturnType<typeof getWebSearchProviderPreset>;
 }) {
+  const providerIcon = resolveWebSearchProviderIcon(provider.id)?.[iconTheme];
+
   return (
     <View className="min-w-0 max-w-52 flex-row items-center justify-end gap-2">
-      {imageSource ? (
-        <Image className="size-5 shrink-0" contentFit="contain" source={imageSource} />
+      {providerIcon ? (
+        <Image
+          cachePolicy="memory-disk"
+          className="size-5 shrink-0"
+          contentFit="contain"
+          recyclingKey={provider.id}
+          source={providerIcon}
+        />
       ) : null}
       <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
-        {label}
+        {provider.name}
       </Text>
-      <ChevronRightIcon className="size-5 shrink-0 text-foreground" />
+      <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" />
     </View>
   );
 }

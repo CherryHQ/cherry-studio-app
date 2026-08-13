@@ -122,6 +122,8 @@ export const iconRegistry = {
     drift: 'SF Symbols has no translate glyph; iOS shows a character bubble.',
   },
   LightbulbIcon: { sf: 'lightbulb', material: 'lightbulb' },
+  // `checklist` mirrors the SF Symbol the iOS toolbar already passes for this same action.
+  ListChecksIcon: { sf: 'checklist', material: 'checklist' },
   MailIcon: { sf: 'envelope', material: 'mail' },
   MapPinIcon: { sf: 'mappin', material: 'location_on' },
   MessageCircleIcon: { sf: 'message', material: 'chat_bubble' },

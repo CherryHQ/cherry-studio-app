@@ -17,6 +17,7 @@ import {
   getAvailableModelPickerFilterTags,
   getAvailableModelPickerFilterTagsForModels,
   getModelPickerModelItem,
+  getModelPickerRowTags,
   getPinnedModelIds,
 } from '../modelPickerData';
 import { buildModelPickerListItems } from '../modelPickerListItems';
@@ -319,6 +320,27 @@ describe('model picker data helpers', () => {
 
     expect(groups.flatMap((group) => group.items.map((item) => item.modelId))).toEqual([
       'openai::gpt-image-2',
+    ]);
+  });
+
+  // Every list that draws a model row reads its badges from here, so the picker
+  // sheet and the provider screens cannot drift apart on what a model claims.
+  test('badges a row with its capabilities, and with free last when it is', () => {
+    const paid = createModel({
+      capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION, MODEL_CAPABILITY.REASONING],
+      modelId: 'paid-model',
+      name: 'Paid Model',
+      providerId: 'custom',
+    });
+
+    expect(getModelPickerRowTags(paid)).toEqual([
+      MODEL_CAPABILITY.IMAGE_RECOGNITION,
+      MODEL_CAPABILITY.REASONING,
+    ]);
+    expect(getModelPickerRowTags({ ...paid, name: 'Paid Model (free)' })).toEqual([
+      MODEL_CAPABILITY.IMAGE_RECOGNITION,
+      MODEL_CAPABILITY.REASONING,
+      'free',
     ]);
   });
 

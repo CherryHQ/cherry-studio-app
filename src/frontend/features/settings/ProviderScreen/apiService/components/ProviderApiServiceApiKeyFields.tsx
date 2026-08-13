@@ -1,12 +1,14 @@
+import { CopyIcon, KeyRoundIcon, PlusIcon, Trash2Icon } from '@cherrystudio/app-icons';
 import {
-  CopyIcon,
-  EyeIcon,
-  EyeOffIcon,
-  KeyRoundIcon,
-  PlusIcon,
-  Trash2Icon,
-} from '@cherrystudio/app-icons';
-import { Button, FieldError, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
+  Button,
+  FieldError,
+  Input,
+  Label,
+  SecureInput,
+  type SecureInputVisibilityAccessibilityLabels,
+  Switch,
+  TextField,
+} from '@cherrystudio/ui/components';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
 import { useCallback, useState } from 'react';
@@ -18,43 +20,37 @@ import { normalizeApiKeySingleLine } from '../utils/providerApiServiceApiKeys';
 
 export function ProviderApiServiceApiKeysField({
   apiKeysInput,
-  apiKeysVisible,
   onCommit,
   onManagePress,
-  onToggleVisible,
 }: {
   apiKeysInput: string;
-  apiKeysVisible: boolean;
   onCommit: (value: string) => void;
   onManagePress: () => void;
-  onToggleVisible: () => void;
 }) {
   const { t } = useTranslation();
 
   return (
     <TextField>
-      <Label>{t('settings.provider.apiService.apiKeys')}</Label>
+      {/* Semibold to match the `Section.Header` of the connectivity check right
+          below it — heroui's own label default is only medium. */}
+      <Label>
+        <Label.Text className="font-semibold">
+          {t('settings.provider.apiService.apiKeys')}
+        </Label.Text>
+      </Label>
       <View className="flex-row items-center gap-2">
         <View className="min-w-0 flex-1 overflow-hidden">
           <ApiKeysCommitInput
             accessibilityLabel={t('settings.provider.apiService.apiKeys')}
-            isVisible={apiKeysVisible}
             onCommit={onCommit}
             placeholder={t('settings.provider.apiService.apiKeysPlaceholder')}
             value={apiKeysInput}
+            visibilityAccessibilityLabels={{
+              hide: t('settings.provider.apiService.hideApiKeys'),
+              show: t('settings.provider.apiService.showApiKeys'),
+            }}
           />
         </View>
-        <Button
-          accessibilityLabel={
-            apiKeysVisible
-              ? t('settings.provider.apiService.hideApiKeys')
-              : t('settings.provider.apiService.showApiKeys')
-          }
-          hitSlop={2}
-          icon={apiKeysVisible ? <EyeIcon /> : <EyeOffIcon />}
-          onPress={onToggleVisible}
-          variant="secondary"
-        />
         <Button
           accessibilityLabel={t('settings.provider.apiService.manageApiKeys')}
           hitSlop={2}
@@ -69,16 +65,16 @@ export function ProviderApiServiceApiKeysField({
 
 function ApiKeysCommitInput({
   accessibilityLabel,
-  isVisible,
   onCommit,
   placeholder,
   value,
+  visibilityAccessibilityLabels,
 }: {
   accessibilityLabel: string;
-  isVisible: boolean;
   onCommit: (value: string) => void;
   placeholder: string;
   value: string;
+  visibilityAccessibilityLabels: SecureInputVisibilityAccessibilityLabels;
 }) {
   const [draftValue, setDraftValue] = useState(value);
   const [sourceValue, setSourceValue] = useState(value);
@@ -99,20 +95,17 @@ function ApiKeysCommitInput({
   }, []);
 
   return (
-    <Input
+    <SecureInput
       accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
       lineBreakModeIOS="clip"
-      multiline={false}
       numberOfLines={1}
       onBlur={commitValue}
       onChangeText={handleChangeText}
       placeholder={placeholder}
       returnKeyType="done"
       selectTextOnFocus
-      secureTextEntry={!isVisible}
       value={draftValue}
+      visibilityAccessibilityLabels={visibilityAccessibilityLabels}
     />
   );
 }

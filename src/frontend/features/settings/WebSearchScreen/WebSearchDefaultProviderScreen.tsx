@@ -1,5 +1,6 @@
 import { CheckIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -12,13 +13,14 @@ import { resolveWebSearchProviderIcon } from './utils/providerIcons';
 
 export default function WebSearchDefaultProviderScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { theme } = useUniwind();
   const { searchKeywords } = useWebSearchProviderPreferences();
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
 
   return (
     <>
-      <BackHeader title={t('settings.websearch.defaultProvider')} />
+      <BackHeader title={t('settings.websearch.provider.selection')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -51,6 +53,7 @@ export default function WebSearchDefaultProviderScreen() {
                 onPress={() => {
                   if (!selected) {
                     searchKeywords.onValueChange(option.value);
+                    router.back();
                   }
                 }}
                 showChevron={false}

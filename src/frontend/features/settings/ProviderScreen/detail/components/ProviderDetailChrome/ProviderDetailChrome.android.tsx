@@ -1,12 +1,12 @@
 import {
-  ActivityIcon,
+  ListChecksIcon,
   PauseIcon,
   PlayIcon,
   RefreshCcwIcon,
   Trash2Icon,
 } from '@cherrystudio/app-icons';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { ProviderDetailChromeProps } from './ProviderDetailChrome.types';
@@ -14,18 +14,47 @@ import { PullSpinner } from './PullSpinner';
 
 export function ProviderDetailChrome({
   canDelete,
-  checkAction,
+  editAction,
   isActive,
   isDisabled,
   onDelete,
   onToggleActive,
   pullAction,
+  selection,
 }: ProviderDetailChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const toggleLabel = t(
     isActive ? 'settings.provider.disableProvider' : 'settings.provider.enableProvider',
   );
+  const selectAllLabel = t(
+    selection?.isAllSelected
+      ? 'settings.provider.models.selection.deselectAll'
+      : 'settings.provider.models.selection.selectAll',
+  );
+
+  if (selection) {
+    return (
+      <View
+        pointerEvents="box-none"
+        style={[styles.container, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      >
+        <View className="bg-background/85" pointerEvents="none" style={styles.backdrop} />
+        <View className="flex-row items-center">
+          <Pressable
+            accessibilityLabel={selectAllLabel}
+            accessibilityRole="button"
+            className="items-center justify-center rounded-full border border-border bg-field px-5 py-3 active:opacity-60 android:shadow-lg"
+            onPress={selection.onToggleAll}
+          >
+            <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
+              {selectAllLabel}
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -33,7 +62,7 @@ export function ProviderDetailChrome({
       style={[styles.container, { paddingBottom: Math.max(insets.bottom, 12) }]}
     >
       <View className="bg-background/85" pointerEvents="none" style={styles.backdrop} />
-      <View className="flex-row items-center justify-between">
+      <View className="flex-row items-center">
         <View className="flex-row overflow-hidden rounded-full border border-border bg-field android:shadow-lg">
           <Pressable
             accessibilityLabel={toggleLabel}
@@ -70,6 +99,19 @@ export function ProviderDetailChrome({
             </Pressable>
           ) : null}
 
+          {editAction ? (
+            <Pressable
+              accessibilityLabel={t('settings.provider.models.selection.start')}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: editAction.isDisabled }}
+              className="size-12 items-center justify-center border-border border-l active:opacity-60 disabled:opacity-35"
+              disabled={editAction.isDisabled}
+              onPress={editAction.onPress}
+            >
+              <ListChecksIcon className="size-5 text-foreground" />
+            </Pressable>
+          ) : null}
+
           {canDelete ? (
             <Pressable
               accessibilityLabel={t('settings.provider.deleteProvider')}
@@ -82,22 +124,6 @@ export function ProviderDetailChrome({
               <Trash2Icon className="size-5 text-destructive" />
             </Pressable>
           ) : null}
-        </View>
-
-        <View className="overflow-hidden rounded-full border border-border bg-field android:shadow-lg">
-          <Pressable
-            accessibilityLabel={t('settings.provider.models.check')}
-            accessibilityRole="button"
-            accessibilityState={{
-              busy: checkAction.isLoading,
-              disabled: checkAction.isDisabled || checkAction.isLoading,
-            }}
-            className="size-12 items-center justify-center active:opacity-60 disabled:opacity-35"
-            disabled={checkAction.isDisabled || checkAction.isLoading}
-            onPress={checkAction.onPress}
-          >
-            <ActivityIcon className="size-5 text-foreground" />
-          </Pressable>
         </View>
       </View>
     </View>

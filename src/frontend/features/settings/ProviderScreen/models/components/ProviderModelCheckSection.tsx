@@ -1,34 +1,39 @@
-import { ChevronRightIcon } from '@cherrystudio/app-icons';
+import { ChevronDownIcon } from '@cherrystudio/app-icons';
 import { Button, Section } from '@cherrystudio/ui/components';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
 import {
   SingleSelectionSheet,
   type SingleSelectionSheetOption,
 } from '@/frontend/components/selectionSheet';
 
-import { useProviderApiServiceQueries } from './apiService';
-import { useProviderDetailSettings } from './detail';
-import { useProviderModelCheck } from './models/hooks/useProviderModelCheck';
+import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
+import { ProviderModelSelectSheet } from './ProviderModelSelectSheet';
 
 type SelectionKind = 'api-key' | 'model' | null;
 
-export default function ProviderModelCheckScreen() {
-  const { providerId, providerName } = useLocalSearchParams<{
-    providerId?: string;
-    providerName?: string;
-  }>();
+type ProviderModelCheckSectionProps = {
+  apiKeys: readonly ApiKeyEntry[] | undefined;
+  isLoading?: boolean;
+  models: readonly Model[];
+  /** Only for the model rows' logos; absent while the provider is still loading. */
+  provider: Provider | undefined;
+  providerId: string;
+};
+
+export function ProviderModelCheckSection({
+  apiKeys,
+  isLoading = false,
+  models,
+  provider,
+  providerId,
+}: ProviderModelCheckSectionProps) {
   const { t } = useTranslation();
   const [selectionKind, setSelectionKind] = useState<SelectionKind>(null);
-  const { models, modelsQuery, provider, providerQuery } = useProviderDetailSettings(
-    providerId ?? '',
-  );
-  const { apiKeys, apiKeysQuery } = useProviderApiServiceQueries(providerId ?? '');
   const {
     apiKeyOptions,
     isChecking,
@@ -38,35 +43,22 @@ export default function ProviderModelCheckScreen() {
     setSelectedApiKeyId,
     setSelectedModelId,
     startCheck,
-  } = useProviderModelCheck({ apiKeys, models, providerId: providerId ?? '' });
-  const modelOptions: SingleSelectionSheetOption<UniqueModelId>[] = models.map((model) => ({
-    label: model.name,
-    value: model.id,
-  }));
+  } = useProviderModelCheck({ apiKeys, models, providerId });
   const apiKeySelectionOptions: SingleSelectionSheetOption<string>[] = apiKeyOptions.map(
     (option) => ({ label: option.label, value: option.value }),
   );
-  const isLoading = modelsQuery.isPending || providerQuery.isPending || apiKeysQuery.isPending;
 
-  if (!providerId || providerQuery.isError) {
-    return <Redirect href="/settings/provider" />;
-  }
-
+  // The sheets sit outside the spaced stack: they open as native overlays, so a
+  // gap between them would only pad the configuration tab with dead space.
   return (
-    <>
-      <BackHeader
-        title={providerName ?? provider?.name ?? t('settings.provider.models.checkTitle')}
-      />
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentContainerClassName="gap-5 px-4 py-5"
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-      >
+    <View>
+      <View className="gap-5">
         <Section>
+          {/* Section's own `title` slot indents the header by 12px, which would
+              sit it out of line with the API keys field label right above. */}
+          <Section.Header className="px-0" title={t('settings.provider.models.checkTitle')} />
           <Section.Item
-            disabled={isChecking || isLoading || modelOptions.length === 0}
+            disabled={isChecking || isLoading || models.length === 0}
             label={t('settings.provider.models.checkModelSection')}
             onPress={() => setSelectionKind('model')}
             trailing={
@@ -98,18 +90,16 @@ export default function ProviderModelCheckScreen() {
             ? t('settings.provider.models.checkChecking')
             : t('settings.provider.models.checkStart')}
         </Button>
-      </ScrollView>
+      </View>
 
-      <SingleSelectionSheet
-        closeAccessibilityLabel={t('common.close')}
+      <ProviderModelSelectSheet
         emptyText={t('settings.provider.models.checkNoModels')}
         isOpen={selectionKind === 'model'}
+        models={models}
         onClose={() => setSelectionKind(null)}
         onSelect={setSelectedModelId}
-        options={modelOptions}
-        searchable
-        selectedValue={selectedModel?.id ?? null}
-        testID="provider-model-selection"
+        provider={provider}
+        selectedModelId={selectedModel?.id ?? null}
         title={t('settings.provider.models.checkModelSection')}
       />
       <SingleSelectionSheet
@@ -124,17 +114,17 @@ export default function ProviderModelCheckScreen() {
         testID="provider-api-key-selection"
         title={t('settings.provider.models.checkApiKeySection')}
       />
-    </>
+    </View>
   );
 }
 
 function SelectionRowValue({ label }: { label: string }) {
   return (
-    <View className="min-w-0 max-w-56 flex-row items-center justify-end gap-1">
+    <View className="min-w-0 flex-row items-center justify-end gap-1">
       <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
         {label}
       </Text>
-      <ChevronRightIcon className="size-5 shrink-0 text-foreground" />
+      <ChevronDownIcon className="size-5 shrink-0 text-foreground" />
     </View>
   );
 }

@@ -4,14 +4,13 @@ export {
   getWebSearchCapabilityTitleKey,
   getWebSearchFeatureSections,
   getWebSearchProviderDetailSections,
-  getWebSearchProviderOfficialWebsite,
   getWebSearchProviderPreset,
   mergeWebSearchProviderOverride,
   type WebSearchProviderMenuEntry,
 } from './utils/providerSettings';
 export { default as WebSearchApiKeySettingsScreen } from './WebSearchApiKeySettingsScreen';
-export { default as WebSearchCheckScreen } from './WebSearchCheckScreen';
+export { default as WebSearchAdvancedScreen } from './WebSearchAdvancedScreen';
 export { default as WebSearchCompressionMethodScreen } from './WebSearchCompressionMethodScreen';
 export { default as WebSearchDefaultProviderScreen } from './WebSearchDefaultProviderScreen';
-export { default as WebSearchProviderScreen } from './WebSearchProviderScreen';
+export { default as WebSearchFetchProviderScreen } from './WebSearchFetchProviderScreen';
 export { default as WebSearchScreen } from './WebSearchScreen';

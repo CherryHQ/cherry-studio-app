@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 
 type SettingNumberInputProps = {
   accessibilityLabel: string;
+  compact?: boolean;
   min?: number;
   onValueChange: (value: number) => void;
   value: number;
@@ -10,6 +11,7 @@ type SettingNumberInputProps = {
 
 export function SettingNumberInput({
   accessibilityLabel,
+  compact = false,
   min = 1,
   onValueChange,
   value,
@@ -49,6 +51,7 @@ export function SettingNumberInput({
         onChangeText={handleChangeText}
         onSubmitEditing={commitValue}
         returnKeyType="done"
+        style={compact ? { height: 36, minHeight: 36, textAlign: 'center', width: 64 } : undefined}
         value={draftValue}
       />
     </TextField>
