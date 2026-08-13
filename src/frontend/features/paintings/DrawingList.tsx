@@ -179,7 +179,7 @@ export function DrawingList() {
                 onPress={() => void handleViewAllPress()}
                 testID="painting-photos-view-all"
               >
-                <Text className="font-medium text-primary text-sm">
+                <Text className="font-medium text-foreground text-sm">
                   {t('painting.photos.viewAll')}
                 </Text>
               </Pressable>
@@ -346,8 +346,8 @@ function DrawingGridItem({
           exiting={FadeOut.duration(120)}
         >
           {isSelected ? (
-            <View className="size-6 items-center justify-center rounded-full bg-primary">
-              <CheckIcon className="size-4 text-primary-foreground" />
+            <View className="size-6 items-center justify-center rounded-full bg-foreground">
+              <CheckIcon className="size-4 text-background" />
             </View>
           ) : (
             <View className="size-6 rounded-full border-2 border-border-strong bg-constant-black/30" />

@@ -33,7 +33,7 @@ export function McpServerChrome({
           {isActive ? (
             <PauseIcon className="size-5 text-foreground" />
           ) : (
-            <PlayIcon className="size-5 text-primary" />
+            <PlayIcon className="size-5 text-foreground" />
           )}
         </Pressable>
 

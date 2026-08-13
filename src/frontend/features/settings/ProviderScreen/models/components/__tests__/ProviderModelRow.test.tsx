@@ -140,7 +140,7 @@ describe('ProviderModelRow', () => {
       );
 
       expect(findCheckbox(tree).props.accessibilityState.checked).toBe(true);
-      expect(findTickClassNames(tree)[0]).toContain('bg-primary');
+      expect(findTickClassNames(tree)[0]).toContain('bg-foreground');
     });
 
     it('leaves the checkbox empty for an unselected model', () => {

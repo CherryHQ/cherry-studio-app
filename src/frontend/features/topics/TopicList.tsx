@@ -335,11 +335,11 @@ const TopicRow = memo(function TopicRow({
             <View
               className={
                 isSelected
-                  ? 'size-6 items-center justify-center rounded-full bg-primary'
+                  ? 'size-6 items-center justify-center rounded-full bg-foreground'
                   : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
               }
             >
-              {isSelected ? <CheckIcon className="size-4 text-primary-foreground" /> : null}
+              {isSelected ? <CheckIcon className="size-4 text-background" /> : null}
             </View>
           </Animated.View>
         ) : null}

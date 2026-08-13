@@ -101,8 +101,8 @@ export function AiUsageRankingList({
               testID="ai-usage-show-more"
               onPress={() => setVisibleCount((count) => count + AI_USAGE_RANKING_PAGE_SIZE)}
             >
-              <Text className="font-medium text-primary text-sm">{t('aiUsage.showMore')}</Text>
-              <ChevronDownIcon className="size-4 text-primary" />
+              <Text className="font-medium text-foreground text-sm">{t('aiUsage.showMore')}</Text>
+              <ChevronDownIcon className="size-4 text-foreground" />
             </Pressable>
           </View>
         ) : null

@@ -52,7 +52,6 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
     background,
     mutedForeground,
     link,
-    primary,
     border,
     secondary,
     codeBlock,
@@ -63,7 +62,6 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
     'background',
     'muted-foreground',
     'link',
-    'primary',
     'border',
     'secondary',
     'code-block',
@@ -130,7 +128,7 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
       },
       taskList: {
         borderColor: mutedForeground,
-        checkedColor: primary,
+        checkedColor: foreground,
         checkedTextColor: mutedForeground,
         checkmarkColor: foreground,
       },
@@ -151,7 +149,6 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
     inlineCodeForeground,
     link,
     mutedForeground,
-    primary,
     resolvedStep,
     secondary,
   ]);

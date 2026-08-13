@@ -417,15 +417,14 @@ function EndpointTypeChip({
       accessibilityState={{ checked: isSelected, disabled: isDisabled }}
       className={cn(
         'h-8 flex-row items-center gap-1 rounded-full px-3 active:opacity-70 disabled:opacity-40',
-        isSelected ? 'bg-primary/10' : 'border border-border bg-secondary',
+        isSelected
+          ? 'border border-border-strong bg-secondary'
+          : 'border border-border bg-secondary',
       )}
       disabled={isDisabled}
       onPress={onPress}
     >
-      <Text
-        className={cn('font-medium text-sm', isSelected ? 'text-primary' : 'text-foreground')}
-        numberOfLines={1}
-      >
+      <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
         {label}
       </Text>
     </Pressable>

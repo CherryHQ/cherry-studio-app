@@ -191,8 +191,8 @@ export function ProviderDefaultEndpointControl({
   if (isDefault) {
     return (
       <View className="shrink-0 flex-row items-center gap-1.5 px-2 py-2">
-        <CheckIcon className="size-4 text-primary" />
-        <Text className="text-primary text-sm">
+        <CheckIcon className="size-4 text-foreground" />
+        <Text className="text-foreground text-sm">
           {t('settings.provider.apiService.defaultEndpoint')}
         </Text>
       </View>

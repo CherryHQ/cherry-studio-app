@@ -1,6 +1,5 @@
 import { CheckIcon } from '@cherrystudio/app-icons';
 import { Composer } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import { useTranslation } from 'react-i18next';
 
 import { type ChatInputActionId, chatInputActions } from '../utils/chatInputActions';
@@ -24,12 +23,12 @@ export function ChatInputMenuItems({ onActionPress, selectedToolId }: ChatInputM
 
     return (
       <Composer.Menu.Item
-        icon={<Icon className={cn('size-5', isSelected ? 'text-primary' : 'text-foreground')} />}
+        icon={<Icon className="size-5 text-foreground" />}
         key={action.id}
         label={t(action.titleKey)}
         onPress={() => onActionPress(action.id)}
         selected={isSelected}
-        trailing={isSelected ? <CheckIcon className="size-5 text-primary" /> : null}
+        trailing={isSelected ? <CheckIcon className="size-5 text-foreground" /> : null}
       />
     );
   });

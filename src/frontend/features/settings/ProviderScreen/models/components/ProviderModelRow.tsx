@@ -123,11 +123,11 @@ function ProviderModelRowCheckbox({
     <View
       className={
         isSelected
-          ? `size-6 items-center justify-center rounded-full bg-primary${disabledClassName}`
+          ? `size-6 items-center justify-center rounded-full bg-foreground${disabledClassName}`
           : `size-6 items-center justify-center rounded-full border-2 border-border-strong${disabledClassName}`
       }
     >
-      {isSelected ? <CheckIcon className="size-4 text-primary-foreground" /> : null}
+      {isSelected ? <CheckIcon className="size-4 text-background" /> : null}
     </View>
   );
 }
