@@ -40,6 +40,11 @@ export const THRESHOLDS = {
   offsetNoisePx: 8,
   /** 位移方向反转的振幅下限。实测非交互期的正常噪声在 ±19px 内，100px 给足余量。 */
   offsetReversalPx: 100,
+  /**
+   * 手势结束后仍算「用户造成的」余波时长。松手后惯性还要跑一段，位移与随之而来的按钮显隐
+   * 都是这次手势的后果。实测一次上滑的惯性在 600ms 内收敛。
+   */
+  interactionEchoMs: 800,
   /** 单行高度回缩下限，同 contentShrinkPx。 */
   rowShrinkPx: 8,
   /** 「滚动到底部」按钮在 1 秒窗口内允许的最大显隐翻转次数。 */
@@ -88,11 +93,25 @@ function judgeScrollButtonPhase(trace: Trace): JudgeReport {
   };
 }
 
+/**
+ * 「以帧为周期脉动」才是缺陷；用户自己拖动引发的显隐不是。
+ *
+ * 一次上滑天然会翻两次（离开底部→显示、惯性回到底部→隐藏），滑动前后各带一次就到 4 次，
+ * 正好压在 1 秒窗口的边界上——同一 commit 连跑三轮实测到 2/4/2 次，判据因此间歇性变红。
+ * 一个会自己 flake 的判据当不了回归基线：把手势窗口（及其惯性余波）内的翻转排除掉，
+ * 剩下的才是「app 自己在抖」。
+ */
 function judgeScrollButtonChatter(trace: Trace): JudgeReport {
+  const isUserDriven = (atMs: number) =>
+    trace.interactionWindows.some(
+      (window) => atMs >= window.start && atMs <= window.end + THRESHOLDS.interactionEchoMs,
+    );
+
   const violations: Violation[] = [];
-  const toggles = trace.events
+  const all = trace.events
     .filter((event) => event.e === 'button')
     .map((event) => event.t - trace.originMs);
+  const toggles = all.filter((at) => !isUserDriven(at));
 
   for (let index = 0; index < toggles.length; index += 1) {
     const windowEnd = toggles[index] + 1000;
@@ -115,7 +134,8 @@ function judgeScrollButtonChatter(trace: Trace): JudgeReport {
   return {
     description: '按钮显隐不得以帧为周期脉动',
     judge: 'scroll-button-chatter',
-    metrics: { toggles: toggles.length },
+    // 两个数都留：只报净值时看不出「这一轮到底有没有手势」，跨轮对比会莫名其妙。
+    metrics: { toggles: toggles.length, userDrivenToggles: all.length - toggles.length },
     violations,
   };
 }

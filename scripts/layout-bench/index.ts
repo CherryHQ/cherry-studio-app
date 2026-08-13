@@ -33,6 +33,9 @@ import { LAYOUT, SCENARIOS, type Scenario, type Step } from './scenarios';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const KNOWN_ISSUES_FILE = path.join(__dirname, 'known-issues.json');
+const METRO_URL = process.env.LAYOUT_BENCH_METRO_URL ?? 'http://localhost:8081';
+/** 冷启动到 postReady 的余量；实测本机 ~14s，留一倍。 */
+const APP_BOOT_SETTLE_MS = 30_000;
 
 type Options = {
   outputDir: string;
@@ -222,6 +225,13 @@ async function main(): Promise<void> {
 
   const device = new Device(options.udid!);
   device.disableDevMenuFloatingButton();
+
+  // 每轮都从「重新接上 Metro」开始，而不是假定 app 还停在上一轮的状态。dev client 被重启或
+  // 断连后会停在自己的服务器列表页，此后每一次坐标点击都打在启动页上，最终以一句无从诊断的
+  // XCTest 失败收场。顺带把冷启动固定成每轮的起点，跨轮对比才有可比性。
+  process.stdout.write(`\n接回 ${METRO_URL}…\n`);
+  device.ensureDevClientAttached(METRO_URL);
+  await sleep(APP_BOOT_SETTLE_MS);
 
   for (const scenario of options.scenarios) {
     run.scenarios.push(await runScenario(device, scenario, options.outputDir));

@@ -92,6 +92,41 @@ describe('scroll-button-phase', () => {
   });
 });
 
+describe('scroll-button-chatter', () => {
+  it('不把手势与其惯性余波里的翻转算成抖动', () => {
+    // 一次上滑天然翻两次（离开底部→显示、惯性回底→隐藏），前后各带一次就压在 1 秒 4 次的
+    // 边界上。同一 commit 连跑三轮实测到 2/4/2——不排除手势的话判据自己会 flake。
+    const events: ProbeEvent[] = [
+      { e: 'phase', phase: 'following', t: at(0) },
+      { e: 'button', t: at(100), visible: false },
+      { e: 'interaction', kind: 'drag', state: 'begin', t: at(200) },
+      { e: 'button', t: at(250), visible: true },
+      { e: 'interaction', kind: 'drag', state: 'end', t: at(300) },
+      // 松手后的惯性余波里还会再翻一次。
+      { e: 'button', t: at(700), visible: false },
+      { e: 'button', t: at(900), visible: true },
+    ];
+
+    const report = judge(events, 'scroll-button-chatter');
+    expect(report.metrics).toMatchObject({ toggles: 1, userDrivenToggles: 3 });
+    expect(report.violations).toHaveLength(0);
+  });
+
+  it('照抓没有手势解释的连续脉动', () => {
+    const events: ProbeEvent[] = [
+      { e: 'phase', phase: 'following', t: at(0) },
+      { e: 'button', t: at(100), visible: true },
+      { e: 'button', t: at(133), visible: false },
+      { e: 'button', t: at(166), visible: true },
+      { e: 'button', t: at(200), visible: false },
+    ];
+
+    const report = judge(events, 'scroll-button-chatter');
+    expect(report.violations).toHaveLength(1);
+    expect(report.violations[0].detail).toMatchObject({ count: 4 });
+  });
+});
+
 describe('offset-reversal', () => {
   const scrollTo = (offsetMs: number, y: number): ProbeEvent => ({
     e: 'scroll',
