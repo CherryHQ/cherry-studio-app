@@ -1,6 +1,6 @@
 const DEFAULT_REPLY_READ_ALOUD_CHUNK_LENGTH = 3000;
 const NATIVE_SPEECH_LENGTH_BUFFER = 100;
-const MIN_REPLY_READ_ALOUD_CHUNK_LENGTH = 1;
+const MIN_REPLY_READ_ALOUD_CHUNK_LENGTH = 2;
 
 export function resolveReplyReadAloudChunkLength(maxSpeechInputLength: number | undefined): number {
   if (!Number.isFinite(maxSpeechInputLength)) {
@@ -31,7 +31,7 @@ function findHardBoundary(text: string, maxLength: number): number {
 
   for (const codePoint of text) {
     if (boundary + codePoint.length > maxLength) {
-      break;
+      return boundary || codePoint.length;
     }
     boundary += codePoint.length;
   }

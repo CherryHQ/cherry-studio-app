@@ -16,9 +16,9 @@ describe('resolveReplyReadAloudChunkLength', () => {
     expect(resolveReplyReadAloudChunkLength(2000)).toBe(1900);
   });
 
-  it('always returns a usable positive length', () => {
-    expect(resolveReplyReadAloudChunkLength(100)).toBe(1);
-    expect(resolveReplyReadAloudChunkLength(-10)).toBe(1);
+  it('always leaves room for one complete Unicode code point', () => {
+    expect(resolveReplyReadAloudChunkLength(101)).toBe(2);
+    expect(resolveReplyReadAloudChunkLength(-10)).toBe(2);
   });
 });
 
@@ -58,6 +58,13 @@ describe('splitReplyReadAloudText', () => {
     expect(chunks.every((chunk) => chunk.length <= 3)).toBe(true);
     expect(chunks.every((chunk) => !/[\uD800-\uDBFF]$/.test(chunk))).toBe(true);
     expect(chunks.every((chunk) => !/^[\uDC00-\uDFFF]/.test(chunk))).toBe(true);
+  });
+
+  it('makes progress when maxLength is shorter than a surrogate pair', () => {
+    const chunks = splitReplyReadAloudText('😀x', 1);
+
+    expect(chunks).toEqual(['😀', 'x']);
+    expect(chunks.join('')).toBe('😀x');
   });
 
   it('preserves all trimmed spoken content and separator order', () => {
