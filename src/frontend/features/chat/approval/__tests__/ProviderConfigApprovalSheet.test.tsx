@@ -63,8 +63,20 @@ jest.mock('@cherrystudio/ui/components', () => {
   }
   Button.Label = native.Text;
 
-  function BottomSheet({ children, ...props }: { children?: ReactNode }) {
-    return React.createElement(native.View, { ...props, testID: 'bottom-sheet' }, children);
+  function BottomSheet({
+    children,
+    headerRight,
+    ...props
+  }: {
+    children?: ReactNode;
+    headerRight?: ReactNode;
+  }) {
+    return React.createElement(
+      native.View,
+      { ...props, testID: 'bottom-sheet' },
+      headerRight,
+      children,
+    );
   }
   function PageTransition({ children, ...props }: { children?: ReactNode }) {
     return React.createElement(native.View, { ...props, testID: 'page-transition' }, children);
@@ -89,6 +101,8 @@ jest.mock('@cherrystudio/ui/components', () => {
     Input: (props: object) => React.createElement(native.View, props),
     Label: native.Text,
     Section,
+    Surface: ({ children, ...props }: { children?: ReactNode }) =>
+      React.createElement(native.View, props, children),
     TextField: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement(native.View, props, children),
   };
@@ -268,6 +282,21 @@ describe('ProviderConfigApprovalSheet', () => {
       renderer!.root.findByProps({ testID: 'provider-config-floating-action' }).props,
     ).toMatchObject({
       className: 'absolute inset-x-4 bottom-3 z-10 items-center gap-2',
+    });
+  });
+
+  test('renders setup progress on an adaptive liquid-glass surface', () => {
+    renderSheet();
+
+    expect(renderer!.root.findByProps({ testID: 'provider-config-progress' }).props).toMatchObject({
+      className: 'bg-secondary',
+      cornerRadius: 16,
+      style: {
+        alignItems: 'center',
+        height: 32,
+        justifyContent: 'center',
+        width: 40,
+      },
     });
   });
 

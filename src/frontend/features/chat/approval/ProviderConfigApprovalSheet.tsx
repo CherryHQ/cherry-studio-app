@@ -1,4 +1,4 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, Surface } from '@cherrystudio/ui/components';
 import type { BottomSheetCloseReason } from '@cherrystudio/ui/components';
 import {
   CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME,
@@ -8,7 +8,7 @@ import {
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, useWindowDimensions, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useBackendModule } from '@/frontend/data';
@@ -40,6 +40,22 @@ import {
 import type { ToolApprovalRespondInput } from './types';
 
 const userCancelledReason = 'Provider configuration was cancelled by the user.';
+const PROGRESS_HEIGHT = 32;
+
+function ProviderConfigProgress({ current, total }: { current: number; total: number }) {
+  return (
+    <Surface
+      className="bg-secondary"
+      cornerRadius={PROGRESS_HEIGHT / 2}
+      style={styles.progressSurface}
+      testID="provider-config-progress"
+    >
+      <Text className="text-foreground-secondary text-sm" style={styles.progressText}>
+        {current}/{total}
+      </Text>
+    </Surface>
+  );
+}
 
 export function isProviderConfigurationApproval(approval: PendingToolApproval | undefined) {
   return (
@@ -345,9 +361,7 @@ export function ProviderConfigApprovalSheet({
       backAccessibilityLabel={t('common.back')}
       closeAccessibilityLabel={t('common.cancel')}
       headerRight={
-        <Text className="text-foreground-tertiary text-sm">
-          {stepIndex + 1}/{providerConfigSetupSteps.length}
-        </Text>
+        <ProviderConfigProgress current={stepIndex + 1} total={providerConfigSetupSteps.length} />
       }
       height={sheetHeight}
       isCloseDisabled={isSubmitting}
@@ -406,3 +420,15 @@ export function ProviderConfigApprovalSheet({
     </BottomSheet>
   );
 }
+
+const styles = StyleSheet.create({
+  progressSurface: {
+    alignItems: 'center',
+    height: PROGRESS_HEIGHT,
+    justifyContent: 'center',
+    width: 40,
+  },
+  progressText: {
+    fontVariant: ['tabular-nums'],
+  },
+});
