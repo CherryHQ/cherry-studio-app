@@ -4,6 +4,7 @@ export { default as BuiltInToolsSettingsScreen } from './BuiltInToolsSettingsScr
 export { default as DataScreen } from './DataScreen';
 export { default as FontSizeSettingsScreen } from './FontSizeSettingsScreen';
 export { default as LanguageSettingsScreen } from './LanguageSettingsScreen';
+export { default as ModelSettingSelectScreen } from './ModelSettingSelectScreen';
 export { default as ModelSettingsScreen } from './ModelSettingsScreen';
 export { default as ProfileSettingsScreen } from './ProfileSettingsScreen';
 export { default as ProviderListScreen } from './ProviderListScreen';

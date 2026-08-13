@@ -1,10 +1,10 @@
-import { Button, Input, Label, Section, TextField } from '@cherrystudio/ui/components';
+import { Button, Input, Label, Section, SecureInput, TextField } from '@cherrystudio/ui/components';
 import type { ProviderConfigurationManualModel } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import type { TFunction } from 'i18next';
-import { CheckIcon, EyeIcon, EyeOffIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { CheckIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
@@ -103,7 +103,6 @@ function BuiltinProviderConfigurationForm({
   providerSnapshot: ProviderSetupMatchedProvider | null;
 }) {
   const { t } = useTranslation();
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const provider = providerSnapshot?.provider;
   const showOAuth = provider?.authMethods?.includes('oauth') ?? false;
   const showApiKey = provider
@@ -153,40 +152,26 @@ function BuiltinProviderConfigurationForm({
       {showApiKey ? (
         <TextField isDisabled={isDisabled}>
           <Label>{t('settings.provider.apiService.apiKey')}</Label>
-          <View className="flex-row items-center gap-2">
-            <View className="min-w-0 flex-1 overflow-hidden">
-              <Input
-                accessibilityLabel={t('settings.provider.apiService.apiKey')}
-                autoCapitalize="none"
-                autoCorrect={false}
-                lineBreakModeIOS="clip"
-                multiline={false}
-                numberOfLines={1}
-                onChangeText={(apiKey) =>
-                  onChange({
-                    ...draft,
-                    input: { ...draft.input, apiKey: normalizeApiKeySingleLine(apiKey) },
-                  })
-                }
-                placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
-                returnKeyType="done"
-                scrollEnabled={false}
-                secureTextEntry={!apiKeyVisible}
-                value={draft.input.apiKey}
-              />
-            </View>
-            <Button
-              accessibilityLabel={
-                apiKeyVisible
-                  ? t('settings.provider.apiService.hideApiKeys')
-                  : t('settings.provider.apiService.showApiKeys')
-              }
-              disabled={isDisabled}
-              icon={apiKeyVisible ? <EyeIcon /> : <EyeOffIcon />}
-              onPress={() => setApiKeyVisible((visible) => !visible)}
-              variant="secondary"
-            />
-          </View>
+          <SecureInput
+            accessibilityLabel={t('settings.provider.apiService.apiKey')}
+            disabled={isDisabled}
+            lineBreakModeIOS="clip"
+            numberOfLines={1}
+            onChangeText={(apiKey) =>
+              onChange({
+                ...draft,
+                input: { ...draft.input, apiKey: normalizeApiKeySingleLine(apiKey) },
+              })
+            }
+            placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
+            returnKeyType="done"
+            scrollEnabled={false}
+            value={draft.input.apiKey}
+            visibilityAccessibilityLabels={{
+              hide: t('settings.provider.apiService.hideApiKeys'),
+              show: t('settings.provider.apiService.showApiKeys'),
+            }}
+          />
         </TextField>
       ) : null}
       {error ? (

@@ -1,103 +1,120 @@
-import { Section } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { type ReactNode, useState } from 'react';
-import { Text, View } from 'react-native';
+import { CheckIcon } from 'lucide-uniwind/png';
+import type { ReactNode } from 'react';
+import { Pressable, Text, View } from 'react-native';
 
-import {
-  getModelPickerTags,
-  isFreeModel,
-  ModelPickerIcon,
-  type ModelPickerTag,
-  ModelPickerTagChip,
-} from '@/frontend/components/modelPicker';
+import { ModelAvatar } from '@/frontend/components/ModelAvatar';
+import { getModelPickerRowTags, ModelPickerTagChip } from '@/frontend/components/modelPicker';
 
-import { SettingsGroupedSurface } from '../../../components/SettingsGroupedSurface';
-
-export const providerModelRowEstimatedHeight = 48;
-// Past this the capability strip starts squeezing the model name off the row.
-const providerModelRowMaxTags = 4;
+/** `py-2` around the tallest thing in the row, which is the 26 avatar. */
+export const providerModelRowEstimatedHeight = 42;
 
 /**
  * One model, as both screens that list models draw it: the provider's own tab
- * and the pull preview. They differ only in what sits at the end of the row —
- * a remove button on one side, the pull's `+`/`-` on the other — so that is
- * what `children` is for.
+ * and the pull preview. Both now select rather than act row by row, so neither
+ * puts anything at the end of the row; `children` is the slot if one ever does.
+ *
+ * Laid out here rather than through `Section.Item`, whose `py-3` is fixed: a
+ * settings row holds one tappable line and can afford the height, but this one
+ * repeats down a list hundreds of models long. Nothing is drawn between rows
+ * either — a hairline every 48pt reads as a grid, and the avatars already give
+ * the eye a column to follow.
  */
 export function ProviderModelRow({
   children,
-  hideSeparator = false,
-  isDisabled = false,
-  isFirst,
-  isLast,
+  className,
   model,
-  onPress,
   provider,
-  surfaceClassName,
+  selection,
   tone = 'default',
 }: {
   /** The row's trailing action. */
   children?: ReactNode;
-  hideSeparator?: boolean;
-  isDisabled?: boolean;
-  isFirst: boolean;
-  isLast: boolean;
+  /** Applied last, so a row can tint itself. */
+  className?: string;
   model: Model;
-  /** Given only when the row itself is the action. */
-  onPress?: () => void;
   provider: Provider | undefined;
-  /** Applied last, so a row can tint its own surface. */
-  surfaceClassName?: string;
+  /**
+   * Given only while the list is selecting. The row then draws a checkbox and
+   * becomes the control that ticks it — nothing else on it is tappable.
+   */
+  selection?: {
+    isDisabled?: boolean;
+    isSelected: boolean;
+    onToggle: () => void;
+  };
   /** `struck` reads as "on its way out", the way the pull screen marks a model the provider no longer serves. */
   tone?: 'default' | 'struck';
 }) {
-  const tags = getProviderModelRowTags(model);
-  const [isPressed, setIsPressed] = useState(false);
+  const tags = getModelPickerRowTags(model);
+  const rowClassName = className
+    ? `flex-row items-center gap-3 px-4 py-2 ${className}`
+    : 'flex-row items-center gap-3 px-4 py-2';
+  const content = (
+    <>
+      {selection ? <ProviderModelRowCheckbox isSelected={selection.isSelected} /> : null}
+      {/* Unsized, so it is `BrandAvatar`'s own square — the one a provider row
+          draws, and the one the picker sheet draws beside the same single line
+          of text. */}
+      <ModelAvatar model={model} provider={provider} />
+      {/* The one part of the row that gives: the capabilities and the action
+          keep their natural width, so a long model id ellipsizes rather than
+          pushing them off the end. */}
+      <Text
+        className={
+          tone === 'struck'
+            ? 'min-w-0 flex-1 text-base text-foreground line-through'
+            : 'min-w-0 flex-1 text-base text-foreground'
+        }
+        numberOfLines={1}
+      >
+        {model.name}
+      </Text>
+      {tags.length > 0 ? (
+        <View className="flex-row items-center gap-1">
+          {tags.map((tag) => (
+            <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
+          ))}
+        </View>
+      ) : null}
+      {children}
+    </>
+  );
 
-  const trailing =
-    tags.length > 0 || children ? (
-      <View className="flex-row items-center gap-1">
-        {tags.slice(0, providerModelRowMaxTags).map((tag) => (
-          <ModelPickerTagChip key={`${model.id}:${tag}`} tag={tag} />
-        ))}
-        {children}
+  if (!selection) {
+    return (
+      <View accessibilityLabel={model.name} accessible className={rowClassName}>
+        {content}
       </View>
-    ) : undefined;
+    );
+  }
 
   return (
-    <SettingsGroupedSurface
-      className={surfaceClassName}
-      hideSeparator={hideSeparator || isPressed}
-      isFirst={isFirst}
-      isLast={isLast}
+    <Pressable
+      accessibilityLabel={model.name}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selection.isSelected, disabled: selection.isDisabled }}
+      className={`${rowClassName} active:bg-foreground/5`}
+      disabled={selection.isDisabled}
+      onPress={selection.onToggle}
     >
-      <Section.Item
-        accessibilityLabel={model.name}
-        accessibilityState={{ busy: isDisabled, disabled: isDisabled }}
-        disabled={isDisabled}
-        label={
-          tone === 'struck' ? (
-            <Text className="text-foreground text-base line-through" numberOfLines={1}>
-              {model.name}
-            </Text>
-          ) : (
-            model.name
-          )
-        }
-        leading={<ModelPickerIcon model={model} provider={provider} />}
-        onPress={onPress}
-        onPressIn={() => setIsPressed(true)}
-        onPressOut={() => setIsPressed(false)}
-        showChevron={false}
-        trailing={trailing}
-      />
-    </SettingsGroupedSurface>
+      {content}
+    </Pressable>
   );
 }
 
-// `getModelPickerTags` only covers capabilities; free is inferred, so it is not
-// among them.
-function getProviderModelRowTags(model: Model): ModelPickerTag[] {
-  const tags = getModelPickerTags(model);
-  return isFreeModel(model) ? [...tags, 'free'] : tags;
+/** The same tick the topic list draws, since both lists select the same way. */
+function ProviderModelRowCheckbox({ isSelected }: { isSelected: boolean }) {
+  return (
+    <View
+      className={
+        isSelected
+          ? 'size-6 items-center justify-center rounded-full bg-primary'
+          : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
+      }
+    >
+      {isSelected ? <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} /> : null}
+    </View>
+  );
 }

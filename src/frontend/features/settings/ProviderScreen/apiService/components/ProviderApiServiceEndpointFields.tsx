@@ -31,7 +31,11 @@ export function ProviderApiServiceEndpointField({
 
   return (
     <TextField>
-      <Label>{t('settings.provider.apiService.baseUrl')}</Label>
+      <Label>
+        <Label.Text className="font-semibold">
+          {t('settings.provider.apiService.baseUrl')}
+        </Label.Text>
+      </Label>
       <View className="flex-row items-center gap-2">
         <PrimaryEndpointBaseUrlInput
           accessibilityLabel={t('settings.provider.apiService.baseUrl')}

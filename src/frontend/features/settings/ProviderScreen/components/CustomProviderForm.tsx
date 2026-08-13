@@ -1,7 +1,6 @@
-import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Input, Label, SecureInput, TextField } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
-import { EyeIcon, EyeOffIcon } from 'lucide-uniwind/png';
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -46,7 +45,6 @@ export function CustomProviderForm({
   value: CustomProviderFormValue;
 }) {
   const { t } = useTranslation();
-  const [apiKeyVisible, setApiKeyVisible] = useState(false);
 
   const update = useCallback(
     <TField extends keyof CustomProviderFormValue>(
@@ -111,36 +109,21 @@ export function CustomProviderForm({
       </FormField>
 
       <FormField disabled={disabled} label={t('settings.provider.apiService.apiKey')}>
-        <View className="flex-row items-center gap-2">
-          <View className="min-w-0 flex-1 overflow-hidden">
-            <Input
-              accessibilityLabel={t('settings.provider.apiService.apiKey')}
-              autoCapitalize="none"
-              autoCorrect={false}
-              lineBreakModeIOS="clip"
-              multiline={false}
-              numberOfLines={1}
-              onChangeText={(apiKey) => update('apiKey', normalizeApiKeySingleLine(apiKey))}
-              placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
-              returnKeyType="done"
-              scrollEnabled={false}
-              secureTextEntry={!apiKeyVisible}
-              value={value.apiKey}
-            />
-          </View>
-          <Button
-            accessibilityLabel={
-              apiKeyVisible
-                ? t('settings.provider.apiService.hideApiKeys')
-                : t('settings.provider.apiService.showApiKeys')
-            }
-            disabled={disabled}
-            hitSlop={6}
-            icon={apiKeyVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
-            onPress={() => setApiKeyVisible((visible) => !visible)}
-            variant="secondary"
-          />
-        </View>
+        <SecureInput
+          accessibilityLabel={t('settings.provider.apiService.apiKey')}
+          disabled={disabled}
+          lineBreakModeIOS="clip"
+          numberOfLines={1}
+          onChangeText={(apiKey) => update('apiKey', normalizeApiKeySingleLine(apiKey))}
+          placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
+          returnKeyType="done"
+          scrollEnabled={false}
+          value={value.apiKey}
+          visibilityAccessibilityLabels={{
+            hide: t('settings.provider.apiService.hideApiKeys'),
+            show: t('settings.provider.apiService.showApiKeys'),
+          }}
+        />
       </FormField>
 
       <View className="gap-4">

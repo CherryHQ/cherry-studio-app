@@ -99,7 +99,10 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   firecrawl: {
     name: 'Firecrawl',
     type: 'api',
-    capabilities: [{ feature: 'searchKeywords', apiHost: 'https://api.firecrawl.dev' }],
+    capabilities: [
+      { feature: 'searchKeywords', apiHost: 'https://api.firecrawl.dev' },
+      { feature: 'fetchUrls', apiHost: 'https://api.firecrawl.dev' },
+    ],
   },
 } as const satisfies Record<WebSearchProviderId, WebSearchProviderPresetConfig>;
 

@@ -9,6 +9,7 @@ export * from './menu';
 export * from './portal';
 export * from './surface';
 export * from './search-field';
+export * from './secure-input';
 export * from './scroll-shadow';
 export * from './section';
 export * from './shimmer-text';

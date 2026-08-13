@@ -5,35 +5,44 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
 import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
-import { ProviderModelListContent } from '../models/components/ProviderModelListContent';
+import {
+  ProviderModelListContent,
+  type ProviderModelListSelection,
+} from '../models/components/ProviderModelListContent';
 import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';
-import { useProviderModelRemove } from '../models/hooks/useProviderModelRemove';
 import type { ProviderModelAction } from '../models/types';
 import { filterModelsByKeywords } from '../models/utils/providerModelSearch';
 
 type ProviderModelListProps = {
+  isDefaultModel: (model: Model) => boolean;
   isLoading: boolean;
   models: Model[];
   provider: Provider | undefined;
   /** The bottom toolbar's pull, surfaced again as the empty list's call to action. */
   pullAction?: ProviderModelAction;
+  /** Given while the screen is selecting; the rows become checkboxes. */
+  selection?: ProviderModelListSelection;
 };
 
 export function ProviderModelList({
+  isDefaultModel,
   isLoading,
   models,
   provider,
   pullAction,
+  selection,
 }: ProviderModelListProps) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
+  // A selection covers every model the provider has, so the list has to show
+  // every one of them — select-all reaching past what a leftover search term
+  // left on screen is how a model nobody can see gets deleted.
   const displayedModels = useMemo(
-    () => filterModelsByKeywords(deferredSearchText, models),
-    [deferredSearchText, models],
+    () => (selection ? models : filterModelsByKeywords(deferredSearchText, models)),
+    [deferredSearchText, models, selection],
   );
   const isSearching = searchText.trim().length > 0;
-  const { isDefaultModel, removeModel, removingIds } = useProviderModelRemove();
 
   // A provider with no models at all has nothing to search and nothing to say, so
   // the search field and the "no models" line both give way to the pull itself.
@@ -41,7 +50,9 @@ export function ProviderModelList({
 
   return (
     <>
-      {!hasNoModels && process.env.EXPO_OS === 'ios' ? (
+      {/* Searching while selecting would hide rows that stay selected, so the
+          field goes away for the duration. */}
+      {!hasNoModels && !selection && process.env.EXPO_OS === 'ios' ? (
         <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
       ) : null}
       <ProviderModelListContent
@@ -64,7 +75,7 @@ export function ProviderModelList({
         // Swapping the header rather than the whole tree keeps the underlying list
         // mounted, so its automatic content inset survives the transition.
         ListHeaderComponent={
-          hasNoModels || process.env.EXPO_OS === 'ios' ? undefined : (
+          hasNoModels || selection || process.env.EXPO_OS === 'ios' ? undefined : (
             // 12 all round, the one gap the pull screen uses between every
             // control and the list below it.
             <View className="px-4 py-3">
@@ -74,8 +85,7 @@ export function ProviderModelList({
         }
         models={displayedModels}
         provider={provider}
-        removingIds={removingIds}
-        onRemoveModel={removeModel}
+        selection={selection}
         onScrollBeginDrag={Keyboard.dismiss}
       />
     </>

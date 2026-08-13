@@ -6,6 +6,11 @@ import { useTranslation } from 'react-i18next';
 import type { HeaderToolbarAction } from './BackHeader.types';
 
 export type BackHeaderProps = {
+  /**
+   * Replaces the back button. For modes that suspend navigation — a selection's
+   * "Done" — where going back would strand the mode's own state.
+   */
+  leftActions?: readonly HeaderToolbarAction[];
   onBack?: () => void;
   rightActions?: readonly HeaderToolbarAction[];
   title?: string;
@@ -59,7 +64,13 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
   );
 }
 
-export function BackHeader({ onBack, rightActions, title = '', titleElement }: BackHeaderProps) {
+export function BackHeader({
+  leftActions,
+  onBack,
+  rightActions,
+  title = '',
+  titleElement,
+}: BackHeaderProps) {
   const isPreview = useIsPreview();
   const { t } = useTranslation();
   const router = useRouter();
@@ -88,11 +99,15 @@ export function BackHeader({ onBack, rightActions, title = '', titleElement }: B
       <Stack.Screen options={options} />
       {titleElement ? <Stack.Title asChild>{titleElement}</Stack.Title> : null}
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('navigation.back')}
-          icon="chevron.backward"
-          onPress={goBack}
-        />
+        {leftActions && leftActions.length > 0 ? (
+          leftActions.map((action) => renderHeaderAction(action))
+        ) : (
+          <Stack.Toolbar.Button
+            accessibilityLabel={t('navigation.back')}
+            icon="chevron.backward"
+            onPress={goBack}
+          />
+        )}
       </Stack.Toolbar>
       {rightActions && rightActions.length > 0 ? (
         <Stack.Toolbar placement="right">

@@ -35,7 +35,7 @@ export function PaintingAssistantMessage({
   aspectRatio,
   error,
   interruption,
-  output,
+  outputs,
   paintingId,
   resolution,
   status,
@@ -44,7 +44,7 @@ export function PaintingAssistantMessage({
   aspectRatio: number;
   error: Error | null;
   interruption: PaintingInterruption | null;
-  output?: PaintingOutput;
+  outputs: readonly PaintingOutput[];
   paintingId?: string;
   resolution: string;
   status: PaintingGenerationStatus;
@@ -110,74 +110,76 @@ export function PaintingAssistantMessage({
     );
   }
 
-  const visibleOutput = status === 'generating' ? undefined : output;
-  if (!visibleOutput) {
-    if (status !== 'generating') {
-      return null;
-    }
+  const visibleOutputs = status === 'generating' ? [] : outputs;
+  if (visibleOutputs.length === 0 && status !== 'generating') {
+    return null;
   }
 
   const isTransitioning = animateOutput && !isFadeComplete;
   const showLoader = status === 'generating' || isTransitioning;
   const isResultInteractive = !animateOutput || isFadeComplete;
-  const result = visibleOutput ? (
-    <Pressable
-      accessibilityLabel={t('painting.output')}
-      accessibilityElementsHidden={!isResultInteractive}
-      accessibilityRole={paintingId ? 'button' : 'image'}
-      className="relative h-full w-full overflow-hidden rounded-xl border-continuous bg-card active:opacity-80"
-      importantForAccessibility={isResultInteractive ? 'auto' : 'no-hide-descendants'}
-      pointerEvents={isResultInteractive ? 'auto' : 'none'}
-      testID={`painting-output-${visibleOutput.fileEntryId}`}
-    >
-      <Image
-        cachePolicy="memory-disk"
-        contentFit="contain"
-        onDisplay={handleResultDisplay}
-        onError={handleResultError}
-        source={visibleOutput.uri}
-        style={StyleSheet.absoluteFill}
-        testID="painting-result-image"
-      />
-      <View
-        className="absolute inset-0 rounded-xl border border-border border-continuous"
-        pointerEvents="none"
-      />
-    </Pressable>
-  ) : null;
-
-  const linkedResult =
-    result && paintingId && visibleOutput ? (
-      <PaintingZoomLink fileEntryId={visibleOutput.fileEntryId} paintingId={paintingId}>
-        {result}
-      </PaintingZoomLink>
-    ) : (
-      result
+  const results = visibleOutputs.map((output, index) => {
+    const result = (
+      <Pressable
+        accessibilityLabel={t('painting.output')}
+        accessibilityElementsHidden={!isResultInteractive}
+        accessibilityRole={paintingId ? 'button' : 'image'}
+        className="relative h-full w-full overflow-hidden rounded-xl border-continuous bg-card active:opacity-80"
+        importantForAccessibility={isResultInteractive ? 'auto' : 'no-hide-descendants'}
+        pointerEvents={isResultInteractive ? 'auto' : 'none'}
+        testID={`painting-output-${output.fileEntryId}`}
+      >
+        <Image
+          cachePolicy="memory-disk"
+          contentFit="contain"
+          onDisplay={index === 0 ? handleResultDisplay : undefined}
+          onError={index === 0 ? handleResultError : undefined}
+          source={output.uri}
+          style={StyleSheet.absoluteFill}
+          testID={`painting-result-image-${output.fileEntryId}`}
+        />
+        <View
+          className="absolute inset-0 rounded-xl border border-border border-continuous"
+          pointerEvents="none"
+        />
+      </Pressable>
     );
+
+    return (
+      <View className="w-full" key={output.fileEntryId} style={{ aspectRatio }}>
+        {paintingId ? (
+          <PaintingZoomLink fileEntryId={output.fileEntryId} paintingId={paintingId}>
+            {result}
+          </PaintingZoomLink>
+        ) : (
+          result
+        )}
+      </View>
+    );
+  });
 
   return (
     <View className="w-full px-4 py-3">
       <View className="relative w-full" onLayout={handlePreviewLayout}>
         {showLoader ? (
           previewWidth > 0 ? (
-            <ImageGenerationLoader
-              active={status === 'generating'}
-              height={previewWidth / aspectRatio}
-              label={t('painting.status.generating')}
-              resolution={resolution}
-              testID="painting-generation-loader"
-              width={previewWidth}
-            />
-          ) : (
+            <View className={isTransitioning ? 'absolute left-0 right-0 top-0' : undefined}>
+              <ImageGenerationLoader
+                active={status === 'generating'}
+                height={previewWidth / aspectRatio}
+                label={t('painting.status.generating')}
+                resolution={resolution}
+                testID="painting-generation-loader"
+                width={previewWidth}
+              />
+            </View>
+          ) : status === 'generating' ? (
             <View style={{ aspectRatio }} />
-          )
+          ) : null
         ) : null}
-        {linkedResult ? (
-          <Animated.View
-            className={showLoader ? 'absolute left-0 right-0 top-0' : 'w-full'}
-            style={[{ aspectRatio }, animateOutput ? resultStyle : undefined]}
-          >
-            {linkedResult}
+        {results.length > 0 ? (
+          <Animated.View className="w-full gap-3" style={animateOutput ? resultStyle : undefined}>
+            {results}
           </Animated.View>
         ) : null}
       </View>

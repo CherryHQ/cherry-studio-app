@@ -101,6 +101,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     Input: (props: object) => React.createElement(native.View, props),
     Label: native.Text,
     Section,
+    SecureInput: (props: object) => React.createElement(native.View, props),
     Surface: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement(native.View, props, children),
     TextField: ({ children, ...props }: { children?: ReactNode }) =>

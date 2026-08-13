@@ -9,8 +9,6 @@ jest.mock('expo-router', () => {
   const Toolbar = Object.assign(ToolbarRoot, {
     Button: (props: { children?: React.ReactNode; onPress?: () => void }) =>
       React.createElement('ToolbarButton', props, props.children),
-    // Rendered rather than nulled out: the spacer is what splits the toolbar into
-    // a leading and a trailing side, so the tests below assert against its index.
     Spacer: () => React.createElement('ToolbarSpacer'),
     View: (props: { children?: React.ReactNode }) =>
       React.createElement('ToolbarView', props, props.children),
@@ -43,8 +41,10 @@ jest.mock('react-i18next', () => ({
         'settings.provider.deleteProvider': 'Delete provider',
         'settings.provider.disableProvider': 'Disable provider',
         'settings.provider.enableProvider': 'Enable provider',
-        'settings.provider.models.check': 'Check models',
         'settings.provider.models.pull': 'Pull models',
+        'settings.provider.models.selection.deselectAll': 'Deselect all',
+        'settings.provider.models.selection.selectAll': 'Select all',
+        'settings.provider.models.selection.start': 'Select models',
       })[key] ?? key,
   }),
 }));
@@ -64,7 +64,6 @@ describe('ProviderDetailChrome.ios', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete
-          checkAction={{ onPress: jest.fn() }}
           isActive={false}
           isDisabled={false}
           onDelete={onDelete}
@@ -99,7 +98,6 @@ describe('ProviderDetailChrome.ios', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
-          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -109,20 +107,18 @@ describe('ProviderDetailChrome.ios', () => {
     });
 
     const [toggle] = renderer?.root.findAllByType('ToolbarButton') ?? [];
-    expect(renderer?.root.findAllByType('ToolbarButton')).toHaveLength(2);
+    expect(renderer?.root.findAllByType('ToolbarButton')).toHaveLength(1);
     expect(toggle.props.accessibilityLabel).toBe('Disable provider');
     expect(toggle.props.icon).toBe('pause');
   });
 
-  it('orders the leading side toggle, pull, delete and leaves check past the spacer', async () => {
-    const onCheck = jest.fn();
+  it('orders the toolbar as toggle, pull, delete', async () => {
     const onPull = jest.fn();
 
     await act(async () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete
-          checkAction={{ onPress: onCheck }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -140,20 +136,18 @@ describe('ProviderDetailChrome.ios', () => {
       .findByType('Toolbar')
       .findAll((node) => node.type === 'ToolbarButton' || node.type === 'ToolbarSpacer');
 
+    // The trailing spacer is what keeps a lone toggle off the toolbar's centre.
     expect(items.map((item) => item.props.accessibilityLabel ?? item.type)).toEqual([
       'Disable provider',
       'Pull models',
       'Delete provider',
       'ToolbarSpacer',
-      'Check models',
     ]);
     expect(items[1].props.icon).toBe('arrow.trianglehead.2.clockwise.rotate.90');
 
     items[1].props.onPress();
-    items[4].props.onPress();
 
     expect(onPull).toHaveBeenCalledTimes(1);
-    expect(onCheck).toHaveBeenCalledTimes(1);
   });
 
   it('disables an action while it is in flight', async () => {
@@ -161,7 +155,6 @@ describe('ProviderDetailChrome.ios', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
-          checkAction={{ isLoading: true, onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -172,10 +165,8 @@ describe('ProviderDetailChrome.ios', () => {
     });
 
     const [pull] = renderer?.root.findAllByProps({ accessibilityLabel: 'Pull models' }) ?? [];
-    const [check] = renderer?.root.findAllByProps({ accessibilityLabel: 'Check models' }) ?? [];
 
     expect(pull.props.disabled).toBe(true);
-    expect(check.props.disabled).toBe(true);
   });
 
   // A native bar button item cannot animate its SF Symbol, so the spinner has to
@@ -185,7 +176,6 @@ describe('ProviderDetailChrome.ios', () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
-          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -207,12 +197,94 @@ describe('ProviderDetailChrome.ios', () => {
     ).toHaveLength(0);
   });
 
-  it('keeps check visible when pull is omitted outside the models tab', async () => {
+  it('offers the edit action between pull and delete', async () => {
+    const onEdit = jest.fn();
+
+    await act(async () => {
+      renderer = create(
+        <ProviderDetailChrome
+          canDelete
+          editAction={{ isDisabled: false, onPress: onEdit }}
+          isActive
+          isDisabled={false}
+          onDelete={onDelete}
+          onToggleActive={onToggleActive}
+          pullAction={{ onPress: jest.fn() }}
+        />,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ProviderDetailChrome test renderer was not created.');
+    }
+
+    const labels = renderer.root
+      .findAllByType('ToolbarButton')
+      .map((button) => button.props.accessibilityLabel);
+
+    expect(labels).toEqual(['Disable provider', 'Pull models', 'Select models', 'Delete provider']);
+
+    renderer.root.findByProps({ accessibilityLabel: 'Select models' }).props.onPress();
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  // Selecting models has nothing to do with the provider's own actions, and
+  // leaving "delete provider" up invites deleting it mid-selection.
+  it('replaces the whole bar with select-all while selecting', async () => {
+    const onToggleAll = jest.fn();
+
+    await act(async () => {
+      renderer = create(
+        <ProviderDetailChrome
+          canDelete
+          editAction={{ isDisabled: false, onPress: jest.fn() }}
+          isActive
+          isDisabled={false}
+          onDelete={onDelete}
+          onToggleActive={onToggleActive}
+          pullAction={{ onPress: jest.fn() }}
+          selection={{ isAllSelected: false, onToggleAll }}
+        />,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('ProviderDetailChrome test renderer was not created.');
+    }
+
+    const buttons = renderer.root.findAllByType('ToolbarButton');
+
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].props.children).toBe('Select all');
+
+    buttons[0].props.onPress();
+
+    expect(onToggleAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers to undo a full selection', async () => {
+    await act(async () => {
+      renderer = create(
+        <ProviderDetailChrome
+          canDelete
+          isActive
+          isDisabled={false}
+          onDelete={onDelete}
+          onToggleActive={onToggleActive}
+          selection={{ isAllSelected: true, onToggleAll: jest.fn() }}
+        />,
+      );
+    });
+
+    expect(renderer?.root.findByType('ToolbarButton').props.children).toBe('Deselect all');
+  });
+
+  it('omits pull outside the models tab', async () => {
     await act(async () => {
       renderer = create(
         <ProviderDetailChrome
           canDelete={false}
-          checkAction={{ onPress: jest.fn() }}
           isActive
           isDisabled={false}
           onDelete={onDelete}
@@ -222,10 +294,5 @@ describe('ProviderDetailChrome.ios', () => {
     });
 
     expect(renderer?.root.findAllByProps({ accessibilityLabel: 'Pull models' })).toHaveLength(0);
-    expect(
-      renderer?.root
-        .findAllByType('ToolbarButton')
-        .filter((button) => button.props.accessibilityLabel === 'Check models'),
-    ).toHaveLength(1);
   });
 });
