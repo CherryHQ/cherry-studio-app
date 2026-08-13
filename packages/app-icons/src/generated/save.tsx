@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * SaveIcon — SF `square.and.arrow.down` / Material `save` (was lucide `save`).
- * DRIFT: SF Symbols has no floppy disk; iOS uses the save-into-box arrow.
+ * SaveIcon — SF `square.and.arrow.down` on iOS, Material `save` on Android.
  */
 export default createIcon({
   displayName: 'SaveIcon',

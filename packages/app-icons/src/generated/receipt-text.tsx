@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ReceiptTextIcon — SF `list.bullet.rectangle.portrait` / Material `receipt_long` (was lucide `receipt-text`).
- * DRIFT: SF Symbols has no receipt; iOS shows a bulleted document.
+ * ReceiptTextIcon — SF `list.bullet.rectangle.portrait` on iOS, Material `receipt_long` on Android.
  */
 export default createIcon({
   displayName: 'ReceiptTextIcon',

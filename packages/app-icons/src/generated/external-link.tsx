@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ExternalLinkIcon — SF `arrow.up.right.square` / Material `open_in_new` (was lucide `external-link`).
- * DRIFT: Arrow leaves a square instead of lucide's broken-corner box; same open-elsewhere reading.
+ * ExternalLinkIcon — SF `arrow.up.right.square` on iOS, Material `open_in_new` on Android.
  */
 export default createIcon({
   displayName: 'ExternalLinkIcon',

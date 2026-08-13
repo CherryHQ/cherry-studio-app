@@ -15,7 +15,7 @@
     "ios:dev": "pnpm packages:build && expo run:ios",
     "prebuild": "expo prebuild",
     "db:generate": "drizzle-kit generate",
-    "generate:icons": "tsx packages/app-icons/scripts/generate-icons.ts",
+    "generate:icons": "tsx packages/app-icons/scripts/generate-icons.ts && oxfmt packages/app-icons/src",
     "ui:icons:generate": "tsx packages/ui/src/scripts/generate-icons.ts",
     "ui:icons:generate:webp": "tsx packages/ui/src/scripts/generate-icons.ts",
     "ui:icons:generate:general": "tsx packages/ui/src/scripts/generate-icons.ts --type=general",

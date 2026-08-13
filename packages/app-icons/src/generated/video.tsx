@@ -1,6 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * VideoIcon — SF `video` / Material `videocam` (was lucide `video`).
+ * VideoIcon — SF `video` on iOS, Material `videocam` on Android.
  */
 export default createIcon({ displayName: 'VideoIcon', sf: 'video', glyph: '\ue04b' });

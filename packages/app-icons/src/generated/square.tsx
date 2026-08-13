@@ -1,7 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * SquareIcon — SF `square` / Material `square` (was lucide `square`).
- * DRIFT: Composer stop button. Kept as the literal outline square; `stop.fill` is the Apple-native alternative if the outline reads too weak.
+ * SquareIcon — SF `stop.fill` on iOS, Material `stop` on Android.
  */
-export default createIcon({ displayName: 'SquareIcon', sf: 'square', glyph: '\ueb36' });
+export default createIcon({ displayName: 'SquareIcon', sf: 'stop.fill', glyph: '\ue047' });

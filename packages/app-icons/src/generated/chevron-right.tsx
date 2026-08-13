@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ChevronRightIcon — SF `chevron.right` / Material `chevron_right` (was lucide `chevron-right`).
+ * ChevronRightIcon — SF `chevron.right` on iOS, Material `chevron_right` on Android.
  */
 export default createIcon({
   displayName: 'ChevronRightIcon',

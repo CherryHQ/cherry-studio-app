@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * UploadIcon — SF `square.and.arrow.up` / Material `upload` (was lucide `upload`).
+ * UploadIcon — SF `square.and.arrow.up` on iOS, Material `upload` on Android.
  */
 export default createIcon({
   displayName: 'UploadIcon',

@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * DownloadIcon — SF `arrow.down.to.line` / Material `download` (was lucide `download`).
+ * DownloadIcon — SF `arrow.down.to.line` on iOS, Material `download` on Android.
  */
 export default createIcon({
   displayName: 'DownloadIcon',

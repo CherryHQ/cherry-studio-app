@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * RssIcon — SF `dot.radiowaves.up.forward` / Material `rss_feed` (was lucide `rss`).
- * DRIFT: SF Symbols has no RSS glyph; iOS shows forward radiowaves.
+ * RssIcon — SF `dot.radiowaves.up.forward` on iOS, Material `rss_feed` on Android.
  */
 export default createIcon({
   displayName: 'RssIcon',

@@ -19,7 +19,9 @@ import { iconRegistry, tabBarIcons } from '../src/registry';
  *     sources, not components)
  *
  * Material names are validated against expo-symbols' own codepoint map, so the generator fails
- * loudly on a typo instead of shipping a tofu glyph. Run with `pnpm generate:icons`.
+ * loudly on a typo instead of shipping a tofu glyph. Run with `pnpm generate:icons`, which also
+ * formats the output — emitting each component on one line leaves the longer ones over oxfmt's
+ * print width.
  */
 
 const require = createRequire(import.meta.url);
@@ -86,14 +88,12 @@ async function main() {
 
     subsetText += glyph.char;
 
-    const driftLine = 'drift' in entry ? `\n * DRIFT: ${entry.drift}` : '';
-
     writeFileSync(
       join(generatedDir, `${fileName}.tsx`),
       `import { createIcon } from '../createIcon';
 
 /**
- * ${exportName} — SF \`${entry.sf}\` / Material \`${entry.material}\` (was lucide \`${fileName}\`).${driftLine}
+ * ${exportName} — SF \`${entry.sf}\` on iOS, Material \`${entry.material}\` on Android.
  */
 export default createIcon({ displayName: '${exportName}', sf: '${entry.sf}', glyph: ${glyph.literal} });
 `,

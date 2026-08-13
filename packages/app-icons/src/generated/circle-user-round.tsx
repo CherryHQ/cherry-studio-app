@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * CircleUserRoundIcon — SF `person.crop.circle` / Material `account_circle` (was lucide `circle-user-round`).
+ * CircleUserRoundIcon — SF `person.crop.circle` on iOS, Material `account_circle` on Android.
  */
 export default createIcon({
   displayName: 'CircleUserRoundIcon',

@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * LanguagesIcon — SF `character.bubble` / Material `translate` (was lucide `languages`).
- * DRIFT: SF Symbols has no translate glyph; iOS shows a character bubble.
+ * LanguagesIcon — SF `character.bubble` on iOS, Material `translate` on Android.
  */
 export default createIcon({
   displayName: 'LanguagesIcon',

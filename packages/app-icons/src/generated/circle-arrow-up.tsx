@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * CircleArrowUpIcon — SF `arrow.up.circle` / Material `arrow_circle_up` (was lucide `circle-arrow-up`).
+ * CircleArrowUpIcon — SF `arrow.up.circle` on iOS, Material `arrow_circle_up` on Android.
  */
 export default createIcon({
   displayName: 'CircleArrowUpIcon',

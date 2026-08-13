@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * BellRingIcon — SF `bell.and.waves.left.and.right` / Material `notifications_active` (was lucide `bell-ring`).
+ * BellRingIcon — SF `bell.and.waves.left.and.right` on iOS, Material `notifications_active` on Android.
  */
 export default createIcon({
   displayName: 'BellRingIcon',

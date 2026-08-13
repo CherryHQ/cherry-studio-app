@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * SquareArrowOutUpRightIcon — SF `arrow.up.right.square` / Material `open_in_new` (was lucide `square-arrow-out-up-right`).
- * DRIFT: Converges with ExternalLinkIcon — identical lucide semantics, identical mapping.
+ * SquareArrowOutUpRightIcon — SF `arrow.up.right.square` on iOS, Material `open_in_new` on Android.
  */
 export default createIcon({
   displayName: 'SquareArrowOutUpRightIcon',

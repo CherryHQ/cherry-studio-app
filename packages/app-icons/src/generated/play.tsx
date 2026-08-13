@@ -1,6 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * PlayIcon — SF `play` / Material `play_arrow` (was lucide `play`).
+ * PlayIcon — SF `play` on iOS, Material `play_arrow` on Android.
  */
 export default createIcon({ displayName: 'PlayIcon', sf: 'play', glyph: '\ue037' });

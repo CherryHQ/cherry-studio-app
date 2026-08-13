@@ -1,7 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * HeartPulseIcon — SF `heart` / Material `monitor_heart` (was lucide `heart-pulse`).
- * DRIFT: Health-permission heart: iOS drops the pulse line (Health-app metaphor is the bare heart).
+ * HeartPulseIcon — SF `heart` on iOS, Material `monitor_heart` on Android.
  */
 export default createIcon({ displayName: 'HeartPulseIcon', sf: 'heart', glyph: '\ueaa2' });

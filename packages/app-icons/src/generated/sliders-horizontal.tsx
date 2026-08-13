@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * SlidersHorizontalIcon — SF `slider.horizontal.3` / Material `tune` (was lucide `sliders-horizontal`).
+ * SlidersHorizontalIcon — SF `slider.horizontal.3` on iOS, Material `tune` on Android.
  */
 export default createIcon({
   displayName: 'SlidersHorizontalIcon',

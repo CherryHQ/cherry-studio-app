@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * CodeIcon — SF `chevron.left.forwardslash.chevron.right` / Material `code` (was lucide `code`).
+ * CodeIcon — SF `chevron.left.forwardslash.chevron.right` on iOS, Material `code` on Android.
  */
 export default createIcon({
   displayName: 'CodeIcon',

@@ -1,6 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * FileTextIcon — SF `doc.text` / Material `description` (was lucide `file-text`).
+ * FileTextIcon — SF `doc.text` on iOS, Material `description` on Android.
  */
 export default createIcon({ displayName: 'FileTextIcon', sf: 'doc.text', glyph: '\ue873' });

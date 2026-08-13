@@ -1,7 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * BoxesIcon — SF `square.stack.3d.up` / Material `deployed_code` (was lucide `boxes`).
- * DRIFT: Embedding-model stack: iOS 3D square stack, Android deployed-code cube.
+ * BoxesIcon — SF `square.stack.3d.up` on iOS, Material `deployed_code` on Android.
  */
 export default createIcon({ displayName: 'BoxesIcon', sf: 'square.stack.3d.up', glyph: '\uf720' });

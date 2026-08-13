@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ArrowUpDownIcon — SF `arrow.up.arrow.down` / Material `swap_vert` (was lucide `arrow-up-down`).
+ * ArrowUpDownIcon — SF `arrow.up.arrow.down` on iOS, Material `swap_vert` on Android.
  */
 export default createIcon({
   displayName: 'ArrowUpDownIcon',

@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ShieldCheckIcon — SF `checkmark.shield` / Material `verified_user` (was lucide `shield-check`).
+ * ShieldCheckIcon — SF `checkmark.shield` on iOS, Material `verified_user` on Android.
  */
 export default createIcon({
   displayName: 'ShieldCheckIcon',

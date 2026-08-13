@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * RotateCcwIcon — SF `arrow.counterclockwise` / Material `replay` (was lucide `rotate-ccw`).
- * DRIFT: Converges with RefreshCcwIcon on iOS: both collapse to the counterclockwise arrow.
+ * RotateCcwIcon — SF `arrow.counterclockwise` on iOS, Material `replay` on Android.
  */
 export default createIcon({
   displayName: 'RotateCcwIcon',

@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ALargeSmallIcon — SF `textformat.size` / Material `format_size` (was lucide `alarge-small`).
- * DRIFT: Font-size metaphor rendered as "A" sizes on both platforms, not lucide's a/A pair.
+ * ALargeSmallIcon — SF `textformat.size` on iOS, Material `format_size` on Android.
  */
 export default createIcon({
   displayName: 'ALargeSmallIcon',

@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * CircleDollarSignIcon — SF `dollarsign.circle` / Material `paid` (was lucide `circle-dollar-sign`).
+ * CircleDollarSignIcon — SF `dollarsign.circle` on iOS, Material `paid` on Android.
  */
 export default createIcon({
   displayName: 'CircleDollarSignIcon',

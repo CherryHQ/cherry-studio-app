@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * RefreshCcwIcon — SF `arrow.counterclockwise` / Material `sync` (was lucide `refresh-ccw`).
+ * RefreshCcwIcon — SF `arrow.counterclockwise` on iOS, Material `sync` on Android.
  */
 export default createIcon({
   displayName: 'RefreshCcwIcon',

@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ActivityIcon — SF `waveform.path.ecg` / Material `monitoring` (was lucide `activity`).
- * DRIFT: Health-check pulse: iOS keeps an ECG line, Android becomes a monitoring line chart.
+ * ActivityIcon — SF `waveform.path.ecg` on iOS, Material `monitoring` on Android.
  */
 export default createIcon({
   displayName: 'ActivityIcon',

@@ -1,6 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * ImagesIcon — SF `photo.on.rectangle` / Material `photo_library` (was lucide `images`).
+ * ImagesIcon — SF `photo.on.rectangle` on iOS, Material `photo_library` on Android.
  */
 export default createIcon({ displayName: 'ImagesIcon', sf: 'photo.on.rectangle', glyph: '\ue413' });

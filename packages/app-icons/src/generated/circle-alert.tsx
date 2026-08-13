@@ -1,7 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * CircleAlertIcon — SF `exclamationmark.circle` / Material `error` (was lucide `circle-alert`).
+ * CircleAlertIcon — SF `exclamationmark.circle` on iOS, Material `error` on Android.
  */
 export default createIcon({
   displayName: 'CircleAlertIcon',

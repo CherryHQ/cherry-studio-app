@@ -1,8 +1,7 @@
 import { createIcon } from '../createIcon';
 
 /**
- * Settings2Icon — SF `slider.horizontal.3` / Material `tune` (was lucide `settings2`).
- * DRIFT: Converges with SlidersHorizontalIcon: both collapse to the platform sliders glyph.
+ * Settings2Icon — SF `slider.horizontal.3` on iOS, Material `tune` on Android.
  */
 export default createIcon({
   displayName: 'Settings2Icon',

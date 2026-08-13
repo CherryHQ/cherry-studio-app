@@ -1,6 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * CloudIcon — SF `cloud` / Material `cloud` (was lucide `cloud`).
+ * CloudIcon — SF `cloud` on iOS, Material `cloud` on Android.
  */
 export default createIcon({ displayName: 'CloudIcon', sf: 'cloud', glyph: '\ue2bd' });

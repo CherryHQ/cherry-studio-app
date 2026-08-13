@@ -1,6 +1,6 @@
 import { createIcon } from '../createIcon';
 
 /**
- * PaletteIcon — SF `paintpalette` / Material `palette` (was lucide `palette`).
+ * PaletteIcon — SF `paintpalette` on iOS, Material `palette` on Android.
  */
 export default createIcon({ displayName: 'PaletteIcon', sf: 'paintpalette', glyph: '\ue40a' });
