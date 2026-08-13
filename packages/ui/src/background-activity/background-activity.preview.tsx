@@ -12,7 +12,6 @@ import {
   type PngIconProps,
 } from 'lucide-uniwind/png';
 import type { ComponentType } from 'react';
-import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 
 import type {
@@ -27,9 +26,6 @@ export type BackgroundActivityPreviewProps = Omit<
   BackgroundActivityPresentation,
   'colorScheme' | 'finishedAtEpochMs' | 'logoUri' | 'startedAtEpochMs'
 > & {
-  elapsedSeconds: number;
-  finished: boolean;
-  liveTimer: boolean;
   showLogo: boolean;
   theme: 'dark' | 'light';
 };
@@ -46,29 +42,7 @@ const ICONS: Record<BackgroundActivityIcon, ComponentType<PngIconProps>> = {
   'x-circle': CircleXIcon,
 };
 
-export function formatElapsedTime(elapsedSeconds: number): string {
-  const totalSeconds = Math.max(0, Math.floor(elapsedSeconds));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-  }
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
 export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps) {
-  const [elapsedSeconds, setElapsedSeconds] = useState(props.elapsedSeconds);
-
-  useEffect(() => {
-    if (!props.liveTimer || props.finished) return;
-
-    const timer = setInterval(() => setElapsedSeconds((current) => current + 1), 1000);
-    return () => clearInterval(timer);
-  }, [props.finished, props.liveTimer]);
-
-  const elapsed = formatElapsedTime(elapsedSeconds);
   const colors =
     props.theme === 'dark'
       ? {
@@ -99,15 +73,15 @@ export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps)
       style={{ flex: 1 }}
     >
       <PreviewSurface label="Lock Screen / Banner" labelColor={colors.label}>
-        <BannerPreview colors={colors} elapsed={elapsed} {...props} />
+        <BannerPreview colors={colors} {...props} />
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Compact" labelColor={colors.label}>
-        <CompactPreview elapsed={elapsed} {...props} />
+        <CompactPreview {...props} />
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Expanded" labelColor={colors.label}>
-        <ExpandedPreview elapsed={elapsed} {...props} />
+        <ExpandedPreview {...props} />
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Minimal" labelColor={colors.label}>
@@ -135,16 +109,13 @@ type PreviewColors = {
   surface: string;
 };
 
-type SurfacePreviewProps = BackgroundActivityPreviewProps & { elapsed: string };
-
 function BannerPreview({
   colors,
   detail,
-  elapsed,
   icon,
   showLogo,
   title,
-}: SurfacePreviewProps & { colors: PreviewColors }) {
+}: BackgroundActivityPreviewProps & { colors: PreviewColors }) {
   return (
     <View
       style={{
@@ -177,12 +148,11 @@ function BannerPreview({
           </Text>
         </View>
       </View>
-      <Timer color={colors.secondary} elapsed={elapsed} />
     </View>
   );
 }
 
-function CompactPreview({ compactLabel, elapsed, finished, icon }: SurfacePreviewProps) {
+function CompactPreview({ compactLabel, icon }: BackgroundActivityPreviewProps) {
   return (
     <View
       style={{
@@ -208,16 +178,18 @@ function CompactPreview({ compactLabel, elapsed, finished, icon }: SurfacePrevie
       >
         {compactLabel}
       </Text>
-      {finished ? (
-        <ActivityIcon icon={icon} size={16} />
-      ) : (
-        <Timer color="#FFFFFF" elapsed={elapsed} />
-      )}
+      <ActivityIcon icon={icon} size={16} />
     </View>
   );
 }
 
-function ExpandedPreview({ detail, elapsed, icon, preview, showLogo, title }: SurfacePreviewProps) {
+function ExpandedPreview({
+  detail,
+  icon,
+  preview,
+  showLogo,
+  title,
+}: BackgroundActivityPreviewProps) {
   return (
     <View
       style={{
@@ -240,7 +212,6 @@ function ExpandedPreview({ detail, elapsed, icon, preview, showLogo, title }: Su
         >
           {title}
         </Text>
-        <Timer color="#C7C7CC" elapsed={elapsed} />
       </View>
       <View
         style={{ alignItems: 'center', flexDirection: 'row', gap: 6, justifyContent: 'center' }}
@@ -287,24 +258,6 @@ function PreviewSurface({
       </Text>
       <View style={{ alignItems: 'center' }}>{children}</View>
     </View>
-  );
-}
-
-function Timer({ color, elapsed }: { color: string; elapsed: string }) {
-  return (
-    <Text
-      style={{
-        color,
-        fontSize: 13,
-        fontVariant: ['tabular-nums'],
-        fontWeight: '500',
-        letterSpacing: 0,
-        minWidth: 44,
-        textAlign: 'right',
-      }}
-    >
-      {elapsed}
-    </Text>
   );
 }
 

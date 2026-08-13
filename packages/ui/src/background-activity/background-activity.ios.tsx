@@ -5,7 +5,6 @@ import {
   foregroundStyle,
   frame,
   lineLimit,
-  monospacedDigit,
   multilineTextAlignment,
   padding,
   resizable,
@@ -27,13 +26,6 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
   const foreground = colorScheme === 'dark' ? '#FFFFFF' : '#151515';
   const secondary = colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
   const background = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
-  const finishedAt =
-    props.finishedAtEpochMs !== undefined ? new Date(props.finishedAtEpochMs) : undefined;
-  const timerInterval = {
-    lower: new Date(props.startedAtEpochMs),
-    upper: new Date(props.startedAtEpochMs + 24 * 60 * 60 * 1000),
-  };
-  const isTerminal = props.finishedAtEpochMs !== undefined;
   const iconSymbol =
     props.icon === 'brain'
       ? 'brain.head.profile'
@@ -102,16 +94,6 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
           </HStack>
         </VStack>
         <Spacer />
-        <Text
-          countsDown={false}
-          pauseTime={finishedAt}
-          timerInterval={timerInterval}
-          modifiers={[
-            font({ size: 13, weight: 'medium' }),
-            monospacedDigit(),
-            foregroundStyle(secondary),
-          ]}
-        />
       </HStack>
     ),
     compactLeading: (
@@ -126,20 +108,7 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
         {props.compactLabel}
       </Text>
     ),
-    compactTrailing: isTerminal ? (
-      <Image color={brandColor} size={16} systemName={iconSymbol} />
-    ) : (
-      <Text
-        countsDown={false}
-        pauseTime={finishedAt}
-        timerInterval={timerInterval}
-        modifiers={[
-          font({ size: 13, weight: 'medium' }),
-          monospacedDigit(),
-          foregroundStyle('#FFFFFF'),
-        ]}
-      />
-    ),
+    compactTrailing: <Image color={brandColor} size={16} systemName={iconSymbol} />,
     minimal: <Image color={brandColor} size={16} systemName={iconSymbol} />,
     expandedLeading: (
       <HStack spacing={8} modifiers={[padding({ leading: 12, top: 10 })]}>
@@ -165,20 +134,7 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
         </Text>
       </HStack>
     ),
-    expandedTrailing: (
-      <HStack modifiers={[padding({ top: 10, trailing: 12 })]}>
-        <Text
-          countsDown={false}
-          pauseTime={finishedAt}
-          timerInterval={timerInterval}
-          modifiers={[
-            font({ size: 13, weight: 'medium' }),
-            monospacedDigit(),
-            foregroundStyle('#C7C7CC'),
-          ]}
-        />
-      </HStack>
-    ),
+    expandedTrailing: null,
     expandedCenter: (
       <HStack spacing={6} modifiers={[padding({ horizontal: 12, top: 6 })]}>
         <Image color={brandColor} size={16} systemName={iconSymbol} />

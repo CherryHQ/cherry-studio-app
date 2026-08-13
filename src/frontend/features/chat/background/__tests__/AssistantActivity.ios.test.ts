@@ -11,12 +11,12 @@ describe.each([
   ['assistant', AssistantActivity],
   ['painting', PaintingActivity],
 ] as const)('%s iOS activity layout', (_name, activity) => {
-  test('uses a pausable timer interval for running and terminal content', () => {
+  test('does not render elapsed time', () => {
     const layout = (activity as unknown as { layout: string }).layout;
 
-    expect(layout).toContain('timerInterval');
-    expect(layout).toContain('countsDown:false');
-    expect(layout).toContain('pauseTime');
+    expect(layout).not.toContain('timerInterval');
+    expect(layout).not.toContain('countsDown');
+    expect(layout).not.toContain('pauseTime');
     expect(layout).not.toContain('dateStyle:"timer"');
   });
 });

@@ -261,7 +261,7 @@ spacing, typography, or layout overrides. Feature services keep their phase and 
 map those values into this presentation model.
 
 `@cherrystudio/ui/background-activity/ios` exposes the serializable `expo-widgets` renderer. It owns
-the Lock Screen and Dynamic Island layouts, colors, type, spacing, truncation, timer behavior, logo
+the Lock Screen and Dynamic Island layouts, colors, type, spacing, truncation, status icons, logo
 placement, and SF Symbol mapping. Feature activity files only register that renderer under their
 typed activity name. Infrastructure injects the resolved theme and staged logo and stamps terminal
 time. A future Android renderer should consume the same presentation semantics while owning its own
