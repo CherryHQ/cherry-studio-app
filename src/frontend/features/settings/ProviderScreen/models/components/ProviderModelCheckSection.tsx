@@ -1,6 +1,6 @@
 import { Button, Section } from '@cherrystudio/ui/components';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
+import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
 import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import {
 } from '@/frontend/components/selectionSheet';
 
 import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
+import { ProviderModelSelectSheet } from './ProviderModelSelectSheet';
 
 type SelectionKind = 'api-key' | 'model' | null;
 
@@ -19,6 +20,8 @@ type ProviderModelCheckSectionProps = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   isLoading?: boolean;
   models: readonly Model[];
+  /** Only for the model rows' logos; absent while the provider is still loading. */
+  provider: Provider | undefined;
   providerId: string;
 };
 
@@ -26,6 +29,7 @@ export function ProviderModelCheckSection({
   apiKeys,
   isLoading = false,
   models,
+  provider,
   providerId,
 }: ProviderModelCheckSectionProps) {
   const { t } = useTranslation();
@@ -40,10 +44,6 @@ export function ProviderModelCheckSection({
     setSelectedModelId,
     startCheck,
   } = useProviderModelCheck({ apiKeys, models, providerId });
-  const modelOptions: SingleSelectionSheetOption<UniqueModelId>[] = models.map((model) => ({
-    label: model.name,
-    value: model.id,
-  }));
   const apiKeySelectionOptions: SingleSelectionSheetOption<string>[] = apiKeyOptions.map(
     (option) => ({ label: option.label, value: option.value }),
   );
@@ -58,7 +58,7 @@ export function ProviderModelCheckSection({
               sit it out of line with the API keys field label right above. */}
           <Section.Header className="px-0" title={t('settings.provider.models.checkTitle')} />
           <Section.Item
-            disabled={isChecking || isLoading || modelOptions.length === 0}
+            disabled={isChecking || isLoading || models.length === 0}
             label={t('settings.provider.models.checkModelSection')}
             onPress={() => setSelectionKind('model')}
             trailing={
@@ -92,16 +92,14 @@ export function ProviderModelCheckSection({
         </Button>
       </View>
 
-      <SingleSelectionSheet
-        closeAccessibilityLabel={t('common.close')}
+      <ProviderModelSelectSheet
         emptyText={t('settings.provider.models.checkNoModels')}
         isOpen={selectionKind === 'model'}
+        models={models}
         onClose={() => setSelectionKind(null)}
         onSelect={setSelectedModelId}
-        options={modelOptions}
-        searchable
-        selectedValue={selectedModel?.id ?? null}
-        testID="provider-model-selection"
+        provider={provider}
+        selectedModelId={selectedModel?.id ?? null}
         title={t('settings.provider.models.checkModelSection')}
       />
       <SingleSelectionSheet

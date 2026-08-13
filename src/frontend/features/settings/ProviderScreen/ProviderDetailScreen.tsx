@@ -430,6 +430,7 @@ export default function ProviderDetailSettingsScreen() {
                 apiKeys={apiKeys}
                 isLoading={modelsQuery.isPending}
                 models={models}
+                provider={provider}
                 providerId={providerId}
               />
             </>
