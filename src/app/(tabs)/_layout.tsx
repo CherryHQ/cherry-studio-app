@@ -36,16 +36,16 @@ const filledSceneStyle = { height: '100%' } as const;
 // Material Symbols PNGs baked by the app-icons generator (see packages/app-icons/src/registry.ts).
 const homeIcon = isAndroid
   ? require('../../../packages/app-icons/src/tab-icons/home.png')
-  : ({ sfSymbol: 'house' } as const);
+  : ({ sfSymbol: 'house.fill' } as const);
 const assistantsIcon = isAndroid
   ? require('../../../packages/app-icons/src/tab-icons/assistants.png')
-  : ({ sfSymbol: 'person.2' } as const);
+  : ({ sfSymbol: 'person.circle.fill' } as const);
 const messagesIcon = isAndroid
   ? require('../../../packages/app-icons/src/tab-icons/messages.png')
-  : ({ sfSymbol: 'message' } as const);
+  : ({ sfSymbol: 'message.fill' } as const);
 const settingsIcon = isAndroid
   ? require('../../../packages/app-icons/src/tab-icons/settings.png')
-  : ({ sfSymbol: 'gearshape' } as const);
+  : ({ sfSymbol: 'gear' } as const);
 const searchIcon = isAndroid
   ? require('../../../packages/app-icons/src/tab-icons/search.png')
   : ({ sfSymbol: 'magnifyingglass' } as const);
