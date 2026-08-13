@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from '@cherrystudio/app-icons';
 import { Description, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
 import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
@@ -9,7 +10,6 @@ import {
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -295,7 +295,7 @@ function AssistantEditForm({
                   </Text>
                 </>
               ) : null}
-              <ChevronDownIcon className="size-6 text-foreground" strokeWidth={2} />
+              <ChevronDownIcon className="size-6 text-foreground" />
             </View>
           </Pressable>
           <SwitchRow
@@ -386,7 +386,7 @@ function AssistantEditForm({
               >
                 {selectedMcpMode?.label}
               </Text>
-              <ChevronDownIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
+              <ChevronDownIcon className="size-5 shrink-0 text-foreground" />
             </View>
           </Pressable>
           {form.mcpMode === 'manual' ? (

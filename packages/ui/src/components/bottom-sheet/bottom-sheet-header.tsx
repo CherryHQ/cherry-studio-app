@@ -1,4 +1,4 @@
-import { ChevronLeftIcon, XIcon } from 'lucide-uniwind/png';
+import { ChevronLeftIcon, XIcon } from '@cherrystudio/app-icons';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -119,7 +119,7 @@ function BottomSheetBackButton({
       onPress={onPress}
       testID={testID}
     >
-      <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2.25} />
+      <ChevronLeftIcon className="size-6 text-foreground" />
     </Pressable>
   );
 }
@@ -145,7 +145,7 @@ function BottomSheetCloseButton({
       onPress={onPress}
       testID={testID}
     >
-      <XIcon className="size-6 text-foreground" strokeWidth={2.25} />
+      <XIcon className="size-6 text-foreground" />
     </Pressable>
   );
 }

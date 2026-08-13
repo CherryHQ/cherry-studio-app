@@ -43,7 +43,7 @@ jest.mock('@legendapp/list/react-native', () => ({
   },
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CheckIcon: () => null,
 }));
 

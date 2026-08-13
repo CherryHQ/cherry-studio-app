@@ -1,6 +1,12 @@
+import {
+  DownloadIcon,
+  EllipsisIcon,
+  PencilIcon,
+  ProportionsIcon,
+  XIcon,
+} from '@cherrystudio/app-icons';
 import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
-import { DownloadIcon, EllipsisIcon, PencilIcon, ProportionsIcon, XIcon } from 'lucide-uniwind/png';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
@@ -56,7 +62,7 @@ export function PaintingViewerChrome({
         options={{
           headerLeft: () => (
             <HeaderIconButton accessibilityLabel={t('painting.viewer.close')} onPress={onClose}>
-              <XIcon className="size-6 text-constant-white" strokeWidth={2} />
+              <XIcon className="size-6 text-constant-white" />
             </HeaderIconButton>
           ),
           headerRight: () => (
@@ -65,7 +71,7 @@ export function PaintingViewerChrome({
                 accessibilityLabel={t('painting.viewer.download')}
                 onPress={onDownload}
               >
-                <DownloadIcon className="size-6 text-constant-white" strokeWidth={2} />
+                <DownloadIcon className="size-6 text-constant-white" />
               </HeaderIconButton>
               <Menu items={overflowMenuItems} trigger="tap">
                 <View
@@ -73,7 +79,7 @@ export function PaintingViewerChrome({
                   accessibilityRole="button"
                   className="size-9 items-center justify-center"
                 >
-                  <EllipsisIcon className="size-6 text-constant-white" strokeWidth={2} />
+                  <EllipsisIcon className="size-6 text-constant-white" />
                 </View>
               </Menu>
             </View>
@@ -86,7 +92,7 @@ export function PaintingViewerChrome({
         style={[styles.bottomBar, { bottom: Math.max(insets.bottom, 12) + 12 }]}
       >
         <HeaderIconButton accessibilityLabel={t('painting.viewer.edit')} onPress={onEdit}>
-          <PencilIcon className="size-6 text-constant-white" strokeWidth={2} />
+          <PencilIcon className="size-6 text-constant-white" />
         </HeaderIconButton>
         <Menu items={resizeMenuItems} trigger="tap">
           <View
@@ -94,7 +100,7 @@ export function PaintingViewerChrome({
             accessibilityRole="button"
             className="size-9 items-center justify-center"
           >
-            <ProportionsIcon className="size-6 text-constant-white" strokeWidth={2} />
+            <ProportionsIcon className="size-6 text-constant-white" />
           </View>
         </Menu>
       </View>

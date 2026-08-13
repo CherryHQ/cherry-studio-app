@@ -1,5 +1,5 @@
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -105,7 +105,7 @@ function SelectedModelAccessory({
       <Text className="min-w-0 shrink text-right text-foreground text-sm" numberOfLines={1}>
         {item?.model.name ?? placeholder}
       </Text>
-      <ChevronRightIcon className="size-6 text-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-6 text-foreground" />
     </View>
   );
 }

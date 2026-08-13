@@ -12,7 +12,7 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
 
-jest.mock('lucide-uniwind/png', () => ({ CheckIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ CheckIcon: () => null }));
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');

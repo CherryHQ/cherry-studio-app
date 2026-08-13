@@ -1,13 +1,13 @@
-import { Section } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
 import {
   BellRingIcon,
   CalendarIcon,
   ChevronRightIcon,
   HeartPulseIcon,
   MapPinIcon,
-  type PngIconProps,
-} from 'lucide-uniwind/png';
+  type AppIconProps,
+} from '@cherrystudio/app-icons';
+import { Section } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import type { ComponentType } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, ScrollView, Text, View } from 'react-native';
@@ -19,7 +19,7 @@ import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { getPermissionSummaryKey, type PermissionKind, permissionConfig } from './permissionConfig';
 
-const permissionIcons: Record<PermissionKind, ComponentType<PngIconProps>> = {
+const permissionIcons: Record<PermissionKind, ComponentType<AppIconProps>> = {
   calendar: CalendarIcon,
   health: HeartPulseIcon,
   location: MapPinIcon,
@@ -71,7 +71,7 @@ export default function PermissionsSettingsScreen() {
             source={iosPermissionImages[kind]}
           />
         ) : (
-          <Icon className="size-5 text-foreground" strokeWidth={2} />
+          <Icon className="size-5 text-foreground" />
         ),
       onPress: () => router.push(`/settings/permissions/${kind}`),
       trailing: (
@@ -79,7 +79,7 @@ export default function PermissionsSettingsScreen() {
           <Text className="text-base text-foreground" numberOfLines={1}>
             {t(summaryKey)}
           </Text>
-          <ChevronRightIcon className="size-5 text-foreground" strokeWidth={2} />
+          <ChevronRightIcon className="size-5 text-foreground" />
         </View>
       ),
     };

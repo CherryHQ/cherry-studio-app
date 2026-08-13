@@ -16,7 +16,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   ChevronRightIcon: () => null,
 }));
 

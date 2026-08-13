@@ -56,7 +56,7 @@ jest.mock('react-native-worklets', () => ({
   scheduleOnRN: (callback: (...args: unknown[]) => void, ...args: unknown[]) => callback(...args),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CircleAlertIcon: () => null,
 }));
 

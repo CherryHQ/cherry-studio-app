@@ -11,7 +11,7 @@ jest.mock('heroui-native/utils', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => {
+jest.mock('@cherrystudio/app-icons', () => {
   const React = require('react');
   const { View } = require('react-native');
 

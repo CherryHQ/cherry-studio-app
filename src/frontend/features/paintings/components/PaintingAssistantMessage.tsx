@@ -1,6 +1,6 @@
+import { CircleAlertIcon } from '@cherrystudio/app-icons';
 import { ImageGenerationLoader } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { CircleAlertIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -96,7 +96,7 @@ export function PaintingAssistantMessage({
     return (
       <View className="w-full px-4 py-3">
         <View className="flex-row items-start gap-2 rounded-md border border-border bg-card p-3">
-          <CircleAlertIcon className="mt-0.5 size-5 text-destructive" strokeWidth={1.5} />
+          <CircleAlertIcon className="mt-0.5 size-5 text-destructive" />
           <View className="min-w-0 flex-1 gap-0.5">
             <Text accessibilityRole="alert" className="font-medium text-foreground text-sm">
               {interruption ? t('painting.status.interrupted') : t('painting.status.failed')}

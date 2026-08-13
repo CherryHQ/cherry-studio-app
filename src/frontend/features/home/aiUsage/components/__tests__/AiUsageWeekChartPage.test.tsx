@@ -8,7 +8,7 @@ import { AiUsageWeekChartPage } from '../AiUsageWeekChartPage';
 const mockRefetch = jest.fn();
 const mockSelectDate = jest.fn();
 
-jest.mock('lucide-uniwind/png', () => ({ RefreshCwIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ RefreshCwIcon: () => null }));
 jest.mock('../AiUsageWeeklyChart', () => {
   const { View: MockView } = jest.requireActual('react-native');
   return {

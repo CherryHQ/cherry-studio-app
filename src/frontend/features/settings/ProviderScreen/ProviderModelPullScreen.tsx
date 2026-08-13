@@ -1,9 +1,9 @@
+import { MinusIcon, PlusIcon } from '@cherrystudio/app-icons';
 import { Button, Section, Spinner } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { MinusIcon, PlusIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -371,9 +371,9 @@ const PullModelRow = memo(function PullModelRow({
         hitSlop={6}
         icon={
           showsMinus ? (
-            <MinusIcon className="text-destructive" strokeWidth={2} />
+            <MinusIcon className="text-destructive" />
           ) : (
-            <PlusIcon className="text-primary" strokeWidth={2} />
+            <PlusIcon className="text-primary" />
           )
         }
         onPress={handleToggle}

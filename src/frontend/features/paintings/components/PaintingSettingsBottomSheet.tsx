@@ -1,3 +1,4 @@
+import { CheckIcon, ChevronRightIcon } from '@cherrystudio/app-icons';
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import {
   BottomSheet,
@@ -12,7 +13,6 @@ import {
   useBottomSheet,
 } from '@cherrystudio/ui/components';
 import type { TFunction } from 'i18next';
-import { CheckIcon, ChevronRightIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -460,7 +460,7 @@ function EnumSettingRow({
             <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
               {selectedLabel}
             </Text>
-            <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
+            <ChevronRightIcon className="size-5 shrink-0 text-foreground" />
           </View>
         }
       />
@@ -504,11 +504,7 @@ function EnumSelectionPage({
               onPress={() => onValueChange(field.key, option)}
               showChevron={false}
               testID={`painting-setting-option-${field.key}-${option}`}
-              trailing={
-                isSelected ? (
-                  <CheckIcon className="size-5 text-primary" strokeWidth={2.5} />
-                ) : undefined
-              }
+              trailing={isSelected ? <CheckIcon className="size-5 text-primary" /> : undefined}
             />
           );
         })}

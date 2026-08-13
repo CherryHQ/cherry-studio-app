@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from 'lucide-uniwind/png';
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { Children, cloneElement, Fragment, isValidElement, type ReactNode, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -85,7 +85,7 @@ function SectionItem({
         {trailing ? <View className="shrink-0 items-center justify-center">{trailing}</View> : null}
         {shouldShowChevron ? (
           <View className="shrink-0" testID="section-chevron">
-            <ChevronRightIcon className="size-5 text-muted-foreground" strokeWidth={2} />
+            <ChevronRightIcon className="size-5 text-muted-foreground" />
           </View>
         ) : null}
       </>

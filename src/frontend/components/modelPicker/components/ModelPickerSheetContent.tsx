@@ -1,10 +1,10 @@
+import { CheckIcon } from '@cherrystudio/app-icons';
 import { cn } from '@cherrystudio/ui/utils';
 import {
   LegendList,
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
-import { CheckIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -212,7 +212,7 @@ const ModelPickerRow = memo(function ModelPickerRow({
           </Text>
         ) : null}
       </View>
-      {isSelected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.5} /> : null}
+      {isSelected ? <CheckIcon className="size-5 text-primary" /> : null}
     </Pressable>
   );
 });

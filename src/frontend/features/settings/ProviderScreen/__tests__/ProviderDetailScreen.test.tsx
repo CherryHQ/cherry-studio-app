@@ -101,7 +101,7 @@ jest.mock('heroui-native/toast', () => ({
   useToast: () => ({ toast: { show: jest.fn() } }),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   PlusIcon: () => null,
   SquareArrowOutUpRightIcon: () => null,
 }));

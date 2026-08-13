@@ -1,10 +1,10 @@
+import { SquareArrowOutUpRightIcon } from '@cherrystudio/app-icons';
 import {
   WEB_SEARCH_PROVIDER_IDS,
   type WebSearchProviderId,
 } from '@cherrystudio/universal/data/preference';
 import { isMobileSupportedWebSearchProviderId } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, View } from 'react-native';

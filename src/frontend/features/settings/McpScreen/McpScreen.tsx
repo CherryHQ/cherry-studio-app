@@ -1,6 +1,6 @@
+import { PlusIcon } from '@cherrystudio/app-icons';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useRouter } from 'expo-router';
-import { PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';

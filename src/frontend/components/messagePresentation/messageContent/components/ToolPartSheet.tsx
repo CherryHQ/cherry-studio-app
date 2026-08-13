@@ -1,7 +1,7 @@
+import { ChevronRightIcon, type AppIconProps, WrenchIcon } from '@cherrystudio/app-icons';
 import { BottomSheet } from '@cherrystudio/ui/components';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import type { ImageSource } from 'expo-image';
-import { ChevronRightIcon, type PngIconProps, WrenchIcon } from 'lucide-uniwind/png';
 import { type ComponentType, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -20,7 +20,7 @@ const toolSheetMediumFraction = 0.6;
 const toolSheetFullFraction = 0.94;
 
 type ToolPartTriggerProps = {
-  icon?: ComponentType<PngIconProps>;
+  icon?: ComponentType<AppIconProps>;
   imageSource?: ImageSource | number;
   isRunning: boolean;
   onPress: () => void;
@@ -69,7 +69,6 @@ export function ToolPartTrigger({
                 ? 'size-5 text-warning'
                 : 'size-5 text-foreground'
           }
-          strokeWidth={2}
         />
       )}
       <Text
@@ -106,7 +105,6 @@ export function ToolPartTrigger({
               ? 'size-4 shrink-0 text-warning'
               : 'size-4 shrink-0 text-foreground'
         }
-        strokeWidth={2}
       />
     </Pressable>
   );

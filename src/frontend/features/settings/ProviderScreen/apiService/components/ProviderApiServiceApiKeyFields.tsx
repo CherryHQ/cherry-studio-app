@@ -1,6 +1,3 @@
-import { Button, FieldError, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
-import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
-import * as Clipboard from 'expo-clipboard';
 import {
   CopyIcon,
   EyeIcon,
@@ -8,7 +5,10 @@ import {
   KeyRoundIcon,
   PlusIcon,
   Trash2Icon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Button, FieldError, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
+import * as Clipboard from 'expo-clipboard';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
@@ -51,14 +51,14 @@ export function ProviderApiServiceApiKeysField({
               : t('settings.provider.apiService.showApiKeys')
           }
           hitSlop={2}
-          icon={apiKeysVisible ? <EyeIcon strokeWidth={2} /> : <EyeOffIcon strokeWidth={2} />}
+          icon={apiKeysVisible ? <EyeIcon /> : <EyeOffIcon />}
           onPress={onToggleVisible}
           variant="secondary"
         />
         <Button
           accessibilityLabel={t('settings.provider.apiService.manageApiKeys')}
           hitSlop={2}
-          icon={<KeyRoundIcon strokeWidth={2} />}
+          icon={<KeyRoundIcon />}
           onPress={onManagePress}
           variant="secondary"
         />
@@ -157,7 +157,7 @@ export function ProviderApiServiceApiKeyForm({
         </View>
       ) : null}
 
-      <Button icon={<PlusIcon strokeWidth={2} />} onPress={onAdd} variant="secondary">
+      <Button icon={<PlusIcon />} onPress={onAdd} variant="secondary">
         {t('settings.provider.apiService.addApiKey')}
       </Button>
     </View>
@@ -207,7 +207,7 @@ function ApiKeyRow({
           accessibilityLabel={t('settings.provider.apiService.copyApiKey')}
           disabled={isPending}
           hitSlop={2}
-          icon={<CopyIcon strokeWidth={2} />}
+          icon={<CopyIcon />}
           onPress={() => void Clipboard.setStringAsync(apiKey.key)}
           variant="secondary"
         />
@@ -215,7 +215,7 @@ function ApiKeyRow({
           accessibilityLabel={t('settings.provider.apiService.removeApiKey')}
           disabled={isPending}
           hitSlop={2}
-          icon={<Trash2Icon strokeWidth={2} />}
+          icon={<Trash2Icon />}
           onPress={() => onRemove(apiKey.id)}
           variant="secondary"
         />

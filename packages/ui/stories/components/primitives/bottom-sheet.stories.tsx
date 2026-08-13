@@ -1,6 +1,6 @@
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
@@ -78,7 +78,7 @@ function SheetRow({ label, onPress }: { label: string; onPress: () => void }) {
       onPress={onPress}
     >
       <Text className="min-w-0 flex-1 text-base text-foreground">{label}</Text>
-      <ChevronRightIcon className="size-5 text-muted-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-5 text-muted-foreground" />
     </Pressable>
   );
 }

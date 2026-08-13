@@ -1,6 +1,6 @@
+import { XIcon } from '@cherrystudio/app-icons';
 import { cn } from '@cherrystudio/ui/utils';
 import { Stack, useRouter } from 'expo-router';
-import { XIcon } from 'lucide-uniwind/png';
 import type { ReactNode } from 'react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,7 +49,7 @@ export function CloseHeader({ onClose, rightActions, title = '' }: CloseHeaderPr
       headerBackVisible: false,
       headerLeft: () => (
         <HeaderIconButton accessibilityLabel={t('common.close')} onPress={close}>
-          <XIcon className="size-6 text-foreground" strokeWidth={2} />
+          <XIcon className="size-6 text-foreground" />
         </HeaderIconButton>
       ),
       ...(rightActions && rightActions.length > 0

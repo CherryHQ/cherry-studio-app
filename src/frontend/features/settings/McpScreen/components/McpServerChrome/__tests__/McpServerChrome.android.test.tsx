@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { McpServerChrome } from '../McpServerChrome.android';
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   PauseIcon: () => null,
   PlayIcon: () => null,
   Trash2Icon: () => null,

@@ -22,7 +22,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CheckIcon: () => null,
   SettingsIcon: () => null,
 }));

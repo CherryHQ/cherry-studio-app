@@ -1,8 +1,8 @@
+import { MinusIcon } from '@cherrystudio/app-icons';
 import { Button } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { MinusIcon } from 'lucide-uniwind/png';
 import { memo, type ReactElement, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
@@ -158,7 +158,7 @@ const ModelRow = memo(function ModelRow({
         accessibilityState={{ busy: isRemoving }}
         disabled={!canRemove || isRemoving}
         hitSlop={6}
-        icon={<MinusIcon className="text-destructive" strokeWidth={2} />}
+        icon={<MinusIcon className="text-destructive" />}
         onPress={handleRemove}
         onPressIn={() => onPressedChange(itemKey, true)}
         onPressOut={() => onPressedChange(itemKey, false)}

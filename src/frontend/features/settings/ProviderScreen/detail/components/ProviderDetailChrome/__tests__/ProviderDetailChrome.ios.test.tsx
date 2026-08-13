@@ -34,7 +34,7 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => ({ RefreshCcwIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ RefreshCcwIcon: () => null }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({

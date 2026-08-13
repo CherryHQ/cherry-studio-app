@@ -1,6 +1,3 @@
-import { Section } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import { useRouter } from 'expo-router';
 import {
   CircleUserRoundIcon,
   CloudIcon,
@@ -10,7 +7,10 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   SunIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Section } from '@cherrystudio/ui/components';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -69,26 +69,26 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.profile')}
-              leading={<CircleUserRoundIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<CircleUserRoundIcon className="size-5 text-foreground" />}
               onPress={openProfileSettings}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.items.modelService')}
-              leading={<CloudIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<CloudIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/provider')}
             />
             <Section.Item
               label={t('settings.items.defaultModel')}
-              leading={<SparklesIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<SparklesIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/model')}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.items.webSearch')}
-              leading={<EarthIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<EarthIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/websearch')}
             />
             <Section.Item
@@ -109,26 +109,26 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.dataBackup')}
-              leading={<DatabaseIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<DatabaseIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/data')}
             />
             <Section.Item
               label={t('settings.items.permissions')}
-              leading={<ShieldCheckIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<ShieldCheckIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.appearance.title')}
-              leading={<SunIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<SunIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.items.aboutUs')}
-              leading={<InfoIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<InfoIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/about')}
             />
           </Section>

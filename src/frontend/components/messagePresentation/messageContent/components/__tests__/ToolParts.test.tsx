@@ -1,5 +1,5 @@
+import { BellRingIcon } from '@cherrystudio/app-icons';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { BellRingIcon } from 'lucide-uniwind/png';
 import type { ReactElement, ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -88,7 +88,7 @@ describe('tool message detail sheets', () => {
     expect(trigger.props.title).toBe('chat.builtinTool.reminders.listLists');
   });
 
-  it('uses the matching Lucide icon for a built-in tool on Android', async () => {
+  it('uses the matching Material icon for a built-in tool on Android', async () => {
     setPlatform('android');
     await render(
       <ToolPart

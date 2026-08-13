@@ -42,7 +42,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => ({ MinusIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ MinusIcon: () => null }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

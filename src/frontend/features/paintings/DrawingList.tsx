@@ -1,8 +1,8 @@
+import { CheckIcon, ImageIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
 import { ImageGenerationLoader } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
-import { CheckIcon, ImageIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -219,7 +219,7 @@ export function DrawingList() {
                 className="mx-4 h-20 items-center justify-center rounded-md bg-secondary active:opacity-70"
                 onPress={() => void handleViewAllPress()}
               >
-                <ImageIcon className="size-6 text-foreground-tertiary" strokeWidth={1.5} />
+                <ImageIcon className="size-6 text-foreground-tertiary" />
               </Pressable>
             )}
           </View>
@@ -339,7 +339,7 @@ function DrawingGridItem({
         >
           {isSelected ? (
             <View className="size-6 items-center justify-center rounded-full bg-primary">
-              <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+              <CheckIcon className="size-4 text-primary-foreground" />
             </View>
           ) : (
             <View className="size-6 rounded-full border-2 border-border-strong bg-constant-black/30" />
@@ -419,7 +419,7 @@ function renderTileContent({
 
   return (
     <View className="flex-1 items-center justify-center gap-1 px-2">
-      <RotateCcwIcon className="size-5 text-foreground-tertiary" strokeWidth={1.5} />
+      <RotateCcwIcon className="size-5 text-foreground-tertiary" />
       <Text className="text-center font-medium text-foreground-secondary text-xs">
         {interruptedLabel}
       </Text>

@@ -1,7 +1,7 @@
+import { ALargeSmallIcon, ChevronRightIcon, GlobeIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { ThemeMode } from '@cherrystudio/universal/data/preference';
 import { useRouter } from 'expo-router';
-import { ALargeSmallIcon, ChevronRightIcon, GlobeIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -59,25 +59,25 @@ export default function AppearanceSettingsScreen() {
         <Section>
           <Section.Item
             label={t('settings.items.appLanguage')}
-            leading={<GlobeIcon className="size-5 text-foreground" strokeWidth={2} />}
+            leading={<GlobeIcon className="size-5 text-foreground" />}
             onPress={() => router.push('/settings/language')}
             trailing={
               <View className="flex-row items-center gap-1">
                 <Text className="text-right text-base text-foreground">{languageLabel}</Text>
-                <ChevronRightIcon className="size-5 text-foreground" strokeWidth={2} />
+                <ChevronRightIcon className="size-5 text-foreground" />
               </View>
             }
           />
           <Section.Item
             label={t('settings.items.fontSize')}
-            leading={<ALargeSmallIcon className="size-5 text-foreground" strokeWidth={2} />}
+            leading={<ALargeSmallIcon className="size-5 text-foreground" />}
             onPress={() => router.push('/settings/font-size')}
             trailing={
               <View className="flex-row items-center gap-1">
                 <Text className="text-right text-base text-foreground">
                   {t(FONT_SIZE_STEP_LABEL_KEYS[normalizedFontSizeStep])}
                 </Text>
-                <ChevronRightIcon className="size-5 text-foreground" strokeWidth={2} />
+                <ChevronRightIcon className="size-5 text-foreground" />
               </View>
             }
           />

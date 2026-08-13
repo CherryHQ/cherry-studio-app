@@ -1,4 +1,4 @@
-import { ActivityIcon } from 'lucide-uniwind/png';
+import { ActivityIcon } from '@cherrystudio/app-icons';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,7 +23,7 @@ export function WebSearchProviderChrome({ onCheck }: WebSearchProviderChromeProp
           className="size-12 items-center justify-center active:opacity-60"
           onPress={onCheck}
         >
-          <ActivityIcon className="size-5 text-foreground" strokeWidth={2} />
+          <ActivityIcon className="size-5 text-foreground" />
         </Pressable>
       </View>
     </View>

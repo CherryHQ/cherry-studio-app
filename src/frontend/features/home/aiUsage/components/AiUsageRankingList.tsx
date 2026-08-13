@@ -1,6 +1,6 @@
+import { ChevronDownIcon, EllipsisIcon } from '@cherrystudio/app-icons';
 import { resolveIcon, resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { ChevronDownIcon, EllipsisIcon } from 'lucide-uniwind/png';
 import { type ReactElement, type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -102,7 +102,7 @@ export function AiUsageRankingList({
               onPress={() => setVisibleCount((count) => count + AI_USAGE_RANKING_PAGE_SIZE)}
             >
               <Text className="font-medium text-primary text-sm">{t('aiUsage.showMore')}</Text>
-              <ChevronDownIcon className="size-4 text-primary" strokeWidth={2} />
+              <ChevronDownIcon className="size-4 text-primary" />
             </Pressable>
           </View>
         ) : null
@@ -241,7 +241,7 @@ function AiUsageRankingIcon({ item, label }: { item: AiUsageRankingItem; label: 
   if (item.isOther) {
     return (
       <BrandAvatar {...frameProps}>
-        <EllipsisIcon className="size-4 text-muted-foreground" strokeWidth={2} />
+        <EllipsisIcon className="size-4 text-muted-foreground" />
       </BrandAvatar>
     );
   }

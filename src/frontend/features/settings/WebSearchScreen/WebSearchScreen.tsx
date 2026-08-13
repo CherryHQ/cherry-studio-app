@@ -1,7 +1,7 @@
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS } from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useRouter } from 'expo-router';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -136,7 +136,7 @@ function SelectionValue({
       <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
         {label}
       </Text>
-      <ChevronRightIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-5 shrink-0 text-foreground" />
     </View>
   );
 }

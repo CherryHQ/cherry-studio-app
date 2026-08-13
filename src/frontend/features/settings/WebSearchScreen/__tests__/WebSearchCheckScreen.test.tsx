@@ -20,7 +20,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   ChevronRightIcon: () => null,
 }));
 

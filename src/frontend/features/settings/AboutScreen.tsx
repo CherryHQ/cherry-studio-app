@@ -1,6 +1,3 @@
-import { Section } from '@cherrystudio/ui/components';
-import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
-import Constants from 'expo-constants';
 import {
   CodeIcon,
   CopyrightIcon,
@@ -8,7 +5,10 @@ import {
   MailIcon,
   RssIcon,
   SquareArrowOutUpRightIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Section } from '@cherrystudio/ui/components';
+import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
+import Constants from 'expo-constants';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -77,49 +77,37 @@ export default function AboutSettingsScreen() {
               label={t('settings.about.repository.title')}
               leading={<GitHubIcon className="size-5" />}
               onPress={() => openLink(ABOUT_LINKS.repository)}
-              trailing={
-                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
-              }
+              trailing={<SquareArrowOutUpRightIcon className="size-5 text-foreground" />}
             />
             <Section.Item
               label={t('settings.about.releases.title')}
-              leading={<RssIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<RssIcon className="size-5 text-foreground" />}
               onPress={() => openLink(ABOUT_LINKS.releases)}
-              trailing={
-                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
-              }
+              trailing={<SquareArrowOutUpRightIcon className="size-5 text-foreground" />}
             />
             <Section.Item
               label={t('settings.about.website.title')}
-              leading={<GlobeIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<GlobeIcon className="size-5 text-foreground" />}
               onPress={() => openLink(ABOUT_LINKS.website)}
-              trailing={
-                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
-              }
+              trailing={<SquareArrowOutUpRightIcon className="size-5 text-foreground" />}
             />
             <Section.Item
               label={t('settings.about.feedback.title')}
-              leading={<CodeIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<CodeIcon className="size-5 text-foreground" />}
               onPress={() => openLink(ABOUT_LINKS.feedback)}
-              trailing={
-                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
-              }
+              trailing={<SquareArrowOutUpRightIcon className="size-5 text-foreground" />}
             />
             <Section.Item
               label={t('settings.about.license.title')}
-              leading={<CopyrightIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<CopyrightIcon className="size-5 text-foreground" />}
               onPress={() => openLink(ABOUT_LINKS.license)}
-              trailing={
-                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
-              }
+              trailing={<SquareArrowOutUpRightIcon className="size-5 text-foreground" />}
             />
             <Section.Item
               label={t('settings.about.contact.title')}
-              leading={<MailIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<MailIcon className="size-5 text-foreground" />}
               onPress={() => openLink(ABOUT_LINKS.contact)}
-              trailing={
-                <SquareArrowOutUpRightIcon className="size-5 text-foreground" strokeWidth={2} />
-              }
+              trailing={<SquareArrowOutUpRightIcon className="size-5 text-foreground" />}
             />
           </Section>
         </View>
