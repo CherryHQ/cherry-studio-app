@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const ROOT = path.resolve(__dirname, '..');
-const SCAN_ROOTS = ['docs', 'src', 'packages', 'scripts', 'migrations', '.maestro'];
+const SCAN_ROOTS = ['docs', 'src', 'packages', 'scripts', 'migrations'];
 const SKIPPED_DIRECTORIES = new Set(['node_modules', '.git', 'build', 'coverage', 'dist', 'out']);
 
 // Synced third-party skill documentation under .agents is intentionally outside project ownership.
