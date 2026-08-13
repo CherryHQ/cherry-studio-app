@@ -322,7 +322,7 @@ describe('ProviderConfigApprovalSheet', () => {
     expect(
       renderer!.root.findByProps({ testID: 'provider-config-floating-action' }).props,
     ).toMatchObject({
-      className: 'absolute inset-x-4 bottom-3 z-10 items-center gap-2 py-10',
+      className: 'absolute inset-x-4 bottom-3 z-10 items-center gap-2 py-7',
     });
   });
 
