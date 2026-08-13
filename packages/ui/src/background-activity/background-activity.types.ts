@@ -25,7 +25,8 @@ export type BackgroundActivityBasePresentation = {
 
 export type BackgroundActivityPresentation = BackgroundActivityBasePresentation & {
   compactIcon: BackgroundActivityIcon;
-  compactLabel: string;
+  /** Replaces the compact timer while a short status needs immediate attention. */
+  compactLabel?: string;
   detail: string;
   icon: BackgroundActivityIcon;
   preview?: string;

@@ -194,11 +194,11 @@ function paintingActivityProps(
 ): PaintingActivityProps {
   return {
     compactIcon: 'paintbrush',
-    compactLabel: translate(
-      phase === 'completed'
-        ? 'backgroundActivity.completed'
-        : `painting.backgroundActivity.${phase}`,
-    ),
+    ...(phase === 'completed'
+      ? { compactLabel: translate('backgroundActivity.completed') }
+      : phase === 'cancelled' || phase === 'failed'
+        ? { compactLabel: translate(`painting.backgroundActivity.${phase}`) }
+        : {}),
     detail: translate(`painting.backgroundActivity.${phase}`),
     icon: paintingActivityIcon(phase),
     phase,

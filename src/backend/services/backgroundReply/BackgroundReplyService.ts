@@ -268,10 +268,13 @@ export class BackgroundReplyService
     return {
       ...record.content,
       compactIcon: 'bubble-ellipsis',
-      compactLabel:
-        record.content.phase === 'completed'
-          ? this.environment.translate('backgroundActivity.completed')
-          : record.content.detail,
+      ...(record.content.phase === 'awaiting-approval'
+        ? { compactLabel: this.environment.translate('backgroundActivity.awaitingApproval') }
+        : record.content.phase === 'completed'
+          ? { compactLabel: this.environment.translate('backgroundActivity.completed') }
+          : record.content.phase === 'cancelled' || record.content.phase === 'failed'
+            ? { compactLabel: record.content.detail }
+            : {}),
       icon: backgroundReplyIcon(record.content.phase),
       startedAtEpochMs: record.startedAtEpochMs,
       title: record.assistantName,

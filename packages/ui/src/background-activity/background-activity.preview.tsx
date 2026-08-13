@@ -28,7 +28,6 @@ export type BackgroundActivityPreviewProps = Omit<
   'colorScheme' | 'finishedAtEpochMs' | 'logoUri' | 'startedAtEpochMs'
 > & {
   elapsedSeconds: number;
-  finished: boolean;
   liveTimer: boolean;
   showLogo: boolean;
   theme: 'dark' | 'light';
@@ -50,11 +49,11 @@ export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps)
   const [elapsedSeconds, setElapsedSeconds] = useState(props.elapsedSeconds);
 
   useEffect(() => {
-    if (!props.liveTimer || props.finished) return;
+    if (!props.liveTimer || props.compactLabel !== undefined) return;
 
     const timer = setInterval(() => setElapsedSeconds((current) => current + 1), 1000);
     return () => clearInterval(timer);
-  }, [props.finished, props.liveTimer]);
+  }, [props.compactLabel, props.liveTimer]);
 
   const elapsed = formatElapsedTime(elapsedSeconds);
   const colors =
@@ -182,7 +181,6 @@ function CompactPreview({
   compactIcon,
   compactLabel,
   elapsed,
-  finished,
 }: BackgroundActivityPreviewProps & { elapsed: string }) {
   return (
     <View
@@ -198,7 +196,7 @@ function CompactPreview({
       }}
     >
       <ActivityIcon icon={compactIcon} size={16} />
-      {finished ? (
+      {compactLabel !== undefined ? (
         <Text
           numberOfLines={1}
           style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '600', letterSpacing: 0 }}

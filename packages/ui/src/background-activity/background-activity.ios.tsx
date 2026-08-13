@@ -27,7 +27,7 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
   const foreground = colorScheme === 'dark' ? '#FFFFFF' : '#151515';
   const secondary = colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
   const background = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
-  const isTerminal = props.finishedAtEpochMs !== undefined;
+  const hasCompactLabel = props.compactLabel !== undefined;
   const timerInterval = {
     lower: new Date(props.startedAtEpochMs),
     upper: new Date(props.startedAtEpochMs + 24 * 60 * 60 * 1000),
@@ -121,7 +121,7 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
       </HStack>
     ),
     compactLeading: <Image color={brandColor} size={16} systemName={compactIconSymbol} />,
-    compactTrailing: isTerminal ? (
+    compactTrailing: hasCompactLabel ? (
       <Text
         modifiers={[
           font({ size: 12, weight: 'semibold' }),

@@ -6,7 +6,7 @@ import type {
 import { deriveBackgroundReplyContent, extractReplyPreview } from '../deriveBackgroundReplyContent';
 
 const translations: Record<string, string> = {
-  'chat.backgroundReply.awaitingApproval': 'Approval needed',
+  'chat.backgroundReply.awaitingApproval': 'Awaiting approval',
   'chat.backgroundReply.preparing': 'Preparing',
   'chat.backgroundReply.responding': 'Replying',
   'chat.backgroundReply.thinking': 'Thinking',
@@ -78,7 +78,7 @@ describe('deriveBackgroundReplyContent', () => {
     );
 
     expect(content).toEqual({
-      detail: 'Approval needed',
+      detail: 'Awaiting approval',
       phase: 'awaiting-approval',
       preview: 'Partial answer',
     });

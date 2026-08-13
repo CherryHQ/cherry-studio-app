@@ -87,9 +87,14 @@ describe('BackgroundReplyService', () => {
 
     turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'hello' }], role: 'assistant' });
     expect(session?.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ icon: 'bubble-ellipsis', phase: 'responding', preview: 'hello' }),
+      expect.objectContaining({
+        icon: 'bubble-ellipsis',
+        phase: 'responding',
+        preview: 'hello',
+      }),
       { keepAlive: true, urgent: true },
     );
+    expect(session?.update.mock.calls.at(-1)?.[0]).not.toHaveProperty('compactLabel');
 
     turn.update({
       id: 'assistant-1',
@@ -103,9 +108,24 @@ describe('BackgroundReplyService', () => {
 
     turn.awaitApproval({ id: 'assistant-1', parts: [], role: 'assistant' });
     expect(session?.update).toHaveBeenLastCalledWith(
-      expect.objectContaining({ icon: 'bubble-exclamation', phase: 'awaiting-approval' }),
+      expect.objectContaining({
+        compactLabel: '等待审批',
+        icon: 'bubble-exclamation',
+        phase: 'awaiting-approval',
+      }),
       { keepAlive: false, urgent: true },
     );
+
+    turn.update({
+      id: 'assistant-1',
+      parts: [{ type: 'text', text: 'approved and continuing' }],
+      role: 'assistant',
+    });
+    expect(session?.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'responding' }),
+      { keepAlive: true, urgent: true },
+    );
+    expect(session?.update.mock.calls.at(-1)?.[0]).not.toHaveProperty('compactLabel');
 
     turn.finish('completed');
     await flushOperations();
@@ -265,9 +285,11 @@ describe('BackgroundReplyService', () => {
     translate: (key: string) => string = (key) =>
       key === 'chat.backgroundReply.assistant'
         ? 'Localized assistant'
-        : key === 'backgroundActivity.completed'
-          ? '已完成'
-          : key,
+        : key === 'backgroundActivity.awaitingApproval'
+          ? '等待审批'
+          : key === 'backgroundActivity.completed'
+            ? '已完成'
+            : key,
   ) {
     const service = new BackgroundReplyService(
       { startSession: mockStartSession },

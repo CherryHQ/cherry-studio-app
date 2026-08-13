@@ -171,7 +171,7 @@ describe('createPaintingGenerateJobHandler', () => {
     function createSessionDependencies() {
       const dependencies = createDependencies();
       const sessions: { cancel: jest.Mock; finish: jest.Mock; update: jest.Mock }[] = [];
-      const startSession = jest.fn(() => {
+      const startSession = jest.fn((_input: unknown) => {
         const session = {
           cancel: jest.fn(),
           finish: jest.fn(),
@@ -205,6 +205,8 @@ describe('createPaintingGenerateJobHandler', () => {
           tag: 'painting.generate',
         }),
       );
+      const activityInput = startSession.mock.calls[0]?.[0] as { props: unknown } | undefined;
+      expect(activityInput?.props).not.toHaveProperty('compactLabel');
       expect(sessions[0]?.finish).toHaveBeenCalledWith(
         expect.objectContaining({
           compactIcon: 'paintbrush',
