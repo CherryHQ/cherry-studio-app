@@ -1,4 +1,5 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DrawingList } from '../DrawingList';
@@ -86,9 +87,17 @@ jest.mock('@cherrystudio/app-icons', () => ({
 }));
 
 jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
   const { View: MockView } = jest.requireActual('react-native');
 
+  function Button({ children, ...props }: { children?: React.ReactNode }) {
+    return React.createElement('Button', props, children);
+  }
+  Button.Label = ({ children }: { children?: React.ReactNode }) =>
+    React.createElement('ButtonLabel', null, children);
+
   return {
+    Button,
     ImageGenerationLoader: (props: { testID?: string }) => <MockView {...props} />,
   };
 });
@@ -226,6 +235,27 @@ describe('DrawingList', () => {
     expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(mockGalleryItems.length);
   });
 
+  it('centers an empty message above the primary new-drawing action', async () => {
+    mockGalleryItems = [];
+    const tree = await render();
+
+    const [emptyState] = findHostsByTestID(tree, 'painting-history-empty');
+    const createButton = tree.root.findByType('Button');
+
+    expect(emptyState.props.className).toContain('flex-1');
+    expect(emptyState.props.className).toContain('justify-center');
+    expect(
+      tree.root
+        .findAllByType(Text)
+        .some((node) => node.props.children === 'painting.history.empty'),
+    ).toBe(true);
+    expect(createButton.props.variant).toBe('default');
+    expect(tree.root.findByType('ButtonLabel').props.children).toBe('painting.history.createNew');
+
+    await act(async () => createButton.props.onPress());
+    expect(mockPush).toHaveBeenCalledWith('/paintings');
+  });
+
   it('hides photos and templates while editing and toggles selection on tap', async () => {
     mockIsEditing = true;
 
@@ -350,7 +380,7 @@ describe('DrawingList', () => {
     );
     await act(async () => createButton.props.onPress());
 
-    expect(createButton.props.accessibilityLabel).toBe('painting.history.create');
+    expect(createButton.props.accessibilityLabel).toBe('painting.history.createNew');
     expect(mockPush).toHaveBeenCalledWith('/paintings');
   });
 });

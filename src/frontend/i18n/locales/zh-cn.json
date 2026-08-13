@@ -599,6 +599,8 @@
   "topic.deleteFailed": "对话删除失败，请重试。",
   "topic.deleteTitle": "删除对话",
   "painting.history.create": "创建绘图",
+  "painting.history.createNew": "新建绘图",
+  "painting.history.empty": "暂无绘图，请创建一个新的绘图",
   "painting.history.item": "生成的绘图",
   "painting.history.title": "我的绘图",
   "painting.input.invalidCustomSize": "宽高需在 {{min}} 至 {{max}} 像素之间",

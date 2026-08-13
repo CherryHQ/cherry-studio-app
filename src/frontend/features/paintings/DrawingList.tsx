@@ -1,5 +1,5 @@
 import { CheckIcon, ImageIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
-import { ImageGenerationLoader } from '@cherrystudio/ui/components';
+import { Button, ImageGenerationLoader } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
@@ -151,7 +151,7 @@ export function DrawingList() {
       className="flex-1 bg-background"
       // Stable across the edit⇄done flip (see useMessageListBottomInset) so the
       // gallery never reflows on toggle.
-      contentContainerStyle={{ paddingBottom: bottomInset }}
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: bottomInset }}
       onScroll={({ nativeEvent }) => {
         const distanceToEnd =
           nativeEvent.contentSize.height -
@@ -228,26 +228,31 @@ export function DrawingList() {
         </>
       )}
 
-      <Text className="px-4 pb-3 font-semibold text-foreground text-base">
-        {t('painting.history.title')}
-      </Text>
+      {visibleGalleryItems.length > 0 || paintings.isLoading || gallery.isLoading ? (
+        <Text className="px-4 pb-3 font-semibold text-foreground text-base">
+          {t('painting.history.title')}
+        </Text>
+      ) : null}
       {paintings.isLoading || gallery.isLoading ? (
         <View className="h-32 items-center justify-center">
           <ActivityIndicator />
         </View>
       ) : visibleGalleryItems.length === 0 ? (
-        <View className="h-32 items-center justify-center px-6">
-          <Pressable
-            accessibilityLabel={t('painting.history.create')}
-            accessibilityRole="button"
-            className="h-9 min-w-20 items-center justify-center rounded-xl bg-primary px-4 active:opacity-80"
+        <View
+          className="min-h-48 flex-1 items-center justify-center gap-4 px-6 pb-24"
+          testID="painting-history-empty"
+        >
+          <Text className="text-center text-base text-foreground">
+            {t('painting.history.empty')}
+          </Text>
+          <Button
+            accessibilityLabel={t('painting.history.createNew')}
             onPress={handleCreatePainting}
             testID="painting-history-create"
+            variant="default"
           >
-            <Text className="font-medium text-primary-foreground text-sm" numberOfLines={1}>
-              {t('painting.history.create')}
-            </Text>
-          </Pressable>
+            <Button.Label>{t('painting.history.createNew')}</Button.Label>
+          </Button>
         </View>
       ) : (
         <View className="flex-row gap-1.5 px-4" testID="painting-history-masonry">
