@@ -10,14 +10,13 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@/shared/backgroundActivities/logo';
 import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivities/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { BackgroundActivityHandle, BackgroundActivityPresenter } from './presenter';
 
 const NATIVE_UPDATE_INTERVAL_MS = 1000;
-const CHERRY_LOGO_BASE64 =
-  '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';
 const logger = loggerService.withContext('BackgroundActivity');
 
 export type BackgroundActivitySessionInput<Props extends BackgroundActivityBaseProps> = {
@@ -297,7 +296,7 @@ export class BackgroundActivityManager extends BaseService {
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
       const { widgetsDirectory } = require('expo-widgets') as typeof import('expo-widgets');
       const destination = new File(widgetsDirectory, 'cherry-studio-logo.png');
-      destination.write(CHERRY_LOGO_BASE64, { encoding: 'base64' });
+      destination.write(CHERRY_ACTIVITY_LOGO_BASE64, { encoding: 'base64' });
       this.logoUri = destination.uri;
     } catch (error) {
       logger.warn('Background activity logo preparation failed', error as Error);

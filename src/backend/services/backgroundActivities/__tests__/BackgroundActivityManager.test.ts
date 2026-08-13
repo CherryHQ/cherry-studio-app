@@ -1,16 +1,19 @@
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
+import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@/shared/backgroundActivities/logo';
 import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivities/types';
 
 import { BackgroundActivityManager } from '../BackgroundActivityManager';
 import type { BackgroundActivityPresenter } from '../presenter';
+
+const mockFileWrite = jest.fn();
 
 jest.mock('expo-file-system', () => ({
   File: class MockFile {
     exists = true;
     uri = 'file:///widgets/cherry-studio-logo.png';
     copy = jest.fn(async () => {});
-    write = jest.fn(() => {});
+    write = mockFileWrite;
   },
 }));
 jest.mock('expo-widgets', () => ({ widgetsDirectory: 'file:///widgets' }));
@@ -70,6 +73,9 @@ describe('BackgroundActivityManager', () => {
 
     expect(first.presenter.clearOrphans).toHaveBeenCalledTimes(1);
     expect(second.presenter.clearOrphans).toHaveBeenCalledTimes(1);
+    expect(mockFileWrite).toHaveBeenCalledWith(CHERRY_ACTIVITY_LOGO_BASE64, {
+      encoding: 'base64',
+    });
     await manager._doStop();
   });
 
