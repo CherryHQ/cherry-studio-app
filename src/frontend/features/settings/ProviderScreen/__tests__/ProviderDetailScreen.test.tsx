@@ -5,7 +5,7 @@ import type {
   Provider,
 } from '@cherrystudio/universal/data/types/provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -24,6 +24,15 @@ type SectionProps = {
   provider?: Provider;
   showApiKeys: boolean;
   showBaseUrl: boolean;
+};
+type PagerProps = {
+  children?: ReactNode;
+  onPageSelected?: (event: { nativeEvent: { position: number } }) => void;
+  scrollEnabled?: boolean;
+};
+type TabsProps = {
+  onTabChange: (tab: 'configuration' | 'models') => void;
+  tab: 'configuration' | 'models';
 };
 
 const pendingQuery: QueryState = { isError: false, isPending: true, isSuccess: false };
@@ -50,6 +59,9 @@ let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
 let mockCheckSectionRenderCount: number;
 let mockSectionRenders: SectionProps[];
+let mockPagerProps: PagerProps | undefined;
+let mockTabsProps: TabsProps | undefined;
+const mockSetPage = jest.fn();
 const mockReplaceApiKeys = jest.fn(async () => undefined);
 const mockSaveProvider = jest.fn(async () => undefined);
 const mockAlertConfirm = jest.fn();
@@ -79,6 +91,19 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
 }));
 
+jest.mock('@expo/ui/community/pager-view', () => {
+  const React = jest.requireActual('react');
+
+  return {
+    __esModule: true,
+    default: React.forwardRef(function MockPager(props: PagerProps, ref: React.Ref<unknown>) {
+      mockPagerProps = props;
+      React.useImperativeHandle(ref, () => ({ setPage: mockSetPage }));
+      return React.createElement('PagerView', props, props.children);
+    }),
+  };
+});
+
 jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({
     alert: {
@@ -89,7 +114,9 @@ jest.mock('@/frontend/components/AlertProvider', () => ({
 }));
 
 jest.mock('@/frontend/components/headers', () => ({
-  BackHeader: () => null,
+  BackHeader: ({ titleElement }: { titleElement?: ReactElement }) => {
+    return titleElement ?? null;
+  },
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -147,7 +174,10 @@ jest.mock('../detail/components/ProviderDetailChrome/ProviderDetailChrome', () =
 }));
 
 jest.mock('../detail/components/ProviderDetailTabs/ProviderDetailTabs', () => ({
-  ProviderDetailTabs: () => null,
+  ProviderDetailTabs: (props: TabsProps) => {
+    mockTabsProps = props;
+    return null;
+  },
 }));
 
 jest.mock('../components/ProviderApiManagementSection', () => ({
@@ -232,6 +262,9 @@ describe('ProviderDetailScreen', () => {
     mockChromeRenderCount = 0;
     mockCheckSectionRenderCount = 0;
     mockSectionRenders = [];
+    mockPagerProps = undefined;
+    mockTabsProps = undefined;
+    mockSetPage.mockClear();
     mockReplaceApiKeys.mockClear();
     mockSaveProvider.mockClear();
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -267,6 +300,19 @@ describe('ProviderDetailScreen', () => {
 
     expect(renderer?.root.findAllByType(ScrollView)).not.toHaveLength(0);
     expect(mockChromeRenderCount).toBe(1);
+  });
+
+  it('keeps header tabs and horizontal paging in sync', () => {
+    loadEverything();
+    render();
+
+    expect(mockTabsProps?.tab).toBe('configuration');
+    act(() => mockTabsProps?.onTabChange('models'));
+    expect(mockSetPage).toHaveBeenCalledWith(1);
+    expect(mockTabsProps?.tab).toBe('models');
+
+    act(() => mockPagerProps?.onPageSelected?.({ nativeEvent: { position: 0 } }));
+    expect(mockTabsProps?.tab).toBe('configuration');
   });
 
   // The section used to mount without its Base URL / API keys blocks and gain them a
