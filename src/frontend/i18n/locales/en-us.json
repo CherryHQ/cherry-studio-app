@@ -63,6 +63,8 @@
   "chat.messageActions.readAloud": "Read reply aloud",
   "chat.messageActions.readAloudFailed": "Unable to read this reply aloud",
   "chat.messageActions.readAloudFailedDescription": "Check your device’s speech settings.",
+  "chat.messageActions.readAloudVoiceUnavailable": "Install a system voice to read this reply",
+  "chat.messageActions.readAloudVoiceUnavailableDescription": "Add a voice for this language in your device’s speech or text-to-speech settings, then try again.",
   "chat.messageActions.regenerate": "Regenerate",
   "chat.messageActions.regenerateFailed": "Couldn't regenerate the reply. Please try again.",
   "chat.messageActions.stopReadAloud": "Stop reading",

@@ -29,7 +29,7 @@ import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
 } from './hooks/useMessageListInitialRenderGate';
-import { useReplyReadAloud } from './hooks/useReplyReadAloud';
+import { type ReplyReadAloudErrorReason, useReplyReadAloud } from './hooks/useReplyReadAloud';
 
 const logger = loggerService.withContext('ChatWorkspace');
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
@@ -74,12 +74,25 @@ export function ChatWorkspace({
     () => presentationMessages.map((message) => message.id),
     [presentationMessages],
   );
-  const handleReadAloudError = useCallback(() => {
-    alert.show({
-      description: t('chat.messageActions.readAloudFailedDescription'),
-      title: t('chat.messageActions.readAloudFailed'),
-    });
-  }, [alert, t]);
+  const handleReadAloudError = useCallback(
+    (reason: ReplyReadAloudErrorReason) => {
+      const isVoiceUnavailable = reason === 'voice-unavailable';
+
+      alert.show({
+        description: t(
+          isVoiceUnavailable
+            ? 'chat.messageActions.readAloudVoiceUnavailableDescription'
+            : 'chat.messageActions.readAloudFailedDescription',
+        ),
+        title: t(
+          isVoiceUnavailable
+            ? 'chat.messageActions.readAloudVoiceUnavailable'
+            : 'chat.messageActions.readAloudFailed',
+        ),
+      });
+    },
+    [alert, t],
+  );
   const { activeMessageId, readAloud, stopReadAloud, stopReadAloudIfActive } = useReplyReadAloud({
     onError: handleReadAloudError,
     topicId,

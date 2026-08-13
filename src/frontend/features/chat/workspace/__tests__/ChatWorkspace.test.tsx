@@ -7,6 +7,7 @@ import type {
 } from '@/frontend/components/messagePresentation';
 
 import { ChatWorkspace } from '../ChatWorkspace';
+import type { ReplyReadAloudErrorReason } from '../hooks/useReplyReadAloud';
 
 const mockInputHeightShared = {
   get: jest.fn(() => 80),
@@ -23,7 +24,11 @@ const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
 const mockAlertShow = jest.fn();
 const mockLoggerError = jest.fn();
 const mockUseReplyReadAloud = jest.fn(
-  (_options: { onError: () => void; topicId: string; visibleMessageIds: readonly string[] }) => ({
+  (_options: {
+    onError: (reason: ReplyReadAloudErrorReason) => void;
+    topicId: string;
+    visibleMessageIds: readonly string[];
+  }) => ({
     activeMessageId: mockActiveReadAloudMessageId,
     readAloud: mockReadAloud,
     stopReadAloud: mockStopReadAloud,
@@ -131,7 +136,7 @@ jest.mock('../components/ChatOlderMessagesIndicator', () => ({
 
 jest.mock('../hooks/useReplyReadAloud', () => ({
   useReplyReadAloud: (options: {
-    onError: () => void;
+    onError: (reason: ReplyReadAloudErrorReason) => void;
     topicId: string;
     visibleMessageIds: readonly string[];
   }) => mockUseReplyReadAloud(options),
@@ -296,11 +301,23 @@ describe('ChatWorkspace message presentation integration', () => {
     renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
     const hookOptions = mockUseReplyReadAloud.mock.calls.at(-1)?.[0];
 
-    act(() => hookOptions?.onError());
+    act(() => hookOptions?.onError('speech-failed'));
 
     expect(mockAlertShow).toHaveBeenCalledWith({
       description: 'chat.messageActions.readAloudFailedDescription',
       title: 'chat.messageActions.readAloudFailed',
+    });
+  });
+
+  test('explains when no system voice is available for the reply language', () => {
+    renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
+    const hookOptions = mockUseReplyReadAloud.mock.calls.at(-1)?.[0];
+
+    act(() => hookOptions?.onError('voice-unavailable'));
+
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      description: 'chat.messageActions.readAloudVoiceUnavailableDescription',
+      title: 'chat.messageActions.readAloudVoiceUnavailable',
     });
   });
 
