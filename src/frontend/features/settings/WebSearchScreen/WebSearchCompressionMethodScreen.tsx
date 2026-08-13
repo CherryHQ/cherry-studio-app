@@ -1,4 +1,5 @@
 import { Section } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
 import { CheckIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
@@ -9,6 +10,7 @@ import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPr
 
 export default function WebSearchCompressionMethodScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { compressionMethod } = useWebSearchProviderPreferences();
 
   return (
@@ -34,6 +36,7 @@ export default function WebSearchCompressionMethodScreen() {
                 onPress={() => {
                   if (!selected) {
                     compressionMethod.onValueChange(option.value);
+                    router.back();
                   }
                 }}
                 showChevron={false}

@@ -11,6 +11,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
 jest.mock('lucide-uniwind/png', () => ({
+  ActivityIcon: () => null,
   CopyIcon: () => null,
   KeyRoundIcon: () => null,
   PlusIcon: () => null,
@@ -25,12 +26,17 @@ jest.mock('@cherrystudio/ui/components', () => {
     View: MockView,
   } = jest.requireActual('react-native');
 
+  const Label = (props: { children?: ReactNode }) => <MockText {...props} />;
+  Label.Text = function LabelText(props: { children?: ReactNode }) {
+    return <MockText {...props} />;
+  };
+
   return {
     Button: (props: { children?: ReactNode }) =>
       React.createElement('MockButton', { ...props, mockComponent: 'button' }),
     FieldError: (props: { children?: ReactNode }) => <MockText {...props} />,
     Input: (props: Record<string, unknown>) => <MockTextInput {...props} />,
-    Label: (props: { children?: ReactNode }) => <MockText {...props} />,
+    Label,
     SecureInput: (props: Record<string, unknown>) => (
       <MockTextInput {...props} mockComponent="secure-input" />
     ),
@@ -83,7 +89,9 @@ describe('API key visibility fields', () => {
       renderer = create(
         <WebSearchApiServiceApiKeysField
           apiKeysInput="web-search-secret"
+          isChecking={false}
           onApiKeysInputChange={jest.fn()}
+          onCheck={jest.fn()}
           onManagePress={jest.fn()}
         />,
       );
@@ -99,10 +107,12 @@ describe('API key visibility fields', () => {
         },
       }),
     );
-    expect(externalButtons()).toHaveLength(1);
-    expect(externalButtons()[0].props.accessibilityLabel).toBe(
+    // The visibility action is the one that moved inside the field; the check
+    // this screen runs against the key is still a button of its own beside it.
+    expect(externalButtons().map((button) => button.props.accessibilityLabel)).toEqual([
       'settings.websearch.provider.manageApiKeys',
-    );
+      'settings.websearch.provider.check',
+    ]);
   });
 
   function secureInput() {

@@ -1,15 +1,13 @@
 import { Section } from '@cherrystudio/ui/components';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
-import { useCallback, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 import {
-  getNextModelSelection,
   MODEL_SETTING_KIND_TITLE_KEYS,
   MODEL_SETTING_KINDS,
-  ModelPickerBottomSheet,
   type ModelPickerModelItem,
   type ModelSettingKind,
   useModelPickerData,
@@ -24,43 +22,31 @@ const MODEL_SETTING_ICONS = {
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const modelSettings = useModelSettingSelections();
   const modelPickerData = useModelPickerData();
-  // Which kind's picker sheet is open (null = none). Each row opens the shared
-  // model-picker sheet in place instead of pushing a dedicated selection screen,
-  // matching the chat input's picker.
-  const [openKind, setOpenKind] = useState<ModelSettingKind | null>(null);
-
-  const closePicker = useCallback(() => setOpenKind(null), []);
-  const handleSelect = useCallback(
-    (item: ModelPickerModelItem) => {
-      if (!openKind) {
-        return;
-      }
-
-      const nextModelId = getNextModelSelection(modelSettings.selections[openKind], item.modelId);
-      modelSettings.onSelectionChange(openKind, nextModelId);
-      setOpenKind(null);
-    },
-    [modelSettings, openKind],
-  );
-
+  // The three settings are one choice made three times, so they share one card
+  // rather than sitting in three of their own. Each pushes the picker as a
+  // screen: it is a search through every model on the device, which wants the
+  // whole height and a back button rather than a sheet over this list.
   const items = useMemo(
     () =>
       MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
+        key: kind,
         label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
         leading: (
           <Text className="min-w-5 text-center text-emoji-xl">{MODEL_SETTING_ICONS[kind]}</Text>
         ),
-        onPress: () => setOpenKind(kind),
+        onPress: () => router.push(`/settings/model/${kind}`),
+        showChevron: true,
         trailing: (
-          <SelectedModelAccessory
+          <SelectedModelName
             item={modelPickerData.getModelItem(modelSettings.selections[kind])}
             placeholder={t('settings.select.placeholder')}
           />
         ),
       })),
-    [modelPickerData, modelSettings.selections, t],
+    [modelPickerData, modelSettings.selections, router, t],
   );
 
   return (
@@ -72,28 +58,19 @@ export default function ModelSettingsScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <View className="gap-6 px-4 py-5">
-          {items.map((item) => (
-            <Section key={item.label}>
-              <Section.Item {...item} />
-            </Section>
-          ))}
+        <View className="px-4 py-5">
+          <Section>
+            {items.map(({ key, ...item }) => (
+              <Section.Item key={key} {...item} />
+            ))}
+          </Section>
         </View>
       </ScrollView>
-      {openKind ? (
-        <ModelPickerBottomSheet
-          isOpen
-          onClose={closePicker}
-          onSelect={handleSelect}
-          selectedModelId={modelSettings.selections[openKind]}
-          title={t(MODEL_SETTING_KIND_TITLE_KEYS[openKind])}
-        />
-      ) : null}
     </>
   );
 }
 
-function SelectedModelAccessory({
+function SelectedModelName({
   item,
   placeholder,
 }: {
@@ -101,11 +78,8 @@ function SelectedModelAccessory({
   placeholder: string;
 }) {
   return (
-    <View className="max-w-[62%] flex-row items-center justify-end gap-1">
-      <Text className="min-w-0 shrink text-right text-foreground text-sm" numberOfLines={1}>
-        {item?.model.name ?? placeholder}
-      </Text>
-      <ChevronRightIcon className="size-6 text-foreground" strokeWidth={2} />
-    </View>
+    <Text className="min-w-0 shrink text-right text-foreground text-sm" numberOfLines={1}>
+      {item?.model.name ?? placeholder}
+    </Text>
   );
 }

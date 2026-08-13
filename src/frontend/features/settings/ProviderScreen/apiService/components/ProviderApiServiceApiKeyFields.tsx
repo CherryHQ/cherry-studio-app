@@ -31,7 +31,13 @@ export function ProviderApiServiceApiKeysField({
 
   return (
     <TextField>
-      <Label>{t('settings.provider.apiService.apiKeys')}</Label>
+      {/* Semibold to match the `Section.Header` of the connectivity check right
+          below it — heroui's own label default is only medium. */}
+      <Label>
+        <Label.Text className="font-semibold">
+          {t('settings.provider.apiService.apiKeys')}
+        </Label.Text>
+      </Label>
       <View className="flex-row items-center gap-2">
         <View className="min-w-0 flex-1 overflow-hidden">
           <ApiKeysCommitInput

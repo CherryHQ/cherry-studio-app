@@ -1,3 +1,4 @@
+import { Section } from '@cherrystudio/ui/components';
 import type {
   WebSearchCapability,
   WebSearchProviderId,
@@ -8,7 +9,6 @@ import type { WebSearchProviderPreset } from '@cherrystudio/universal/data/prese
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
 
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
@@ -18,6 +18,9 @@ import {
 import { getWebSearchProviderDetailSections } from '../utils/providerSettings';
 
 type WebSearchApiManagementSectionProps = {
+  afterItems?: React.ReactNode;
+  capability: WebSearchCapability;
+  children: React.ReactNode;
   onCapabilityApiHostChange: (
     providerId: WebSearchProviderId,
     capability: WebSearchCapability,
@@ -32,6 +35,9 @@ type WebSearchApiManagementSectionProps = {
 };
 
 export function WebSearchApiManagementSection({
+  afterItems,
+  capability,
+  children,
   onCapabilityApiHostChange,
   onProviderOverrideChange,
   provider,
@@ -41,6 +47,9 @@ export function WebSearchApiManagementSection({
   const router = useRouter();
   const providerOverride = providerOverrides[provider.id];
   const sections = getWebSearchProviderDetailSections(provider.id);
+  const combinesApiKeysAndHost =
+    sections.some((section) => section.type === 'apiKeys') &&
+    sections.some((section) => section.type === 'capabilityApiHosts');
 
   const openZhipuApiKeySettings = useCallback(() => {
     router.push({
@@ -74,6 +83,7 @@ export function WebSearchApiManagementSection({
         t,
       },
       state: {
+        capability,
         provider,
         providerOverride,
       },
@@ -83,6 +93,7 @@ export function WebSearchApiManagementSection({
       onProviderOverrideChange,
       openApiKeySettings,
       openZhipuApiKeySettings,
+      capability,
       provider,
       providerOverride,
       t,
@@ -91,11 +102,18 @@ export function WebSearchApiManagementSection({
 
   return (
     <WebSearchApiManagementContext value={contextValue}>
-      <View className="gap-6">
+      <Section>
+        {children}
         {sections.map((section) => (
-          <WebSearchApiServiceFieldGroup key={section.type} section={section} />
+          <WebSearchApiServiceFieldGroup
+            capability={capability}
+            combinesApiKeysAndHost={combinesApiKeysAndHost}
+            key={section.type}
+            section={section}
+          />
         ))}
-      </View>
+        {afterItems}
+      </Section>
     </WebSearchApiManagementContext>
   );
 }

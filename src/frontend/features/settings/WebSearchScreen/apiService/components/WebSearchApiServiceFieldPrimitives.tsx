@@ -1,20 +1,24 @@
 import { Input, Label, TextField } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { TextInputEndEditingEvent } from 'react-native';
+import type { StyleProp, TextInputEndEditingEvent, TextStyle } from 'react-native';
 
 type SettingTextInputProps = {
   accessibilityLabel: string;
   onCommit: (value: string) => void;
+  multiline?: boolean;
   placeholder?: string;
   secureTextEntry?: boolean;
+  style?: StyleProp<TextStyle>;
   value: string;
 };
 
 export function SettingTextInput({
   accessibilityLabel,
   onCommit,
+  multiline = false,
   placeholder,
   secureTextEntry,
+  style,
   value,
 }: SettingTextInputProps) {
   const [draftValue, setDraftValue] = useState(value);
@@ -74,13 +78,15 @@ export function SettingTextInput({
       accessibilityLabel={accessibilityLabel}
       autoCapitalize="none"
       autoCorrect={false}
+      multiline={multiline}
       onBlur={handleCommitEvent}
       onChangeText={handleChangeText}
       onEndEditing={handleEndEditing}
-      onSubmitEditing={handleCommitEvent}
+      onSubmitEditing={multiline ? undefined : handleCommitEvent}
       placeholder={placeholder}
-      returnKeyType="done"
+      returnKeyType={multiline ? 'default' : 'done'}
       secureTextEntry={secureTextEntry}
+      style={style}
       value={draftValue}
     />
   );

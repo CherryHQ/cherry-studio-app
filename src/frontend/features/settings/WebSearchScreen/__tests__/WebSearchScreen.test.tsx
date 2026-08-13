@@ -4,51 +4,38 @@ import WebSearchSettingsScreen from '../WebSearchScreen';
 
 const mockPush = jest.fn();
 
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
-
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: mockPush }) }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-
 jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
-
 jest.mock('lucide-uniwind/png', () => ({ ChevronRightIcon: () => null }));
-
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   const Section = (props: object) => createElement('Section', props);
   Section.Item = (props: object) => createElement('SectionItem', props);
   return { Section };
 });
-
 jest.mock('@/frontend/components/headers', () => ({ BackHeader: () => null }));
 jest.mock('@/frontend/components/nativePrimitives', () => ({ Image: () => null }));
-jest.mock('../../components/SettingNumberInput', () => ({ SettingNumberInput: () => null }));
 jest.mock('../../hooks/useWebSearchProviderPreferences', () => ({
   useWebSearchProviderPreferences: () => ({
-    compressionCutoffLimit: { onValueChange: jest.fn(), value: 2000 },
-    compressionMethod: {
-      onValueChange: jest.fn(),
-      options: [
-        { label: 'None', value: 'none' },
-        { label: 'Cutoff', value: 'cutoff' },
-      ],
-      value: 'none',
+    providerOverrides: {
+      onCapabilityApiHostChange: jest.fn(),
+      onProviderOverrideChange: jest.fn(),
+      value: { tavily: { apiKeys: ['test-key'] } },
     },
-    maxResults: { onValueChange: jest.fn(), value: 5 },
-    searchKeywords: {
-      onValueChange: jest.fn(),
-      options: [
-        { label: 'Tavily', value: 'tavily' },
-        { label: 'Exa', value: 'exa' },
-      ],
-      value: 'tavily',
-    },
+    fetchUrls: { value: 'jina' },
+    searchKeywords: { value: 'tavily' },
   }),
 }));
-
+jest.mock('../components/WebSearchApiManagementSection', () => {
+  const { createElement } = jest.requireActual('react');
+  return {
+    WebSearchApiManagementSection: ({ afterItems, children, ...props }: any) =>
+      createElement('WebSearchApiManagementSection', props, children, afterItems),
+  };
+});
 jest.mock('../utils/providerIcons', () => ({ resolveWebSearchProviderIcon: () => undefined }));
 
 describe('WebSearchSettingsScreen', () => {
@@ -66,19 +53,22 @@ describe('WebSearchSettingsScreen', () => {
     renderer = undefined;
   });
 
-  test('opens dedicated screens for provider and compression selection', () => {
+  test('opens provider, advanced, and URL fetch provider screens', () => {
     const rows = renderer!.root.findAllByType('SectionItem');
     const providerRow = rows.find(
-      (row) => row.props.label === 'settings.websearch.defaultProvider',
+      (row) => row.props.label === 'settings.websearch.provider.selection',
     );
-    const compressionRow = rows.find(
-      (row) => row.props.label === 'settings.websearch.compressionMethod',
+    const advancedRow = rows.find((row) => row.props.label === 'settings.websearch.advanced.title');
+    const fetchProviderRow = rows.find(
+      (row) => row.props.label === 'settings.websearch.fetchUrlsProvider',
     );
 
     act(() => providerRow?.props.onPress());
-    act(() => compressionRow?.props.onPress());
+    act(() => advancedRow?.props.onPress());
+    act(() => fetchProviderRow?.props.onPress());
 
     expect(mockPush).toHaveBeenNthCalledWith(1, '/settings/websearch/default-provider');
-    expect(mockPush).toHaveBeenNthCalledWith(2, '/settings/websearch/compression-method');
+    expect(mockPush).toHaveBeenNthCalledWith(2, '/settings/websearch/advanced');
+    expect(mockPush).toHaveBeenNthCalledWith(3, '/settings/websearch/fetch-provider');
   });
 });

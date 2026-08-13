@@ -1,13 +1,15 @@
+import { Section } from '@cherrystudio/ui/components';
+import type { WebSearchCapability } from '@cherrystudio/universal/data/preference';
 import { useCallback, useMemo } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useWebSearchApiManagementContext } from '../../context/WebSearchApiManagementContext';
 import {
   getWebSearchCapabilityTitleKey,
-  getWebSearchProviderDescriptionKey,
   normalizeWebSearchApiHost,
   type WebSearchProviderDetailSection,
 } from '../../utils/providerSettings';
+import { useWebSearchProviderCheck } from '../hooks/useWebSearchProviderCheck';
 import {
   buildWebSearchApiKeysInput,
   parseWebSearchApiKeysInput,
@@ -22,43 +24,24 @@ function ZhipuApiKeyShortcutSection() {
   } = useWebSearchApiManagementContext();
 
   return (
-    <Pressable
+    <Section.Item
       accessibilityLabel={t('settings.websearch.provider.configureZhipuApiKey')}
-      accessibilityRole="button"
-      className="h-12 items-center justify-center rounded-xl bg-secondary active:opacity-60"
-      hitSlop={6}
+      label={t('settings.websearch.provider.configureZhipuApiKey')}
       onPress={openZhipuApiKeySettings}
-    >
-      <Text className="font-medium text-base text-foreground">
-        {t('settings.websearch.provider.configureZhipuApiKey')}
-      </Text>
-    </Pressable>
+    />
   );
 }
 
-function DescriptionSection() {
-  const {
-    meta: { t },
-    state: { provider },
-  } = useWebSearchApiManagementContext();
-  const descriptionKey = getWebSearchProviderDescriptionKey(provider.id);
-
-  if (!descriptionKey) {
-    return null;
-  }
-
-  return (
-    <View className="rounded-2xl bg-grouped-surface p-4">
-      <Text className="text-base text-foreground">{t(descriptionKey)}</Text>
-    </View>
-  );
-}
-
-function ApiKeysSection() {
+function ApiKeysSection({ includesApiHost }: { includesApiHost: boolean }) {
   const {
     actions: { onProviderOverrideChange, openApiKeySettings },
-    state: { provider, providerOverride },
+    state: { capability, provider, providerOverride },
   } = useWebSearchApiManagementContext();
+  const { isChecking, startCheck } = useWebSearchProviderCheck(
+    provider,
+    providerOverride,
+    capability,
+  );
   const apiKeysInput = useMemo(
     () => buildWebSearchApiKeysInput(providerOverride?.apiKeys ?? []),
     [providerOverride?.apiKeys],
@@ -74,15 +57,22 @@ function ApiKeysSection() {
   );
 
   return (
-    <WebSearchApiServiceApiKeysField
-      apiKeysInput={apiKeysInput}
-      onApiKeysInputChange={handleApiKeysCommit}
-      onManagePress={openApiKeySettings}
-    />
+    <Section.Item>
+      <View className="gap-4">
+        <WebSearchApiServiceApiKeysField
+          apiKeysInput={apiKeysInput}
+          isChecking={isChecking}
+          onCheck={(apiKey) => void startCheck(apiKey)}
+          onApiKeysInputChange={handleApiKeysCommit}
+          onManagePress={openApiKeySettings}
+        />
+        {includesApiHost ? <CapabilityApiHostFields capability={capability} /> : null}
+      </View>
+    </Section.Item>
   );
 }
 
-function CapabilityApiHostSections() {
+function CapabilityApiHostFields({ capability }: { capability: WebSearchCapability }) {
   const {
     actions: { onCapabilityApiHostChange },
     meta: { t },
@@ -91,30 +81,35 @@ function CapabilityApiHostSections() {
 
   return (
     <>
-      {provider.capabilities.map((capability) =>
-        capability.apiHost !== undefined ? (
-          <ConfigField
-            key={capability.feature}
-            label={t(getWebSearchCapabilityTitleKey(capability.feature))}
-          >
-            <SettingTextInput
-              accessibilityLabel={t(getWebSearchCapabilityTitleKey(capability.feature))}
-              onCommit={(nextValue) =>
-                onCapabilityApiHostChange(
-                  provider.id,
-                  capability.feature,
-                  normalizeWebSearchApiHost(nextValue),
-                )
-              }
-              placeholder={capability.apiHost}
-              value={
-                providerOverride?.capabilities?.[capability.feature]?.apiHost ?? capability.apiHost
-              }
-            />
-          </ConfigField>
+      {provider.capabilities.map((providerCapability) =>
+        providerCapability.feature === capability && providerCapability.apiHost !== undefined ? (
+          <SettingTextInput
+            accessibilityLabel={t(getWebSearchCapabilityTitleKey(providerCapability.feature))}
+            key={providerCapability.feature}
+            onCommit={(nextValue) =>
+              onCapabilityApiHostChange(
+                provider.id,
+                providerCapability.feature,
+                normalizeWebSearchApiHost(nextValue),
+              )
+            }
+            placeholder={providerCapability.apiHost}
+            value={
+              providerOverride?.capabilities?.[providerCapability.feature]?.apiHost ??
+              providerCapability.apiHost
+            }
+          />
         ) : null,
       )}
     </>
+  );
+}
+
+function CapabilityApiHostSection({ capability }: { capability: WebSearchCapability }) {
+  return (
+    <Section.Item>
+      <CapabilityApiHostFields capability={capability} />
+    </Section.Item>
   );
 }
 
@@ -147,47 +142,48 @@ function BasicAuthSection() {
   );
 
   return (
-    <View className="gap-4">
-      <Text className="font-medium text-foreground text-sm">
-        {t('settings.websearch.provider.basicAuth')}
-      </Text>
-      <ConfigField label={t('settings.websearch.provider.basicAuthUsername')}>
-        <SettingTextInput
-          accessibilityLabel={t('settings.websearch.provider.basicAuthUsername')}
-          onCommit={handleBasicAuthUsernameCommit}
-          placeholder={t('settings.websearch.provider.basicAuthUsernamePlaceholder')}
-          value={providerOverride?.basicAuthUsername ?? ''}
-        />
-      </ConfigField>
-      {providerOverride?.basicAuthUsername ? (
-        <ConfigField label={t('settings.websearch.provider.basicAuthPassword')}>
+    <Section.Item>
+      <View className="gap-4">
+        <ConfigField label={t('settings.websearch.provider.basicAuthUsername')}>
           <SettingTextInput
-            accessibilityLabel={t('settings.websearch.provider.basicAuthPassword')}
-            onCommit={handleBasicAuthPasswordCommit}
-            placeholder={t('settings.websearch.provider.basicAuthPasswordPlaceholder')}
-            secureTextEntry
-            value={providerOverride?.basicAuthPassword ?? ''}
+            accessibilityLabel={t('settings.websearch.provider.basicAuthUsername')}
+            onCommit={handleBasicAuthUsernameCommit}
+            placeholder={t('settings.websearch.provider.basicAuthUsernamePlaceholder')}
+            value={providerOverride?.basicAuthUsername ?? ''}
           />
         </ConfigField>
-      ) : null}
-    </View>
+        {providerOverride?.basicAuthUsername ? (
+          <ConfigField label={t('settings.websearch.provider.basicAuthPassword')}>
+            <SettingTextInput
+              accessibilityLabel={t('settings.websearch.provider.basicAuthPassword')}
+              onCommit={handleBasicAuthPasswordCommit}
+              placeholder={t('settings.websearch.provider.basicAuthPasswordPlaceholder')}
+              secureTextEntry
+              value={providerOverride?.basicAuthPassword ?? ''}
+            />
+          </ConfigField>
+        ) : null}
+      </View>
+    </Section.Item>
   );
 }
 
 export function WebSearchApiServiceFieldGroup({
+  capability,
+  combinesApiKeysAndHost,
   section,
 }: {
+  capability: WebSearchCapability;
+  combinesApiKeysAndHost: boolean;
   section: WebSearchProviderDetailSection;
 }) {
   switch (section.type) {
     case 'apiKeys':
-      return <ApiKeysSection />;
+      return <ApiKeysSection includesApiHost={combinesApiKeysAndHost} />;
     case 'basicAuth':
       return <BasicAuthSection />;
     case 'capabilityApiHosts':
-      return <CapabilityApiHostSections />;
-    case 'description':
-      return <DescriptionSection />;
+      return combinesApiKeysAndHost ? null : <CapabilityApiHostSection capability={capability} />;
     case 'zhipuApiKeyShortcut':
       return <ZhipuApiKeyShortcutSection />;
   }

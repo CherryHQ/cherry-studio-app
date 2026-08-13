@@ -28,58 +28,18 @@ export type WebSearchProviderDetailSection =
   | { type: 'apiKeys' }
   | { type: 'basicAuth' }
   | { type: 'capabilityApiHosts' }
-  | { type: 'description' }
   | { type: 'zhipuApiKeyShortcut' };
-
-type WebSearchProviderDisplayMeta = {
-  descriptionKey?: string;
-  officialWebsite?: string;
-};
 
 const WEB_SEARCH_CAPABILITY_ORDER: readonly WebSearchCapability[] = [
   'searchKeywords',
   'fetchUrls',
 ] as const;
 
-const WEB_SEARCH_PROVIDER_DISPLAY_META: Record<WebSearchProviderId, WebSearchProviderDisplayMeta> =
-  {
-    bocha: {
-      officialWebsite: 'https://bochaai.com',
-    },
-    exa: {
-      officialWebsite: 'https://exa.ai',
-    },
-    'exa-mcp': {
-      officialWebsite: 'https://exa.ai',
-    },
-    fetch: {
-      descriptionKey: 'settings.websearch.providerDescription.fetch',
-    },
-    firecrawl: {
-      officialWebsite: 'https://firecrawl.dev',
-    },
-    jina: {
-      officialWebsite: 'https://jina.ai/reader',
-    },
-    querit: {
-      officialWebsite: 'https://querit.ai',
-    },
-    searxng: {
-      officialWebsite: 'https://docs.searxng.org',
-    },
-    tavily: {
-      officialWebsite: 'https://tavily.com',
-    },
-    zhipu: {
-      officialWebsite: 'https://docs.bigmodel.cn/cn/guide/tools/web-search',
-    },
-  };
-
 const WEB_SEARCH_PROVIDER_DETAIL_SECTIONS = {
   bocha: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   exa: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   'exa-mcp': [{ type: 'capabilityApiHosts' }],
-  fetch: [{ type: 'description' }],
+  fetch: [],
   firecrawl: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   jina: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
   querit: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
@@ -99,18 +59,6 @@ export function getWebSearchProviderDetailSections(
   providerId: WebSearchProviderId,
 ): readonly WebSearchProviderDetailSection[] {
   return WEB_SEARCH_PROVIDER_DETAIL_SECTIONS[providerId];
-}
-
-export function getWebSearchProviderDescriptionKey(
-  providerId: WebSearchProviderId,
-): string | undefined {
-  return WEB_SEARCH_PROVIDER_DISPLAY_META[providerId].descriptionKey;
-}
-
-export function getWebSearchProviderOfficialWebsite(
-  providerId: WebSearchProviderId,
-): string | undefined {
-  return WEB_SEARCH_PROVIDER_DISPLAY_META[providerId].officialWebsite;
 }
 
 export function getWebSearchCapabilityTitleKey(capability: WebSearchCapability): string {

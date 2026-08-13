@@ -25,6 +25,7 @@ export type WebSearchApiManagementContextValue = {
     t: ReturnType<typeof useTranslation>['t'];
   };
   state: {
+    capability: WebSearchCapability;
     provider: WebSearchProviderPreset;
     providerOverride: WebSearchProviderOverride | undefined;
   };

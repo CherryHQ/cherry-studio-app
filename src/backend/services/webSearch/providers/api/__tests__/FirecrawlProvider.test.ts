@@ -70,6 +70,48 @@ describe('FirecrawlProvider', () => {
     expect(headers.get('Authorization')).toBeNull();
   });
 
+  test('scrapes a URL and maps the markdown response', async () => {
+    const fetchMock = mockJsonResponse({
+      success: true,
+      data: {
+        markdown: 'Scraped page',
+        metadata: { title: ['Page title'], sourceURL: 'https://example.com/final' },
+      },
+    });
+    const provider = new FirecrawlProvider(
+      createProvider({
+        capabilities: [
+          { feature: 'searchKeywords', apiHost: 'https://api.firecrawl.example' },
+          { feature: 'fetchUrls', apiHost: 'https://api.firecrawl.example' },
+        ],
+      }),
+      new ApiKeyRotationState(),
+    );
+
+    const result = await provider.fetchUrls('https://example.com', runtimeConfig);
+
+    expect(fetchMock).toHaveBeenCalledWith('https://api.firecrawl.example/v2/scrape', {
+      method: 'POST',
+      headers: expect.any(Headers),
+      body: JSON.stringify({ url: 'https://example.com', formats: ['markdown'] }),
+      signal: undefined,
+    });
+    expect(result).toEqual({
+      query: 'https://example.com',
+      providerId: 'firecrawl',
+      capability: 'fetchUrls',
+      inputs: ['https://example.com'],
+      results: [
+        {
+          title: 'Page title',
+          content: 'Scraped page',
+          url: 'https://example.com/final',
+          sourceInput: 'https://example.com',
+        },
+      ],
+    });
+  });
+
   test('throws when the payload reports success: false', async () => {
     mockJsonResponse({ success: false, error: 'Rate limit exceeded' });
 
