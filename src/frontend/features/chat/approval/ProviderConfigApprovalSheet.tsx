@@ -10,6 +10,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useResolveClassNames } from 'uniwind';
 
 import { useBackendModule } from '@/frontend/data';
 import {
@@ -39,6 +40,7 @@ import {
 import type { ToolApprovalRespondInput } from './types';
 
 const userCancelledReason = 'Provider configuration was cancelled by the user.';
+const ACTION_HEIGHT = 40;
 const PROGRESS_HEIGHT = 32;
 
 function ProviderConfigProgress({ current, total }: { current: number; total: number }) {
@@ -56,6 +58,46 @@ function ProviderConfigProgress({ current, total }: { current: number; total: nu
       >
         {current}/{total}
       </Text>
+    </Surface>
+  );
+}
+
+function ProviderConfigActionButton({
+  disabled,
+  label,
+  loading = false,
+  onPress,
+  tone,
+}: {
+  disabled: boolean;
+  label: string;
+  loading?: boolean;
+  onPress: () => void;
+  tone: 'primary' | 'secondary';
+}) {
+  const surfaceClassName = tone === 'primary' ? 'bg-foreground' : 'border border-border bg-field';
+  const surfaceFill = useResolveClassNames(surfaceClassName);
+  const tintColor =
+    typeof surfaceFill.backgroundColor === 'string' ? surfaceFill.backgroundColor : undefined;
+
+  return (
+    <Surface
+      className={surfaceClassName}
+      cornerRadius={ACTION_HEIGHT / 2}
+      interactive={!disabled && !loading}
+      style={styles.actionSurface}
+      testID={`provider-config-action-${tone}`}
+      tintColor={tintColor}
+    >
+      <Button
+        className="h-full w-full rounded-full bg-transparent p-2 shadow-none"
+        disabled={disabled}
+        loading={loading}
+        onPress={onPress}
+        variant={tone === 'primary' ? 'default' : 'ghost'}
+      >
+        {label}
+      </Button>
     </Surface>
   );
 }
@@ -410,23 +452,20 @@ export function ProviderConfigApprovalSheet({
           ) : null}
           <View className="w-full flex-row gap-3" testID="provider-config-actions">
             {step === 'models' ? (
-              <Button
-                className="flex-1 rounded-full p-2"
+              <ProviderConfigActionButton
                 disabled={isSubmitting}
+                label={t('chat.providerConfig.previous')}
                 onPress={goBack}
-                variant="secondary"
-              >
-                {t('chat.providerConfig.previous')}
-              </Button>
+                tone="secondary"
+              />
             ) : null}
-            <Button
-              className="flex-1 rounded-full p-2"
+            <ProviderConfigActionButton
               disabled={!canContinueProviderConfig(step, draft, preview)}
+              label={actionLabel}
               loading={isPreviewLoading || isSubmitting}
               onPress={goForward}
-            >
-              {actionLabel}
-            </Button>
+              tone="primary"
+            />
           </View>
         </View>
       </View>
@@ -435,6 +474,10 @@ export function ProviderConfigApprovalSheet({
 }
 
 const styles = StyleSheet.create({
+  actionSurface: {
+    flex: 1,
+    height: ACTION_HEIGHT,
+  },
   progressSurface: {
     alignItems: 'center',
     height: PROGRESS_HEIGHT,

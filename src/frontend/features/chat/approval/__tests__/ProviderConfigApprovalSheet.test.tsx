@@ -141,6 +141,37 @@ jest.mock(
     };
   },
 );
+jest.mock(
+  '@/frontend/features/settings/ProviderScreen/models/components/ProviderModelSearchField',
+  () => {
+    const React = jest.requireActual('react');
+    const native = jest.requireActual('react-native');
+    return {
+      ProviderModelSearchField: (props: object) =>
+        React.createElement(native.View, { ...props, testID: 'provider-model-search' }),
+    };
+  },
+);
+jest.mock(
+  '@/frontend/features/settings/ProviderScreen/models/components/ProviderModelTypeFilterBar',
+  () => {
+    const React = jest.requireActual('react');
+    const native = jest.requireActual('react-native');
+    return {
+      ProviderModelTypeFilterBar: (props: object) =>
+        React.createElement(native.View, { ...props, testID: 'provider-model-type-filters' }),
+    };
+  },
+);
+jest.mock('@/frontend/features/settings/ProviderScreen/models/components/ProviderModelRow', () => {
+  const React = jest.requireActual('react');
+  const native = jest.requireActual('react-native');
+  return {
+    ProviderModelRow: (props: object) =>
+      React.createElement(native.View, { ...props, testID: 'provider-model-row' }),
+    providerModelRowEstimatedHeight: 42,
+  };
+});
 
 function customApproval(
   overrides: Partial<PendingToolApproval['input']> = {},
@@ -273,11 +304,20 @@ describe('ProviderConfigApprovalSheet', () => {
     expect(onRespond).not.toHaveBeenCalled();
   });
 
-  test('uses a full-width pill action without a footer', () => {
+  test('uses a full-width liquid-glass pill action without a footer', () => {
     renderSheet();
 
     expect(action('chat.providerConfig.next').props).toMatchObject({
-      className: 'flex-1 rounded-full p-2',
+      className: 'h-full w-full rounded-full bg-transparent p-2 shadow-none',
+      variant: 'default',
+    });
+    expect(
+      renderer!.root.findByProps({ testID: 'provider-config-action-primary' }).props,
+    ).toMatchObject({
+      className: 'bg-foreground',
+      cornerRadius: 20,
+      interactive: true,
+      style: { flex: 1, height: 40 },
     });
     expect(
       renderer!.root.findByProps({ testID: 'provider-config-floating-action' }).props,
@@ -321,11 +361,19 @@ describe('ProviderConfigApprovalSheet', () => {
     expect(bottomSheetProps).not.toHaveProperty('onBack');
     expect(bottomSheetProps.title).toBe('chat.providerConfig.step.models');
     expect(action('chat.providerConfig.previous').props).toMatchObject({
-      className: 'flex-1 rounded-full p-2',
-      variant: 'secondary',
+      className: 'h-full w-full rounded-full bg-transparent p-2 shadow-none',
+      variant: 'ghost',
     });
     expect(action('chat.providerConfig.confirm').props).toMatchObject({
-      className: 'flex-1 rounded-full p-2',
+      className: 'h-full w-full rounded-full bg-transparent p-2 shadow-none',
+      variant: 'default',
+    });
+    expect(
+      renderer!.root.findByProps({ testID: 'provider-config-action-secondary' }).props,
+    ).toMatchObject({
+      className: 'border border-border bg-field',
+      cornerRadius: 20,
+      interactive: true,
     });
     expect(
       renderer!.root.findByProps({ testID: 'provider-config-progress-label' }).props.children,
@@ -424,15 +472,15 @@ describe('ProviderConfigApprovalSheet', () => {
     expect(mockLegendListProps.data).toEqual([
       expect.objectContaining({ key: 'section:added', type: 'section' }),
       expect.objectContaining({
-        key: `catalog-model:added:${remoteModelId}`,
-        type: 'catalog-model',
+        key: `model:added:${remoteModelId}`,
+        type: 'model',
       }),
     ]);
     expect(
       mockLegendListProps.data.map((item: unknown, index: number) =>
         mockLegendListProps.keyExtractor(item, index),
       ),
-    ).toEqual(['section:added', `catalog-model:added:${remoteModelId}`]);
+    ).toEqual(['section:added', `model:added:${remoteModelId}`]);
   });
 
   test('disables closing while the approved draft is being saved', async () => {

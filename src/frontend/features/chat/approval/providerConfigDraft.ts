@@ -136,13 +136,6 @@ export function canContinueProviderConfig(
   return preview !== null;
 }
 
-export function toggleSetItem<T>(items: ReadonlySet<T>, item: T): ReadonlySet<T> {
-  const next = new Set(items);
-  if (next.has(item)) next.delete(item);
-  else next.add(item);
-  return next;
-}
-
 export function dedupeManualModels(
   models: readonly ProviderConfigurationManualModel[],
 ): ProviderConfigurationManualModel[] {

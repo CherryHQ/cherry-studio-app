@@ -2,16 +2,20 @@ import { SearchField } from '@cherrystudio/ui';
 import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+export type ProviderModelSearchFieldPlacement = 'automatic' | 'inline';
+
 export function ProviderModelSearchField({
+  searchFieldPlacement = 'automatic',
   searchText,
   setSearchText,
 }: {
+  searchFieldPlacement?: ProviderModelSearchFieldPlacement;
   searchText: string;
   setSearchText: (value: string) => void;
 }) {
   const { t } = useTranslation();
 
-  if (process.env.EXPO_OS === 'ios') {
+  if (process.env.EXPO_OS === 'ios' && searchFieldPlacement === 'automatic') {
     return (
       <Stack.SearchBar
         autoCapitalize="none"

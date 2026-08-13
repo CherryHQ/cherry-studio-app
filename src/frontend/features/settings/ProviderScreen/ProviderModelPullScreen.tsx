@@ -1,52 +1,26 @@
-import { Section, Spinner } from '@cherrystudio/ui/components';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { Spinner } from '@cherrystudio/ui/components';
+import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelPullChrome } from './models/components/ProviderModelPullChrome/ProviderModelPullChrome';
-import {
-  ProviderModelRow,
-  providerModelRowEstimatedHeight,
-} from './models/components/ProviderModelRow';
-import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
-import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
+import { ProviderModelPullList } from './models/components/ProviderModelPullList';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import {
   type ProviderModelPullApplyChange,
   useProviderModelPullSelection,
 } from './models/hooks/useProviderModelPullSelection';
-import {
-  buildProviderModelPullListItems,
-  filterProviderModelPullPreview,
-  type ProviderModelPullListItem,
-  type ProviderModelPullPreview,
-  type ProviderModelPullSectionKey,
+import type {
+  ProviderModelPullPreview,
+  ProviderModelPullSectionKey,
 } from './models/utils/providerModelPullPreview';
 import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
-import {
-  filterModelsByProviderModelType,
-  getProviderModelTypeCounts,
-  type ProviderModelTypeFilter,
-} from './models/utils/providerModelTypeFilter';
-
-type PullTranslator = ReturnType<typeof useTranslation>['t'];
-
-type PullListExtraData = {
-  displayedPreview: ProviderModelPullPreview;
-  isApplying: boolean;
-  onToggleAll: (ids: readonly UniqueModelId[]) => void;
-  onToggleModel: (id: UniqueModelId) => void;
-  provider: Provider | undefined;
-  selectedIds: ReadonlySet<UniqueModelId>;
-  t: PullTranslator;
-};
 
 export default function ProviderModelPullScreen() {
   const { providerId, providerName, returnToConfiguration } = useLocalSearchParams<{
@@ -142,60 +116,11 @@ function ProviderModelPullPreviewPage({
   preview: ProviderModelPullPreview;
   provider: Provider | undefined;
 }) {
-  const { t } = useTranslation();
-  const [searchText, setSearchText] = useState('');
-  const deferredSearchText = useDeferredValue(searchText);
-  const [typeFilter, setTypeFilter] = useState<ProviderModelTypeFilter>('all');
-  const missingCount = preview.missing.length;
-  const searchedPreview = useMemo(
-    () => filterProviderModelPullPreview(preview, deferredSearchText),
-    [deferredSearchText, preview],
-  );
-  const displayedPreview = useMemo(
-    () => ({
-      added: filterModelsByProviderModelType(searchedPreview.added, typeFilter),
-      missing: filterModelsByProviderModelType(searchedPreview.missing, typeFilter),
-    }),
-    [searchedPreview, typeFilter],
-  );
-  // Counted over what the search left behind but before the type filter, so a
-  // tab's number says how many models picking it would show.
-  const typeCounts = useMemo(
-    () => getProviderModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
-    [searchedPreview],
-  );
   const { applySelection, isApplying, selectedIds, toggleAll, toggleModel } =
     useProviderModelPullSelection({
       applyModelChange,
       preview,
     });
-  const visibleSections = useMemo<ProviderModelPullSectionKey[]>(
-    () => (missingCount > 0 ? ['added', 'missing'] : ['added']),
-    [missingCount],
-  );
-  const listItems = useMemo(
-    () => buildProviderModelPullListItems(displayedPreview, visibleSections),
-    [displayedPreview, visibleSections],
-  );
-  const listExtraData = useMemo<PullListExtraData>(
-    () => ({
-      displayedPreview,
-      isApplying,
-      onToggleAll: toggleAll,
-      onToggleModel: toggleModel,
-      provider,
-      selectedIds,
-      t,
-    }),
-    [displayedPreview, isApplying, provider, selectedIds, t, toggleAll, toggleModel],
-  );
-  const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
-  // Everything on screen, which is what the search and the type filter left of
-  // the pull — selecting all of a filtered list should not reach past it.
-  const displayedIds = useMemo(
-    () => [...displayedPreview.added, ...displayedPreview.missing].map((model) => model.id),
-    [displayedPreview],
-  );
   const handleApply = useCallback(() => {
     void applySelection().then((didApply) => {
       if (didApply) {
@@ -203,197 +128,36 @@ function ProviderModelPullPreviewPage({
       }
     });
   }, [applySelection, onApplied]);
-
-  return (
-    <>
-      {process.env.EXPO_OS === 'ios' ? (
-        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-      ) : null}
-      <LegendList
-        alwaysBounceVertical={false}
-        contentContainerStyle={styles.listContent}
-        contentInsetAdjustmentBehavior="automatic"
-        data={listItems}
-        drawDistance={320}
-        estimatedItemSize={providerModelRowEstimatedHeight}
-        extraData={listExtraData}
-        getItemType={getPullListItemType}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
-        keyExtractor={pullListKeyExtractor}
-        ListFooterComponent={
-          isSearchEmpty ? (
-            <View className="items-center justify-center px-4 py-10">
-              <Text className="text-center text-base text-foreground">
-                {t('settings.provider.models.search.empty')}
-              </Text>
-            </View>
-          ) : null
-        }
-        ListHeaderComponent={
-          // One gap for the whole screen: the Android search field, the filter
-          // bar and the first section are all 12 apart. iOS pads nothing above
-          // the filter bar — its search field belongs to the navigation bar,
-          // which already leaves a gap of its own below itself.
-          <View className={process.env.EXPO_OS === 'ios' ? 'gap-3 px-4 pb-3' : 'gap-3 px-4 py-3'}>
-            {process.env.EXPO_OS === 'ios' ? null : (
-              <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-            )}
-            <ProviderModelTypeFilterBar
-              counts={typeCounts}
-              selectedFilter={typeFilter}
-              onSelect={setTypeFilter}
-            />
-          </View>
-        }
-        maintainVisibleContentPosition={false}
-        recycleItems
-        renderItem={renderPullListItem}
-        showsVerticalScrollIndicator={false}
-        style={styles.list}
-      />
-      <ProviderModelPullChrome
-        isAllSelected={displayedIds.length > 0 && displayedIds.every((id) => selectedIds.has(id))}
-        isApplying={isApplying}
-        selectedCount={selectedIds.size}
-        onApply={handleApply}
-        onToggleAll={() => toggleAll(displayedIds)}
-      />
-    </>
+  const isSelected = useCallback(
+    (_section: ProviderModelPullSectionKey, id: UniqueModelId) => selectedIds.has(id),
+    [selectedIds],
   );
-}
-
-function pullListKeyExtractor(item: ProviderModelPullListItem) {
-  return item.key;
-}
-
-function getPullListItemType(item: ProviderModelPullListItem) {
-  // A section header is shorter than a model row, so the virtualizer sizes the
-  // two separately.
-  return item.type;
-}
-
-function renderPullListItem({
-  extraData,
-  item,
-}: LegendListRenderItemProps<ProviderModelPullListItem>) {
-  const listData = extraData as PullListExtraData;
-
-  if (item.type === 'section') {
-    const isAddedSection = item.section === 'added';
-    const sectionModels = isAddedSection
-      ? listData.displayedPreview.added
-      : listData.displayedPreview.missing;
-    const sectionIds = sectionModels.map((model) => model.id);
-    // The two sections pull in opposite directions — one adds models, the other
-    // drops them — so each keeps its own select-all beside the toolbar's.
-    const isSectionSelected =
-      sectionIds.length > 0 && sectionIds.every((id) => listData.selectedIds.has(id));
-
-    return (
-      <PullSectionHeader
-        actionLabel={listData.t(
-          isSectionSelected
-            ? 'settings.provider.models.selection.deselectAll'
-            : 'settings.provider.models.selection.selectAll',
-        )}
-        count={sectionModels.length}
-        isFirstSection={item.isFirstSection}
-        title={listData.t(
-          isAddedSection
-            ? 'settings.provider.models.pullAddedSection'
-            : 'settings.provider.models.pullMissingSection',
-        )}
-        onActionPress={() => listData.onToggleAll(sectionIds)}
-      />
-    );
-  }
-
-  return (
-    <PullModelRow
-      isApplying={listData.isApplying}
-      isSelected={listData.selectedIds.has(item.model.id)}
-      model={item.model}
-      provider={listData.provider}
-      section={item.section}
-      onToggleModel={listData.onToggleModel}
-    />
+  const handleToggleModel = useCallback(
+    (_section: ProviderModelPullSectionKey, id: UniqueModelId) => toggleModel(id),
+    [toggleModel],
   );
-}
-
-function PullSectionHeader({
-  actionLabel,
-  count,
-  isFirstSection,
-  onActionPress,
-  title,
-}: {
-  actionLabel: string;
-  count: number;
-  isFirstSection: boolean;
-  onActionPress: () => void;
-  title: string;
-}) {
-  return (
-    // `px-4` rather than the header's own `px-3`, so the title starts where the
-    // model names below it do.
-    <Section.Header
-      className={isFirstSection ? 'px-4 pb-2' : 'mt-3 px-4 pb-2'}
-      title={`${title} (${count})`}
-    >
-      <Pressable
-        accessibilityLabel={actionLabel}
-        accessibilityRole="button"
-        className="shrink-0 justify-center px-1 active:opacity-60 disabled:opacity-40"
-        disabled={count === 0}
-        hitSlop={6}
-        onPress={onActionPress}
-      >
-        <Text className="font-medium text-primary text-sm">{actionLabel}</Text>
-      </Pressable>
-    </Section.Header>
+  const handleToggleAll = useCallback(
+    (_section: ProviderModelPullSectionKey, ids: readonly UniqueModelId[]) => toggleAll(ids),
+    [toggleAll],
   );
-}
-
-const PullModelRow = memo(function PullModelRow({
-  isApplying,
-  isSelected,
-  model,
-  onToggleModel,
-  provider,
-  section,
-}: {
-  isApplying: boolean;
-  isSelected: boolean;
-  model: Model;
-  onToggleModel: (id: UniqueModelId) => void;
-  provider: Provider | undefined;
-  section: ProviderModelPullSectionKey;
-}) {
-  const handleToggle = useCallback(() => {
-    onToggleModel(model.id);
-  }, [model.id, onToggleModel]);
 
   return (
-    <ProviderModelRow
-      model={model}
+    <ProviderModelPullList
+      isDisabled={isApplying}
+      isSelected={isSelected}
+      preview={preview}
       provider={provider}
-      selection={{ isDisabled: isApplying, isSelected, onToggle: handleToggle }}
-      // The provider no longer serves it, whether or not the row is ticked.
-      tone={section === 'missing' ? 'struck' : 'default'}
+      onToggleAll={handleToggleAll}
+      onToggleModel={handleToggleModel}
+      renderAccessory={({ displayedIds }) => (
+        <ProviderModelPullChrome
+          isAllSelected={displayedIds.length > 0 && displayedIds.every((id) => selectedIds.has(id))}
+          isApplying={isApplying}
+          selectedCount={selectedIds.size}
+          onApply={handleApply}
+          onToggleAll={() => toggleAll(displayedIds)}
+        />
+      )}
     />
   );
-});
-
-const styles = StyleSheet.create({
-  list: {
-    flex: 1,
-  },
-  // No horizontal padding: the model rows carry their own `px-4`, so an outer
-  // inset would push their content twice as far in as the navigation chrome
-  // above them. Everything else here pads itself to match. The bottom clears
-  // the select-all/apply bar, which floats over the list.
-  listContent: {
-    paddingBottom: 96,
-  },
-});
+}
