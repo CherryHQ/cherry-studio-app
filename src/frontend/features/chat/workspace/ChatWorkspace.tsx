@@ -29,6 +29,7 @@ import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
 } from './hooks/useMessageListInitialRenderGate';
+import { useReplyReadAloud } from './hooks/useReplyReadAloud';
 
 const logger = loggerService.withContext('ChatWorkspace');
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
@@ -69,6 +70,21 @@ export function ChatWorkspace({
       ),
     [visibleMessages],
   );
+  const visibleMessageIds = useMemo(
+    () => presentationMessages.map((message) => message.id),
+    [presentationMessages],
+  );
+  const handleReadAloudError = useCallback(() => {
+    alert.show({
+      description: t('chat.messageActions.readAloudFailedDescription'),
+      title: t('chat.messageActions.readAloudFailed'),
+    });
+  }, [alert, t]);
+  const { activeMessageId, readAloud, stopReadAloud, stopReadAloudIfActive } = useReplyReadAloud({
+    onError: handleReadAloudError,
+    topicId,
+    visibleMessageIds,
+  });
   const chat = useChat();
   // 待审批检测以活动 tip 的 parts 为准，因此杀 app 重进后 sheet 也会自动恢复。
   const pendingApprovals = getPendingToolApprovals(visibleMessages);
@@ -107,29 +123,37 @@ export function ChatWorkspace({
   );
   const handleRegenerateAssistantMessage = useCallback(
     (messageId: string) => {
-      void regenerateAssistantMessage({ messageId }).catch((error) => {
-        logger.error('Regenerate assistant message failed', error as Error);
-        alert.show({ title: t('chat.messageActions.regenerateFailed') });
-      });
+      void stopReadAloudIfActive(messageId)
+        .then(() => regenerateAssistantMessage({ messageId }))
+        .catch((error) => {
+          logger.error('Regenerate assistant message failed', error as Error);
+          alert.show({ title: t('chat.messageActions.regenerateFailed') });
+        });
     },
-    [alert, regenerateAssistantMessage, t],
+    [alert, regenerateAssistantMessage, stopReadAloudIfActive, t],
   );
   const assistantActions = useMemo<AssistantMessageActions | undefined>(
     () =>
       isPreview
         ? undefined
         : {
+            activeReadAloudMessageId: activeMessageId,
             copiedMessageId,
             isRegenerateDisabled: chatTopic.isBusy,
             onCopy: handleCopyAssistantMessage,
+            onReadAloud: readAloud,
             onRegenerate: handleRegenerateAssistantMessage,
+            onStopReadAloud: stopReadAloud,
           },
     [
+      activeMessageId,
       chatTopic.isBusy,
       copiedMessageId,
       handleCopyAssistantMessage,
       handleRegenerateAssistantMessage,
       isPreview,
+      readAloud,
+      stopReadAloud,
     ],
   );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({

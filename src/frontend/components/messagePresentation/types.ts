@@ -19,9 +19,9 @@ export type AssistantMessageActions = {
   copiedMessageId?: string;
   isRegenerateDisabled: boolean;
   onCopy: (input: { messageId: string; text: string }) => void;
-  onReadAloud?: (input: AssistantReadAloudInput) => void;
+  onReadAloud: (input: AssistantReadAloudInput) => void;
   onRegenerate: (messageId: string) => void;
-  onStopReadAloud?: () => void;
+  onStopReadAloud: () => void;
 };
 
 export type MessageListProps = {

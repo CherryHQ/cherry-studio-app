@@ -26,26 +26,11 @@ jest.mock('@cherrystudio/ui/components', () => {
 });
 
 jest.mock('lucide-uniwind/png', () => ({
-  CheckIcon: () => {
-    const { View: MockView } = jest.requireActual('react-native');
-    return <MockView testID="check-icon" />;
-  },
-  CopyIcon: () => {
-    const { View: MockView } = jest.requireActual('react-native');
-    return <MockView testID="copy-icon" />;
-  },
-  RefreshCwIcon: () => {
-    const { View: MockView } = jest.requireActual('react-native');
-    return <MockView testID="refresh-icon" />;
-  },
-  SquareIcon: () => {
-    const { View: MockView } = jest.requireActual('react-native');
-    return <MockView testID="square-icon" />;
-  },
-  Volume2Icon: () => {
-    const { View: MockView } = jest.requireActual('react-native');
-    return <MockView testID="volume2-icon" />;
-  },
+  CheckIcon: () => null,
+  CopyIcon: () => null,
+  RefreshCwIcon: () => null,
+  SquareIcon: () => null,
+  Volume2Icon: () => null,
 }));
 
 jest.mock('react-i18next', () => ({
@@ -112,11 +97,7 @@ describe('AssistantMessageRow', () => {
   });
 
   test('orders copy, read aloud, and regenerate actions', () => {
-    const actions = {
-      ...createActions(),
-      onReadAloud: jest.fn(),
-      onStopReadAloud: jest.fn(),
-    };
+    const actions = createActions();
 
     act(() => {
       renderer = create(
@@ -140,11 +121,7 @@ describe('AssistantMessageRow', () => {
       act(() => {
         renderer = create(
           <AssistantMessageRow
-            actions={{
-              ...createActions(),
-              onReadAloud: jest.fn(),
-              onStopReadAloud: jest.fn(),
-            }}
+            actions={createActions()}
             message={createAssistantMessage(status, [{ text: 'Answer', type: 'text' }])}
           />,
         );
@@ -239,23 +216,6 @@ describe('AssistantMessageRow', () => {
     expect(buttonProps.icon.type).toBe(Volume2Icon);
   });
 
-  test('requires both read-aloud commands during the transitional action contract', () => {
-    const message = createAssistantMessage('success', [{ text: 'Answer', type: 'text' }]);
-
-    act(() => {
-      renderer = create(
-        <AssistantMessageRow
-          actions={{ ...createActions(), onReadAloud: jest.fn() }}
-          message={message}
-        />,
-      );
-    });
-
-    expect(renderer!.root.findAllByProps({ testID: 'assistant-message-read-aloud' })).toHaveLength(
-      0,
-    );
-  });
-
   test('hides the toolbar while pending or when the consumer provides no actions', () => {
     act(() => {
       renderer = create(
@@ -297,11 +257,7 @@ describe('AssistantMessageRow', () => {
     act(() => {
       renderer = create(
         <AssistantMessageRow
-          actions={{
-            ...createActions({ isRegenerateDisabled: true }),
-            onReadAloud: jest.fn(),
-            onStopReadAloud: jest.fn(),
-          }}
+          actions={createActions({ isRegenerateDisabled: true })}
           message={createAssistantMessage('success', [{ text: 'Answer', type: 'text' }])}
         />,
       );
@@ -335,7 +291,9 @@ function createActions(overrides: Partial<AssistantMessageActions> = {}): Assist
   return {
     isRegenerateDisabled: false,
     onCopy: jest.fn(),
+    onReadAloud: jest.fn(),
     onRegenerate: jest.fn(),
+    onStopReadAloud: jest.fn(),
     ...overrides,
   };
 }

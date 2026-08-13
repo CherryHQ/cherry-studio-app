@@ -284,7 +284,9 @@ describe('MessageList', () => {
     const actions: AssistantMessageActions = {
       isRegenerateDisabled: false,
       onCopy: jest.fn(),
+      onReadAloud: jest.fn(),
       onRegenerate: jest.fn(),
+      onStopReadAloud: jest.fn(),
     };
     const user = createMessage('user-1', 'user', [textPart('hello')]);
     const assistant = {
