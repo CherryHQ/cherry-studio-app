@@ -5,8 +5,8 @@ import type {
   Provider,
 } from '@cherrystudio/universal/data/types/provider';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactElement, ReactNode } from 'react';
-import { Dimensions, ScrollView, StyleSheet } from 'react-native';
+import type { ReactElement } from 'react';
+import { ScrollView } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
@@ -24,12 +24,6 @@ type SectionProps = {
   provider?: Provider;
   showApiKeys: boolean;
   showBaseUrl: boolean;
-};
-type PagerProps = {
-  children?: ReactNode;
-  onPageSelected?: (event: { nativeEvent: { position: number } }) => void;
-  scrollEnabled?: boolean;
-  style?: unknown;
 };
 type TabsProps = {
   onTabChange: (tab: 'configuration' | 'models') => void;
@@ -60,9 +54,7 @@ let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
 let mockCheckSectionRenderCount: number;
 let mockSectionRenders: SectionProps[];
-let mockPagerProps: PagerProps | undefined;
 let mockTabsProps: TabsProps | undefined;
-const mockSetPage = jest.fn();
 const mockReplaceApiKeys = jest.fn(async () => undefined);
 const mockSaveProvider = jest.fn(async () => undefined);
 const mockAlertConfirm = jest.fn();
@@ -91,19 +83,6 @@ jest.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ providerId: mockProviderId }),
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
 }));
-
-jest.mock('@expo/ui/community/pager-view', () => {
-  const React = jest.requireActual('react');
-
-  return {
-    __esModule: true,
-    default: React.forwardRef(function MockPager(props: PagerProps, ref: React.Ref<unknown>) {
-      mockPagerProps = props;
-      React.useImperativeHandle(ref, () => ({ setPage: mockSetPage }));
-      return React.createElement('PagerView', props, props.children);
-    }),
-  };
-});
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({
@@ -189,9 +168,10 @@ jest.mock('../components/ProviderApiManagementSection', () => ({
 }));
 
 jest.mock('../components/ProviderModelList', () => ({
-  // The API management section is handed over as this list's header, so the stub has to
-  // render it for the assertions below to see anything.
-  ProviderModelList: ({ header }: { header?: ReactElement }) => header ?? null,
+  ProviderModelList: () => {
+    const { View: MockView } = jest.requireActual('react-native');
+    return <MockView testID="provider-model-list" />;
+  },
 }));
 
 jest.mock('../models/components/ProviderModelCheckSection', () => ({
@@ -263,9 +243,7 @@ describe('ProviderDetailScreen', () => {
     mockChromeRenderCount = 0;
     mockCheckSectionRenderCount = 0;
     mockSectionRenders = [];
-    mockPagerProps = undefined;
     mockTabsProps = undefined;
-    mockSetPage.mockClear();
     mockReplaceApiKeys.mockClear();
     mockSaveProvider.mockClear();
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -303,21 +281,18 @@ describe('ProviderDetailScreen', () => {
     expect(mockChromeRenderCount).toBe(1);
   });
 
-  it('keeps header tabs and horizontal paging in sync', () => {
+  it('switches content from the header tabs', () => {
     loadEverything();
     render();
 
-    expect(StyleSheet.flatten(mockPagerProps?.style)).toMatchObject({
-      flex: 1,
-      width: Dimensions.get('window').width,
-    });
     expect(mockTabsProps?.tab).toBe('configuration');
-    act(() => mockTabsProps?.onTabChange('models'));
-    expect(mockSetPage).toHaveBeenCalledWith(1);
-    expect(mockTabsProps?.tab).toBe('models');
+    expect(renderer?.root.findAllByType(ScrollView)).not.toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'provider-model-list' })).toHaveLength(0);
 
-    act(() => mockPagerProps?.onPageSelected?.({ nativeEvent: { position: 0 } }));
-    expect(mockTabsProps?.tab).toBe('configuration');
+    act(() => mockTabsProps?.onTabChange('models'));
+    expect(mockTabsProps?.tab).toBe('models');
+    expect(renderer?.root.findAllByType(ScrollView)).toHaveLength(0);
+    expect(renderer?.root.findAllByProps({ testID: 'provider-model-list' })).not.toHaveLength(0);
   });
 
   // The section used to mount without its Base URL / API keys blocks and gain them a

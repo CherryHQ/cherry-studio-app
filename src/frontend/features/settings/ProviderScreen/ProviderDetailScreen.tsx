@@ -1,13 +1,12 @@
 import { PlusIcon, SquareArrowOutUpRightIcon } from '@cherrystudio/app-icons';
 import { Spinner } from '@cherrystudio/ui/components';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import PagerView, { type PagerViewRef } from '@expo/ui/community/pager-view';
 import { useQueryClient } from '@tanstack/react-query';
 import { Color, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
@@ -36,10 +35,7 @@ import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
 import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
 import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
-import {
-  type ProviderDetailTab,
-  providerDetailTabs,
-} from './detail/components/ProviderDetailTabs/types';
+import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
 import { ProviderModelCheckSection } from './models/components/ProviderModelCheckSection';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import { useProviderModelRemove } from './models/hooks/useProviderModelRemove';
@@ -57,8 +53,6 @@ export default function ProviderDetailSettingsScreen() {
   const { toast } = useToast();
   const { alert } = useAlert();
   const providers = useBackendModule('providers');
-  const { width: windowWidth } = useWindowDimensions();
-  const pagerRef = useRef<PagerViewRef>(null);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
@@ -286,21 +280,8 @@ export default function ProviderDetailSettingsScreen() {
     (tab: ProviderDetailTab) => {
       exitModelSelection();
       setActiveTab(tab);
-      pagerRef.current?.setPage(providerDetailTabs.indexOf(tab));
     },
     [exitModelSelection],
-  );
-  const handlePageSelected = useCallback(
-    (event: { nativeEvent: { position: number } }) => {
-      const tab = providerDetailTabs[event.nativeEvent.position];
-      if (!tab || tab === activeTab) {
-        return;
-      }
-
-      exitModelSelection();
-      setActiveTab(tab);
-    },
-    [activeTab, exitModelSelection],
   );
   const requestRemoveSelectedModels = useCallback(() => {
     if (selectedModels.length === 0) {
@@ -418,65 +399,55 @@ export default function ProviderDetailSettingsScreen() {
           )
         }
       />
-      <PagerView
-        initialPage={0}
-        ref={pagerRef}
-        scrollEnabled={!modelSelection.isEditing}
-        style={[styles.screen, { width: windowWidth }]}
-        testID="provider-detail-pager"
-        onPageSelected={handlePageSelected}
-      >
-        <View key="configuration" collapsable={false} style={styles.screen}>
-          <ScrollView
-            alwaysBounceVertical={false}
-            contentContainerStyle={styles.configurationContent}
-            contentInsetAdjustmentBehavior="automatic"
-            showsVerticalScrollIndicator={false}
-            style={styles.screen}
-          >
-            {isProviderDetailLoading ? (
-              <View className="items-center py-10">
-                <Spinner accessibilityLabel={t('settings.provider.loading')} />
-              </View>
-            ) : (
-              // Still gated as one commit: #467 kept the Base URL / API keys blocks
-              // out until all three queries land so the content never grows under a
-              // finger that already aimed at the toolbar.
-              <>
-                <ProviderApiManagementSection
-                  apiKeysInput={apiKeysInput}
-                  baseUrl={getProviderPrimaryBaseUrl(provider)}
-                  provider={provider}
-                  showApiKeys={showApiKeys}
-                  showBaseUrl={canEditEndpoint}
-                  onApiKeysCommit={commitApiKeys}
-                  onApiKeysManagePress={openApiKeySettings}
-                  onBaseUrlCommit={commitBaseUrl}
-                  onBaseUrlManagePress={openEndpointSettings}
-                />
-                <ProviderModelCheckSection
-                  apiKeys={apiKeys}
-                  isLoading={modelsQuery.isPending}
-                  models={models}
-                  provider={provider}
-                  providerId={providerId}
-                />
-              </>
-            )}
-          </ScrollView>
-        </View>
-        <View key="models" collapsable={false} style={styles.screen}>
-          <ProviderModelList
-            addAction={addAction}
-            isDefaultModel={isDefaultModel}
-            isLoading={modelsQuery.isPending}
-            models={models}
-            provider={provider}
-            pullAction={modelPullAction}
-            selection={modelListSelection}
-          />
-        </View>
-      </PagerView>
+      {activeTab === 'configuration' ? (
+        <ScrollView
+          alwaysBounceVertical={false}
+          contentContainerStyle={styles.configurationContent}
+          contentInsetAdjustmentBehavior="automatic"
+          showsVerticalScrollIndicator={false}
+          style={styles.screen}
+        >
+          {isProviderDetailLoading ? (
+            <View className="items-center py-10">
+              <Spinner accessibilityLabel={t('settings.provider.loading')} />
+            </View>
+          ) : (
+            // Still gated as one commit: #467 kept the Base URL / API keys blocks
+            // out until all three queries land so the content never grows under a
+            // finger that already aimed at the toolbar.
+            <>
+              <ProviderApiManagementSection
+                apiKeysInput={apiKeysInput}
+                baseUrl={getProviderPrimaryBaseUrl(provider)}
+                provider={provider}
+                showApiKeys={showApiKeys}
+                showBaseUrl={canEditEndpoint}
+                onApiKeysCommit={commitApiKeys}
+                onApiKeysManagePress={openApiKeySettings}
+                onBaseUrlCommit={commitBaseUrl}
+                onBaseUrlManagePress={openEndpointSettings}
+              />
+              <ProviderModelCheckSection
+                apiKeys={apiKeys}
+                isLoading={modelsQuery.isPending}
+                models={models}
+                provider={provider}
+                providerId={providerId}
+              />
+            </>
+          )}
+        </ScrollView>
+      ) : (
+        <ProviderModelList
+          addAction={addAction}
+          isDefaultModel={isDefaultModel}
+          isLoading={modelsQuery.isPending}
+          models={models}
+          provider={provider}
+          pullAction={modelPullAction}
+          selection={modelListSelection}
+        />
+      )}
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
