@@ -1,4 +1,4 @@
-import { RefreshCwIcon } from 'lucide-uniwind/png';
+import { RefreshCwIcon } from '@cherrystudio/app-icons';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -32,7 +32,7 @@ export function AiUsageSectionStatus({
       testID={retryTestID}
       onPress={onRetry}
     >
-      <RefreshCwIcon className="size-4 text-destructive" strokeWidth={2} />
+      <RefreshCwIcon className="size-4 text-destructive" />
     </Pressable>
   );
 }
@@ -93,7 +93,7 @@ export function AiUsageSectionError({
         testID={testID}
         onPress={onRetry}
       >
-        <RefreshCwIcon className="size-4 text-foreground" strokeWidth={2} />
+        <RefreshCwIcon className="size-4 text-foreground" />
         <Text className="font-medium text-foreground text-sm">{t('aiUsage.retry')}</Text>
       </Pressable>
     </View>

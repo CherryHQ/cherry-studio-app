@@ -183,7 +183,7 @@ Directory naming splits into category rules (§4.1–§4.3, §4.5–§4.7, §4.1
 
 ```
 packages/ai-sdk-provider/     ✅
-packages/lucide-uniwind/      ✅
+packages/app-icons/           ✅
 packages/provider-registry/   ✅
 packages/somePkg/             ❌ (camelCase not allowed)
 packages/SomePkg/             ❌ (PascalCase not allowed)
@@ -246,7 +246,7 @@ packages/ui/src/icons-webp/    ✅
 packages/ui/src/icons-webp/provider-aliases.ts   ✅
 ```
 
-The other publishable packages (`ai-sdk-provider/`, `provider-registry/`, `lucide-uniwind/`) follow the same package-local `kebab-case` for their files.
+The other publishable packages (`ai-sdk-provider/`, `provider-registry/`, `app-icons/`) follow the same package-local `kebab-case` for their files.
 
 ### 4.7 Convention-Mandated Directories
 

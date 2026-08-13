@@ -158,9 +158,9 @@ Existing heavy animations (the thinking pixel field, the logo draw-on, the setti
 
 ## Icons
 
-Icons come from `lucide-uniwind/png`. In `className`, `size-*` sets the dimensions and `text-*` sets the tint; explicit props win over `className`.
+Icons come from `@cherrystudio/app-icons` — real SF Symbols on iOS (via expo-symbols), Material Symbols glyphs on Android (bundled subset font). In `className`, `size-*` sets the dimensions and `text-*` sets the glyph color; explicit props win over `className`.
 
-⚠️ **`strokeWidth` is a no-op** — the stroke is baked into the PNG. It is accepted so call sites can mirror the lucide API, and it neither errors nor does anything. Do not use it to adjust weight.
+Every icon is one entry in `packages/app-icons/src/registry.ts` declaring both its SF and Material name (both compile-time checked). To add an icon: add the registry entry, run `pnpm generate:icons`, import the generated component. Per-platform weight is the platform default on purpose — do not tune one platform to imitate the other.
 
 Icons are not decoration. Do not place them in coloured tiles and do not add them to fill space. Prefer words where words are clearer.
 

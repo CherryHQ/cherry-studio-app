@@ -1,4 +1,11 @@
 import {
+  ActivityIcon,
+  CopyIcon,
+  KeyRoundIcon,
+  PlusIcon,
+  Trash2Icon,
+} from '@cherrystudio/app-icons';
+import {
   Button,
   FieldError,
   Input,
@@ -8,7 +15,6 @@ import {
   TextField,
 } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
-import { ActivityIcon, CopyIcon, KeyRoundIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
@@ -61,7 +67,7 @@ export function WebSearchApiServiceApiKeysField({
         <Button
           accessibilityLabel={t('settings.websearch.provider.manageApiKeys')}
           hitSlop={2}
-          icon={<KeyRoundIcon strokeWidth={2} />}
+          icon={<KeyRoundIcon />}
           onPress={onManagePress}
           variant="secondary"
         />
@@ -69,7 +75,7 @@ export function WebSearchApiServiceApiKeysField({
           accessibilityLabel={t('settings.websearch.provider.check')}
           disabled={!currentInput.trim()}
           hitSlop={2}
-          icon={<ActivityIcon strokeWidth={2} />}
+          icon={<ActivityIcon />}
           loading={isChecking}
           onPress={() => {
             const apiKeys = parseWebSearchApiKeysInput(currentInput);
@@ -214,7 +220,7 @@ export function WebSearchApiServiceApiKeyForm({
         </View>
       ) : null}
 
-      <Button icon={<PlusIcon strokeWidth={2} />} onPress={onAdd} variant="secondary">
+      <Button icon={<PlusIcon />} onPress={onAdd} variant="secondary">
         {t('settings.websearch.provider.addApiKey')}
       </Button>
     </View>
@@ -252,7 +258,7 @@ function ApiKeyRow({
           accessibilityLabel={t('settings.websearch.provider.copyApiKey')}
           disabled={isPending}
           hitSlop={2}
-          icon={<CopyIcon strokeWidth={2} />}
+          icon={<CopyIcon />}
           onPress={() => void Clipboard.setStringAsync(apiKey.key)}
           variant="secondary"
         />
@@ -260,7 +266,7 @@ function ApiKeyRow({
           accessibilityLabel={t('settings.websearch.provider.removeApiKey')}
           disabled={isPending}
           hitSlop={2}
-          icon={<Trash2Icon strokeWidth={2} />}
+          icon={<Trash2Icon />}
           onPress={() => onRemove(apiKey.id)}
           variant="secondary"
         />

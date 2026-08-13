@@ -1,4 +1,4 @@
-import { PauseIcon, PlayIcon, Trash2Icon } from 'lucide-uniwind/png';
+import { PauseIcon, PlayIcon, Trash2Icon } from '@cherrystudio/app-icons';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,9 +31,9 @@ export function McpServerChrome({
           onPress={onToggleActive}
         >
           {isActive ? (
-            <PauseIcon className="size-5 text-foreground" strokeWidth={2} />
+            <PauseIcon className="size-5 text-foreground" />
           ) : (
-            <PlayIcon className="size-5 text-primary" strokeWidth={2} />
+            <PlayIcon className="size-5 text-primary" />
           )}
         </Pressable>
 
@@ -45,7 +45,7 @@ export function McpServerChrome({
           disabled={isDisabled}
           onPress={onDelete}
         >
-          <Trash2Icon className="size-5 text-destructive" strokeWidth={2} />
+          <Trash2Icon className="size-5 text-destructive" />
         </Pressable>
       </View>
     </View>

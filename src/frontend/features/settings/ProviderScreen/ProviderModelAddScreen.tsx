@@ -1,9 +1,9 @@
+import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from '@cherrystudio/app-icons';
 import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, type TextInputProps, View } from 'react-native';
@@ -272,9 +272,9 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
               {t('settings.provider.models.addMoreSettings')}
             </Text>
             {showMoreSettings ? (
-              <ChevronUpIcon className="size-4 text-foreground" strokeWidth={2} />
+              <ChevronUpIcon className="size-4 text-foreground" />
             ) : (
-              <ChevronDownIcon className="size-4 text-foreground" strokeWidth={2} />
+              <ChevronDownIcon className="size-4 text-foreground" />
             )}
           </Pressable>
 

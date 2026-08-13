@@ -1,9 +1,9 @@
+import { Settings2Icon } from '@cherrystudio/app-icons';
 import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
 import { resolveIcon } from '@cherrystudio/ui/icons';
 import { isUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
-import { Settings2Icon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -256,7 +256,7 @@ export function PaintingInput({
               onPress={openSettings}
               testID="painting-input-settings-button"
             >
-              <Settings2Icon className="size-4 text-foreground" strokeWidth={2} />
+              <Settings2Icon className="size-4 text-foreground" />
             </Composer.Action>
           ) : null}
           <ComposerModelPill

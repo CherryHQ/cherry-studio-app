@@ -1,6 +1,6 @@
+import { ChevronLeftIcon } from '@cherrystudio/app-icons';
 import { cn } from '@cherrystudio/ui/utils';
 import { Stack, useRouter } from 'expo-router';
-import { ChevronLeftIcon } from 'lucide-uniwind/png';
 import { Fragment, type ReactElement, type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text } from 'react-native';
@@ -60,7 +60,7 @@ function renderAndroidHeaderAction(action: HeaderToolbarAction): ReactNode {
       key={action.key}
       onPress={action.onPress}
     >
-      <AndroidIcon className="size-6 text-foreground" strokeWidth={2} />
+      <AndroidIcon className="size-6 text-foreground" />
     </HeaderIconButton>
   );
 }
@@ -92,7 +92,7 @@ export function BackHeader({
           ? () => leftActions.map((action) => renderAndroidHeaderAction(action))
           : () => (
               <HeaderIconButton accessibilityLabel={t('navigation.back')} onPress={goBack}>
-                <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2} />
+                <ChevronLeftIcon className="size-6 text-foreground" />
               </HeaderIconButton>
             ),
       headerRight:

@@ -1,6 +1,6 @@
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
@@ -51,10 +51,7 @@ export default function WebSearchAdvancedScreen() {
                 >
                   {selectedCompressionMethod?.label ?? t('settings.select.placeholder')}
                 </Text>
-                <ChevronRightIcon
-                  className="size-5 shrink-0 text-muted-foreground"
-                  strokeWidth={2}
-                />
+                <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" />
               </View>
             }
           />

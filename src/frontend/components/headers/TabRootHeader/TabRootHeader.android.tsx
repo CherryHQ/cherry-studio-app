@@ -47,7 +47,7 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
       key={action.key}
       onPress={action.onPress}
     >
-      <AndroidIcon className="size-6 text-foreground" strokeWidth={2} />
+      <AndroidIcon className="size-6 text-foreground" />
     </HeaderIconButton>
   );
 }

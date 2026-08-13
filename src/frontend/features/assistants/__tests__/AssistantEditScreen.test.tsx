@@ -51,7 +51,7 @@ jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   ChevronDownIcon: () => null,
 }));
 

@@ -17,7 +17,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => {
+jest.mock('@cherrystudio/app-icons', () => {
   const React = jest.requireActual('react');
 
   return {

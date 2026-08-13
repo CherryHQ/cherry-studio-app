@@ -7,7 +7,7 @@
 @import '@cherrystudio/design-tokens/native.css';
 
 @source "..";
-@source "../../../packages/lucide-uniwind/src";
+@source "../../../packages/app-icons/src";
 @source "../../../packages/ui/src";
 @source "../../../packages/ui/stories";
 @source "../../../node_modules/heroui-native/lib";

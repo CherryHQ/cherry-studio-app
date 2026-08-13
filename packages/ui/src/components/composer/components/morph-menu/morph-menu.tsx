@@ -1,4 +1,4 @@
-import { PlusIcon } from 'lucide-uniwind/png';
+import { PlusIcon } from '@cherrystudio/app-icons';
 import {
   createContext,
   use,
@@ -236,7 +236,7 @@ function MorphMenuRoot({
         testID={testID ? `${testID}-trigger` : undefined}
       >
         <Animated.View style={plusStyle}>
-          <PlusIcon className="size-6 text-foreground" strokeWidth={2} />
+          <PlusIcon className="size-6 text-foreground" />
         </Animated.View>
       </Pressable>
     </MorphMenuContext>

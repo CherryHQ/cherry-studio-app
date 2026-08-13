@@ -1,3 +1,4 @@
+import { XIcon } from '@cherrystudio/app-icons';
 import {
   Button,
   DynamicToast,
@@ -5,7 +6,6 @@ import {
   useDynamicToast,
 } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { XIcon } from 'lucide-uniwind/png';
 import { useEffect } from 'react';
 import { Text, View } from 'react-native';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';

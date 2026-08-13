@@ -63,7 +63,10 @@ jest.mock('@cherrystudio/ui/icons', () => ({
 jest.mock('@/frontend/components/nativePrimitives', () => ({
   Image: (props: unknown) => mockImage(props),
 }));
-jest.mock('lucide-uniwind/png', () => ({ ChevronDownIcon: () => null, EllipsisIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({
+  ChevronDownIcon: () => null,
+  EllipsisIcon: () => null,
+}));
 jest.mock('uniwind', () => ({
   useResolveClassNames: () => ({}),
   useUniwind: () => ({ theme: 'light' }),

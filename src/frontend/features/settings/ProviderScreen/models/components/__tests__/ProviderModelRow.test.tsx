@@ -17,7 +17,7 @@ jest.mock('@/frontend/components/modelPicker', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => {
+jest.mock('@cherrystudio/app-icons', () => {
   const { createElement } = jest.requireActual('react');
   return { CheckIcon: (props: object) => createElement('CheckIcon', props) };
 });

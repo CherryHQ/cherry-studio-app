@@ -1,3 +1,4 @@
+import { PlusIcon } from '@cherrystudio/app-icons';
 import {
   Button,
   type ButtonProps,
@@ -5,7 +6,6 @@ import {
   type ButtonVariant,
 } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { PlusIcon } from 'lucide-uniwind/png';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';

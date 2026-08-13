@@ -1,8 +1,8 @@
-import { GlobeIcon, ImageIcon, type PngIconProps } from 'lucide-uniwind/png';
+import { GlobeIcon, ImageIcon, type AppIconProps } from '@cherrystudio/app-icons';
 import type { ComponentType } from 'react';
 
 type ChatInputActionConfig = {
-  icon: ComponentType<PngIconProps>;
+  icon: ComponentType<AppIconProps>;
   id: string;
   tagTitleKey: string;
   titleKey: string;

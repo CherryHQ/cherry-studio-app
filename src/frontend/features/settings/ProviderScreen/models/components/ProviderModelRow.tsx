@@ -1,6 +1,6 @@
+import { CheckIcon } from '@cherrystudio/app-icons';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { CheckIcon } from 'lucide-uniwind/png';
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -114,7 +114,7 @@ function ProviderModelRowCheckbox({ isSelected }: { isSelected: boolean }) {
           : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
       }
     >
-      {isSelected ? <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} /> : null}
+      {isSelected ? <CheckIcon className="size-4 text-primary-foreground" /> : null}
     </View>
   );
 }

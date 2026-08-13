@@ -1,4 +1,4 @@
-import { CircleArrowDownIcon, CircleArrowUpIcon } from 'lucide-uniwind/png';
+import { CircleArrowDownIcon, CircleArrowUpIcon } from '@cherrystudio/app-icons';
 import { type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -391,7 +391,7 @@ function AiUsageWeekOverWeekBadge({ change, locale }: { change: number; locale: 
       className="shrink-0 flex-row items-center gap-1"
       testID={change > 0 ? 'ai-usage-week-over-week-up' : 'ai-usage-week-over-week-down'}
     >
-      <TrendIcon className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+      <TrendIcon className="size-4 shrink-0 text-muted-foreground" />
       <Text className="text-muted-foreground text-sm" maxFontSizeMultiplier={1.1} numberOfLines={1}>
         {t('aiUsage.weekOverWeek')}
       </Text>

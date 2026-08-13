@@ -1,5 +1,5 @@
+import { ChevronLeftIcon, SquarePenIcon } from '@cherrystudio/app-icons';
 import { Stack, useRouter } from 'expo-router';
-import { ChevronLeftIcon, SquarePenIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
@@ -30,11 +30,11 @@ export function MainHeader() {
         <View style={{ height: insets.top }} />
         <View className="h-11 flex-row items-center justify-between px-4">
           <HeaderIconButton accessibilityLabel={t('navigation.back')} onPress={goBack}>
-            <ChevronLeftIcon className="size-6 text-foreground" strokeWidth={2} />
+            <ChevronLeftIcon className="size-6 text-foreground" />
           </HeaderIconButton>
           <View className="flex-row items-center">
             <HeaderIconButton accessibilityLabel={t('navigation.newChat')} onPress={openNewTopic}>
-              <SquarePenIcon className="size-6 text-foreground" strokeWidth={2} />
+              <SquarePenIcon className="size-6 text-foreground" />
             </HeaderIconButton>
             {assistant ? (
               <MainHeaderAssistantButton assistant={assistant} onPress={openAssistant} />

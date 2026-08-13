@@ -1,7 +1,7 @@
+import { CheckIcon } from '@cherrystudio/app-icons';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { CheckIcon } from 'lucide-uniwind/png';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Text, View } from 'react-native';
@@ -337,9 +337,7 @@ const TopicRow = memo(function TopicRow({
                   : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
               }
             >
-              {isSelected ? (
-                <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
-              ) : null}
+              {isSelected ? <CheckIcon className="size-4 text-primary-foreground" /> : null}
             </View>
           </Animated.View>
         ) : null}

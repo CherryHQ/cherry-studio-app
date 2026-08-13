@@ -4,7 +4,7 @@ import {
   PlayIcon,
   RefreshCcwIcon,
   Trash2Icon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -73,9 +73,9 @@ export function ProviderDetailChrome({
             onPress={onToggleActive}
           >
             {isActive ? (
-              <PauseIcon className="size-5 text-foreground" strokeWidth={2} />
+              <PauseIcon className="size-5 text-foreground" />
             ) : (
-              <PlayIcon className="size-5 text-primary" strokeWidth={2} />
+              <PlayIcon className="size-5 text-primary" />
             )}
           </Pressable>
 
@@ -94,7 +94,7 @@ export function ProviderDetailChrome({
               {pullAction.isLoading ? (
                 <PullSpinner className="size-5 text-foreground" />
               ) : (
-                <RefreshCcwIcon className="size-5 text-foreground" strokeWidth={2} />
+                <RefreshCcwIcon className="size-5 text-foreground" />
               )}
             </Pressable>
           ) : null}
@@ -108,7 +108,7 @@ export function ProviderDetailChrome({
               disabled={editAction.isDisabled}
               onPress={editAction.onPress}
             >
-              <ListChecksIcon className="size-5 text-foreground" strokeWidth={2} />
+              <ListChecksIcon className="size-5 text-foreground" />
             </Pressable>
           ) : null}
 
@@ -121,7 +121,7 @@ export function ProviderDetailChrome({
               disabled={isDisabled}
               onPress={onDelete}
             >
-              <Trash2Icon className="size-5 text-destructive" strokeWidth={2} />
+              <Trash2Icon className="size-5 text-destructive" />
             </Pressable>
           ) : null}
         </View>

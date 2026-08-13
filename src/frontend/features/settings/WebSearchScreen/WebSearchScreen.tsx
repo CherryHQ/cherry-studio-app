@@ -1,6 +1,6 @@
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -94,7 +94,7 @@ function ProviderSelectionValue({
       <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
         {provider.name}
       </Text>
-      <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" strokeWidth={2} />
+      <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" />
     </View>
   );
 }

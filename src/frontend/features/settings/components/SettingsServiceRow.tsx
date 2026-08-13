@@ -1,7 +1,7 @@
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
-import { ChevronRightIcon } from 'lucide-uniwind/png';
 import { memo, type ReactNode, useState } from 'react';
 import { Text, View } from 'react-native';
 
@@ -102,7 +102,7 @@ export const SettingsServiceRow = memo(function SettingsServiceRow({
                 {statusLabel}
               </Text>
             ) : null}
-            <ChevronRightIcon className="size-5 text-muted-foreground" strokeWidth={2} />
+            <ChevronRightIcon className="size-5 text-muted-foreground" />
           </View>
         }
       />

@@ -10,7 +10,7 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   ActivityIcon: () => null,
   CopyIcon: () => null,
   KeyRoundIcon: () => null,

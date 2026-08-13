@@ -15,7 +15,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
-jest.mock('lucide-uniwind/png', () => ({ CheckIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ CheckIcon: () => null }));
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   const Section = (props: object) => createElement('Section', props);

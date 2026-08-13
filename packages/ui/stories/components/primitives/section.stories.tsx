@@ -1,12 +1,12 @@
-import { Button, Section, Switch } from '@cherrystudio/ui/components';
-import type { Meta, StoryObj } from '@storybook/react-native';
 import {
   BellIcon,
   CircleUserRoundIcon,
   InfoIcon,
   PaletteIcon,
   Trash2Icon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Button, Section, Switch } from '@cherrystudio/ui/components';
+import type { Meta, StoryObj } from '@storybook/react-native';
 import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
@@ -29,17 +29,17 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
           <Section.Header title="General" />
           <Section.Item
             label="Appearance"
-            leading={<PaletteIcon className="size-5 text-primary" strokeWidth={2} />}
+            leading={<PaletteIcon className="size-5 text-primary" />}
             onPress={fn()}
           />
           <Section.Item
             label="Account"
-            leading={<CircleUserRoundIcon className="size-5 text-primary" strokeWidth={2} />}
+            leading={<CircleUserRoundIcon className="size-5 text-primary" />}
             onPress={fn()}
           />
           <Section.Item
             label="Notifications"
-            leading={<BellIcon className="size-5 text-primary" strokeWidth={2} />}
+            leading={<BellIcon className="size-5 text-primary" />}
             trailing={
               <Switch
                 accessibilityLabel="Notifications"
@@ -59,7 +59,7 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
           <Section.Item
             description="Build 2026.08.05"
             label="Cherry Studio"
-            leading={<InfoIcon className="size-5 text-primary" strokeWidth={2} />}
+            leading={<InfoIcon className="size-5 text-primary" />}
             trailing={<Text className="text-base text-muted-foreground">0.2</Text>}
           />
           <Section.Item disabled label="Unavailable option" onPress={fn()} />
@@ -69,7 +69,7 @@ function ThemePreview({ label, theme }: { label: string; theme: 'dark' | 'light'
           <Section.Item
             destructive
             label="Delete account"
-            leading={<Trash2Icon className="size-5 text-destructive" strokeWidth={2} />}
+            leading={<Trash2Icon className="size-5 text-destructive" />}
             onPress={fn()}
             showChevron={false}
           />

@@ -1,4 +1,3 @@
-import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import {
   AudioLinesIcon,
   Code2Icon,
@@ -9,7 +8,8 @@ import {
   RotateCwIcon,
   SparklesIcon,
   WrenchIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useCSSVariable } from 'uniwind';

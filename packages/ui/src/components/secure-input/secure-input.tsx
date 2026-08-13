@@ -1,6 +1,6 @@
 // Metro resolves this workspace package export; ESLint's import resolver does not.
 // eslint-disable-next-line import/no-unresolved
-import { EyeIcon, EyeOffIcon } from 'lucide-uniwind/png';
+import { EyeIcon, EyeOffIcon } from '@cherrystudio/app-icons';
 import { useRef, useState } from 'react';
 import { StyleSheet, type TextInput, View } from 'react-native';
 import Animated, {

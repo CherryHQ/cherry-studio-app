@@ -1,5 +1,3 @@
-import { Composer, type ComposerProps } from '@cherrystudio/ui/components';
-import type { Meta, StoryObj } from '@storybook/react-native';
 import {
   CameraIcon,
   FileIcon,
@@ -8,7 +6,9 @@ import {
   SlidersHorizontalIcon,
   SparklesIcon,
   XIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Composer, type ComposerProps } from '@cherrystudio/ui/components';
+import type { Meta, StoryObj } from '@storybook/react-native';
 import { type ReactNode, useState } from 'react';
 import { Image, Pressable, ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
@@ -57,7 +57,7 @@ function AttachmentStrip({
             hitSlop={8}
             onPress={() => onRemove(attachment.id)}
           >
-            <XIcon className="size-3.5 text-white" strokeWidth={2.5} />
+            <XIcon className="size-3.5 text-white" />
           </Pressable>
         </View>
       ))}
@@ -210,27 +210,27 @@ export const Composed: Story = {
             <Composer.Toolbar>
               <Composer.Menu accessibilityLabel="Add attachment">
                 <Composer.Menu.Item
-                  icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
+                  icon={<CameraIcon className="size-5 text-foreground" />}
                   label="Camera"
                   onPress={attach}
                 />
                 <Composer.Menu.Item
-                  icon={<ImagesIcon className="size-5 text-foreground" strokeWidth={2} />}
+                  icon={<ImagesIcon className="size-5 text-foreground" />}
                   label="Photos"
                   onPress={attach}
                 />
                 <Composer.Menu.Item
-                  icon={<FileIcon className="size-5 text-foreground" strokeWidth={2} />}
+                  icon={<FileIcon className="size-5 text-foreground" />}
                   label="File"
                   onPress={attach}
                 />
               </Composer.Menu>
               <Composer.Action accessibilityLabel="Settings" onPress={fn()}>
-                <SlidersHorizontalIcon className="size-6 text-foreground" strokeWidth={2} />
+                <SlidersHorizontalIcon className="size-6 text-foreground" />
               </Composer.Action>
               <Composer.Pill
                 accessibilityLabel="Change model"
-                icon={<SparklesIcon className="size-4 text-foreground" strokeWidth={2} />}
+                icon={<SparklesIcon className="size-4 text-foreground" />}
                 onPress={fn()}
               >
                 <Text
@@ -268,7 +268,7 @@ export const StatusRow: Story = {
             <Composer.Collapsible>
               {value.length > 0 ? (
                 <View className="flex-row items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-1.5">
-                  <GlobeIcon className="size-4 text-primary" strokeWidth={2} />
+                  <GlobeIcon className="size-4 text-primary" />
                   <Text className="text-sm text-primary">Searching the web…</Text>
                 </View>
               ) : null}
