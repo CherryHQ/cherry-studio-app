@@ -50,7 +50,11 @@ function ProviderConfigProgress({ current, total }: { current: number; total: nu
       style={styles.progressSurface}
       testID="provider-config-progress"
     >
-      <Text className="text-foreground-secondary text-sm" style={styles.progressText}>
+      <Text
+        className="text-foreground text-sm"
+        style={styles.progressText}
+        testID="provider-config-progress-label"
+      >
         {current}/{total}
       </Text>
     </Surface>

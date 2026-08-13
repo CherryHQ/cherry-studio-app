@@ -298,6 +298,12 @@ describe('ProviderConfigApprovalSheet', () => {
         width: 40,
       },
     });
+    expect(
+      renderer!.root.findByProps({ testID: 'provider-config-progress-label' }).props,
+    ).toMatchObject({
+      className: 'text-foreground text-sm',
+      style: { fontVariant: ['tabular-nums'] },
+    });
   });
 
   test('saves a generated stable id and default model selection through updatedInput', async () => {
