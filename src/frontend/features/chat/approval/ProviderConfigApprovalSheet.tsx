@@ -442,7 +442,7 @@ export function ProviderConfigApprovalSheet({
           )}
         </BottomSheet.PageTransition>
         <View
-          className="absolute inset-x-4 bottom-3 z-10 items-center gap-2"
+          className="absolute inset-x-4 bottom-3 z-10 items-center gap-2 py-10"
           testID="provider-config-floating-action"
         >
           {approvalCount > 1 ? (
