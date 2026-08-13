@@ -264,9 +264,15 @@ map those values into this presentation model.
 the Lock Screen and Dynamic Island layouts, colors, type, spacing, truncation, compact timer/status, logo
 placement, and SF Symbol mapping. Feature activity files only register that renderer under their
 typed activity name. Infrastructure injects the resolved theme and staged logo and stamps terminal
-time. The compact surface shows its timer when `compactLabel` is absent and replaces the timer with
-that short status when present. A future Android renderer should consume the same presentation
-semantics while owning its own native layout in this package.
+time. Compact and banner surfaces show their timer when `compactLabel` is absent and replace the
+timer with that short status when present. The banner presents `title` and optional `attribution` on its first
+row, then the latest single-line `preview` with elapsed time on its second row. Overflow is truncated
+from the head so the newest content remains visible. A future Android renderer should consume the
+same presentation semantics while owning its own native layout in this package.
+
+The expanded surface repeats the title and attribution header, shows up to three lines of the latest
+`preview`, and puts elapsed time at the lower trailing edge. When `compactLabel` is present, banner
+and expanded timers both show that short status instead.
 
 ## Storybook
 

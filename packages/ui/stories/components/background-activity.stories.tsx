@@ -22,6 +22,7 @@ const meta = {
   title: 'Components/Background Activity',
   component: BackgroundActivityPreview,
   args: {
+    attribution: 'Qwen',
     compactIcon: 'bubble-ellipsis',
     compactLabel: undefined,
     detail: '回复中',
@@ -31,9 +32,10 @@ const meta = {
     preview: '第一章：记忆的碎片',
     showLogo: true,
     theme: 'dark',
-    title: 'Qwen',
+    title: '记忆与身份的关系',
   },
   argTypes: {
+    attribution: { control: 'text' },
     compactIcon: { control: 'select', options: icons },
     compactLabel: { control: 'text' },
     detail: { control: 'text' },
@@ -67,13 +69,14 @@ export const Completed: Story = {
 
 export const Painting: Story = {
   args: {
+    attribution: 'GPT Image 2',
     compactIcon: 'paintbrush',
     compactLabel: undefined,
     detail: '正在生成图片',
     elapsedSeconds: 24,
     icon: 'paintbrush',
     preview: 'Cherry Studio floating above a quiet neon city',
-    title: 'AI 绘画',
+    title: '绘图',
   },
   render: (args) => <ControlledPreview {...args} />,
 };
@@ -83,6 +86,16 @@ export const AwaitingApproval: Story = {
     compactLabel: '等待审批',
     detail: '等待审批',
     icon: 'bubble-exclamation',
+  },
+  render: (args) => <ControlledPreview {...args} />,
+};
+
+export const ExpandedThreeLines: Story = {
+  args: {
+    elapsedSeconds: 128,
+    preview:
+      '第一行展示最新回复的主要结论。\n第二行补充必要的背景和关键细节。\n第三行保留下一步建议，超过三行的更早内容会被省略。',
+    title: '三行内容预览',
   },
   render: (args) => <ControlledPreview {...args} />,
 };

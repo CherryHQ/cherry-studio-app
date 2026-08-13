@@ -37,6 +37,7 @@ export type PaintingGenerateJobInput = {
   images: readonly PaintingGenerateJobImage[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
+  modelName: string;
   paintingId: string;
   paramValues: ParamValues;
   prompt: string;
@@ -107,7 +108,7 @@ export function createPaintingGenerateJobHandler(
     // the registration is that index, for as long as the execution lives.
     scopes: (input) => [{ id: input.paintingId, kind: 'painting' }],
     async execute(ctx): Promise<PaintingGenerationResult> {
-      const { images, mode, modelId, paintingId, paramValues, prompt } = ctx.input;
+      const { images, mode, modelId, modelName, paintingId, paramValues, prompt } = ctx.input;
       const { ai, paintings, storage } = dependencies;
       const translate = dependencies.translate ?? ((key: string) => key);
       const startedAtEpochMs = Date.now();
@@ -115,7 +116,7 @@ export function createPaintingGenerateJobHandler(
         deepLinkUrl: `cherrystudio://paintings/${encodeURIComponent(paintingId)}`,
         // The dispatch loop already holds the user-continued keep-alive lease.
         keepAlive: false,
-        props: paintingActivityProps(translate, 'generating', prompt, startedAtEpochMs),
+        props: paintingActivityProps(translate, 'generating', modelName, prompt, startedAtEpochMs),
         tag: 'painting.generate',
       });
 
@@ -169,7 +170,9 @@ export function createPaintingGenerateJobHandler(
             return { fileEntryId: entry.id, uri };
           });
 
-          session?.finish(paintingActivityProps(translate, 'completed', prompt, startedAtEpochMs));
+          session?.finish(
+            paintingActivityProps(translate, 'completed', modelName, prompt, startedAtEpochMs),
+          );
           return { outputs, painting };
         } catch (error) {
           if (!outputRefsCommitted) {
@@ -179,7 +182,9 @@ export function createPaintingGenerateJobHandler(
         }
       } catch (error) {
         const phase: PaintingActivityPhase = ctx.signal.aborted ? 'cancelled' : 'failed';
-        session?.finish(paintingActivityProps(translate, phase, prompt, startedAtEpochMs));
+        session?.finish(
+          paintingActivityProps(translate, phase, modelName, prompt, startedAtEpochMs),
+        );
         throw error;
       }
     },
@@ -189,16 +194,20 @@ export function createPaintingGenerateJobHandler(
 function paintingActivityProps(
   translate: (key: string) => string,
   phase: PaintingActivityPhase,
+  modelName: string,
   preview: string,
   startedAtEpochMs: number,
 ): PaintingActivityProps {
   return {
+    ...(modelName.trim() ? { attribution: modelName.trim() } : {}),
     compactIcon: 'paintbrush',
     ...(phase === 'completed'
       ? { compactLabel: translate('backgroundActivity.completed') }
-      : phase === 'cancelled' || phase === 'failed'
-        ? { compactLabel: translate(`painting.backgroundActivity.${phase}`) }
-        : {}),
+      : phase === 'cancelled'
+        ? { compactLabel: translate('backgroundActivity.cancelled') }
+        : phase === 'failed'
+          ? { compactLabel: translate('painting.backgroundActivity.failed') }
+          : {}),
     detail: translate(`painting.backgroundActivity.${phase}`),
     icon: paintingActivityIcon(phase),
     phase,

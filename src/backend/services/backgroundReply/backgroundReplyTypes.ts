@@ -31,6 +31,7 @@ export type BackgroundReplyTurn = {
 export type BackgroundReplyTurnInput = {
   assistantName: string;
   topicId: string;
+  topicTitle: string;
 };
 
 export type BackgroundReplyLifecycle = {

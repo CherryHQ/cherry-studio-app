@@ -24,6 +24,8 @@ export type BackgroundActivityBasePresentation = {
 };
 
 export type BackgroundActivityPresentation = BackgroundActivityBasePresentation & {
+  /** Optional short attribution shown opposite the title on roomy surfaces. */
+  attribution?: string;
   compactIcon: BackgroundActivityIcon;
   /** Replaces the compact timer while a short status needs immediate attention. */
   compactLabel?: string;

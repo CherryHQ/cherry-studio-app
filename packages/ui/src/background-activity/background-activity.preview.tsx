@@ -86,7 +86,7 @@ export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps)
       style={{ flex: 1 }}
     >
       <PreviewSurface label="Lock Screen / Banner" labelColor={colors.label}>
-        <BannerPreview colors={colors} {...props} />
+        <BannerPreview colors={colors} elapsed={elapsed} {...props} />
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Compact" labelColor={colors.label}>
@@ -94,7 +94,7 @@ export function BackgroundActivityPreview(props: BackgroundActivityPreviewProps)
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Expanded" labelColor={colors.label}>
-        <ExpandedPreview {...props} />
+        <ExpandedPreview elapsed={elapsed} {...props} />
       </PreviewSurface>
 
       <PreviewSurface label="Dynamic Island / Minimal" labelColor={colors.label}>
@@ -135,12 +135,15 @@ type PreviewColors = {
 };
 
 function BannerPreview({
+  attribution,
   colors,
-  detail,
+  compactLabel,
+  elapsed,
   icon,
+  preview,
   showLogo,
   title,
-}: BackgroundActivityPreviewProps & { colors: PreviewColors }) {
+}: BackgroundActivityPreviewProps & { colors: PreviewColors; elapsed: string }) {
   return (
     <View
       style={{
@@ -157,20 +160,76 @@ function BannerPreview({
     >
       {showLogo ? <CherryLogo size={36} /> : <ActivityIcon icon={icon} size={24} />}
       <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
-        <Text
-          numberOfLines={1}
-          style={{ color: colors.foreground, fontSize: 15, fontWeight: '600', letterSpacing: 0 }}
-        >
-          {title}
-        </Text>
-        <View style={{ alignItems: 'center', flexDirection: 'row', gap: 5 }}>
-          <ActivityIcon icon={icon} size={16} />
+        <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
           <Text
             numberOfLines={1}
-            style={{ color: colors.secondary, flex: 1, fontSize: 13, letterSpacing: 0 }}
+            style={{
+              color: colors.foreground,
+              flex: 1,
+              fontSize: 15,
+              fontWeight: '600',
+              letterSpacing: 0,
+            }}
           >
-            {detail}
+            {title}
           </Text>
+          {attribution ? (
+            <Text
+              numberOfLines={1}
+              style={{
+                color: colors.secondary,
+                flexShrink: 1,
+                fontSize: 12,
+                fontWeight: '500',
+                letterSpacing: 0,
+              }}
+            >
+              {attribution}
+            </Text>
+          ) : null}
+        </View>
+        <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
+          {preview ? (
+            <Text
+              ellipsizeMode="head"
+              numberOfLines={1}
+              style={{
+                color: colors.secondary,
+                flex: 1,
+                fontSize: 12,
+                letterSpacing: 0,
+              }}
+            >
+              {preview}
+            </Text>
+          ) : (
+            <View style={{ flex: 1 }} />
+          )}
+          {compactLabel !== undefined ? (
+            <Text
+              numberOfLines={1}
+              style={{
+                color: colors.secondary,
+                fontSize: 12,
+                fontWeight: '500',
+                letterSpacing: 0,
+              }}
+            >
+              {compactLabel}
+            </Text>
+          ) : (
+            <Text
+              style={{
+                color: colors.secondary,
+                fontSize: 12,
+                fontVariant: ['tabular-nums'],
+                fontWeight: '500',
+                letterSpacing: 0,
+              }}
+            >
+              {elapsed}
+            </Text>
+          )}
         </View>
       </View>
     </View>
@@ -229,12 +288,13 @@ function Timer({ elapsed }: { elapsed: string }) {
 }
 
 function ExpandedPreview({
-  detail,
-  icon,
+  attribution,
+  compactLabel,
+  elapsed,
   preview,
   showLogo,
   title,
-}: BackgroundActivityPreviewProps) {
+}: BackgroundActivityPreviewProps & { elapsed: string }) {
   return (
     <View
       style={{
@@ -243,7 +303,7 @@ function ExpandedPreview({
         borderCurve: 'continuous',
         borderRadius: 42,
         gap: 10,
-        minHeight: preview ? 142 : 110,
+        minHeight: 110,
         paddingBottom: 16,
         paddingHorizontal: 14,
         paddingTop: 12,
@@ -257,32 +317,46 @@ function ExpandedPreview({
         >
           {title}
         </Text>
+        {attribution ? (
+          <Text
+            numberOfLines={1}
+            style={{ color: '#C7C7CC', fontSize: 12, fontWeight: '500', letterSpacing: 0 }}
+          >
+            {attribution}
+          </Text>
+        ) : null}
       </View>
-      <View
-        style={{ alignItems: 'center', flexDirection: 'row', gap: 6, justifyContent: 'center' }}
-      >
-        <ActivityIcon icon={icon} size={16} />
+      <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
+        {preview ? (
+          <Text
+            ellipsizeMode="head"
+            numberOfLines={3}
+            style={{
+              color: '#C7C7CC',
+              flex: 1,
+              fontSize: 13,
+              letterSpacing: 0,
+              lineHeight: 18,
+            }}
+          >
+            {preview}
+          </Text>
+        ) : (
+          <View style={{ flex: 1 }} />
+        )}
         <Text
           numberOfLines={1}
           style={{
-            color: '#FFFFFF',
-            flexShrink: 1,
-            fontSize: 14,
+            color: '#C7C7CC',
+            fontSize: 12,
+            fontVariant: compactLabel === undefined ? ['tabular-nums'] : undefined,
             fontWeight: '500',
             letterSpacing: 0,
           }}
         >
-          {detail}
+          {compactLabel ?? elapsed}
         </Text>
       </View>
-      {preview ? (
-        <Text
-          numberOfLines={2}
-          style={{ color: '#C7C7CC', fontSize: 13, letterSpacing: 0, lineHeight: 18 }}
-        >
-          {preview}
-        </Text>
-      ) : null}
     </View>
   );
 }

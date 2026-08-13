@@ -152,6 +152,7 @@ describe('ChatRuntime', () => {
     expect(backgroundReply.startTurn).toHaveBeenCalledWith({
       assistantName: 'Assistant',
       topicId: 'topic-1',
+      topicTitle: 'Topic',
     });
     expect(backgroundTurn.update).toHaveBeenCalledWith(assistantChunk);
     expect(backgroundTurn.finish).toHaveBeenCalledWith('completed');
@@ -1378,6 +1379,7 @@ describe('ChatRuntime', () => {
     expect(backgroundReply.startTurn).toHaveBeenCalledWith({
       assistantName: 'Assistant',
       topicId: 'topic-1',
+      topicTitle: 'Topic',
     });
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({

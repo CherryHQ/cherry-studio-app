@@ -1945,6 +1945,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
       const backgroundReply = this.dependencies.backgroundReply.startTurn({
         assistantName: await this.resolveBackgroundAssistantName(topic, model),
         topicId: topic.id,
+        topicTitle: topic.name,
       });
       activeTurn.backgroundReply = backgroundReply;
       void backgroundReply.ready.catch((error) => {

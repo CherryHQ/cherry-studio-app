@@ -48,8 +48,16 @@ describe('BackgroundReplyService', () => {
   test('opens one keep-alive session per topic with derived initial content', async () => {
     const service = await createService();
     expect(service.isActivated).toBe(true);
-    const first = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
-    const second = service.startTurn({ assistantName: 'Beta', topicId: 'topic-2' });
+    const first = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
+    const second = service.startTurn({
+      assistantName: 'Beta',
+      topicId: 'topic-2',
+      topicTitle: 'Second topic',
+    });
     expect(first).not.toBe(second);
     await Promise.all([first.ready, second.ready]);
 
@@ -58,12 +66,22 @@ describe('BackgroundReplyService', () => {
       deepLinkUrl: 'cherrystudio://topics?topicId=topic-1',
       keepAlive: true,
       props: expect.objectContaining({
+        attribution: 'Alpha',
         compactIcon: 'bubble-ellipsis',
+        detail: 'chat.backgroundReply.preparing',
         icon: 'hourglass',
         phase: 'preparing',
-        title: 'Alpha',
+        title: 'First topic',
       }),
       tag: 'chat.backgroundReply',
+    });
+    expect(mockSessions[1]?.input).toMatchObject({
+      deepLinkUrl: 'cherrystudio://topics?topicId=topic-2',
+      props: expect.objectContaining({
+        attribution: 'Beta',
+        detail: 'chat.backgroundReply.preparing',
+        title: 'Second topic',
+      }),
     });
 
     await service._doStop();
@@ -71,7 +89,7 @@ describe('BackgroundReplyService', () => {
 
   test('uses the localized assistant fallback when no assistant or model name is available', async () => {
     const service = await createService();
-    const turn = service.startTurn({ assistantName: ' ', topicId: 'topic-1' });
+    const turn = service.startTurn({ assistantName: ' ', topicId: 'topic-1', topicTitle: ' ' });
     await turn.ready;
 
     expect(mockSessions[0]?.input.props).toMatchObject({ title: 'Localized assistant' });
@@ -81,7 +99,11 @@ describe('BackgroundReplyService', () => {
 
   test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
     const service = await createService();
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const turn = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await turn.ready;
     const session = mockSessions[0];
 
@@ -140,14 +162,46 @@ describe('BackgroundReplyService', () => {
     await service._doStop();
   });
 
+  test.each([
+    ['cancelled', '已取消'],
+    ['failed', '回复失败'],
+  ] as const)(
+    'uses the expected compact label when a turn finishes as %s',
+    async (outcome, label) => {
+      const service = await createService();
+      const turn = service.startTurn({
+        assistantName: 'Alpha',
+        topicId: 'topic-1',
+        topicTitle: 'First topic',
+      });
+      await turn.ready;
+
+      turn.finish(outcome);
+      await flushOperations();
+
+      expect(mockSessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ compactLabel: label, phase: outcome }),
+      );
+      await service._doStop();
+    },
+  );
+
   test('does not let an older finish end the session inherited by a newer turn', async () => {
     const service = await createService();
-    const first = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const first = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await first.ready;
     const session = mockSessions[0];
 
     first.finish('completed');
-    const second = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const second = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await second.ready;
     await flushOperations();
 
@@ -166,7 +220,11 @@ describe('BackgroundReplyService', () => {
 
   test('clearTopic cancels the session so approval records cannot recreate it later', async () => {
     const service = await createService();
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const turn = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await turn.ready;
 
     turn.awaitApproval();
@@ -180,7 +238,11 @@ describe('BackgroundReplyService', () => {
 
   test('cancels sessions when the preference turns off and restores them on re-enable', async () => {
     const service = await createService();
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const turn = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await turn.ready;
 
     enabled = false;
@@ -204,8 +266,8 @@ describe('BackgroundReplyService', () => {
 
   test('rolls back partially restored sessions when activation fails', async () => {
     const service = await createService();
-    service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
-    service.startTurn({ assistantName: 'Beta', topicId: 'topic-2' });
+    service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1', topicTitle: 'First topic' });
+    service.startTurn({ assistantName: 'Beta', topicId: 'topic-2', topicTitle: 'Second topic' });
 
     enabled = false;
     preferenceListener?.();
@@ -225,7 +287,11 @@ describe('BackgroundReplyService', () => {
 
   test('ends sessions when stopped during an active turn and stops idempotently', async () => {
     const service = await createService();
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const turn = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await turn.ready;
 
     await expect(service._doStop()).resolves.toBeUndefined();
@@ -236,7 +302,11 @@ describe('BackgroundReplyService', () => {
   test('uses no-op turns on Android and when the preference is disabled at startup', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const androidService = await createService();
-    const androidTurn = androidService.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const androidTurn = androidService.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await androidTurn.ready;
     expect(mockStartSession).not.toHaveBeenCalled();
     await androidService._doStop();
@@ -248,6 +318,7 @@ describe('BackgroundReplyService', () => {
     const disabledTurn = disabledService.startTurn({
       assistantName: 'Alpha',
       topicId: 'topic-2',
+      topicTitle: 'Second topic',
     });
     await disabledTurn.ready;
     expect(mockStartSession).not.toHaveBeenCalled();
@@ -265,7 +336,11 @@ describe('BackgroundReplyService', () => {
       }
       return key;
     });
-    const turn = service.startTurn({ assistantName: 'Alpha', topicId: 'topic-1' });
+    const turn = service.startTurn({
+      assistantName: 'Alpha',
+      topicId: 'topic-1',
+      topicTitle: 'First topic',
+    });
     await turn.ready;
 
     expect(() =>
@@ -287,9 +362,13 @@ describe('BackgroundReplyService', () => {
         ? 'Localized assistant'
         : key === 'backgroundActivity.awaitingApproval'
           ? '等待审批'
-          : key === 'backgroundActivity.completed'
-            ? '已完成'
-            : key,
+          : key === 'backgroundActivity.cancelled'
+            ? '已取消'
+            : key === 'backgroundActivity.completed'
+              ? '已完成'
+              : key === 'chat.backgroundReply.failed'
+                ? '回复失败'
+                : key,
   ) {
     const service = new BackgroundReplyService(
       { startSession: mockStartSession },

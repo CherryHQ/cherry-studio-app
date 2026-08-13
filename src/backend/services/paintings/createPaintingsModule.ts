@@ -129,6 +129,7 @@ async function startGeneration(
           images,
           mode: input.mode,
           modelId: input.modelId,
+          modelName: input.modelName,
           paintingId: receipt.id,
           paramValues: input.paramValues,
           prompt,

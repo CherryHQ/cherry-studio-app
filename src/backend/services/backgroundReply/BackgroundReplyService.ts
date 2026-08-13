@@ -47,6 +47,7 @@ type TurnRecord = {
   session?: ChatActivitySession;
   startedAtEpochMs: number;
   topicId: string;
+  topicTitle: string;
 };
 
 type BackgroundActivityPort = {
@@ -133,13 +134,15 @@ export class BackgroundReplyService
     const existing = this.turns.get(input.topicId);
     const generation = ++this.generation;
     const content = deriveBackgroundReplyContent(undefined, this.environment.translate);
+    const assistantName =
+      input.assistantName.trim() || this.environment.translate('chat.backgroundReply.assistant');
     const record: TurnRecord = {
-      assistantName:
-        input.assistantName.trim() || this.environment.translate('chat.backgroundReply.assistant'),
+      assistantName,
       content,
       generation,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
       topicId: input.topicId,
+      topicTitle: input.topicTitle.trim(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
     this.turns.set(input.topicId, record);
@@ -267,17 +270,21 @@ export class BackgroundReplyService
   private toActivityProps(record: TurnRecord): BackgroundReplyActivityProps {
     return {
       ...record.content,
+      ...(record.topicTitle ? { attribution: record.assistantName } : {}),
       compactIcon: 'bubble-ellipsis',
       ...(record.content.phase === 'awaiting-approval'
         ? { compactLabel: this.environment.translate('backgroundActivity.awaitingApproval') }
         : record.content.phase === 'completed'
           ? { compactLabel: this.environment.translate('backgroundActivity.completed') }
-          : record.content.phase === 'cancelled' || record.content.phase === 'failed'
-            ? { compactLabel: record.content.detail }
-            : {}),
+          : record.content.phase === 'cancelled'
+            ? { compactLabel: this.environment.translate('backgroundActivity.cancelled') }
+            : record.content.phase === 'failed'
+              ? { compactLabel: record.content.detail }
+              : {}),
+      detail: record.content.detail,
       icon: backgroundReplyIcon(record.content.phase),
       startedAtEpochMs: record.startedAtEpochMs,
-      title: record.assistantName,
+      title: record.topicTitle || record.assistantName,
     };
   }
 

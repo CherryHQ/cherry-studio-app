@@ -30,7 +30,7 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
   const hasCompactLabel = props.compactLabel !== undefined;
   const timerInterval = {
     lower: new Date(props.startedAtEpochMs),
-    upper: new Date(props.startedAtEpochMs + 24 * 60 * 60 * 1000),
+    upper: new Date(props.finishedAtEpochMs ?? props.startedAtEpochMs + 24 * 60 * 60 * 1000),
   };
   const iconSymbol =
     props.icon === 'brain'
@@ -92,32 +92,75 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
         ) : (
           <Image color={brandColor} size={24} systemName={iconSymbol} />
         )}
-        <VStack alignment="leading" spacing={3}>
-          <Text
-            modifiers={[
-              font({ size: 15, weight: 'semibold' }),
-              foregroundStyle(foreground),
-              lineLimit(1),
-              truncationMode('tail'),
-            ]}
-          >
-            {props.title}
-          </Text>
-          <HStack spacing={5}>
-            <Image color={brandColor} size={16} systemName={iconSymbol} />
+        <VStack
+          alignment="leading"
+          spacing={3}
+          modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+        >
+          <HStack spacing={8}>
             <Text
               modifiers={[
-                font({ size: 13 }),
-                foregroundStyle(secondary),
+                font({ size: 15, weight: 'semibold' }),
+                foregroundStyle(foreground),
                 lineLimit(1),
                 truncationMode('tail'),
               ]}
             >
-              {props.detail}
+              {props.title}
             </Text>
+            {props.attribution ? <Spacer /> : null}
+            {props.attribution ? (
+              <Text
+                modifiers={[
+                  font({ size: 12, weight: 'medium' }),
+                  foregroundStyle(secondary),
+                  lineLimit(1),
+                  truncationMode('tail'),
+                ]}
+              >
+                {props.attribution}
+              </Text>
+            ) : null}
+          </HStack>
+          <HStack alignment="bottom" spacing={8}>
+            {props.preview ? (
+              <Text
+                modifiers={[
+                  font({ size: 12 }),
+                  foregroundStyle(secondary),
+                  lineLimit(1),
+                  multilineTextAlignment('leading'),
+                  truncationMode('head'),
+                ]}
+              >
+                {props.preview}
+              </Text>
+            ) : null}
+            <Spacer />
+            {hasCompactLabel ? (
+              <Text
+                modifiers={[
+                  font({ size: 12, weight: 'medium' }),
+                  foregroundStyle(secondary),
+                  lineLimit(1),
+                  truncationMode('tail'),
+                ]}
+              >
+                {props.compactLabel}
+              </Text>
+            ) : (
+              <Text
+                countsDown={false}
+                timerInterval={timerInterval}
+                modifiers={[
+                  font({ size: 12, weight: 'medium' }),
+                  monospacedDigit(),
+                  foregroundStyle(secondary),
+                ]}
+              />
+            )}
           </HStack>
         </VStack>
-        <Spacer />
       </HStack>
     ),
     compactLeading: <Image color={brandColor} size={16} systemName={compactIconSymbol} />,
@@ -168,36 +211,63 @@ export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityP
         </Text>
       </HStack>
     ),
-    expandedTrailing: null,
-    expandedCenter: (
-      <HStack spacing={6} modifiers={[padding({ horizontal: 12, top: 6 })]}>
-        <Image color={brandColor} size={16} systemName={iconSymbol} />
-        <Text
-          modifiers={[
-            font({ size: 14, weight: 'medium' }),
-            foregroundStyle('#FFFFFF'),
-            lineLimit(1),
-            truncationMode('tail'),
-          ]}
-        >
-          {props.detail}
-        </Text>
-      </HStack>
-    ),
-    expandedBottom: props.preview ? (
+    expandedTrailing: (
       <Text
         modifiers={[
-          font({ size: 13 }),
+          font({ size: 12, weight: 'medium' }),
           foregroundStyle('#C7C7CC'),
-          frame({ maxWidth: Infinity, alignment: 'leading' }),
-          lineLimit(2),
-          multilineTextAlignment('leading'),
+          lineLimit(1),
           truncationMode('tail'),
-          padding({ bottom: 12, horizontal: 12, top: 6 }),
+          padding({ trailing: 12, top: 10 }),
         ]}
       >
-        {props.preview}
+        {props.attribution}
       </Text>
-    ) : null,
+    ),
+    expandedCenter: null,
+    expandedBottom: (
+      <HStack
+        alignment="bottom"
+        spacing={8}
+        modifiers={[padding({ bottom: 12, horizontal: 12, top: 6 })]}
+      >
+        {props.preview ? (
+          <Text
+            modifiers={[
+              font({ size: 13 }),
+              foregroundStyle('#C7C7CC'),
+              lineLimit(3),
+              multilineTextAlignment('leading'),
+              truncationMode('head'),
+            ]}
+          >
+            {props.preview}
+          </Text>
+        ) : null}
+        <Spacer />
+        {hasCompactLabel ? (
+          <Text
+            modifiers={[
+              font({ size: 12, weight: 'medium' }),
+              foregroundStyle('#C7C7CC'),
+              lineLimit(1),
+              truncationMode('tail'),
+            ]}
+          >
+            {props.compactLabel}
+          </Text>
+        ) : (
+          <Text
+            countsDown={false}
+            timerInterval={timerInterval}
+            modifiers={[
+              font({ size: 12, weight: 'medium' }),
+              monospacedDigit(),
+              foregroundStyle('#C7C7CC'),
+            ]}
+          />
+        )}
+      </HStack>
+    ),
   };
 };

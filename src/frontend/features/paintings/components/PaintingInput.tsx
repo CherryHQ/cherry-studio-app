@@ -163,7 +163,7 @@ export function PaintingInput({
   );
   const handleSend = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
-      if (!selectedModelId || !isSelectedModelAvailable) {
+      if (!selectedModelId || !selectedModel || !isSelectedModelAvailable) {
         throw new Error('Select an available image generation model');
       }
       const submittedImageCount = attachments.filter(
@@ -205,6 +205,7 @@ export function PaintingInput({
         attachments,
         mode,
         modelId: selectedModelId,
+        modelName: selectedModel.name,
         paramValues: submittedValues,
         prompt: text,
       });
@@ -218,6 +219,7 @@ export function PaintingInput({
       onGenerated,
       paramValues,
       selectedModel?.imageGeneration,
+      selectedModel?.name,
       selectedModelId,
     ],
   );
