@@ -51,8 +51,8 @@ import { SecureInput } from '@cherrystudio/ui/components';
 Visibility starts hidden on every mount. Toggling keeps input focus by default; set
 `blurOnVisibilityToggle` only when a consumer intentionally relies on blur to dismiss the keyboard
 or commit its draft value. `SecureInput` fixes `multiline`, `secureTextEntry`, `autoCapitalize`, and
-`autoCorrect`, while forwarding the remaining `Input` props. Disabling the field also disables its
-visibility action.
+`autoCorrect`, while forwarding the remaining `Input` props. Its `style` prop targets the composed
+field container. Disabling the field also disables its visibility action.
 
 `Menu` is the shared native action menu. It accepts one trigger element and a flat, stable `items`
 array; the package owns Nitro wiring, native action dispatch, and platform gesture behavior:
