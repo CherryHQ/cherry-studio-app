@@ -1,6 +1,5 @@
-// Metro resolves this workspace package export; ESLint's import resolver does not.
-// eslint-disable-next-line import/no-unresolved
 import { EyeIcon, EyeOffIcon } from '@cherrystudio/app-icons';
+import { useIsOnSurface } from 'heroui-native/hooks';
 import { useRef, useState } from 'react';
 import { StyleSheet, type TextInput, View } from 'react-native';
 import Animated, {
@@ -12,6 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { duration, easing } from '../../motion';
+import { cn } from '../../utils';
 import { Button } from '../button';
 import { Input } from '../input';
 import type { SecureInputProps } from './secure-input.types';
@@ -61,11 +61,13 @@ function VisibilityIcon({
 export function SecureInput({
   blurOnVisibilityToggle = false,
   disabled,
+  invalid,
   style,
   testID,
   visibilityAccessibilityLabels,
   ...inputProps
 }: SecureInputProps) {
+  const isOnSurface = useIsOnSurface();
   const inputRef = useRef<TextInput>(null);
   const [isVisible, setIsVisible] = useState(false);
   const visibilityProgress = useSharedValue(0);
@@ -81,7 +83,14 @@ export function SecureInput({
   };
 
   return (
-    <View className="relative">
+    <View
+      className={cn(
+        'min-h-11 flex-row items-stretch overflow-hidden rounded-lg border border-border shadow-none',
+        isOnSurface ? 'bg-default' : 'bg-field',
+        invalid && 'border-destructive',
+      )}
+      style={styles.root}
+    >
       <Input
         ref={inputRef}
         {...inputProps}
@@ -93,10 +102,7 @@ export function SecureInput({
         style={[style, styles.input]}
         testID={testID}
       />
-      <View
-        className="absolute top-0 right-1 bottom-0 z-10 w-11 items-center justify-center"
-        pointerEvents="box-none"
-      >
+      <View className="w-11 shrink-0 items-center justify-center">
         <Button
           accessibilityLabel={
             isVisible ? visibilityAccessibilityLabels.hide : visibilityAccessibilityLabels.show
@@ -116,8 +122,16 @@ export function SecureInput({
 
 const styles = StyleSheet.create({
   input: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
+    flex: 1,
     minHeight: 44,
-    paddingRight: 48,
+    minWidth: 0,
+    paddingRight: 0,
+  },
+  root: {
+    borderCurve: 'continuous',
   },
   visibilityIcon: {
     position: 'relative',
