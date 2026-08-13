@@ -1,0 +1,84 @@
+import type { Meta, StoryObj } from '@storybook/react-native';
+
+import {
+  BackgroundActivityPreview,
+  type BackgroundActivityPreviewProps,
+} from '../../src/background-activity/background-activity.preview';
+import type { BackgroundActivityIcon } from '../../src/background-activity/background-activity.types';
+
+const icons: BackgroundActivityIcon[] = [
+  'brain',
+  'bubble-ellipsis',
+  'bubble-exclamation',
+  'check-circle',
+  'hourglass',
+  'paintbrush',
+  'warning-triangle',
+  'wrench',
+  'x-circle',
+];
+
+const meta = {
+  title: 'Components/Background Activity',
+  component: BackgroundActivityPreview,
+  args: {
+    compactLabel: '回复中',
+    detail: '回复中',
+    elapsedSeconds: 37,
+    finished: false,
+    icon: 'bubble-ellipsis',
+    liveTimer: false,
+    preview: '第一章：记忆的碎片',
+    showLogo: true,
+    theme: 'dark',
+    title: 'Qwen',
+  },
+  argTypes: {
+    compactLabel: { control: 'text' },
+    detail: { control: 'text' },
+    elapsedSeconds: { control: { max: 7200, min: 0, step: 1, type: 'range' } },
+    finished: { control: 'boolean' },
+    icon: { control: 'select', options: icons },
+    liveTimer: { control: 'boolean' },
+    preview: { control: 'text' },
+    showLogo: { control: 'boolean' },
+    theme: { control: 'select', options: ['dark', 'light'] },
+    title: { control: 'text' },
+  },
+} satisfies Meta<typeof BackgroundActivityPreview>;
+
+export default meta;
+
+type Story = StoryObj<typeof meta>;
+
+export const Playground: Story = {
+  render: (args) => <ControlledPreview {...args} />,
+};
+
+export const Completed: Story = {
+  args: {
+    compactLabel: '已完成',
+    detail: '回复完成',
+    elapsedSeconds: 96,
+    finished: true,
+    icon: 'check-circle',
+  },
+  render: (args) => <ControlledPreview {...args} />,
+};
+
+export const Painting: Story = {
+  args: {
+    compactLabel: '绘图中',
+    detail: '正在生成图片',
+    elapsedSeconds: 24,
+    icon: 'paintbrush',
+    preview: 'Cherry Studio floating above a quiet neon city',
+    title: 'AI 绘画',
+  },
+  render: (args) => <ControlledPreview {...args} />,
+};
+
+function ControlledPreview(args: BackgroundActivityPreviewProps) {
+  const resetKey = `${args.elapsedSeconds}:${args.finished}:${args.liveTimer}`;
+  return <BackgroundActivityPreview {...args} key={resetKey} />;
+}

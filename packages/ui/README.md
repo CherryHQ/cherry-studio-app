@@ -252,6 +252,21 @@ package's own components, and the app still has its own easings to bring across.
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
 
+## Background Activities
+
+`@cherrystudio/ui/background-activity` exposes the platform-neutral presentation model and a
+registered icon union. Callers supply title, detail, compact label, optional preview, timing, and
+one registered icon. They cannot supply children, render functions, arbitrary components, colors,
+spacing, typography, or layout overrides. Feature services keep their phase and state machines and
+map those values into this presentation model.
+
+`@cherrystudio/ui/background-activity/ios` exposes the serializable `expo-widgets` renderer. It owns
+the Lock Screen and Dynamic Island layouts, colors, type, spacing, truncation, timer behavior, logo
+placement, and SF Symbol mapping. Feature activity files only register that renderer under their
+typed activity name. Infrastructure injects the resolved theme and staged logo and stamps terminal
+time. A future Android renderer should consume the same presentation semantics while owning its own
+native layout in this package.
+
 ## Storybook
 
 Stories are development-only assets kept outside the runtime source tree, matching the desktop UI
