@@ -1,6 +1,5 @@
 import { type LanguageVarious, ThemeMode } from '@cherrystudio/universal/data/preference';
-import { useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useCallback } from 'react';
 
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 import { initI18n, resolveLanguage } from '@/frontend/i18n';
@@ -13,18 +12,14 @@ const preferenceMapping = {
   themeMode: 'ui.theme_mode',
 } as const;
 
+export const languageOptions: SettingOption<LanguageVarious>[] = [
+  { label: '简体中文', value: 'zh-CN' },
+  { label: 'English', value: 'en-US' },
+];
+
 export function useSettingPreferences() {
-  const { t } = useTranslation();
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
   const languageValue = resolveLanguage(preferences.language);
-
-  const languageOptions = useMemo<SettingOption<LanguageVarious>[]>(
-    () => [
-      { label: t('settings.options.language.zhCN'), value: 'zh-CN' },
-      { label: t('settings.options.language.enUS'), value: 'en-US' },
-    ],
-    [t],
-  );
 
   const handleThemeModeChange = useCallback(
     (nextThemeMode: ThemeMode) => {

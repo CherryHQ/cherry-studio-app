@@ -356,8 +356,6 @@
   "settings.fontSize.saveFailed": "Failed to save font size",
   "settings.fontSize.sliderLabel": "Font size level",
   "settings.fontSize.title": "Font size",
-  "settings.options.language.enUS": "English",
-  "settings.options.language.zhCN": "Simplified Chinese",
   "settings.options.theme.dark": "Dark",
   "settings.options.theme.light": "Light",
   "settings.options.theme.system": "System",

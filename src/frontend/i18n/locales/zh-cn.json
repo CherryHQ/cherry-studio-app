@@ -355,8 +355,6 @@
   "settings.fontSize.saveFailed": "字号设置保存失败",
   "settings.fontSize.sliderLabel": "字体大小档位",
   "settings.fontSize.title": "字体大小",
-  "settings.options.language.enUS": "English",
-  "settings.options.language.zhCN": "简体中文",
   "settings.options.theme.dark": "深色",
   "settings.options.theme.light": "浅色",
   "settings.options.theme.system": "系统",

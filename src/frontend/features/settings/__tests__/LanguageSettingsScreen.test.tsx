@@ -32,7 +32,7 @@ jest.mock('../hooks/useSettingPreferences', () => ({
     language: {
       onValueChange: mockLanguageChange,
       options: [
-        { label: 'Simplified Chinese', value: 'zh-CN' },
+        { label: '简体中文', value: 'zh-CN' },
         { label: 'English', value: 'en-US' },
       ],
       value: 'zh-CN',
@@ -60,7 +60,7 @@ describe('LanguageSettingsScreen', () => {
     const items = renderer?.root.findAllByType('SectionItem') ?? [];
 
     expect(header?.props.title).toBe('settings.items.appLanguage');
-    expect(items.map((item) => item.props.label)).toEqual(['Simplified Chinese', 'English']);
+    expect(items.map((item) => item.props.label)).toEqual(['简体中文', 'English']);
     expect(items[0].props.accessibilityRole).toBe('radio');
     expect(items[0].props.accessibilityState).toEqual({ checked: true });
     expect(items[1].props.accessibilityState).toEqual({ checked: false });
