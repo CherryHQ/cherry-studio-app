@@ -53,7 +53,12 @@ export function ProviderModelRow({
     : 'flex-row items-center gap-3 px-4 py-2';
   const content = (
     <>
-      {selection ? <ProviderModelRowCheckbox isSelected={selection.isSelected} /> : null}
+      {selection ? (
+        <ProviderModelRowCheckbox
+          isDisabled={selection.isDisabled}
+          isSelected={selection.isSelected}
+        />
+      ) : null}
       {/* Unsized, so it is `BrandAvatar`'s own square — the one a provider row
           draws, and the one the picker sheet draws beside the same single line
           of text. */}
@@ -105,13 +110,21 @@ export function ProviderModelRow({
 }
 
 /** The same tick the topic list draws, since both lists select the same way. */
-function ProviderModelRowCheckbox({ isSelected }: { isSelected: boolean }) {
+function ProviderModelRowCheckbox({
+  isDisabled,
+  isSelected,
+}: {
+  isDisabled?: boolean;
+  isSelected: boolean;
+}) {
+  const disabledClassName = isDisabled ? ' opacity-40' : '';
+
   return (
     <View
       className={
         isSelected
-          ? 'size-6 items-center justify-center rounded-full bg-primary'
-          : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
+          ? `size-6 items-center justify-center rounded-full bg-primary${disabledClassName}`
+          : `size-6 items-center justify-center rounded-full border-2 border-border-strong${disabledClassName}`
       }
     >
       {isSelected ? <CheckIcon className="size-4 text-primary-foreground" /> : null}

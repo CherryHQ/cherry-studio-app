@@ -272,8 +272,8 @@ export default function ProviderDetailSettingsScreen() {
   );
   const { exitEditing: exitModelSelection, selectedIds: selectedModelIds } = modelSelection;
   const selectedModels = useMemo(
-    () => models.filter((model) => selectedModelIds.has(model.id)),
-    [models, selectedModelIds],
+    () => models.filter((model) => selectedModelIds.has(model.id) && !isDefaultModel(model)),
+    [isDefaultModel, models, selectedModelIds],
   );
   const modelListSelection = useMemo(
     () =>
@@ -337,14 +337,14 @@ export default function ProviderDetailSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('common.delete'),
-        disabled: selectedModelIds.size === 0,
+        disabled: selectedModels.length === 0,
         key: 'remove-selected-models',
         label: t('common.delete'),
         onPress: requestRemoveSelectedModels,
         tintColor: Color.ios.systemRed,
       },
     ],
-    [requestRemoveSelectedModels, selectedModelIds.size, t],
+    [requestRemoveSelectedModels, selectedModels.length, t],
   );
   const handleToggleProvider = useCallback(() => {
     if (!provider) {
@@ -409,7 +409,7 @@ export default function ProviderDetailSettingsScreen() {
         }
         title={
           modelSelection.isEditing
-            ? t('settings.provider.models.selection.count', { count: selectedModelIds.size })
+            ? t('settings.provider.models.selection.count', { count: selectedModels.length })
             : (providerName ?? t('settings.provider.tabs.configuration'))
         }
         titleElement={

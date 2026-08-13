@@ -167,6 +167,7 @@ describe('ProviderModelRow', () => {
       );
 
       expect(findCheckbox(tree).props.disabled).toBe(true);
+      expect(findTickClassNames(tree)[0]).toContain('opacity-40');
     });
 
     it('draws no checkbox at all outside a selection', () => {
