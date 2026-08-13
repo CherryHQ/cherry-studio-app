@@ -47,6 +47,7 @@ export type ProviderModelPullListRenderState = {
  * callers can either keep one combined set or separate additions and removals.
  */
 export function ProviderModelPullList({
+  contentBottomInset = 96,
   footerContent,
   headerContent,
   isDisabled,
@@ -58,6 +59,7 @@ export function ProviderModelPullList({
   renderAccessory,
   searchFieldPlacement = 'automatic',
 }: {
+  contentBottomInset?: number;
   footerContent?: ReactNode;
   headerContent?: ReactNode;
   isDisabled: boolean;
@@ -108,6 +110,10 @@ export function ProviderModelPullList({
     () => [...displayedPreview.added, ...displayedPreview.missing].map((model) => model.id),
     [displayedPreview],
   );
+  const listContentStyle = useMemo(
+    () => ({ paddingBottom: contentBottomInset }),
+    [contentBottomInset],
+  );
   const usesNavigationSearch =
     process.env.EXPO_OS === 'ios' && searchFieldPlacement === 'automatic';
 
@@ -118,7 +124,7 @@ export function ProviderModelPullList({
       ) : null}
       <LegendList
         alwaysBounceVertical={false}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={listContentStyle}
         contentInsetAdjustmentBehavior="automatic"
         data={listItems}
         drawDistance={320}
@@ -287,8 +293,5 @@ const PullModelRow = memo(function PullModelRow({
 const styles = StyleSheet.create({
   list: {
     flex: 1,
-  },
-  listContent: {
-    paddingBottom: 96,
   },
 });

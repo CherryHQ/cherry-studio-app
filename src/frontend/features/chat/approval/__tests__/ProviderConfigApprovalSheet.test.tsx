@@ -1,5 +1,6 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import type { ReactNode } from 'react';
+import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { PendingToolApproval } from '../../runtime/chatRuntimeProjection';
@@ -13,6 +14,7 @@ const mockPreviewBuiltin = jest.fn();
 const mockResolveBuiltin = jest.fn();
 const mockCherryInOauth = jest.fn((_props: object) => null);
 const mockProviderOauthSection = jest.fn((_props: object) => null);
+const mockProviderAvatar = jest.fn((_props: object) => null);
 let mockLegendListProps: Record<string, any> = {};
 
 jest.mock('expo-crypto', () => ({ randomUUID: () => generatedProviderId }));
@@ -130,16 +132,12 @@ jest.mock('@/frontend/features/settings/ProviderScreen/components/CherryInOauth'
 jest.mock('@/frontend/features/settings/ProviderScreen/components/ProviderOauthSection', () => ({
   ProviderOauthSection: (props: object) => mockProviderOauthSection(props),
 }));
+jest.mock('@/frontend/features/settings/components/ProviderAvatar', () => ({
+  ProviderAvatar: (props: object) => mockProviderAvatar(props),
+}));
 jest.mock(
   '@/frontend/features/settings/ProviderScreen/models/components/ProviderModelDraftForm',
-  () => {
-    const React = jest.requireActual('react');
-    const native = jest.requireActual('react-native');
-    return {
-      ProviderModelDraftForm: (props: object) =>
-        React.createElement(native.View, { ...props, testID: 'manual-model-form' }),
-    };
-  },
+  () => ({ ProviderModelDraftForm: () => null }),
 );
 jest.mock(
   '@/frontend/features/settings/ProviderScreen/models/components/ProviderModelSearchField',
@@ -304,7 +302,7 @@ describe('ProviderConfigApprovalSheet', () => {
     expect(onRespond).not.toHaveBeenCalled();
   });
 
-  test('uses a full-width liquid-glass pill action without a footer', () => {
+  test('uses a dedicated bottom area for the full-width liquid-glass action', () => {
     renderSheet();
 
     expect(action('chat.providerConfig.next').props).toMatchObject({
@@ -320,9 +318,9 @@ describe('ProviderConfigApprovalSheet', () => {
       style: { flex: 1, height: 40 },
     });
     expect(
-      renderer!.root.findByProps({ testID: 'provider-config-floating-action' }).props,
+      renderer!.root.findByProps({ testID: 'provider-config-action-area' }).props,
     ).toMatchObject({
-      className: 'absolute inset-x-4 bottom-3 z-10 items-center gap-2 py-7',
+      className: 'shrink-0 items-center gap-2 px-4 pb-7 pt-1',
     });
   });
 
@@ -469,6 +467,10 @@ describe('ProviderConfigApprovalSheet', () => {
 
     expect(mockLegendListProps.recycleItems).toBe(true);
     expect(mockLegendListProps.drawDistance).toBe(320);
+    expect(mockLegendListProps.contentContainerStyle).toEqual({ paddingBottom: 16 });
+    expect(
+      renderer!.root.findAllByProps({ testID: 'button:settings.provider.models.addTitle' }),
+    ).toHaveLength(0);
     expect(mockLegendListProps.data).toEqual([
       expect.objectContaining({ key: 'section:added', type: 'section' }),
       expect.objectContaining({
@@ -508,36 +510,6 @@ describe('ProviderConfigApprovalSheet', () => {
     });
     expect(renderer!.root.findByProps({ testID: 'bottom-sheet' }).props.isCloseDisabled).toBe(
       false,
-    );
-  });
-
-  test('removes a catalog selection when the same model is added manually', async () => {
-    const onRespond = renderSheet();
-
-    await act(async () => {
-      action('chat.providerConfig.next').props.onPress();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    act(() => action('settings.provider.models.addTitle').props.onPress());
-    act(() => {
-      renderer!.root
-        .findByProps({ testID: 'manual-model-form' })
-        .props.controller.updateModelId('remote-model');
-    });
-    act(() => action('settings.provider.models.addSubmit').props.onPress());
-    await act(async () => {
-      action('chat.providerConfig.confirm').props.onPress();
-      await Promise.resolve();
-    });
-
-    expect(onRespond).toHaveBeenCalledWith(
-      expect.objectContaining({
-        updatedInput: expect.objectContaining({
-          manualModels: [expect.objectContaining({ modelId: 'remote-model' })],
-          selectedModelIds: [],
-        }),
-      }),
     );
   });
 
@@ -591,6 +563,19 @@ describe('ProviderConfigApprovalSheet', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+
+    expect(mockProviderAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerId: 'cherryin',
+        providerName: 'CherryIN',
+        size: 36,
+      }),
+    );
+    expect(
+      renderer!.root
+        .findByProps({ testID: 'provider-config-provider-identity' })
+        .findAllByType(Text),
+    ).toHaveLength(1);
 
     await act(async () => {
       action('chat.providerConfig.next').props.onPress();

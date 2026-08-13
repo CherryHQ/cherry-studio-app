@@ -6,6 +6,7 @@ import {
   type ProviderConfigurationManualModel,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import { ENDPOINT_TYPE, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { normalizeCustomProviderBaseUrl } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
 
 import {
@@ -46,6 +47,7 @@ export function createProviderConfigDraft(
     return {
       input: {
         ...parsed.data,
+        baseUrl: normalizeCustomProviderBaseUrl(parsed.data.baseUrl),
         providerId: Crypto.randomUUID(),
       },
       kind: 'custom',
@@ -134,15 +136,4 @@ export function canContinueProviderConfig(
     );
   }
   return preview !== null;
-}
-
-export function dedupeManualModels(
-  models: readonly ProviderConfigurationManualModel[],
-): ProviderConfigurationManualModel[] {
-  return [...new Map(models.map((model) => [model.modelId.trim(), model])).values()];
-}
-
-export function numericProviderConfigDraft(value: string): number {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
 }

@@ -14,6 +14,7 @@ export {
   type CustomProviderFormValue,
 } from './ProviderScreen/components/CustomProviderForm';
 export { ProviderOauthSection } from './ProviderScreen/components/ProviderOauthSection';
+export { ProviderAvatar } from './components/ProviderAvatar';
 export {
   ProviderModelDraftForm,
   type ProviderModelDraftFormController,

@@ -1,40 +1,28 @@
-import { PlusIcon, Trash2Icon } from '@cherrystudio/app-icons';
+import { Trash2Icon } from '@cherrystudio/app-icons';
 import { Button, Input, Label, Section, SecureInput, TextField } from '@cherrystudio/ui/components';
 import type { ProviderConfigurationManualModel } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import {
   CherryInOauth,
-  createInitialProviderModelAddFormState,
   CustomProviderForm,
   getEffectiveAuthConfig,
-  getDefaultProviderModelGroupName,
-  getProviderChatEndpointTypes,
-  getProviderModelAddMode,
-  getProviderModelPurposeEndpointType,
-  inferProviderModelPurpose,
   normalizeApiKeySingleLine,
-  ProviderModelDraftForm,
+  ProviderAvatar,
   ProviderModelPullList,
-  type ProviderModelAddFormState,
   type ProviderModelPullSectionKey,
-  type ProviderModelPurpose,
   ProviderOauthSection,
-  providerModelAddDefaultEndpointType,
   shouldShowApiKeys,
-  splitProviderModelIds,
 } from '@/frontend/features/settings/providerConfiguration';
 import type { ProviderSetupMatchedProvider, ProviderSetupPreview } from '@/shared/contracts';
 
 import {
   customFormValueFromInput,
   customInputFromForm,
-  numericProviderConfigDraft,
   type ProviderConfigDraft,
 } from './providerConfigDraft';
 
@@ -55,7 +43,7 @@ export function ProviderConfigConfigurationPage({
     return (
       <KeyboardAwareScrollView
         bottomOffset={160}
-        contentContainerClassName="px-4 pb-20 pt-2"
+        contentContainerClassName="px-4 pb-4 pt-2"
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         mode="layout"
@@ -111,20 +99,23 @@ function BuiltinProviderConfigurationForm({
   return (
     <KeyboardAwareScrollView
       bottomOffset={120}
-      contentContainerClassName="gap-5 px-4 pb-20 pt-2"
+      contentContainerClassName="gap-5 px-4 pb-4 pt-2"
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
       mode="layout"
       showsVerticalScrollIndicator={false}
     >
       {provider ? (
-        <View className="gap-1">
-          <Text className="font-semibold text-foreground text-lg">{provider.name}</Text>
-          {providerSnapshot.origin ? (
-            <Text className="text-foreground-tertiary text-sm" numberOfLines={1} selectable>
-              {providerSnapshot.origin}
-            </Text>
-          ) : null}
+        <View className="flex-row items-center gap-3" testID="provider-config-provider-identity">
+          <ProviderAvatar
+            presetProviderId={provider.presetProviderId}
+            providerId={provider.id}
+            providerName={provider.name}
+            size={36}
+          />
+          <Text className="min-w-0 flex-1 font-semibold text-foreground text-lg" numberOfLines={1}>
+            {provider.name}
+          </Text>
         </View>
       ) : null}
       {showOAuth && provider ? (
@@ -185,7 +176,6 @@ function BuiltinProviderConfigurationForm({
 export function ProviderConfigModelsPage({
   draft,
   isDisabled,
-  onAddManualModels,
   onRemoveManualModel,
   onRemovedModelIdsChange,
   onRetry,
@@ -196,7 +186,6 @@ export function ProviderConfigModelsPage({
 }: {
   draft: ProviderConfigDraft;
   isDisabled: boolean;
-  onAddManualModels: (models: ProviderConfigurationManualModel[]) => void;
   onRemoveManualModel: (modelId: string) => void;
   onRemovedModelIdsChange: (ids: ReadonlySet<UniqueModelId>) => void;
   onRetry: () => void;
@@ -206,7 +195,6 @@ export function ProviderConfigModelsPage({
   selectedModelIds: ReadonlySet<UniqueModelId>;
 }) {
   const { t } = useTranslation();
-  const [showManualForm, setShowManualForm] = useState(false);
   const isSelected = useCallback(
     (section: ProviderModelPullSectionKey, id: UniqueModelId) =>
       (section === 'added' ? selectedModelIds : removedModelIds).has(id),
@@ -250,19 +238,15 @@ export function ProviderConfigModelsPage({
   return (
     <KeyboardAvoidingView automaticOffset behavior="padding" style={styles.flex}>
       <ProviderModelPullList
+        contentBottomInset={16}
         footerContent={
-          <ProviderConfigModelsFooter
-            disabled={isDisabled}
-            manualModels={draft.input.manualModels}
-            provider={preview.provider}
-            showManualForm={showManualForm}
-            onAdd={(models) => {
-              onAddManualModels(models);
-              setShowManualForm(false);
-            }}
-            onRemoveManualModel={onRemoveManualModel}
-            onShowManualForm={() => setShowManualForm(true)}
-          />
+          draft.input.manualModels.length > 0 ? (
+            <ProviderConfigManualModelsFooter
+              disabled={isDisabled}
+              manualModels={draft.input.manualModels}
+              onRemoveManualModel={onRemoveManualModel}
+            />
+          ) : undefined
         }
         headerContent={<CatalogStatus preview={preview} onRetry={onRetry} />}
         isDisabled={isDisabled}
@@ -277,63 +261,44 @@ export function ProviderConfigModelsPage({
   );
 }
 
-function ProviderConfigModelsFooter({
+function ProviderConfigManualModelsFooter({
   manualModels,
   disabled,
   onRemoveManualModel,
-  onAdd,
-  onShowManualForm,
-  provider,
-  showManualForm,
 }: {
   manualModels: readonly ProviderConfigurationManualModel[];
   disabled: boolean;
   onRemoveManualModel: (modelId: string) => void;
-  onAdd: (models: ProviderConfigurationManualModel[]) => void;
-  onShowManualForm: () => void;
-  provider: Provider;
-  showManualForm: boolean;
 }) {
   const { t } = useTranslation();
   return (
-    <View className="gap-5 pt-5">
-      {manualModels.length > 0 ? (
-        <View>
-          <Section.Header
-            className="px-0 pb-2"
-            title={`${t('chat.providerConfig.manualModels')} (${manualModels.length})`}
-          />
-          <View className="overflow-hidden rounded-lg bg-grouped-surface">
-            {manualModels.map((model, index) => (
-              <View key={model.modelId}>
-                <Section.Item
+    <View className="pt-5">
+      <Section.Header
+        className="px-0 pb-2"
+        title={`${t('chat.providerConfig.manualModels')} (${manualModels.length})`}
+      />
+      <View className="overflow-hidden rounded-lg bg-grouped-surface">
+        {manualModels.map((model, index) => (
+          <View key={model.modelId}>
+            <Section.Item
+              disabled={disabled}
+              label={model.name || model.modelId}
+              showChevron={false}
+              trailing={
+                <Button
+                  accessibilityLabel={t('settings.provider.models.remove')}
                   disabled={disabled}
-                  label={model.name || model.modelId}
-                  showChevron={false}
-                  trailing={
-                    <Button
-                      accessibilityLabel={t('settings.provider.models.remove')}
-                      disabled={disabled}
-                      icon={<Trash2Icon className="text-destructive" />}
-                      onPress={() => onRemoveManualModel(model.modelId)}
-                      size="sm"
-                      variant="ghost"
-                    />
-                  }
+                  icon={<Trash2Icon className="text-destructive" />}
+                  onPress={() => onRemoveManualModel(model.modelId)}
+                  size="sm"
+                  variant="ghost"
                 />
-                {index < manualModels.length - 1 ? <View className="mx-3 h-px bg-border" /> : null}
-              </View>
-            ))}
+              }
+            />
+            {index < manualModels.length - 1 ? <View className="mx-3 h-px bg-border" /> : null}
           </View>
-        </View>
-      ) : null}
-      {showManualForm ? (
-        <ManualModelDraftEditor disabled={disabled} provider={provider} onAdd={onAdd} />
-      ) : (
-        <Button icon={<PlusIcon />} onPress={onShowManualForm} variant="secondary">
-          {t('settings.provider.models.addTitle')}
-        </Button>
-      )}
+        ))}
+      </View>
     </View>
   );
 }
@@ -364,104 +329,6 @@ function CatalogStatus({
     <Text className="text-foreground-tertiary text-sm">
       {t('chat.providerConfig.registryCatalog')}
     </Text>
-  );
-}
-
-function ManualModelDraftEditor({
-  disabled,
-  onAdd,
-  provider,
-}: {
-  disabled: boolean;
-  onAdd: (models: ProviderConfigurationManualModel[]) => void;
-  provider: Provider;
-}) {
-  const { t } = useTranslation();
-  const chatEndpointTypes = useMemo(() => getProviderChatEndpointTypes(provider), [provider]);
-  const defaultChatEndpoint = chatEndpointTypes[0] ?? providerModelAddDefaultEndpointType;
-  const [formState, setFormState] = useState<ProviderModelAddFormState>(() =>
-    createInitialProviderModelAddFormState(defaultChatEndpoint),
-  );
-  const [showMoreSettings, setShowMoreSettings] = useState(false);
-  const [attempted, setAttempted] = useState(false);
-  const modelAddMode = getProviderModelAddMode(provider);
-  const modelPurpose = inferProviderModelPurpose(formState.endpointTypes);
-  const modelIds = splitProviderModelIds(formState.modelId);
-  const endpointTypesValid =
-    modelAddMode !== 'endpoint-types' || formState.endpointTypes.length > 0;
-  const update = useCallback(
-    <TField extends keyof ProviderModelAddFormState>(
-      field: TField,
-      value: ProviderModelAddFormState[TField],
-    ) => setFormState((current) => ({ ...current, [field]: value })),
-    [],
-  );
-  const updateModelId = useCallback(
-    (modelId: string) =>
-      setFormState((current) => ({
-        ...current,
-        group: getDefaultProviderModelGroupName(modelId, provider.id),
-        modelId,
-        name: modelId,
-      })),
-    [provider.id],
-  );
-  const add = useCallback(() => {
-    setAttempted(true);
-    if (modelIds.length === 0 || !endpointTypesValid) return;
-    const isBatch = modelIds.length > 1;
-    onAdd(
-      modelIds.map((modelId) => ({
-        contextWindow: numericProviderConfigDraft(formState.contextWindow),
-        endpointTypes: modelAddMode === 'legacy' ? [] : [...formState.endpointTypes],
-        group: isBatch
-          ? getDefaultProviderModelGroupName(modelId, provider.id)
-          : formState.group.trim(),
-        maxInputTokens: numericProviderConfigDraft(formState.maxInputTokens),
-        maxOutputTokens: numericProviderConfigDraft(formState.maxOutputTokens),
-        modelId,
-        name: isBatch ? modelId : formState.name.trim(),
-      })),
-    );
-  }, [endpointTypesValid, formState, modelAddMode, modelIds, onAdd, provider.id]);
-
-  return (
-    <View className="gap-4">
-      <ProviderModelDraftForm
-        controller={{
-          chatEndpointTypes,
-          endpointTypeError:
-            attempted && !endpointTypesValid
-              ? t('settings.provider.models.addEndpointTypeRequired')
-              : undefined,
-          formState,
-          modelAddMode,
-          modelIdError:
-            attempted && modelIds.length === 0
-              ? t('settings.provider.models.addModelIdRequired')
-              : undefined,
-          modelPurpose,
-          updateChatEndpointType: (endpointType) => update('endpointTypes', [endpointType]),
-          updateContextWindow: (value) => update('contextWindow', value),
-          updateEndpointTypes: (value) => update('endpointTypes', value),
-          updateGroup: (value) => update('group', value),
-          updateMaxInputTokens: (value) => update('maxInputTokens', value),
-          updateMaxOutputTokens: (value) => update('maxOutputTokens', value),
-          updateModelId,
-          updateModelPurpose: (purpose: ProviderModelPurpose) =>
-            update('endpointTypes', [
-              getProviderModelPurposeEndpointType(purpose, defaultChatEndpoint),
-            ]),
-          updateName: (value) => update('name', value),
-        }}
-        isDisabled={disabled}
-        onMoreSettingsVisibilityChange={setShowMoreSettings}
-        showMoreSettings={showMoreSettings}
-      />
-      <Button disabled={disabled} onPress={add} variant="secondary">
-        {t('settings.provider.models.addSubmit')}
-      </Button>
-    </View>
   );
 }
 

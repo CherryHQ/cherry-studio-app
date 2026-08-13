@@ -3,7 +3,6 @@ import type { BottomSheetCloseReason } from '@cherrystudio/ui/components';
 import {
   CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME,
   CREATE_CUSTOM_PROVIDER_TOOL_NAME,
-  type ProviderConfigurationManualModel,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -29,7 +28,6 @@ import {
   canContinueProviderConfig,
   createProviderConfigDraft,
   customFormValueFromInput,
-  dedupeManualModels,
   type ProviderConfigDraft,
   type ProviderConfigSetupStep,
   providerConfigSetupSteps,
@@ -343,31 +341,6 @@ export function ProviderConfigApprovalSheet({
     void loadPreview(nextDraft);
   }, [draft, loadPreview]);
 
-  const addManualModels = useCallback(
-    (models: ProviderConfigurationManualModel[]) => {
-      setDraft((current) =>
-        current
-          ? withManualModels(
-              current,
-              dedupeManualModels([...current.input.manualModels, ...models]),
-            )
-          : current,
-      );
-      if (preview) {
-        const manualModelIds = new Set(models.map((model) => model.modelId.trim()));
-        const catalogIds = new Set(
-          preview.models.added
-            .filter((model) => manualModelIds.has(model.modelId))
-            .map((model) => model.id),
-        );
-        setSelectedModelIds(
-          (current) => new Set([...current].filter((modelId) => !catalogIds.has(modelId))),
-        );
-      }
-    },
-    [preview],
-  );
-
   const removeManualModel = useCallback((modelId: string) => {
     setDraft((current) =>
       current
@@ -416,7 +389,7 @@ export function ProviderConfigApprovalSheet({
       testID="provider-config-approval"
       title={title}
     >
-      <View className="relative min-h-0 flex-1">
+      <View className="min-h-0 flex-1">
         <BottomSheet.PageTransition depth={stepIndex} pageKey={step} testID="provider-config-page">
           {step === 'configuration' ? (
             <ProviderConfigConfigurationPage
@@ -433,7 +406,6 @@ export function ProviderConfigApprovalSheet({
               preview={preview}
               removedModelIds={removedModelIds}
               selectedModelIds={selectedModelIds}
-              onAddManualModels={addManualModels}
               onRemoveManualModel={removeManualModel}
               onRemovedModelIdsChange={setRemovedModelIds}
               onRetry={retryPreview}
@@ -442,8 +414,8 @@ export function ProviderConfigApprovalSheet({
           )}
         </BottomSheet.PageTransition>
         <View
-          className="absolute inset-x-4 bottom-3 z-10 items-center gap-2 py-7"
-          testID="provider-config-floating-action"
+          className="shrink-0 items-center gap-2 px-4 pb-7 pt-1"
+          testID="provider-config-action-area"
         >
           {approvalCount > 1 ? (
             <Text className="text-foreground-tertiary text-xs">
