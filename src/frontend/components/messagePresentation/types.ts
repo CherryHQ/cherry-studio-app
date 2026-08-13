@@ -8,6 +8,12 @@ export type MessagePresentationItem = Readonly<
   }
 >;
 
+export type AssistantReadAloudInput = {
+  language?: string;
+  messageId: string;
+  text: string;
+};
+
 export type AssistantMessageActions = {
   copiedMessageId?: string;
   isRegenerateDisabled: boolean;
