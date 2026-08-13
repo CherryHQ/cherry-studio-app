@@ -12,6 +12,8 @@ history, message rows and parts, live-turn anchoring, entry motion, and scroll-t
   bottom-accessory inputs, and a feature-owned assistant renderer. Chat uses the default assistant
   row; painting supplies its proportional loader and image result without changing message data.
   Single-turn workspaces can opt into animating their first entering anchor.
+- The default assistant row projects speakable text only from a completed reply and exposes a
+  controlled read-aloud action through `AssistantMessageActions`.
 
 Message rows, part renderers, animation providers, and platform controls are private implementation
 details. Callers import only from `@/frontend/components/messagePresentation`.
@@ -21,6 +23,9 @@ details. Callers import only from `@/frontend/components/messagePresentation`.
 The module accepts only visible `user` and `assistant` messages. A feature that stores additional
 roles must explicitly filter or adapt them before crossing this interface. Feature runtime,
 persistence entities, composer state, and tool-approval orchestration remain with their owners.
+Consumers own playback state and commands through `AssistantMessageActions`. Reasoning, tool
+results, attachments, standalone code, and other non-spoken parts do not cross the read-aloud
+projection.
 
 ## List Behavior
 

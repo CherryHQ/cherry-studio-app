@@ -14,7 +14,11 @@ workspace behavior. Structured message presentation is shared with painting thro
   assistant/model bookkeeping behind both. The composer itself is
   `@/frontend/components/composer`, shared with painting.
 - `workspace/` adapts visible Chat runtime messages into the shared `MessageList`, and owns loading
-  indicators, initial-render gating, tool approvals, and composer placement.
+  indicators, initial-render gating, tool approvals, and composer placement. Ordinary Chat also
+  owns the transient device TTS session for reply read-aloud. Playback stops when the Topic loses
+  focus, the app leaves the foreground, or the active reply disappears. Preview and painting do
+  not opt into actions. Read-aloud does not autoplay, persist or generate audio, or use a cloud or
+  provider speech service.
 - `runtime/` subscribes to the app-owned `ChatModule`, projects one Topic snapshot through
   `useChatTopic()`, and owns frontend navigation and query invalidation effects. It does not create
   or dispose `ChatRuntime`.
