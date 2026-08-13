@@ -20,6 +20,13 @@ pnpm bench:layout --replay <probe.jsonl>            # 对已采集的 trace 重�
 
 - dev 构建的 app 已装在目标模拟器上，**并已连上 Metro**——探针只在 `__DEV__` 下发。
   若 app 停在 dev client 的启动页，这一轮会采到零事件并以明确报错终止。
+- 改完 app 代码后**先确认新代码真的在跑**再开始量。这里踩过两次：
+  - Metro 的 Hermes 字节码走**另一套缓存**（app 请求的是 `/index.ts.bundle?...transform.bytecode=1`，
+    不是 `/index.bundle`），源码明明改了、curl 打包结果也对，设备上仍是旧行为，须 `--clear` 重启 Metro。
+  - Fast Refresh 会**静默不生效**。曾据此得出「改了没变化 ⇒ 该因素无关」的假阴性结论，
+    实际是补丁根本没上去。判别办法是让探针自报所用参数（如给 `progScroll` 带上本次的
+    `closeKeyboard`），或干脆走一次完整重载：
+    `xcrun simctl openurl <UDID> "com.cherry-ai.cherry-studio-app://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081"`。
 - `agent-device` 在 PATH 上。
 - 目标模拟器唯一在跑；否则用 `--udid` 或 `LAYOUT_BENCH_UDID` 指定。这台机器上常有多个并行
   workspace 各开一台模拟器，所以多台在跑时脚本**不猜**，直接列出让人选。
@@ -96,6 +103,9 @@ provider 完全不受影响，`config.ts` 也零改动。详见
   正常钉顶动画（几百像素单调位移）末尾几像素的回弹会被报成几百像素的跳动。
 - `estimate-collapse` 与 `row-shrink` 靠「是不是该行的首次实测」区分：首次实测的 `prev` 是
   估算值不是量出来的高度，拿它算「行变矮」必然误报。
+- `offset-reversal` 切分单调段时必须带噪声地板（`offsetNoisePx`）。按逐帧 delta 切段时，
+  一次 616px 的爬升被中途一个 5px 的回撤切开，「两腿取短」于是拿到 88px，前面那条 310px
+  的突跳就此被判成合格——**判据漏掉了自己被造出来要抓的那个缺陷**，而报告看起来是全绿的。
 
 ## 真值来源与工具边界
 
@@ -107,6 +117,11 @@ view flattening 抹成匿名节点，`text=` / `id=` 选择器一律 miss（原�
   iPhone 17 Pro（402×874pt）；换机型必须重量一遍。
 - 要摆脱坐标，替换 `scripts/layout-bench/device.ts` 为走 RN 组件树的驱动（如
   [argent](https://github.com/software-mansion/argent)）即可，场景定义不用动。
+
+键盘是唯一**不改 contentSize 也不改视口**却会挪动内容的因素（它只改滚动视图的底部 inset），
+所以 `keyboard` 与 `freeze` 两类事件必须单独采：缺了它们，发送瞬间那一帧位移无法归因。
+`keyboard` 的订阅刻意不按 armed 开关——探针由假模型在**第一次发送**时 arm，而订阅所在的
+effect 在列表挂载时就跑完了，按 armed 判断等于永远不订阅（实测整轮零 keyboard 事件）。
 
 探针通道（`src/shared/devBench/layoutBenchProbe.ts`）有两条硬约束：
 
@@ -131,4 +146,41 @@ view flattening 抹成匿名节点，`text=` / `id=` 选择器一律 miss（原�
    程序化滚动 217 → 87。
 3. **`scroll-button-chatter`**：按钮 1 秒翻转 4 次，是上一条的症状而非独立缺陷，随之消失。
 
-`follow-up-turn` 的 `offset-reversal` 仍在 known-issues 里挂账，签名与线索见该文件。
+`follow-up-turn` 的 `offset-reversal`（-310px）仍在 known-issues 里挂账：根因已定位到收键盘
+一帧抽掉 336px 底部 inset 触发的 contentOffset 夹回，但两条候选修法一条更差、一条是产品行为
+变更，所以留账等决策。签名、判别实验与两条修法的实测数字见该文件。
+
+## 用录像做交叉验证
+
+判据只看得到 offset 数字，而「offset 变了」不等于「画面动了」——底部 padding 同时缩掉同样的
+量时，内容在屏幕上是不动的。所以凡是要下「用户看得见」的结论，都得回到像素：
+
+```bash
+agent-device record start out.mp4 --udid <UDID> --max-size 1200 --quality high --hide-touches
+pnpm bench:layout --scenario follow-up-turn
+agent-device record stop --udid <UDID>
+```
+
+`xcrun simctl io recordVideo` 在**多台模拟器同时开着**时会以
+`SimRenderServer.SimulatorError Code=2` 失败，这台机器上常年如此，用 agent-device 的 `record`。
+
+量法不要用逐帧互相关：聊天正文是等行距的重复纹理，互相关会锁到行距的整数倍上（实测大量
+corr=0.999 的 +11/+22/+33 假位移）。可靠的做法是**盯住一个可识别的元素**——用户气泡是右对齐
+的浅灰圆角块，按「右侧区域连续 ≥12 行落在气泡填充灰、且同高度的左侧区域不命中」就能逐帧
+定位它的屏幕位置，得到真正的可见位移曲线。
+
+用这个方法读用户报的那段录像（29fps，逐帧真实时间戳来自 `showinfo`，不要假设 fps），
+新气泡顶边轨迹是：
+
+| t | 气泡顶(px) | Δ |
+| --- | --- | --- |
+| 1.570 | 整屏空白 | — |
+| 1.603→1.742 | 759 → 754 | -5 / 139ms |
+| 1.777 | 652 | **-102，单帧** |
+| 1.845 | 652 | 0 |
+| 1.880 | 617 | -35 |
+| 1.915 | **214** | **-403，单帧** |
+
+不是动画，是几次跳切，而且开头有整屏空白——这正是 `estimate-collapse` 的形态（先按 3012px
+的估值滚进空白区，实测 48px 后内容骤缩近 3000px，位置连着重算几次）。该缺陷已修，修后
+harness 里 `viewport-blank` 峰值 35-53%（即设计内的预留空白），整片扫描不再出现 100% 空白帧。
