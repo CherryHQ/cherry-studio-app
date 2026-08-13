@@ -1,5 +1,5 @@
+import type { AppIconProps } from '@cherrystudio/app-icons';
 import type { ImageSource } from 'expo-image';
-import type { PngIconProps } from 'lucide-uniwind/png';
 import { type ComponentType, type ReactNode, useState } from 'react';
 import { View } from 'react-native';
 
@@ -7,7 +7,7 @@ import { ToolPartSheet, ToolPartTrigger } from './ToolPartSheet';
 
 type ToolPartDisclosureProps = {
   children: ReactNode;
-  icon?: ComponentType<PngIconProps>;
+  icon?: ComponentType<AppIconProps>;
   imageSource?: ImageSource | number;
   isRunning: boolean;
   statusText?: string;

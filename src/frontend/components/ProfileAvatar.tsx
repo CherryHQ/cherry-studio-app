@@ -1,4 +1,4 @@
-import { CameraIcon, PencilIcon } from 'lucide-uniwind/png';
+import { CameraIcon, PencilIcon } from '@cherrystudio/app-icons';
 import { View } from 'react-native';
 
 import { Image } from '@/frontend/components/nativePrimitives';
@@ -58,7 +58,7 @@ export function ProfileAvatarEditBadge({ icon, size }: ProfileAvatarEditBadgePro
         width: badgeSize,
       }}
     >
-      <Icon color={iconColor} size={Math.round(badgeSize * 0.5)} strokeWidth={2.4} />
+      <Icon color={iconColor} size={Math.round(badgeSize * 0.5)} />
     </View>
   );
 }

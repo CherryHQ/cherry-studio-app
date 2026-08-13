@@ -1,6 +1,6 @@
+import { BotIcon, CheckIcon, PlusIcon } from '@cherrystudio/app-icons';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Stack, useRouter } from 'expo-router';
-import { BotIcon, CheckIcon, PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, ScrollView, Text, View } from 'react-native';
@@ -342,9 +342,7 @@ function AssistantListRow({
                   : 'size-6 items-center justify-center rounded-full border-2 border-border-strong'
               }
             >
-              {isSelected ? (
-                <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
-              ) : null}
+              {isSelected ? <CheckIcon className="size-4 text-primary-foreground" /> : null}
             </View>
           </Animated.View>
         ) : null}
@@ -384,7 +382,7 @@ function AssistantEmptyState({
   return (
     <View className="items-center justify-center gap-4 px-8 py-16">
       <View className="size-14 items-center justify-center rounded-full bg-secondary">
-        <BotIcon className="size-7 text-foreground" strokeWidth={2} />
+        <BotIcon className="size-7 text-foreground" />
       </View>
       <View className="items-center gap-1">
         <Text className="text-center font-semibold text-foreground text-lg">

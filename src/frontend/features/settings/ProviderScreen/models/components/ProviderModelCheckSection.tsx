@@ -1,7 +1,7 @@
+import { ChevronDownIcon } from '@cherrystudio/app-icons';
 import { Button, Section } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
-import { ChevronDownIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -124,7 +124,7 @@ function SelectionRowValue({ label }: { label: string }) {
       <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
         {label}
       </Text>
-      <ChevronDownIcon className="size-5 shrink-0 text-foreground" strokeWidth={2} />
+      <ChevronDownIcon className="size-5 shrink-0 text-foreground" />
     </View>
   );
 }

@@ -1,5 +1,5 @@
+import { CircleAlertIcon } from '@cherrystudio/app-icons';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { CircleAlertIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
@@ -15,7 +15,7 @@ export function ErrorPart({ part }: ErrorPartProps) {
   return (
     <View className="gap-1.5 rounded-lg border border-destructive bg-danger-soft p-3">
       <View className="flex-row items-center gap-2">
-        <CircleAlertIcon className="size-4 text-destructive" strokeWidth={2} />
+        <CircleAlertIcon className="size-4 text-destructive" />
         <Text className="flex-1 font-semibold text-destructive text-base" selectable>
           {title}
         </Text>

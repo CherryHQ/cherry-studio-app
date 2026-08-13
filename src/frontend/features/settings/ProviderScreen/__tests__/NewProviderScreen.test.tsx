@@ -14,7 +14,7 @@ jest.mock('expo-router', () => ({
 jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => 'test-id') }));
 jest.mock('expo-image-picker', () => ({}));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   ImageUpIcon: () => null,
   RotateCcwIcon: () => null,
 }));

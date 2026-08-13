@@ -1,10 +1,10 @@
+import { SettingsIcon } from '@cherrystudio/app-icons';
 import {
   isProviderConfigurationToolName,
   providerConfigurationSummarySchema,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useRouter } from 'expo-router';
-import { SettingsIcon } from 'lucide-uniwind/png';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';

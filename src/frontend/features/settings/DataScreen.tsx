@@ -1,6 +1,3 @@
-import { Section } from '@cherrystudio/ui/components';
-import * as FileSystem from 'expo-file-system/legacy';
-import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import {
   DownloadIcon,
   FolderOpenIcon,
@@ -8,7 +5,10 @@ import {
   RefreshCwIcon,
   Trash2Icon,
   UploadIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Section } from '@cherrystudio/ui/components';
+import * as FileSystem from 'expo-file-system/legacy';
+import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
@@ -80,19 +80,19 @@ export default function DataSettingsScreen() {
           <Section title={t('settings.data.backupRestore.title')}>
             <Section.Item
               label={t('settings.data.backup.title')}
-              leading={<UploadIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<UploadIcon className="size-5 text-foreground" />}
               onPress={handleActionPress}
               showChevron={false}
             />
             <Section.Item
               label={t('settings.data.restore.title')}
-              leading={<DownloadIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<DownloadIcon className="size-5 text-foreground" />}
               onPress={handleActionPress}
               showChevron={false}
             />
             <Section.Item
               label={t('settings.data.syncDesktop.title')}
-              leading={<MonitorCloudIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<MonitorCloudIcon className="size-5 text-foreground" />}
               onPress={handleActionPress}
               showChevron={false}
             />
@@ -102,7 +102,7 @@ export default function DataSettingsScreen() {
               <Section.Item
                 key={title}
                 label={title}
-                leading={<Icon className="size-5 text-foreground" strokeWidth={2} />}
+                leading={<Icon className="size-5 text-foreground" />}
                 onPress={onPress}
                 showChevron={false}
               />
@@ -111,7 +111,7 @@ export default function DataSettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.data.resetData.title')}
-              leading={<RefreshCwIcon className="size-5 text-foreground" strokeWidth={2} />}
+              leading={<RefreshCwIcon className="size-5 text-foreground" />}
               onPress={handleActionPress}
               showChevron={false}
             />

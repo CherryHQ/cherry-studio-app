@@ -64,7 +64,7 @@ jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   ChevronDownIcon: () => null,
   ChevronUpIcon: () => null,
   SaveIcon: () => null,

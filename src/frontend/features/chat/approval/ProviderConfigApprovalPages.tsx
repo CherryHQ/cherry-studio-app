@@ -1,8 +1,8 @@
+import { PlusIcon, Trash2Icon } from '@cherrystudio/app-icons';
 import { Button, Input, Label, Section, SecureInput, TextField } from '@cherrystudio/ui/components';
 import type { ProviderConfigurationManualModel } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';

@@ -1,4 +1,4 @@
-import { RefreshCcwIcon } from 'lucide-uniwind/png';
+import { RefreshCcwIcon } from '@cherrystudio/app-icons';
 import { useEffect } from 'react';
 import Animated, {
   Easing,
@@ -33,7 +33,7 @@ export function PullSpinner({ className }: { className?: string }) {
 
   return (
     <Animated.View style={animatedStyle}>
-      <RefreshCcwIcon className={className} strokeWidth={2} />
+      <RefreshCcwIcon className={className} />
     </Animated.View>
   );
 }

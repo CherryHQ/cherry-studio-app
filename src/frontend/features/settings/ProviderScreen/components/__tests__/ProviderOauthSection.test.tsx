@@ -41,7 +41,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 jest.mock('@cherrystudio/ui/icons/providers', () => ({
   resolveProviderIcon: () => ({ dark: 1, light: 1 }),
 }));
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CircleAlertIcon: () => null,
   CircleDollarSignIcon: () => null,
   CopyIcon: () => null,

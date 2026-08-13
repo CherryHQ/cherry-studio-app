@@ -1,9 +1,9 @@
+import { ImageUpIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
 import { Button, Menu, type MenuItem } from '@cherrystudio/ui/components';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { ImageUpIcon, RotateCcwIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
@@ -243,13 +243,13 @@ function NewProviderAvatarSection({
       <AvatarPreview name={name} size={avatarPreviewSize} uri={avatarUri} />
       <View className="flex-row items-center gap-3">
         <Menu items={avatarMenuItems} trigger="tap">
-          <Button icon={<ImageUpIcon strokeWidth={2} />} variant="secondary">
+          <Button icon={<ImageUpIcon />} variant="secondary">
             {t('settings.provider.add.uploadImage')}
           </Button>
         </Menu>
         <Button
           disabled={!avatarUri}
-          icon={<RotateCcwIcon strokeWidth={2} />}
+          icon={<RotateCcwIcon />}
           onPress={resetAvatar}
           variant="secondary"
         >

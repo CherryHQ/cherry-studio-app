@@ -1,7 +1,7 @@
+import { ChevronDownIcon, ChevronUpIcon } from '@cherrystudio/app-icons';
 import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
-import { ChevronDownIcon, ChevronUpIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, type TextInputProps, View } from 'react-native';
@@ -188,9 +188,9 @@ export function ProviderModelDraftForm({
           {t('settings.provider.models.addMoreSettings')}
         </Text>
         {showMoreSettings ? (
-          <ChevronUpIcon className="size-4 text-foreground" strokeWidth={2} />
+          <ChevronUpIcon className="size-4 text-foreground" />
         ) : (
-          <ChevronDownIcon className="size-4 text-foreground" strokeWidth={2} />
+          <ChevronDownIcon className="size-4 text-foreground" />
         )}
       </Pressable>
 

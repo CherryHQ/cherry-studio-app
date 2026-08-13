@@ -58,7 +58,7 @@ jest.mock('../AiUsageWeekChartPage', () => {
       React.createElement('AiUsageWeekChartPageMock', props),
   };
 });
-jest.mock('lucide-uniwind/png', () => ({ RefreshCwIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ RefreshCwIcon: () => null }));
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) =>

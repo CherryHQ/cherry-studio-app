@@ -1,5 +1,5 @@
+import { SearchIcon } from '@cherrystudio/app-icons';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { SearchIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 

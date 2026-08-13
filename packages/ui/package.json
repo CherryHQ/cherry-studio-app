@@ -87,7 +87,7 @@
     "expo-paste-input": "*",
     "expo-screen-corner-radius": "*",
     "heroui-native": "*",
-    "lucide-uniwind": "*",
+    "@cherrystudio/app-icons": "workspace:*",
     "react": "*",
     "react-native": "*",
     "react-native-nitro-modules": "*",

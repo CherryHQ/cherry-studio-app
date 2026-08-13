@@ -1,4 +1,4 @@
-import { GlobeIcon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
+import { GlobeIcon, SquareArrowOutUpRightIcon } from '@cherrystudio/app-icons';
 import { Pressable, Text, View } from 'react-native';
 
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
@@ -24,7 +24,7 @@ export function SourceUrlItem({ label, url, variant = 'card' }: SourceUrlItemPro
       onPress={() => void openExternalUrl(url)}
     >
       <View className="size-7 items-center justify-center rounded-md bg-secondary">
-        <GlobeIcon className="size-3.5 text-foreground" strokeWidth={2} />
+        <GlobeIcon className="size-3.5 text-foreground" />
       </View>
       <View className="min-w-0 flex-1">
         <Text className="font-medium text-foreground text-base" numberOfLines={1} selectable>
@@ -34,7 +34,7 @@ export function SourceUrlItem({ label, url, variant = 'card' }: SourceUrlItemPro
           {domain || url}
         </Text>
       </View>
-      <SquareArrowOutUpRightIcon className="size-3.5 text-foreground-tertiary" strokeWidth={2} />
+      <SquareArrowOutUpRightIcon className="size-3.5 text-foreground-tertiary" />
     </Pressable>
   );
 }

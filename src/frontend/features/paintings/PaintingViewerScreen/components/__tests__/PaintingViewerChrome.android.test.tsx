@@ -17,7 +17,7 @@ jest.mock('expo-router', () => ({
   },
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   DownloadIcon: () => null,
   EllipsisIcon: () => null,
   PencilIcon: () => null,

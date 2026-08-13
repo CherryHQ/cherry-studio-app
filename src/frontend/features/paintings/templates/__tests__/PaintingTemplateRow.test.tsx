@@ -102,7 +102,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => {
+jest.mock('@cherrystudio/app-icons', () => {
   const { View: MockView } = jest.requireActual('react-native');
 
   return { XIcon: MockView };

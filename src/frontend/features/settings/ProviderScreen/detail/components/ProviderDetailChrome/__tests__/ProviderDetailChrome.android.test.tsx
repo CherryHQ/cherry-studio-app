@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { ProviderDetailChrome } from '../ProviderDetailChrome.android';
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   PauseIcon: () => null,
   PlayIcon: () => null,
   RefreshCcwIcon: () => null,

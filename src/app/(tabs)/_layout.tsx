@@ -32,11 +32,23 @@ const Tabs = withLayoutContext<
 
 const filledSceneStyle = { height: '100%' } as const;
 
-const homeIcon = require('@/assets/navigation/home.png');
-const assistantsIcon = require('@/assets/navigation/assistants.png');
-const messagesIcon = require('@/assets/navigation/messages.png');
-const settingsIcon = require('@/assets/navigation/settings.png');
-const searchIcon = require('../../../packages/lucide-uniwind/src/png-icons/assets/search.png');
+// iOS gets native SF Symbols; Android's native tab bar only takes image sources, so it uses the
+// Material Symbols PNGs baked by the app-icons generator (see packages/app-icons/src/registry.ts).
+const homeIcon = isAndroid
+  ? require('../../../packages/app-icons/src/tab-icons/home.png')
+  : ({ sfSymbol: 'house' } as const);
+const assistantsIcon = isAndroid
+  ? require('../../../packages/app-icons/src/tab-icons/assistants.png')
+  : ({ sfSymbol: 'person.2' } as const);
+const messagesIcon = isAndroid
+  ? require('../../../packages/app-icons/src/tab-icons/messages.png')
+  : ({ sfSymbol: 'message' } as const);
+const settingsIcon = isAndroid
+  ? require('../../../packages/app-icons/src/tab-icons/settings.png')
+  : ({ sfSymbol: 'gearshape' } as const);
+const searchIcon = isAndroid
+  ? require('../../../packages/app-icons/src/tab-icons/search.png')
+  : ({ sfSymbol: 'magnifyingglass' } as const);
 
 export const unstable_settings = {
   initialRouteName: '(messages)',

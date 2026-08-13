@@ -1,6 +1,6 @@
+import { CheckIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
-import { CheckIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 
@@ -40,9 +40,7 @@ export default function WebSearchCompressionMethodScreen() {
                   }
                 }}
                 showChevron={false}
-                trailing={
-                  selected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.5} /> : null
-                }
+                trailing={selected ? <CheckIcon className="size-5 text-primary" /> : null}
               />
             );
           })}

@@ -9,7 +9,7 @@ Runtime imports use the component-only entry point so Metro does not traverse th
 
 ```tsx
 import { Button } from '@cherrystudio/ui/components';
-import { PlusIcon } from 'lucide-uniwind/png';
+import { PlusIcon } from '@cherrystudio/app-icons';
 
 <Button icon={<PlusIcon />} loading={isSaving} onPress={save} size="lg" variant="default">
   Save
