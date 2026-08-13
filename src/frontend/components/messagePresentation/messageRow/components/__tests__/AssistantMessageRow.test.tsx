@@ -1,4 +1,4 @@
-import { SquareIcon, Volume2Icon } from 'lucide-uniwind/png';
+import { SpeechIcon, SquareIcon } from '@cherrystudio/app-icons';
 import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -26,12 +26,12 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CheckIcon: () => null,
   CopyIcon: () => null,
   RefreshCwIcon: () => null,
+  SpeechIcon: () => null,
   SquareIcon: () => null,
-  Volume2Icon: () => null,
 }));
 
 jest.mock('react-i18next', () => ({
@@ -212,7 +212,7 @@ describe('AssistantMessageRow', () => {
     )?.[0];
     expect(button.props.accessibilityLabel).toBe('chat.messageActions.readAloud');
     expect(button.props.accessibilityState).toBeUndefined();
-    expect(buttonProps.icon.type).toBe(Volume2Icon);
+    expect(buttonProps.icon.type).toBe(SpeechIcon);
 
     act(() => button.props.onPress());
 
@@ -272,7 +272,7 @@ describe('AssistantMessageRow', () => {
       ([props]) => props.testID === 'assistant-message-read-aloud',
     )?.[0];
     expect(button.props.accessibilityLabel).toBe('chat.messageActions.readAloud');
-    expect(buttonProps.icon.type).toBe(Volume2Icon);
+    expect(buttonProps.icon.type).toBe(SpeechIcon);
   });
 
   test('hides the toolbar while pending or when the consumer provides no actions', () => {

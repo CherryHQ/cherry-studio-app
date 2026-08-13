@@ -1,5 +1,11 @@
+import {
+  CheckIcon,
+  CopyIcon,
+  RefreshCwIcon,
+  SpeechIcon,
+  SquareIcon,
+} from '@cherrystudio/app-icons';
 import { Button, PrismSweep } from '@cherrystudio/ui/components';
-import { CheckIcon, CopyIcon, RefreshCwIcon, SquareIcon, Volume2Icon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -64,7 +70,7 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
             <Button
               accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
               hitSlop={6}
-              icon={isCopied ? <CheckIcon strokeWidth={2} /> : <CopyIcon strokeWidth={2} />}
+              icon={isCopied ? <CheckIcon /> : <CopyIcon />}
               onPress={() => actions.onCopy({ messageId: message.id, text: copyText })}
               size="sm"
               testID="assistant-message-copy"
@@ -79,9 +85,7 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
                   : 'chat.messageActions.readAloud',
               )}
               hitSlop={6}
-              icon={
-                isReadAloudActive ? <SquareIcon strokeWidth={2} /> : <Volume2Icon strokeWidth={2} />
-              }
+              icon={isReadAloudActive ? <SquareIcon /> : <SpeechIcon />}
               onPress={handleReadAloudPress}
               size="sm"
               testID="assistant-message-read-aloud"
@@ -92,7 +96,7 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
             accessibilityLabel={t('chat.messageActions.regenerate')}
             disabled={actions.isRegenerateDisabled}
             hitSlop={6}
-            icon={<RefreshCwIcon strokeWidth={2} />}
+            icon={<RefreshCwIcon />}
             onPress={() => actions.onRegenerate(message.id)}
             size="sm"
             testID="assistant-message-regenerate"
