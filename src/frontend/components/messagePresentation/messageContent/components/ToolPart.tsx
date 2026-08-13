@@ -17,6 +17,8 @@ export function ToolPart({ part }: ToolPartProps) {
   const toolPresentation = getBuiltInToolPresentation(getToolName(part));
   const title = getToolLabel(part, toolPresentation?.titleKey, t);
   const statusText = getToolStatusText(part, t);
+  const iosImageSource = Platform.OS === 'ios' ? toolPresentation?.iosImageSource : undefined;
+  const icon = iosImageSource ? undefined : toolPresentation?.androidIcon;
   const isRunning =
     part.state === 'input-streaming' ||
     part.state === 'input-available' ||
@@ -24,8 +26,8 @@ export function ToolPart({ part }: ToolPartProps) {
 
   return (
     <ToolPartDisclosure
-      icon={Platform.OS === 'android' ? toolPresentation?.androidIcon : undefined}
-      imageSource={Platform.OS === 'ios' ? toolPresentation?.iosImageSource : undefined}
+      icon={icon}
+      imageSource={iosImageSource}
       isRunning={isRunning}
       statusText={statusText}
       statusTone={getToolStatusTone(part)}

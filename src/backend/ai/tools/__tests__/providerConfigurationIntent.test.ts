@@ -5,6 +5,7 @@ import { resolveProviderConfigurationToolName } from '../providerConfigurationIn
 const providers = [
   { id: 'gemini', name: 'Gemini' },
   { id: 'openai', name: 'OpenAI' },
+  { id: 'openrouter', name: 'OpenRouter' },
   { id: 'cherryin', name: 'CherryIN' },
   { id: 'anthropic', name: 'Anthropic' },
   { id: 'zai', name: 'zai' },
@@ -12,11 +13,11 @@ const providers = [
 const tools = {
   configure_builtin_provider: {} as never,
   create_custom_provider: {} as never,
+  list_providers: {} as never,
 } satisfies ToolSet;
 
 describe('resolveProviderConfigurationToolName', () => {
   test.each([
-    '帮我配置服务商',
     '帮我配置 Gemini',
     '帮我配置openai',
     '请更新 CherryIN 服务商',
@@ -26,7 +27,26 @@ describe('resolveProviderConfigurationToolName', () => {
     expect(resolve(text)).toBe('configure_builtin_provider');
   });
 
-  test.each(['帮我拉取模型', '同步 OpenRouter 模型', '帮我添加模型', 'refresh models'])(
+  test.each([
+    '有哪些服务商',
+    '查看 provider 列表',
+    '我配置了哪些服务商',
+    '哪些服务商已启用',
+    'list providers',
+    'OpenAI 配置好了吗',
+    'Gemini 是否已配置',
+    'CherryIN 启用了吗',
+    'Anthropic 能用吗',
+    'OpenAI provider status',
+    '帮我配置服务商',
+    '帮我更新服务商',
+    '帮我拉取模型',
+    '帮我添加模型',
+  ])('discovers providers before an underspecified request: %s', (text) => {
+    expect(resolve(text)).toBe('list_providers');
+  });
+
+  test.each(['同步 OpenRouter 模型', '拉取 Gemini 模型', 'refresh OpenAI models'])(
     'routes built-in provider model management: %s',
     (text) => {
       expect(resolve(text)).toBe('configure_builtin_provider');
@@ -55,6 +75,8 @@ describe('resolveProviderConfigurationToolName', () => {
     expect(
       resolve('帮我创建一个服务商', { configure_builtin_provider: {} as never }),
     ).toBeUndefined();
+    expect(resolve('有哪些服务商', { configure_builtin_provider: {} as never })).toBeUndefined();
+    expect(resolve('帮我配置服务商', { list_providers: {} as never })).toBe('list_providers');
   });
 
   test('does not reroute an approval continuation ending in an assistant message', () => {

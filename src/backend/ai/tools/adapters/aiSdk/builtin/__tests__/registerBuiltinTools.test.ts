@@ -4,6 +4,7 @@ import {
   configureBuiltinProviderInputSchema,
   type CreateCustomProviderInput,
   createCustomProviderInputSchema,
+  listProvidersInputSchema,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import { asSchema, type Tool } from 'ai';
@@ -28,6 +29,7 @@ describe('registerBuiltinTools', () => {
     expect(registry.getAll().map((entry) => entry.name)).toEqual(
       [
         ...deviceToolNames,
+        'list_providers',
         'configure_builtin_provider',
         'create_custom_provider',
         'web_fetch',
@@ -54,6 +56,11 @@ describe('registerBuiltinTools', () => {
         name: 'create_custom_provider',
         namespace: 'provider-configuration',
       }),
+      expect.objectContaining({
+        defer: 'never',
+        name: 'list_providers',
+        namespace: 'provider-configuration',
+      }),
     ]);
     expect(registry.getByName('tool_exec')).toBeUndefined();
   });
@@ -63,6 +70,7 @@ describe('registerBuiltinTools', () => {
     expect(entries.map((entry) => entry.tool.inputSchema)).toEqual([
       configureBuiltinProviderInputSchema,
       createCustomProviderInputSchema,
+      listProvidersInputSchema,
     ]);
 
     for (const entry of entries) {
@@ -79,19 +87,27 @@ describe('registerBuiltinTools', () => {
 
   test('describes provider intent routing before collecting missing details', () => {
     const registry = createRegistry();
+    const list = registry.getByName('list_providers');
     const builtin = registry.getByName('configure_builtin_provider');
     const custom = registry.getByName('create_custom_provider');
+
+    expect(list?.description).toBe(list?.tool.description);
+    for (const description of [list?.description, list?.tool.description]) {
+      expect(description?.length).toBeLessThanOrEqual(180);
+      expect(description).toContain('List providers and redacted setup status');
+      expect(description).toContain('no provider was named');
+      expect(description).toContain('Never returns keys or URLs');
+    }
 
     expect(builtin?.description).toBe(builtin?.tool.description);
     for (const description of [builtin?.description, builtin?.tool.description]) {
       expect(description?.length).toBeLessThanOrEqual(260);
-      expect(description).toContain('Call immediately');
-      expect(description).toContain('configure or update');
+      expect(description).toContain('Configure or update');
       expect(description).toContain('OpenAI, Gemini, CherryIN');
-      expect(description).toContain('pull, sync, add, or manage models');
-      expect(description).toContain('provider, key, or URL is missing');
-      expect(description).toContain('pass empty values');
-      expect(description).toContain('tool handles clarification');
+      expect(description).toContain('pull, sync, add, or manage its models');
+      expect(description).toContain('no provider was named');
+      expect(description).toContain('call list_providers first');
+      expect(description).toContain('missing key or URL as empty');
     }
 
     expect(custom?.description).toBe(custom?.tool.description);
@@ -167,9 +183,11 @@ describe('registerBuiltinTools', () => {
 
     await execute(registry.getByName('configure_builtin_provider')?.tool, builtinInput, signal);
     await execute(registry.getByName('create_custom_provider')?.tool, customInput, signal);
+    await execute(registry.getByName('list_providers')?.tool, { filter: 'configured' }, signal);
 
     expect(deps.providerSetup.executeBuiltin).toHaveBeenCalledWith(builtinInput, signal);
     expect(deps.providerSetup.executeCustom).toHaveBeenCalledWith(customInput, signal);
+    expect(deps.providerSetup.listProviders).toHaveBeenCalledWith({ filter: 'configured' });
   });
 
   test('uses strict required-only provider schemas for every device tool', async () => {
@@ -223,6 +241,7 @@ function dependencies(mode: 'ask' | 'always') {
     providerSetup: {
       executeBuiltin: jest.fn(),
       executeCustom: jest.fn(),
+      listProviders: jest.fn(async () => ({ providers: [], status: 'ok' as const })),
       resolveBuiltin: jest.fn(async () => ({
         candidates: [],
         message: 'No matching provider.',

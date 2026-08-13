@@ -83,6 +83,7 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
     providerSetup: {
       executeBuiltin: jest.fn(),
       executeCustom: jest.fn(),
+      listProviders: jest.fn(async () => ({ providers: [], status: 'ok' as const })),
       resolveBuiltin: jest.fn(async () => ({
         candidates: [],
         message: 'Provider is required.',

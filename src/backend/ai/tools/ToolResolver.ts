@@ -29,7 +29,10 @@ export type ToolResolverDependencies = {
   devicePermissions: Pick<DevicePermissions, 'getStatusForPreference'>;
   mcpRuntime: Pick<McpRuntimeService, 'getToolEntriesForAssistant'>;
   preference: Pick<PreferenceService, 'get'>;
-  providerSetup: Pick<ProviderSetupModule, 'executeBuiltin' | 'executeCustom' | 'resolveBuiltin'>;
+  providerSetup: Pick<
+    ProviderSetupModule,
+    'executeBuiltin' | 'executeCustom' | 'listProviders' | 'resolveBuiltin'
+  >;
   webSearch: WebSearchService;
 };
 

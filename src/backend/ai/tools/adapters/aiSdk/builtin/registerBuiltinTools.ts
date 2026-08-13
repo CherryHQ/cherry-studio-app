@@ -15,7 +15,10 @@ import { createWebSearchToolEntry } from './WebSearchTool';
 export function registerBuiltinTools(
   registry: ToolRegistry<ToolApplyScope>,
   deps: DeviceToolDependencies & {
-    providerSetup: Pick<ProviderSetupModule, 'executeBuiltin' | 'executeCustom' | 'resolveBuiltin'>;
+    providerSetup: Pick<
+      ProviderSetupModule,
+      'executeBuiltin' | 'executeCustom' | 'listProviders' | 'resolveBuiltin'
+    >;
     webSearch: WebSearchService;
   },
 ): void {

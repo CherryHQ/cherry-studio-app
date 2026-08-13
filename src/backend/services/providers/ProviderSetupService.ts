@@ -1,13 +1,17 @@
 import {
   type ConfigureBuiltinProviderInput,
   type CreateCustomProviderInput,
+  type ListProvidersInput,
   type ProviderConfigurationResolution,
   type ProviderConfigurationSummary,
+  type ProviderListItem,
+  type ProviderListOutput,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import { CHERRYAI_PROVIDER_ID } from '@cherrystudio/universal/data/presets/cherryai';
 import { type Model, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import {
+  type AuthConfig,
   canEditProviderEndpoint,
   type Provider,
 } from '@cherrystudio/universal/data/types/provider';
@@ -135,6 +139,44 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     } catch (error) {
       return invalidResolution(error);
     }
+  }
+
+  async listProviders(input: ListProvidersInput): Promise<ProviderListOutput> {
+    if (!(await this.isEnabled())) return { providers: [], status: 'disabled' };
+
+    const [providers, models] = await Promise.all([providerService.list(), modelService.list()]);
+    const modelCounts = new Map<string, number>();
+    for (const model of models) {
+      modelCounts.set(model.providerId, (modelCounts.get(model.providerId) ?? 0) + 1);
+    }
+
+    const items = await Promise.all(
+      providers
+        .filter((provider) => provider.id !== CHERRYAI_PROVIDER_ID)
+        .map(async (provider): Promise<ProviderListItem> => {
+          const modelCount = modelCounts.get(provider.id) ?? 0;
+          const authenticationStatus = await getProviderAuthenticationStatus(provider);
+          const kind = provider.presetProviderId == null ? 'custom' : 'builtin';
+          return {
+            authenticationStatus,
+            id: provider.id,
+            isConfigured:
+              kind === 'custom' ||
+              provider.isEnabled ||
+              authenticationStatus === 'ready' ||
+              modelCount > 0,
+            isEnabled: provider.isEnabled,
+            kind,
+            modelCount,
+            name: provider.name,
+          };
+        }),
+    );
+
+    return {
+      providers: items.filter((item) => matchesListFilter(item, input.filter)),
+      status: 'ok',
+    };
   }
 
   private async isEnabled(): Promise<boolean> {
@@ -381,6 +423,82 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
       providerName: provider.name,
       status: 'configured',
     };
+  }
+}
+
+function matchesListFilter(item: ProviderListItem, filter: ListProvidersInput['filter']): boolean {
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'configured':
+      return item.isConfigured;
+    case 'enabled':
+      return item.isEnabled;
+    case 'builtin':
+      return item.kind === 'builtin';
+    case 'custom':
+      return item.kind === 'custom';
+  }
+}
+
+async function getProviderAuthenticationStatus(
+  provider: Provider,
+): Promise<ProviderListItem['authenticationStatus']> {
+  const hasApiKey = provider.apiKeys.some((key) => key.isEnabled);
+  if (hasApiKey) return 'ready';
+
+  const [authConfig, oauthStatus] = await Promise.all([
+    provider.authType === 'api-key' || provider.authType === 'api-key-aws'
+      ? null
+      : providerService.getAuthConfig(provider.id),
+    getOAuthStatus(provider),
+  ]);
+  const hasAuthCredential =
+    oauthStatus?.isAuthenticated === true ||
+    (authConfig ? hasCompleteAuthConfig(authConfig) : false);
+  if (hasAuthCredential) return 'ready';
+  if (provider.authOptional === true) return 'not-required';
+  if (provider.authMethods?.includes('external-cli')) return 'unknown';
+
+  const canUseApiKey = provider.authMethods?.includes('api-key') ?? true;
+  if (oauthStatus?.isConfigured === false && !canUseApiKey) return 'unavailable';
+  if (provider.authMethods?.includes('oauth') && !oauthStatus && !canUseApiKey) return 'unknown';
+  return 'missing';
+}
+
+async function getOAuthStatus(provider: Provider) {
+  if (!provider.authMethods?.includes('oauth')) return null;
+  try {
+    return await application.get('ProviderOAuthService').getStatus(provider.id);
+  } catch {
+    return null;
+  }
+}
+
+function hasCompleteAuthConfig(authConfig: AuthConfig): boolean {
+  switch (authConfig.type) {
+    case 'oauth':
+      return Boolean(authConfig.accessToken?.trim() || authConfig.refreshToken?.trim());
+    case 'iam-aws':
+      return Boolean(
+        authConfig.region.trim() &&
+        authConfig.accessKeyId?.trim() &&
+        authConfig.secretAccessKey?.trim(),
+      );
+    case 'iam-gcp': {
+      const credentials = authConfig.credentials;
+      return Boolean(
+        authConfig.location.trim() &&
+        authConfig.project.trim() &&
+        credentials &&
+        (credentials.clientEmail || credentials.client_email) &&
+        (credentials.privateKey || credentials.private_key),
+      );
+    }
+    case 'api-key':
+    case 'api-key-aws':
+    case 'iam-azure':
+      return false;
   }
 }
 

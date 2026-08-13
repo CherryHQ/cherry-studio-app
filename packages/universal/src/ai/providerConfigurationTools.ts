@@ -3,6 +3,7 @@ import * as z from 'zod';
 
 export const CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME = 'configure_builtin_provider';
 export const CREATE_CUSTOM_PROVIDER_TOOL_NAME = 'create_custom_provider';
+export const LIST_PROVIDERS_TOOL_NAME = 'list_providers';
 
 export const PROVIDER_CONFIGURATION_TOOL_NAMES = [
   CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME,
@@ -10,6 +11,40 @@ export const PROVIDER_CONFIGURATION_TOOL_NAMES = [
 ] as const;
 
 export type ProviderConfigurationToolName = (typeof PROVIDER_CONFIGURATION_TOOL_NAMES)[number];
+
+export type ProviderToolName = typeof LIST_PROVIDERS_TOOL_NAME | ProviderConfigurationToolName;
+
+export const PROVIDER_LIST_FILTERS = ['all', 'configured', 'enabled', 'builtin', 'custom'] as const;
+export const ProviderListFilterSchema = z.enum(PROVIDER_LIST_FILTERS);
+
+export const listProvidersInputSchema = z
+  .object({
+    filter: ProviderListFilterSchema.describe(
+      'all providers, configured providers, enabled providers, built-in providers, or custom providers.',
+    ),
+  })
+  .strict();
+
+export const providerListItemSchema = z
+  .object({
+    authenticationStatus: z
+      .enum(['ready', 'missing', 'not-required', 'unavailable', 'unknown'])
+      .describe('Redacted credential readiness. unknown means the app cannot inspect it.'),
+    id: z.string(),
+    isConfigured: z.boolean(),
+    isEnabled: z.boolean(),
+    kind: z.enum(['builtin', 'custom']),
+    modelCount: z.number().int().nonnegative(),
+    name: z.string(),
+  })
+  .strict();
+
+export const providerListOutputSchema = z
+  .object({
+    providers: z.array(providerListItemSchema),
+    status: z.enum(['ok', 'disabled']),
+  })
+  .strict();
 
 export const PROVIDER_CONFIGURATION_INTENTS = [
   'configure',
@@ -146,10 +181,13 @@ export const providerConfigurationToolOutputSchema = z.union([
 
 export type ConfigureBuiltinProviderInput = z.infer<typeof configureBuiltinProviderInputSchema>;
 export type CreateCustomProviderInput = z.infer<typeof createCustomProviderInputSchema>;
+export type ListProvidersInput = z.infer<typeof listProvidersInputSchema>;
 export type ProviderConfigurationManualModel = z.infer<typeof manualModelSchema>;
 export type ProviderConfigurationSummary = z.infer<typeof providerConfigurationSummarySchema>;
 export type ProviderConfigurationResolution = z.infer<typeof providerConfigurationResolutionSchema>;
 export type ProviderConfigurationToolOutput = z.infer<typeof providerConfigurationToolOutputSchema>;
+export type ProviderListItem = z.infer<typeof providerListItemSchema>;
+export type ProviderListOutput = z.infer<typeof providerListOutputSchema>;
 
 export function isProviderConfigurationToolName(
   value: string,

@@ -1,6 +1,7 @@
 import {
   BellRingIcon,
   CalendarIcon,
+  DatabaseIcon,
   HeartPulseIcon,
   MapPinIcon,
   type AppIconProps,
@@ -9,7 +10,7 @@ import type { ComponentType } from 'react';
 
 export type BuiltInToolPresentation = {
   androidIcon: ComponentType<AppIconProps>;
-  iosImageSource: number;
+  iosImageSource?: number;
   titleKey: string;
 };
 
@@ -21,6 +22,10 @@ const iosSystemImages = {
 } as const;
 
 const builtInToolPresentations: Record<string, BuiltInToolPresentation> = {
+  list_providers: {
+    androidIcon: DatabaseIcon,
+    titleKey: 'chat.builtinTool.providers.list',
+  },
   calendar_create_event: {
     androidIcon: CalendarIcon,
     iosImageSource: iosSystemImages.calendar,

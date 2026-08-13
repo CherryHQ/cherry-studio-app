@@ -36,6 +36,7 @@ describe('ToolResolver', () => {
         'health_get_summary',
         'health_list_workouts',
         'location_get_current',
+        'list_providers',
         'mcp__server__search',
         'reminder_create_item',
         'reminder_delete_item',
@@ -59,6 +60,7 @@ describe('ToolResolver', () => {
     expect(Object.keys(result.tools ?? {}).sort()).toEqual([
       'configure_builtin_provider',
       'create_custom_provider',
+      'list_providers',
     ]);
     expect(result.hasMcpTools).toBe(false);
     expect(getStatus).not.toHaveBeenCalled();
@@ -82,16 +84,18 @@ describe('ToolResolver', () => {
 
     expect(result.tools).not.toHaveProperty('configure_builtin_provider');
     expect(result.tools).not.toHaveProperty('create_custom_provider');
+    expect(result.tools).not.toHaveProperty('list_providers');
     expect(result.tools).toHaveProperty('calendar_list_events');
   });
 
-  test('filters both provider configuration tools with their shared preference', async () => {
+  test('filters all provider tools with their shared preference', async () => {
     const result = await createResolver({ providerConfigurationEnabled: false }).resolveForRequest({
       assistant: assistant(),
     });
 
     expect(result.tools).not.toHaveProperty('configure_builtin_provider');
     expect(result.tools).not.toHaveProperty('create_custom_provider');
+    expect(result.tools).not.toHaveProperty('list_providers');
   });
 
   test('does not register web search when the assistant disables it', async () => {
@@ -147,6 +151,7 @@ function createResolver(options: {
     providerSetup: {
       executeBuiltin: jest.fn(),
       executeCustom: jest.fn(),
+      listProviders: jest.fn(),
       resolveBuiltin: jest.fn(async () => ({
         candidates: [],
         message: 'Provider is required.',

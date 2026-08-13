@@ -39,6 +39,7 @@
   "chat.builtinTool.health.listWorkouts": "Find workout records",
   "chat.builtinTool.health.summary": "Get health summary",
   "chat.builtinTool.location.current": "Get current location",
+  "chat.builtinTool.providers.list": "View providers",
   "chat.builtinTool.reminders.create": "Create reminder",
   "chat.builtinTool.reminders.delete": "Delete reminder",
   "chat.builtinTool.reminders.list": "Find reminders",

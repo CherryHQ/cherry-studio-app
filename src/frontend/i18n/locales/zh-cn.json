@@ -39,6 +39,7 @@
   "chat.builtinTool.health.listWorkouts": "查询体能训练记录",
   "chat.builtinTool.health.summary": "获取健康摘要",
   "chat.builtinTool.location.current": "获取当前位置",
+  "chat.builtinTool.providers.list": "查看服务商",
   "chat.builtinTool.reminders.create": "创建提醒事项",
   "chat.builtinTool.reminders.delete": "删除提醒事项",
   "chat.builtinTool.reminders.list": "查询提醒事项",

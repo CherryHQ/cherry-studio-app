@@ -335,6 +335,7 @@ describe('buildAgentParams reasoning contract', () => {
         tools: {
           configure_builtin_provider: {} as never,
           create_custom_provider: {} as never,
+          list_providers: {} as never,
         },
       }),
       provider,
@@ -350,6 +351,44 @@ describe('buildAgentParams reasoning contract', () => {
     expect(result.options.toolChoice).toBeUndefined();
   });
 
+  it('discovers providers before an underspecified configuration request', async () => {
+    const provider = createProvider('openai');
+    const model = {
+      ...resolveModel(provider, 'gpt-4o'),
+      capabilities: ['function-call' as const],
+    };
+    const assistant = createAssistant(model, 'default');
+    const result = await buildAgentParams({
+      request: {
+        assistantId: assistant.id,
+        messages: [
+          {
+            id: 'user-message',
+            parts: [{ text: '帮我配置服务商', type: 'text' }],
+            role: 'user',
+          },
+        ],
+        uniqueModelId: model.id,
+      },
+      services: createServices(provider, {
+        tools: {
+          configure_builtin_provider: {} as never,
+          create_custom_provider: {} as never,
+          list_providers: {} as never,
+        },
+      }),
+      provider,
+      model,
+      assistant,
+      shouldIncludeExternalTools: true,
+    });
+
+    expect(result.options.firstStepToolChoice).toEqual({
+      toolName: 'list_providers',
+      type: 'tool',
+    });
+  });
+
   it('loads and routes provider configuration tools without an assistant', async () => {
     const provider = createProvider('openai');
     const model = {
@@ -360,6 +399,7 @@ describe('buildAgentParams reasoning contract', () => {
       tools: {
         configure_builtin_provider: {} as never,
         create_custom_provider: {} as never,
+        list_providers: {} as never,
       },
     });
     const result = await buildAgentParams({

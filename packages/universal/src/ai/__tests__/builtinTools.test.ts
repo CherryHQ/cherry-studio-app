@@ -23,6 +23,9 @@ import {
   configureBuiltinProviderInputSchema,
   CREATE_CUSTOM_PROVIDER_TOOL_NAME,
   createCustomProviderInputSchema,
+  LIST_PROVIDERS_TOOL_NAME,
+  listProvidersInputSchema,
+  PROVIDER_CONFIGURATION_TOOL_NAMES,
 } from '../providerConfigurationTools';
 
 function expectDirectPropertyTypes(schema: z.ZodType) {
@@ -46,6 +49,23 @@ describe('builtin tool contracts', () => {
     expect(REPORT_ARTIFACTS_TOOL_NAME).toBe('report_artifacts');
     expect(CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME).toBe('configure_builtin_provider');
     expect(CREATE_CUSTOM_PROVIDER_TOOL_NAME).toBe('create_custom_provider');
+    expect(LIST_PROVIDERS_TOOL_NAME).toBe('list_providers');
+    expect(PROVIDER_CONFIGURATION_TOOL_NAMES).toEqual([
+      'configure_builtin_provider',
+      'create_custom_provider',
+    ]);
+  });
+
+  it('uses one strict enum filter for provider discovery', () => {
+    const json = z.toJSONSchema(listProvidersInputSchema) as {
+      properties?: Record<string, { type?: unknown; anyOf?: unknown }>;
+      required?: string[];
+    };
+
+    expect(json.required).toEqual(['filter']);
+    expectDirectPropertyTypes(listProvidersInputSchema);
+    expect(listProvidersInputSchema.safeParse({ filter: 'configured' }).success).toBe(true);
+    expect(listProvidersInputSchema.safeParse({ filter: 'unknown' }).success).toBe(false);
   });
 
   it.each([

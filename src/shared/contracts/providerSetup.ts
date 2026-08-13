@@ -1,8 +1,10 @@
 import type {
   ConfigureBuiltinProviderInput,
   CreateCustomProviderInput,
+  ListProvidersInput,
   ProviderConfigurationSummary,
   ProviderConfigurationToolOutput,
+  ProviderListOutput,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -40,6 +42,7 @@ export interface ProviderSetupModule {
     input: CreateCustomProviderInput,
     signal?: AbortSignal,
   ): Promise<ProviderConfigurationToolOutput>;
+  listProviders(input: ListProvidersInput): Promise<ProviderListOutput>;
   previewBuiltin(
     input: ConfigureBuiltinProviderInput,
     signal?: AbortSignal,

@@ -58,6 +58,8 @@ describe('ProviderSetupService', () => {
   let testDb: TestDb;
   let sqlite: DatabaseSync;
   let catalogList: jest.MockedFunction<ModelCatalogService['list']>;
+  let oauthGetStatus: jest.Mock;
+  let providerConfigurationEnabled: boolean;
   let subject: ProviderSetupService;
 
   beforeEach(async () => {
@@ -68,12 +70,21 @@ describe('ProviderSetupService', () => {
       remotelyProbed: true,
       source: 'api' as const,
     })) as jest.MockedFunction<ModelCatalogService['list']>;
+    oauthGetStatus = jest.fn(async (providerId: string) => ({
+      accountId: null,
+      flowType: 'pkce-session' as const,
+      isAuthenticated: false,
+      isConfigured: true,
+      providerId,
+    }));
+    providerConfigurationEnabled = true;
     await installTestHost({
       DbService: testDb.dbService,
       ModelCatalogService: { list: catalogList },
+      ProviderOAuthService: { getStatus: oauthGetStatus },
       PreferenceService: {
         get: jest.fn(async (key: string) =>
-          key === 'chat.tools.provider_configuration.enabled' ? true : null,
+          key === 'chat.tools.provider_configuration.enabled' ? providerConfigurationEnabled : null,
         ),
       },
     });
@@ -134,6 +145,146 @@ describe('ProviderSetupService', () => {
       ],
       message: 'More than one built-in provider matches. Ask the user to choose one candidate.',
       status: 'ambiguous',
+    });
+  });
+
+  test('lists redacted provider status without treating seeded built-ins as configured', async () => {
+    await seedBuiltin({ apiKey: 'secret-key', id: 'cherryin', name: 'CherryIN' });
+    await providerService.update('cherryin', { isEnabled: true });
+    await seedBuiltin({ id: 'gemini', name: 'Gemini' });
+    await seedBuiltin({ id: 'ollama', name: 'Ollama' });
+    await providerService.create({
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://private.example/v1' },
+      },
+      name: 'Private Relay',
+      providerId: 'private-relay',
+    });
+    await modelService.createFromRegistry({
+      capabilities: [],
+      isEnabled: true,
+      isHidden: false,
+      modelId: 'configured-model',
+      name: 'Configured model',
+      providerId: 'cherryin',
+      supportsStreaming: true,
+    });
+
+    const result = await subject.listProviders({ filter: 'all' });
+
+    expect(result).toEqual({
+      providers: [
+        expect.objectContaining({
+          authenticationStatus: 'ready',
+          id: 'cherryin',
+          isConfigured: true,
+          isEnabled: true,
+          kind: 'builtin',
+          modelCount: 1,
+          name: 'CherryIN',
+        }),
+        expect.objectContaining({
+          authenticationStatus: 'missing',
+          id: 'gemini',
+          isConfigured: false,
+          isEnabled: false,
+          kind: 'builtin',
+          modelCount: 0,
+        }),
+        expect.objectContaining({
+          authenticationStatus: 'not-required',
+          id: 'ollama',
+          isConfigured: false,
+          kind: 'builtin',
+        }),
+        expect.objectContaining({
+          authenticationStatus: 'missing',
+          id: 'private-relay',
+          isConfigured: true,
+          isEnabled: false,
+          kind: 'custom',
+        }),
+      ],
+      status: 'ok',
+    });
+    expect(JSON.stringify(result)).not.toContain('secret-key');
+    expect(JSON.stringify(result)).not.toContain('private.example');
+  });
+
+  test('filters provider discovery by configured, enabled, built-in, and custom status', async () => {
+    await seedBuiltin({ id: 'gemini', name: 'Gemini' });
+    await seedBuiltin({ id: 'openai', name: 'OpenAI' });
+    await providerService.update('openai', { isEnabled: true });
+    await providerService.create({
+      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
+      endpointConfigs: {
+        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: { baseUrl: 'https://relay.example/v1' },
+      },
+      name: 'Relay',
+      providerId: 'relay',
+    });
+
+    await expect(subject.listProviders({ filter: 'configured' })).resolves.toMatchObject({
+      providers: [{ id: 'openai' }, { id: 'relay' }],
+    });
+    await expect(subject.listProviders({ filter: 'enabled' })).resolves.toMatchObject({
+      providers: [{ id: 'openai' }],
+    });
+    await expect(subject.listProviders({ filter: 'builtin' })).resolves.toMatchObject({
+      providers: [{ id: 'gemini' }, { id: 'openai' }],
+    });
+    await expect(subject.listProviders({ filter: 'custom' })).resolves.toMatchObject({
+      providers: [{ id: 'relay' }],
+    });
+  });
+
+  test('uses OAuth state without exposing account details and rechecks the tool preference', async () => {
+    await seedBuiltin({ id: 'cherryin', name: 'CherryIN' });
+    oauthGetStatus.mockResolvedValueOnce({
+      accountId: 'private-account',
+      flowType: 'pkce-session',
+      isAuthenticated: true,
+      isConfigured: true,
+      providerId: 'cherryin',
+    });
+
+    const configured = await subject.listProviders({ filter: 'configured' });
+    expect(configured).toEqual({
+      providers: [
+        expect.objectContaining({
+          authenticationStatus: 'ready',
+          id: 'cherryin',
+          isConfigured: true,
+        }),
+      ],
+      status: 'ok',
+    });
+    expect(JSON.stringify(configured)).not.toContain('private-account');
+
+    providerConfigurationEnabled = false;
+    await expect(subject.listProviders({ filter: 'all' })).resolves.toEqual({
+      providers: [],
+      status: 'disabled',
+    });
+  });
+
+  test('distinguishes unavailable OAuth from external credentials the app cannot inspect', async () => {
+    await seedBuiltin({ id: 'openai-codex', name: 'OpenAI Codex' });
+    await seedBuiltin({ id: 'claude-code', name: 'Claude Code' });
+    oauthGetStatus.mockImplementation(async (providerId: string) => ({
+      accountId: null,
+      flowType: 'blocked' as const,
+      isAuthenticated: false,
+      isConfigured: false,
+      providerId,
+    }));
+
+    await expect(subject.listProviders({ filter: 'all' })).resolves.toMatchObject({
+      providers: [
+        { authenticationStatus: 'unavailable', id: 'openai-codex' },
+        { authenticationStatus: 'unknown', id: 'claude-code' },
+      ],
     });
   });
 

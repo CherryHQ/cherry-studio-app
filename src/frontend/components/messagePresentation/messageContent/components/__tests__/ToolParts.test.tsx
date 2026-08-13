@@ -1,4 +1,4 @@
-import { BellRingIcon } from '@cherrystudio/app-icons';
+import { BellRingIcon, DatabaseIcon } from '@cherrystudio/app-icons';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement, ReactNode } from 'react';
 import { Platform, Text, View } from 'react-native';
@@ -116,6 +116,23 @@ describe('tool message detail sheets', () => {
     await render(<ToolPart part={makeToolPart({ toolName: 'calculator' })} />);
 
     expect(findByTestID('tool-part-trigger').props.title).toBe('calculator');
+  });
+
+  it('shows a localized title for provider discovery', async () => {
+    setPlatform('ios');
+    await render(
+      <ToolPart
+        part={makeToolPart({
+          toolMetadata: { cherry: { tool: { type: 'builtin' } } },
+          toolName: 'list_providers',
+        })}
+      />,
+    );
+
+    const trigger = findByTestID('tool-part-trigger');
+    expect(trigger.props.icon).toBe(DatabaseIcon);
+    expect(trigger.props.imageSource).toBeUndefined();
+    expect(trigger.props.title).toBe('chat.builtinTool.providers.list');
   });
 
   it('shows a redacted provider configuration summary and opens full settings', async () => {
