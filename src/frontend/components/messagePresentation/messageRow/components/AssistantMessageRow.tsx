@@ -7,6 +7,7 @@ import { MessageParts } from '../../messageContent';
 import type { AssistantMessageActions, MessagePresentationItem } from '../../types';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 import { projectAssistantMessageReadAloud } from '../utils/projectAssistantMessageReadAloud';
+import { resolveAssistantReadAloudLanguage } from '../utils/resolveAssistantReadAloudLanguage';
 
 type AssistantMessageRowProps = {
   actions?: AssistantMessageActions;
@@ -25,6 +26,26 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
   const isReadAloudActive = actions?.activeReadAloudMessageId === message.id;
   const onReadAloud = actions?.onReadAloud;
   const onStopReadAloud = actions?.onStopReadAloud;
+
+  const handleReadAloudPress = () => {
+    if (!readAloudContent || !onReadAloud || !onStopReadAloud) {
+      return;
+    }
+    if (isReadAloudActive) {
+      onStopReadAloud();
+      return;
+    }
+
+    const language = resolveAssistantReadAloudLanguage(
+      readAloudContent.text,
+      readAloudContent.language,
+    );
+    onReadAloud({
+      messageId: message.id,
+      text: readAloudContent.text,
+      ...(language !== undefined ? { language } : {}),
+    });
+  };
 
   return (
     <View className="w-full gap-2 px-4 py-3">
@@ -61,11 +82,7 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
               icon={
                 isReadAloudActive ? <SquareIcon strokeWidth={2} /> : <Volume2Icon strokeWidth={2} />
               }
-              onPress={() =>
-                isReadAloudActive
-                  ? onStopReadAloud()
-                  : onReadAloud({ messageId: message.id, ...readAloudContent })
-              }
+              onPress={handleReadAloudPress}
               size="sm"
               testID="assistant-message-read-aloud"
               variant="ghost"

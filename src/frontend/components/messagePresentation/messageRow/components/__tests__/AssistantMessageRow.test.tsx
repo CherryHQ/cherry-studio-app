@@ -8,6 +8,7 @@ import { AssistantMessageRow } from '../AssistantMessageRow';
 const mockMessageParts = jest.fn((_props: { message: MessagePresentationItem }) => null);
 const mockPrismSweep = jest.fn((_props: { active: boolean }) => null);
 const mockButton = jest.fn();
+const mockResolveAssistantReadAloudLanguage = jest.fn();
 
 jest.mock('../../../messageContent', () => ({
   MessageParts: (props: { message: MessagePresentationItem }) => mockMessageParts(props),
@@ -37,6 +38,11 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+jest.mock('../../utils/resolveAssistantReadAloudLanguage', () => ({
+  resolveAssistantReadAloudLanguage: (text: string, explicitLanguage?: string) =>
+    mockResolveAssistantReadAloudLanguage(text, explicitLanguage),
+}));
+
 function createAssistantMessage(
   status: MessagePresentationItem['status'],
   parts: MessagePresentationItem['data']['parts'] = [],
@@ -54,6 +60,7 @@ describe('AssistantMessageRow', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResolveAssistantReadAloudLanguage.mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -133,7 +140,52 @@ describe('AssistantMessageRow', () => {
     },
   );
 
-  test('starts read aloud with projected translated content and language', () => {
+  test('resolves language only on click using cleaned projected reply text', () => {
+    const onReadAloud = jest.fn();
+    const message = createAssistantMessage('success', [{ text: '## 中文 **回答**', type: 'text' }]);
+    mockResolveAssistantReadAloudLanguage.mockReturnValue('zh-CN');
+
+    act(() => {
+      renderer = create(
+        <AssistantMessageRow actions={{ ...createActions(), onReadAloud }} message={message} />,
+      );
+    });
+
+    expect(mockResolveAssistantReadAloudLanguage).not.toHaveBeenCalled();
+
+    act(() =>
+      renderer!.root.findByProps({ testID: 'assistant-message-read-aloud' }).props.onPress(),
+    );
+
+    expect(mockResolveAssistantReadAloudLanguage).toHaveBeenCalledTimes(1);
+    expect(mockResolveAssistantReadAloudLanguage).toHaveBeenCalledWith('中文 回答', undefined);
+    expect(onReadAloud).toHaveBeenCalledWith({
+      language: 'zh-CN',
+      messageId: message.id,
+      text: '中文 回答',
+    });
+  });
+
+  test('omits the language property when the resolver returns no hint', () => {
+    const onReadAloud = jest.fn();
+    const message = createAssistantMessage('success', [{ text: 'Answer', type: 'text' }]);
+
+    act(() => {
+      renderer = create(
+        <AssistantMessageRow actions={{ ...createActions(), onReadAloud }} message={message} />,
+      );
+    });
+    act(() =>
+      renderer!.root.findByProps({ testID: 'assistant-message-read-aloud' }).props.onPress(),
+    );
+
+    expect(mockResolveAssistantReadAloudLanguage).toHaveBeenCalledTimes(1);
+    expect(mockResolveAssistantReadAloudLanguage).toHaveBeenCalledWith('Answer', undefined);
+    expect(onReadAloud).toHaveBeenCalledWith({ messageId: message.id, text: 'Answer' });
+    expect(onReadAloud.mock.calls[0][0]).not.toHaveProperty('language');
+  });
+
+  test('passes the translation target language to the resolver and forwards its result', () => {
     const onReadAloud = jest.fn();
     const onStopReadAloud = jest.fn();
     const message = createAssistantMessage('success', [
@@ -143,6 +195,7 @@ describe('AssistantMessageRow', () => {
         type: 'data-translation',
       },
     ]);
+    mockResolveAssistantReadAloudLanguage.mockReturnValue('de-DE');
 
     act(() => {
       renderer = create(
@@ -163,8 +216,13 @@ describe('AssistantMessageRow', () => {
 
     act(() => button.props.onPress());
 
+    expect(mockResolveAssistantReadAloudLanguage).toHaveBeenCalledTimes(1);
+    expect(mockResolveAssistantReadAloudLanguage).toHaveBeenCalledWith(
+      'Final translation',
+      'fr-FR',
+    );
     expect(onReadAloud).toHaveBeenCalledWith({
-      language: 'fr-FR',
+      language: 'de-DE',
       messageId: message.id,
       text: 'Final translation',
     });
@@ -198,6 +256,7 @@ describe('AssistantMessageRow', () => {
 
     expect(onStopReadAloud).toHaveBeenCalledTimes(1);
     expect(onReadAloud).not.toHaveBeenCalled();
+    expect(mockResolveAssistantReadAloudLanguage).not.toHaveBeenCalled();
 
     act(() => {
       renderer?.update(
