@@ -7,7 +7,7 @@ import type { TFunction } from 'i18next';
 import { CheckIcon, EyeIcon, EyeOffIcon, PlusIcon, Trash2Icon } from 'lucide-uniwind/png';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { KeyboardAvoidingView, KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import {
@@ -36,7 +36,6 @@ import {
   customInputFromForm,
   numericProviderConfigDraft,
   type ProviderConfigDraft,
-  providerNameFromDraft,
   toggleSetItem,
 } from './providerConfigDraft';
 
@@ -283,11 +282,7 @@ export function ProviderConfigModelsPage({
             onShowManualForm={() => setShowManualForm(true)}
           />
         }
-        ListHeaderComponent={
-          <View className="pb-5">
-            <CatalogStatus preview={preview} onRetry={onRetry} />
-          </View>
-        }
+        ListHeaderComponent={<CatalogStatus preview={preview} onRetry={onRetry} />}
         maintainVisibleContentPosition={false}
         recycleItems
         renderItem={renderProviderConfigModelListItem}
@@ -534,7 +529,7 @@ function CatalogStatus({
   const { t } = useTranslation();
   if (preview.catalogSource === 'skipped') {
     return (
-      <View className="gap-2 rounded-md bg-secondary p-3">
+      <View className="mb-5 gap-2 rounded-md bg-secondary p-3">
         <Text className="text-destructive text-sm" selectable>
           {preview.catalogError ?? t('chat.providerConfig.catalogSkipped')}
         </Text>
@@ -544,11 +539,11 @@ function CatalogStatus({
       </View>
     );
   }
+  if (preview.catalogSource === 'api') return null;
+
   return (
-    <Text className="text-foreground-tertiary text-sm">
-      {preview.remotelyProbed
-        ? t('chat.providerConfig.remoteConnected')
-        : t('chat.providerConfig.registryCatalog')}
+    <Text className="pb-5 text-foreground-tertiary text-sm">
+      {t('chat.providerConfig.registryCatalog')}
     </Text>
   );
 }
@@ -647,67 +642,6 @@ function ManualModelDraftEditor({
       <Button disabled={disabled} onPress={add} variant="secondary">
         {t('settings.provider.models.addSubmit')}
       </Button>
-    </View>
-  );
-}
-
-export function ProviderConfigConfirmationPage({
-  draft,
-  preview,
-}: {
-  draft: ProviderConfigDraft;
-  preview: ProviderSetupPreview | null;
-}) {
-  const { t } = useTranslation();
-  const providerName = preview?.provider.name ?? providerNameFromDraft(draft);
-  return (
-    <ScrollView
-      className="flex-1"
-      contentContainerClassName="gap-5 px-4 pb-20 pt-2"
-      showsVerticalScrollIndicator={false}
-    >
-      <SummaryRow label={t('chat.providerConfig.provider')} value={providerName} />
-      <SummaryRow
-        label={t('chat.providerConfig.origin')}
-        value={preview?.origin || t('chat.providerConfig.notSet')}
-      />
-      <SummaryRow
-        label={t('chat.providerConfig.apiKey')}
-        value={
-          preview?.apiKeyWillBeAdded
-            ? t('chat.providerConfig.willAdd')
-            : t('chat.providerConfig.unchanged')
-        }
-      />
-      <SummaryRow
-        label={t('chat.providerConfig.modelsAdded')}
-        value={String(draft.input.selectedModelIds.length + draft.input.manualModels.length)}
-      />
-      <SummaryRow
-        label={t('chat.providerConfig.modelsRemoved')}
-        value={String(draft.input.removedModelIds.length)}
-      />
-      <SummaryRow
-        label={t('chat.providerConfig.catalog')}
-        value={
-          preview?.catalogSource === 'registry'
-            ? t('chat.providerConfig.registryCatalog')
-            : preview?.catalogSource === 'api'
-              ? t('chat.providerConfig.remoteConnected')
-              : t('chat.providerConfig.catalogSkipped')
-        }
-      />
-    </ScrollView>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="gap-1 border-border border-b pb-4">
-      <Text className="text-foreground-tertiary text-sm">{label}</Text>
-      <Text className="text-foreground text-base" selectable>
-        {value}
-      </Text>
     </View>
   );
 }

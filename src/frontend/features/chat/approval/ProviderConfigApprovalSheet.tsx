@@ -22,7 +22,6 @@ import type { ProviderSetupMatchedProvider, ProviderSetupPreview } from '@/share
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 import {
   ProviderConfigConfigurationPage,
-  ProviderConfigConfirmationPage,
   ProviderConfigModelsPage,
 } from './ProviderConfigApprovalPages';
 import {
@@ -234,25 +233,29 @@ export function ProviderConfigApprovalSheet({
     [abortPreview, deny],
   );
 
-  const approve = useCallback(async () => {
-    if (!draft || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      await onRespond({
-        approvalId: approval.approvalId,
-        approved: true,
-        messageId: approval.messageId,
-        updatedInput: { ...draft.input },
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [approval.approvalId, approval.messageId, draft, isSubmitting, onRespond]);
+  const approve = useCallback(
+    async (approvedDraft: ProviderConfigDraft) => {
+      if (isSubmitting) return;
+      setIsSubmitting(true);
+      try {
+        await onRespond({
+          approvalId: approval.approvalId,
+          approved: true,
+          messageId: approval.messageId,
+          updatedInput: { ...approvedDraft.input },
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [approval.approvalId, approval.messageId, isSubmitting, onRespond],
+  );
 
   const goBack = useCallback(() => {
-    if (step === 'confirmation') setStep('models');
-    else if (step === 'models') setStep('configuration');
-  }, [step]);
+    abortPreview();
+    setIsPreviewLoading(false);
+    if (step === 'models') setStep('configuration');
+  }, [abortPreview, step]);
 
   const goForward = useCallback(() => {
     if (!draft) return;
@@ -271,7 +274,7 @@ export function ProviderConfigApprovalSheet({
       return;
     }
     if (step === 'models') {
-      setDraft(
+      void approve(
         withModelSelections(
           draft,
           selectedModelIds,
@@ -279,10 +282,7 @@ export function ProviderConfigApprovalSheet({
           preview?.catalogSource === 'skipped',
         ),
       );
-      setStep('confirmation');
-      return;
     }
-    void approve();
   }, [
     approve,
     draft,
@@ -338,7 +338,8 @@ export function ProviderConfigApprovalSheet({
   }, []);
 
   const title = t(`chat.providerConfig.step.${step}`);
-  const actionLabel = step === 'confirmation' ? t('common.save') : t('chat.providerConfig.next');
+  const actionLabel =
+    step === 'models' ? t('chat.providerConfig.confirm') : t('chat.providerConfig.next');
 
   if (!draft) {
     return (
@@ -362,7 +363,6 @@ export function ProviderConfigApprovalSheet({
 
   return (
     <BottomSheet
-      backAccessibilityLabel={t('common.back')}
       closeAccessibilityLabel={t('common.cancel')}
       headerRight={
         <ProviderConfigProgress current={stepIndex + 1} total={providerConfigSetupSteps.length} />
@@ -370,7 +370,6 @@ export function ProviderConfigApprovalSheet({
       height={sheetHeight}
       isCloseDisabled={isSubmitting}
       isOpen={isOpen}
-      onBack={stepIndex > 0 ? goBack : undefined}
       onClose={handleClose}
       testID="provider-config-approval"
       title={title}
@@ -385,7 +384,7 @@ export function ProviderConfigApprovalSheet({
               providerSnapshot={preview ?? builtinSnapshot}
               onChange={setDraft}
             />
-          ) : step === 'models' ? (
+          ) : (
             <ProviderConfigModelsPage
               draft={draft}
               isDisabled={isPreviewLoading || isSubmitting}
@@ -398,8 +397,6 @@ export function ProviderConfigApprovalSheet({
               onRetry={retryPreview}
               onSelectedModelIdsChange={setSelectedModelIds}
             />
-          ) : (
-            <ProviderConfigConfirmationPage draft={draft} preview={preview} />
           )}
         </BottomSheet.PageTransition>
         <View
@@ -411,14 +408,26 @@ export function ProviderConfigApprovalSheet({
               {t('chat.tool.approval.pendingCount', { count: approvalCount })}
             </Text>
           ) : null}
-          <Button
-            className="self-stretch rounded-full p-4"
-            disabled={step !== 'confirmation' && !canContinueProviderConfig(step, draft, preview)}
-            loading={isPreviewLoading || isSubmitting}
-            onPress={goForward}
-          >
-            {actionLabel}
-          </Button>
+          <View className="w-full flex-row gap-3" testID="provider-config-actions">
+            {step === 'models' ? (
+              <Button
+                className="flex-1 rounded-full p-2"
+                disabled={isSubmitting}
+                onPress={goBack}
+                variant="secondary"
+              >
+                {t('chat.providerConfig.previous')}
+              </Button>
+            ) : null}
+            <Button
+              className="flex-1 rounded-full p-2"
+              disabled={!canContinueProviderConfig(step, draft, preview)}
+              loading={isPreviewLoading || isSubmitting}
+              onPress={goForward}
+            >
+              {actionLabel}
+            </Button>
+          </View>
         </View>
       </View>
     </BottomSheet>

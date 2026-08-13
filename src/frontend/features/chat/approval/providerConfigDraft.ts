@@ -26,12 +26,11 @@ export type ProviderConfigDraft =
       kind: 'custom';
     };
 
-export type ProviderConfigSetupStep = 'configuration' | 'confirmation' | 'models';
+export type ProviderConfigSetupStep = 'configuration' | 'models';
 
 export const providerConfigSetupSteps: readonly ProviderConfigSetupStep[] = [
   'configuration',
   'models',
-  'confirmation',
 ];
 
 export function createProviderConfigDraft(
@@ -153,8 +152,4 @@ export function dedupeManualModels(
 export function numericProviderConfigDraft(value: string): number {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 0;
-}
-
-export function providerNameFromDraft(draft: ProviderConfigDraft): string {
-  return draft.kind === 'builtin' ? draft.input.provider : draft.input.name;
 }
