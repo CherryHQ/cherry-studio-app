@@ -323,6 +323,9 @@ importers:
       react-native-nitro-modules:
         specifier: 0.35.9
         version: 0.35.9(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+      react-native-nitro-theme-transition:
+        specifier: ^1.0.0
+        version: 1.0.0(react-native-nitro-modules@0.35.9(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       react-native-reanimated:
         specifier: 4.5.0
         version: 4.5.0(patch_hash=98a5ad9821aaded8cb131bcc4d0b77f31aa2489850cccfd2f13db70259fe1bd1)(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
@@ -8073,6 +8076,13 @@ packages:
     peerDependencies:
       react: '*'
       react-native: '*'
+
+  react-native-nitro-theme-transition@1.0.0:
+    resolution: {integrity: sha512-wCmcR+Bzsth6yHhQvAS6UGWBD6DzQWb84VgYTKYJE8YsQsrCdSYxOVGNajRFM++/TAtneoZVTeC60N33mG0Afg==}
+    peerDependencies:
+      react: '*'
+      react-native: '*'
+      react-native-nitro-modules: '>=0.36.0'
 
   react-native-reanimated@4.5.0:
     resolution: {integrity: sha512-+iPfvK34PKKYP/p/4TaBliFkbfvjGDIvXuiiaxvISP5ip7sWegvlacwU/uAV6zNDSSmX0tDyER7PurPMKGDipA==}
@@ -16932,6 +16942,12 @@ snapshots:
     dependencies:
       react: 19.2.3
       react-native: 0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3)
+
+  react-native-nitro-theme-transition@1.0.0(react-native-nitro-modules@0.35.9(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      react: 19.2.3
+      react-native: 0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3)
+      react-native-nitro-modules: 0.35.9(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
 
   react-native-reanimated@4.5.0(patch_hash=98a5ad9821aaded8cb131bcc4d0b77f31aa2489850cccfd2f13db70259fe1bd1)(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
     dependencies:
