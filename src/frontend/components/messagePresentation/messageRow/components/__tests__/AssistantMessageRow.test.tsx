@@ -14,6 +14,10 @@ jest.mock('@cherrystudio/ui/components', () => ({
   PrismSweep: (props: { active: boolean }) => mockPrismSweep(props),
 }));
 
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 function createAssistantMessage(
   status: MessagePresentationItem['status'],
   parts: MessagePresentationItem['data']['parts'] = [],

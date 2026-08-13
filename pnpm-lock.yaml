@@ -248,6 +248,9 @@ importers:
       expo-screen-corner-radius:
         specifier: ^1.1.0
         version: 1.1.0(expo@57.0.6)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+      expo-speech:
+        specifier: ~57.0.1
+        version: 57.0.1(expo@57.0.6)
       expo-splash-screen:
         specifier: ~57.0.4
         version: 57.0.4(expo@57.0.6)(typescript@6.0.3)
@@ -6160,6 +6163,11 @@ packages:
   expo-server@57.0.1:
     resolution: {integrity: sha512-sBfVDH6dmKVHZxqUxbfkzS00PZELMZt1IpnHKxcOTMZtR/t7CtRAFrbXcisG+EyzeqHSVDacZT+1tbYfZt5D8w==}
     engines: {node: '>=20.16.0'}
+
+  expo-speech@57.0.1:
+    resolution: {integrity: sha512-xRI5FyAju4rK10xcVE+3SjdrF1ni24+Sj8ujSrylBsbrwFrrLO19H5DkG6EzXXVQ6lWdn+dC0JCr8OLaM7HI+Q==}
+    peerDependencies:
+      expo: '*'
 
   expo-splash-screen@57.0.4:
     resolution: {integrity: sha512-AspaOA5VZUl8yXb/BQORrRdOs0f7F/IgmvKNdCFaUDuz4X+j/4bPkkyssARFKwC5A5IQ3g7QS/Ve1XxDiDZ38Q==}
@@ -14697,6 +14705,10 @@ snapshots:
       react-native: 0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3)
 
   expo-server@57.0.1: {}
+
+  expo-speech@57.0.1(expo@57.0.6):
+    dependencies:
+      expo: 57.0.6(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.5)(expo-router@57.0.6)(react-dom@19.2.3(react@19.2.3))(react-native-web@0.21.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-native-webview@13.16.1(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
 
   expo-splash-screen@57.0.4(expo@57.0.6)(typescript@6.0.3):
     dependencies:

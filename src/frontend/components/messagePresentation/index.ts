@@ -1,2 +1,7 @@
 export { MessageList } from './components/MessageList';
-export type { MessageListProps, MessagePresentationItem } from './types';
+export type {
+  AssistantMessageActions,
+  AssistantReadAloudInput,
+  MessageListProps,
+  MessagePresentationItem,
+} from './types';

@@ -12,6 +12,10 @@ const mockInputHeightShared = {
 };
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
+const mockRegenerate = jest.fn(async () => undefined);
+const mockReadAloud = jest.fn();
+const mockStopReadAloud = jest.fn(() => undefined);
+const mockStopReadAloudIfActive = jest.fn(async (_messageId: string) => undefined);
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -24,10 +28,16 @@ let mockChatComposerProps:
   | undefined;
 let mockChatTopic: {
   hasHistoryBeforePendingTurn?: boolean;
+  isBusy: boolean;
   overlayMessage?: Message;
   pendingUserMessage?: Message;
+  regenerate: typeof mockRegenerate;
   status: string;
 };
+
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn(async () => undefined),
+}));
 
 jest.mock('expo-router/react-navigation', () => ({
   useHeaderHeight: () => 52,
@@ -101,6 +111,15 @@ jest.mock('../components/ChatOlderMessagesIndicator', () => ({
   },
 }));
 
+jest.mock('../hooks/useReplyReadAloud', () => ({
+  useReplyReadAloud: () => ({
+    activeMessageId: undefined,
+    readAloud: mockReadAloud,
+    stopReadAloud: mockStopReadAloud,
+    stopReadAloudIfActive: mockStopReadAloudIfActive,
+  }),
+}));
+
 const now = '2026-08-09T00:00:00.000Z';
 
 function createMessage(id: string, role: Message['role']): Message {
@@ -148,7 +167,12 @@ describe('ChatWorkspace message presentation integration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockChatComposerProps = undefined;
-    mockChatTopic = { hasHistoryBeforePendingTurn: true, status: 'idle' };
+    mockChatTopic = {
+      hasHistoryBeforePendingTurn: true,
+      isBusy: false,
+      regenerate: mockRegenerate,
+      status: 'idle',
+    };
     mockCoverVisible = undefined;
     mockIsLoadingOlder = undefined;
     mockMessageListProps = undefined;

@@ -8,8 +8,25 @@ export type MessagePresentationItem = Readonly<
   }
 >;
 
+export type AssistantReadAloudInput = {
+  language?: string;
+  messageId: string;
+  text: string;
+};
+
+export type AssistantMessageActions = {
+  activeReadAloudMessageId?: string;
+  copiedMessageId?: string;
+  isRegenerateDisabled: boolean;
+  onCopy: (input: { messageId: string; text: string }) => void;
+  onReadAloud: (input: AssistantReadAloudInput) => void;
+  onRegenerate: (messageId: string) => void;
+  onStopReadAloud: () => void;
+};
+
 export type MessageListProps = {
   animateFirstEnteringMessage?: boolean;
+  assistantActions?: AssistantMessageActions;
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
