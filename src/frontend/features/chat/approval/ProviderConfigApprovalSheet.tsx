@@ -394,7 +394,7 @@ export function ProviderConfigApprovalSheet({
             </Text>
           ) : null}
           <Button
-            className="self-stretch rounded-full"
+            className="self-stretch rounded-full p-4"
             disabled={step !== 'confirmation' && !canContinueProviderConfig(step, draft, preview)}
             loading={isPreviewLoading || isSubmitting}
             onPress={goForward}

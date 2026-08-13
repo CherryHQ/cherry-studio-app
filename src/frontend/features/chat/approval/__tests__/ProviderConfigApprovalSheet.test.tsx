@@ -262,7 +262,7 @@ describe('ProviderConfigApprovalSheet', () => {
     renderSheet();
 
     expect(action('chat.providerConfig.next').props).toMatchObject({
-      className: 'self-stretch rounded-full',
+      className: 'self-stretch rounded-full p-4',
     });
     expect(
       renderer!.root.findByProps({ testID: 'provider-config-floating-action' }).props,
