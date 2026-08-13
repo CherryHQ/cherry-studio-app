@@ -17,6 +17,7 @@ import {
   type NativeSyntheticEvent,
   View,
 } from 'react-native';
+import { KeyboardEvents } from 'react-native-keyboard-controller';
 import {
   runOnJS,
   useAnimatedReaction,
@@ -101,6 +102,9 @@ function messageKeyExtractor(item: MessagePresentationItem) {
 // （实测 3012px）再塌回去——一帧内内容少了 2964px，预留空白与钉顶落点都要跟着重算。
 // 分类后修正量 2964px → 5px。
 //
+// 注意它**不是**「发送后跳一下」的成因：分类修好之后，续轮发送前那一帧 -310px 的突跳原样
+// 还在（见 scripts/layout-bench/known-issues.json）。两件事都在同一瞬间发生，别再合并归因。
+//
 // 判据用「有没有 part」而不是 status：类型翻转因此发生在第一个 chunk 落地时，那一刻行还只有
 // 几十像素，翻转本身不产生可见修正；而 status 要到整条回复结束才变，翻转时行已有数千像素。
 // 翻转后这一行的后续增长计入 assistant 均值，空行阶段的尺寸留在 assistant-empty，两个均值
@@ -121,6 +125,34 @@ function emitButtonVisibility(visible: boolean) {
 
 function emitScrollOffset(y: number) {
   emitLayoutBenchProbe('scroll', { y: Math.round(y) });
+}
+
+function emitFreeze(on: boolean) {
+  emitLayoutBenchProbe('freeze', { on });
+}
+
+// 键盘收放只改滚动视图的底部 inset，既不改 contentSize 也不改视口，因此它挪动内容却不留下
+// 任何其它探针能看见的痕迹。发送时 `scrollMessageToEnd` 正好同时发起收键盘与钉顶滚动，
+// 缺了这条时间线就没法判断那一帧的位移是谁造成的。
+//
+// 订阅不能按 `isLayoutBenchProbeArmed()` 开关：探针由假模型在**第一次发送**时 arm，而这个
+// effect 在列表挂载时就跑完了，按 armed 判断等于永远不订阅（实测整轮零 keyboard 事件）。
+// 改成 dev 下常驻订阅、由 emit 自己按 armed 过滤——键盘事件只在收放时各一条，不像 onScroll
+// 那样每帧都有，常驻的代价可以忽略。
+function useKeyboardProbe() {
+  useEffect(() => {
+    if (!__DEV__) {
+      return;
+    }
+
+    const subscriptions = (['keyboardWillShow', 'keyboardWillHide'] as const).map((event) =>
+      KeyboardEvents.addListener(event, ({ duration, height }) => {
+        emitLayoutBenchProbe('keyboard', { dur: duration, event, h: Math.round(height) });
+      }),
+    );
+
+    return () => subscriptions.forEach((subscription) => subscription.remove());
+  }, []);
 }
 
 // 程序化滚动只记「谁调的」不够：同一个 scrollToEnd 落到哪里，取决于调用瞬间列表认为的
@@ -282,6 +314,17 @@ export function MessageList({
       }
     },
   );
+
+  useAnimatedReaction(
+    () => freeze.get(),
+    (current, previous) => {
+      if (probeArmed.get() && previous !== null && current !== previous) {
+        runOnJS(emitFreeze)(current);
+      }
+    },
+  );
+
+  useKeyboardProbe();
 
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;

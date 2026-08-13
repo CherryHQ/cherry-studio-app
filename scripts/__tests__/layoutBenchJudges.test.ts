@@ -115,9 +115,30 @@ describe('offset-reversal', () => {
       scrollTo(40, 2_995),
     ];
 
+    // 5px 的收尾回撤在噪声地板之下，整段算一次单调位移，连「一次往返」都不构成。
     const report = judge(events, 'offset-reversal');
-    expect(report.metrics.maxBouncePx).toBe(5);
+    expect(report.metrics.maxBouncePx).toBe(0);
     expect(report.violations).toHaveLength(0);
+  });
+
+  it('爬升途中的微抖动不得把返程切碎', () => {
+    // 实测签名：钉顶前突跳 -310px，随后 616px 爬回目标，途中有一次 5px 的回撤。
+    // 按逐帧 delta 切段时返程被切成 88px 的碎片，min(310, 88) 落到阈值之下 → 漏报。
+    const events: ProbeEvent[] = [
+      { e: 'phase', phase: 'anchoring', t: at(0) },
+      contentHeight(1, 5_000),
+      scrollTo(0, 2_762),
+      scrollTo(20, 2_452),
+      scrollTo(40, 2_540),
+      scrollTo(60, 2_535),
+      scrollTo(80, 2_800),
+      scrollTo(100, 3_068),
+    ];
+
+    const report = judge(events, 'offset-reversal');
+    expect(report.metrics.maxBouncePx).toBe(310);
+    expect(report.violations).toHaveLength(1);
+    expect(report.violations[0].detail).toMatchObject({ backPx: 616, bouncePx: 310, outPx: 310 });
   });
 
   it('抓住去回两腿都很长的往返', () => {

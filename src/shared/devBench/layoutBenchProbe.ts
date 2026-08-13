@@ -28,6 +28,16 @@ export type LayoutBenchProbeEvent =
   | 'content'
   /** 锚点下方预留空白的实测尺寸。它决定钉顶落点，也是发送瞬间位移突变的第一嫌疑。 */
   | 'endSpace'
+  /**
+   * 键盘收放。它不改列表视口，只改滚动视图的底部 inset——也就是说它移动内容却不留下
+   * `content` 或 `viewport` 事件，是唯一无法从其它探针反推出来的位移来源。
+   */
+  | 'keyboard'
+  /**
+   * 发送时对键盘驱动的位移补偿所设的闸门（`useKeyboardScrollToEnd` 的 freeze）。
+   * 它是 shared value，JS 写入要跨线程才落地，与键盘收起谁先谁后必须能对时才说得清。
+   */
+  | 'freeze'
   /** 用户交互窗口边界（拖动/惯性/触摸），据此判定「手势期间是否有程序化滚动」。 */
   | 'interaction'
   /** 列表视口尺寸；没有它就无法把 contentLength 换算成「距底还有多远」。 */

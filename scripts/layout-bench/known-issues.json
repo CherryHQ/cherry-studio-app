@@ -1,7 +1,7 @@
 [
   {
     "judge": "offset-reversal",
-    "reason": "续轮发送时钉顶动画前有一帧 -310px 的突跳，随后 470ms 动画爬回，肉眼是「内容先跳一下再滑回来」。实测签名：发送前 offset=2762（等于旧内容 3334 + 输入框 inset 302 - 视口 874，即真正的末端），锚点出现后 endSpace 512 顶替输入框 inset，getState 报 contentLength=3942 而 scrollToEnd 目标 3068，中间那一帧却落到 2452。线索：只在 animated=True 的续轮钉顶出现（首轮 anchorIndex=0 走 animated=False，无此现象），怀疑是 MVCP 对底部 padding 由 302 变 512 做了一次补偿。未修，先记账。",
+    "reason": "续轮发送时钉顶动画前有一帧 -310px 的突跳。根因已定位：收键盘会一帧内抽掉 336px 的底部 inset，原生 ScrollView 随即把 contentOffset 夹回新的末端，而 ComposerSurface 与 MessageList 的钉顶滚动同时发起，夹回值就成了动画起点，动画于是走 616px 而不是 306px。判别实验：把 scrollMessageToEnd 的 closeKeyboard 置 false（其余不动，且确认补丁真的热更上去），位移全程单调，往返 310px → 24px。试过的两条修法都更差或越界：先钉顶再收键盘会把夹回搬到动画终点并被尾随滚动再拉一次（反转 1 处 310px → 2 处 334px）；根本不收键盘能彻底消掉，但那是产品行为变更（当前设计是发送即收键盘）。留账等产品决策。",
     "scenario": "follow-up-turn"
   }
 ]

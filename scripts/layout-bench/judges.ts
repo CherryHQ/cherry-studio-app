@@ -33,6 +33,11 @@ export const THRESHOLDS = {
    * 批次（实测单批最大 93px）而抓住估值级别的错位。
    */
   estimateCorrectionPx: 400,
+  /**
+   * 切分单调段时忽略多大的回撤。动画收尾会在目标值附近来回蹭几像素（实测 5-6px），
+   * 不过滤就会把一整段爬升切成碎片，「两腿取短」随即取到碎片长度而不是真正的返程。
+   */
+  offsetNoisePx: 8,
   /** 位移方向反转的振幅下限。实测非交互期的正常噪声在 ±19px 内，100px 给足余量。 */
   offsetReversalPx: 100,
   /** 单行高度回缩下限，同 contentShrinkPx。 */
@@ -164,35 +169,68 @@ type MonotoneRun = {
   startMs: number;
 };
 
-/** 把位移轨迹切成同向的单调段，段的振幅是这一段走过的净距离。 */
+/**
+ * 把位移轨迹切成同向的单调段，段的振幅是这一段走过的净距离。
+ *
+ * 换向必须超过 `offsetNoisePx` 才算换向，否则动画收尾在目标值附近蹭的那几像素会把一整段
+ * 爬升切成碎片。这不是理论洁癖：实测一次 616px 的钉顶爬升被中途一个 5px 的回撤切开，
+ * 「两腿取短」于是拿到 88px，前面那条 310px 的突跳就此被判成合格——判据漏掉了自己被造
+ * 出来要抓的那个缺陷。
+ */
 function toMonotoneRuns(trace: Trace): MonotoneRun[] {
   const runs: MonotoneRun[] = [];
-  let direction = 0;
-  let current: MonotoneRun | undefined;
+  const [first] = trace.samples;
+  if (!first) {
+    return runs;
+  }
 
-  for (let index = 1; index < trace.samples.length; index += 1) {
-    const previous = trace.samples[index - 1];
-    const sample = trace.samples[index];
-    const delta = sample.y - previous.y;
-    if (delta === 0) {
+  let direction = 0;
+  let start = first;
+  // 当前段走到过的最远点。换向幅度按「离开极值多远」算，而不是按逐帧 delta——后者无法
+  // 区分「连着三帧各退 3px」（累计 9px 的真回撤）与「单帧抖 3px」。
+  let extreme = first;
+  let inInteraction = first.inInteraction;
+
+  for (const sample of trace.samples.slice(1)) {
+    inInteraction ||= sample.inInteraction;
+    const delta = sample.y - extreme.y;
+
+    if (direction === 0) {
+      if (Math.abs(delta) >= THRESHOLDS.offsetNoisePx) {
+        direction = delta > 0 ? 1 : -1;
+        extreme = sample;
+      }
       continue;
     }
 
-    const nextDirection = delta > 0 ? 1 : -1;
-    if (!current || nextDirection !== direction) {
-      current = {
-        amplitude: 0,
-        endMs: sample.atMs,
-        inInteraction: false,
-        startMs: previous.atMs,
-      };
-      runs.push(current);
-      direction = nextDirection;
+    if (Math.sign(delta) === direction) {
+      extreme = sample;
+      continue;
     }
 
-    current.amplitude += delta;
-    current.endMs = sample.atMs;
-    current.inInteraction ||= sample.inInteraction || previous.inInteraction;
+    if (Math.abs(delta) < THRESHOLDS.offsetNoisePx) {
+      continue;
+    }
+
+    runs.push({
+      amplitude: extreme.y - start.y,
+      endMs: extreme.atMs,
+      inInteraction,
+      startMs: start.atMs,
+    });
+    start = extreme;
+    direction = -direction;
+    extreme = sample;
+    inInteraction = sample.inInteraction;
+  }
+
+  if (direction !== 0) {
+    runs.push({
+      amplitude: extreme.y - start.y,
+      endMs: extreme.atMs,
+      inInteraction,
+      startMs: start.atMs,
+    });
   }
 
   return runs;
