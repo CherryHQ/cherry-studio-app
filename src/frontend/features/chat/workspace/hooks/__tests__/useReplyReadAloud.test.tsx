@@ -1,5 +1,5 @@
 import type { SpeechOptions } from 'expo-speech';
-import type { EffectCallback } from 'react';
+import { type EffectCallback, useEffect } from 'react';
 import { AppState } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -72,7 +72,12 @@ function deferred<TValue>(): Deferred<TValue> {
 }
 
 function Probe(props: UseReplyReadAloudOptions) {
-  latest = useReplyReadAloud(props);
+  const result = useReplyReadAloud(props);
+
+  useEffect(() => {
+    latest = result;
+  }, [result]);
+
   return null;
 }
 
