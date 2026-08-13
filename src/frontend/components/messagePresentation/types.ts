@@ -15,10 +15,13 @@ export type AssistantReadAloudInput = {
 };
 
 export type AssistantMessageActions = {
+  activeReadAloudMessageId?: string;
   copiedMessageId?: string;
   isRegenerateDisabled: boolean;
   onCopy: (input: { messageId: string; text: string }) => void;
+  onReadAloud?: (input: AssistantReadAloudInput) => void;
   onRegenerate: (messageId: string) => void;
+  onStopReadAloud?: () => void;
 };
 
 export type MessageListProps = {

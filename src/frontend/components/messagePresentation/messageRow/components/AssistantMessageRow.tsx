@@ -1,11 +1,12 @@
 import { Button, PrismSweep } from '@cherrystudio/ui/components';
-import { CheckIcon, CopyIcon, RefreshCwIcon } from 'lucide-uniwind/png';
+import { CheckIcon, CopyIcon, RefreshCwIcon, SquareIcon, Volume2Icon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import { MessageParts } from '../../messageContent';
 import type { AssistantMessageActions, MessagePresentationItem } from '../../types';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
+import { projectAssistantMessageReadAloud } from '../utils/projectAssistantMessageReadAloud';
 
 type AssistantMessageRowProps = {
   actions?: AssistantMessageActions;
@@ -19,7 +20,11 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
     actions && message.status !== 'pending'
       ? copyAssistantMessageText(message.data.parts ?? [])
       : '';
+  const readAloudContent = actions ? projectAssistantMessageReadAloud(message) : null;
   const isCopied = actions?.copiedMessageId === message.id;
+  const isReadAloudActive = actions?.activeReadAloudMessageId === message.id;
+  const onReadAloud = actions?.onReadAloud;
+  const onStopReadAloud = actions?.onStopReadAloud;
 
   return (
     <View className="w-full gap-2 px-4 py-3">
@@ -42,6 +47,27 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
               onPress={() => actions.onCopy({ messageId: message.id, text: copyText })}
               size="sm"
               testID="assistant-message-copy"
+              variant="ghost"
+            />
+          ) : null}
+          {readAloudContent && onReadAloud && onStopReadAloud ? (
+            <Button
+              accessibilityLabel={t(
+                isReadAloudActive
+                  ? 'chat.messageActions.stopReadAloud'
+                  : 'chat.messageActions.readAloud',
+              )}
+              hitSlop={6}
+              icon={
+                isReadAloudActive ? <SquareIcon strokeWidth={2} /> : <Volume2Icon strokeWidth={2} />
+              }
+              onPress={() =>
+                isReadAloudActive
+                  ? onStopReadAloud()
+                  : onReadAloud({ messageId: message.id, ...readAloudContent })
+              }
+              size="sm"
+              testID="assistant-message-read-aloud"
               variant="ghost"
             />
           ) : null}
