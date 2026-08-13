@@ -2,6 +2,7 @@ import { ScrollShadow } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import {
+  type RefObject,
   useCallback,
   useEffect,
   useEffectEvent,
@@ -120,6 +121,28 @@ function emitButtonVisibility(visible: boolean) {
 
 function emitScrollOffset(y: number) {
   emitLayoutBenchProbe('scroll', { y: Math.round(y) });
+}
+
+// 程序化滚动只记「谁调的」不够：同一个 scrollToEnd 落到哪里，取决于调用瞬间列表认为的
+// 内容长度与视口长度。发送消息时这两个量正在剧烈变化（新行未测量、预留空白在重算），
+// 落点因此可能远离用户当前位置——把三个量与调用点一起记下才谈得上归因。
+function emitProgrammaticScroll(
+  src: string,
+  listRef: RefObject<LegendListRef | null>,
+  extra?: Record<string, boolean | number | string | undefined>,
+) {
+  if (!isLayoutBenchProbeArmed()) {
+    return;
+  }
+
+  const listState = listRef.current?.getState();
+  emitLayoutBenchProbe('progScroll', {
+    ...extra,
+    content: listState ? Math.round(listState.contentLength) : undefined,
+    scroll: listState ? Math.round(listState.scroll) : undefined,
+    src,
+    viewport: listState ? Math.round(listState.scrollLength) : undefined,
+  });
 }
 
 function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[]) {
@@ -319,7 +342,7 @@ export function MessageList({
         | { scrollToEnd?: (options: { animated?: boolean }) => void }
         | null
         | undefined;
-      emitLayoutBenchProbe('progScroll', { src: 'tailFollow' });
+      emitProgrammaticScroll('tailFollow', listRef);
       nativeScrollRef?.scrollToEnd?.({ animated: false });
     });
   }, [listRef]);
@@ -405,7 +428,7 @@ export function MessageList({
       const isEnteringMessage = info.anchorKey === enteringMessageId;
       const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
-        emitLayoutBenchProbe('progScroll', { animated: shouldAnimate, src: 'anchorReady' });
+        emitProgrammaticScroll('anchorReady', listRef, { animated: shouldAnimate });
         // 收键盘与钉顶滚动同时发起，别试着把它挪到滚动之后：实测「先钉顶、动画结束再收
         // 键盘」会把位移搬到动画终点、还要再被尾随滚动拉一次，反转从 1 处 310px 变 2 处
         // 334px，更差。
@@ -426,6 +449,8 @@ export function MessageList({
 
   const handleAnchoredEndSpaceSizeChanged = useCallback(
     (size: number) => {
+      emitLayoutBenchProbe('endSpace', { size: Math.round(size) });
+
       if (size > 0 || !anchorMessageId) {
         return;
       }
@@ -554,7 +579,7 @@ export function MessageList({
     [isAtBottom, scrollOffset],
   );
   const handleScrollToEnd = useCallback(() => {
-    emitLayoutBenchProbe('progScroll', { src: 'button' });
+    emitProgrammaticScroll('button', listRef);
     void listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
@@ -598,6 +623,7 @@ export function MessageList({
   );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    emitLayoutBenchProbe('viewport', { h: Math.round(event.nativeEvent.layout.height) });
     setViewportHeight(event.nativeEvent.layout.height);
   }, []);
 
@@ -652,7 +678,8 @@ export function MessageList({
         // 本 effect 依赖 contentBaseHeight，而流式每来一个 chunk 内容高度就变一次 → 静默窗口
         // 反复重启、gate 在整段流式里每帧重跑，这个 scrollToEnd 于是变成第二条不受尾随状态机
         // 管的自动滚动。它必须和 scheduleTailFollow 守同一个不变式：用户手上有动作时一律不滚，
-        // 否则拖动过程中列表会被硬拽回底部（实测一次拖动被拽 +198px）。
+        // 否则拖动过程中列表会被硬拽回底部（实测一次拖动被拽 +198px，harness 的
+        // gesture-conflict 判据就是这么抓到的）。
         // 跳过滚动但照常进入 settle：遮罩存在的意义是挡住布局抖动，人都已经在拖了就别再挡着。
         if (shouldScrollToEndBeforeReady && !isUserInteractingRef.current) {
           scrollLog.debug('[SCROLL] gateScrollToEnd', {
@@ -661,7 +688,7 @@ export function MessageList({
             viewportHeight: Math.round(viewportHeight),
             t: Date.now(),
           });
-          emitLayoutBenchProbe('progScroll', { src: 'readyGate' });
+          emitProgrammaticScroll('readyGate', listRef);
           void listRef.current?.scrollToEnd({ animated: false }).finally(reportReadyAfterSettle);
           return;
         }

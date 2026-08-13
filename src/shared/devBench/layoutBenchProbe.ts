@@ -26,8 +26,12 @@ export const LAYOUT_BENCH_PROBE_PREFIX = '[LBP]';
 export type LayoutBenchProbeEvent =
   /** 内容总高变化；`ready` 为真表示遮罩已撤，此后的高度修正会泄漏成可见跳动。 */
   | 'content'
+  /** 锚点下方预留空白的实测尺寸。它决定钉顶落点，也是发送瞬间位移突变的第一嫌疑。 */
+  | 'endSpace'
   /** 用户交互窗口边界（拖动/惯性/触摸），据此判定「手势期间是否有程序化滚动」。 */
   | 'interaction'
+  /** 列表视口尺寸；没有它就无法把 contentLength 换算成「距底还有多远」。 */
+  | 'viewport'
   /** 单行尺寸变化，用于统计行高振荡。 */
   | 'itemSize'
   /** 尾随状态机相位切换；不知道相位就无法判定同一条轨迹是合格还是缺陷。 */
