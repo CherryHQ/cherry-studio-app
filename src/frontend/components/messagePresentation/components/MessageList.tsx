@@ -16,7 +16,12 @@ import {
   type NativeSyntheticEvent,
   View,
 } from 'react-native';
-import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
+import {
+  runOnJS,
+  useAnimatedReaction,
+  useDerivedValue,
+  useSharedValue,
+} from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
@@ -149,6 +154,8 @@ export function MessageList({
   // arm 发生在假模型被构造时（晚于本组件挂载），worklet 读不到 JS 侧的模块变量，
   // 因此每次渲染把 arm 状态同步进 shared value，未 arm 时连 runOnJS 都不发生。
   const probeArmed = useSharedValue(false);
+  // 尾随相位是 React state，worklet 读不到，镜像一份供按钮显隐推导使用。
+  const isTailControlled = useSharedValue(false);
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const [contentBaseHeight, setContentBaseHeight] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -223,8 +230,20 @@ export function MessageList({
     probeArmed.set(isLayoutBenchProbeArmed());
   });
 
+  // 「滚动到底部」只在**用户自己**离开底部时才有意义。而 isAtEnd 用的是 ~0px 的判定边界，
+  // 只要 app 正把列表往底部推（钉顶动画、流式尾随），内容每长一截都会先把视口挤离底部、
+  // 下一帧滚动再吸回来，isAtEnd 就跟着以帧为周期翻转（实测一轮流式 33 次）。
+  //
+  // 关键是**不能**拿「是否在尾随」去否决它：相位是 React state，镜像进 shared value 必然是
+  // JS→UI 的跨线程写，落地比 UI 线程自己翻的 isAtEnd 晚一帧，那一帧里两个条件都为假，按钮
+  // 照闪不误（实测把镜像挪进 layout effect 也没用，晚的是线程不是 React 时序）。
+  // 换成「列表是否正被程序化接管」后，延迟的方向就全是安全的：进入接管态发生在用户刚发出
+  // 消息、列表本就贴底的那一刻，anchoring→following 根本不改变它；退出接管态只会让按钮晚
+  // 一帧出现。paused 是唯一不会自动滚的相位，也正是按钮该出现的相位。
+  const isScrollButtonHidden = useDerivedValue(() => isAtBottom.get() || isTailControlled.get());
+
   useAnimatedReaction(
-    () => isAtBottom.get(),
+    () => isScrollButtonHidden.get(),
     (current, previous) => {
       if (previous !== null && current !== previous) {
         runOnJS(emitButtonVisibility)(!current);
@@ -243,10 +262,13 @@ export function MessageList({
 
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;
+    // anchoring 与 following 都由 app 主动把列表推向底部（钉顶滚动 / 尾随滚动），
+    // 只有 paused 全程不自动滚。没有锚点时不存在任何自动滚动，交回 isAtEnd 单独判定。
+    isTailControlled.set(hasAnchor && tailFollowPhase !== 'paused');
     // 相位决定同一条位移轨迹该被判成合格还是缺陷（钉顶期应静止、尾随期应跟随），
     // 所以它必须作为独立信号进日志，否则 harness 无从判定。
     emitLayoutBenchProbe('phase', { anchorId: anchorMessageId, phase: tailFollowPhase });
-  }, [anchorMessageId, tailFollowPhase]);
+  }, [anchorMessageId, hasAnchor, isTailControlled, tailFollowPhase]);
 
   // Read from size and layout callbacks, which the platform dispatches well
   // after commit, so mirroring the staged anchor here is soon enough.
@@ -724,7 +746,7 @@ export function MessageList({
           <ScrollToBottomButton
             gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
             inputHeight={bottomAccessoryHeight}
-            isAtBottom={isAtBottom}
+            isHidden={isScrollButtonHidden}
             onPress={handleScrollToEnd}
           />
         ) : null}
