@@ -36,4 +36,13 @@ describe('Storybook entry wiring', () => {
   test('metro strips Storybook from the bundle using the same flag', () => {
     expect(read('metro.config.js')).toContain(`process.env.${flag} === 'true'`);
   });
+
+  test('collects both package and app feature stories', () => {
+    const main = read('.rnstorybook/main.ts');
+    const generated = read('.rnstorybook/storybook.requires.ts');
+
+    expect(main).toContain('../packages/ui/stories/**/*.stories.?(ts|tsx|js|jsx)');
+    expect(main).toContain('../src/frontend/**/*.stories.?(ts|tsx|js|jsx)');
+    expect(generated).toContain('../src/frontend');
+  });
 });
