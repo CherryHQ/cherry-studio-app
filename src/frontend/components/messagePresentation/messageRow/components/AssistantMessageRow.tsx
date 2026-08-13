@@ -65,7 +65,7 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
         <MessageParts message={message} />
       )}
       {actions && message.status !== 'pending' ? (
-        <View className="flex-row items-center" testID="assistant-message-toolbar">
+        <View className="-ml-2 flex-row items-center" testID="assistant-message-toolbar">
           {copyText ? (
             <Button
               accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
