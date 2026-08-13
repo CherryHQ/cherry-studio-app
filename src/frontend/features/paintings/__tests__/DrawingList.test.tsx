@@ -53,14 +53,13 @@ let mockGalleryItems = defaultGalleryItems;
 
 jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
-  requestMediaLibraryPermissionsAsync: jest.fn(),
 }));
 
 jest.mock('expo-media-library', () => ({
   addListener: jest.fn(() => ({ remove: jest.fn() })),
   Asset: jest.fn(),
-  getPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
-  requestPermissionsAsync: jest.fn(async () => ({ canAskAgain: false, granted: false })),
+  getPermissionsAsync: jest.fn(),
+  requestPermissionsAsync: jest.fn(),
 }));
 
 jest.mock('expo-router', () => {
@@ -195,6 +194,18 @@ describe('DrawingList', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest
+      .requireMock('expo-media-library')
+      .getPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
+    jest
+      .requireMock('expo-media-library')
+      .requestPermissionsAsync.mockResolvedValue({ canAskAgain: false, granted: false });
+    jest
+      .requireMock('expo-image-picker')
+      .launchImageLibraryAsync.mockResolvedValue({ canceled: true });
+    jest.requireMock('../utils/photoLibrary').loadPhotoPreviewPage.mockResolvedValue({
+      photoPreviews: [],
+    });
     mockGalleryItems = defaultGalleryItems;
     mockIsEditing = false;
     mockPendingDeletionIds = new Set();
@@ -233,6 +244,56 @@ describe('DrawingList', () => {
     expect(findHostsByTestID(tree, 'painting-photos-view-all')).toHaveLength(1);
     expect(findHostsByTestID(tree, 'painting-template-row')).toHaveLength(1);
     expect(findHostsByTestID(tree, 'painting-zoom-link')).toHaveLength(mockGalleryItems.length);
+  });
+
+  it('keeps the denied-permission placeholder thumbnail-sized and requests access when pressed', async () => {
+    const tree = await render();
+    const requestPhotoPermissions = jest.requireMock('expo-media-library')
+      .requestPermissionsAsync as jest.Mock;
+    const placeholder = tree.root
+      .findAll((node) => node.props.testID === 'painting-photos-permission-placeholder')
+      .find((node) => typeof node.props.onPress === 'function');
+    if (!placeholder) {
+      throw new Error('Photo permission placeholder was not rendered.');
+    }
+
+    expect(placeholder.props.className).toContain('size-20');
+    expect(placeholder.props.className).not.toContain('h-20');
+    const requestsBeforePress = requestPhotoPermissions.mock.calls.length;
+
+    await act(async () => {
+      placeholder.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(requestPhotoPermissions).toHaveBeenCalledTimes(requestsBeforePress + 1);
+    expect(findHostsByTestID(tree, 'painting-photos-permission-placeholder')).toHaveLength(1);
+  });
+
+  it('requests photo access again from view all before opening the system picker', async () => {
+    const requestPhotoPermissions = jest.requireMock('expo-media-library')
+      .requestPermissionsAsync as jest.Mock;
+    const launchImageLibrary = jest.requireMock('expo-image-picker')
+      .launchImageLibraryAsync as jest.Mock;
+    requestPhotoPermissions.mockResolvedValueOnce({ canAskAgain: false, granted: true });
+    const tree = await render();
+    const viewAll = tree.root
+      .findAll((node) => node.props.testID === 'painting-photos-view-all')
+      .find((node) => typeof node.props.onPress === 'function');
+    if (!viewAll) {
+      throw new Error('View all photos action was not rendered.');
+    }
+    const requestsBeforePress = requestPhotoPermissions.mock.calls.length;
+
+    await act(async () => {
+      viewAll.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(requestPhotoPermissions).toHaveBeenCalledTimes(requestsBeforePress + 1);
+    expect(launchImageLibrary).toHaveBeenCalledTimes(1);
   });
 
   it('centers an empty message above the primary new-drawing action', async () => {

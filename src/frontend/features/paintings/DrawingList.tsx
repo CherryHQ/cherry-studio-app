@@ -3,7 +3,7 @@ import { Button, ImageGenerationLoader } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -63,6 +63,7 @@ export function DrawingList() {
   const bottomInset = useMessageListBottomInset();
   const { width: windowWidth } = useWindowDimensions();
   const recentPhotos = useRecentPaintingPhotos(scope === 'drawings');
+  const requestPhotoAccess = recentPhotos.requestAccess;
   const paintings = usePaintings();
   const gallery = usePaintingGalleryEntries(paintings.paintings);
   const columnWidth = (windowWidth - pageEdge * 2 - galleryGap) / 2;
@@ -114,8 +115,8 @@ export function DrawingList() {
   );
   const handleViewAllPress = useCallback(async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-      if (!permission.granted) {
+      const hasAccess = await requestPhotoAccess();
+      if (!hasAccess) {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -144,7 +145,7 @@ export function DrawingList() {
     } catch (error) {
       alert.show({ title: error instanceof Error ? error.message : String(error) });
     }
-  }, [alert, openPaintingWithAttachments]);
+  }, [alert, openPaintingWithAttachments, requestPhotoAccess]);
 
   return (
     <ScrollView
@@ -215,9 +216,11 @@ export function DrawingList() {
               </ScrollView>
             ) : (
               <Pressable
+                accessibilityLabel={t('painting.photos.requestAccess')}
                 accessibilityRole="button"
-                className="mx-4 h-20 items-center justify-center rounded-md bg-secondary active:opacity-70"
-                onPress={() => void handleViewAllPress()}
+                className="mx-4 size-20 items-center justify-center rounded-md bg-secondary active:opacity-70"
+                onPress={() => void requestPhotoAccess()}
+                testID="painting-photos-permission-placeholder"
               >
                 <ImageIcon className="size-6 text-foreground-tertiary" />
               </Pressable>
@@ -440,41 +443,55 @@ function renderTileContent({
 function useRecentPaintingPhotos(enabled: boolean) {
   const [isLoading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
+  const isActiveRef = useRef(false);
+
+  const refresh = useCallback(
+    async (requestPermission: boolean) => {
+      if (!enabled) {
+        return false;
+      }
+
+      try {
+        let permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
+        if (!permission.granted && (requestPermission || permission.canAskAgain)) {
+          permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+        }
+        const nextPhotos = permission.granted
+          ? (await loadPhotoPreviewPage(0)).photoPreviews.slice(0, recentPhotoLimit)
+          : [];
+        if (isActiveRef.current) {
+          setPhotos(nextPhotos);
+          setLoading(false);
+        }
+        return permission.granted;
+      } catch {
+        if (isActiveRef.current) {
+          setPhotos([]);
+          setLoading(false);
+        }
+        return false;
+      }
+    },
+    [enabled],
+  );
 
   useEffect(() => {
     if (!enabled) {
       return;
     }
-    let active = true;
-    const load = async () => {
-      let permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
-      if (!permission.granted && permission.canAskAgain) {
-        permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
-      }
-      if (permission.granted) {
-        const page = await loadPhotoPreviewPage(0);
-        if (active) {
-          setPhotos(page.photoPreviews.slice(0, recentPhotoLimit));
-        }
-      } else if (active) {
-        setPhotos([]);
-      }
-      if (active) {
-        setLoading(false);
-      }
-    };
-    void load().catch(() => {
-      if (active) {
-        setPhotos([]);
-        setLoading(false);
-      }
-    });
-    const subscription = MediaLibrary.addListener(() => void load());
+    isActiveRef.current = true;
+    void refresh(false);
+    const subscription = MediaLibrary.addListener(() => void refresh(false));
     return () => {
-      active = false;
+      isActiveRef.current = false;
       subscription.remove();
     };
-  }, [enabled]);
+  }, [enabled, refresh]);
 
-  return { isLoading: enabled && isLoading, photos };
+  const requestAccess = useCallback(() => refresh(true), [refresh]);
+
+  return useMemo(
+    () => ({ isLoading: enabled && isLoading, photos, requestAccess }),
+    [enabled, isLoading, photos, requestAccess],
+  );
 }

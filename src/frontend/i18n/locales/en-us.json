@@ -694,6 +694,7 @@
   "painting.settings.title": "Image settings",
   "painting.settings.width": "Width",
   "painting.photos.item": "Recent photo {{index}}",
+  "painting.photos.requestAccess": "Allow access to Photos",
   "painting.photos.title": "Start from your photos",
   "painting.photos.viewAll": "View all",
   "painting.selection.deleteFailed": "Selected drawings were not deleted. Try again.",
