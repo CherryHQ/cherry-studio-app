@@ -110,6 +110,7 @@ export const iconRegistry = {
   TypeIcon: { sf: 'textformat', material: 'text_fields' },
   UploadIcon: { sf: 'square.and.arrow.up', material: 'upload' },
   VideoIcon: { sf: 'video', material: 'videocam' },
+  VolumeHighIcon: { sf: 'speaker.wave.2.fill', material: 'volume_up' },
   WrenchIcon: { sf: 'wrench.adjustable', material: 'build' },
   XIcon: { sf: 'xmark', material: 'close' },
 } as const satisfies Record<string, IconRegistryEntry>;

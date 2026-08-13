@@ -2,8 +2,8 @@ import {
   CheckIcon,
   CopyIcon,
   RefreshCwIcon,
-  SpeechIcon,
   SquareIcon,
+  VolumeHighIcon,
 } from '@cherrystudio/app-icons';
 import { Button, PrismSweep } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
@@ -85,7 +85,7 @@ export function AssistantMessageRow({ actions, message }: AssistantMessageRowPro
                   : 'chat.messageActions.readAloud',
               )}
               hitSlop={6}
-              icon={isReadAloudActive ? <SquareIcon /> : <SpeechIcon />}
+              icon={isReadAloudActive ? <SquareIcon /> : <VolumeHighIcon />}
               onPress={handleReadAloudPress}
               size="sm"
               testID="assistant-message-read-aloud"

@@ -84,5 +84,6 @@ export { default as Trash2Icon } from './generated/trash2';
 export { default as TypeIcon } from './generated/type';
 export { default as UploadIcon } from './generated/upload';
 export { default as VideoIcon } from './generated/video';
+export { default as VolumeHighIcon } from './generated/volume-high';
 export { default as WrenchIcon } from './generated/wrench';
 export { default as XIcon } from './generated/x';
