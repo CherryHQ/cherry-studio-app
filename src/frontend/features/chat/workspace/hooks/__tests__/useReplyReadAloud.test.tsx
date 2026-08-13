@@ -380,6 +380,17 @@ describe('useReplyReadAloud', () => {
     expect(mockOnError).toHaveBeenCalledTimes(1);
   });
 
+  it('does not stop global speech for idle app, focus, or unmount cleanup', async () => {
+    await renderHook();
+
+    act(() => appStateListener?.('background'));
+    act(() => mockFocusCleanup?.());
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+
+    expect(mockStop).not.toHaveBeenCalled();
+  });
+
   it.each(['background', 'inactive'])(
     'system-cleans on %s without reporting cleanup failure',
     async (state) => {

@@ -83,6 +83,10 @@ export function useReplyReadAloud({
   }, []);
 
   const systemCleanup = useCallback(() => {
+    if (!activeSessionRef.current) {
+      return;
+    }
+
     invalidateCurrentSession();
     stopSpeechForCleanup('Failed to stop speech during system cleanup');
   }, [invalidateCurrentSession, stopSpeechForCleanup]);
