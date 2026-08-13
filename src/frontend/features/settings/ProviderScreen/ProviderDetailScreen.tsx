@@ -1,9 +1,9 @@
+import { PlusIcon, SquareArrowOutUpRightIcon } from '@cherrystudio/app-icons';
 import { Spinner } from '@cherrystudio/ui/components';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useQueryClient } from '@tanstack/react-query';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Color, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
-import { PlusIcon, SquareArrowOutUpRightIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -36,7 +36,10 @@ import { useProviderDetailSettings } from './detail';
 import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
 import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
+import { ProviderModelCheckSection } from './models/components/ProviderModelCheckSection';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
+import { useProviderModelRemove } from './models/hooks/useProviderModelRemove';
+import { useProviderModelSelection } from './models/hooks/useProviderModelSelection';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 export default function ProviderDetailSettingsScreen() {
@@ -50,10 +53,11 @@ export default function ProviderDetailSettingsScreen() {
   const { toast } = useToast();
   const { alert } = useAlert();
   const providers = useBackendModule('providers');
-  const [apiKeysVisible, setApiKeysVisible] = useState(false);
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
+  const { isDefaultModel, removeModels } = useProviderModelRemove();
+  const modelSelection = useProviderModelSelection();
   const deleteProviderMutation = useMutation('DELETE', '/providers/:id', {
     onMutate: async (variables) => {
       const providerIdToDelete = variables?.params.id;
@@ -196,19 +200,6 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/model-add',
     });
   }, [provider, providerId, router]);
-  const openModelCheckSettings = useCallback(() => {
-    if (!providerId || models.length === 0) {
-      return;
-    }
-
-    router.push({
-      params: {
-        ...(provider?.name ? { providerName: provider.name } : {}),
-        providerId,
-      },
-      pathname: '/settings/provider/[providerId]/model-check',
-    });
-  }, [models.length, provider, providerId, router]);
   const openModelPullSettings = useCallback(async () => {
     if (!providerId) {
       return;
@@ -255,14 +246,6 @@ export default function ProviderDetailSettingsScreen() {
     ],
     [openModelAddSettings, provider, t],
   );
-  const checkAction = useMemo(
-    () => ({
-      isDisabled: models.length === 0,
-      isLoading: false,
-      onPress: openModelCheckSettings,
-    }),
-    [models.length, openModelCheckSettings],
-  );
   const pullAction = useMemo(
     () =>
       activeTab === 'models'
@@ -273,6 +256,75 @@ export default function ProviderDetailSettingsScreen() {
           }
         : undefined,
     [activeTab, isModelPullLoading, openModelPullSettings, provider],
+  );
+  // The chat default is the one model the service refuses to delete, so it is
+  // also the one row a selection leaves alone — including "select all".
+  const selectableIds = useMemo(
+    () => models.filter((model) => !isDefaultModel(model)).map((model) => model.id),
+    [isDefaultModel, models],
+  );
+  const { exitEditing: exitModelSelection, selectedIds: selectedModelIds } = modelSelection;
+  const selectedModels = useMemo(
+    () => models.filter((model) => selectedModelIds.has(model.id)),
+    [models, selectedModelIds],
+  );
+  const modelListSelection = useMemo(
+    () =>
+      modelSelection.isEditing
+        ? { onToggleModel: modelSelection.toggleModel, selectedIds: selectedModelIds }
+        : undefined,
+    [modelSelection.isEditing, modelSelection.toggleModel, selectedModelIds],
+  );
+  const handleTabChange = useCallback(
+    (tab: ProviderDetailTab) => {
+      exitModelSelection();
+      setActiveTab(tab);
+    },
+    [exitModelSelection],
+  );
+  const requestRemoveSelectedModels = useCallback(() => {
+    if (selectedModels.length === 0) {
+      return;
+    }
+
+    alert.confirm({
+      confirmLabel: t('common.delete'),
+      description: t('settings.provider.models.selection.removeMessage', {
+        count: selectedModels.length,
+      }),
+      onConfirm: () => {
+        // Left before the request so the rows stop being checkboxes at the tap,
+        // rather than after a round trip that also empties the list under them.
+        exitModelSelection();
+        void removeModels(selectedModels);
+      },
+      role: 'destructive',
+      title: t('settings.provider.models.selection.removeTitle'),
+    });
+  }, [alert, exitModelSelection, removeModels, selectedModels, t]);
+  const selectionHeaderLeftActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.done'),
+        key: 'finish-selecting-models',
+        label: t('common.done'),
+        onPress: exitModelSelection,
+      },
+    ],
+    [exitModelSelection, t],
+  );
+  const selectionHeaderRightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.delete'),
+        disabled: selectedModelIds.size === 0,
+        key: 'remove-selected-models',
+        label: t('common.delete'),
+        onPress: requestRemoveSelectedModels,
+        tintColor: Color.ios.systemRed,
+      },
+    ],
+    [requestRemoveSelectedModels, selectedModelIds.size, t],
   );
   const handleToggleProvider = useCallback(() => {
     if (!provider) {
@@ -324,10 +376,27 @@ export default function ProviderDetailSettingsScreen() {
   // this exact tree on the first frame, and looked fine.
   return (
     <>
+      {/* Selecting takes the header over: the tabs would navigate out from under
+          the selection, and "Done" belongs where the back button was. */}
       <BackHeader
-        rightActions={activeTab === 'models' ? modelActions : configurationActions}
-        title={providerName ?? t('settings.provider.tabs.configuration')}
-        titleElement={<ProviderDetailTabs onTabChange={setActiveTab} tab={activeTab} />}
+        leftActions={modelSelection.isEditing ? selectionHeaderLeftActions : undefined}
+        rightActions={
+          modelSelection.isEditing
+            ? selectionHeaderRightActions
+            : activeTab === 'models'
+              ? modelActions
+              : configurationActions
+        }
+        title={
+          modelSelection.isEditing
+            ? t('settings.provider.models.selection.count', { count: selectedModelIds.size })
+            : (providerName ?? t('settings.provider.tabs.configuration'))
+        }
+        titleElement={
+          modelSelection.isEditing ? undefined : (
+            <ProviderDetailTabs onTabChange={handleTabChange} tab={activeTab} />
+          )
+        }
       />
       {activeTab === 'configuration' ? (
         <ScrollView
@@ -345,34 +414,47 @@ export default function ProviderDetailSettingsScreen() {
             // Still gated as one commit: #467 kept the Base URL / API keys blocks
             // out until all three queries land so the content never grows under a
             // finger that already aimed at the toolbar.
-            <ProviderApiManagementSection
-              apiKeysInput={apiKeysInput}
-              apiKeysVisible={apiKeysVisible}
-              baseUrl={getProviderPrimaryBaseUrl(provider)}
-              provider={provider}
-              showApiKeys={showApiKeys}
-              showBaseUrl={canEditEndpoint}
-              onApiKeysCommit={commitApiKeys}
-              onApiKeysManagePress={openApiKeySettings}
-              onApiKeysVisibleToggle={() => setApiKeysVisible((visible) => !visible)}
-              onBaseUrlCommit={commitBaseUrl}
-              onBaseUrlManagePress={openEndpointSettings}
-            />
+            <>
+              <ProviderApiManagementSection
+                apiKeysInput={apiKeysInput}
+                baseUrl={getProviderPrimaryBaseUrl(provider)}
+                provider={provider}
+                showApiKeys={showApiKeys}
+                showBaseUrl={canEditEndpoint}
+                onApiKeysCommit={commitApiKeys}
+                onApiKeysManagePress={openApiKeySettings}
+                onBaseUrlCommit={commitBaseUrl}
+                onBaseUrlManagePress={openEndpointSettings}
+              />
+              <ProviderModelCheckSection
+                apiKeys={apiKeys}
+                isLoading={modelsQuery.isPending}
+                models={models}
+                provider={provider}
+                providerId={providerId}
+              />
+            </>
           )}
         </ScrollView>
       ) : (
         <ProviderModelList
+          isDefaultModel={isDefaultModel}
           isLoading={modelsQuery.isPending}
           models={models}
           provider={provider}
           pullAction={pullAction}
+          selection={modelListSelection}
         />
       )}
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
         canDelete={provider ? providers.canRemove(provider) : false}
-        checkAction={checkAction}
+        editAction={
+          activeTab === 'models' && selectableIds.length > 0
+            ? { isDisabled: false, onPress: modelSelection.enterEditing }
+            : undefined
+        }
         isActive={provider?.isEnabled ?? false}
         isDisabled={
           !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isLoading
@@ -380,6 +462,15 @@ export default function ProviderDetailSettingsScreen() {
         onDelete={requestDeleteProvider}
         onToggleActive={handleToggleProvider}
         pullAction={pullAction}
+        selection={
+          modelSelection.isEditing
+            ? {
+                isAllSelected:
+                  selectableIds.length > 0 && selectableIds.every((id) => selectedModelIds.has(id)),
+                onToggleAll: () => modelSelection.toggleAll(selectableIds),
+              }
+            : undefined
+        }
       />
     </>
   );

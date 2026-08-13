@@ -1,8 +1,8 @@
+import { SaveIcon } from '@cherrystudio/app-icons';
 import { Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { SaveIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';

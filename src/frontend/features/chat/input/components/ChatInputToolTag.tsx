@@ -1,4 +1,4 @@
-import { XIcon } from 'lucide-uniwind/png';
+import { XIcon } from '@cherrystudio/app-icons';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 
@@ -16,7 +16,7 @@ export function ChatInputToolTag({ onClear, tool }: ChatInputToolTagProps) {
 
   return (
     <View className="flex-row items-center gap-1 self-start rounded-full bg-primary/10 px-2 py-1">
-      <Icon className="size-5 text-primary" strokeWidth={2.25} />
+      <Icon className="size-5 text-primary" />
       <Text className="font-semibold text-base text-primary" numberOfLines={1}>
         {t(tool.tagTitleKey)}
       </Text>
@@ -27,7 +27,7 @@ export function ChatInputToolTag({ onClear, tool }: ChatInputToolTagProps) {
         hitSlop={6}
         onPress={onClear}
       >
-        <XIcon className="size-5 text-primary" strokeWidth={2.25} />
+        <XIcon className="size-5 text-primary" />
       </Pressable>
     </View>
   );

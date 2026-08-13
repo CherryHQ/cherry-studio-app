@@ -1,6 +1,6 @@
+import { SquarePenIcon } from '@cherrystudio/app-icons';
 // Android-only: mirrors the native iOS messages-tab header actions.
 import { Menu, type MenuItem } from '@cherrystudio/ui/components';
-import { SquarePenIcon } from 'lucide-uniwind/png';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
@@ -77,7 +77,7 @@ export const MessageHeader = memo(function MessageHeader({
                 hitSlop={8}
                 testID="topic-create-menu"
               >
-                <SquarePenIcon className="size-5 text-foreground" strokeWidth={2} />
+                <SquarePenIcon className="size-5 text-foreground" />
               </Pressable>
             </Menu>
           </View>

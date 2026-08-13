@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { SingleSelectionSheet } from '../components/SingleSelectionSheet';
 
 let mockHandleSheetClose: ((reason: string) => void) | undefined;
+let mockListExtraData: unknown;
 const mockRequestClose = jest.fn((reason: string) => mockHandleSheetClose?.(reason));
 
 jest.mock('@cherrystudio/ui/components', () => ({
@@ -23,9 +24,11 @@ jest.mock('@cherrystudio/ui/components', () => ({
 jest.mock('@legendapp/list/react-native', () => ({
   LegendList: ({
     data,
+    extraData,
     renderItem,
   }: {
     data: { label: string; value: string }[];
+    extraData: unknown;
     renderItem: (info: {
       index: number;
       item: { label: string; value: string };
@@ -33,6 +36,7 @@ jest.mock('@legendapp/list/react-native', () => ({
   }) => {
     const { Fragment } = jest.requireActual('react');
     const { View: MockView } = jest.requireActual('react-native');
+    mockListExtraData = extraData;
     return (
       <MockView>
         {data.map((item, index) => (
@@ -43,7 +47,7 @@ jest.mock('@legendapp/list/react-native', () => ({
   },
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CheckIcon: () => null,
 }));
 
@@ -61,6 +65,7 @@ describe('SingleSelectionSheet', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockHandleSheetClose = undefined;
+    mockListExtraData = undefined;
   });
 
   afterEach(() => {
@@ -106,5 +111,31 @@ describe('SingleSelectionSheet', () => {
 
     expect(mockRequestClose).toHaveBeenCalledWith('selection');
     expect(calls).toEqual(['close', 'select:second']);
+  });
+
+  test('invalidates recycled rows when the selected value changes', () => {
+    const props = {
+      closeAccessibilityLabel: 'Close',
+      emptyText: 'No options',
+      isOpen: true,
+      onClose: jest.fn(),
+      onSelect: jest.fn(),
+      options: [
+        { label: 'First', value: 'first' },
+        { label: 'Second', value: 'second' },
+      ],
+      testID: 'selection',
+      title: 'Choose',
+    } as const;
+
+    act(() => {
+      renderer = create(<SingleSelectionSheet {...props} selectedValue="first" />);
+    });
+    expect(mockListExtraData).toBe('first');
+
+    act(() => {
+      renderer!.update(<SingleSelectionSheet {...props} selectedValue="second" />);
+    });
+    expect(mockListExtraData).toBe('second');
   });
 });

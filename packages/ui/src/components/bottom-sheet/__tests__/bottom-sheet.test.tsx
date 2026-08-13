@@ -28,7 +28,7 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => {
+jest.mock('@cherrystudio/app-icons', () => {
   const { View } = jest.requireActual('react-native');
 
   return { ChevronLeftIcon: View, XIcon: View };

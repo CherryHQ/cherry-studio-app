@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { SettingsServiceRow } from '../SettingsServiceRow';
 
-jest.mock('lucide-uniwind/png', () => ({ ChevronRightIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ ChevronRightIcon: () => null }));
 jest.mock('heroui-native/utils', () => ({
   cn: (...classes: (false | null | string | undefined)[]) => classes.filter(Boolean).join(' '),
 }));

@@ -14,9 +14,6 @@ export type ProviderModelPullListItem =
       type: 'section';
     }
   | {
-      /** Where the row sits in its section's grouped card. */
-      isFirst: boolean;
-      isLast: boolean;
       key: string;
       model: Model;
       section: ProviderModelPullSectionKey;
@@ -73,10 +70,8 @@ export function buildProviderModelPullListItems(
     });
     renderedSectionCount += 1;
 
-    for (const [index, model] of models.entries()) {
+    for (const model of models) {
       items.push({
-        isFirst: index === 0,
-        isLast: index === models.length - 1,
         key: `model:${section}:${model.id}`,
         model,
         section,

@@ -2,25 +2,26 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import WebSearchCompressionMethodScreen from '../WebSearchCompressionMethodScreen';
 import WebSearchDefaultProviderScreen from '../WebSearchDefaultProviderScreen';
+import WebSearchFetchProviderScreen from '../WebSearchFetchProviderScreen';
 
 const mockCompressionChange = jest.fn();
 const mockProviderChange = jest.fn();
+const mockFetchProviderChange = jest.fn();
+const mockBack = jest.fn();
+
+jest.mock('expo-router', () => ({ useRouter: () => ({ back: mockBack }) }));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-
 jest.mock('uniwind', () => ({ useUniwind: () => ({ theme: 'light' }) }));
-
-jest.mock('lucide-uniwind/png', () => ({ CheckIcon: () => null }));
-
+jest.mock('@cherrystudio/app-icons', () => ({ CheckIcon: () => null }));
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   const Section = (props: object) => createElement('Section', props);
   Section.Item = (props: object) => createElement('SectionItem', props);
   return { Section };
 });
-
 jest.mock('@/frontend/components/headers', () => ({ BackHeader: () => null }));
 jest.mock('@/frontend/components/nativePrimitives', () => ({ Image: () => null }));
 jest.mock('../../hooks/useWebSearchProviderPreferences', () => ({
@@ -32,6 +33,14 @@ jest.mock('../../hooks/useWebSearchProviderPreferences', () => ({
         { label: 'Cutoff', value: 'cutoff' },
       ],
       value: 'none',
+    },
+    fetchUrls: {
+      onValueChange: mockFetchProviderChange,
+      options: [
+        { label: 'Jina', value: 'jina' },
+        { label: 'Firecrawl', value: 'firecrawl' },
+      ],
+      value: 'jina',
     },
     searchKeywords: {
       onValueChange: mockProviderChange,
@@ -54,33 +63,37 @@ describe('Web Search selection screens', () => {
     jest.clearAllMocks();
   });
 
-  test('selects the default provider without automatically leaving the screen', () => {
+  test('selects the default provider', () => {
     act(() => {
       renderer = create(<WebSearchDefaultProviderScreen />);
     });
 
     const rows = renderer!.root.findAllByType('SectionItem');
-    expect(rows.map((row) => row.props.accessibilityState)).toEqual([
-      { checked: true },
-      { checked: false },
-    ]);
-
     act(() => rows[1].props.onPress());
     expect(mockProviderChange).toHaveBeenCalledWith('exa');
+    expect(mockBack).toHaveBeenCalledTimes(1);
   });
 
-  test('selects the compression method without automatically leaving the screen', () => {
+  test('selects the compression method', () => {
     act(() => {
       renderer = create(<WebSearchCompressionMethodScreen />);
     });
 
     const rows = renderer!.root.findAllByType('SectionItem');
-    expect(rows.map((row) => row.props.accessibilityState)).toEqual([
-      { checked: true },
-      { checked: false },
-    ]);
-
     act(() => rows[1].props.onPress());
     expect(mockCompressionChange).toHaveBeenCalledWith('cutoff');
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  test('selects Jina or Firecrawl for URL fetching', () => {
+    act(() => {
+      renderer = create(<WebSearchFetchProviderScreen />);
+    });
+
+    const rows = renderer!.root.findAllByType('SectionItem');
+    expect(rows.map((row) => row.props.label)).toEqual(['Jina', 'Firecrawl']);
+    act(() => rows[1].props.onPress());
+    expect(mockFetchProviderChange).toHaveBeenCalledWith('firecrawl');
+    expect(mockBack).toHaveBeenCalledTimes(1);
   });
 });

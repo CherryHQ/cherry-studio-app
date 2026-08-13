@@ -5,7 +5,7 @@ import {
   SquareArrowOutUpRightIcon,
   VideoIcon,
   WrenchIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
 import { Pressable, Text, View } from 'react-native';
 
 export type PartPlaceholderIcon = 'data' | 'document' | 'file' | 'link' | 'tool' | 'video';
@@ -25,17 +25,17 @@ export function PartPlaceholder({ description, icon, label, onPress }: PartPlace
   }`;
   const iconElement =
     icon === 'data' ? (
-      <BracesIcon className={iconClassName} strokeWidth={2} />
+      <BracesIcon className={iconClassName} />
     ) : icon === 'document' ? (
-      <FileTextIcon className={iconClassName} strokeWidth={2} />
+      <FileTextIcon className={iconClassName} />
     ) : icon === 'file' ? (
-      <FileIcon className={iconClassName} strokeWidth={2} />
+      <FileIcon className={iconClassName} />
     ) : icon === 'link' ? (
-      <SquareArrowOutUpRightIcon className={iconClassName} strokeWidth={2} />
+      <SquareArrowOutUpRightIcon className={iconClassName} />
     ) : icon === 'tool' ? (
-      <WrenchIcon className={iconClassName} strokeWidth={2} />
+      <WrenchIcon className={iconClassName} />
     ) : (
-      <VideoIcon className={iconClassName} strokeWidth={2} />
+      <VideoIcon className={iconClassName} />
     );
 
   const content = (

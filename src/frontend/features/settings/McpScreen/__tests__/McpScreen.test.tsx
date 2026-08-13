@@ -19,7 +19,7 @@ jest.mock('expo-router', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({ PlusIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ PlusIcon: () => null }));
 
 jest.mock('@/frontend/components/headers', () => ({
   BackHeader: ({ rightActions }: { rightActions?: readonly HeaderAction[] }) => {

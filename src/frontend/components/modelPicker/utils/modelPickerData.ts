@@ -106,6 +106,17 @@ export function getModelPickerTags(model: Model): ModelPickerTag[] {
   return MODEL_PICKER_TAGS.filter((tag) => matchesModelPickerTag(model, tag));
 }
 
+/**
+ * The badges a model row shows, wherever one is drawn. Free is not a declared
+ * capability — it is read off the model — so it is not among the tags above and
+ * has to be appended.
+ */
+export function getModelPickerRowTags(model: Model): ModelPickerTag[] {
+  const tags = getModelPickerTags(model);
+
+  return isFreeModel(model) ? [...tags, 'free'] : tags;
+}
+
 export function getAvailableModelPickerFilterTags({
   models,
   providers,

@@ -101,7 +101,7 @@
     "expo-screen-corner-radius": "*",
     "expo-widgets": "*",
     "heroui-native": "*",
-    "lucide-uniwind": "*",
+    "@cherrystudio/app-icons": "workspace:*",
     "react": "*",
     "react-native": "*",
     "react-native-nitro-modules": "*",

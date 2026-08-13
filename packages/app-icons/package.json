@@ -1,0 +1,32 @@
+{
+  "name": "@cherrystudio/app-icons",
+  "version": "0.0.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "icons:generate": "tsx scripts/generate-icons.ts"
+  },
+  "peerDependencies": {
+    "expo-symbols": "*",
+    "react": "*",
+    "react-native": "*",
+    "uniwind": "*"
+  },
+  "devDependencies": {
+    "@expo-google-fonts/material-symbols": "^0.4.43",
+    "@material-symbols/svg-400": "^0.45.10",
+    "sf-symbols-typescript": "^2.2.0",
+    "sharp": "^0.34.5",
+    "subset-font": "^2.5.0"
+  }
+}

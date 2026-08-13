@@ -1,7 +1,3 @@
-import { Button, Section } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons/providers';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import * as Clipboard from 'expo-clipboard';
 import {
   CircleAlertIcon,
   CircleDollarSignIcon,
@@ -9,7 +5,11 @@ import {
   ExternalLinkIcon,
   ReceiptTextIcon,
   XIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Button, Section } from '@cherrystudio/ui/components';
+import { resolveProviderIcon } from '@cherrystudio/ui/icons/providers';
+import type { Provider } from '@cherrystudio/universal/data/types/provider';
+import * as Clipboard from 'expo-clipboard';
 import type { ReactNode } from 'react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

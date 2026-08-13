@@ -79,7 +79,7 @@ jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CheckIcon: () => null,
   ImageIcon: () => null,
   RotateCcwIcon: () => null,

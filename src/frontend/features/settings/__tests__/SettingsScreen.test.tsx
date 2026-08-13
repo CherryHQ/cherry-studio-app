@@ -19,7 +19,7 @@ jest.mock('@cherrystudio/ui/components', () => {
 
 jest.mock('@cherrystudio/ui/icons', () => ({ resolveProviderIcon: () => undefined }));
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CircleUserRoundIcon: () => null,
   CloudIcon: () => null,
   DatabaseIcon: () => null,

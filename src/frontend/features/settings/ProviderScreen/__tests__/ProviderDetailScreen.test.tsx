@@ -48,6 +48,7 @@ let mockAuthConfigQuery: QueryState;
 let mockRedirectHref: unknown;
 let mockSpinnerRenderCount: number;
 let mockChromeRenderCount: number;
+let mockCheckSectionRenderCount: number;
 let mockSectionRenders: SectionProps[];
 const mockReplaceApiKeys = jest.fn(async () => undefined);
 const mockSaveProvider = jest.fn(async () => undefined);
@@ -69,6 +70,7 @@ const dataApi = {
 } as unknown as ApiClient;
 
 jest.mock('expo-router', () => ({
+  Color: { ios: { systemRed: '#ff3b30' } },
   Redirect: ({ href }: { href: unknown }) => {
     mockRedirectHref = href;
     return null;
@@ -101,7 +103,7 @@ jest.mock('heroui-native/toast', () => ({
   useToast: () => ({ toast: { show: jest.fn() } }),
 }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   PlusIcon: () => null,
   SquareArrowOutUpRightIcon: () => null,
 }));
@@ -161,8 +163,24 @@ jest.mock('../components/ProviderModelList', () => ({
   ProviderModelList: ({ header }: { header?: ReactElement }) => header ?? null,
 }));
 
+jest.mock('../models/components/ProviderModelCheckSection', () => ({
+  ProviderModelCheckSection: () => {
+    mockCheckSectionRenderCount += 1;
+    return null;
+  },
+}));
+
 jest.mock('../models/hooks/useProviderModelPull', () => ({
   useProviderModelPull: () => ({ isPreviewLoading: false, loadPullPreview: jest.fn() }),
+}));
+
+// Reads the chat default through `usePreference`, which needs a provider this
+// screen's tree does not install.
+jest.mock('../models/hooks/useProviderModelRemove', () => ({
+  useProviderModelRemove: () => ({
+    isDefaultModel: () => false,
+    removeModels: jest.fn(),
+  }),
 }));
 
 describe('ProviderDetailScreen', () => {
@@ -212,6 +230,7 @@ describe('ProviderDetailScreen', () => {
     mockRedirectHref = undefined;
     mockSpinnerRenderCount = 0;
     mockChromeRenderCount = 0;
+    mockCheckSectionRenderCount = 0;
     mockSectionRenders = [];
     mockReplaceApiKeys.mockClear();
     mockSaveProvider.mockClear();
@@ -228,6 +247,15 @@ describe('ProviderDetailScreen', () => {
 
     expect(mockSpinnerRenderCount).toBe(1);
     expect(mockSectionRenders).toEqual([]);
+    expect(mockCheckSectionRenderCount).toBe(0);
+  });
+
+  // The connectivity check used to live behind a toolbar button on its own route.
+  it('renders the connectivity check inline under the API management section', () => {
+    loadEverything();
+    render();
+
+    expect(mockCheckSectionRenderCount).toBe(1);
   });
 
   // The spinner used to replace the whole screen, so the scroll view and the bottom

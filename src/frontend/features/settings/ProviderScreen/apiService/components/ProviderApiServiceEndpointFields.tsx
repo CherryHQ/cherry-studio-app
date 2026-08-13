@@ -1,7 +1,7 @@
+import { CheckIcon, SettingsIcon } from '@cherrystudio/app-icons';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
-import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TextInputEndEditingEvent } from 'react-native';
@@ -31,7 +31,11 @@ export function ProviderApiServiceEndpointField({
 
   return (
     <TextField>
-      <Label>{t('settings.provider.apiService.baseUrl')}</Label>
+      <Label>
+        <Label.Text className="font-semibold">
+          {t('settings.provider.apiService.baseUrl')}
+        </Label.Text>
+      </Label>
       <View className="flex-row items-center gap-2">
         <PrimaryEndpointBaseUrlInput
           accessibilityLabel={t('settings.provider.apiService.baseUrl')}
@@ -42,7 +46,7 @@ export function ProviderApiServiceEndpointField({
         <Button
           accessibilityLabel={t('settings.provider.apiService.manageEndpoints')}
           hitSlop={6}
-          icon={<SettingsIcon strokeWidth={2} />}
+          icon={<SettingsIcon />}
           onPress={onManagePress}
           variant="secondary"
         />
@@ -187,7 +191,7 @@ export function ProviderDefaultEndpointControl({
   if (isDefault) {
     return (
       <View className="shrink-0 flex-row items-center gap-1.5 px-2 py-2">
-        <CheckIcon className="size-4 text-primary" strokeWidth={2.5} />
+        <CheckIcon className="size-4 text-primary" />
         <Text className="text-primary text-sm">
           {t('settings.provider.apiService.defaultEndpoint')}
         </Text>

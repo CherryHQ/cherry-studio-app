@@ -1,4 +1,4 @@
-import { XIcon } from 'lucide-uniwind/png';
+import { XIcon } from '@cherrystudio/app-icons';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -109,7 +109,7 @@ function RemoveBadge({ onPress }: { onPress: () => void }) {
       onPress={handlePress}
     >
       <View className="absolute top-1.5 right-1.5 size-7 items-center justify-center rounded-full bg-constant-white">
-        <XIcon className="size-4.5 text-constant-black" strokeWidth={2.5} />
+        <XIcon className="size-4.5 text-constant-black" />
       </View>
     </Pressable>
   );

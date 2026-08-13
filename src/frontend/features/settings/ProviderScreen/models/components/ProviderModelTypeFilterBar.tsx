@@ -1,5 +1,3 @@
-import { Tabs } from '@cherrystudio/ui/components';
-import { cn } from '@cherrystudio/ui/utils';
 import {
   ArrowUpDownIcon,
   AudioLinesIcon,
@@ -9,7 +7,9 @@ import {
   SpeechIcon,
   TypeIcon,
   VideoIcon,
-} from 'lucide-uniwind/png';
+} from '@cherrystudio/app-icons';
+import { Tabs } from '@cherrystudio/ui/components';
+import { cn } from '@cherrystudio/ui/utils';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
@@ -50,7 +50,7 @@ function ProviderModelTypeTabContent({
       {/* Selection is carried by the label's weight alone — an icon has no
        * weight axis, and tinting only it would put the two halves of one tab
        * on different signals. */}
-      {Icon ? <Icon className="size-3.5 shrink-0 text-foreground" strokeWidth={2} /> : null}
+      {Icon ? <Icon className="size-3.5 shrink-0 text-foreground" /> : null}
       <Text
         adjustsFontSizeToFit
         className={cn(

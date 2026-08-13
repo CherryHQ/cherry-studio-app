@@ -1,5 +1,6 @@
+import { CheckIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
-import { CheckIcon } from 'lucide-uniwind/png';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 
@@ -9,6 +10,7 @@ import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPr
 
 export default function WebSearchCompressionMethodScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { compressionMethod } = useWebSearchProviderPreferences();
 
   return (
@@ -34,12 +36,11 @@ export default function WebSearchCompressionMethodScreen() {
                 onPress={() => {
                   if (!selected) {
                     compressionMethod.onValueChange(option.value);
+                    router.back();
                   }
                 }}
                 showChevron={false}
-                trailing={
-                  selected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.5} /> : null
-                }
+                trailing={selected ? <CheckIcon className="size-5 text-primary" /> : null}
               />
             );
           })}

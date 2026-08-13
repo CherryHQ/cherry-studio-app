@@ -11,7 +11,7 @@ jest.mock('heroui-native/utils', () => {
   };
 });
 
-jest.mock('lucide-uniwind/png', () => {
+jest.mock('@cherrystudio/app-icons', () => {
   const React = require('react');
   const { View } = require('react-native');
 
@@ -78,6 +78,35 @@ describe('Section', () => {
     expect(
       tree.root.findByProps({ children: 'Changes apply immediately.' }).props.className,
     ).toContain('mt-2');
+  });
+
+  // A trailing value is usually a variable-length string, so the slot that holds
+  // it is the side that gives: it shrinks, and past a share of the row it stops
+  // growing so the label keeps a column to itself. Callers used to cap it one by
+  // one, and the ones that forgot rendered their label a character per line.
+  test('caps trailing content and lets it shrink rather than squeeze the label', () => {
+    const tree = render(
+      <Section>
+        <Section.Item
+          label="Model"
+          trailing={<Text testID="row-value">a-very-long-model-id</Text>}
+        />
+      </Section>,
+    );
+
+    const slots = tree.root.findAll(
+      (node) =>
+        node.type === View &&
+        typeof node.props.className === 'string' &&
+        node.props.className.includes('items-center justify-center') &&
+        node.findAllByProps({ testID: 'row-value' }).length > 0,
+    );
+
+    expect(slots).toHaveLength(1);
+    expect(slots[0].props.className).toContain('min-w-0');
+    expect(slots[0].props.className).toContain('max-w-[62%]');
+    expect(slots[0].props.className).toContain('shrink');
+    expect(slots[0].props.className).not.toContain('shrink-0');
   });
 
   test('renders a standalone header with optional trailing content', () => {

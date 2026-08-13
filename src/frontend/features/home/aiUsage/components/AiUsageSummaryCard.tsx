@@ -1,10 +1,10 @@
+import { ChevronRightIcon, RefreshCwIcon } from '@cherrystudio/app-icons';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import type {
   AiUsageRecordCostTotal,
   AiUsageRecordTimelineBucket,
 } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import { Link } from 'expo-router';
-import { ChevronRightIcon, RefreshCwIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
@@ -60,7 +60,7 @@ export function AiUsageSummaryCard() {
               testID="ai-usage-summary-refresh-retry"
               onPress={() => void refetch()}
             >
-              <RefreshCwIcon className="size-4 text-destructive" strokeWidth={2} />
+              <RefreshCwIcon className="size-4 text-destructive" />
             </Pressable>
           ) : null}
         </View>
@@ -75,7 +75,7 @@ export function AiUsageSummaryCard() {
             <Text className="font-medium text-primary text-sm" numberOfLines={1}>
               {t('aiUsage.viewDetails')}
             </Text>
-            <ChevronRightIcon className="size-4 text-primary" strokeWidth={2} />
+            <ChevronRightIcon className="size-4 text-primary" />
           </Pressable>
         </Link>
       </View>
@@ -92,7 +92,7 @@ export function AiUsageSummaryCard() {
             testID="ai-usage-summary-retry"
             onPress={() => void refetch()}
           >
-            <RefreshCwIcon className="size-4 text-foreground" strokeWidth={2} />
+            <RefreshCwIcon className="size-4 text-foreground" />
             <Text className="font-medium text-foreground text-sm">{t('aiUsage.retry')}</Text>
           </Pressable>
         </View>

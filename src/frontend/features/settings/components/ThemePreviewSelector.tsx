@@ -1,6 +1,6 @@
+import { CheckIcon } from '@cherrystudio/app-icons';
 import { Switch } from '@cherrystudio/ui/components';
 import { ThemeMode } from '@cherrystudio/universal/data/preference';
-import { CheckIcon } from 'lucide-uniwind/png';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { ScopedTheme } from 'uniwind';
@@ -127,7 +127,7 @@ function ThemePreview({ theme }: { theme: ResolvedThemeMode }) {
 function ThemeSelectionIndicator({ selected }: { selected: boolean }) {
   return selected ? (
     <View className="size-6 items-center justify-center rounded-full bg-primary">
-      <CheckIcon className="size-4 text-primary-foreground" strokeWidth={3} />
+      <CheckIcon className="size-4 text-primary-foreground" />
     </View>
   ) : (
     <View className="size-6 rounded-full border-2 border-muted-foreground" />

@@ -1,10 +1,10 @@
+import { CheckIcon, SettingsIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import type {
   PermissionMode,
   PermissionPreferenceKey,
 } from '@cherrystudio/universal/data/preference';
 import { useLocalSearchParams } from 'expo-router';
-import { CheckIcon, SettingsIcon } from 'lucide-uniwind/png';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
@@ -112,9 +112,7 @@ function PermissionModeGroup({
             label={t(`settings.permissions.mode.${option}`)}
             onPress={() => void selectMode(option)}
             showChevron={false}
-            trailing={
-              selected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.5} /> : null
-            }
+            trailing={selected ? <CheckIcon className="size-5 text-primary" /> : null}
           />
         );
       })}
@@ -146,7 +144,7 @@ function OpenSettingsSection({
     >
       <Section.Item
         label={t('settings.permissions.openSystemSettings')}
-        leading={<SettingsIcon className="size-5 text-foreground" strokeWidth={2} />}
+        leading={<SettingsIcon className="size-5 text-foreground" />}
         onPress={() => void recoverAccess()}
       />
     </Section>

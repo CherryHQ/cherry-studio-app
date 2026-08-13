@@ -17,7 +17,7 @@ type PaintingInputProps = {
 
 const painting: Painting = {
   createdAt: '2026-08-11T00:00:00.000Z',
-  files: { input: ['input-1'], output: ['output-1'] },
+  files: { input: ['input-1'], output: ['output-1', 'output-1b'] },
   id: 'painting-1',
   modelId: 'provider::image-model',
   orderKey: 'painting-1',
@@ -48,11 +48,27 @@ const files: ResolvedPaintingFiles = {
       status: 'ready',
       uri: 'file:///output.png',
     },
+    {
+      fileEntryId: 'output-1b',
+      id: 'painting-file:output-1b',
+      kind: 'image',
+      mediaType: 'image/png',
+      name: 'output-1b.png',
+      status: 'ready',
+      uri: 'file:///output-1b.png',
+    },
   ],
 };
 const result: PaintingGenerationResult = {
-  outputs: [{ fileEntryId: 'output-2', uri: 'file:///output-2.png' }],
-  painting: { ...painting, files: { input: [], output: ['output-2'] }, id: 'painting-2' },
+  outputs: [
+    { fileEntryId: 'output-2', uri: 'file:///output-2.png' },
+    { fileEntryId: 'output-3', uri: 'file:///output-3.png' },
+  ],
+  painting: {
+    ...painting,
+    files: { input: [], output: ['output-2', 'output-3'] },
+    id: 'painting-2',
+  },
 };
 const input: PaintingGenerationInput = {
   attachments: [],
@@ -205,7 +221,7 @@ describe('PaintingComposer', () => {
     });
     expect(mockAssistantProps).toMatchObject({
       animateOutput: false,
-      output: files.outputs[0],
+      outputs: files.outputs,
       paintingId: painting.id,
       status: 'idle',
     });
@@ -247,7 +263,7 @@ describe('PaintingComposer', () => {
     expect(mockMessageListProps?.messages[1].status).toBe('success');
     expect(mockAssistantProps).toMatchObject({
       animateOutput: true,
-      output: result.outputs[0],
+      outputs: result.outputs,
       paintingId: result.painting.id,
     });
     expect(mockMessageListMounts).toBe(1);

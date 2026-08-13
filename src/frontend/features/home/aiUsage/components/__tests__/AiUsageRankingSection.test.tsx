@@ -7,7 +7,7 @@ import { AiUsageRankingSection } from '../AiUsageRankingSection';
 const mockRefetch = jest.fn();
 const mockUseAiUsageRanking = jest.fn();
 
-jest.mock('lucide-uniwind/png', () => ({ RefreshCwIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ RefreshCwIcon: () => null }));
 jest.mock('../../hooks/useAiUsageRanking', () => ({
   useAiUsageRanking: (options: Record<string, unknown>) => mockUseAiUsageRanking(options),
 }));

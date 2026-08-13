@@ -3,7 +3,6 @@ import type { ComponentType, ReactElement } from 'react';
 
 type HeaderAndroidIconProps = {
   className?: string;
-  strokeWidth?: number;
 };
 
 export type HeaderToolbarAction = Pick<

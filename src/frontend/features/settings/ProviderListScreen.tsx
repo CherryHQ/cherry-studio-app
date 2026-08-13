@@ -1,7 +1,7 @@
+import { PlusIcon } from '@cherrystudio/app-icons';
 import { SearchField, Section } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { PlusIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';

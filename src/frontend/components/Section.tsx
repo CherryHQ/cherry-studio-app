@@ -1,5 +1,5 @@
+import { ChevronRightIcon, type AppIconProps } from '@cherrystudio/app-icons';
 import type { ImageSource } from 'expo-image';
-import { ChevronRightIcon, type PngIconProps } from 'lucide-uniwind/png';
 import type { ComponentType, ReactNode } from 'react';
 import { Pressable, Text, View, type ViewProps } from 'react-native';
 
@@ -16,9 +16,9 @@ export type SectionItemProps = {
   title: string;
 };
 
-/** Lucide icon at the row's leading size and color. */
-export function SectionIcon({ icon: Icon }: { icon?: ComponentType<PngIconProps> }) {
-  return Icon ? <Icon className="size-6 text-foreground" strokeWidth={2} /> : null;
+/** App icon at the row's leading size and color. */
+export function SectionIcon({ icon: Icon }: { icon?: ComponentType<AppIconProps> }) {
+  return Icon ? <Icon className="size-6 text-foreground" /> : null;
 }
 
 /** Bitmap logo at the row's leading size. Renders nothing when the source is missing. */
@@ -127,7 +127,7 @@ function SectionItem({
       </View>
       {hideAccessory
         ? null
-        : (accessory ?? <ChevronRightIcon className="size-6 text-foreground" strokeWidth={2} />)}
+        : (accessory ?? <ChevronRightIcon className="size-6 text-foreground" />)}
     </Pressable>
   );
 }

@@ -1,7 +1,7 @@
+import { CameraIcon, FileIcon, ImagesIcon } from '@cherrystudio/app-icons';
 import { Composer } from '@cherrystudio/ui/components';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
-import { CameraIcon, FileIcon, ImagesIcon } from 'lucide-uniwind/png';
 import { type PropsWithChildren, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -120,17 +120,17 @@ export function ComposerMenu({ children }: PropsWithChildren) {
       testID="composer-menu"
     >
       <Composer.Menu.Item
-        icon={<CameraIcon className="size-5 text-foreground" strokeWidth={2} />}
+        icon={<CameraIcon className="size-5 text-foreground" />}
         label={t('chat.media.camera')}
         onPress={() => present('camera', openCamera)}
       />
       <Composer.Menu.Item
-        icon={<ImagesIcon className="size-5 text-foreground" strokeWidth={2} />}
+        icon={<ImagesIcon className="size-5 text-foreground" />}
         label={t('chat.media.photos')}
         onPress={() => present('photo', openPhotoLibrary)}
       />
       <Composer.Menu.Item
-        icon={<FileIcon className="size-5 text-foreground" strokeWidth={2} />}
+        icon={<FileIcon className="size-5 text-foreground" />}
         label={t('chat.media.file')}
         onPress={() => present('document', openDocumentPicker)}
       />

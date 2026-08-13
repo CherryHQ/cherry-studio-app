@@ -1,6 +1,6 @@
+import { ArrowDownIcon } from '@cherrystudio/app-icons';
 import { Surface } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { ArrowDownIcon } from 'lucide-uniwind/png';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { useAnimatedProps, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 
@@ -40,7 +40,7 @@ export function ScrollToBottomButton({
             interactive
             style={styles.surface}
           >
-            <ArrowDownIcon className="size-5 text-foreground" strokeWidth={2} />
+            <ArrowDownIcon className="size-5 text-foreground" />
           </Surface>
         </Pressable>
       </Animated.View>

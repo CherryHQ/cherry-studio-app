@@ -34,7 +34,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: (string | null | undefined)[]) => values.filter(Boolean).join(' '),
 }));
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CheckIcon: () => null,
   SettingsIcon: () => null,
 }));

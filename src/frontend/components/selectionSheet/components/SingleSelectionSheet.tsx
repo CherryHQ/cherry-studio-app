@@ -1,10 +1,10 @@
+import { CheckIcon } from '@cherrystudio/app-icons';
 import {
   BottomSheet,
   type BottomSheetCloseReason,
   useBottomSheet,
 } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { CheckIcon } from 'lucide-uniwind/png';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -156,6 +156,7 @@ function SelectionSheetOptions<TValue extends string>({
       contentContainerStyle={styles.listContent}
       data={options}
       estimatedItemSize={estimatedOptionHeight}
+      extraData={selectedValue}
       keyExtractor={keyExtractor}
       keyboardDismissMode="on-drag"
       keyboardShouldPersistTaps="handled"
@@ -195,7 +196,7 @@ function SelectionSheetOptionRow<TValue extends string>({
       <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={2}>
         {label}
       </Text>
-      {isSelected ? <CheckIcon className="size-5 text-primary" strokeWidth={2.5} /> : null}
+      {isSelected ? <CheckIcon className="size-5 text-primary" /> : null}
     </Pressable>
   );
 }

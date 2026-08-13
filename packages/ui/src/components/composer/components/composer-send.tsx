@@ -1,4 +1,4 @@
-import { ArrowUpIcon, SquareIcon } from 'lucide-uniwind/png';
+import { ArrowUpIcon, SquareIcon } from '@cherrystudio/app-icons';
 
 import { cn } from '../../../utils';
 import { useComposerActions, useComposerState } from '../composer.context';
@@ -51,7 +51,6 @@ export function ComposerSend({ testID }: ComposerSendProps) {
           isActive ? 'text-primary-foreground' : 'text-muted-foreground',
           isStopping ? 'size-4' : 'size-6',
         )}
-        strokeWidth={2}
       />
     </ComposerAction>
   );

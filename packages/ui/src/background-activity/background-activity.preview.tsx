@@ -1,4 +1,3 @@
-import { Image } from 'expo-image';
 import {
   BrainIcon,
   CircleCheckIcon,
@@ -9,8 +8,9 @@ import {
   PaintbrushIcon,
   TriangleAlertIcon,
   WrenchIcon,
-  type PngIconProps,
-} from 'lucide-uniwind/png';
+  type AppIconProps,
+} from '@cherrystudio/app-icons';
+import { Image } from 'expo-image';
 import type { ComponentType } from 'react';
 import { useEffect, useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
@@ -33,7 +33,7 @@ export type BackgroundActivityPreviewProps = Omit<
   theme: 'dark' | 'light';
 };
 
-const ICONS: Record<BackgroundActivityIcon, ComponentType<PngIconProps>> = {
+const ICONS: Record<BackgroundActivityIcon, ComponentType<AppIconProps>> = {
   brain: BrainIcon,
   'bubble-ellipsis': MessageCircleMoreIcon,
   'bubble-exclamation': MessageCircleWarningIcon,

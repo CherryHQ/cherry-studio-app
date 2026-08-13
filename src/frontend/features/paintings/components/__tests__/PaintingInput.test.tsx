@@ -152,6 +152,7 @@ describe('PaintingInput', () => {
       attachments: payload.attachments,
       mode: 'edit',
       modelId: 'provider::image-model',
+      modelName: 'Image Model',
       paramValues: {},
       prompt: payload.text,
     });
@@ -219,6 +220,7 @@ describe('PaintingInput', () => {
       attachments: [],
       mode: 'generate',
       modelId: 'provider::image-model',
+      modelName: 'Image Model',
       paramValues: { size: '1024x1024' },
       prompt: '',
     });

@@ -9,7 +9,7 @@ Runtime imports use the component-only entry point so Metro does not traverse th
 
 ```tsx
 import { Button } from '@cherrystudio/ui/components';
-import { PlusIcon } from 'lucide-uniwind/png';
+import { PlusIcon } from '@cherrystudio/app-icons';
 
 <Button icon={<PlusIcon />} loading={isSaving} onPress={save} size="lg" variant="default">
   Save
@@ -29,6 +29,30 @@ need an Expo UI `Host`.
 Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
+
+`SecureInput` is the shared single-line field for passwords, API keys, and other sensitive text. It
+keeps the controlled value with the caller, owns only whether that value is revealed, and renders
+the visibility action inside the field. Callers must provide localized action labels:
+
+```tsx
+import { SecureInput } from '@cherrystudio/ui/components';
+
+<SecureInput
+  accessibilityLabel={t('settings.provider.apiService.apiKey')}
+  onChangeText={setApiKey}
+  value={apiKey}
+  visibilityAccessibilityLabels={{
+    hide: t('settings.provider.apiService.hideApiKeys'),
+    show: t('settings.provider.apiService.showApiKeys'),
+  }}
+/>;
+```
+
+Visibility starts hidden on every mount. Toggling keeps input focus by default; set
+`blurOnVisibilityToggle` only when a consumer intentionally relies on blur to dismiss the keyboard
+or commit its draft value. `SecureInput` fixes `multiline`, `secureTextEntry`, `autoCapitalize`, and
+`autoCorrect`, while forwarding the remaining `Input` props. Disabling the field also disables its
+visibility action.
 
 `Menu` is the shared native action menu. It accepts one trigger element and a flat, stable `items`
 array; the package owns Nitro wiring, native action dispatch, and platform gesture behavior:

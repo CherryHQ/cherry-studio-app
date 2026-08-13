@@ -5,7 +5,7 @@ import { Section, SectionIcon, SectionImage } from '../Section';
 
 const mockPress = jest.fn();
 
-jest.mock('lucide-uniwind/png', () => ({ ChevronRightIcon: () => null }));
+jest.mock('@cherrystudio/app-icons', () => ({ ChevronRightIcon: () => null }));
 jest.mock('@/frontend/components/nativePrimitives', () => ({ Image: () => null }));
 
 describe('Section', () => {

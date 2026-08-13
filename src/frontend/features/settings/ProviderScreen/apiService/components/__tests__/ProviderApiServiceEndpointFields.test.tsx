@@ -8,6 +8,14 @@ import {
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   const { Pressable, Text, TextInput, View } = jest.requireActual('react-native');
+  const Label = Object.assign(
+    ({ children, ...props }: { children?: React.ReactNode }) =>
+      React.createElement(Text, props, children),
+    {
+      Text: ({ children, ...props }: { children?: React.ReactNode }) =>
+        React.createElement(Text, props, children),
+    },
+  );
 
   return {
     Button: ({ children, icon: _icon, ...props }: { children?: React.ReactNode; icon?: unknown }) =>
@@ -15,14 +23,13 @@ jest.mock('@cherrystudio/ui/components', () => {
     FieldError: ({ children }: { children?: React.ReactNode }) =>
       React.createElement(Text, null, children),
     Input: TextInput,
-    Label: ({ children, ...props }: { children?: React.ReactNode }) =>
-      React.createElement(Text, props, children),
+    Label,
     TextField: ({ children, ...props }: { children?: React.ReactNode }) =>
       React.createElement(View, { ...props, testID: 'text-field' }, children),
   };
 });
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CheckIcon: () => null,
   SettingsIcon: () => null,
 }));

@@ -3,12 +3,12 @@ import {
   CalendarIcon,
   HeartPulseIcon,
   MapPinIcon,
-  type PngIconProps,
-} from 'lucide-uniwind/png';
+  type AppIconProps,
+} from '@cherrystudio/app-icons';
 import type { ComponentType } from 'react';
 
 export type BuiltInToolPresentation = {
-  androidIcon: ComponentType<PngIconProps>;
+  androidIcon: ComponentType<AppIconProps>;
   iosImageSource: number;
   titleKey: string;
 };

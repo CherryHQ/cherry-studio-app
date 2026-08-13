@@ -30,6 +30,11 @@ jest.mock('expo-glass-effect', () => ({
 // "display radius unknown" answer, which every caller already handles.
 jest.mock('expo-screen-corner-radius', () => ({ getCornerRadiusSync: () => null }));
 
+// expo-symbols' SymbolView is a native view (jest-expo runs as iOS, so every
+// @cherrystudio/app-icons icon reaches it). Icon behavior is asserted through
+// per-suite icon mocks, not the native symbol, so render nothing.
+jest.mock('expo-symbols', () => ({ SymbolView: () => null }));
+
 // Callstack bottom tabs is a Fabric native view and is unavailable in Jest.
 // Keep its layout context present so tab-owned screens can render normally.
 jest.mock('react-native-bottom-tabs', () => {

@@ -12,10 +12,8 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 
-jest.mock('lucide-uniwind/png', () => ({
+jest.mock('@cherrystudio/app-icons', () => ({
   CopyIcon: () => null,
-  EyeIcon: () => null,
-  EyeOffIcon: () => null,
   KeyRoundIcon: () => null,
   PlusIcon: () => null,
   Trash2Icon: () => null,
@@ -34,6 +32,7 @@ jest.mock('@cherrystudio/ui/components', () => {
     FieldError: (props: { children?: ReactNode }) => <MockText {...props} />,
     Input: (props: Record<string, unknown>) => <MockTextInput {...props} />,
     Label: (props: { children?: ReactNode }) => <MockText {...props} />,
+    SecureInput: (props: Record<string, unknown>) => <MockTextInput {...props} />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
     TextField: ({ children, ...props }: { children?: ReactNode }) => (
       <MockView {...props} mockComponent="text-field">

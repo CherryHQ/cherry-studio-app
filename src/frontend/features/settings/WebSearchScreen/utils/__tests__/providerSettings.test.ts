@@ -1,27 +1,17 @@
 import {
   getWebSearchFeatureSections,
-  getWebSearchProviderDescriptionKey,
   getWebSearchProviderDetailSections,
-  getWebSearchProviderOfficialWebsite,
   mergeWebSearchProviderOverride,
   normalizeWebSearchApiHost,
 } from '../providerSettings';
 
 describe('web search provider settings', () => {
-  test('returns provider display metadata', () => {
-    expect(getWebSearchProviderDescriptionKey('fetch')).toBe(
-      'settings.websearch.providerDescription.fetch',
-    );
-    expect(getWebSearchProviderDescriptionKey('exa-mcp')).toBeUndefined();
-    expect(getWebSearchProviderOfficialWebsite('jina')).toBe('https://jina.ai/reader');
-  });
-
   test('returns provider detail sections', () => {
     expect(getWebSearchProviderDetailSections('tavily')).toEqual([
       { type: 'apiKeys' },
       { type: 'capabilityApiHosts' },
     ]);
-    expect(getWebSearchProviderDetailSections('fetch')).toEqual([{ type: 'description' }]);
+    expect(getWebSearchProviderDetailSections('fetch')).toEqual([]);
     expect(getWebSearchProviderDetailSections('zhipu')).toEqual([{ type: 'zhipuApiKeyShortcut' }]);
     expect(getWebSearchProviderDetailSections('searxng')).toEqual([
       { type: 'capabilityApiHosts' },
@@ -51,7 +41,10 @@ describe('web search provider settings', () => {
       'searchKeywords:firecrawl',
     ]);
     expect(sections[1].capability).toBe('fetchUrls');
-    expect(sections[1].entries.map((entry) => entry.key)).toEqual(['fetchUrls:jina']);
+    expect(sections[1].entries.map((entry) => entry.key)).toEqual([
+      'fetchUrls:jina',
+      'fetchUrls:firecrawl',
+    ]);
   });
 
   test('normalizes api host input without strict url validation', () => {
