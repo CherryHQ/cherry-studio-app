@@ -5,11 +5,7 @@ import { type LayoutChangeEvent, Platform } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type {
-  AssistantMessageActions,
-  MessageListProps,
-  MessagePresentationItem,
-} from '../../types';
+import type { MessageListProps, MessagePresentationItem } from '../../types';
 import { MessageList } from '../MessageList';
 
 type AnchoredEndSpaceConfig = {
@@ -25,7 +21,6 @@ type MockLegendListProps = {
   anchoredEndSpace?: AnchoredEndSpaceConfig;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
   data?: readonly MessagePresentationItem[];
-  extraData?: unknown;
   freeze?: unknown;
   getItemType?: (item: MessagePresentationItem) => string;
   keyboardOffset?: number;
@@ -65,9 +60,7 @@ const mockIsAtBottom = {
   set: jest.fn(),
   value: true,
 } as unknown as SharedValue<boolean>;
-const mockAssistantMessageRow = jest.fn(
-  (_props: { actions?: AssistantMessageActions; message: MessagePresentationItem }) => null,
-);
+const mockAssistantMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
 const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
 let mockSlideInMessageId: string | undefined;
 let mockScrollButtonProps:
@@ -138,10 +131,8 @@ jest.mock('react-native-reanimated', () => ({
 }));
 
 jest.mock('../../messageRow', () => ({
-  AssistantMessageRow: (props: {
-    actions?: AssistantMessageActions;
-    message: MessagePresentationItem;
-  }) => mockAssistantMessageRow(props),
+  AssistantMessageRow: (props: { message: MessagePresentationItem }) =>
+    mockAssistantMessageRow(props),
   MessageSlideInProvider: ({
     children,
     slideInMessageId,
@@ -206,7 +197,7 @@ function listProps(
   };
 }
 
-describe('MessageList', () => {
+describe('MessageList anchored tail following', () => {
   let renderer: ReactTestRenderer | undefined;
   let cancelAnimationFrameSpy: jest.SpyInstance;
   let frameCallbacks: Map<number, FrameRequestCallback>;
@@ -278,31 +269,6 @@ describe('MessageList', () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
     cancelAnimationFrameSpy.mockRestore();
     requestAnimationFrameSpy.mockRestore();
-  });
-
-  test('forwards controlled actions only to assistant rows', () => {
-    const actions: AssistantMessageActions = {
-      isRegenerateDisabled: false,
-      onCopy: jest.fn(),
-      onReadAloud: jest.fn(),
-      onRegenerate: jest.fn(),
-      onStopReadAloud: jest.fn(),
-    };
-    const user = createMessage('user-1', 'user', [textPart('hello')]);
-    const assistant = {
-      ...createMessage('assistant-1', 'assistant', [textPart('answer')]),
-      status: 'success' as const,
-    };
-
-    act(() => {
-      renderer = create(
-        <MessageList {...listProps([user, assistant])} assistantActions={actions} />,
-      );
-    });
-
-    expect(mockAssistantMessageRow).toHaveBeenCalledWith({ actions, message: assistant });
-    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: user });
-    expect(mockLatestListProps?.extraData).toBe(actions);
   });
 
   test('caps text anchors at two current body lines and leaves file anchors uncapped', () => {
