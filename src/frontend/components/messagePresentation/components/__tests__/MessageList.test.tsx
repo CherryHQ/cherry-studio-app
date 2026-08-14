@@ -23,6 +23,7 @@ type MockLegendListProps = {
   data?: readonly MessagePresentationItem[];
   freeze?: unknown;
   getItemType?: (item: MessagePresentationItem) => string;
+  keyboardLiftBehavior?: string;
   keyboardOffset?: number;
   maintainScrollAtEnd?: unknown;
   maintainScrollAtEndThreshold?: number;
@@ -403,6 +404,11 @@ describe('MessageList anchored tail following', () => {
     });
 
     expect(mockLatestListProps?.keyboardOffset).toBe(26);
+    // 键盘抬升模式是硬契约，不是口味：`persistent` 的收起分支同样不产生位移，但它的
+    // 抬起分支恒抬且收起时保住抬升量，在历史区反复聚焦会像棘轮一样把列表推到底；
+    // `always` 走的是「按记录量回退」那条路，续轮发送会重现 310px 反向跳。
+    // 真实行为在 worklet 里，单测够不着，这行断言是拦住顺手改模式的唯一闸门。
+    expect(mockLatestListProps?.keyboardLiftBehavior).toBe('whenAtEnd');
     expect(mockLatestListProps?.showsVerticalScrollIndicator).toBe(false);
     expect(mockLatestListProps?.contentContainerStyle).toEqual({
       paddingBottom: 80,

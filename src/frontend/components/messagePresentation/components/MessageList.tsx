@@ -338,6 +338,15 @@ export function MessageList({
       const isEnteringMessage = info.anchorKey === enteringMessageId;
       const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
+        // 收键盘与钉顶滚动同时发起，别试着把它挪到滚动之后：实测「先钉顶、动画结束再收
+        // 键盘」会把位移搬到动画终点、还要再被尾随滚动拉一次，反转从 1 处 310px 变 2 处
+        // 334px，更差。
+        //
+        // 这一句能安全地和钉顶同帧，前提是 patches/ 里那个键盘补丁。收键盘时
+        // react-native-keyboard-controller 默认按**键盘抬起那一刻记录的抬升量**回退，而
+        // 发送恰好在两次键盘事件之间把钉顶预留空白从 0 顶到 512、可滚动末端跟着下移，
+        // 回退的前提已经不成立——补丁前这里有一帧 -310px 的突跳，动画因此走 616px 而非
+        // 306px。补丁改成「夹到当下的合法区间」。补丁掉了这个跳动就会回来。
         void scrollMessageToEnd({
           animated: shouldAnimate,
           closeKeyboard: isEnteringMessage,
@@ -621,6 +630,10 @@ export function MessageList({
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}
             keyboardDismissMode="interactive"
+            // 贴底时才让键盘抬起内容——在历史里翻看时点输入框，内容不该跟着动。
+            // 别改成 persistent：它的收起分支确实不产生位移（那正是 patches/ 里给
+            // whenAtEnd 补上的语义），但它的抬起分支恒抬、且收起时把抬起量保住，
+            // 在历史区反复聚焦/失焦会像棘轮一样把列表一格格推到底。
             keyboardLiftBehavior="whenAtEnd"
             keyboardOffset={keyboardOffset}
             keyboardShouldPersistTaps="handled"
