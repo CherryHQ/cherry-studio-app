@@ -120,6 +120,7 @@ const ModelRow = memo(function ModelRow({
 
 const styles = StyleSheet.create({
   contentContainer: {
+    flexGrow: 1,
     paddingBottom: 96,
   },
   list: {

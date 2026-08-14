@@ -349,7 +349,7 @@ function PullSectionHeader({
         hitSlop={6}
         onPress={onActionPress}
       >
-        <Text className="font-medium text-primary text-sm">{actionLabel}</Text>
+        <Text className="font-medium text-foreground text-sm">{actionLabel}</Text>
       </Pressable>
     </Section.Header>
   );

@@ -62,11 +62,7 @@ export function SlotText({
 }: SlotTextProps) {
   const resolvedEllipsizeMode = ellipsizeMode ?? 'clip';
   const reducedMotion = useReducedMotion();
-  // The user's accent, not Cherry's green: this tints ordinary foreground text
-  // for a beat to say "this value just changed", so it belongs to whatever the
-  // rest of the app's interactive accents are. It was frozen at the brand
-  // default as a literal, which made the tint ignore the theme-colour setting.
-  const highlightColor = useThemeColor('primary');
+  const highlightColor = useThemeColor('muted-foreground');
   const resolved = resolveSlotTextOptions({
     bounce,
     colorFadeDurationMs,

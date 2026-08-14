@@ -55,8 +55,7 @@ export function AiUsageWeeklyChart({
 }: AiUsageWeeklyChartProps) {
   const { t } = useTranslation();
   const { onLayout, ref: containerRef, width: containerWidth } = useMeasuredWidth();
-  const [primary, info, warning, muted, separator, success, foreground] = useThemeColor([
-    'primary',
+  const [info, warning, muted, separator, success, foreground] = useThemeColor([
     'info',
     'warning',
     'muted-foreground',
@@ -121,14 +120,14 @@ export function AiUsageWeeklyChart({
     }
 
     return data.series.map((series, index) => ({
-      color: getSeriesColor(series.isOther, index, primary, info, warning, muted),
+      color: getSeriesColor(series.isOther, index, success, info, warning, muted),
       key: series.key,
       label: series.isOther
         ? t('aiUsage.other')
         : displayAiUsageModelId(series.modelId) || t('aiUsage.unknownModel'),
       yKey: seriesValueKey(index),
     }));
-  }, [data.series, info, muted, primary, t, warning]);
+  }, [data.series, info, muted, success, t, warning]);
   const chartTheme = useMemo<CartesianChartTheme>(
     () => ({
       axis: 'transparent',
@@ -136,10 +135,10 @@ export function AiUsageWeeklyChart({
       grid: 'transparent',
       mutedText: muted,
       plotBackground: 'transparent',
-      series: chartSeries.map((series) => series.color ?? primary),
+      series: chartSeries.map((series) => series.color ?? success),
       text: foreground,
     }),
-    [chartSeries, foreground, muted, primary],
+    [chartSeries, foreground, muted, success],
   );
   const renderBar = useCallback(
     ({ bar, fill, radius }: BarChartRenderBarProps<ChartDatum>) => {
@@ -312,7 +311,7 @@ export function AiUsageWeeklyChart({
                         <Text
                           className={
                             isSelected
-                              ? 'font-semibold text-primary text-xs'
+                              ? 'font-semibold text-foreground text-xs'
                               : 'text-muted-foreground text-xs'
                           }
                           maxFontSizeMultiplier={1.1}
@@ -437,13 +436,13 @@ function WeeklyChartSkeleton() {
 function getSeriesColor(
   isOther: boolean,
   index: number,
-  primary: string,
+  success: string,
   info: string,
   warning: string,
   muted: string,
 ): string {
   if (isOther) return muted;
-  if (index === 0) return primary;
+  if (index === 0) return success;
   if (index === 1) return info;
   if (index === 2) return warning;
   return muted;

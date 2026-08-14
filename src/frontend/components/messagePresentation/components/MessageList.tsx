@@ -88,8 +88,22 @@ function messageKeyExtractor(item: MessagePresentationItem) {
 // LegendList 内部（react-native.mjs getItemSize）优先用「已测量的同类型行的真实均值 averageSizes[type].avg」
 // 估算未测量行，无则才退回 estimatedItemSize。按 role 分类后，向上翻页 prepend / 滚回历史时，新行用
 // 各自类型的真实均值定位 → MVCP/初始 bootstrap 的「估算→真实」修正幅度大幅收窄，减少可见跳动。
+//
+// 「还没有内容的助手行」必须单独成一类，否则同一机制会反过来制造跳动：刚发出消息时新建的
+// 助手行只是个加载点（实测 48px），若按 assistant 的均值估算，它会先占住上一条长回复的高度
+// （实测 3012px）再塌回去——一帧内内容少了 2964px，预留空白与钉顶落点都要跟着重算。
+// 分类后修正量 2964px → 5px。
+//
+// 判据用「有没有 part」而不是 status：类型翻转因此发生在第一个 chunk 落地时，那一刻行还只有
+// 几十像素，翻转本身不产生可见修正；而 status 要到整条回复结束才变，翻转时行已有数千像素。
+// 翻转后这一行的后续增长计入 assistant 均值，空行阶段的尺寸留在 assistant-empty，两个均值
+// 各自都稳定。
 function getMessageRowType(item: MessagePresentationItem) {
-  return item.role;
+  if (item.role !== 'assistant') {
+    return item.role;
+  }
+
+  return item.data.parts?.length ? 'assistant' : 'assistant-empty';
 }
 
 function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[]) {
@@ -324,6 +338,15 @@ export function MessageList({
       const isEnteringMessage = info.anchorKey === enteringMessageId;
       const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
+        // 收键盘与钉顶滚动同时发起，别试着把它挪到滚动之后：实测「先钉顶、动画结束再收
+        // 键盘」会把位移搬到动画终点、还要再被尾随滚动拉一次，反转从 1 处 310px 变 2 处
+        // 334px，更差。
+        //
+        // 这一句能安全地和钉顶同帧，前提是 patches/ 里那个键盘补丁。收键盘时
+        // react-native-keyboard-controller 默认按**键盘抬起那一刻记录的抬升量**回退，而
+        // 发送恰好在两次键盘事件之间把钉顶预留空白从 0 顶到 512、可滚动末端跟着下移，
+        // 回退的前提已经不成立——补丁前这里有一帧 -310px 的突跳，动画因此走 616px 而非
+        // 306px。补丁改成「夹到当下的合法区间」。补丁掉了这个跳动就会回来。
         void scrollMessageToEnd({
           animated: shouldAnimate,
           closeKeyboard: isEnteringMessage,
@@ -547,7 +570,12 @@ export function MessageList({
           }, READY_SETTLE_MS);
         };
 
-        if (shouldScrollToEndBeforeReady) {
+        // 本 effect 依赖 contentBaseHeight，而流式每来一个 chunk 内容高度就变一次 → 静默窗口
+        // 反复重启、gate 在整段流式里每帧重跑，这个 scrollToEnd 于是变成第二条不受尾随状态机
+        // 管的自动滚动。它必须和 scheduleTailFollow 守同一个不变式：用户手上有动作时一律不滚，
+        // 否则拖动过程中列表会被硬拽回底部（实测一次拖动被拽 +198px）。
+        // 跳过滚动但照常进入 settle：遮罩存在的意义是挡住布局抖动，人都已经在拖了就别再挡着。
+        if (shouldScrollToEndBeforeReady && !isUserInteractingRef.current) {
           scrollLog.debug('[SCROLL] gateScrollToEnd', {
             contentBottomInset,
             contentBaseHeight: Math.round(contentBaseHeight),
@@ -602,6 +630,10 @@ export function MessageList({
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}
             keyboardDismissMode="interactive"
+            // 贴底时才让键盘抬起内容——在历史里翻看时点输入框，内容不该跟着动。
+            // 别改成 persistent：它的收起分支确实不产生位移（那正是 patches/ 里给
+            // whenAtEnd 补上的语义），但它的抬起分支恒抬、且收起时把抬起量保住，
+            // 在历史区反复聚焦/失焦会像棘轮一样把列表一格格推到底。
             keyboardLiftBehavior="whenAtEnd"
             keyboardOffset={keyboardOffset}
             keyboardShouldPersistTaps="handled"

@@ -43,7 +43,7 @@ export function MessagesScreen() {
   return (
     <>
       <View className="flex-1 bg-background">
-        <MessagePager topicSearchText={searchText} />
+        <MessagePager onScopeChange={handleScopeChange} topicSearchText={searchText} />
         <SelectionControls />
       </View>
       <Stack.Screen

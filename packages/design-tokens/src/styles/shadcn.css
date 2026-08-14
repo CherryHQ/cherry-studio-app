@@ -36,11 +36,9 @@
    * 服务的是一个改不了的设置。偏好键本身留在 packages/universal（持久化数据、与桌
    * 面共享），真做了主题色界面再把这层接回来。
    *
-   * 前景取 `--background-100`（浅色白、深色黑）而不是某个固定值：`--brand` 现在是
-   * green-900，浅色下是深绿 #107d32、需要白字（5.25:1），深色下是亮绿 #00ca50、
-   * 需要黑字（9.56:1）—— 要的正好是「页面底色当墨水」，两个主题都过 AA。 */
+   * Logo 红 #ff5757 上使用黑色前景；白字对这个红色的对比度不足。 */
   --primary: var(--brand);
-  --primary-foreground: var(--background-100);
+  --primary-foreground: var(--constant-black);
   --secondary: var(--gray-alpha-100);
   --secondary-foreground: var(--gray-1000);
   --muted: var(--gray-alpha-100);

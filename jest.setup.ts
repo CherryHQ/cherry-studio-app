@@ -132,6 +132,16 @@ jest.mock('react-native-mmkv', () => {
   return { createMMKV };
 });
 
+// react-native-nitro-theme-transition is another Nitro HybridObject. The library
+// already degrades to "just run the callback" when the native side is missing, so
+// this is not about avoiding a crash — it is about not dragging
+// react-native-nitro-modules into every suite whose import chain reaches
+// useSettingPreferences. Running the callback inline keeps the theme swap
+// synchronous, which is what the real thing does under the snapshot.
+jest.mock('react-native-nitro-theme-transition', () => ({
+  withThemeTransition: (applyTheme: () => void) => applyTheme(),
+}));
+
 // gesture-handler 真模块在 jest 下要求 Reanimated.default.createAnimatedComponent，
 // 而 jest 环境的 reanimated 没有这个 API。GestureDetector 透传 children，
 // Gesture.* 返回任意链式调用都指向自身的构建器。

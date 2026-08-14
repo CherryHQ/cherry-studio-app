@@ -1,9 +1,9 @@
 import { CheckIcon, ImageIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
-import { ImageGenerationLoader } from '@cherrystudio/ui/components';
+import { Button, ImageGenerationLoader } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -63,6 +63,7 @@ export function DrawingList() {
   const bottomInset = useMessageListBottomInset();
   const { width: windowWidth } = useWindowDimensions();
   const recentPhotos = useRecentPaintingPhotos(scope === 'drawings');
+  const requestPhotoAccess = recentPhotos.requestAccess;
   const paintings = usePaintings();
   const gallery = usePaintingGalleryEntries(paintings.paintings);
   const columnWidth = (windowWidth - pageEdge * 2 - galleryGap) / 2;
@@ -114,8 +115,8 @@ export function DrawingList() {
   );
   const handleViewAllPress = useCallback(async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-      if (!permission.granted) {
+      const hasAccess = await requestPhotoAccess();
+      if (!hasAccess) {
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -144,14 +145,14 @@ export function DrawingList() {
     } catch (error) {
       alert.show({ title: error instanceof Error ? error.message : String(error) });
     }
-  }, [alert, openPaintingWithAttachments]);
+  }, [alert, openPaintingWithAttachments, requestPhotoAccess]);
 
   return (
     <ScrollView
       className="flex-1 bg-background"
       // Stable across the edit⇄done flip (see useMessageListBottomInset) so the
       // gallery never reflows on toggle.
-      contentContainerStyle={{ paddingBottom: bottomInset }}
+      contentContainerStyle={{ flexGrow: 1, paddingBottom: bottomInset }}
       onScroll={({ nativeEvent }) => {
         const distanceToEnd =
           nativeEvent.contentSize.height -
@@ -178,7 +179,7 @@ export function DrawingList() {
                 onPress={() => void handleViewAllPress()}
                 testID="painting-photos-view-all"
               >
-                <Text className="font-medium text-primary text-sm">
+                <Text className="font-medium text-foreground text-sm">
                   {t('painting.photos.viewAll')}
                 </Text>
               </Pressable>
@@ -215,9 +216,11 @@ export function DrawingList() {
               </ScrollView>
             ) : (
               <Pressable
+                accessibilityLabel={t('painting.photos.requestAccess')}
                 accessibilityRole="button"
-                className="mx-4 h-20 items-center justify-center rounded-md bg-secondary active:opacity-70"
-                onPress={() => void handleViewAllPress()}
+                className="mx-4 size-20 items-center justify-center rounded-md bg-secondary active:opacity-70"
+                onPress={() => void requestPhotoAccess()}
+                testID="painting-photos-permission-placeholder"
               >
                 <ImageIcon className="size-6 text-foreground-tertiary" />
               </Pressable>
@@ -228,26 +231,31 @@ export function DrawingList() {
         </>
       )}
 
-      <Text className="px-4 pb-3 font-semibold text-foreground text-base">
-        {t('painting.history.title')}
-      </Text>
+      {visibleGalleryItems.length > 0 || paintings.isLoading || gallery.isLoading ? (
+        <Text className="px-4 pb-3 font-semibold text-foreground text-base">
+          {t('painting.history.title')}
+        </Text>
+      ) : null}
       {paintings.isLoading || gallery.isLoading ? (
         <View className="h-32 items-center justify-center">
           <ActivityIndicator />
         </View>
       ) : visibleGalleryItems.length === 0 ? (
-        <View className="h-32 items-center justify-center px-6">
-          <Pressable
-            accessibilityLabel={t('painting.history.create')}
-            accessibilityRole="button"
-            className="h-9 min-w-20 items-center justify-center rounded-xl bg-primary px-4 active:opacity-80"
+        <View
+          className="min-h-48 flex-1 items-center justify-center gap-4 px-6 pb-24"
+          testID="painting-history-empty"
+        >
+          <Text className="text-center text-base text-foreground">
+            {t('painting.history.empty')}
+          </Text>
+          <Button
+            accessibilityLabel={t('painting.history.createNew')}
             onPress={handleCreatePainting}
             testID="painting-history-create"
+            variant="default"
           >
-            <Text className="font-medium text-primary-foreground text-sm" numberOfLines={1}>
-              {t('painting.history.create')}
-            </Text>
-          </Pressable>
+            <Button.Label>{t('painting.history.createNew')}</Button.Label>
+          </Button>
         </View>
       ) : (
         <View className="flex-row gap-1.5 px-4" testID="painting-history-masonry">
@@ -338,8 +346,8 @@ function DrawingGridItem({
           exiting={FadeOut.duration(120)}
         >
           {isSelected ? (
-            <View className="size-6 items-center justify-center rounded-full bg-primary">
-              <CheckIcon className="size-4 text-primary-foreground" />
+            <View className="size-6 items-center justify-center rounded-full bg-foreground">
+              <CheckIcon className="size-4 text-background" />
             </View>
           ) : (
             <View className="size-6 rounded-full border-2 border-border-strong bg-constant-black/30" />
@@ -435,41 +443,56 @@ function renderTileContent({
 function useRecentPaintingPhotos(enabled: boolean) {
   const [isLoading, setLoading] = useState(true);
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
+  const isActiveRef = useRef(false);
+
+  const refresh = useCallback(
+    async (requestPermission: boolean) => {
+      if (!enabled) {
+        return false;
+      }
+
+      try {
+        let permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
+        if (!permission.granted && (requestPermission || permission.canAskAgain)) {
+          permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
+        }
+        const nextPhotos = permission.granted
+          ? (await loadPhotoPreviewPage(0)).photoPreviews.slice(0, recentPhotoLimit)
+          : [];
+        if (isActiveRef.current) {
+          setPhotos(nextPhotos);
+          setLoading(false);
+        }
+        return permission.granted;
+      } catch {
+        if (isActiveRef.current) {
+          setPhotos([]);
+          setLoading(false);
+        }
+        return false;
+      }
+    },
+    [enabled],
+  );
 
   useEffect(() => {
     if (!enabled) {
       return;
     }
-    let active = true;
-    const load = async () => {
-      let permission = await MediaLibrary.getPermissionsAsync(false, ['photo']);
-      if (!permission.granted && permission.canAskAgain) {
-        permission = await MediaLibrary.requestPermissionsAsync(false, ['photo']);
-      }
-      if (permission.granted) {
-        const page = await loadPhotoPreviewPage(0);
-        if (active) {
-          setPhotos(page.photoPreviews.slice(0, recentPhotoLimit));
-        }
-      } else if (active) {
-        setPhotos([]);
-      }
-      if (active) {
-        setLoading(false);
-      }
-    };
-    void load().catch(() => {
-      if (active) {
-        setPhotos([]);
-        setLoading(false);
-      }
-    });
-    const subscription = MediaLibrary.addListener(() => void load());
+    isActiveRef.current = true;
+    const refreshPhotos = () => void refresh(false);
+    queueMicrotask(refreshPhotos);
+    const subscription = MediaLibrary.addListener(refreshPhotos);
     return () => {
-      active = false;
+      isActiveRef.current = false;
       subscription.remove();
     };
-  }, [enabled]);
+  }, [enabled, refresh]);
 
-  return { isLoading: enabled && isLoading, photos };
+  const requestAccess = useCallback(() => refresh(true), [refresh]);
+
+  return useMemo(
+    () => ({ isLoading: enabled && isLoading, photos, requestAccess }),
+    [enabled, isLoading, photos, requestAccess],
+  );
 }
