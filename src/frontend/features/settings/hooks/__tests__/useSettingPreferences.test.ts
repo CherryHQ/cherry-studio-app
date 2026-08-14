@@ -1,4 +1,4 @@
-import { languageOptions } from '../useSettingPreferences';
+import { languageOptions } from '../../settingOptions';
 
 describe('languageOptions', () => {
   test('uses each language native name instead of translated labels', () => {

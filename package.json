@@ -44,11 +44,6 @@
     "lint:fix": "oxlint --fix && expo lint --fix",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
-    "e2e:ios": "pnpm e2e:ios:prepare && maestro test --platform ios .maestro/flows",
-    "e2e:ios:debug": "pnpm e2e:ios:prepare && maestro test --platform ios --debug-output artifacts/e2e .maestro/flows",
-    "e2e:ios:flow": "maestro test --platform ios",
-    "e2e:ios:prepare": "xcrun simctl spawn booted defaults write com.cherry-ai.cherry-studio-app EXDevMenuShowFloatingActionButton -bool NO",
-    "e2e:maestro:check": "for f in .maestro/flows/*.yaml; do maestro check-syntax \"$f\" || exit 1; done",
     "prepare": "prek install"
   },
   "dependencies": {
@@ -143,6 +138,7 @@
     "react-native-nitro-healthkit": "1.0.0",
     "react-native-nitro-image": "0.15.1",
     "react-native-nitro-modules": "0.35.9",
+    "react-native-nitro-theme-transition": "^1.0.0",
     "react-native-reanimated": "4.5.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.25.1",

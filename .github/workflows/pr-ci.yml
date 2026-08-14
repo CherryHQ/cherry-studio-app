@@ -11,7 +11,57 @@ on:
     types: [ready_for_review, synchronize, opened]
 
 jobs:
-  build:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      PRCI: true
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm test
+
+  typecheck:
+    runs-on: ubuntu-latest
+    env:
+      PRCI: true
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v5
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type Check
+        run: pnpm typecheck
+
+  lint:
     runs-on: ubuntu-latest
     env:
       PRCI: true
@@ -36,17 +86,11 @@ jobs:
       - name: Build AI Packages
         run: pnpm packages:build
 
-      - name: Documentation Link Check
-        run: pnpm docs:check-links
-
       - name: Lint Check
         run: pnpm lint
 
       - name: Format Check
         run: pnpm format:check
 
-      - name: Type Check
-        run: pnpm typecheck
-
-      - name: Test
-        run: pnpm test
+      - name: Documentation Link Check
+        run: pnpm docs:check-links
