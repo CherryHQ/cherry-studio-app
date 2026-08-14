@@ -480,8 +480,9 @@ function useRecentPaintingPhotos(enabled: boolean) {
       return;
     }
     isActiveRef.current = true;
-    void refresh(false);
-    const subscription = MediaLibrary.addListener(() => void refresh(false));
+    const refreshPhotos = () => void refresh(false);
+    queueMicrotask(refreshPhotos);
+    const subscription = MediaLibrary.addListener(refreshPhotos);
     return () => {
       isActiveRef.current = false;
       subscription.remove();

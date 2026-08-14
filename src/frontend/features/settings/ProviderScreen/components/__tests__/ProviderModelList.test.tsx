@@ -9,8 +9,9 @@ jest.mock('@cherrystudio/ui/components', () => {
   function Button({ children, ...props }: { children?: React.ReactNode }) {
     return React.createElement('Button', props, children);
   }
-  Button.Label = ({ children }: { children?: React.ReactNode }) =>
-    React.createElement('ButtonLabel', null, children);
+  Button.Label = function ButtonLabel({ children }: { children?: React.ReactNode }) {
+    return React.createElement('ButtonLabel', null, children);
+  };
 
   return { Button };
 });

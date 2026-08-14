@@ -21,7 +21,9 @@ jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');
   const Section = ({ children }: { children?: React.ReactNode }) =>
     React.createElement('Section', null, children);
-  Section.Item = (props: object) => React.createElement('SectionItem', props);
+  Section.Item = function SectionItem(props: object) {
+    return React.createElement('SectionItem', props);
+  };
 
   return { Section };
 });
