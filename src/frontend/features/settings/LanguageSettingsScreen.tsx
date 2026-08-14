@@ -37,7 +37,7 @@ export default function LanguageSettingsScreen() {
                   }
                 }}
                 showChevron={false}
-                trailing={selected ? <CheckIcon className="size-5 text-primary" /> : null}
+                trailing={selected ? <CheckIcon className="size-5 text-foreground" /> : null}
               />
             );
           })}

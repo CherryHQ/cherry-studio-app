@@ -1,5 +1,5 @@
 import { type LanguageVarious, ThemeMode } from '@cherrystudio/universal/data/preference';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { withThemeTransition } from 'react-native-nitro-theme-transition';
 
@@ -9,7 +9,7 @@ import { initI18n, resolveLanguage } from '@/frontend/i18n';
 import { themeTransition } from '@/frontend/utils/constants';
 import { applyThemeModePreference } from '@/frontend/utils/theme';
 
-import type { SettingOption } from '../settingOptions';
+import { languageOptions } from '../settingOptions';
 
 const preferenceMapping = {
   language: 'app.language',
@@ -22,14 +22,6 @@ export function useSettingPreferences() {
   const [preferences, setPreferences] = useMultiplePreferences(preferenceMapping);
   const persistenceVersionRef = useRef(0);
   const languageValue = resolveLanguage(preferences.language);
-
-  const languageOptions = useMemo<SettingOption<LanguageVarious>[]>(
-    () => [
-      { label: t('settings.options.language.zhCN'), value: 'zh-CN' },
-      { label: t('settings.options.language.enUS'), value: 'en-US' },
-    ],
-    [t],
-  );
 
   const handleThemeModeChange = useCallback(
     (nextThemeMode: ThemeMode) => {

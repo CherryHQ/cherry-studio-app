@@ -246,16 +246,17 @@ export default function ProviderDetailSettingsScreen() {
     ],
     [openModelAddSettings, provider, t],
   );
-  const pullAction = useMemo(
-    () =>
-      activeTab === 'models'
-        ? {
-            isDisabled: !provider || isModelPullLoading,
-            isLoading: isModelPullLoading,
-            onPress: () => void openModelPullSettings(),
-          }
-        : undefined,
-    [activeTab, isModelPullLoading, openModelPullSettings, provider],
+  const addAction = useMemo(
+    () => ({ isDisabled: !provider, onPress: openModelAddSettings }),
+    [openModelAddSettings, provider],
+  );
+  const modelPullAction = useMemo(
+    () => ({
+      isDisabled: !provider || isModelPullLoading,
+      isLoading: isModelPullLoading,
+      onPress: () => void openModelPullSettings(),
+    }),
+    [isModelPullLoading, openModelPullSettings, provider],
   );
   // The chat default is the one model the service refuses to delete, so it is
   // also the one row a selection leaves alone — including "select all".
@@ -265,8 +266,8 @@ export default function ProviderDetailSettingsScreen() {
   );
   const { exitEditing: exitModelSelection, selectedIds: selectedModelIds } = modelSelection;
   const selectedModels = useMemo(
-    () => models.filter((model) => selectedModelIds.has(model.id)),
-    [models, selectedModelIds],
+    () => models.filter((model) => selectedModelIds.has(model.id) && !isDefaultModel(model)),
+    [isDefaultModel, models, selectedModelIds],
   );
   const modelListSelection = useMemo(
     () =>
@@ -317,14 +318,14 @@ export default function ProviderDetailSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('common.delete'),
-        disabled: selectedModelIds.size === 0,
+        disabled: selectedModels.length === 0,
         key: 'remove-selected-models',
         label: t('common.delete'),
         onPress: requestRemoveSelectedModels,
         tintColor: Color.ios.systemRed,
       },
     ],
-    [requestRemoveSelectedModels, selectedModelIds.size, t],
+    [requestRemoveSelectedModels, selectedModels.length, t],
   );
   const handleToggleProvider = useCallback(() => {
     if (!provider) {
@@ -389,7 +390,7 @@ export default function ProviderDetailSettingsScreen() {
         }
         title={
           modelSelection.isEditing
-            ? t('settings.provider.models.selection.count', { count: selectedModelIds.size })
+            ? t('settings.provider.models.selection.count', { count: selectedModels.length })
             : (providerName ?? t('settings.provider.tabs.configuration'))
         }
         titleElement={
@@ -438,11 +439,12 @@ export default function ProviderDetailSettingsScreen() {
         </ScrollView>
       ) : (
         <ProviderModelList
+          addAction={addAction}
           isDefaultModel={isDefaultModel}
           isLoading={modelsQuery.isPending}
           models={models}
           provider={provider}
-          pullAction={pullAction}
+          pullAction={modelPullAction}
           selection={modelListSelection}
         />
       )}
@@ -461,7 +463,7 @@ export default function ProviderDetailSettingsScreen() {
         }
         onDelete={requestDeleteProvider}
         onToggleActive={handleToggleProvider}
-        pullAction={pullAction}
+        pullAction={activeTab === 'models' ? modelPullAction : undefined}
         selection={
           modelSelection.isEditing
             ? {

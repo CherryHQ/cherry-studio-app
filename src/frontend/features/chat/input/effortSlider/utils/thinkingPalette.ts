@@ -3,8 +3,7 @@
  * flattened into the layouts the shader uniforms expect.
  *
  * The web original (claude-model-selector) is purple; this port hue-rotates
- * every chromatic value onto the app's brand green (--primary,
- * oklch hue 146) in OKLCH, preserving each color's lightness and chroma so
+ * every chromatic value onto a semantic green in OKLCH, preserving each color's lightness and chroma so
  * the field keeps the original's tonal structure. The dark palette keeps the
  * same hue relationships but flips the luminance structure: bases are pushed
  * down toward the surface, highlights stay bright, so the field reads as
@@ -14,9 +13,8 @@
  * a token. They are an 11-stop tonal ramp plus its mix targets, share-weighted
  * so deep tones dominate; the palette ships five green steps, which cannot
  * reconstruct that and would flatten the field into bands. What did name a
- * token was the accent — a frozen copy of `--primary`, which the theme-colour
- * setting rewrites at runtime, so it went stale the moment anyone changed it.
- * That one now reads the variable at its point of use.
+ * token was the accent; it now reads the semantic success color at its point
+ * of use so it stays independent from the app brand.
  */
 
 export type ThinkingPaletteUniforms = {

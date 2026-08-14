@@ -1,64 +1,67 @@
-import { useEffect } from 'react';
+import PagerView, { type PagerViewRef } from '@expo/ui/community/pager-view';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, useWindowDimensions, View } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { Text, View } from 'react-native';
 
-import { getMessageScopeIndex, useMessageScope } from '@/frontend/components/messageTabs';
+import {
+  getMessageScopeAtIndex,
+  getMessageScopeIndex,
+  type MessageScope,
+  useMessageScope,
+  useMessageSelectionState,
+} from '@/frontend/components/messageTabs';
 import { DrawingList } from '@/frontend/features/paintings';
 import { TopicList } from '@/frontend/features/topics';
 
 type MessagePagerProps = {
+  onScopeChange: (scope: MessageScope) => void;
   showRecentsHeading?: boolean;
   topicSearchText?: string;
 };
 
-// Hand-rolled two-page slider instead of @expo/ui's PagerView: the SwiftUI
-// pager silently snaps back to page 0 when the native chrome around it
-// changes (edit mode swaps the header title and mounts the bottom toolbar)
-// while its scrollPosition state still holds the old id, so no setPage call
-// can recover it. Swiping between pages was already disabled (it collides
-// with the topic rows' own swipe actions), so scope-driven translation is
-// all the paging this screen needs.
 export function MessagePager({
+  onScopeChange,
   showRecentsHeading = false,
   topicSearchText = '',
 }: MessagePagerProps) {
   const { t } = useTranslation();
   const { scope } = useMessageScope();
-  const { width: windowWidth } = useWindowDimensions();
-  const page = useSharedValue(getMessageScopeIndex(scope));
+  const { isEditing } = useMessageSelectionState();
+  const pagerRef = useRef<PagerViewRef>(null);
+  const [initialPage] = useState(() => getMessageScopeIndex(scope));
+  const currentPageRef = useRef(initialPage);
 
   useEffect(() => {
-    page.value = withTiming(getMessageScopeIndex(scope), {
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-    });
-  }, [page, scope]);
-
-  const trackStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -page.value * windowWidth }],
-  }));
+    const nextPage = getMessageScopeIndex(scope);
+    if (nextPage !== currentPageRef.current) {
+      pagerRef.current?.setPage(nextPage);
+    }
+  }, [scope]);
 
   return (
-    <View className="flex-1 overflow-hidden" testID="topic-list-pager">
-      <Animated.View className="flex-1 flex-row" style={[{ width: windowWidth * 2 }, trackStyle]}>
-        <View collapsable={false} style={{ width: windowWidth }}>
-          {showRecentsHeading ? (
-            <Text className="px-5 pb-1 pt-1 font-medium text-muted-foreground text-sm">
-              {t('navigation.recents')}
-            </Text>
-          ) : null}
-          <TopicList searchText={topicSearchText} />
-        </View>
-        <View collapsable={false} style={{ width: windowWidth }}>
-          <DrawingList />
-        </View>
-      </Animated.View>
-    </View>
+    <PagerView
+      initialPage={initialPage}
+      ref={pagerRef}
+      scrollEnabled={!isEditing}
+      style={{ flex: 1 }}
+      testID="topic-list-pager"
+      onPageSelected={(event) => {
+        const nextPage = event.nativeEvent.position;
+        currentPageRef.current = nextPage;
+        onScopeChange(getMessageScopeAtIndex(nextPage));
+      }}
+    >
+      <View key="conversations" collapsable={false} className="flex-1">
+        {showRecentsHeading ? (
+          <Text className="px-5 pb-1 pt-1 font-medium text-muted-foreground text-sm">
+            {t('navigation.recents')}
+          </Text>
+        ) : null}
+        <TopicList searchText={topicSearchText} />
+      </View>
+      <View key="drawings" collapsable={false} className="flex-1">
+        <DrawingList />
+      </View>
+    </PagerView>
   );
 }

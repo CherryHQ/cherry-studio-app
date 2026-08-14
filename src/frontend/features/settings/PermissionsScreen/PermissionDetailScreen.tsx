@@ -112,7 +112,7 @@ function PermissionModeGroup({
             label={t(`settings.permissions.mode.${option}`)}
             onPress={() => void selectMode(option)}
             showChevron={false}
-            trailing={selected ? <CheckIcon className="size-5 text-primary" /> : null}
+            trailing={selected ? <CheckIcon className="size-5 text-foreground" /> : null}
           />
         );
       })}

@@ -63,7 +63,7 @@ export function AiUsageSectionAction({
       testID={testID}
       onPress={onPress}
     >
-      <Text className="font-medium text-primary text-sm" numberOfLines={1}>
+      <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
         {label}
       </Text>
     </Pressable>
