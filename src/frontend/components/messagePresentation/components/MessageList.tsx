@@ -103,7 +103,8 @@ function messageKeyExtractor(item: MessagePresentationItem) {
 // 分类后修正量 2964px → 5px。
 //
 // 注意它**不是**「发送后跳一下」的成因：分类修好之后，续轮发送前那一帧 -310px 的突跳原样
-// 还在（见 scripts/layout-bench/known-issues.json）。两件事都在同一瞬间发生，别再合并归因。
+// 还在，另有其因（收键盘按记录量回退，见下面 handleAnchorReady 的说明与 patches/）。两件事
+// 都在同一瞬间发生，别再合并归因。
 //
 // 判据用「有没有 part」而不是 status：类型翻转因此发生在第一个 chunk 落地时，那一刻行还只有
 // 几十像素，翻转本身不产生可见修正；而 status 要到整条回复结束才变，翻转时行已有数千像素。
@@ -131,15 +132,20 @@ function emitFreeze(on: boolean) {
   emitLayoutBenchProbe('freeze', { on });
 }
 
-// 键盘收放只改滚动视图的底部 inset，既不改 contentSize 也不改视口，因此它挪动内容却不留下
-// 任何其它探针能看见的痕迹。发送时 `scrollMessageToEnd` 正好同时发起收键盘与钉顶滚动，
-// 缺了这条时间线就没法判断那一帧的位移是谁造成的。
+// 键盘收放挪动内容却不改 contentSize、不改视口，因此不留下任何其它探针能看见的痕迹。发送时
+// `scrollMessageToEnd` 正好同时发起收键盘与钉顶滚动，缺了这条时间线就没法判断那一帧的位移
+// 是谁造成的。
+//
+// 一起记下当时的预留空白，是因为键盘造成净位移的充要条件就是它：抬起时按「当时的预留空白
+// 能吸收多少」决定抬多少，收起时回退的是抬起那一刻记下来的量——**两次之间预留空白变了，
+// 回退量就不再对**（实测续轮发送 0 → 512，净位移 310px）。没有这两个数，这类位移只能靠
+// 猜（上一轮就据此错误地怀疑过 MVCP）。
 //
 // 订阅不能按 `isLayoutBenchProbeArmed()` 开关：探针由假模型在**第一次发送**时 arm，而这个
 // effect 在列表挂载时就跑完了，按 armed 判断等于永远不订阅（实测整轮零 keyboard 事件）。
 // 改成 dev 下常驻订阅、由 emit 自己按 armed 过滤——键盘事件只在收放时各一条，不像 onScroll
 // 那样每帧都有，常驻的代价可以忽略。
-function useKeyboardProbe() {
+function useKeyboardProbe(endSpaceRef: RefObject<number>) {
   useEffect(() => {
     if (!__DEV__) {
       return;
@@ -147,12 +153,17 @@ function useKeyboardProbe() {
 
     const subscriptions = (['keyboardWillShow', 'keyboardWillHide'] as const).map((event) =>
       KeyboardEvents.addListener(event, ({ duration, height }) => {
-        emitLayoutBenchProbe('keyboard', { dur: duration, event, h: Math.round(height) });
+        emitLayoutBenchProbe('keyboard', {
+          dur: duration,
+          endSpace: Math.round(endSpaceRef.current),
+          event,
+          h: Math.round(height),
+        });
       }),
     );
 
     return () => subscriptions.forEach((subscription) => subscription.remove());
-  }, []);
+  }, [endSpaceRef]);
 }
 
 // 程序化滚动只记「谁调的」不够：同一个 scrollToEnd 落到哪里，取决于调用瞬间列表认为的
@@ -226,6 +237,8 @@ export function MessageList({
   const isDraggingListRef = useRef(false);
   const isMomentumScrollingRef = useRef(false);
   const isUserInteractingRef = useRef(false);
+  // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useKeyboardProbe）。
+  const endSpaceRef = useRef(0);
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
@@ -324,7 +337,7 @@ export function MessageList({
     },
   );
 
-  useKeyboardProbe();
+  useKeyboardProbe(endSpaceRef);
 
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;
@@ -472,15 +485,17 @@ export function MessageList({
       const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
         emitProgrammaticScroll('anchorReady', listRef, { animated: shouldAnimate });
-        // 收键盘与钉顶滚动同时发起，别试着把它挪到滚动之后：实测「先钉顶、动画结束再收
-        // 键盘」会把位移搬到动画终点、还要再被尾随滚动拉一次，反转从 1 处 310px 变 2 处
-        // 334px，更差。
+        // 收键盘与钉顶滚动**必须**同时发起，别再试着把它挪到滚动之后：改成「先钉顶、
+        // 动画结束再收键盘」实测反转从 1 处 310px 变成 2 处 334px（位移搬到动画终点，
+        // 还要再被尾随滚动拉一次），更差。
         //
-        // 这一句能安全地和钉顶同帧，前提是 patches/ 里那个键盘补丁。收键盘时
-        // react-native-keyboard-controller 默认按**键盘抬起那一刻记录的抬升量**回退，而
-        // 发送恰好在两次键盘事件之间把钉顶预留空白从 0 顶到 512、可滚动末端跟着下移，
-        // 回退的前提已经不成立——补丁前这里有一帧 -310px 的突跳，动画因此走 616px 而非
-        // 306px。补丁改成「夹到当下的合法区间」。补丁掉了这个跳动就会回来。
+        // 这里曾经有一帧 -310px 的突跳，成因**不是**「收键盘抽掉底部 inset 触发原生夹回」
+        // ——inset 全程是 max(预留空白 512, 键盘 310) = 512，一动没动。真正写值的是
+        // react-native-keyboard-controller 的 keyboardWillHide worklet：它按**键盘抬起
+        // 那一刻记录下来的抬升量**原样回退，而这两次键盘事件之间预留空白从 0 涨到了 512、
+        // 可滚动末端跟着下移，回退的前提已经不成立。修法是 patches/ 里那个补丁：让
+        // whenAtEnd 在键盘变矮时「夹到当下的合法区间」而不是「按记录量回退」，两者只在
+        // 这一个情形下不同，其余逐值相同。补丁掉了这个跳动就会回来。
         void scrollMessageToEnd({
           animated: shouldAnimate,
           closeKeyboard: isEnteringMessage,
@@ -492,6 +507,7 @@ export function MessageList({
 
   const handleAnchoredEndSpaceSizeChanged = useCallback(
     (size: number) => {
+      endSpaceRef.current = size;
       emitLayoutBenchProbe('endSpace', { size: Math.round(size) });
 
       if (size > 0 || !anchorMessageId) {
