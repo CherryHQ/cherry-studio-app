@@ -37,7 +37,7 @@ const AnimatedBlurView = createAnimatedComponent(BlurView);
 const openDurationMs = 150;
 const closeDurationMs = 120;
 const appBlurIntensity = 30;
-const keyboardBlurIntensity = 7;
+const keyboardBlurIntensity = 30;
 const isIOS = process.env.EXPO_OS === 'ios';
 
 type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
@@ -130,6 +130,7 @@ export function ChatInputEffortOverlay({
         const nextLayout = getChatInputEffortOverlayLayout(
           { height, left, top, width },
           gaugeFrame,
+          { height: viewportHeight, left: 0, top: 0, width: viewportWidth },
         );
         if (!nextLayout) {
           return;

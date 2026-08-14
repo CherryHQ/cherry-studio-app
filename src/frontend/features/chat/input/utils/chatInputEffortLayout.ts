@@ -17,6 +17,8 @@ export const chatInputEffortTrackHeight = effortSliderTrackHeight;
 export const chatInputEffortTrackInset = 24;
 export const chatInputEffortLabelGap = 16;
 export const chatInputEffortLabelHeight = 24;
+export const chatInputEffortPanelHeight =
+  chatInputEffortLabelHeight + chatInputEffortLabelGap + chatInputEffortTrackHeight;
 
 function isValidFrame(frame: ChatInputEffortFrame): boolean {
   return (
@@ -29,24 +31,30 @@ function isValidFrame(frame: ChatInputEffortFrame): boolean {
   );
 }
 
-/** Geometry for the floating slider, derived from the live composer and gauge. */
+/** Gauge-anchored morph geometry with a viewport-centered resting panel. */
 export function getChatInputEffortOverlayLayout(
   composerFrame: ChatInputEffortFrame,
   gaugeFrame: ChatInputEffortFrame,
+  viewportFrame: ChatInputEffortFrame,
 ): ChatInputEffortOverlayLayout | null {
-  if (!isValidFrame(composerFrame) || !isValidFrame(gaugeFrame)) {
+  if (!isValidFrame(composerFrame) || !isValidFrame(gaugeFrame) || !isValidFrame(viewportFrame)) {
     return null;
   }
 
-  const sliderWidth = composerFrame.width - chatInputEffortTrackInset * 2;
-  if (sliderWidth < chatInputEffortTrackHeight) {
+  const sliderWidth =
+    Math.min(composerFrame.width, viewportFrame.width) - chatInputEffortTrackInset * 2;
+  if (
+    sliderWidth < chatInputEffortTrackHeight ||
+    viewportFrame.height < chatInputEffortPanelHeight
+  ) {
     return null;
   }
 
+  const panelTop = viewportFrame.top + (viewportFrame.height - chatInputEffortPanelHeight) / 2;
   const sliderFrame = {
     height: chatInputEffortTrackHeight,
-    left: composerFrame.left + chatInputEffortTrackInset,
-    top: gaugeFrame.top + (gaugeFrame.height - chatInputEffortTrackHeight) / 2,
+    left: viewportFrame.left + (viewportFrame.width - sliderWidth) / 2,
+    top: panelTop + chatInputEffortLabelHeight + chatInputEffortLabelGap,
     width: sliderWidth,
   };
 
@@ -54,9 +62,9 @@ export function getChatInputEffortOverlayLayout(
     gaugeFrame,
     labelFrame: {
       height: chatInputEffortLabelHeight,
-      left: composerFrame.left,
-      top: sliderFrame.top - chatInputEffortLabelGap - chatInputEffortLabelHeight,
-      width: composerFrame.width,
+      left: sliderFrame.left,
+      top: panelTop,
+      width: sliderWidth,
     },
     sliderFrame,
   };
