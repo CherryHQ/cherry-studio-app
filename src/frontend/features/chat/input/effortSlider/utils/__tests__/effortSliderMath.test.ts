@@ -1,4 +1,13 @@
-import { clamp01, magnetize, nearestStopIndex, stopFraction } from '../effortSliderMath';
+import {
+  clamp01,
+  effortGaugeNeedleAngle,
+  getEffortSliderTrackGeometry,
+  magnetize,
+  nearestStopIndex,
+  stopFraction,
+  trackXToFraction,
+} from '../effortSliderMath';
+import { effortSliderThumbInset, effortSliderThumbSize } from '../effortSliderVisual';
 
 describe('clamp01', () => {
   it('clamps to the unit interval', () => {
@@ -26,6 +35,50 @@ describe('stopFraction', () => {
   });
 });
 
+describe('getEffortSliderTrackGeometry', () => {
+  it('aligns every stop between the circular thumb endpoint centers', () => {
+    expect(
+      getEffortSliderTrackGeometry(300, 3, effortSliderThumbSize, effortSliderThumbInset),
+    ).toEqual({
+      thumbCenterStart: 33,
+      tickCenters: [33, 150, 267],
+      travelDistance: 234,
+    });
+  });
+
+  it('supports model-driven stop counts and clamps undersized travel', () => {
+    expect(
+      getEffortSliderTrackGeometry(300, 2, effortSliderThumbSize, effortSliderThumbInset)
+        .tickCenters,
+    ).toEqual([33, 267]);
+    expect(
+      getEffortSliderTrackGeometry(20, 1, effortSliderThumbSize, effortSliderThumbInset),
+    ).toEqual({
+      thumbCenterStart: 33,
+      tickCenters: [33],
+      travelDistance: 0,
+    });
+    expect(
+      getEffortSliderTrackGeometry(300, 0, effortSliderThumbSize, effortSliderThumbInset)
+        .tickCenters,
+    ).toEqual([]);
+  });
+});
+
+describe('effortGaugeNeedleAngle', () => {
+  it('maps the first, middle, and last stops across the gauge sweep', () => {
+    expect(effortGaugeNeedleAngle(0, 5)).toBeCloseTo(-Math.PI / 3);
+    expect(effortGaugeNeedleAngle(2, 5)).toBeCloseTo(0);
+    expect(effortGaugeNeedleAngle(4, 5)).toBeCloseTo(Math.PI / 3);
+  });
+
+  it('clamps invalid indices and collapses a single stop to the start angle', () => {
+    expect(effortGaugeNeedleAngle(-1, 5)).toBeCloseTo(-Math.PI / 3);
+    expect(effortGaugeNeedleAngle(9, 5)).toBeCloseTo(Math.PI / 3);
+    expect(effortGaugeNeedleAngle(0, 1)).toBeCloseTo(-Math.PI / 3);
+  });
+});
+
 describe('nearestStopIndex', () => {
   it('rounds to the closest stop', () => {
     expect(nearestStopIndex(0, 5)).toBe(0);
@@ -37,6 +90,20 @@ describe('nearestStopIndex', () => {
   it('clamps positions outside the track', () => {
     expect(nearestStopIndex(-0.2, 5)).toBe(0);
     expect(nearestStopIndex(1.7, 5)).toBe(4);
+  });
+});
+
+describe('trackXToFraction', () => {
+  it('maps the visual thumb endpoint centers to zero and one', () => {
+    expect(trackXToFraction(30, 300, 30)).toBe(0);
+    expect(trackXToFraction(150, 300, 30)).toBe(0.5);
+    expect(trackXToFraction(270, 300, 30)).toBe(1);
+  });
+
+  it('clamps touches outside the endpoints and undersized tracks', () => {
+    expect(trackXToFraction(0, 300, 30)).toBe(0);
+    expect(trackXToFraction(300, 300, 30)).toBe(1);
+    expect(trackXToFraction(20, 40, 30)).toBe(0);
   });
 });
 

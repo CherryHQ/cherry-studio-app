@@ -12,9 +12,9 @@ type ChatComposerProps = {
 
 /**
  * The docked chat input, wrapped in the managed Composer provider so every screen
- * that shows the input (chat + new-topic) imports attachments before preview. The
- * reasoning-effort control lives inside the model picker sheet
- * (ChatInputReasoningSection), not as a separate floating panel.
+ * that shows the input (chat + new-topic) imports attachments before preview.
+ * ChatInput owns the reasoning-effort morph because it is assistant/model state,
+ * while this wrapper owns only docking and composer storage.
  */
 export function ChatComposer({
   assistantId,

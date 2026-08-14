@@ -50,9 +50,10 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   pill.
 - `ComposerProvider` / `useComposerState` / `useComposerActions` — the draft and
   its attachments.
-- `useComposerFieldDismiss` — take the keyboard down and blur, before opening
-  anything over the composer. The pill does this itself; a toolbar button the
-  caller adds has to call it.
+- `useComposerFieldDismiss` — take the keyboard down and blur before opening a
+  picker or settings surface that replaces the input context. The model pill
+  does this itself; caller-owned buttons decide whether their overlay should
+  dismiss or preserve the live input.
 - `ComposerDock` / `useComposerDockLayout` — floating the composer at the bottom
   of a screen, and what the content above it reserves.
 - `utils/composerAttachments` and `utils/composerLayout` are deep-imported on
@@ -95,8 +96,9 @@ walk to verify it.
 ## Behavior notes
 
 - The ＋ menu takes the keyboard down but leaves the field first responder, so
-  iOS restores the keyboard the instant the menu closes. Everything else that
-  opens over the input blurs it first, via `useComposerFieldDismiss`.
+  iOS restores the keyboard the instant the menu closes. Pickers and settings
+  surfaces blur via `useComposerFieldDismiss`; the chat effort slider instead
+  keeps focus and covers the live keyboard.
 - The i18n keys are still under `chat.*`. Two of them (`chat.media.camera`,
   `chat.media.photos`) are shared with the settings screens, so a `composer.*`
   namespace would fork strings rather than move them.

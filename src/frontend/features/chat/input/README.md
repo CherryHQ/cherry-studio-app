@@ -13,8 +13,8 @@ them as one input:
    recovery. Shared with painting, so it knows nothing about assistants either.
 3. This directory — assistants, models, reasoning effort, web search. It assembles the composer's
    parts itself (see `ChatInput.tsx`) and drops its own nodes in: the tool tag as a
-   `Composer.Collapsible`, the tools as `ComposerMenu` children, the effort label inside
-   `ComposerModelPill`.
+   `Composer.Collapsible`, the tools as `ComposerMenu` children, and the effort gauge/slider overlay
+   above the live surface.
 
 ## Why this document exists
 
@@ -66,6 +66,10 @@ Two consequences to take seriously:
 
 - [ ] Opening the model picker dismisses the keyboard, blurs the field, and clears the focused state
       **before** the picker opens.
+- [ ] Opening the reasoning-effort slider keeps the field focused and leaves the keyboard in place.
+      The app content is blurred behind a portal; iOS also blurs the keyboard through
+      `OverKeyboardView`, while Android dims it. The first background or keyboard tap closes only
+      the slider, so the next tap can continue typing immediately.
 - [ ] The image-settings button (painting only) does the same. It is assembled by painting rather
       than by the composer, so it calls `useComposerFieldDismiss()` explicitly — the one thing
       assembling made the caller's job.
@@ -73,14 +77,21 @@ Two consequences to take seriously:
       upward into the space the keyboard occupies, so the keyboard has to go; leaving the field as
       first responder is what makes iOS restore it the instant the menu closes.
 
-### The model pill
+### Model and reasoning controls
 
 - [ ] Shows the selected model's name; with no model, a `chat.model.select` pill.
 - [ ] The icon falls back to the label's first character uppercased, or `M`.
-- [ ] The reasoning-effort label appears only when the model has reasoning stops.
-- [ ] The effort label is muted (`text-foreground`) at every stop except `max`, which is
-      `text-brand` — Cherry's Logo red, deliberately not `text-primary`, which the theme setting
-      recolours.
+- [ ] A gauge appears immediately left of send only when the selected model has reasoning stops. Its
+      needle rotates across the same normalized stop positions as the slider.
+- [ ] The model pill has no effort suffix, and the model picker has no effort footer: the gauge is the
+      only entry point.
+- [ ] Tapping the gauge grows the discrete slider leftward from the gauge into the composer's
+      toolbar footprint. The composer keeps its size and stays mounted behind the blur, so the
+      draft, attachments, selected tool, keyboard, and focus remain unchanged.
+- [ ] The floating label contains the selected model name and localized effort name; crossing a stop
+      updates it immediately and fires the slider's selection haptic.
+- [ ] Tapping outside closes the slider. The transparent dismissal regions do not cover its track,
+      so tap-to-seek and dragging remain available.
 
 ### The selected-tool row
 
@@ -167,9 +178,6 @@ Do not restore these; their absence is the design, not a regression.
 
 ## Known defects, not fixed here
 
-- `useChatInputReasoningEfforts` derives the available effort stops from
-  `modelSettings.selections.default`, while the pill shows the model bound to the assistant. For an
-  assistant on a non-default model the stops and the label come from two different models.
 - The web-search mirror in `ChatInput.tsx` is the repository's only
   `react-hooks/set-state-in-effect` suppression. The rule is right that most such effects are
   derivable — the reasoning effort next to it was — but this one reconciles an optimistic write
@@ -183,14 +191,14 @@ Do not restore these; their absence is the design, not a regression.
 - `ChatInput.tsx` owns the selected tool, the reasoning effort, everything that talks to assistants
   and models, **and the arrangement** — it assembles the composer's parts rather than configuring a
   single component.
-- `effortSlider/` owns the reasoning-effort control, which lives in the model picker's footer — not
-  in the input.
+- `effortSlider/` owns the reusable track and gesture math. `ChatInputEffortOverlay` owns its
+  composer-specific morph, dismissal regions, and floating label.
 - Leaf components here render from what they are passed. They must not keep parallel state for
   something `ChatInput.tsx` already holds.
 
 ## Manual acceptance with agent-device
 
-Use the existing Expo dev server on port `8001`.
+Use the workspace Expo dev server on port `8084`.
 
 ```bash
 agent-device open com.cherry-ai.cherry-studio-app --session chat-input --platform ios --device "iPhone 17 Pro" --relaunch

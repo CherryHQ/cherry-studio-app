@@ -79,7 +79,9 @@ jest.mock('@shopify/react-native-skia', () => {
 
   return {
     Canvas: inert('SkiaCanvas'),
+    Circle: inert('SkiaCircle'),
     Group: inert('SkiaGroup'),
+    Line: inert('SkiaLine'),
     Text: inert('SkiaText'),
     BlurMask: inert('SkiaBlurMask'),
     Rect: inert('SkiaRect'),
@@ -88,13 +90,14 @@ jest.mock('@shopify/react-native-skia', () => {
     ImageShader: inert('SkiaImageShader'),
     Path: inert('SkiaPath'),
     Mask: inert('SkiaMask'),
+    vec: (x: number, y: number) => ({ x, y }),
     matchFont: () => ({
       getGlyphIDs: (text: string) => Array.from(text).map((_, index) => index),
       getGlyphWidths: (ids: number[]) => ids.map(() => 8),
       getMetrics: () => ({ ascent: -11, descent: 3 }),
     }),
-    // thinkingPixelField.ts compiles its SkSL at module scope, so RuntimeEffect.Make
-    // must return a truthy stub or the ChatInputSurface import chain throws under test.
+    // The image-generation loader compiles SkSL at module scope, so
+    // RuntimeEffect.Make must return a truthy stub under test.
     Skia: {
       Color: (color: number | string) => color,
       RuntimeEffect: {

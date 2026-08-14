@@ -64,7 +64,7 @@ There is no fifth. A new literal must state in its commit which case it falls un
 | Case | Examples | Why a token cannot serve |
 |---|---|---|
 | **Chrome over uncontrolled content** | Image viewer, camera preview, thumbnail badges | The backdrop is a photo — neither a light nor a dark surface. `--constant-black` / `--constant-white` already cover this; **use them instead of adding more** |
-| **Artwork** | `thinkingPalette.ts` (33 shader colours), `logoPalette.ts` | These encode relationships between each other, not roles. Changing one breaks the image |
+| **Artwork** | `logoPalette.ts` | Its colors encode relationships with each other, not roles. Changing one breaks the image |
 | **Upstream of the tokens** | `brandAvatarStyles.ts`, which picks ink by luminance | Its output *is* the colour decision; reading a token back would be a cycle |
 | **Outside the render tree** | `LoggerService` `%c` console styles, build scripts | Never passes through uniwind |
 
@@ -154,7 +154,7 @@ Still by default. Motion is justified in three cases: explaining a state change,
 
 No scroll-triggered reveals, no decorative pulsing, no parallax, no hover displacement. **The base experience must be complete with zero motion**, and `useReducedMotion` must actually be wired, not merely imported.
 
-Existing heavy animations (the thinking pixel field, the logo draw-on, the settings droplet collapse) are deliberate one-off investments. `useReducedMotion` is currently wired in `PrismSweep`, `ImageGenerationLoader`, `SlotText`, and `EffortSlider` — follow those when adding anything at that scale, and first say what it explains.
+Existing heavy animations (the image-generation prism sweep, the logo draw-on, the settings droplet collapse) are deliberate one-off investments. `useReducedMotion` is currently wired in `PrismSweep`, `ImageGenerationLoader`, `SlotText`, and `EffortSlider` — follow those when adding anything at that scale, and first say what it explains.
 
 ## Icons
 

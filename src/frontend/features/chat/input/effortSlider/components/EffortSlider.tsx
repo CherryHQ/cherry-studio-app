@@ -1,27 +1,20 @@
 import * as Haptics from 'expo-haptics';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useCallback, useEffect, useState } from 'react';
 import { type AccessibilityActionEvent, type LayoutChangeEvent, View } from 'react-native';
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useReducedMotion, withTiming } from 'react-native-reanimated';
-import { useUniwind } from 'uniwind';
 
-import { useShaderClock } from '@/frontend/hooks/useShaderClock';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { useEffortSliderGesture } from '../hooks/useEffortSliderGesture';
-import { useThinkingReveal } from '../hooks/useThinkingReveal';
-import { effortSliderSnapTiming, THINKING_CLOCK_WRAP_SECONDS } from '../utils/constants';
+import { effortSliderSnapTiming } from '../utils/constants';
 import { stopFraction } from '../utils/effortSliderMath';
 import {
-  darkThinkingFallbackGradient,
-  darkThinkingPalette,
-  effortTickColor,
-  lightThinkingFallbackGradient,
-  lightThinkingPalette,
-} from '../utils/thinkingPalette';
-import { EffortSliderTrack, effortSliderTrackRadius } from './EffortSliderTrack';
-import { ThinkingPixelField } from './ThinkingPixelField';
+  effortSliderThumbInset,
+  effortSliderThumbSize,
+  effortSliderTrackHeight,
+} from '../utils/effortSliderVisual';
+import { EffortSliderTrack } from './EffortSliderTrack';
 
 const unmeasuredStyle = { opacity: 0 } as const;
 
@@ -37,11 +30,6 @@ export type EffortSliderProps = {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
-  /**
-   * Option whose stop ignites the thinking pixel field. Defaults to the last
-   * option; pass e.g. 'max' when a trailing 'auto' stop shouldn't ignite.
-   */
-  pixelFieldValue?: string;
   /** Track height in dp. */
   trackHeight?: number;
   accessibilityLabel?: string;
@@ -49,41 +37,32 @@ export type EffortSliderProps = {
 };
 
 /**
- * Discrete effort slider with ease-out snapping, drag magnetism, and a Skia
- * "thinking" pixel field that ignites on the configured top stop. See
- * README.md for the source effect this ports.
+ * Discrete effort slider with ease-out snapping, drag magnetism, and a
+ * reference-matched two-layer track.
  */
 export function EffortSlider({
   options,
   value,
   onChange,
   disabled = false,
-  pixelFieldValue,
-  trackHeight = 32,
+  trackHeight = effortSliderTrackHeight,
   accessibilityLabel,
   testID,
 }: EffortSliderProps) {
   const reducedMotion = useReducedMotion();
-  // The app's own theme, not the OS's: appearance settings can pin one against
-  // the system, and reading `useColorScheme` here painted the light field on a
-  // dark track whenever they disagreed.
-  const isDark = useUniwind().theme === 'dark';
-  // Match the thumb to the fixed green pixel field instead of the app brand.
-  const accentColor = useThemeColor('success');
+  const [constantBlack, constantWhite] = useThemeColor(['constant-black', 'constant-white']);
   // 0 until the first onLayout lands: with travelDistance 0 the thumb/fill
   // would paint at the left edge, then teleport once measured — hide the
   // track for those frames (the panel's fade-in covers the gap).
   const [measuredWidth, setMeasuredWidth] = useState(0);
 
   const stopCount = options.length;
+  const visualScale = trackHeight / effortSliderTrackHeight;
+  const thumbCenterInset = (effortSliderThumbInset + effortSliderThumbSize / 2) * visualScale;
   const valueIndex = Math.max(
     0,
     options.findIndex((option) => option.value === value),
   );
-  const pixelStopIndex =
-    pixelFieldValue === undefined
-      ? stopCount - 1
-      : options.findIndex((option) => option.value === pixelFieldValue);
 
   const handleCommit = useCallback(
     (index: number) => {
@@ -104,19 +83,9 @@ export function EffortSlider({
     initialIndex: valueIndex,
     disabled: disabled || stopCount < 2,
     reducedMotion,
+    thumbCenterInset,
     onCommit: handleCommit,
   });
-
-  const { fieldMounted, reveal, fieldAlpha } = useThinkingReveal(
-    activeStopIndex,
-    pixelStopIndex,
-    !reducedMotion,
-    valueIndex === pixelStopIndex,
-  );
-  const time = useShaderClock(fieldMounted, THINKING_CLOCK_WRAP_SECONDS);
-  const palette = isDark ? darkThinkingPalette : lightThinkingPalette;
-  const fallbackGradient = isDark ? darkThinkingFallbackGradient : lightThinkingFallbackGradient;
-  const showStaticField = reducedMotion && valueIndex === pixelStopIndex && pixelStopIndex >= 0;
 
   // Sync external value changes (e.g. model switch fallback) onto the thumb.
   useEffect(() => {
@@ -164,35 +133,13 @@ export function EffortSlider({
         testID={testID}
       >
         <EffortSliderTrack
-          accentColor={accentColor}
-          hideTicks={fieldMounted || showStaticField}
+          constantBlack={constantBlack}
+          constantWhite={constantWhite}
           measuredWidth={measuredWidth}
-          pixelStopIndex={pixelStopIndex}
           position={position}
           stopCount={stopCount}
-          tickColor={effortTickColor[isDark ? 'dark' : 'light']}
           trackHeight={trackHeight}
-        >
-          {fieldMounted && !reducedMotion ? (
-            <ThinkingPixelField
-              fieldAlpha={fieldAlpha}
-              height={trackHeight}
-              palette={palette}
-              radius={effortSliderTrackRadius}
-              reveal={reveal}
-              time={time}
-              width={measuredWidth}
-            />
-          ) : null}
-          {showStaticField ? (
-            <LinearGradient
-              colors={fallbackGradient}
-              end={{ x: 1, y: 0 }}
-              start={{ x: 0, y: 0 }}
-              style={{ position: 'absolute', top: 0, bottom: 0, left: 0, right: 0 }}
-            />
-          ) : null}
-        </EffortSliderTrack>
+        />
       </View>
     </GestureDetector>
   );
