@@ -6,12 +6,15 @@ import {
   type MarkdownStyle,
 } from 'react-native-enriched-markdown';
 import { StreamdownText } from 'react-native-streamdown';
+import { useUniwind } from 'uniwind';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { monoFontFamily } from '@/frontend/utils/constants';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
+
+import { resolveSyntaxColors } from './syntaxColors';
 
 type MarkdownTextProps = {
   fontSizeStep?: FontSizeStep;
@@ -47,6 +50,7 @@ function createMarkdownTypographyStyle(fontSizeStep: FontSizeStep): MarkdownStyl
 
 export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: MarkdownTextProps) {
   const [storedFontSizeStep] = usePreference('ui.font_size_step');
+  const { theme } = useUniwind();
   const [
     foreground,
     background,
@@ -110,6 +114,7 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
         backgroundColor: codeBlock,
         borderColor: border,
         color: foreground,
+        syntaxColors: resolveSyntaxColors(theme, mutedForeground),
       },
       link: { color: link },
       strong: { color: foreground },
@@ -151,6 +156,7 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
     mutedForeground,
     resolvedStep,
     secondary,
+    theme,
   ]);
 
   return (
