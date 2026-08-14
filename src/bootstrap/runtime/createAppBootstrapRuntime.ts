@@ -65,9 +65,10 @@ export function createAppBootstrapRuntime(
     oauth,
     oauthSession,
     preference,
+    providerSetup,
     webSearch,
   });
-  const { backend, dataApiDependencies } = createBackend(services, { dbService, providerSetup });
+  const { backend, dataApiDependencies } = createBackend(services, { dbService });
   let disposePromise: Promise<void> | undefined;
   const dataApi = new DataApiService(
     createDataApiHandlers({

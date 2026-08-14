@@ -71,7 +71,7 @@ describe('builtin tool contracts', () => {
   it.each([
     ['built-in provider', configureBuiltinProviderInputSchema],
     ['custom provider', createCustomProviderInputSchema],
-  ])('keeps every %s configuration field required and directly typed', async (_label, schema) => {
+  ])('keeps every %s configuration field required and directly typed', (_label, schema) => {
     const json = z.toJSONSchema(schema) as {
       properties?: Record<string, { type?: unknown; anyOf?: unknown }>;
       required?: string[];

@@ -50,13 +50,10 @@ export class ToolResolver {
   }): Promise<{ deferredEntries: ToolEntry[]; hasMcpTools: boolean; tools: ToolSet | undefined }> {
     if (!input.assistant) {
       const providerConfigurationEnabled = await this.getProviderConfigurationEnabled();
-      const activeBuiltins = this.builtinRegistry.selectActive({
-        deviceAccess: unavailableDeviceAccess(),
-        platform: Platform.OS,
-        providerConfigurationEnabled,
-      });
       return materializeTools(
-        activeBuiltins.filter((entry) => entry.namespace === 'provider-configuration'),
+        providerConfigurationEnabled
+          ? this.builtinRegistry.getAll({ namespace: 'provider-configuration' })
+          : [],
         input.contextWindow,
       );
     }
@@ -121,15 +118,6 @@ function materializeTools(
     ...applyDeferExposition(tools, requestRegistry, contextWindow),
     hasMcpTools: options.hasMcpTools ?? false,
   };
-}
-
-function unavailableDeviceAccess(): DeviceToolAccess {
-  return Object.fromEntries(
-    DEVICE_PREFERENCE_KEYS.map((key) => [
-      key,
-      { mode: 'never' as const, status: 'unavailable' as const },
-    ]),
-  ) as DeviceToolAccess;
 }
 
 function toToolSet(entries: readonly ToolEntry[]): ToolSet | undefined {

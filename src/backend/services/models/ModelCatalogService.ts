@@ -38,7 +38,6 @@ export type ModelCatalogApi = {
 
 export type ModelCatalogResult = {
   models: Model[];
-  remotelyProbed: boolean;
   source: 'api' | 'registry';
 };
 
@@ -64,11 +63,32 @@ export type ModelCatalogDependencies = ModelCatalogApi & {
 @ServicePhase(Phase.PostReady)
 @DependsOn(['ModelCatalogAdapter'])
 export class ModelCatalogService extends BaseService {
+  private readonly dependencies: ModelCatalogDependencies;
+
   constructor(
-    private readonly api: ModelCatalogApi,
-    private readonly overrides: Partial<Omit<ModelCatalogDependencies, keyof ModelCatalogApi>> = {},
+    api: ModelCatalogApi,
+    overrides: Partial<Omit<ModelCatalogDependencies, keyof ModelCatalogApi>> = {},
   ) {
     super();
+    this.dependencies = {
+      getAuthConfig:
+        overrides.getAuthConfig ?? ((providerId) => providerService.getAuthConfig(providerId)),
+      getCopilotToken:
+        overrides.getCopilotToken ??
+        ((headers, signal) =>
+          application
+            .get('ProviderOAuthService')
+            .getServingToken(COPILOT_PROVIDER_ID, headers, signal)),
+      getStoredApiKey:
+        overrides.getStoredApiKey ?? ((providerId) => providerService.getRotatedApiKey(providerId)),
+      getVertexAuthHeaders: (input) => api.getVertexAuthHeaders(input),
+      listApiModels: (provider, context, signal) => api.listApiModels(provider, context, signal),
+      listRegistryModels:
+        overrides.listRegistryModels ??
+        ((input) => providerRegistryService.listProviderRegistryModels(input)),
+      materialize: overrides.materialize ?? materializeRemoteModels,
+      timeoutMs: overrides.timeoutMs ?? defaultTimeoutMs,
+    };
   }
 
   async list(input: ModelCatalogListInput): Promise<ModelCatalogResult> {
@@ -81,7 +101,6 @@ export class ModelCatalogService extends BaseService {
     if (input.provider.modelListSource === 'registry') {
       return {
         models: registryModels,
-        remotelyProbed: false,
         source: 'registry',
       };
     }
@@ -108,32 +127,7 @@ export class ModelCatalogService extends BaseService {
         input.provider,
         mergeProviderModelsWithRegistry(remoteModels, registryModels),
       ),
-      remotelyProbed: true,
       source: 'api',
-    };
-  }
-
-  private get dependencies(): ModelCatalogDependencies {
-    return {
-      getAuthConfig:
-        this.overrides.getAuthConfig ?? ((providerId) => providerService.getAuthConfig(providerId)),
-      getCopilotToken:
-        this.overrides.getCopilotToken ??
-        ((headers, signal) =>
-          application
-            .get('ProviderOAuthService')
-            .getServingToken(COPILOT_PROVIDER_ID, headers, signal)),
-      getStoredApiKey:
-        this.overrides.getStoredApiKey ??
-        ((providerId) => providerService.getRotatedApiKey(providerId)),
-      getVertexAuthHeaders: (input) => this.api.getVertexAuthHeaders(input),
-      listApiModels: (provider, context, signal) =>
-        this.api.listApiModels(provider, context, signal),
-      listRegistryModels:
-        this.overrides.listRegistryModels ??
-        ((input) => providerRegistryService.listProviderRegistryModels(input)),
-      materialize: this.overrides.materialize ?? materializeRemoteModels,
-      timeoutMs: this.overrides.timeoutMs ?? defaultTimeoutMs,
     };
   }
 

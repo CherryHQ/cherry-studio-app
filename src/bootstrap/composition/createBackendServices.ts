@@ -9,6 +9,7 @@ import type { ModelCatalogService } from '@/backend/services/models/ModelCatalog
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { devicePermissions } from '@/backend/services/permissions';
+import type { ProviderSetupService } from '@/backend/services/providers/ProviderSetupService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import { createDataServices } from './createDataServices';
@@ -31,6 +32,7 @@ export type BackendInfrastructure = {
   oauth: ProviderOAuthService;
   oauthSession: OAuthRuntimeService;
   preference: PreferenceService;
+  providerSetup: ProviderSetupService;
   webSearch: WebSearchService;
 };
 
@@ -44,6 +46,7 @@ export function createBackendServices({
   oauth,
   oauthSession,
   preference,
+  providerSetup,
   webSearch,
 }: BackendInfrastructure) {
   return {
@@ -58,6 +61,7 @@ export function createBackendServices({
     modelCatalog,
     oauth,
     oauthSession,
+    providerSetup,
     webSearch,
   };
 }

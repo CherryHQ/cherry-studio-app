@@ -67,7 +67,6 @@ describe('ProviderSetupService', () => {
     testDb = createTestDb(sqlite);
     catalogList = jest.fn(async (_input: Parameters<ModelCatalogService['list']>[0]) => ({
       models: [],
-      remotelyProbed: true,
       source: 'api' as const,
     })) as jest.MockedFunction<ModelCatalogService['list']>;
     oauthGetStatus = jest.fn(async (providerId: string) => ({
@@ -300,15 +299,19 @@ describe('ProviderSetupService', () => {
       if (catalogInput.apiKey !== 'draft-key' || baseUrl !== 'https://draft.example/v1') {
         throw new Error('preview did not use the transient provider configuration');
       }
-      return { models: [], remotelyProbed: true, source: 'api' };
+      return { models: [], source: 'api' };
     });
 
     await expect(subject.previewBuiltin(input)).resolves.toMatchObject({
-      apiKeyCount: 1,
-      apiKeyWillBeAdded: true,
       catalogSource: 'api',
-      origin: 'https://draft.example',
-      provider: { endpointConfigs: expect.any(Object), isEnabled: false },
+      provider: {
+        endpointConfigs: {
+          [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: expect.objectContaining({
+            baseUrl: 'https://draft.example/v1',
+          }),
+        },
+        isEnabled: false,
+      },
     });
     await expect(providerService.getByProviderId('cherryin')).resolves.toMatchObject({
       endpointConfigs: {
@@ -331,7 +334,6 @@ describe('ProviderSetupService', () => {
       catalogError: 'offline',
       catalogSource: 'skipped',
       models: { added: [], missing: [] },
-      remotelyProbed: false,
     });
   });
 
@@ -348,7 +350,7 @@ describe('ProviderSetupService', () => {
       providerId: 'cherryin',
       supportsStreaming: true,
     };
-    catalogList.mockResolvedValueOnce({ models: [remote], remotelyProbed: true, source: 'api' });
+    catalogList.mockResolvedValueOnce({ models: [remote], source: 'api' });
 
     await expect(
       subject.previewBuiltin(
@@ -385,12 +387,10 @@ describe('ProviderSetupService', () => {
       ) {
         throw new Error('preview did not use the transient custom provider configuration');
       }
-      return { models: [], remotelyProbed: true, source: 'api' };
+      return { models: [], source: 'api' };
     });
 
     await expect(subject.previewCustom(input)).resolves.toMatchObject({
-      apiKeyCount: 0,
-      apiKeyWillBeAdded: true,
       catalogSource: 'api',
       provider: { id: 'custom-transient', isEnabled: false },
     });
@@ -412,7 +412,7 @@ describe('ProviderSetupService', () => {
       providerId: 'cherryin',
       supportsStreaming: true,
     };
-    catalogList.mockResolvedValue({ models: [remote], remotelyProbed: true, source: 'api' });
+    catalogList.mockResolvedValue({ models: [remote], source: 'api' });
     const input = builtinInput({
       apiKey: 'new-key',
       selectedModelIds: [remote.id],
@@ -510,7 +510,7 @@ describe('ProviderSetupService', () => {
       providerId: 'cherryin',
       supportsStreaming: true,
     });
-    catalogList.mockResolvedValueOnce({ models: [], remotelyProbed: true, source: 'api' });
+    catalogList.mockResolvedValueOnce({ models: [], source: 'api' });
 
     await expect(
       subject.executeBuiltin(
@@ -611,7 +611,7 @@ describe('ProviderSetupService', () => {
         name: 'Other AI',
         providerId: 'custom-race',
       });
-      return { models: [], remotelyProbed: true, source: 'api' };
+      return { models: [], source: 'api' };
     });
 
     await expect(

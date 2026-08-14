@@ -11,6 +11,5 @@ export function mergeProviderModelsWithRegistry(
   registry: readonly Model[],
 ): Partial<Model>[] {
   const seen = new Set(remote.map(bareModelKey));
-  const missing = registry.filter((model) => !seen.has(bareModelKey(model)));
-  return missing.length > 0 ? [...remote, ...missing] : [...remote];
+  return [...remote, ...registry.filter((model) => !seen.has(bareModelKey(model)))];
 }

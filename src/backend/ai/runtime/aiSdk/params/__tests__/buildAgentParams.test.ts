@@ -145,7 +145,49 @@ async function buildReasoningOptions(input: {
   return result.options.providerOptions ?? {};
 }
 
-describe('buildAgentParams reasoning contract', () => {
+async function buildProviderToolOptions(
+  text: string,
+  input: { includeAssistant?: boolean; toolChoice?: CallOverrides['toolChoice'] } = {},
+) {
+  const provider = createProvider('openai');
+  const model = {
+    ...resolveModel(provider, 'gpt-4o'),
+    capabilities: ['function-call' as const],
+  };
+  const assistant =
+    input.includeAssistant === false ? undefined : createAssistant(model, 'default');
+  const result = await buildAgentParams({
+    request: {
+      ...(assistant && { assistantId: assistant.id }),
+      ...(input.toolChoice !== undefined && {
+        callOverrides: { toolChoice: input.toolChoice },
+      }),
+      messages: [
+        {
+          id: 'user-message',
+          parts: [{ text, type: 'text' }],
+          role: 'user',
+        },
+      ],
+      uniqueModelId: model.id,
+    },
+    services: createServices(provider, {
+      tools: {
+        configure_builtin_provider: {} as never,
+        create_custom_provider: {} as never,
+        list_providers: {} as never,
+      },
+    }),
+    provider,
+    model,
+    assistant,
+    shouldIncludeExternalTools: true,
+  });
+
+  return result.options;
+}
+
+describe('buildAgentParams', () => {
   it('uses the request snapshot before the assistant selection and maps to the nearest tier', async () => {
     await expect(
       buildReasoningOptions({
@@ -313,148 +355,39 @@ describe('buildAgentParams reasoning contract', () => {
   });
 
   it('forces a provider configuration tool only for the first matching user step', async () => {
-    const provider = createProvider('openai');
-    const model = {
-      ...resolveModel(provider, 'gpt-4o'),
-      capabilities: ['function-call' as const],
-    };
-    const assistant = createAssistant(model, 'default');
-    const result = await buildAgentParams({
-      request: {
-        assistantId: assistant.id,
-        messages: [
-          {
-            id: 'user-message',
-            parts: [{ text: '帮我配置 Gemini', type: 'text' }],
-            role: 'user',
-          },
-        ],
-        uniqueModelId: model.id,
-      },
-      services: createServices(provider, {
-        tools: {
-          configure_builtin_provider: {} as never,
-          create_custom_provider: {} as never,
-          list_providers: {} as never,
-        },
-      }),
-      provider,
-      model,
-      assistant,
-      shouldIncludeExternalTools: true,
-    });
+    const options = await buildProviderToolOptions('帮我配置 Gemini');
 
-    expect(result.options.firstStepToolChoice).toEqual({
+    expect(options.firstStepToolChoice).toEqual({
       toolName: 'configure_builtin_provider',
       type: 'tool',
     });
-    expect(result.options.toolChoice).toBeUndefined();
+    expect(options.toolChoice).toBeUndefined();
   });
 
   it('discovers providers before an underspecified configuration request', async () => {
-    const provider = createProvider('openai');
-    const model = {
-      ...resolveModel(provider, 'gpt-4o'),
-      capabilities: ['function-call' as const],
-    };
-    const assistant = createAssistant(model, 'default');
-    const result = await buildAgentParams({
-      request: {
-        assistantId: assistant.id,
-        messages: [
-          {
-            id: 'user-message',
-            parts: [{ text: '帮我配置服务商', type: 'text' }],
-            role: 'user',
-          },
-        ],
-        uniqueModelId: model.id,
-      },
-      services: createServices(provider, {
-        tools: {
-          configure_builtin_provider: {} as never,
-          create_custom_provider: {} as never,
-          list_providers: {} as never,
-        },
-      }),
-      provider,
-      model,
-      assistant,
-      shouldIncludeExternalTools: true,
-    });
+    const options = await buildProviderToolOptions('帮我配置服务商');
 
-    expect(result.options.firstStepToolChoice).toEqual({
+    expect(options.firstStepToolChoice).toEqual({
       toolName: 'list_providers',
       type: 'tool',
     });
   });
 
   it('loads and routes provider configuration tools without an assistant', async () => {
-    const provider = createProvider('openai');
-    const model = {
-      ...resolveModel(provider, 'gpt-4o'),
-      capabilities: ['function-call' as const],
-    };
-    const services = createServices(provider, {
-      tools: {
-        configure_builtin_provider: {} as never,
-        create_custom_provider: {} as never,
-        list_providers: {} as never,
-      },
-    });
-    const result = await buildAgentParams({
-      request: {
-        messages: [
-          {
-            id: 'user-message',
-            parts: [{ text: '帮我配置 Gemini', type: 'text' }],
-            role: 'user',
-          },
-        ],
-        uniqueModelId: model.id,
-      },
-      services,
-      provider,
-      model,
-      shouldIncludeExternalTools: true,
+    const options = await buildProviderToolOptions('帮我配置 Gemini', {
+      includeAssistant: false,
     });
 
-    expect(result.options.firstStepToolChoice).toEqual({
+    expect(options.firstStepToolChoice).toEqual({
       toolName: 'configure_builtin_provider',
       type: 'tool',
     });
   });
 
   it('preserves an explicit tool choice over provider intent routing', async () => {
-    const provider = createProvider('openai');
-    const model = {
-      ...resolveModel(provider, 'gpt-4o'),
-      capabilities: ['function-call' as const],
-    };
-    const assistant = createAssistant(model, 'default');
-    const result = await buildAgentParams({
-      request: {
-        assistantId: assistant.id,
-        callOverrides: { toolChoice: 'auto' },
-        messages: [
-          {
-            id: 'user-message',
-            parts: [{ text: '帮我配置 Gemini', type: 'text' }],
-            role: 'user',
-          },
-        ],
-        uniqueModelId: model.id,
-      },
-      services: createServices(provider, {
-        tools: { configure_builtin_provider: {} as never },
-      }),
-      provider,
-      model,
-      assistant,
-      shouldIncludeExternalTools: true,
-    });
+    const options = await buildProviderToolOptions('帮我配置 Gemini', { toolChoice: 'auto' });
 
-    expect(result.options.firstStepToolChoice).toBeUndefined();
-    expect(result.options.toolChoice).toBe('auto');
+    expect(options.firstStepToolChoice).toBeUndefined();
+    expect(options.toolChoice).toBe('auto');
   });
 });

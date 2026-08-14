@@ -66,7 +66,6 @@ describe('ModelCatalogService', () => {
 
     await expect(subject.list({ apiKey: 'draft-key', provider: provider() })).resolves.toEqual({
       models: [remote],
-      remotelyProbed: true,
       source: 'api',
     });
   });
@@ -91,7 +90,6 @@ describe('ModelCatalogService', () => {
 
     await expect(subject.list({ apiKey: 'ignored', provider: registryProvider })).resolves.toEqual({
       models: [registryModel],
-      remotelyProbed: false,
       source: 'registry',
     });
   });
@@ -118,7 +116,6 @@ describe('ModelCatalogService', () => {
 
     await expect(subject.list({ provider: presetBackedProvider })).resolves.toEqual({
       models: [remoteTwin, registryOnly],
-      remotelyProbed: true,
       source: 'api',
     });
   });

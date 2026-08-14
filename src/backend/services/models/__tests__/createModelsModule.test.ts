@@ -35,7 +35,7 @@ function createSubject(overrides: Partial<ModelsModuleDependencies> = {}) {
       checkModel: jest.fn(async () => ({ latency: 12 })),
     },
     catalog: {
-      list: jest.fn(async () => ({ models: [], remotelyProbed: true, source: 'api' as const })),
+      list: jest.fn(async () => ({ models: [], source: 'api' as const })),
     },
     models: {
       get: jest.fn(async (id: UniqueModelId) => model(id.split('::')[1] ?? id)),
@@ -63,7 +63,6 @@ describe('createModelsModule', () => {
     jest.mocked(dependencies.models.list).mockResolvedValue([local]);
     jest.mocked(dependencies.catalog.list).mockResolvedValue({
       models: [remote],
-      remotelyProbed: true,
       source: 'api',
     });
 
@@ -81,7 +80,6 @@ describe('createModelsModule', () => {
     jest.mocked(dependencies.models.list).mockResolvedValue([local]);
     jest.mocked(dependencies.catalog.list).mockResolvedValue({
       models: [remote],
-      remotelyProbed: true,
       source: 'api',
     });
 
@@ -97,7 +95,6 @@ describe('createModelsModule', () => {
     jest.mocked(dependencies.models.list).mockResolvedValue([current]);
     jest.mocked(dependencies.catalog.list).mockResolvedValue({
       models: [current],
-      remotelyProbed: true,
       source: 'api',
     });
 

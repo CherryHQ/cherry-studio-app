@@ -10,9 +10,7 @@ import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/mo
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 export type ProviderSetupMatchedProvider = {
-  apiKeyCount: number;
   canEditEndpoint: boolean;
-  origin: string;
   provider: Provider;
   status: 'matched';
 };
@@ -22,7 +20,6 @@ export type ProviderSetupResolveResult =
   | Exclude<ProviderConfigurationToolOutput, ProviderConfigurationSummary>;
 
 export type ProviderSetupPreview = ProviderSetupMatchedProvider & {
-  apiKeyWillBeAdded: boolean;
   catalogError?: string;
   catalogSource: 'api' | 'registry' | 'skipped';
   defaultSelectedModelIds: UniqueModelId[];
@@ -30,7 +27,6 @@ export type ProviderSetupPreview = ProviderSetupMatchedProvider & {
     added: Model[];
     missing: Model[];
   };
-  remotelyProbed: boolean;
 };
 
 export interface ProviderSetupModule {

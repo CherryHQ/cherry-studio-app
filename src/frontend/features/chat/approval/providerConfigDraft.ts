@@ -3,17 +3,12 @@ import {
   configureBuiltinProviderInputSchema,
   CREATE_CUSTOM_PROVIDER_TOOL_NAME,
   createCustomProviderInputSchema,
-  type ProviderConfigurationManualModel,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
-import { ENDPOINT_TYPE, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import { normalizeCustomProviderBaseUrl } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
 
-import {
-  type CustomProviderFormValue,
-  isCustomProviderFormComplete,
-} from '@/frontend/features/settings/providerConfigurationForm';
-import type { ProviderSetupPreview } from '@/shared/contracts';
+import type { CustomProviderFormValue } from '@/frontend/features/settings/providerConfigurationForm';
 
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 
@@ -26,13 +21,6 @@ export type ProviderConfigDraft =
       input: ReturnType<typeof createCustomProviderInputSchema.parse>;
       kind: 'custom';
     };
-
-export type ProviderConfigSetupStep = 'configuration' | 'models';
-
-export const providerConfigSetupSteps: readonly ProviderConfigSetupStep[] = [
-  'configuration',
-  'models',
-];
 
 export function createProviderConfigDraft(
   approval: PendingToolApproval,
@@ -94,47 +82,16 @@ export function customInputFromForm(
   };
 }
 
-export function withModelSelections(
-  draft: ProviderConfigDraft,
-  selectedModelIds: ReadonlySet<UniqueModelId>,
-  removedModelIds: ReadonlySet<UniqueModelId>,
-  skipModelPull: boolean,
-): ProviderConfigDraft {
-  const selections = {
-    removedModelIds: [...removedModelIds],
-    selectedModelIds: [...selectedModelIds],
-    skipModelPull,
-  };
-  return draft.kind === 'builtin'
-    ? { ...draft, input: { ...draft.input, ...selections } }
-    : { ...draft, input: { ...draft.input, ...selections } };
-}
+type ProviderConfigDraftUpdate = Partial<
+  Pick<
+    ReturnType<typeof configureBuiltinProviderInputSchema.parse>,
+    'manualModels' | 'removedModelIds' | 'selectedModelIds' | 'skipModelPull'
+  >
+>;
 
-export function withManualModels(
-  draft: ProviderConfigDraft,
-  manualModels: ProviderConfigurationManualModel[],
-): ProviderConfigDraft {
-  return draft.kind === 'builtin'
-    ? { ...draft, input: { ...draft.input, manualModels } }
-    : { ...draft, input: { ...draft.input, manualModels } };
-}
-
-export function withModelPullEnabled(draft: ProviderConfigDraft): ProviderConfigDraft {
-  return draft.kind === 'builtin'
-    ? { ...draft, input: { ...draft.input, skipModelPull: false } }
-    : { ...draft, input: { ...draft.input, skipModelPull: false } };
-}
-
-export function canContinueProviderConfig(
-  step: ProviderConfigSetupStep,
-  draft: ProviderConfigDraft,
-  preview: ProviderSetupPreview | null,
-): boolean {
-  if (step === 'configuration') {
-    return (
-      draft.kind === 'builtin' ||
-      isCustomProviderFormComplete(customFormValueFromInput(draft.input))
-    );
-  }
-  return preview !== null;
+export function updateProviderConfigDraft<TDraft extends ProviderConfigDraft>(
+  draft: TDraft,
+  update: ProviderConfigDraftUpdate,
+): TDraft {
+  return { ...draft, input: { ...draft.input, ...update } };
 }

@@ -45,7 +45,8 @@ import {
   type ProviderSetupDraft,
 } from './providerSetupDraft';
 
-type ExecutionCatalog = {
+type ProviderSetupCatalog = {
+  error?: string;
   models: Model[];
   source: 'api' | 'registry' | 'skipped';
 };
@@ -117,7 +118,7 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     } catch (error) {
       return invalidResolution(error);
     }
-    const catalog = await this.catalogForExecution(prepared, input, signal);
+    const catalog = await this.loadCatalog(prepared, input, signal);
     return this.commitBuiltin(prepared, input, catalog);
   }
 
@@ -133,7 +134,7 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     } catch (error) {
       return invalidResolution(error);
     }
-    const catalog = await this.catalogForExecution(prepared, input, signal);
+    const catalog = await this.loadCatalog(prepared, input, signal);
     try {
       return await this.commitCustom(prepared, input, catalog);
     } catch (error) {
@@ -183,12 +184,9 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     return application.get('PreferenceService').get('chat.tools.provider_configuration.enabled');
   }
 
-  private async snapshot(provider: Provider): Promise<ProviderSetupMatchedProvider> {
-    const row = await providerService.getRowByProviderId(provider.id);
+  private snapshot(provider: Provider): ProviderSetupMatchedProvider {
     return {
-      apiKeyCount: row?.apiKeys?.length ?? 0,
       canEditEndpoint: canEditProviderEndpoint(provider),
-      origin: getProviderOrigin(provider),
       provider,
       status: 'matched',
     };
@@ -199,31 +197,8 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     input: ProviderSetupDraft,
     signal?: AbortSignal,
   ): Promise<ProviderSetupPreview> {
-    const [localModels, snapshot] = await Promise.all([
-      modelService.list({ providerId: prepared.provider.id }),
-      this.snapshot(prepared.provider),
-    ]);
-    const catalog = input.skipModelPull
-      ? { models: [], remotelyProbed: false, source: 'skipped' as const }
-      : await application
-          .get('ModelCatalogService')
-          .list({
-            ...(prepared.authConfig
-              ? { apiKey: prepared.apiKey, authConfig: prepared.authConfig }
-              : {}),
-            ...(!prepared.authConfig && prepared.apiKey ? { apiKey: prepared.apiKey } : {}),
-            provider: prepared.provider,
-            signal,
-          })
-          .catch((error: unknown) => {
-            if (signal?.aborted) throw signal.reason ?? error;
-            return {
-              error: error instanceof Error ? error.message : String(error),
-              models: [],
-              remotelyProbed: false,
-              source: 'skipped' as const,
-            };
-          });
+    const localModels = await modelService.list({ providerId: prepared.provider.id });
+    const catalog = await this.loadCatalog(prepared, input, signal);
     const models =
       catalog.source === 'skipped'
         ? { added: [], missing: [] }
@@ -235,15 +210,11 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     const added = models.added.filter((model) => !excludedIds.has(model.id));
 
     return {
-      ...snapshot,
-      apiKeyWillBeAdded: await willAddApiKey(prepared.provider.id, prepared.apiKey),
+      ...this.snapshot(prepared.provider),
       ...('error' in catalog ? { catalogError: catalog.error } : {}),
       catalogSource: catalog.source,
       defaultSelectedModelIds: added.map((model) => model.id),
       models: { added, missing: models.missing },
-      origin: getProviderOrigin(prepared.provider),
-      provider: prepared.provider,
-      remotelyProbed: catalog.remotelyProbed,
     };
   }
 
@@ -255,33 +226,42 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     return prepared;
   }
 
-  private async catalogForExecution(
+  private async loadCatalog(
     prepared: PreparedProviderSetup,
     input: ProviderSetupDraft,
     signal?: AbortSignal,
-  ): Promise<ExecutionCatalog> {
+  ): Promise<ProviderSetupCatalog> {
     if (input.skipModelPull) return { models: [], source: 'skipped' };
 
     try {
-      const catalog = await application.get('ModelCatalogService').list({
-        ...(prepared.authConfig
-          ? { apiKey: prepared.apiKey, authConfig: prepared.authConfig }
-          : {}),
-        ...(!prepared.authConfig && prepared.apiKey ? { apiKey: prepared.apiKey } : {}),
-        provider: prepared.provider,
-        signal,
-      });
+      const catalog = await this.listCatalog(prepared, signal);
       return { models: catalog.models, source: catalog.source };
     } catch (error) {
       if (signal?.aborted) throw signal.reason ?? error;
-      return { models: [], source: 'skipped' };
+      return {
+        error: error instanceof Error ? error.message : String(error),
+        models: [],
+        source: 'skipped',
+      };
     }
+  }
+
+  private listCatalog(prepared: PreparedProviderSetup, signal?: AbortSignal) {
+    return application.get('ModelCatalogService').list({
+      ...(prepared.authConfig
+        ? { apiKey: prepared.apiKey, authConfig: prepared.authConfig }
+        : prepared.apiKey
+          ? { apiKey: prepared.apiKey }
+          : {}),
+      provider: prepared.provider,
+      signal,
+    });
   }
 
   private async commitBuiltin(
     prepared: PreparedProviderSetup,
     input: ConfigureBuiltinProviderInput,
-    catalog: ExecutionCatalog,
+    catalog: ProviderSetupCatalog,
   ): Promise<ProviderConfigurationSummary> {
     const dbService = application.get('DbService');
     return dbService.withWriteTx(async (tx) => {
@@ -307,7 +287,7 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
   private async commitCustom(
     prepared: PreparedProviderSetup,
     input: CreateCustomProviderInput,
-    catalog: ExecutionCatalog,
+    catalog: ProviderSetupCatalog,
   ): Promise<ProviderConfigurationSummary> {
     const dbService = application.get('DbService');
     return dbService.withWriteTx(async (tx) => {
@@ -363,7 +343,7 @@ export class ProviderSetupService extends BaseService implements ProviderSetupMo
     tx: Database,
     provider: Provider,
     input: ProviderSetupDraft,
-    catalog: ExecutionCatalog,
+    catalog: ProviderSetupCatalog,
     apiKeyAdded: boolean,
   ): Promise<ProviderConfigurationSummary> {
     const localModels = await modelService.listByProviderTx(tx, provider.id);
@@ -500,13 +480,6 @@ function hasCompleteAuthConfig(authConfig: AuthConfig): boolean {
     case 'iam-azure':
       return false;
   }
-}
-
-async function willAddApiKey(providerId: string, apiKey: string): Promise<boolean> {
-  const trimmed = apiKey.trim();
-  if (!trimmed) return false;
-  const { keys } = await providerService.listApiKeys(providerId).catch(() => ({ keys: [] }));
-  return !keys.some((entry) => entry.key.trim() === trimmed);
 }
 
 function resolution(

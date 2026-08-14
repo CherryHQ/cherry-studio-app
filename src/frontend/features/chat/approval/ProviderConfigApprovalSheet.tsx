@@ -25,21 +25,19 @@ import {
   ProviderConfigModelsPage,
 } from './ProviderConfigApprovalPages';
 import {
-  canContinueProviderConfig,
   createProviderConfigDraft,
   customFormValueFromInput,
   type ProviderConfigDraft,
-  type ProviderConfigSetupStep,
-  providerConfigSetupSteps,
-  withManualModels,
-  withModelPullEnabled,
-  withModelSelections,
+  updateProviderConfigDraft,
 } from './providerConfigDraft';
 import type { ToolApprovalRespondInput } from './types';
 
 const userCancelledReason = 'Provider configuration was cancelled by the user.';
 const ACTION_HEIGHT = 40;
 const PROGRESS_HEIGHT = 32;
+const PROVIDER_CONFIG_STEP_COUNT = 2;
+
+type ProviderConfigSetupStep = 'configuration' | 'models';
 
 function ProviderConfigProgress({ current, total }: { current: number; total: number }) {
   return (
@@ -137,7 +135,7 @@ export function ProviderConfigApprovalSheet({
   const [removedModelIds, setRemovedModelIds] = useState<ReadonlySet<UniqueModelId>>(new Set());
   const previewAbortControllerRef = useRef<AbortController | null>(null);
   const previewRunIdRef = useRef(0);
-  const stepIndex = Math.max(0, providerConfigSetupSteps.indexOf(step));
+  const stepIndex = step === 'configuration' ? 0 : 1;
   const availableHeight = windowHeight - insets.top - insets.bottom;
   const sheetHeight = Math.max(360, Math.min(760, availableHeight * 0.94));
   const builtinProviderQuery = draft?.kind === 'builtin' ? draft.input.provider : null;
@@ -315,12 +313,11 @@ export function ProviderConfigApprovalSheet({
     }
     if (step === 'models') {
       void approve(
-        withModelSelections(
-          draft,
-          selectedModelIds,
-          removedModelIds,
-          preview?.catalogSource === 'skipped',
-        ),
+        updateProviderConfigDraft(draft, {
+          removedModelIds: [...removedModelIds],
+          selectedModelIds: [...selectedModelIds],
+          skipModelPull: preview?.catalogSource === 'skipped',
+        }),
       );
     }
   }, [
@@ -336,7 +333,7 @@ export function ProviderConfigApprovalSheet({
 
   const retryPreview = useCallback(() => {
     if (!draft) return;
-    const nextDraft = withModelPullEnabled(draft);
+    const nextDraft = updateProviderConfigDraft(draft, { skipModelPull: false });
     setDraft(nextDraft);
     void loadPreview(nextDraft);
   }, [draft, loadPreview]);
@@ -344,10 +341,9 @@ export function ProviderConfigApprovalSheet({
   const removeManualModel = useCallback((modelId: string) => {
     setDraft((current) =>
       current
-        ? withManualModels(
-            current,
-            current.input.manualModels.filter((model) => model.modelId !== modelId),
-          )
+        ? updateProviderConfigDraft(current, {
+            manualModels: current.input.manualModels.filter((model) => model.modelId !== modelId),
+          })
         : current,
     );
   }, []);
@@ -380,7 +376,7 @@ export function ProviderConfigApprovalSheet({
     <BottomSheet
       closeAccessibilityLabel={t('common.cancel')}
       headerRight={
-        <ProviderConfigProgress current={stepIndex + 1} total={providerConfigSetupSteps.length} />
+        <ProviderConfigProgress current={stepIndex + 1} total={PROVIDER_CONFIG_STEP_COUNT} />
       }
       height={sheetHeight}
       isCloseDisabled={isSubmitting}
@@ -432,7 +428,12 @@ export function ProviderConfigApprovalSheet({
               />
             ) : null}
             <ProviderConfigActionButton
-              disabled={!canContinueProviderConfig(step, draft, preview)}
+              disabled={
+                step === 'models'
+                  ? preview === null
+                  : draft.kind === 'custom' &&
+                    !isCustomProviderFormComplete(customFormValueFromInput(draft.input))
+              }
               label={actionLabel}
               loading={isPreviewLoading || isSubmitting}
               onPress={goForward}

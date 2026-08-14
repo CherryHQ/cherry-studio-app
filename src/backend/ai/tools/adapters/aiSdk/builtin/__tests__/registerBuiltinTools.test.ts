@@ -121,9 +121,7 @@ describe('registerBuiltinTools', () => {
 
     await expect(resolveApproval(builtin, { provider: 'Unknown' })).resolves.toBe(false);
     deps.providerSetup.resolveBuiltin.mockResolvedValueOnce({
-      apiKeyCount: 0,
       canEditEndpoint: true,
-      origin: 'https://api.example.com',
       provider: { id: 'example', name: 'Example' },
       status: 'matched',
     } as never);

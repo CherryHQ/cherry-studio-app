@@ -30,6 +30,15 @@ export type PreparedProviderSetup = {
   provider: Provider;
 };
 
+const CUSTOM_PROVIDER_ENDPOINT_FIELDS = [
+  [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, 'baseUrl'],
+  [ENDPOINT_TYPE.OPENAI_RESPONSES, 'openaiResponsesUrl'],
+  [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, 'anthropicUrl'],
+  [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, 'geminiUrl'],
+  [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, 'imageGenerationUrl'],
+  [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT, 'imageEditUrl'],
+] as const;
+
 export function prepareBuiltinProviderSetup(
   provider: Provider,
   input: ConfigureBuiltinProviderInput,
@@ -96,35 +105,19 @@ export function prepareCustomProviderSetup(
 }
 
 function createCustomEndpointConfigs(input: CreateCustomProviderInput): EndpointConfigs {
-  const values: Partial<Record<keyof CreateCustomProviderInput, string>> = {
-    anthropicUrl: input.anthropicUrl,
-    baseUrl: input.baseUrl,
-    geminiUrl: input.geminiUrl,
-    imageEditUrl: input.imageEditUrl,
-    imageGenerationUrl: input.imageGenerationUrl,
-    openaiResponsesUrl: input.openaiResponsesUrl,
-  };
-  for (const [field, value] of Object.entries(values)) {
-    const baseUrl = normalizeCustomProviderBaseUrl(value);
-    if (baseUrl && !isValidProviderEndpointUrl(baseUrl)) {
+  const endpointConfigs: EndpointConfigs = {};
+  for (const [endpoint, field] of CUSTOM_PROVIDER_ENDPOINT_FIELDS) {
+    const baseUrl = normalizeCustomProviderBaseUrl(input[field]);
+    if (!baseUrl) continue;
+    if (!isValidProviderEndpointUrl(baseUrl)) {
       throw new Error(`${field} must be an absolute HTTP URL.`);
     }
+    endpointConfigs[endpoint] = { baseUrl };
   }
-  if (!normalizeCustomProviderBaseUrl(input.baseUrl)) throw new Error('Base URL is required.');
-
-  return Object.fromEntries(
-    [
-      [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS, input.baseUrl],
-      [ENDPOINT_TYPE.OPENAI_RESPONSES, input.openaiResponsesUrl],
-      [ENDPOINT_TYPE.ANTHROPIC_MESSAGES, input.anthropicUrl],
-      [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT, input.geminiUrl],
-      [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION, input.imageGenerationUrl],
-      [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT, input.imageEditUrl],
-    ].flatMap(([endpoint, value]) => {
-      const baseUrl = normalizeCustomProviderBaseUrl(value);
-      return baseUrl ? [[endpoint, { baseUrl }]] : [];
-    }),
-  ) as EndpointConfigs;
+  if (!endpointConfigs[ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]) {
+    throw new Error('Base URL is required.');
+  }
+  return endpointConfigs;
 }
 
 export function materializeManualModels(

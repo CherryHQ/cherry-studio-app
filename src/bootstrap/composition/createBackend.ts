@@ -19,7 +19,6 @@ import {
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
-import type { ProviderSetupService } from '@/backend/services/providers/ProviderSetupService';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
 
@@ -32,9 +31,9 @@ export type BackendComposition = {
 
 export function createBackend(
   services: BackendServices,
-  infrastructure: { dbService: DbService; providerSetup: ProviderSetupService },
+  infrastructure: { dbService: DbService },
 ): BackendComposition {
-  const { dbService, providerSetup } = infrastructure;
+  const { dbService } = infrastructure;
   const cherryin = new CherryInClient({
     oauth: {
       authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
@@ -138,7 +137,7 @@ export function createBackend(
       permissions,
       profile,
       providers,
-      providerSetup,
+      providerSetup: services.providerSetup,
       webSearch: services.webSearch,
     },
     dataApiDependencies: {

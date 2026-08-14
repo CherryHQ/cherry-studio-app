@@ -5,7 +5,7 @@ import {
   createProviderConfigDraft,
   customFormValueFromInput,
   customInputFromForm,
-  withModelSelections,
+  updateProviderConfigDraft,
 } from '../providerConfigDraft';
 
 const generatedProviderId = '00000000-0000-4000-8000-000000000123';
@@ -38,7 +38,13 @@ describe('provider configuration draft', () => {
     const selectedId = createUniqueModelId('cherryin', 'new-model');
     const removedId = createUniqueModelId('cherryin', 'old-model');
 
-    expect(withModelSelections(draft, new Set([selectedId]), new Set([removedId]), true)).toEqual({
+    expect(
+      updateProviderConfigDraft(draft, {
+        removedModelIds: [removedId],
+        selectedModelIds: [selectedId],
+        skipModelPull: true,
+      }),
+    ).toEqual({
       ...draft,
       input: {
         ...draft.input,
