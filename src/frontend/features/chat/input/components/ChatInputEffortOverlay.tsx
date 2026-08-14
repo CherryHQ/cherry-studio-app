@@ -1,46 +1,50 @@
-import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
-import { Portal, Surface } from '@cherrystudio/ui/components';
-import { duration, easing } from '@cherrystudio/ui/motion';
-import { type ReactNode, useCallback, useId, useMemo, useRef, useState } from 'react';
+import { Portal } from '@cherrystudio/ui/components';
+import { easing } from '@cherrystudio/ui/motion';
+import { BlurView } from 'expo-blur';
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  type LayoutChangeEvent,
-  Pressable,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { OverKeyboardView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, {
   Extrapolation,
+  createAnimatedComponent,
   interpolate,
   runOnJS,
+  useAnimatedProps,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useResolveClassNames } from 'uniwind';
+import { useUniwind } from 'uniwind';
 
-import { useComposerFieldDismiss } from '@/frontend/components/composer';
 import { SlotText } from '@/frontend/components/SlotText';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { EffortSlider } from '../effortSlider';
+import {
+  type ChatInputEffortFrame,
+  type ChatInputEffortOverlayLayout,
+  chatInputEffortTrackHeight,
+  getChatInputEffortOverlayLayout,
+} from '../utils/chatInputEffortLayout';
 import type { ChatInputReasoningEffort } from '../utils/chatInputReasoning';
 import { getChatInputReasoningEffortOption } from '../utils/chatInputReasoning';
 import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
-const openHeight = 48;
-const surfaceRadius = openHeight / 2;
-const labelGap = 10;
-const labelHeight = 20;
-const slideDistance = 20;
-const restingScale = 0.98;
+const AnimatedBlurView = createAnimatedComponent(BlurView);
+const openDurationMs = 150;
+const closeDurationMs = 120;
+const appBlurIntensity = 30;
+const keyboardBlurIntensity = 7;
+const isIOS = process.env.EXPO_OS === 'ios';
 
-type EffortSliderAnchor = {
-  height: number;
-  left: number;
-  top: number;
-  width: number;
+type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
+  keyboardHeight: number;
+  keyboardVisible: boolean;
+  viewportHeight: number;
+  viewportWidth: number;
 };
 
 type ChatInputEffortOverlayProps = {
@@ -51,7 +55,7 @@ type ChatInputEffortOverlayProps = {
   reasoningEfforts: readonly ChatInputReasoningEffort[];
 };
 
-/** Morphs the live composer into its effort slider without moving draft state. */
+/** Floats a gauge-anchored effort slider over the still-mounted composer. */
 export function ChatInputEffortOverlay({
   children,
   modelLabel,
@@ -60,16 +64,20 @@ export function ChatInputEffortOverlay({
   reasoningEfforts,
 }: ChatInputEffortOverlayProps) {
   const { t } = useTranslation();
-  const { height: windowHeight } = useWindowDimensions();
-  const dismissField = useComposerFieldDismiss();
+  const { theme } = useUniwind();
+  const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
+  const keyboard = useKeyboardState((state) => ({
+    appearance: state.appearance,
+    height: state.height,
+    isVisible: state.isVisible,
+  }));
   const reducedMotion = useReducedMotion();
   const progress = useSharedValue(0);
-  const closedHeight = useSharedValue(openHeight);
   const rootRef = useRef<View>(null);
   const openingRef = useRef(false);
-  const [anchor, setAnchor] = useState<EffortSliderAnchor | null>(null);
+  const [layout, setLayout] = useState<ActiveEffortLayout | null>(null);
   const portalName = useId();
-  const fieldMaterial = useResolveClassNames('bg-field');
+  const scrimColor = useThemeColor('constant-black');
   const options = useMemo(
     () =>
       reasoningEfforts.map((value) => ({
@@ -86,98 +94,141 @@ export function ChatInputEffortOverlay({
   const displayLabel = `${modelLabel ?? t('chat.model.select')} ${currentLabel}`.trim();
 
   const close = useCallback(() => {
-    if (!anchor) {
+    if (!layout) {
       return;
     }
 
     if (reducedMotion) {
       progress.set(0);
-      setAnchor(null);
+      setLayout(null);
       return;
     }
 
     progress.set(
-      withTiming(0, { duration: duration.base, easing: easing.settle }, (finished) => {
+      withTiming(0, { duration: closeDurationMs, easing: easing.settle }, (finished) => {
         if (finished) {
-          runOnJS(setAnchor)(null);
+          runOnJS(setLayout)(null);
         }
       }),
     );
-  }, [anchor, progress, reducedMotion]);
+  }, [layout, progress, reducedMotion]);
 
-  const open = useCallback(() => {
-    if (anchor || openingRef.current || reasoningEfforts.length === 0) {
-      return;
-    }
+  const open = useCallback(
+    (gaugeFrame: ChatInputEffortFrame) => {
+      if (layout || openingRef.current || reasoningEfforts.length === 0) {
+        return;
+      }
 
-    openingRef.current = true;
-    void dismissField().finally(() => {
-      requestAnimationFrame(() => {
-        const root = rootRef.current;
-        if (!root) {
-          openingRef.current = false;
+      const root = rootRef.current;
+      if (!root) {
+        return;
+      }
+
+      openingRef.current = true;
+      root.measureInWindow((left, top, width, height) => {
+        openingRef.current = false;
+        const nextLayout = getChatInputEffortOverlayLayout(
+          { height, left, top, width },
+          gaugeFrame,
+        );
+        if (!nextLayout) {
           return;
         }
 
-        root.measureInWindow((x, y, width, height) => {
-          openingRef.current = false;
-          if (width <= 0 || height <= 0) {
-            return;
-          }
-
-          closedHeight.set(height);
-          progress.set(
-            reducedMotion ? 1 : withTiming(1, { duration: duration.slow, easing: easing.settle }),
-          );
-          setAnchor({ height: openHeight, left: x, top: y + height - openHeight, width });
+        progress.set(reducedMotion ? 1 : 0);
+        setLayout({
+          ...nextLayout,
+          keyboardHeight: keyboard.height,
+          keyboardVisible: keyboard.isVisible,
+          viewportHeight,
+          viewportWidth,
         });
+        if (!reducedMotion) {
+          requestAnimationFrame(() => {
+            progress.set(withTiming(1, { duration: openDurationMs, easing: easing.settle }));
+          });
+        }
       });
-    });
-  }, [anchor, closedHeight, dismissField, progress, reasoningEfforts.length, reducedMotion]);
-
-  const handleLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      if (!anchor) {
-        closedHeight.set(event.nativeEvent.layout.height);
-      }
     },
-    [anchor, closedHeight],
+    [
+      keyboard.height,
+      keyboard.isVisible,
+      layout,
+      progress,
+      reasoningEfforts.length,
+      reducedMotion,
+      viewportHeight,
+      viewportWidth,
+    ],
   );
+
+  useEffect(() => {
+    if (!layout) {
+      return;
+    }
+
+    const viewportChanged =
+      layout.viewportHeight !== viewportHeight || layout.viewportWidth !== viewportWidth;
+    const keyboardChanged =
+      layout.keyboardVisible !== keyboard.isVisible ||
+      (layout.keyboardVisible && Math.abs(layout.keyboardHeight - keyboard.height) > 1);
+    if (viewportChanged || keyboardChanged) {
+      const closeFrame = requestAnimationFrame(close);
+      return () => cancelAnimationFrame(closeFrame);
+    }
+
+    return undefined;
+  }, [close, keyboard.height, keyboard.isVisible, layout, viewportHeight, viewportWidth]);
+
   const handleChange = useCallback(
     (value: string) => onChange(value as ChatInputReasoningEffort),
     [onChange],
   );
-
-  const containerStyle = useAnimatedStyle(() => ({
-    height: interpolate(progress.value, [0, 1], [closedHeight.value, openHeight]),
+  const gaugeFrame = layout?.gaugeFrame ?? emptyFrame;
+  const sliderFrame = layout?.sliderFrame ?? emptyFrame;
+  const sliderStyle = useAnimatedStyle(() => ({
+    height: interpolate(
+      progress.value,
+      [0, 1],
+      [gaugeFrame.height, sliderFrame.height],
+      Extrapolation.CLAMP,
+    ),
+    left: interpolate(
+      progress.value,
+      [0, 1],
+      [gaugeFrame.left, sliderFrame.left],
+      Extrapolation.CLAMP,
+    ),
+    top: interpolate(
+      progress.value,
+      [0, 1],
+      [gaugeFrame.top, sliderFrame.top],
+      Extrapolation.CLAMP,
+    ),
+    width: interpolate(
+      progress.value,
+      [0, 1],
+      [gaugeFrame.width, sliderFrame.width],
+      Extrapolation.CLAMP,
+    ),
   }));
-  const composerStyle = useAnimatedStyle(() => {
-    const swap = interpolate(progress.value, [0, 0.58], [0, 1], Extrapolation.CLAMP);
-
-    return {
-      opacity: 1 - swap,
-      transform: [{ translateX: -slideDistance * swap }, { scale: 1 - (1 - restingScale) * swap }],
-    };
-  });
-  const sliderStyle = useAnimatedStyle(() => {
-    const swap = interpolate(progress.value, [0.22, 1], [0, 1], Extrapolation.CLAMP);
-
-    return {
-      opacity: swap,
-      transform: [
-        { translateX: slideDistance * (1 - swap) },
-        { scale: restingScale + (1 - restingScale) * swap },
-      ],
-    };
-  });
   const labelStyle = useAnimatedStyle(() => {
-    const reveal = interpolate(progress.value, [0.42, 1], [0, 1], Extrapolation.CLAMP);
+    const reveal = interpolate(progress.value, [0.58, 1], [0, 1], Extrapolation.CLAMP);
 
-    return {
-      opacity: reveal,
-      transform: [{ translateY: 6 * (1 - reveal) }],
-    };
+    return { opacity: reveal, transform: [{ translateY: 5 * (1 - reveal) }] };
   });
+  const appBlurProps = useAnimatedProps(() => ({
+    intensity: appBlurIntensity * progress.value,
+  }));
+  const keyboardBlurProps = useAnimatedProps(() => ({
+    intensity: keyboardBlurIntensity * progress.value,
+  }));
+  const appScrimStyle = useAnimatedStyle(() => ({
+    opacity: progress.value * (isIOS ? 0.07 : 0.2),
+  }));
+  const keyboardScrimStyle = useAnimatedStyle(() => ({
+    opacity: progress.value * (isIOS ? 0.08 : 0.24),
+  }));
 
   const gauge =
     options.length > 0 ? (
@@ -188,142 +239,139 @@ export function ChatInputEffortOverlay({
         valueIndex={valueIndex}
       />
     ) : null;
+  const keyboardOverlayVisible = Boolean(layout?.keyboardVisible && layout.keyboardHeight > 0);
+  const overlayControls = layout ? (
+    <>
+      <Pressable
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        onPress={close}
+        style={{
+          height: viewportHeight,
+          left: 0,
+          position: 'absolute',
+          top: 0,
+          width: viewportWidth,
+          zIndex: 1,
+        }}
+        testID={
+          keyboardOverlayVisible
+            ? 'chat-input-effort-keyboard-backdrop'
+            : 'chat-input-effort-backdrop'
+        }
+      />
+
+      <Animated.View style={[sliderContainerStyle, sliderStyle]} testID="chat-input-effort-slider">
+        <EffortSlider
+          accessibilityLabel={t('chat.reasoning.title')}
+          onChange={handleChange}
+          options={options}
+          testID="chat-input-effort-slider-control"
+          value={reasoningEffort}
+        />
+      </Animated.View>
+
+      <Animated.View
+        pointerEvents="none"
+        style={[labelContainerStyle, layout.labelFrame, labelStyle]}
+      >
+        <SlotText
+          ellipsizeMode="tail"
+          text={displayLabel}
+          textClassName="text-center font-semibold text-foreground text-base"
+          testID="chat-input-effort-label"
+        />
+      </Animated.View>
+    </>
+  ) : null;
 
   return (
     <>
-      <Animated.View
+      <View
         ref={rootRef}
-        onLayout={handleLayout}
-        style={[rootStyle, anchor ? containerStyle : undefined, anchor ? clippedStyle : undefined]}
+        accessibilityElementsHidden={Boolean(layout)}
+        collapsable={false}
+        importantForAccessibility={layout ? 'no-hide-descendants' : 'auto'}
         testID="chat-input-effort-morph"
       >
-        <Animated.View pointerEvents={anchor ? 'none' : 'auto'} style={composerStyle}>
-          {children(gauge)}
-        </Animated.View>
+        {children(gauge)}
+      </View>
 
-        <Animated.View
-          pointerEvents={anchor ? 'auto' : 'none'}
-          style={[sliderLayerStyle, sliderStyle]}
-          testID="chat-input-effort-slider"
-        >
-          <Surface
-            className="bg-field ios:shadow-field android:shadow-sm"
-            cornerRadius={surfaceRadius}
-            style={sliderSurfaceStyle}
-            tintColor={
-              typeof fieldMaterial.backgroundColor === 'string'
-                ? fieldMaterial.backgroundColor
-                : undefined
-            }
-          >
-            <EffortSlider
-              accessibilityLabel={t('chat.reasoning.title')}
-              onChange={handleChange}
-              options={options}
-              pixelFieldValue={REASONING_EFFORT.MAX}
-              testID="chat-input-effort-slider-control"
-              value={reasoningEffort}
-            />
-          </Surface>
-        </Animated.View>
-      </Animated.View>
-
-      {anchor ? (
+      {layout ? (
         <Portal name={`chat-input-effort-${portalName}`}>
-          <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
-            <Pressable
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              onPress={close}
-              style={[backdropStyle, { height: Math.max(anchor.top, 0), top: 0 }]}
-              testID="chat-input-effort-backdrop"
-            />
-            <Pressable
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              onPress={close}
-              style={[
-                backdropStyle,
-                {
-                  bottom: 0,
-                  top: Math.min(anchor.top + anchor.height, windowHeight),
-                },
-              ]}
-            />
-            <Pressable
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              onPress={close}
-              style={[
-                sideBackdropStyle,
-                { height: anchor.height, top: anchor.top, width: Math.max(anchor.left, 0) },
-              ]}
-            />
-            <Pressable
-              accessibilityElementsHidden
-              importantForAccessibility="no-hide-descendants"
-              onPress={close}
-              style={[
-                sideBackdropStyle,
-                {
-                  height: anchor.height,
-                  left: anchor.left + anchor.width,
-                  right: 0,
-                  top: anchor.top,
-                },
-              ]}
-            />
-
+          <View
+            accessibilityViewIsModal
+            onAccessibilityEscape={close}
+            pointerEvents={keyboardOverlayVisible ? 'none' : 'box-none'}
+            style={StyleSheet.absoluteFill}
+          >
+            {isIOS ? (
+              <AnimatedBlurView
+                animatedProps={appBlurProps}
+                pointerEvents="none"
+                style={StyleSheet.absoluteFill}
+                tint={theme === 'dark' ? 'dark' : 'light'}
+              />
+            ) : null}
             <Animated.View
               pointerEvents="none"
-              style={[
-                labelContainerStyle,
-                {
-                  left: anchor.left,
-                  top: anchor.top - labelGap - labelHeight,
-                  width: anchor.width,
-                },
-                labelStyle,
-              ]}
-            >
-              <SlotText
-                ellipsizeMode="tail"
-                text={displayLabel}
-                textClassName="text-center font-semibold text-foreground text-sm"
-                testID="chat-input-effort-label"
-              />
-            </Animated.View>
+              style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }, appScrimStyle]}
+            />
+            {keyboardOverlayVisible ? null : overlayControls}
           </View>
         </Portal>
       ) : null}
+
+      <OverKeyboardView visible={keyboardOverlayVisible}>
+        {/* Reparenting into the keyboard window requires a gesture root in that window. */}
+        <GestureHandlerRootView
+          accessibilityViewIsModal
+          collapsable={false}
+          onAccessibilityEscape={close}
+          pointerEvents="box-none"
+          style={{ height: viewportHeight, position: 'absolute', width: viewportWidth }}
+        >
+          <View
+            pointerEvents="none"
+            style={[keyboardBackdropContainerStyle, { height: layout?.keyboardHeight ?? 0 }]}
+          >
+            {isIOS ? (
+              <AnimatedBlurView
+                animatedProps={keyboardBlurProps}
+                pointerEvents="none"
+                style={StyleSheet.absoluteFill}
+                tint={keyboard.appearance}
+              />
+            ) : null}
+            <Animated.View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }, keyboardScrimStyle]}
+            />
+          </View>
+          {keyboardOverlayVisible ? overlayControls : null}
+        </GestureHandlerRootView>
+      </OverKeyboardView>
     </>
   );
 }
 
-const rootStyle = {
-  justifyContent: 'flex-end',
-  overflow: 'visible',
-  position: 'relative',
+const emptyFrame: ChatInputEffortFrame = { height: 0, left: 0, top: 0, width: 0 };
+const sliderContainerStyle = {
+  borderRadius: chatInputEffortTrackHeight / 2,
+  justifyContent: 'center',
+  overflow: 'hidden',
+  position: 'absolute',
+  zIndex: 2,
 } as const;
-const clippedStyle = { borderRadius: surfaceRadius, overflow: 'hidden' } as const;
-const sliderLayerStyle = {
+const labelContainerStyle = {
+  alignItems: 'center',
+  justifyContent: 'center',
+  position: 'absolute',
+  zIndex: 2,
+} as const;
+const keyboardBackdropContainerStyle = {
   bottom: 0,
-  height: openHeight,
   left: 0,
   position: 'absolute',
   right: 0,
-} as const;
-const sliderSurfaceStyle = {
-  height: openHeight,
-  justifyContent: 'center',
-  paddingHorizontal: 8,
-  width: '100%',
-} as const;
-const backdropStyle = { left: 0, position: 'absolute', right: 0 } as const;
-const sideBackdropStyle = { left: 0, position: 'absolute' } as const;
-const labelContainerStyle = {
-  alignItems: 'center',
-  height: labelHeight,
-  justifyContent: 'center',
-  position: 'absolute',
 } as const;

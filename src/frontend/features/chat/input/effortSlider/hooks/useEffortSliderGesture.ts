@@ -3,13 +3,19 @@ import { Gesture } from 'react-native-gesture-handler';
 import { runOnJS, type SharedValue, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { effortSliderMagnetRadius, effortSliderSnapTiming } from '../utils/constants';
-import { clamp01, magnetize, nearestStopIndex, stopFraction } from '../utils/effortSliderMath';
+import {
+  magnetize,
+  nearestStopIndex,
+  stopFraction,
+  trackXToFraction,
+} from '../utils/effortSliderMath';
 
 type EffortSliderGestureConfig = {
   stopCount: number;
   initialIndex: number;
   disabled: boolean;
   reducedMotion: boolean;
+  thumbCenterInset: number;
   /** Called on the JS thread whenever the drag crosses onto a new stop. */
   onCommit: (index: number) => void;
 };
@@ -18,7 +24,7 @@ export type EffortSliderGesture = {
   gesture: ReturnType<typeof Gesture.Pan>;
   /** Normalized thumb position, 0..1. */
   position: SharedValue<number>;
-  /** Stop the drag currently snaps to; drives the pixel field ignition. */
+  /** Stop the drag currently snaps to; prevents duplicate commits. */
   activeStopIndex: SharedValue<number>;
   isPressed: SharedValue<boolean>;
   /** Measured track width in dp; write from onLayout. */
@@ -34,6 +40,7 @@ export function useEffortSliderGesture({
   initialIndex,
   disabled,
   reducedMotion,
+  thumbCenterInset,
   onCommit,
 }: EffortSliderGestureConfig): EffortSliderGesture {
   const position = useSharedValue(stopFraction(initialIndex, stopCount));
@@ -45,7 +52,7 @@ export function useEffortSliderGesture({
     const seek = (x: number) => {
       'worklet';
       const width = Math.max(trackWidth.value, 1);
-      const raw = clamp01(x / width);
+      const raw = trackXToFraction(x, width, thumbCenterInset);
       const snapIndex = nearestStopIndex(raw, stopCount);
       position.value = magnetize(raw, stopCount, effortSliderMagnetRadius);
       if (snapIndex !== activeStopIndex.value) {
@@ -89,6 +96,7 @@ export function useEffortSliderGesture({
     position,
     reducedMotion,
     stopCount,
+    thumbCenterInset,
     trackWidth,
   ]);
 

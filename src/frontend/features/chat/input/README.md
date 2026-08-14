@@ -13,8 +13,8 @@ them as one input:
    recovery. Shared with painting, so it knows nothing about assistants either.
 3. This directory — assistants, models, reasoning effort, web search. It assembles the composer's
    parts itself (see `ChatInput.tsx`) and drops its own nodes in: the tool tag as a
-   `Composer.Collapsible`, the tools as `ComposerMenu` children, and the effort gauge/slider morph
-   around the whole surface.
+   `Composer.Collapsible`, the tools as `ComposerMenu` children, and the effort gauge/slider overlay
+   above the live surface.
 
 ## Why this document exists
 
@@ -66,8 +66,10 @@ Two consequences to take seriously:
 
 - [ ] Opening the model picker dismisses the keyboard, blurs the field, and clears the focused state
       **before** the picker opens.
-- [ ] Opening the reasoning-effort slider does the same, then measures the keyboard-free composer so
-      the morph remains anchored to its final dock position. Closing it does not restore focus.
+- [ ] Opening the reasoning-effort slider keeps the field focused and leaves the keyboard in place.
+      The app content is blurred behind a portal; iOS also blurs the keyboard through
+      `OverKeyboardView`, while Android dims it. The first background or keyboard tap closes only
+      the slider, so the next tap can continue typing immediately.
 - [ ] The image-settings button (painting only) does the same. It is assembled by painting rather
       than by the composer, so it calls `useComposerFieldDismiss()` explicitly — the one thing
       assembling made the caller's job.
@@ -83,8 +85,9 @@ Two consequences to take seriously:
       needle rotates across the same normalized stop positions as the slider.
 - [ ] The model pill has no effort suffix, and the model picker has no effort footer: the gauge is the
       only entry point.
-- [ ] Tapping the gauge morphs the whole composer in place to the discrete slider. The draft,
-      attachments, and selected tool remain mounted and return unchanged after closing.
+- [ ] Tapping the gauge grows the discrete slider leftward from the gauge into the composer's
+      toolbar footprint. The composer keeps its size and stays mounted behind the blur, so the
+      draft, attachments, selected tool, keyboard, and focus remain unchanged.
 - [ ] The floating label contains the selected model name and localized effort name; crossing a stop
       updates it immediately and fires the slider's selection haptic.
 - [ ] Tapping outside closes the slider. The transparent dismissal regions do not cover its track,
@@ -195,7 +198,7 @@ Do not restore these; their absence is the design, not a regression.
 
 ## Manual acceptance with agent-device
 
-Use the existing Expo dev server on port `8001`.
+Use the workspace Expo dev server on port `8084`.
 
 ```bash
 agent-device open com.cherry-ai.cherry-studio-app --session chat-input --platform ios --device "iPhone 17 Pro" --relaunch
