@@ -21,6 +21,8 @@ model renders 5–6 detents.
   a centered 44dp progress pill, a 36dp white thumb, and 10dp stop dots. Stop
   dots share the thumb's endpoint centers, derived by
   `getEffortSliderTrackGeometry`, so two-stop and six-stop models stay aligned.
+  The chat overlay centers its label-and-track panel in the live viewport, so
+  keyboard and composer movement do not shift its resting position.
 - **Visuals** — the progress pill uses the sampled reference blue (`#3995ff`),
   with translucent white dots over the blue and dark portions of the track.
 

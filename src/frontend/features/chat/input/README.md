@@ -85,9 +85,10 @@ Two consequences to take seriously:
       needle rotates across the same normalized stop positions as the slider.
 - [ ] The model pill has no effort suffix, and the model picker has no effort footer: the gauge is the
       only entry point.
-- [ ] Tapping the gauge grows the discrete slider leftward from the gauge into the composer's
-      toolbar footprint. The composer keeps its size and stays mounted behind the blur, so the
-      draft, attachments, selected tool, keyboard, and focus remain unchanged.
+- [ ] Tapping the gauge grows the discrete slider from the gauge into a viewport-centered panel.
+      Its label and track stay centered when the keyboard moves the composer. The composer keeps
+      its size and stays mounted behind the blur, so the draft, attachments, selected tool,
+      keyboard, and focus remain unchanged.
 - [ ] The floating label contains the selected model name and localized effort name; crossing a stop
       updates it immediately and fires the slider's selection haptic.
 - [ ] Tapping outside closes the slider. The transparent dismissal regions do not cover its track,
