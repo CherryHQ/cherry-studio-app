@@ -298,16 +298,20 @@ describe('MessageList anchored tail following', () => {
 
   test('dispatches user and assistant rows with role-based recycling types', () => {
     const userMessage = createMessage('user-1', 'user', [textPart('hello')]);
-    const pendingAssistantMessage = createMessage('assistant-1', 'assistant');
+    const emptyAssistantMessage = createMessage('assistant-1', 'assistant');
+    const streamingAssistantMessage = createMessage('assistant-2', 'assistant', [textPart('hi')]);
 
     act(() => {
-      renderer = create(<MessageList {...listProps([userMessage, pendingAssistantMessage])} />);
+      renderer = create(<MessageList {...listProps([userMessage, emptyAssistantMessage])} />);
     });
 
     expect(mockUserMessageRow).toHaveBeenCalledWith({ message: userMessage });
-    expect(mockAssistantMessageRow).toHaveBeenCalledWith({ message: pendingAssistantMessage });
+    expect(mockAssistantMessageRow).toHaveBeenCalledWith({ message: emptyAssistantMessage });
     expect(mockLatestListProps?.getItemType?.(userMessage)).toBe('user');
-    expect(mockLatestListProps?.getItemType?.(pendingAssistantMessage)).toBe('assistant');
+    // 空助手行是加载点占位，不能继承成稿长回复的尺寸均值，否则新建时会先占住上一条回复的
+    // 高度再塌回去。第一个 chunk 落地后才归入 assistant，那时行还很小。
+    expect(mockLatestListProps?.getItemType?.(emptyAssistantMessage)).toBe('assistant-empty');
+    expect(mockLatestListProps?.getItemType?.(streamingAssistantMessage)).toBe('assistant');
   });
 
   test('derives the anchor from the latest user message', () => {
@@ -404,6 +408,47 @@ describe('MessageList anchored tail following', () => {
       paddingBottom: 80,
       paddingTop: 12,
     });
+  });
+
+  test('never lets the reveal gate scroll away from a finger on the list', () => {
+    const messages = [
+      createMessage('user-1', 'user', [textPart('hello')]),
+      createMessage('assistant-1', 'assistant'),
+    ];
+    const settleContent = () => {
+      act(() => {
+        mockLatestListProps?.onLayout?.({
+          nativeEvent: { layout: { height: 600, width: 390, x: 0, y: 0 } },
+        } as LayoutChangeEvent);
+        mockLatestListProps?.onContentSizeChange?.(390, 900);
+      });
+      act(() => flushAnimationFrames());
+      act(() => flushAnimationFrames());
+    };
+
+    // 基线：没人碰列表时闸门先滚到底再揭示。缺了这一半，下面的断言在闸门根本没触发时也会绿。
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} onReady={jest.fn()} />);
+    });
+    settleContent();
+    expect(mockListScrollToEndMethod).toHaveBeenCalledWith({ animated: false });
+
+    act(() => renderer?.unmount());
+    mockListScrollToEndMethod.mockClear();
+
+    // 流式每来一个 chunk 内容高度就变一次，闸门（依赖 contentBaseHeight）于是在整段流式里反复重跑。
+    // 手指在列表上时它必须放行，否则拖动会被硬拽回底部。
+    const onReady = jest.fn();
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} onReady={onReady} />);
+    });
+    act(() => {
+      mockLatestListProps?.onTouchStart?.();
+      mockLatestListProps?.onScrollBeginDrag?.();
+    });
+    settleContent();
+
+    expect(mockListScrollToEndMethod).not.toHaveBeenCalled();
   });
 
   test('follows after overflow, pauses on drag, and resumes only at the end', () => {
