@@ -1,5 +1,4 @@
 import { REASONING_EFFORT } from '@cherrystudio/provider-registry';
-import { cn } from '@cherrystudio/ui/utils';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -59,8 +58,6 @@ export function ChatInputReasoningSection({
   }
 
   const currentOption = getChatInputReasoningEffortOption(reasoningEffort);
-  const isMaxEffort = reasoningEffort === REASONING_EFFORT.MAX;
-
   return (
     <View
       className="border-border border-t px-4 pt-4"
@@ -72,15 +69,12 @@ export function ChatInputReasoningSection({
         <SlotText
           ellipsizeMode="clip"
           text={currentOption ? t(currentOption.labelKey) : ''}
-          textClassName={cn(
-            'font-semibold text-base',
-            isMaxEffort ? 'text-brand' : 'text-foreground',
-          )}
+          textClassName="font-semibold text-base text-foreground"
         />
       </View>
       <View className="mt-3 flex-row items-center justify-between">
-        <Text className="text-primary text-sm">{t('chat.reasoning.faster')}</Text>
-        <Text className="text-primary text-sm">{t('chat.reasoning.smarter')}</Text>
+        <Text className="text-foreground-secondary text-sm">{t('chat.reasoning.faster')}</Text>
+        <Text className="text-foreground-secondary text-sm">{t('chat.reasoning.smarter')}</Text>
       </View>
       <View className="mt-2">
         <EffortSlider

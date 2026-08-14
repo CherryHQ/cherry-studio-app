@@ -68,10 +68,8 @@ export function EffortSlider({
   // the system, and reading `useColorScheme` here painted the light field on a
   // dark track whenever they disagreed.
   const isDark = useUniwind().theme === 'dark';
-  // The product's green rather than the user's `--primary`: the field this dot
-  // sits on is a fixed green artwork, so a recoloured dot would read as a
-  // defect. `--brand` does follow the theme, which the field does too.
-  const accentColor = useThemeColor('brand');
+  // Match the thumb to the fixed green pixel field instead of the app brand.
+  const accentColor = useThemeColor('success');
   // 0 until the first onLayout lands: with travelDistance 0 the thumb/fill
   // would paint at the left edge, then teleport once measured — hide the
   // track for those frames (the panel's fade-in covers the gap).

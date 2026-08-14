@@ -196,7 +196,7 @@ function SelectionSheetOptionRow<TValue extends string>({
       <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={2}>
         {label}
       </Text>
-      {isSelected ? <CheckIcon className="size-5 text-primary" /> : null}
+      {isSelected ? <CheckIcon className="size-5 text-foreground" /> : null}
     </Pressable>
   );
 }

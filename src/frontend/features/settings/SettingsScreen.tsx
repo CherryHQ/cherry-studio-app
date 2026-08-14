@@ -1,12 +1,12 @@
 import {
-  CircleUserRoundIcon,
+  CircleHalfIcon,
   CloudIcon,
   DatabaseIcon,
-  EarthIcon,
   InfoIcon,
-  ShieldCheckIcon,
+  LockIcon,
+  NetworkIcon,
+  PersonCropSquareOnSquareAngledIcon,
   SparklesIcon,
-  SunIcon,
   WrenchIcon,
 } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
@@ -70,7 +70,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.profile')}
-              leading={<CircleUserRoundIcon className="size-5 text-foreground" />}
+              leading={<PersonCropSquareOnSquareAngledIcon className="size-5 text-foreground" />}
               onPress={openProfileSettings}
             />
           </Section>
@@ -89,7 +89,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.webSearch')}
-              leading={<EarthIcon className="size-5 text-foreground" />}
+              leading={<NetworkIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/websearch')}
             />
             <Section.Item
@@ -120,14 +120,14 @@ export default function SettingsScreen() {
             />
             <Section.Item
               label={t('settings.items.permissions')}
-              leading={<ShieldCheckIcon className="size-5 text-foreground" />}
+              leading={<LockIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
             />
           </Section>
           <Section>
             <Section.Item
               label={t('settings.appearance.title')}
-              leading={<SunIcon className="size-5 text-foreground" />}
+              leading={<CircleHalfIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
             />
           </Section>

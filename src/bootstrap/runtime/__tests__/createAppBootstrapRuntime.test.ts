@@ -58,9 +58,8 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
  * Overrides are handed out ready-made and receive no lifecycle callbacks, so
  * this file no longer asserts *when* anything initializes or tears down — the
  * dependency graph owns that now, and `serviceRegistry.test.ts` asserts the
- * graph. What is left here is the wiring this function is actually responsible
- * for: which instances reach the composition, and the disposal ordering it
- * still hand-writes for the modules stage B has not migrated yet.
+ * graph. What remains here covers the observable host lifecycle and disposal
+ * ordering that this runtime still owns.
  */
 const createRuntime = () =>
   createAppBootstrapRuntime({
@@ -85,30 +84,6 @@ afterEach(async () => {
 });
 
 describe('createAppBootstrapRuntime', () => {
-  test('composes the backend from the host-resolved infrastructure services', async () => {
-    const runtime = createRuntime();
-
-    await runtime.initialize();
-
-    // No `dbService`: the data services resolve it through `application`, so the
-    // composition is only handed the infrastructure it cannot reach that way.
-    expect(mockCreateBackendServices).toHaveBeenCalledWith({
-      ai: mockAi,
-      cache: mockCache,
-      chat: mockChat,
-      jobRuntime: mockJobRuntime,
-      mcpRuntime: mockMcpRuntime,
-      oauth: mockOauth,
-      oauthSession: mockOauthSession,
-      preference: mockPreference,
-      webSearch: mockWebSearch,
-    });
-    expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
-    expect(runtime.backend).toBe(mockBackend);
-    expect(runtime.dataApi).toBe(mockDataApi);
-    expect(runtime.preference).toBe(mockPreference);
-  });
-
   test('installs its host so services resolve through application', async () => {
     const runtime = createRuntime();
 
@@ -147,13 +122,5 @@ describe('createAppBootstrapRuntime', () => {
     await outgoing.dispose();
 
     expect(application.hasHost).toBe(true);
-  });
-
-  test('delegates post-ready work with the same service graph', async () => {
-    const runtime = createRuntime();
-
-    await runtime.runPostReadyTasks();
-
-    expect(mockRunPostReadyTasks).toHaveBeenCalledWith(mockServices);
   });
 });

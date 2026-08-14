@@ -72,10 +72,10 @@ export function AiUsageSummaryCard() {
             hitSlop={6}
             testID="ai-usage-view-details"
           >
-            <Text className="font-medium text-primary text-sm" numberOfLines={1}>
+            <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
               {t('aiUsage.viewDetails')}
             </Text>
-            <ChevronRightIcon className="size-4 text-primary" />
+            <ChevronRightIcon className="size-4 text-foreground" />
           </Pressable>
         </Link>
       </View>

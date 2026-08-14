@@ -47,11 +47,11 @@ export function ProviderModelPullChrome({
           accessibilityLabel={applyLabel}
           accessibilityRole="button"
           accessibilityState={{ busy: isApplying, disabled: selectedCount === 0 || isApplying }}
-          className="items-center justify-center rounded-full bg-primary px-5 py-3 active:opacity-60 disabled:opacity-35 android:shadow-lg"
+          className="items-center justify-center rounded-full bg-foreground px-5 py-3 active:opacity-60 disabled:opacity-35 android:shadow-lg"
           disabled={selectedCount === 0 || isApplying}
           onPress={onApply}
         >
-          <Text className="font-medium text-primary-foreground text-sm" numberOfLines={1}>
+          <Text className="font-medium text-background text-sm" numberOfLines={1}>
             {applyLabel}
           </Text>
         </Pressable>

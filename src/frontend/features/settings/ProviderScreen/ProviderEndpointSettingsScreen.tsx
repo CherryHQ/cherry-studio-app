@@ -1,11 +1,11 @@
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { EndpointConfigs, Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 
 import {
   buildProviderApiServiceEndpointUpdates,
@@ -174,10 +174,29 @@ function ProviderEndpointSettingsForm({
     },
     [draft, saveEndpointDraft, updatePrimaryEndpoint],
   );
+  const handleSave = useCallback(() => {
+    void saveEndpointDraft({ endpoint: draft.primaryEndpoint, nextDraft: draft });
+  }, [draft, saveEndpointDraft]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.save'),
+        disabled: isSaving || !hasUnsavedChanges,
+        key: 'save-endpoints',
+        label: t('common.save'),
+        onPress: handleSave,
+      },
+    ],
+    [handleSave, hasUnsavedChanges, isSaving, t],
+  );
 
   return (
     <>
-      <BackHeader title={t('settings.provider.apiService.manageEndpoints')} onBack={requestClose} />
+      <BackHeader
+        onBack={requestClose}
+        rightActions={rightActions}
+        title={t('settings.provider.apiService.manageEndpoints')}
+      />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

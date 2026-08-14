@@ -52,7 +52,7 @@ export const MessageHeader = memo(function MessageHeader({
           hitSlop={8}
           onPress={onEditPress}
         >
-          <Text className="font-medium text-base text-primary">
+          <Text className="font-medium text-base text-foreground">
             {t(isEditing ? 'common.done' : 'common.edit')}
           </Text>
         </Pressable>

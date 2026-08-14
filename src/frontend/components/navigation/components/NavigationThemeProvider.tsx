@@ -10,8 +10,7 @@ type NavigationThemeProviderProps = {
 
 export function NavigationThemeProvider({ children }: NavigationThemeProviderProps) {
   const { theme } = useUniwind();
-  const [primary, background, foreground, separator] = useThemeColor([
-    'primary',
+  const [background, foreground, separator] = useThemeColor([
     'background',
     'foreground',
     'border-strong',
@@ -26,12 +25,12 @@ export function NavigationThemeProvider({ children }: NavigationThemeProviderPro
         background,
         border: separator,
         card: background,
-        notification: primary,
-        primary,
+        notification: foreground,
+        primary: foreground,
         text: foreground,
       },
     }),
-    [background, foreground, primary, separator, theme],
+    [background, foreground, separator, theme],
   );
 
   return <ThemeProvider value={navigationTheme}>{children}</ThemeProvider>;

@@ -114,9 +114,7 @@ function ThemePreview({ theme }: { theme: ResolvedThemeMode }) {
           <View className="h-6 flex-row items-center rounded-full border border-border bg-card px-2">
             <View className="h-1 w-1/2 rounded-full bg-border-strong" />
             <View className="flex-1" />
-            {/* The send button carries `primary`, so the swatch also previews
-                whatever brand color the user picked. */}
-            <View className="size-3 rounded-full bg-primary" />
+            <View className="size-3 rounded-full bg-foreground" />
           </View>
         </View>
       </View>
@@ -126,8 +124,8 @@ function ThemePreview({ theme }: { theme: ResolvedThemeMode }) {
 
 function ThemeSelectionIndicator({ selected }: { selected: boolean }) {
   return selected ? (
-    <View className="size-6 items-center justify-center rounded-full bg-primary">
-      <CheckIcon className="size-4 text-primary-foreground" />
+    <View className="size-6 items-center justify-center rounded-full bg-foreground">
+      <CheckIcon className="size-4 text-background" />
     </View>
   ) : (
     <View className="size-6 rounded-full border-2 border-muted-foreground" />

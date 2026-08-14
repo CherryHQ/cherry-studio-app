@@ -15,9 +15,9 @@ export function ChatInputToolTag({ onClear, tool }: ChatInputToolTagProps) {
   const Icon = tool.icon;
 
   return (
-    <View className="flex-row items-center gap-1 self-start rounded-full bg-primary/10 px-2 py-1">
-      <Icon className="size-5 text-primary" />
-      <Text className="font-semibold text-base text-primary" numberOfLines={1}>
+    <View className="flex-row items-center gap-1 self-start rounded-full bg-secondary px-2 py-1">
+      <Icon className="size-5 text-foreground" />
+      <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
         {t(tool.tagTitleKey)}
       </Text>
       <Pressable
@@ -27,7 +27,7 @@ export function ChatInputToolTag({ onClear, tool }: ChatInputToolTagProps) {
         hitSlop={6}
         onPress={onClear}
       >
-        <XIcon className="size-5 text-primary" />
+        <XIcon className="size-5 text-foreground-secondary" />
       </Pressable>
     </View>
   );

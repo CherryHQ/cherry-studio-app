@@ -11,29 +11,13 @@ import {
   type CustomProviderTextEndpoint,
   isCustomProviderTextEndpointType,
 } from '../apiService/utils/providerApiServiceEndpointRules';
+import type { CustomProviderFormValue } from '../utils/customProviderForm';
 
-export type CustomProviderFormValue = {
-  apiKey: string;
-  defaultChatEndpoint: CustomProviderTextEndpoint;
-  endpointUrls: CustomProviderEndpointUrls;
-  name: string;
-};
-
-export function createInitialCustomProviderFormValue(): CustomProviderFormValue {
-  return {
-    apiKey: '',
-    defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-    endpointUrls: {},
-    name: '',
-  };
-}
-
-export function isCustomProviderFormComplete(value: CustomProviderFormValue): boolean {
-  return (
-    value.name.trim().length > 0 &&
-    Boolean(value.endpointUrls[ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]?.trim())
-  );
-}
+export {
+  createInitialCustomProviderFormValue,
+  type CustomProviderFormValue,
+  isCustomProviderFormComplete,
+} from '../utils/customProviderForm';
 
 export function CustomProviderForm({
   disabled = false,

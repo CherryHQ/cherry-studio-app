@@ -1,5 +1,7 @@
-import type { UpdateTopicDto } from '@cherrystudio/universal/data/api/schemas/topics';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
+import type {
+  TopicListItem,
+  UpdateTopicDto,
+} from '@cherrystudio/universal/data/api/schemas/topics';
 import { useCallback, useMemo } from 'react';
 
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
@@ -13,7 +15,7 @@ export type TopicsOptions = {
 export type TopicsViewModel = {
   isLoadingInitial: boolean;
   loadMore: () => Promise<void>;
-  topics: readonly Topic[];
+  topics: readonly TopicListItem[];
 };
 
 const defaultPageSize = 50;

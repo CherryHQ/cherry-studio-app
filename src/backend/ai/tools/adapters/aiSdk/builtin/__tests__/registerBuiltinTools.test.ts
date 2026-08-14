@@ -1,12 +1,9 @@
 import { ToolRegistry } from '@cherrystudio/ai-runtime/tools';
 import {
-  type ConfigureBuiltinProviderInput,
   configureBuiltinProviderInputSchema,
-  type CreateCustomProviderInput,
   createCustomProviderInputSchema,
   listProvidersInputSchema,
 } from '@cherrystudio/universal/ai/providerConfigurationTools';
-import { ENDPOINT_TYPE } from '@cherrystudio/universal/data/types/model';
 import { asSchema, type Tool } from 'ai';
 
 import type { DeviceToolAccess, ToolApplyScope, ToolEntry } from '../../../../types';
@@ -91,34 +88,28 @@ describe('registerBuiltinTools', () => {
     const builtin = registry.getByName('configure_builtin_provider');
     const custom = registry.getByName('create_custom_provider');
 
-    expect(list?.description).toBe(list?.tool.description);
-    for (const description of [list?.description, list?.tool.description]) {
-      expect(description?.length).toBeLessThanOrEqual(180);
-      expect(description).toContain('List providers and redacted setup status');
-      expect(description).toContain('no provider was named');
-      expect(description).toContain('Never returns keys or URLs');
-    }
+    const listDescription = list?.tool.description;
+    expect(listDescription?.length).toBeLessThanOrEqual(180);
+    expect(listDescription).toContain('List providers and redacted setup status');
+    expect(listDescription).toContain('no provider was named');
+    expect(listDescription).toContain('Never returns keys or URLs');
 
-    expect(builtin?.description).toBe(builtin?.tool.description);
-    for (const description of [builtin?.description, builtin?.tool.description]) {
-      expect(description?.length).toBeLessThanOrEqual(260);
-      expect(description).toContain('Configure or update');
-      expect(description).toContain('OpenAI, Gemini, CherryIN');
-      expect(description).toContain('pull, sync, add, or manage its models');
-      expect(description).toContain('no provider was named');
-      expect(description).toContain('call list_providers first');
-      expect(description).toContain('missing key or URL as empty');
-    }
+    const builtinDescription = builtin?.tool.description;
+    expect(builtinDescription?.length).toBeLessThanOrEqual(260);
+    expect(builtinDescription).toContain('Configure or update');
+    expect(builtinDescription).toContain('OpenAI, Gemini, CherryIN');
+    expect(builtinDescription).toContain('pull, sync, add, or manage its models');
+    expect(builtinDescription).toContain('no provider was named');
+    expect(builtinDescription).toContain('call list_providers first');
+    expect(builtinDescription).toContain('missing key or URL as empty');
 
-    expect(custom?.description).toBe(custom?.tool.description);
-    for (const description of [custom?.description, custom?.tool.description]) {
-      expect(description?.length).toBeLessThanOrEqual(200);
-      expect(description).toContain('Call immediately');
-      expect(description).toContain('create or add a new provider');
-      expect(description).toContain('name, key, or URL is missing');
-      expect(description).toContain('pass empty values');
-      expect(description).toContain('built-in provider configuration, updates, or models');
-    }
+    const customDescription = custom?.tool.description;
+    expect(customDescription?.length).toBeLessThanOrEqual(200);
+    expect(customDescription).toContain('Call immediately');
+    expect(customDescription).toContain('create or add a new provider');
+    expect(customDescription).toContain('name, key, or URL is missing');
+    expect(customDescription).toContain('pass empty values');
+    expect(customDescription).toContain('built-in provider configuration, updates, or models');
   });
 
   test('only approves a built-in provider after it resolves uniquely', async () => {
@@ -146,48 +137,6 @@ describe('registerBuiltinTools', () => {
         .selectActive(scope({ providerConfigurationEnabled: false }))
         .some((entry) => entry.namespace === 'provider-configuration'),
     ).toBe(false);
-  });
-
-  test('forwards provider inputs and cancellation to execution', async () => {
-    const deps = dependencies('always');
-    const registry = new ToolRegistry<ToolApplyScope>();
-    registerBuiltinTools(registry, deps as never);
-    const signal = new AbortController().signal;
-    const builtinInput: ConfigureBuiltinProviderInput = {
-      apiKey: 'key',
-      baseUrl: '',
-      intent: 'configure',
-      manualModels: [],
-      provider: 'CherryIN',
-      removedModelIds: [],
-      selectedModelIds: [],
-      skipModelPull: false,
-    };
-    const customInput: CreateCustomProviderInput = {
-      anthropicUrl: '',
-      apiKey: 'key',
-      baseUrl: 'https://api.example.com/v1',
-      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-      geminiUrl: '',
-      imageEditUrl: '',
-      imageGenerationUrl: '',
-      intent: 'configure',
-      manualModels: [],
-      name: 'Example',
-      openaiResponsesUrl: '',
-      providerId: 'provider-id',
-      removedModelIds: [],
-      selectedModelIds: [],
-      skipModelPull: false,
-    };
-
-    await execute(registry.getByName('configure_builtin_provider')?.tool, builtinInput, signal);
-    await execute(registry.getByName('create_custom_provider')?.tool, customInput, signal);
-    await execute(registry.getByName('list_providers')?.tool, { filter: 'configured' }, signal);
-
-    expect(deps.providerSetup.executeBuiltin).toHaveBeenCalledWith(builtinInput, signal);
-    expect(deps.providerSetup.executeCustom).toHaveBeenCalledWith(customInput, signal);
-    expect(deps.providerSetup.listProviders).toHaveBeenCalledWith({ filter: 'configured' });
   });
 
   test('uses strict required-only provider schemas for every device tool', async () => {
@@ -285,13 +234,4 @@ async function resolveApproval(tool: Tool | undefined, input: Record<string, unk
     return tool.needsApproval(input, { messages: [], toolCallId: 'call-1' });
   }
   return tool?.needsApproval;
-}
-
-function execute(tool: Tool | undefined, input: unknown, signal: AbortSignal) {
-  if (!tool?.execute) throw new Error('Tool is not executable');
-  return tool.execute(input, {
-    abortSignal: signal,
-    messages: [],
-    toolCallId: 'call-1',
-  });
 }

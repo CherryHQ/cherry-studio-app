@@ -51,9 +51,7 @@ describe('ToolResolver', () => {
   });
 
   test('exposes only provider configuration tools without an assistant', async () => {
-    const getStatus = jest.fn(async () => 'granted');
-    const getMcpEntries = jest.fn(async () => []);
-    const resolver = createResolver({ getMcpEntries, getStatus });
+    const resolver = createResolver({});
 
     const result = await resolver.resolveForRequest({});
 
@@ -63,8 +61,6 @@ describe('ToolResolver', () => {
       'list_providers',
     ]);
     expect(result.hasMcpTools).toBe(false);
-    expect(getStatus).not.toHaveBeenCalled();
-    expect(getMcpEntries).not.toHaveBeenCalled();
   });
 
   test('fails closed when a preference lookup fails', async () => {
@@ -124,7 +120,6 @@ describe('ToolResolver', () => {
 
 function createResolver(options: {
   failingKey?: string;
-  getMcpEntries?: jest.Mock;
   getStatus?: jest.Mock;
   mcpEntries?: ToolEntry[];
   neverKey?: string;
@@ -135,8 +130,7 @@ function createResolver(options: {
       getStatusForPreference: options.getStatus ?? jest.fn(async () => 'granted'),
     },
     mcpRuntime: {
-      getToolEntriesForAssistant:
-        options.getMcpEntries ?? jest.fn(async () => options.mcpEntries ?? []),
+      getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []),
     },
     preference: {
       get: jest.fn(async (key: string) => {

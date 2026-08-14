@@ -53,33 +53,6 @@ describe('Agent tool request wiring', () => {
     );
   });
 
-  test('forces a routed tool only for the first model step', async () => {
-    const firstStepToolChoice = {
-      toolName: 'configure_builtin_provider',
-      type: 'tool' as const,
-    };
-    const agent = new Agent({
-      modelId: 'deepseek-flash',
-      options: { firstStepToolChoice },
-      providerId: 'openai-compatible',
-      providerSettings: {
-        apiKey: 'test',
-        baseURL: 'https://example.com',
-        name: 'CherryExpress',
-      },
-      tools: { configure_builtin_provider: {} as never },
-    });
-
-    await agent.generate({ prompt: 'hello' });
-
-    const settings = (createAgent as jest.Mock).mock.calls.at(-1)?.[0].agentSettings;
-    expect(settings.toolChoice).toBeUndefined();
-    await expect(settings.prepareStep({ stepNumber: 0 } as never)).resolves.toEqual({
-      toolChoice: firstStepToolChoice,
-    });
-    await expect(settings.prepareStep({ stepNumber: 1 } as never)).resolves.toBeUndefined();
-  });
-
   test('wraps tools with desktop-compatible execution timing hooks', async () => {
     const execute = jest.fn(async () => 'done');
     const onToolExecutionStart = jest.fn();

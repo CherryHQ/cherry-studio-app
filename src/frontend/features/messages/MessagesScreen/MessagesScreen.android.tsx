@@ -68,7 +68,11 @@ export function MessagesScreen() {
           />
         </View>
       ) : null}
-      <MessagePager showRecentsHeading topicSearchText={searchText} />
+      <MessagePager
+        showRecentsHeading
+        onScopeChange={handleScopeChange}
+        topicSearchText={searchText}
+      />
       <SelectionControls />
     </SafeAreaView>
   );

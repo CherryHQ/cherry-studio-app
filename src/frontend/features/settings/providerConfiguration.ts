@@ -8,11 +8,11 @@ export {
   shouldShowApiKeys,
 } from './ProviderScreen/apiService/utils/providerApiServiceAuth';
 export { CherryInOauth } from './ProviderScreen/components/CherryInOauth';
+export { CustomProviderForm } from './ProviderScreen/components/CustomProviderForm';
 export {
-  CustomProviderForm,
   isCustomProviderFormComplete,
   type CustomProviderFormValue,
-} from './ProviderScreen/components/CustomProviderForm';
+} from './ProviderScreen/utils/customProviderForm';
 export { ProviderOauthSection } from './ProviderScreen/components/ProviderOauthSection';
 export { ProviderAvatar } from './components/ProviderAvatar';
 export {

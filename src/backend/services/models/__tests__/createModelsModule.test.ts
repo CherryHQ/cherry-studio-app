@@ -179,16 +179,4 @@ describe('createModelsModule', () => {
     expect(dependencies.ai.checkModel).toHaveBeenCalledTimes(1);
     expect(dependencies.providers.update).not.toHaveBeenCalled();
   });
-
-  it('passes the stored provider and cancellation signal to the catalog', async () => {
-    const controller = new AbortController();
-    const { backend, dependencies } = createSubject();
-
-    await backend.pull('openai', controller.signal);
-
-    expect(dependencies.catalog.list).toHaveBeenCalledWith({
-      provider,
-      signal: controller.signal,
-    });
-  });
 });

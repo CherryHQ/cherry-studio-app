@@ -4,7 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { SlotText } from '../SlotText';
 
 /** Echoed back by the mock below, so the highlight assertion has a name for it. */
-const highlightColor = 'resolved--color-primary';
+const highlightColor = 'resolved--color-muted-foreground';
 
 jest.mock('uniwind', () => ({
   useCSSVariable: (names: string[]) => names.map((name) => `resolved${name}`),

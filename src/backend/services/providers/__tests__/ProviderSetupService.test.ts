@@ -294,25 +294,22 @@ describe('ProviderSetupService', () => {
       apiKey: 'draft-key',
       baseUrl: 'https://draft.example/v1',
     });
+    catalogList.mockImplementationOnce(async (catalogInput) => {
+      const baseUrl =
+        catalogInput.provider.endpointConfigs?.[ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]?.baseUrl;
+      if (catalogInput.apiKey !== 'draft-key' || baseUrl !== 'https://draft.example/v1') {
+        throw new Error('preview did not use the transient provider configuration');
+      }
+      return { models: [], remotelyProbed: true, source: 'api' };
+    });
 
     await expect(subject.previewBuiltin(input)).resolves.toMatchObject({
       apiKeyCount: 1,
       apiKeyWillBeAdded: true,
+      catalogSource: 'api',
       origin: 'https://draft.example',
       provider: { endpointConfigs: expect.any(Object), isEnabled: false },
     });
-    expect(catalogList).toHaveBeenCalledWith(
-      expect.objectContaining({
-        apiKey: 'draft-key',
-        provider: expect.objectContaining({
-          endpointConfigs: expect.objectContaining({
-            [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: expect.objectContaining({
-              baseUrl: 'https://draft.example/v1',
-            }),
-          }),
-        }),
-      }),
-    );
     await expect(providerService.getByProviderId('cherryin')).resolves.toMatchObject({
       endpointConfigs: {
         [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: expect.objectContaining({
@@ -377,26 +374,26 @@ describe('ProviderSetupService', () => {
 
   test('previews a custom provider with explicit transient auth and no stored fallback', async () => {
     const input = customInput({ apiKey: 'draft-key', providerId: 'custom-transient' });
+    catalogList.mockImplementationOnce(async (catalogInput) => {
+      const baseUrl =
+        catalogInput.provider.endpointConfigs?.[ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]?.baseUrl;
+      if (
+        catalogInput.apiKey !== 'draft-key' ||
+        catalogInput.authConfig?.type !== 'api-key' ||
+        catalogInput.provider.id !== 'custom-transient' ||
+        baseUrl !== 'https://api.example.com'
+      ) {
+        throw new Error('preview did not use the transient custom provider configuration');
+      }
+      return { models: [], remotelyProbed: true, source: 'api' };
+    });
 
     await expect(subject.previewCustom(input)).resolves.toMatchObject({
       apiKeyCount: 0,
       apiKeyWillBeAdded: true,
+      catalogSource: 'api',
       provider: { id: 'custom-transient', isEnabled: false },
     });
-    expect(catalogList).toHaveBeenCalledWith(
-      expect.objectContaining({
-        apiKey: 'draft-key',
-        authConfig: { type: 'api-key' },
-        provider: expect.objectContaining({
-          endpointConfigs: expect.objectContaining({
-            [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: expect.objectContaining({
-              baseUrl: 'https://api.example.com',
-            }),
-          }),
-          id: 'custom-transient',
-        }),
-      }),
-    );
     await expect(providerService.getByProviderId('custom-transient')).rejects.toMatchObject({
       code: 'NOT_FOUND',
     });
@@ -477,20 +474,25 @@ describe('ProviderSetupService', () => {
 
   test('saves provider configuration but skips removals after catalog failure', async () => {
     await seedBuiltin();
+    await modelService.createFromRegistry({
+      capabilities: [],
+      isEnabled: true,
+      isHidden: false,
+      modelId: 'old',
+      name: 'Old model',
+      providerId: 'cherryin',
+      supportsStreaming: true,
+    });
     catalogList.mockRejectedValueOnce(new Error('offline'));
-    const reconcile = jest.spyOn(modelService, 'reconcileProviderModelsTx');
 
     await expect(
       subject.executeBuiltin(
         builtinInput({ removedModelIds: [createUniqueModelId('cherryin', 'old')] }),
       ),
     ).resolves.toMatchObject({ catalogSource: 'skipped', status: 'configured' });
-    expect(reconcile).toHaveBeenCalledWith(
-      expect.anything(),
-      'cherryin',
-      expect.objectContaining({ toRemove: [] }),
-      expect.anything(),
-    );
+    await expect(modelService.list({ providerId: 'cherryin' })).resolves.toEqual([
+      expect.objectContaining({ modelId: 'old', providerId: 'cherryin' }),
+    ]);
     await expect(providerService.getByProviderId('cherryin')).resolves.toMatchObject({
       isEnabled: true,
     });

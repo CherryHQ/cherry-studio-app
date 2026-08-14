@@ -34,35 +34,34 @@ function model(providerId: string, modelId: string): Model {
 
 function createSubject(overrides: Partial<ModelCatalogDependencies> = {}) {
   const dependencies: ModelCatalogDependencies = {
-    getAuthConfig: jest.fn(async () => null),
-    getCopilotToken: jest.fn(async () => 'copilot-token'),
-    getStoredApiKey: jest.fn(async () => 'stored-key'),
-    getVertexAuthHeaders: jest.fn(async () => ({})),
-    listApiModels: jest.fn(async () => []),
-    listRegistryModels: jest.fn(() => []),
-    materialize: jest.fn((_, models) => models as Model[]),
+    getAuthConfig: async () => null,
+    getCopilotToken: async () => 'copilot-token',
+    getStoredApiKey: async () => 'stored-key',
+    getVertexAuthHeaders: async () => ({}),
+    listApiModels: async () => [],
+    listRegistryModels: () => [],
+    materialize: (_, models) => models as Model[],
     timeoutMs: 10_000,
     ...overrides,
   };
-  return {
+  return new ModelCatalogService(
+    {
+      getVertexAuthHeaders: dependencies.getVertexAuthHeaders,
+      listApiModels: dependencies.listApiModels,
+    },
     dependencies,
-    subject: new ModelCatalogService(
-      {
-        getVertexAuthHeaders: dependencies.getVertexAuthHeaders,
-        listApiModels: dependencies.listApiModels,
-      },
-      dependencies,
-    ),
-  };
+  );
 }
 
 describe('ModelCatalogService', () => {
   it('uses a transient key without reading the stored provider key', async () => {
     const remote = model('openai', 'gpt-5');
-    const { dependencies, subject } = createSubject();
-    jest.mocked(dependencies.listApiModels).mockImplementation(async (_provider, context) => {
-      expect(await context.getRotatedApiKey('openai')).toBe('draft-key');
-      return [remote];
+    const subject = createSubject({
+      getStoredApiKey: async () => {
+        throw new Error('stored provider key must not be read');
+      },
+      listApiModels: async (_provider, context) =>
+        (await context.getRotatedApiKey('openai')) === 'draft-key' ? [remote] : [],
     });
 
     await expect(subject.list({ apiKey: 'draft-key', provider: provider() })).resolves.toEqual({
@@ -70,13 +69,19 @@ describe('ModelCatalogService', () => {
       remotelyProbed: true,
       source: 'api',
     });
-    expect(dependencies.getStoredApiKey).not.toHaveBeenCalled();
   });
 
   it('reads registry-only catalogs without making a remote request', async () => {
     const registryModel = model('claude-code', 'claude-sonnet-4-5');
-    const { dependencies, subject } = createSubject();
-    jest.mocked(dependencies.listRegistryModels).mockReturnValue([registryModel]);
+    const subject = createSubject({
+      listApiModels: async () => {
+        throw new Error('registry-only catalogs must not make remote requests');
+      },
+      listRegistryModels: (input) =>
+        input.presetProviderId === 'claude-code' && input.providerId === 'claude-code'
+          ? [registryModel]
+          : [],
+    });
     const registryProvider = provider({
       id: 'claude-code',
       modelListSource: 'registry',
@@ -88,11 +93,6 @@ describe('ModelCatalogService', () => {
       models: [registryModel],
       remotelyProbed: false,
       source: 'registry',
-    });
-    expect(dependencies.listApiModels).not.toHaveBeenCalled();
-    expect(dependencies.listRegistryModels).toHaveBeenCalledWith({
-      presetProviderId: 'claude-code',
-      providerId: 'claude-code',
     });
   });
 
@@ -106,9 +106,14 @@ describe('ModelCatalogService', () => {
       ...model('custom-ppio', 'z-image-turbo'),
       apiModelId: 'z-image-turbo',
     };
-    const { dependencies, subject } = createSubject();
-    jest.mocked(dependencies.listApiModels).mockResolvedValue([remoteTwin]);
-    jest.mocked(dependencies.listRegistryModels).mockReturnValue([registryTwin, registryOnly]);
+    const subject = createSubject({
+      listApiModels: async (inputProvider) =>
+        inputProvider.id === 'custom-ppio' ? [remoteTwin] : [],
+      listRegistryModels: (input) =>
+        input.presetProviderId === 'ppio' && input.providerId === 'custom-ppio'
+          ? [registryTwin, registryOnly]
+          : [],
+    });
     const presetBackedProvider = provider({ id: 'custom-ppio', presetProviderId: 'ppio' });
 
     await expect(subject.list({ provider: presetBackedProvider })).resolves.toEqual({
@@ -116,15 +121,11 @@ describe('ModelCatalogService', () => {
       remotelyProbed: true,
       source: 'api',
     });
-    expect(dependencies.listRegistryModels).toHaveBeenCalledWith({
-      presetProviderId: 'ppio',
-      providerId: 'custom-ppio',
-    });
   });
 
   it('rejects a stalled API catalog with the stable timeout error', async () => {
-    const { subject } = createSubject({
-      listApiModels: jest.fn(() => new Promise(() => {})),
+    const subject = createSubject({
+      listApiModels: () => new Promise(() => {}),
       timeoutMs: 1,
     });
 
@@ -136,14 +137,14 @@ describe('ModelCatalogService', () => {
   it('forwards external cancellation to the API request', async () => {
     const controller = new AbortController();
     const reason = new Error('cancelled');
-    const { subject } = createSubject({
-      listApiModels: jest.fn(async (_provider, _context, signal) => {
+    const subject = createSubject({
+      listApiModels: async (_provider, _context, signal) => {
         controller.abort(reason);
         if (!signal.aborted) {
           await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
         }
         throw signal.reason;
-      }),
+      },
     });
 
     await expect(subject.list({ provider: provider(), signal: controller.signal })).rejects.toBe(

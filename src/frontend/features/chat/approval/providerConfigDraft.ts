@@ -12,7 +12,7 @@ import * as Crypto from 'expo-crypto';
 import {
   type CustomProviderFormValue,
   isCustomProviderFormComplete,
-} from '@/frontend/features/settings/providerConfiguration';
+} from '@/frontend/features/settings/providerConfigurationForm';
 import type { ProviderSetupPreview } from '@/shared/contracts';
 
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
@@ -36,6 +36,7 @@ export const providerConfigSetupSteps: readonly ProviderConfigSetupStep[] = [
 
 export function createProviderConfigDraft(
   approval: PendingToolApproval,
+  generateProviderId: () => string = Crypto.randomUUID,
 ): ProviderConfigDraft | null {
   if (approval.toolName === CONFIGURE_BUILTIN_PROVIDER_TOOL_NAME) {
     const parsed = configureBuiltinProviderInputSchema.safeParse(approval.input);
@@ -48,7 +49,7 @@ export function createProviderConfigDraft(
       input: {
         ...parsed.data,
         baseUrl: normalizeCustomProviderBaseUrl(parsed.data.baseUrl),
-        providerId: Crypto.randomUUID(),
+        providerId: generateProviderId(),
       },
       kind: 'custom',
     };

@@ -1,4 +1,4 @@
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
+import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -70,8 +70,8 @@ function TopicListProbe() {
   return null;
 }
 
-function makeTopic(index: number): Topic {
-  return { id: `topic-${index}`, name: `Topic ${index}` } as Topic;
+function makeTopic(index: number): TopicListItem {
+  return { id: `topic-${index}`, latestMessageText: '', name: `Topic ${index}` } as TopicListItem;
 }
 
 beforeEach(() => {
@@ -110,7 +110,7 @@ afterEach(async () => {
   });
 });
 
-async function renderProvider(topics: readonly Topic[]) {
+async function renderProvider(topics: readonly TopicListItem[]) {
   useTopicsMock.mockImplementation(() => ({
     isLoadingInitial: false,
     loadMore: mockLoadMoreTopics,

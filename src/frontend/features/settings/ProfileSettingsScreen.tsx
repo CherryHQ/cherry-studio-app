@@ -1,4 +1,3 @@
-import { SaveIcon } from '@cherrystudio/app-icons';
 import { Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
@@ -100,9 +99,8 @@ export default function ProfileSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('common.save'),
-        androidIcon: SaveIcon,
-        icon: 'checkmark',
         key: 'finish-profile-edit',
+        label: t('common.save'),
         onPress: finishEditing,
       },
     ],
