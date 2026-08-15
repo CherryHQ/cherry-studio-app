@@ -40,6 +40,7 @@ import {
   messageTable,
   topicTable,
 } from '../db/schemas';
+import { createOrderedUuid } from '../db/schemas/_columnHelpers';
 import { getDataService } from './dataServiceRegistry';
 import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';
@@ -68,7 +69,14 @@ export interface CreateUserMessageWithPlaceholdersInput {
   placeholders: AssistantPlaceholder[];
   siblingsGroupId?: number;
   topicId: string;
-  userMessage: { dto: CreateMessageDto; mode: 'create' } | { id: string; mode: 'existing' };
+  /**
+   * `id` sits beside `dto`, not inside it: `CreateMessageDto` is the HTTP
+   * boundary's strict object, and an id is not something a remote caller gets
+   * to choose. In-process callers do — see `newMessageId`.
+   */
+  userMessage:
+    | { dto: CreateMessageDto; id?: string; mode: 'create' }
+    | { id: string; mode: 'existing' };
 }
 
 export interface CreateUserMessageWithPlaceholdersResult {
@@ -559,6 +567,16 @@ export class MessageService {
     });
   }
 
+  /**
+   * Allocate a message id before the row exists, so a caller can show the
+   * message it is about to write and have the persisted row arrive under the
+   * same identity. Same generator as the column default, so the ids stay
+   * time-ordered.
+   */
+  newMessageId(): string {
+    return createOrderedUuid();
+  }
+
   async createUserMessageWithPlaceholders(
     input: CreateUserMessageWithPlaceholdersInput,
   ): Promise<CreateUserMessageWithPlaceholdersResult> {
@@ -575,7 +593,7 @@ export class MessageService {
 
       let userMessage: Message;
       if (input.userMessage.mode === 'create') {
-        const dto = input.userMessage.dto;
+        const { dto, id } = input.userMessage;
         const resolvedParentId =
           dto.parentId === undefined || dto.parentId === null
             ? await getRootMessageIdTx(tx, input.topicId)
@@ -583,6 +601,7 @@ export class MessageService {
         const [row] = await tx
           .insert(messageTable)
           .values({
+            ...(id ? { id } : {}),
             data: dto.data,
             modelId: dto.modelId ?? null,
             messageSnapshot: dto.messageSnapshot ?? null,

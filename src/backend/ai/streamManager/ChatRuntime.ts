@@ -20,6 +20,7 @@ import type {
   CherryMessagePart,
   CherryUIMessage,
   Message,
+  MessageData,
   MessageRuntimeStatsInput,
   MessageSnapshot,
   ModelSnapshot,
@@ -728,13 +729,16 @@ export class ChatRuntime extends BaseService implements ChatModule {
       this.setTurnSnapshot(topic.id, { status: 'reserving' });
       await this.emitAndWait({ type: 'invalidate-topics' });
       throwIfAborted(abortController.signal);
-      await this.emitAndWait({ topicId: topic.id, type: 'open-topic' });
-      throwIfAborted(abortController.signal);
 
       await this.runTopicTurn({
         activeTurn,
         fastMode: input.fastMode,
         models,
+        // 导航挂在「这一轮已经进快照」之后：目的地一挂载就有用户消息和助手占位可画。
+        // 用 emit 而不是 emitAndWait——后者不吞订阅者的异常，一个导航失败会让整轮走 catch。
+        onTurnPublished: () => {
+          this.emit({ topicId: topic.id, type: 'open-topic' });
+        },
         parts,
         reasoningEffort: input.reasoningEffort,
         ...(models.length > 1 ? { siblingsGroupId: nextSiblingsGroupId() } : {}),
@@ -945,6 +949,12 @@ export class ChatRuntime extends BaseService implements ChatModule {
     fastMode?: boolean;
     hasHistoryBeforePendingTurn?: boolean;
     models: readonly Model[];
+    /**
+     * Run once the turn is in the snapshot and before it is persisted — the
+     * only safe moment to move the user to this topic, because the destination
+     * already has something to show.
+     */
+    onTurnPublished?: () => Promise<void> | void;
     parentId?: string | null;
     parts: readonly CherryMessagePart[];
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
@@ -973,6 +983,33 @@ export class ChatRuntime extends BaseService implements ChatModule {
         models.map((model) => this.buildAssistantMessageSnapshot(model, topic)),
       );
       throwIfAborted(abortController.signal);
+      const pendingTurn = buildPendingTurnMessages({
+        messageSnapshots,
+        models,
+        newMessageId: () => this.dependencies.services.message.newMessageId(),
+        parentId: input.parentId === undefined ? (topic.activeNodeId ?? null) : input.parentId,
+        parts: turnParts,
+        siblingsGroupId: input.siblingsGroupId ?? 0,
+        topicId,
+        turnOptions: {
+          fastMode: input.fastMode === true,
+          reasoningEffort: input.reasoningEffort,
+        },
+        userSiblingsGroupId: input.userSiblingsGroupId ?? 0,
+      });
+
+      // 先把这一轮发布出去，再让调用方导航。这样目的地挂载时它要展示的东西已经在快照里，
+      // 中间不存在「界面已经切过去、内容还没有」的空窗——那段空窗过去要靠遮罩、转圈和空状态
+      // 一起糊住。落库后回来的行与这份乐观行是同一个 id，投影就地替换而不是追加。
+      activeTurn.hasHistoryBeforePendingTurn = hasHistoryBeforePendingTurn;
+      activeTurn.pendingUserMessage = pendingTurn.userMessage;
+      for (const [index, model] of models.entries()) {
+        activeTurn.overlays.set(model.id, pendingTurn.placeholders[index]);
+      }
+      this.publishTurnSnapshot(topicId, activeTurn, 'reserving');
+      await input.onTurnPublished?.();
+      throwIfAborted(abortController.signal);
+
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
           ...(input.siblingsGroupId !== undefined
@@ -981,11 +1018,11 @@ export class ChatRuntime extends BaseService implements ChatModule {
           topicId,
           userMessage: {
             mode: 'create',
+            id: pendingTurn.userMessage.id,
             dto: {
-              data: { parts: turnParts },
+              data: pendingTurn.userMessage.data,
               modelId: models[0]?.id,
-              parentId:
-                input.parentId === undefined ? (topic.activeNodeId ?? null) : input.parentId,
+              parentId: pendingTurn.userMessage.parentId,
               role: 'user',
               ...(input.userSiblingsGroupId !== undefined
                 ? { siblingsGroupId: input.userSiblingsGroupId }
@@ -993,17 +1030,12 @@ export class ChatRuntime extends BaseService implements ChatModule {
               status: 'success',
             },
           },
-          placeholders: models.map((model, index) => {
+          placeholders: pendingTurn.placeholders.map((placeholder, index) => {
             const messageSnapshot = messageSnapshots[index];
             return {
-              data: {
-                parts: [],
-                turnOptions: {
-                  fastMode: input.fastMode === true,
-                  reasoningEffort: input.reasoningEffort,
-                },
-              },
-              modelId: model.id,
+              data: placeholder.data,
+              id: placeholder.id,
+              modelId: models[index].id,
               ...(messageSnapshot ? { messageSnapshot } : {}),
               role: 'assistant',
               status: 'pending',
@@ -2091,6 +2123,61 @@ function resolveTurnOutcome(
     return 'error';
   }
   return 'done';
+}
+
+/**
+ * The rows a turn is about to write, in the shape the chat screen reads them.
+ *
+ * Ids come from the caller instead of the column default so the turn can be
+ * published before it is persisted: the optimistic row and the row that lands
+ * carry one identity, and `mergeMessagesWithOverlay` replaces in place instead
+ * of appending a duplicate. Only DB-owned fields are guessed — the timestamps
+ * (the real ones land milliseconds later, and nothing orders a turn by them)
+ * and `searchableText`, which is a trigger's output no chat surface reads.
+ */
+function buildPendingTurnMessages(input: {
+  messageSnapshots: readonly (MessageSnapshot | undefined)[];
+  models: readonly Model[];
+  newMessageId: () => string;
+  parentId: string | null;
+  parts: readonly CherryMessagePart[];
+  siblingsGroupId: number;
+  topicId: string;
+  turnOptions: MessageData['turnOptions'];
+  userSiblingsGroupId: number;
+}): { placeholders: Message[]; userMessage: Message } {
+  const now = new Date().toISOString();
+  const dbOwnedFields = {
+    createdAt: now,
+    searchableText: '',
+    topicId: input.topicId,
+    updatedAt: now,
+  };
+  const userMessage: Message = {
+    ...dbOwnedFields,
+    data: { parts: [...input.parts] },
+    id: input.newMessageId(),
+    modelId: input.models[0]?.id ?? null,
+    parentId: input.parentId,
+    role: 'user',
+    siblingsGroupId: input.userSiblingsGroupId,
+    status: 'success',
+  };
+  const placeholders = input.models.map(
+    (model, index): Message => ({
+      ...dbOwnedFields,
+      data: { parts: [], turnOptions: input.turnOptions },
+      id: input.newMessageId(),
+      messageSnapshot: input.messageSnapshots[index] ?? null,
+      modelId: model.id,
+      parentId: userMessage.id,
+      role: 'assistant',
+      siblingsGroupId: input.siblingsGroupId,
+      status: 'pending',
+    }),
+  );
+
+  return { placeholders, userMessage };
 }
 
 function buildStreamStatusSnapshot(turn: ActiveTurn): TopicStatusSnapshotEntry {

@@ -611,6 +611,51 @@ describe('MessageService', () => {
     ]);
   });
 
+  test('writes the ids the caller allocated for the reserved turn', async () => {
+    const userMessageId = '00000000-0000-7000-8000-0000000000a1';
+    const placeholderId = '00000000-0000-7000-8000-0000000000a2';
+    const data = { parts: [] } satisfies MessageData;
+    const { insertCalls, tx } = createWriteTx({
+      insertRows: [
+        createMessageRow(userMessageId, 'user', data, 'root-1'),
+        createMessageRow(placeholderId, 'assistant', data, userMessageId),
+      ],
+      selectResults: [[{ id: 'topic-1' }], [{ id: 'root-1' }]],
+    });
+    await installMessageServiceHost(tx);
+
+    // 调用方先分配 id 再插行：runtime 靠它在落库之前就把这一轮发布给界面。
+    await messageService.createUserMessageWithPlaceholders({
+      placeholders: [{ data, id: placeholderId, role: 'assistant' }],
+      topicId: 'topic-1',
+      userMessage: { dto: { data, role: 'user' }, id: userMessageId, mode: 'create' },
+    });
+
+    expect(
+      insertCalls
+        .filter((call) => call.table === messageTable)
+        .map((call) => (call.values as { id?: string }).id),
+    ).toEqual([userMessageId, placeholderId]);
+  });
+
+  test('leaves the id to the column default when the caller omits it', async () => {
+    const data = { parts: [] } satisfies MessageData;
+    const { insertCalls, tx } = createWriteTx({
+      insertRows: [createMessageRow('generated-1', 'user', data, 'root-1')],
+      selectResults: [[{ id: 'topic-1' }], [{ id: 'root-1' }]],
+    });
+    await installMessageServiceHost(tx);
+
+    await messageService.createUserMessageWithPlaceholders({
+      placeholders: [],
+      topicId: 'topic-1',
+      userMessage: { dto: { data, role: 'user' }, mode: 'create' },
+    });
+
+    // 缺省时连这个键都不能出现：`id: undefined` 会盖掉 drizzle 的 `$defaultFn`。
+    expect(insertCalls[0]?.values).not.toHaveProperty('id');
+  });
+
   test('creates refs from the general create and createSibling entry points', async () => {
     const fileEntryId = '00000000-0000-7000-8000-000000000001';
     const data = { parts: [filePart(fileEntryId)] } satisfies MessageData;
