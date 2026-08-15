@@ -66,6 +66,8 @@ export function useAnchorPin({
   const pendingReadyFrameRef = useRef<number | null>(null);
   const pendingReadySettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readyGenerationRef = useRef(0);
+  // 揭示前的定位只做一次，见下方 gate 处的说明。
+  const didGateScrollRef = useRef(false);
   const pendingFirstAnchorReleaseFrameRef = useRef<number | null>(null);
 
   // A single-turn workspace has no previous content to scroll past. Keep its first live turn at
@@ -250,7 +252,22 @@ export function useAnchorPin({
         // 否则拖动过程中列表会被硬拽回底部（实测一次拖动被拽 +198px，harness 的
         // gesture-conflict 判据就是这么抓到的）。
         // 跳过滚动但照常进入 settle：遮罩存在的意义是挡住布局抖动，人都已经在拖了就别再挡着。
-        if (shouldScrollToEndBeforeReady && !isUserInteractingRef.current) {
+        //
+        // 交互锁只挡住「用户在拖」，挡不住重跑本身：在**新建话题**里发第一条时，流式让静默窗口
+        // 永不完成 → ready 永远报不出 → gate 每次重跑都真滚一次（实测三轮 58/45/75 次，
+        // stream-scroll 49/25/42 次）。这些滚动全落在「内容还不满一屏」的阶段，末端就是顶端，
+        // 于是表现为 offset 在 0 与 24/40 之间来回弹四五次。续轮发送一次都不出现，只因为它
+        // 进话题时 ready 早就报过、gate 已关闭——这个不对称本身就是「gate 越界」的证据。
+        //
+        // 因此揭示前的定位只做一次：它的语义是「首屏揭示前把列表放到正确位置」，本就是一次性
+        // 事件。此后位置维护归尾随状态机（scheduleTailFollow）与 anchoredEndSpace，gate 只负责
+        // 继续守静默窗口、把迟到的高度修正挡在遮罩后——这一半没有变。
+        if (
+          shouldScrollToEndBeforeReady &&
+          !didGateScrollRef.current &&
+          !isUserInteractingRef.current
+        ) {
+          didGateScrollRef.current = true;
           scrollLog.debug('[SCROLL] gateScrollToEnd', {
             contentBottomInset,
             contentBaseHeight: Math.round(contentBaseHeight),
