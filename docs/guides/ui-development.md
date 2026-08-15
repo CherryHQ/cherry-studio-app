@@ -19,6 +19,10 @@ package's platform-neutral interaction ownership.
 When CherryUI lacks a qualifying reusable component, create it in an independent bottom PR before
 the feature integration PR. Use a `gh-stack` layer when the integration depends on that component.
 
+When an implementation differs between iOS and Android, follow
+[Platform Variants](../references/naming-conventions.md#platform-variants) and use matching
+`.ios.tsx` and `.android.tsx` component files.
+
 ## Compose Component APIs
 
 Use the project `vercel-composition-patterns` skill when creating or substantially changing a

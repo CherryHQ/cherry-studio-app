@@ -27,8 +27,12 @@ do not rename them incidentally.
 Tests use `.test.*`, not `.spec.*`, and normally live in a co-located `__tests__` directory. Files
 inside `utils` do not repeat a `Utils` suffix.
 
-React Native platform variants append `.ios` or `.android` to the normally cased base name, for
-example `MainHeader.ios.tsx` or `message-reader.android.ts` inside `packages`.
+## Platform Variants
+
+When a React component needs different iOS and Android implementations, split it into matching
+`Name.ios.tsx` and `Name.android.tsx` files. Non-JSX modules use the corresponding `.ios.ts` and
+`.android.ts` suffixes. Keep shared types, APIs, and implementation in an unsuffixed file when both
+platform variants need them; Metro selects the platform file at build time.
 
 ## Directories
 
