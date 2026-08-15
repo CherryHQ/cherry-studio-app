@@ -1,22 +1,12 @@
-import {
-  DownloadIcon,
-  FolderOpenIcon,
-  MonitorCloudIcon,
-  RefreshCwIcon,
-  Trash2Icon,
-  UploadIcon,
-} from '@cherrystudio/app-icons';
+import { DownloadIcon, MonitorCloudIcon, RefreshCwIcon, UploadIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
-import * as FileSystem from 'expo-file-system/legacy';
-import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { isAndroid } from '@/frontend/utils/constants';
 
-const ANDROID_GRANT_READ_URI_PERMISSION_FLAG = 1;
+import { DataDirectorySection } from './DataDirectorySection';
 
 export default function DataSettingsScreen() {
   const { t } = useTranslation();
@@ -24,48 +14,6 @@ export default function DataSettingsScreen() {
   const handleActionPress = useCallback(() => {
     // UI placeholder only. Wire real data actions when those services are ready.
   }, []);
-
-  const handleAppDataPress = useCallback(() => {
-    if (!isAndroid || !FileSystem.documentDirectory) {
-      return;
-    }
-
-    FileSystem.getContentUriAsync(FileSystem.documentDirectory)
-      .then((contentUri) =>
-        startActivityAsync('android.intent.action.VIEW', {
-          data: contentUri,
-          flags: ANDROID_GRANT_READ_URI_PERMISSION_FLAG,
-          type: 'resource/folder',
-        }),
-      )
-      .catch(() => {
-        void startActivityAsync(ActivityAction.APP_STORAGE_SETTINGS).catch(() => undefined);
-      });
-  }, []);
-
-  const directoryItems = isAndroid
-    ? [
-        {
-          hideAccessory: true,
-          icon: FolderOpenIcon,
-          title: t('settings.data.appData.title'),
-          onPress: handleAppDataPress,
-        },
-        {
-          hideAccessory: true,
-          icon: Trash2Icon,
-          title: t('settings.data.clearCache.title'),
-          onPress: handleActionPress,
-        },
-      ]
-    : [
-        {
-          hideAccessory: true,
-          icon: Trash2Icon,
-          title: t('settings.data.clearCache.title'),
-          onPress: handleActionPress,
-        },
-      ];
 
   return (
     <>
@@ -97,17 +45,7 @@ export default function DataSettingsScreen() {
               showChevron={false}
             />
           </Section>
-          <Section title={t('settings.data.directory.title')}>
-            {directoryItems.map(({ icon: Icon, onPress, title }) => (
-              <Section.Item
-                key={title}
-                label={title}
-                leading={<Icon className="size-5 text-foreground" />}
-                onPress={onPress}
-                showChevron={false}
-              />
-            ))}
-          </Section>
+          <DataDirectorySection onClearCache={handleActionPress} />
           <Section>
             <Section.Item
               label={t('settings.data.resetData.title')}

@@ -1,20 +1,20 @@
 import { PlusIcon } from '@cherrystudio/app-icons';
-import { SearchField, Section } from '@cherrystudio/ui/components';
+import { Section } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useQuery } from '@/frontend/data';
-import { hiddenProviderListIds, isIOS } from '@/frontend/utils/constants';
+import { hiddenProviderListIds } from '@/frontend/utils/constants';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
+import { ProviderListSearch, providerListContentContainerStyle } from './ProviderListSearch';
 
 const providerListStaleTime = 1000 * 60 * 5;
-const usesNativeBottomSearch = isIOS && Number.parseInt(String(Platform.Version), 10) >= 26;
 const PROVIDER_ROW_ESTIMATED_HEIGHT = 50;
 const PROVIDER_SECTION_HEADER_ESTIMATED_HEIGHT = 48;
 
@@ -37,7 +37,6 @@ export default function ProviderSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const [searchText, setSearchText] = useState('');
-  const [isNativeSearchFocused, setIsNativeSearchFocused] = useState(false);
   const isNavigatingRef = useRef(false);
   const hasFocusedOnceRef = useRef(false);
 
@@ -137,52 +136,13 @@ export default function ProviderSettingsScreen() {
   return (
     <>
       <BackHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
-      {usesNativeBottomSearch ? (
-        <>
-          <Stack.SearchBar
-            allowToolbarIntegration
-            autoCapitalize="none"
-            hideWhenScrolling={false}
-            obscureBackground={false}
-            placeholder={t('navigation.search')}
-            placement="integrated"
-            onBlur={() => setIsNativeSearchFocused(false)}
-            onCancelButtonPress={() => {
-              setIsNativeSearchFocused(false);
-              setSearchText('');
-            }}
-            onChangeText={(event) => setSearchText(event.nativeEvent.text)}
-            onFocus={() => setIsNativeSearchFocused(true)}
-          />
-          <Stack.Toolbar placement="bottom">
-            <Stack.Toolbar.SearchBarSlot />
-          </Stack.Toolbar>
-        </>
-      ) : null}
-      <Pressable
-        accessible={false}
-        className="flex-1 gap-3 px-4 pb-5"
-        onPress={Keyboard.dismiss}
-        style={{ paddingTop: isNativeSearchFocused ? 12 : 0 }}
-      >
-        {usesNativeBottomSearch ? null : (
-          <SearchField
-            accessibilityLabel={t('navigation.search')}
-            clearAccessibilityLabel={t('common.clear')}
-            onChangeText={setSearchText}
-            onClear={() => setSearchText('')}
-            placeholder={t('navigation.search')}
-            value={searchText}
-          />
-        )}
+      <ProviderListSearch searchText={searchText} setSearchText={setSearchText}>
         {filteredProviderItems.length > 0 ? (
           <View className="-mx-4 min-h-0 flex-1">
             <View style={{ height: cardHeight, maxHeight: '100%' }}>
               <SectionList
                 alwaysBounceVertical={false}
-                contentContainerStyle={
-                  usesNativeBottomSearch ? styles.listContentWithNativeBottomSearch : undefined
-                }
+                contentContainerStyle={providerListContentContainerStyle}
                 estimatedItemSize={PROVIDER_ROW_ESTIMATED_HEIGHT}
                 keyboardDismissMode="on-drag"
                 keyboardShouldPersistTaps="handled"
@@ -210,7 +170,7 @@ export default function ProviderSettingsScreen() {
             />
           </Section>
         )}
-      </Pressable>
+      </ProviderListSearch>
     </>
   );
 }
@@ -218,8 +178,5 @@ export default function ProviderSettingsScreen() {
 const styles = StyleSheet.create({
   list: {
     flex: 1,
-  },
-  listContentWithNativeBottomSearch: {
-    paddingBottom: 96,
   },
 });

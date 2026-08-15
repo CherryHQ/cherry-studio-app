@@ -15,6 +15,16 @@ export type ProviderModelListSelection = {
   selectedIds: ReadonlySet<UniqueModelId>;
 };
 
+export type ProviderModelListContentProps = {
+  isDefaultModel: (model: Model) => boolean;
+  ListEmptyComponent?: ReactElement;
+  ListHeaderComponent?: ReactElement;
+  models: Model[];
+  onScrollBeginDrag?: () => void;
+  provider: Provider | undefined;
+  selection?: ProviderModelListSelection;
+};
+
 type ProviderModelListExtraData = {
   isDefaultModel: (model: Model) => boolean;
   provider: Provider | undefined;
@@ -33,15 +43,7 @@ export function ProviderModelListContent({
   onScrollBeginDrag,
   provider,
   selection,
-}: {
-  isDefaultModel: (model: Model) => boolean;
-  ListEmptyComponent?: ReactElement;
-  ListHeaderComponent?: ReactElement;
-  models: Model[];
-  onScrollBeginDrag?: () => void;
-  provider: Provider | undefined;
-  selection?: ProviderModelListSelection;
-}) {
+}: ProviderModelListContentProps) {
   const extraData = useMemo<ProviderModelListExtraData>(
     () => ({
       isDefaultModel,
