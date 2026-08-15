@@ -41,11 +41,25 @@ export type ChatStreamRequest = {
 
 type ApprovalDecision = Omit<ChatToolApprovalInput, 'messageId' | 'topicId'>;
 
+/**
+ * `id` is optional and caller-supplied: the runtime mints message ids before
+ * the write so it can publish the turn ahead of persistence, and the row that
+ * lands must carry the same identity the UI is already rendering.
+ */
+type CreateTurnPlaceholder = Omit<
+  CreateMessageDto,
+  'parentId' | 'setAsActive' | 'siblingsGroupId'
+> & {
+  id?: string;
+};
+
 type CreateTurnInput = {
-  placeholders: Omit<CreateMessageDto, 'parentId' | 'setAsActive' | 'siblingsGroupId'>[];
+  placeholders: CreateTurnPlaceholder[];
   siblingsGroupId?: number;
   topicId: string;
-  userMessage: { dto: CreateMessageDto; mode: 'create' } | { id: string; mode: 'existing' };
+  userMessage:
+    | { dto: CreateMessageDto; id?: string; mode: 'create' }
+    | { id: string; mode: 'existing' };
 };
 
 export type ChatRuntimeServices = {
@@ -86,6 +100,7 @@ export type ChatRuntimeServices = {
     getChildrenByParentId(parentId: string): Promise<Message[]>;
     getPathToNode(id: string): Promise<Message[]>;
     getPathThrough(topicId: string, nodeId: string): Promise<Message[]>;
+    newMessageId(): string;
     finalizeAssistantMessage(
       id: string,
       input: {
