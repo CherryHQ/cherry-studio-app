@@ -488,6 +488,34 @@ describe('MessageList anchored tail following', () => {
     expect(mockListScrollToEndMethod).not.toHaveBeenCalled();
   });
 
+  test('positions once before the reveal even while streaming restarts the settle window', () => {
+    const messages = [
+      createMessage('user-1', 'user', [textPart('hello')]),
+      createMessage('assistant-1', 'assistant'),
+    ];
+
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} onReady={jest.fn()} />);
+    });
+    act(() => {
+      mockLatestListProps?.onLayout?.({
+        nativeEvent: { layout: { height: 600, width: 390, x: 0, y: 0 } },
+      } as LayoutChangeEvent);
+    });
+
+    // 每个 chunk 都会改内容高度，闸门（依赖 contentBaseHeight）因此整段流式反复重跑，静默窗口
+    // 永远等不到完成、ready 也就永远报不出来。定位本身是一次性事件：重跑只该重启静默窗口，
+    // 不该再滚一次。放开这条约束时实测新建话题一轮里滚了 45-75 次，全落在「内容不满一屏」阶段，
+    // 表现为 offset 在 0 与 24/40 之间来回弹。
+    for (const height of [900, 940, 980, 1020, 1060]) {
+      act(() => mockLatestListProps?.onContentSizeChange?.(390, height));
+      act(() => flushAnimationFrames());
+      act(() => flushAnimationFrames());
+    }
+
+    expect(mockListScrollToEndMethod).toHaveBeenCalledTimes(1);
+  });
+
   test('follows after overflow, pauses on drag, and resumes only at the end', () => {
     const messages = [
       createMessage('user-1', 'user', [textPart('hello')]),
