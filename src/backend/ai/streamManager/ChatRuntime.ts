@@ -727,17 +727,19 @@ export class ChatRuntime extends BaseService implements ChatModule {
       this.bindCreatedTopicScope(topic.id);
       this.activateTurn(topic.id, activeTurn);
       this.setTurnSnapshot(topic.id, { status: 'reserving' });
-      await this.emitAndWait({ type: 'invalidate-topics' });
-      throwIfAborted(abortController.signal);
 
       await this.runTopicTurn({
         activeTurn,
         fastMode: input.fastMode,
         models,
         // 导航挂在「这一轮已经进快照」之后：目的地一挂载就有用户消息和助手占位可画。
-        // 用 emit 而不是 emitAndWait——后者不吞订阅者的异常，一个导航失败会让整轮走 catch。
+        //
+        // 两个通知都用 `emit` 而不是 `emitAndWait`：后者不吞订阅者的异常，一个导航失败会让
+        // 整轮走 catch；而话题列表的失效是**一次 refetch**，等它等的是一份此刻没人在看的
+        // 数据——放在导航之前 await，用户就得多盯几百毫秒的空界面。
         onTurnPublished: () => {
           this.emit({ topicId: topic.id, type: 'open-topic' });
+          this.emit({ type: 'invalidate-topics' });
         },
         parts,
         reasoningEffort: input.reasoningEffort,

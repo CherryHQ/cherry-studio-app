@@ -1739,12 +1739,14 @@ describe('ChatRuntime', () => {
 
   test('does not open a new topic when aborted after topic creation', async () => {
     const services = createServices();
-    const invalidateTopics = createDeferredInvalidation({ blockOnCall: 1 });
     const openTopic = jest.fn();
-    const runtime = createRuntime({
-      invalidateTopics: invalidateTopics.fn,
-      openTopic,
-      services,
+    const runtime = createRuntime({ openTopic, services });
+    // 话题已经建出来、这一轮还没发布出去的那个窗口。挂在附件落盘上，因为它是话题创建之后、
+    // 乐观发布之前唯一一个 await 点——导航如今就挂在那次发布上。
+    const partsGate = createDeferred();
+    mockCreateMessageParts.mockImplementationOnce(async (parts: readonly CherryMessagePart[]) => {
+      await partsGate.promise;
+      return { entries: [], parts: [...parts] };
     });
 
     const sendPromise = runtime.sendNewTopicText({
@@ -1752,9 +1754,9 @@ describe('ChatRuntime', () => {
       text: 'first',
     });
 
-    await waitUntil(() => invalidateTopics.callCount > 0);
+    await waitUntil(() => mockCreateMessageParts.mock.calls.length > 0);
     runtime.abort(NEW_TOPIC_SNAPSHOT_KEY);
-    invalidateTopics.resolve();
+    partsGate.resolve();
     await sendPromise;
 
     expect(openTopic).not.toHaveBeenCalled();
@@ -2676,9 +2678,10 @@ function delay(durationMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
-function createDeferredInvalidation(options: { blockOnCall?: number } = {}) {
+function createDeferredInvalidation() {
   const deferred = createDeferred();
-  const blockOnCall = options.blockOnCall ?? 2;
+  // 第一次调用放行、第二次卡住，把测试停在两次失效通知之间的那个窗口。
+  const blockOnCall = 2;
   let callCount = 0;
 
   return {
