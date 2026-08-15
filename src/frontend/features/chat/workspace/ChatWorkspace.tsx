@@ -10,8 +10,8 @@ import {
   MessageList,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
+import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
-import { isIOS } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
@@ -87,7 +87,7 @@ export function ChatWorkspace({
     renderGateKey,
     requiresInitialHistoryLayout,
   });
-  const contentTopInset = isIOS ? headerHeight : 0;
+  const contentTopInset = resolveHeaderContentInset(headerHeight);
   const composerDockLayout = useComposerDockLayout();
   const contentBottomInset = isPreview ? 12 : composerDockLayout.contentBottomInset;
   const keyboardOffset = isPreview ? 0 : composerDockLayout.keyboardOffset;
