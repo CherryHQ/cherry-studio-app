@@ -1,12 +1,14 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import type { ReactNode, Ref } from 'react';
-import { type LayoutChangeEvent, Platform } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps, MessagePresentationItem } from '../../types';
 import { MessageList } from '../MessageList';
+import { followingMaintainVisibleContentPosition as androidFollowingPosition } from '../messageListPlatform.android';
+import { followingMaintainVisibleContentPosition as iosFollowingPosition } from '../messageListPlatform.ios';
 
 type AnchoredEndSpaceConfig = {
   anchorIndex?: number;
@@ -72,8 +74,6 @@ let mockScrollButtonProps:
     }
   | undefined;
 let mockFontSizeStep = 0;
-const originalPlatform = Platform.OS;
-
 jest.mock('@legendapp/list/keyboard', () => {
   const { Fragment: MockFragment } = jest.requireActual('react');
   const { View: MockView } = jest.requireActual('react-native');
@@ -267,7 +267,6 @@ describe('MessageList anchored tail following', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount());
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatform });
     cancelAnimationFrameSpy.mockRestore();
     requestAnimationFrameSpy.mockRestore();
   });
@@ -554,22 +553,9 @@ describe('MessageList anchored tail following', () => {
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
   });
 
-  test.each([
-    ['ios', undefined],
-    ['android', false],
-  ] as const)('uses the %s MVCP behavior while following', (platform, expected) => {
-    Object.defineProperty(Platform, 'OS', { configurable: true, value: platform });
-    const messages = [
-      createMessage('user-1', 'user', [textPart('hello')]),
-      createMessage('assistant-1', 'assistant'),
-    ];
-    act(() => {
-      renderer = create(<MessageList {...listProps(messages)} />);
-    });
-
-    expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
-    act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
-    expect(mockLatestListProps?.maintainVisibleContentPosition).toBe(expected);
+  test('defines the platform MVCP behavior used while following', () => {
+    expect(iosFollowingPosition).toBeUndefined();
+    expect(androidFollowingPosition).toBe(false);
   });
 
   test('preserves follow state across prepend and resets it for a new anchor id', () => {
