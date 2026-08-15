@@ -29,5 +29,6 @@ preferences use `PreferenceClient`, and multi-step workflows use `BackendProvide
 `useBackendModule()`; concrete backend objects never enter frontend state.
 
 See [Architecture Overview](../../docs/references/architecture-overview.md),
+[Code Organization](../../docs/references/code-organization.md),
 [Runtime Ownership](../../docs/references/runtime-ownership.md), and
 [Naming Conventions](../../docs/references/naming-conventions.md).

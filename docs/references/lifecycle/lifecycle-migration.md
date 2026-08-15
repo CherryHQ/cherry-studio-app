@@ -172,6 +172,7 @@ Scenarios 1–5 are Stage D; 6–7 are Stage B; 8–9 hold today and gain the gu
 
 ## Verification per stage
 
-Each commit: `pnpm typecheck`, the targeted `pnpm test:app -- <pattern>`, lint, format. Full
-`pnpm test:app` once before opening each PR. Stage A additionally required a simulator cold start —
-the framework being inert is the claim, and only running the app proves it.
+Each commit used targeted tests, lint, and formatting for its behavior. Before each PR, run the
+current local gate in [Testing And CI](../../guides/testing-and-ci.md); the full suite belongs to
+remote CI. Stage A additionally required a simulator cold start because only running the app proves
+that the framework is inert.

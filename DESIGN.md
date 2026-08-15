@@ -2,7 +2,7 @@
 
 Rules for visual decisions: where colour comes from, how hierarchy is built, when a surface or border is allowed, and where literal values are still permitted.
 
-Interaction component ownership is in [UI Components](docs/references/ui-components.md). Router structure and safe areas are in [Navigation And Insets](docs/references/navigation-and-insets.md). Naming is in [Naming Conventions](docs/references/naming-conventions.md).
+Interaction component ownership is in [UI Components](docs/references/ui-components.md). Router structure and safe areas are in [Navigation And Insets](docs/references/navigation-and-insets.md). Naming is in [Naming Conventions](docs/references/naming-conventions.md). Local and remote validation ownership is in [Testing And CI](docs/guides/testing-and-ci.md).
 
 ## Priority Order
 
@@ -190,10 +190,14 @@ Any visual change:
 
 ```bash
 pnpm typecheck:app
-pnpm test:app -- <pattern>  # affected suites only; run the full suite once before opening a PR
+pnpm test:app -- <pattern>  # affected suites only
 pnpm lint
 pnpm format:check
 ```
+
+Before opening a draft PR, follow the complete local gate in
+[Testing And CI](docs/guides/testing-and-ci.md). If the draft changes later, rerun that gate on the
+final head before marking it ready. The full test suite then runs in remote CI.
 
 **Plus: look at it in both light and dark on a device or simulator.** Structural verification is not the same as having seen it — contrast, hierarchy, and how a colour reads against real content only show up on screen.
 

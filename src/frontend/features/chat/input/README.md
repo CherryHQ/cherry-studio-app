@@ -199,11 +199,8 @@ Do not restore these; their absence is the design, not a regression.
 
 ## Manual acceptance with agent-device
 
-Use the workspace Expo dev server on port `8084`.
-
-```bash
-agent-device open com.cherry-ai.cherry-studio-app --session chat-input --platform ios --device "iPhone 17 Pro" --relaunch
-```
+Provision the workspace simulator, Metro port, and agent-device session through
+[Parallel Device Testing](../../../../../docs/guides/parallel-device-testing.md).
 
 Then walk the contract above. The four items under "Not covered by tests" are mandatory; the rest are
 worth a pass whenever this directory changes shape.
