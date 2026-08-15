@@ -1,7 +1,7 @@
 # effortSlider
 
 Discrete effort-level slider used by the chat composer's gauge overlay. Its
-two-layer capsule, blue fill, stop dots, and circular thumb follow the ChatGPT
+two-layer capsule, brand fill, stop dots, and circular thumb follow the ChatGPT
 iOS interaction reference.
 
 The number of stops is entirely driven by `options` — i.e. by how many
@@ -25,8 +25,8 @@ model renders 5–6 detents.
   keyboard and composer movement do not shift its resting position.
 - **Visuals** — the neutral outer capsule and its exposed stop dots use the
   theme's `secondary`/`secondary-foreground` pair, so the track is light in the
-  light theme and near-black in the dark theme. The progress pill retains the
-  sampled reference blue (`#3995ff`) with translucent white dots.
+  light theme and near-black in the dark theme. The progress pill and gauge
+  pointer use the shared `brand` token with translucent white dots over the pill.
 
 ## Theming & accessibility
 

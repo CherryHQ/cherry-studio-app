@@ -5,7 +5,6 @@ import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { getEffortSliderTrackGeometry, stopFraction } from '../utils/effortSliderMath';
 import {
-  effortSliderAccentColor,
   effortSliderProgressHeight,
   effortSliderThumbInset,
   effortSliderThumbSize,
@@ -23,9 +22,9 @@ type EffortSliderTrackProps = {
 };
 
 /**
- * The reference uses a 64dp neutral capsule around a 44dp blue progress pill.
- * The capsule and exposed ticks follow the active theme. The thumb sits inside
- * the blue end cap, leaving its four-pixel blue ring visible at the endpoints.
+ * A 64dp neutral capsule surrounds a 44dp brand progress pill. The capsule and
+ * exposed ticks follow the active theme. The thumb sits inside the progress end
+ * cap, leaving its four-pixel brand ring visible at the endpoints.
  */
 export function EffortSliderTrack({
   trackHeight,
@@ -33,12 +32,14 @@ export function EffortSliderTrack({
   position,
   measuredWidth,
 }: EffortSliderTrackProps) {
-  const [trackColor, trackForegroundColor, constantBlack, constantWhite] = useThemeColor([
-    'secondary',
-    'secondary-foreground',
-    'constant-black',
-    'constant-white',
-  ]);
+  const [brandColor, trackColor, trackForegroundColor, constantBlack, constantWhite] =
+    useThemeColor([
+      'brand',
+      'secondary',
+      'secondary-foreground',
+      'constant-black',
+      'constant-white',
+    ]);
   const scale = trackHeight / effortSliderTrackHeight;
   const progressHeight = effortSliderProgressHeight * scale;
   const thumbInset = effortSliderThumbInset * scale;
@@ -93,7 +94,7 @@ export function EffortSliderTrack({
           className="absolute overflow-hidden"
           style={[
             {
-              backgroundColor: effortSliderAccentColor,
+              backgroundColor: brandColor,
               borderRadius: progressHeight / 2,
               height: progressHeight,
               left: progressInset,

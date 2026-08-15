@@ -13,7 +13,6 @@ import {
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { effortGaugeNeedleAngle } from '../effortSlider/utils/effortSliderMath';
-import { effortSliderAccentColor } from '../effortSlider/utils/effortSliderVisual';
 import type { ChatInputEffortFrame } from '../utils/chatInputEffortLayout';
 
 const gaugeSize = 20;
@@ -34,7 +33,7 @@ export function ChatInputEffortGauge({
   stopCount,
   valueIndex,
 }: ChatInputEffortGaugeProps) {
-  const foregroundColor = useThemeColor('foreground');
+  const [brandColor, foregroundColor] = useThemeColor(['brand', 'foreground']);
   const reducedMotion = useReducedMotion();
   const needleAngle = useSharedValue(effortGaugeNeedleAngle(valueIndex, stopCount));
   const footprintRef = useRef<View>(null);
@@ -80,13 +79,13 @@ export function ChatInputEffortGauge({
             style="stroke"
           />
           <Line
-            color={effortSliderAccentColor}
+            color={brandColor}
             p1={gaugeCenter}
             p2={needleEnd}
             strokeCap="round"
             strokeWidth={1.8}
           />
-          <Circle color={effortSliderAccentColor} cx={gaugeCenter.x} cy={gaugeCenter.y} r={1.4} />
+          <Circle color={brandColor} cx={gaugeCenter.x} cy={gaugeCenter.y} r={1.4} />
         </Canvas>
       </Composer.Action>
     </View>
