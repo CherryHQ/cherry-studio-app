@@ -8,6 +8,23 @@ import { emitProgrammaticScroll } from './useLayoutBenchInstrumentation';
 
 const TAIL_FOLLOW_END_THRESHOLD = 20;
 
+// 尾随不逐次「贴死底部」，而是每帧朝底部推进剩余距离的这个比例（60fps 下时间常数约 47ms）。
+//
+// 正文按整行阶跃长高——行高 20px，一次 chunk 常带 2~5 行——而内容更新只有约 35Hz，显示是
+// 60Hz。贴死底部等于把这串阶跃原样复制成滚动位移：实测尾随期 45% 的帧一动不动、下一帧蹦
+// 40~100px，三场景各有 67~68% 的位移集中在那几次跳里（`follow-cadence` 判据量的就是它），
+// 而均速只有 800~900px/s。按比例逼近把同一段位移摊到之后几帧上，均速不变、瞬时速度收敛。
+//
+// 代价是稳定滞后约 v×τ ≈ 40px（两行）：流式期间最新一行离视口底部会多留两行的余量，
+// 内容一停就在 ~150ms 内收敛到底。
+const TAIL_FOLLOW_RESPONSE = 0.3;
+// 指数逼近的尾巴无限长，差到这个距离以内直接落位。落位调 `scrollToEnd` 而不是自己算的落点：
+// `contentLength - scrollLength` 是 LegendList 的记账值，与原生 contentSize 可能差一点，
+// 长期以它为准会停在离底部差几像素的地方，`isAtEnd` 判定跟着一起错。
+const TAIL_FOLLOW_SETTLE_PX = 1.5;
+// 比例步在尾段会小于一像素，那几十毫秒既没有可见运动、又够不到落位条件。
+const TAIL_FOLLOW_MIN_STEP_PX = 2;
+
 type TailFollowPhase = 'anchoring' | 'following' | 'paused';
 
 type TailFollowState = {
@@ -55,6 +72,10 @@ export function useTailFollow({
   // 尾随相位是 React state，worklet 读不到，镜像一份供按钮显隐推导使用。
   const isTailControlled = useSharedValue(false);
   const pendingTailFollowFrameRef = useRef<number | null>(null);
+  // 逼近器自己记的落点。**不能每帧改读 `listState.scroll`**：那是节流上报的值，落后于我们
+  // 刚下的命令，用它算剩余距离等于每帧都从旧位置重新起步、一步跨到底，逼近直接退化回贴死
+  // 底部。置 null＝下一帧以列表实测值重新对表（进入尾随、手势结束、落位之后）。
+  const followOffsetRef = useRef<number | null>(null);
   const pendingInteractionEndFrameRef = useRef<number | null>(null);
   const isTouchingListRef = useRef(false);
   const isDraggingListRef = useRef(false);
@@ -80,12 +101,15 @@ export function useTailFollow({
   // LegendList 的 maintainScrollAtEnd 会在 rAF 中捕获旧配置，拖动已暂停后仍可能执行一次。
   // 在应用层合并 follow 请求，并在直接派发给原生 ScrollView 前重新检查同步交互锁。
   const cancelPendingTailFollow = useCallback(() => {
+    followOffsetRef.current = null;
     if (pendingTailFollowFrameRef.current !== null) {
       cancelAnimationFrame(pendingTailFollowFrameRef.current);
       pendingTailFollowFrameRef.current = null;
     }
   }, []);
 
+  // 循环自维持：只要还没追上底部就续下一帧，追上就停。内容在这期间继续长高不必重新调度
+  // ——每帧都重读目标，`scheduleTailFollow` 的重入守卫会把途中的调用吞掉。
   const scheduleTailFollow = useCallback(() => {
     if (
       tailFollowPhaseRef.current !== 'following' ||
@@ -95,20 +119,52 @@ export function useTailFollow({
       return;
     }
 
-    pendingTailFollowFrameRef.current = requestAnimationFrame(() => {
+    const step = () => {
       pendingTailFollowFrameRef.current = null;
 
       if (tailFollowPhaseRef.current !== 'following' || isUserInteractingRef.current) {
+        followOffsetRef.current = null;
         return;
       }
 
       const nativeScrollRef = listRef.current?.getNativeScrollRef() as
-        | { scrollToEnd?: (options: { animated?: boolean }) => void }
+        | {
+            scrollTo?: (options: { animated?: boolean; y: number }) => void;
+            scrollToEnd?: (options: { animated?: boolean }) => void;
+          }
         | null
         | undefined;
-      emitProgrammaticScroll('tailFollow', listRef);
-      nativeScrollRef?.scrollToEnd?.({ animated: false });
-    });
+      const settle = () => {
+        followOffsetRef.current = null;
+        emitProgrammaticScroll('tailFollow', listRef, { step: 'settle' });
+        nativeScrollRef?.scrollToEnd?.({ animated: false });
+      };
+
+      const listState = listRef.current?.getState();
+      if (!listState || listState.scrollLength <= 0) {
+        settle();
+        return;
+      }
+
+      const target = listState.contentLength - listState.scrollLength;
+      const from = followOffsetRef.current ?? listState.scroll;
+      const remaining = target - from;
+      // 负的剩余距离（内容缩短）一并走落位分支，交给 scrollToEnd 定夺。
+      if (remaining <= TAIL_FOLLOW_SETTLE_PX) {
+        settle();
+        return;
+      }
+
+      const next =
+        from +
+        Math.min(remaining, Math.max(remaining * TAIL_FOLLOW_RESPONSE, TAIL_FOLLOW_MIN_STEP_PX));
+      followOffsetRef.current = next;
+      emitProgrammaticScroll('tailFollow', listRef, { step: 'ease', to: Math.round(next) });
+      nativeScrollRef?.scrollTo?.({ animated: false, y: next });
+      pendingTailFollowFrameRef.current = requestAnimationFrame(step);
+    };
+
+    pendingTailFollowFrameRef.current = requestAnimationFrame(step);
   }, [listRef]);
 
   const isListAtEnd = useCallback(() => {

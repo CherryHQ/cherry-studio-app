@@ -56,11 +56,12 @@ type MockLegendListProps = {
 let mockLatestListProps: MockLegendListProps | undefined;
 const mockFreeze = { get: jest.fn(), set: jest.fn(), value: false };
 const mockScrollMessageToEnd = jest.fn(async () => undefined);
+const mockListScrollTo = jest.fn();
 const mockListScrollToEnd = jest.fn();
 const mockListScrollToEndMethod = jest.fn(async () => undefined);
 let mockListMetrics = { contentLength: 500, scroll: 0, scrollLength: 500 };
 const mockLegendListRef = {
-  getNativeScrollRef: () => ({ scrollToEnd: mockListScrollToEnd }),
+  getNativeScrollRef: () => ({ scrollTo: mockListScrollTo, scrollToEnd: mockListScrollToEnd }),
   getState: () => mockListMetrics,
   scrollToEnd: mockListScrollToEndMethod,
 } as unknown as LegendListRef;
@@ -573,6 +574,48 @@ describe('MessageList anchored tail following', () => {
     });
     expect(mockLatestListProps?.maintainVisibleContentPosition).toBeUndefined();
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
+  });
+
+  test('eases toward the end across frames instead of snapping to it', () => {
+    const messages = [
+      createMessage('user-1', 'user', [textPart('hello')]),
+      createMessage('assistant-1', 'assistant'),
+    ];
+    act(() => {
+      renderer = create(<MessageList {...listProps(messages)} />);
+    });
+
+    act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
+    act(() => flushAnimationFrames());
+    mockListScrollToEnd.mockClear();
+
+    // 正文流入，一次记上 1000px 的欠账（内容 1500 − 视口 500）。
+    mockListMetrics = { contentLength: 1_500, scroll: 0, scrollLength: 500 };
+    act(() =>
+      mockLatestListProps?.onItemSizeChanged?.({
+        index: 1,
+        itemKey: 'assistant-1',
+        previous: 120,
+        size: 1_120,
+      }),
+    );
+
+    // 每次 flush 推进一帧：欠账按 0.3 的比例递减（1000→700→490），位移因此是 300/210/147
+    // 而不是第一帧就跨完 1000。这三个数就是「不再把内容阶跃原样复制成滚动」的判据。
+    act(() => flushAnimationFrames());
+    act(() => flushAnimationFrames());
+    act(() => flushAnimationFrames());
+
+    expect(mockListScrollTo.mock.calls.map((call) => call[0].y)).toEqual([300, 510, 657]);
+    expect(mockListScrollToEnd).not.toHaveBeenCalled();
+
+    // 逼近的尾巴无限长，但落位分支必须收得住：追进 1.5px 以内就交给 scrollToEnd 精确贴底，
+    // 循环随之停止（后续帧不再排队）。
+    for (let frame = 0; frame < 30; frame += 1) {
+      act(() => flushAnimationFrames());
+    }
+
+    expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
   });
 
   test('shows the scroll control only once the user pauses tail following', () => {
