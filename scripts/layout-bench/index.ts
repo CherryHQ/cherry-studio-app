@@ -142,7 +142,7 @@ function judgeEvents(
   fs.mkdirSync(chartDir, { recursive: true });
   fs.writeFileSync(
     path.join(chartDir, 'trace.svg'),
-    `${renderTraceSvg(trace, { scenario, violations: partitioned.violations })}\n`,
+    `${renderTraceSvg(trace, { judges, scenario, violations: partitioned.violations })}\n`,
   );
 
   for (const judge of judges) {

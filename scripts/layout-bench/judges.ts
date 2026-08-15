@@ -346,6 +346,63 @@ function percentile(ascending: number[], fraction: number): number {
 /** 切分尾随连续段的空档下限。尾随期正常采样间隔在 25~33ms，这么长的缝只会是相位切换留的。 */
 const FOLLOW_SEGMENT_GAP_MS = 100;
 
+export type FollowStep = {
+  atMs: number;
+  /** 这一步算不算进 follow-cadence 的统计。 */
+  counted: boolean;
+  dy: number;
+  fromMs: number;
+  /** 两端任一落在手势窗口内。手指拉出来的负位移不是「列表自己往回弹」。 */
+  inInteraction: boolean;
+};
+
+/**
+ * 相邻两次滚动采样之间的位移，附带「这一步算不算数」。
+ *
+ * 判据只吃 `counted` 的那些；轨迹图两种都画，否则回答不了「这根柱子这么高，判据怎么没红」。
+ * 两边共用同一份筛选，图上的柱子和摘要里的数字才不会各说各话。
+ */
+export function collectFollowSteps(trace: Trace): FollowStep[] {
+  // 惯性余波里的位移是上一次手势的后果，速度天然远高于尾随；不排除掉，判据量的就是甩动
+  // 的手感而不是跟随的节奏。
+  const isUserDriven = (atMs: number) =>
+    trace.interactionWindows.some(
+      (window) => atMs >= window.start && atMs <= window.end + THRESHOLDS.interactionEchoMs,
+    );
+
+  // 每次进入尾随都要重新追平一次（一轮里可能有多次：手势暂停后回到底部也算）。
+  const followStartsMs = trace.events
+    .filter((event) => event.e === 'phase' && event.phase === 'following')
+    .map((event) => event.t - trace.originMs);
+  const isWarmingUp = (atMs: number) =>
+    followStartsMs.some((startMs) => atMs >= startMs && atMs < startMs + THRESHOLDS.followWarmupMs);
+
+  const steps: FollowStep[] = [];
+
+  for (let index = 1; index < trace.samples.length; index += 1) {
+    const previous = trace.samples[index - 1];
+    const current = trace.samples[index];
+    const dy = current.y - previous.y;
+
+    steps.push({
+      atMs: current.atMs,
+      // 只统计尾随期向下追的那一半：回退归 offset-reversal 管，混进来会把分布压平。
+      counted:
+        previous.phase === 'following' &&
+        current.phase === 'following' &&
+        current.atMs > previous.atMs &&
+        dy > 0 &&
+        !isUserDriven(previous.atMs) &&
+        !isWarmingUp(previous.atMs),
+      dy,
+      fromMs: previous.atMs,
+      inInteraction: previous.inInteraction || current.inInteraction,
+    });
+  }
+
+  return steps;
+}
+
 /**
  * 尾随期的位移该不该匀速——「流式很顺，但滚动一顿一顿」的可量化形态。
  *
@@ -372,42 +429,7 @@ const FOLLOW_SEGMENT_GAP_MS = 100;
  * 必须连 `sampleRateHz` 一起看。
  */
 function judgeFollowCadence(trace: Trace): JudgeReport {
-  // 惯性余波里的位移是上一次手势的后果，速度天然远高于尾随；不排除掉，判据量的就是甩动
-  // 的手感而不是跟随的节奏。
-  const isUserDriven = (atMs: number) =>
-    trace.interactionWindows.some(
-      (window) => atMs >= window.start && atMs <= window.end + THRESHOLDS.interactionEchoMs,
-    );
-
-  // 每次进入尾随都要重新追平一次（一轮里可能有多次：手势暂停后回到底部也算）。
-  const followStartsMs = trace.events
-    .filter((event) => event.e === 'phase' && event.phase === 'following')
-    .map((event) => event.t - trace.originMs);
-  const isWarmingUp = (atMs: number) =>
-    followStartsMs.some((startMs) => atMs >= startMs && atMs < startMs + THRESHOLDS.followWarmupMs);
-
-  const steps: Array<{ atMs: number; dy: number; fromMs: number }> = [];
-
-  for (let index = 1; index < trace.samples.length; index += 1) {
-    const previous = trace.samples[index - 1];
-    const current = trace.samples[index];
-    const dy = current.y - previous.y;
-
-    // 只统计尾随期向下追的那一半：回退归 offset-reversal 管，混进来会把分布压平。
-    if (previous.phase !== 'following' || current.phase !== 'following') {
-      continue;
-    }
-    if (
-      current.atMs <= previous.atMs ||
-      dy <= 0 ||
-      isUserDriven(previous.atMs) ||
-      isWarmingUp(previous.atMs)
-    ) {
-      continue;
-    }
-
-    steps.push({ atMs: current.atMs, dy, fromMs: previous.atMs });
-  }
+  const steps = collectFollowSteps(trace).filter((step) => step.counted);
 
   const violations: Violation[] = [];
   const stepPixels = steps.map((step) => step.dy).sort((left, right) => left - right);
