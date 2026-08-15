@@ -53,6 +53,15 @@ export const THRESHOLDS = {
    */
   followMinSamples: 12,
   /**
+   * 进入尾随后这段时间不计入节奏统计。锚定期结束的那一刻列表未必已经贴底——预留空白刚
+   * 耗尽、内容第一次超出视口——逼近器要先把这段欠账追平。实测 `stream-scroll` 一轮里三次
+   * ≥40px 的位移全部落在进入 following 后 36/73/137ms，对应 160~230px 的欠账，形状是标准的
+   * 指数收敛而不是阶跃。**这是接管，不是跟随的节奏**，判据问的是追平之后走得匀不匀。
+   * 300ms 足够追平这个量级（每帧 30%、实测采样 ~50Hz），又短到抓得住稳态里的跳——贴死底部
+   * 那版的 34 次跃过散布在整整 3 秒里，扣掉头 300ms 依然满屏。
+   */
+  followWarmupMs: 300,
+  /**
    * 切分单调段时忽略多大的回撤。动画收尾会在目标值附近来回蹭几像素（实测 5-6px），
    * 不过滤就会把一整段爬升切成碎片，「两腿取短」随即取到碎片长度而不是真正的返程。
    */
@@ -334,61 +343,8 @@ function percentile(ascending: number[], fraction: number): number {
   return ascending[Math.min(ascending.length - 1, Math.floor(ascending.length * fraction))];
 }
 
-/**
- * 显示时基。钉死的 `iPhone 17 Pro (layout-bench)` 是 ProMotion，跑的是 120Hz——**不是 60**。
- * 实测依据：尾随逼近循环每帧自排下一帧，所以连续 `ease` 探针的间隔就是 rAF 的实际周期，
- * 把它对 8.33ms 取整的残差中位 1.67ms，对 16.67ms 取整则是 6.33ms。换一台 60Hz 设备跑
- * bench 要改这里，否则逐帧栅格会把两个显示帧算成一个。
- */
-const FRAME_MS = 1000 / 120;
-/** 切分尾随连续段的空档下限。尾随期正常采样间隔在 30ms 上下，这么长的缝只会是相位切换留的。 */
+/** 切分尾随连续段的空档下限。尾随期正常采样间隔在 25~33ms，这么长的缝只会是相位切换留的。 */
 const FOLLOW_SEGMENT_GAP_MS = 100;
-
-/**
- * 把尾随位移铺回一条 60Hz 的时间轴，得到「每一帧走了多少像素」。
- *
- * 不能用相邻样本的速度代替：scroll 探针只在 offset **变化时**发，采样密度本身就是被测量的
- * 东西——贴死底部时每两三帧才发一条，逼近时每帧都发。同一段轨迹采得越密，Δt 越小、Δy/Δt
- * 越大，速度百分位于是反着动（实测逼近版 p90 是 3200px/s，比贴死底部的 1600 还高一倍，纯粹
- * 是时间戳量化噪声）。
- *
- * 位移整笔记在**后一个样本所在的帧**，中间的帧记 0：探针的语义就是「这一刻 offset 变成了
- * 这个值」，两个事件之间没有位移发生。把它摊平会亲手抹掉要抓的静止段。
- */
-function toFramePixels(steps: Array<{ atMs: number; dy: number; fromMs: number }>): number[] {
-  const framePixels: number[] = [];
-  const bucket = new Map<number, number>();
-  let segmentStart: number | undefined;
-  let segmentEnd = 0;
-
-  const flushSegment = () => {
-    if (segmentStart === undefined) {
-      return;
-    }
-
-    const frames = Math.max(1, Math.ceil((segmentEnd - segmentStart) / FRAME_MS));
-    for (let index = 0; index < frames; index += 1) {
-      framePixels.push(bucket.get(index) ?? 0);
-    }
-
-    bucket.clear();
-    segmentStart = undefined;
-  };
-
-  for (const step of steps) {
-    if (segmentStart !== undefined && step.fromMs - segmentEnd > FOLLOW_SEGMENT_GAP_MS) {
-      flushSegment();
-    }
-
-    segmentStart ??= step.fromMs;
-    segmentEnd = step.atMs;
-    const index = Math.floor((step.atMs - segmentStart) / FRAME_MS);
-    bucket.set(index, (bucket.get(index) ?? 0) + step.dy);
-  }
-
-  flushSegment();
-  return framePixels;
-}
 
 /**
  * 尾随期的位移该不该匀速——「流式很顺，但滚动一顿一顿」的可量化形态。
@@ -400,10 +356,20 @@ function toFramePixels(steps: Array<{ atMs: number; dy: number; fromMs: number }
  * 量在**实际 offset 轨迹**（scroll 探针）上，而不是跟随调用的落点：落点是实现细节，换一种
  * 跟随策略语义就变了，A/B 两侧不可比；offset 是用户真正看到的东西，两侧定义完全相同。
  *
- * 断言的是「跃过承担了多少位移」而不是速度百分位。速度对采样密度免疫、看着更该用，实测
- * 却抓不住：恒等跟随三场景的 p90 是 1600/2300/1714px/s，横跨任何单一阈值的两侧，而同样
- * 三条轨迹的 share 稳定在 68/72/68%。速度分布被大量「跟上了、没跳」的样本稀释，位移份额
- * 不会——它问的正是那句「少数几次跳吃掉了大部分位移吗」。速度仍进 metrics 供诊断。
+ * 断言的是「跃过承担了多少位移」这个**份额**，因为它是这里唯一不受采样率影响的量。
+ *
+ * 这条判据的全部难处都在采样率上：`scroll` 探针经 `runOnJS` 回抛，采样率因此被 JS 线程钳住，
+ * 实测三代实现分别只有 30 / 37 / 41Hz——显示是 120Hz，探针一次都没够到过。于是
+ *
+ * - 速度百分位**反着动**：采得越密 Δt 越小，`Δy/Δt` 被时间戳量化噪声顶爆（贴死底部 1600px/s、
+ *   逐帧逼近 3200px/s，越改越"差"）。
+ * - 逐帧栅格更糟：按 120Hz 铺开算"静止帧占比"，量到的其实是探针漏了多少帧，三代实现分别
+ *   81 / 65 / 68%——UI 线程版明明每个显示帧都在动，数字却和 JS 版一样。**探针跑在被测量的
+ *   那条线程上，它测不了自己**。两个指标都已删掉，别再加回来。
+ *
+ * 份额是相对量，采样疏密同时作用于分子分母，因此留得住：三代实现 67~82% → 0~13% → 0%。
+ * `maxStepPx` 与 `p90StepPx` 有偏（采得越密值越小）但方向没错，留作诊断，跨版本读它们时
+ * 必须连 `sampleRateHz` 一起看。
  */
 function judgeFollowCadence(trace: Trace): JudgeReport {
   // 惯性余波里的位移是上一次手势的后果，速度天然远高于尾随；不排除掉，判据量的就是甩动
@@ -412,6 +378,13 @@ function judgeFollowCadence(trace: Trace): JudgeReport {
     trace.interactionWindows.some(
       (window) => atMs >= window.start && atMs <= window.end + THRESHOLDS.interactionEchoMs,
     );
+
+  // 每次进入尾随都要重新追平一次（一轮里可能有多次：手势暂停后回到底部也算）。
+  const followStartsMs = trace.events
+    .filter((event) => event.e === 'phase' && event.phase === 'following')
+    .map((event) => event.t - trace.originMs);
+  const isWarmingUp = (atMs: number) =>
+    followStartsMs.some((startMs) => atMs >= startMs && atMs < startMs + THRESHOLDS.followWarmupMs);
 
   const steps: Array<{ atMs: number; dy: number; fromMs: number }> = [];
 
@@ -424,7 +397,12 @@ function judgeFollowCadence(trace: Trace): JudgeReport {
     if (previous.phase !== 'following' || current.phase !== 'following') {
       continue;
     }
-    if (current.atMs <= previous.atMs || dy <= 0 || isUserDriven(previous.atMs)) {
+    if (
+      current.atMs <= previous.atMs ||
+      dy <= 0 ||
+      isUserDriven(previous.atMs) ||
+      isWarmingUp(previous.atMs)
+    ) {
       continue;
     }
 
@@ -432,8 +410,13 @@ function judgeFollowCadence(trace: Trace): JudgeReport {
   }
 
   const violations: Violation[] = [];
-  const framePixels = toFramePixels(steps).sort((left, right) => left - right);
-  const stallFrames = framePixels.filter((px) => px === 0).length;
+  const stepPixels = steps.map((step) => step.dy).sort((left, right) => left - right);
+  // 采样率＝min(offset 真正变了多少次, JS 线程回抛得过来多少)。贴死底部时是前者卡着
+  // （offset 只在内容变化时跳），逐帧逼近时是后者卡着。它是读上面两个位移量的前提。
+  const gaps = steps
+    .map((step) => step.atMs - step.fromMs)
+    .filter((gap) => gap > 0 && gap < FOLLOW_SEGMENT_GAP_MS);
+  const meanGapMs = gaps.length > 0 ? gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length : 0;
   const totalPx = steps.reduce((sum, step) => sum + step.dy, 0);
   const bigSteps = steps.filter((step) => step.dy >= THRESHOLDS.followStepPx);
   const bigStepPx = bigSteps.reduce((sum, step) => sum + step.dy, 0);
@@ -454,11 +437,11 @@ function judgeFollowCadence(trace: Trace): JudgeReport {
         bigStepSharePercent: sharePercent,
         bigSteps: bigSteps.length,
         maxStepPx: Math.round(biggest?.dy ?? 0),
-        p90FramePx: Math.round(percentile(framePixels, 0.9)),
+        p90StepPx: Math.round(percentile(stepPixels, 0.9)),
         samples: steps.length,
       },
       judge: 'follow-cadence',
-      message: `${bigSteps.length}/${steps.length} 次位移 ≥${THRESHOLDS.followStepPx}px，承担了尾随总位移的 ${sharePercent}%（最大单次 ${Math.round(biggest?.dy ?? 0)}px，逐帧位移 p90 ${Math.round(percentile(framePixels, 0.9))}px）`,
+      message: `${bigSteps.length}/${steps.length} 次位移 ≥${THRESHOLDS.followStepPx}px，承担了尾随总位移的 ${sharePercent}%（最大单次 ${Math.round(biggest?.dy ?? 0)}px，p90 ${Math.round(percentile(stepPixels, 0.9))}px）`,
       phase: trace.phaseAt(atMs),
     });
   }
@@ -470,12 +453,9 @@ function judgeFollowCadence(trace: Trace): JudgeReport {
       bigStepCount: bigSteps.length,
       bigStepSharePercent: sharePercent,
       followSamples: steps.length,
-      maxStepPx: Math.round(steps.reduce((max, step) => Math.max(max, step.dy), 0)),
-      p50FramePx: Math.round(percentile(framePixels, 0.5)),
-      p90FramePx: Math.round(percentile(framePixels, 0.9)),
-      // 「停一停、蹦一下」的另一半：一动不动的帧占了多少。
-      stallFramePercent:
-        framePixels.length > 0 ? Math.round((stallFrames / framePixels.length) * 100) : 0,
+      maxStepPx: Math.round(percentile(stepPixels, 1)),
+      p90StepPx: Math.round(percentile(stepPixels, 0.9)),
+      sampleRateHz: meanGapMs > 0 ? Math.round(1000 / meanGapMs) : 0,
     },
     violations,
   };
