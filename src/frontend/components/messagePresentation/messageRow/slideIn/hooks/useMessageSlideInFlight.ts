@@ -24,6 +24,14 @@ export type MessageSlideInFlight = {
   activeMessageId: SharedValue<string | undefined>;
   // 入场行相对钉顶落点的纵向偏移（px，正值＝落点下方）。
   offset: SharedValue<number>;
+  // 与入场行同一轮的助手占位行。它要等用户消息落位后才显形，否则「思考中」会在气泡还在半空
+  // 时先出现在气泡**上方**——助手行的布局位置紧挨用户行的落点，而用户行此刻只是被 transform
+  // 拉下去了，两者读起来是颠倒的。
+  followerMessageId: SharedValue<string | undefined>;
+  // 归一化的落位进度（0＝刚起飞，1＝已落位），跑的是与 offset 同一条弹簧。用它而不是直接读
+  // offset：offset 的量纲是像素、上限随「滚动分走多少」变化，而这个值恒为 0→1，跟随行的真实
+  // 到达节奏，与行程怎么拆无关。
+  landingProgress: SharedValue<number>;
   // 在钉顶落位的同一帧调用，开始向落点收敛。`pendingScrollPx` 是这一帧起列表还会自己滚掉的
   // 距离——那一段由滚动动画承担，弹簧只走剩下的。
   launch: (pendingScrollPx: number) => void;
@@ -51,12 +59,16 @@ export type MessageSlideInFlight = {
  */
 export function useMessageSlideInFlight({
   enteringMessageId,
+  followerMessageId: nextFollowerMessageId,
   travel,
 }: {
   enteringMessageId: string | undefined;
+  followerMessageId: string | undefined;
   travel: number;
 }): MessageSlideInFlight {
   const activeMessageId = useSharedValue<string | undefined>(undefined);
+  const followerMessageId = useSharedValue<string | undefined>(undefined);
+  const landingProgress = useSharedValue(1);
   const offset = useSharedValue(0);
   const armedMessageIdRef = useRef<string | undefined>(undefined);
   const isLaunchedRef = useRef(false);
@@ -87,9 +99,19 @@ export function useMessageSlideInFlight({
     isLaunchedRef.current = false;
     armedTravelRef.current = travel;
     activeMessageId.set(enteringMessageId);
+    followerMessageId.set(nextFollowerMessageId);
+    landingProgress.set(0);
     offset.set(travel);
     emitLayoutBenchProbe('slideIn', { phase: 'arm', travel: Math.round(travel) });
-  }, [activeMessageId, enteringMessageId, offset, travel]);
+  }, [
+    activeMessageId,
+    enteringMessageId,
+    followerMessageId,
+    landingProgress,
+    nextFollowerMessageId,
+    offset,
+    travel,
+  ]);
 
   // 开火只看「装填了没有、开过没有」，不看当前的 enteringMessageId：待发消息一落库它就被
   // 清空，而那常常发生在飞行**中途**。若拿它当判据，清空之后到达的那次落位会被误判成
@@ -121,9 +143,11 @@ export function useMessageSlideInFlight({
           runOnJS(emitSlideInSettled)(isFinished === true);
         }),
       );
+      // 同一条弹簧、同一时刻起跑，所以它与行的到达严格同步，不必再猜一个延迟常量。
+      landingProgress.set(withSpring(1, { ...spring.settle, reduceMotion: ReduceMotion.System }));
     },
-    [offset],
+    [landingProgress, offset],
   );
 
-  return { activeMessageId, launch, offset };
+  return { activeMessageId, followerMessageId, landingProgress, launch, offset };
 }
