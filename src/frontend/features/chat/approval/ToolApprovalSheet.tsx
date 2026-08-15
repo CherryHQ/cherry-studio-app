@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { getBuiltInToolPresentation } from '@/frontend/components/messagePresentation/utils/builtInToolPresentation';
+import { getBuiltInToolPresentation } from '@/frontend/components/messagePresentation/utils/builtInToolPresentation/builtInToolPresentation';
 
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 

@@ -14,7 +14,6 @@ import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Platform,
   View,
 } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -25,6 +24,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
 import type { MessageListProps, MessagePresentationItem } from '../types';
+import { followingMaintainVisibleContentPosition } from './messageListPlatform/messageListPlatform';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
 
 // 滚动/布局诊断埋点：记录会驱动列表位移的关键数值（scroll offset、内容高度、锚点就绪、
@@ -461,9 +461,7 @@ export function MessageList({
   );
 
   const maintainVisibleContentPosition = isFollowing
-    ? Platform.OS === 'android'
-      ? false
-      : undefined
+    ? followingMaintainVisibleContentPosition
     : MAINTAIN_VISIBLE_CONTENT_POSITION;
   // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
   const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);

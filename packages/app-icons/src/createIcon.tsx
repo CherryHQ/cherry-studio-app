@@ -1,8 +1,9 @@
-import { SymbolView } from 'expo-symbols';
 import type { ReactElement } from 'react';
-import { Platform, Text, View, type StyleProp, type TextStyle, type ViewStyle } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { useResolveClassNames } from 'uniwind';
+
+import { IconGlyph } from './icon-glyph/icon-glyph';
 
 export type AppIconProps = {
   /** Tailwind classes; `size-*` drives width/height and `text-*` drives the glyph color. */
@@ -17,14 +18,6 @@ export type AppIconProps = {
 };
 
 const defaultIconSize = 24;
-
-/**
- * Matches the file the generator subsets into `src/fonts/`, which app.json's expo-font plugin
- * bundles into `assets/fonts/` — where Android resolves a family by the file's base name. Bundling
- * it natively (rather than expo-symbols' own Android path, which `loadAsync`s per mount and renders
- * a blank box until it resolves) is what makes the first frame correct.
- */
-const materialFontFamily = 'MaterialSymbols';
 
 function toDimension(value: unknown): number | undefined {
   if (typeof value === 'number') {
@@ -56,51 +49,14 @@ export function createIcon(config: { displayName: string; sf: SFSymbol; glyph: s
     const resolvedHeight = height ?? size ?? toDimension(styles.height) ?? defaultIconSize;
     const resolvedColor = color ?? toColor(styles.color);
 
-    if (Platform.OS === 'ios') {
-      return (
-        // SymbolView is an ExpoView wrapping a UIImageView, and `UIImage(systemName:)` carries
-        // UIKit's own accessibility description — so an icon-only button announces
-        // "waveform.path.ecg" to VoiceOver. Neither `accessible` nor `accessibilityElementsHidden`
-        // on SymbolView suppresses that inner view, so hide the subtree from a plain wrapper.
-        // Icons are decorative; the enclosing pressable owns the label.
-        <View
-          accessibilityElementsHidden
-          style={[{ height: resolvedHeight, width: resolvedWidth }, style]}
-        >
-          <SymbolView
-            name={config.sf}
-            resizeMode="scaleAspectFit"
-            size={Math.min(resolvedWidth, resolvedHeight)}
-            style={{ height: resolvedHeight, width: resolvedWidth }}
-            tintColor={resolvedColor}
-          />
-        </View>
-      );
-    }
-
     return (
-      <Text
-        accessible={false}
-        allowFontScaling={false}
-        importantForAccessibility="no"
-        style={[
-          {
-            color: resolvedColor,
-            fontFamily: materialFontFamily,
-            fontSize: Math.min(resolvedWidth, resolvedHeight),
-            height: resolvedHeight,
-            // Glyphs sit on the em square, so line height = height centers them once Android's
-            // extra font padding is off.
-            includeFontPadding: false,
-            lineHeight: resolvedHeight,
-            textAlign: 'center',
-            width: resolvedWidth,
-          },
-          style as StyleProp<TextStyle>,
-        ]}
-      >
-        {config.glyph}
-      </Text>
+      <IconGlyph
+        color={resolvedColor}
+        config={config}
+        height={resolvedHeight}
+        style={style}
+        width={resolvedWidth}
+      />
     );
   }
 

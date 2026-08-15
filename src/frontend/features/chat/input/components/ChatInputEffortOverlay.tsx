@@ -1,6 +1,5 @@
 import { Portal } from '@cherrystudio/ui/components';
 import { easing } from '@cherrystudio/ui/motion';
-import { BlurView } from 'expo-blur';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
@@ -8,16 +7,13 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { OverKeyboardView, useKeyboardState } from 'react-native-keyboard-controller';
 import Animated, {
   Extrapolation,
-  createAnimatedComponent,
   interpolate,
   runOnJS,
-  useAnimatedProps,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useUniwind } from 'uniwind';
 
 import { SlotText } from '@/frontend/components/SlotText';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -31,14 +27,11 @@ import {
 } from '../utils/chatInputEffortLayout';
 import type { ChatInputReasoningEffort } from '../utils/chatInputReasoning';
 import { getChatInputReasoningEffortOption } from '../utils/chatInputReasoning';
+import { ChatInputEffortBackdrop } from './ChatInputEffortBackdrop/ChatInputEffortBackdrop';
 import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
-const AnimatedBlurView = createAnimatedComponent(BlurView);
 const openDurationMs = 150;
 const closeDurationMs = 120;
-const appBlurIntensity = 30;
-const keyboardBlurIntensity = 30;
-const isIOS = process.env.EXPO_OS === 'ios';
 
 type ActiveEffortLayout = ChatInputEffortOverlayLayout & {
   keyboardHeight: number;
@@ -64,7 +57,6 @@ export function ChatInputEffortOverlay({
   reasoningEfforts,
 }: ChatInputEffortOverlayProps) {
   const { t } = useTranslation();
-  const { theme } = useUniwind();
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const keyboard = useKeyboardState((state) => ({
     appearance: state.appearance,
@@ -218,19 +210,6 @@ export function ChatInputEffortOverlay({
 
     return { opacity: reveal, transform: [{ translateY: 5 * (1 - reveal) }] };
   });
-  const appBlurProps = useAnimatedProps(() => ({
-    intensity: appBlurIntensity * progress.value,
-  }));
-  const keyboardBlurProps = useAnimatedProps(() => ({
-    intensity: keyboardBlurIntensity * progress.value,
-  }));
-  const appScrimStyle = useAnimatedStyle(() => ({
-    opacity: progress.value * (isIOS ? 0.07 : 0.2),
-  }));
-  const keyboardScrimStyle = useAnimatedStyle(() => ({
-    opacity: progress.value * (isIOS ? 0.08 : 0.24),
-  }));
-
   const gauge =
     options.length > 0 ? (
       <ChatInputEffortGauge
@@ -306,18 +285,7 @@ export function ChatInputEffortOverlay({
             pointerEvents={keyboardOverlayVisible ? 'none' : 'box-none'}
             style={StyleSheet.absoluteFill}
           >
-            {isIOS ? (
-              <AnimatedBlurView
-                animatedProps={appBlurProps}
-                pointerEvents="none"
-                style={StyleSheet.absoluteFill}
-                tint={theme === 'dark' ? 'dark' : 'light'}
-              />
-            ) : null}
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }, appScrimStyle]}
-            />
+            <ChatInputEffortBackdrop progress={progress} scrimColor={scrimColor} variant="app" />
             {keyboardOverlayVisible ? null : overlayControls}
           </View>
         </Portal>
@@ -336,17 +304,11 @@ export function ChatInputEffortOverlay({
             pointerEvents="none"
             style={[keyboardBackdropContainerStyle, { height: layout?.keyboardHeight ?? 0 }]}
           >
-            {isIOS ? (
-              <AnimatedBlurView
-                animatedProps={keyboardBlurProps}
-                pointerEvents="none"
-                style={StyleSheet.absoluteFill}
-                tint={keyboard.appearance}
-              />
-            ) : null}
-            <Animated.View
-              pointerEvents="none"
-              style={[StyleSheet.absoluteFill, { backgroundColor: scrimColor }, keyboardScrimStyle]}
+            <ChatInputEffortBackdrop
+              progress={progress}
+              scrimColor={scrimColor}
+              tint={keyboard.appearance}
+              variant="keyboard"
             />
           </View>
           {keyboardOverlayVisible ? overlayControls : null}
