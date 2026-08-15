@@ -6,8 +6,6 @@ import {
 import { nativeStackHeaderHeight } from './nativeNavigationMetrics/nativeNavigationMetrics';
 
 export const defaultLanguage = 'en-US';
-export const isAndroid = process.env.EXPO_OS === 'android';
-export const isIOS = process.env.EXPO_OS === 'ios';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 // Geist Mono, embedded natively by the expo-font plugin (see app.json). This is
