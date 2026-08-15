@@ -1,7 +1,7 @@
 import { BotIcon, CheckIcon, PlusIcon } from '@cherrystudio/app-icons';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import { Stack, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type AccessibilityActionEvent, Pressable, ScrollView, Text, View } from 'react-native';
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
@@ -15,12 +15,11 @@ import {
   useMessageListBottomInset,
 } from '@/frontend/components/messageTabs';
 import { SelectionToolbar } from '@/frontend/components/messageTabs/SelectionToolbar/SelectionToolbar';
-import {
-  ContextMenuLink,
-  type ContextMenuLinkItem,
-  useSetBottomTabBarHidden,
-} from '@/frontend/components/navigation';
+import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
+
+import { AssistantListSearchBar } from './AssistantListSearchBar/AssistantListSearchBar';
+import { useAssistantListEditing } from './useAssistantListEditing/useAssistantListEditing';
 
 export default function AssistantListScreen() {
   const { t } = useTranslation();
@@ -28,7 +27,7 @@ export default function AssistantListScreen() {
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant, deleteAssistants } = useAssistantMutations();
   const { alert } = useAlert();
-  const setBottomTabBarHidden = useSetBottomTabBarHidden();
+  const updatePlatformEditing = useAssistantListEditing();
   const bottomInset = useMessageListBottomInset();
   const [isEditing, setIsEditing] = useState(false);
   const [pendingDeletionIds, setPendingDeletionIds] = useState<ReadonlySet<string>>(
@@ -59,14 +58,6 @@ export default function AssistantListScreen() {
     );
   }, [searchText, visibleAssistants]);
 
-  useEffect(() => {
-    if (process.env.EXPO_OS !== 'android') {
-      return;
-    }
-
-    return () => setBottomTabBarHidden(false);
-  }, [setBottomTabBarHidden]);
-
   const enterEditing = useCallback(() => {
     if (isBatchDeleting) {
       return;
@@ -74,17 +65,13 @@ export default function AssistantListScreen() {
 
     setSearchText('');
     setIsEditing(true);
-    if (process.env.EXPO_OS === 'android') {
-      setBottomTabBarHidden(true);
-    }
-  }, [isBatchDeleting, setBottomTabBarHidden]);
+    updatePlatformEditing(true);
+  }, [isBatchDeleting, updatePlatformEditing]);
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
-    if (process.env.EXPO_OS === 'android') {
-      setBottomTabBarHidden(false);
-    }
-  }, [setBottomTabBarHidden]);
+    updatePlatformEditing(false);
+  }, [updatePlatformEditing]);
   const toggleAssistant = useCallback((assistantId: string) => {
     setSelectedIds((current) => toggleSelection(current, assistantId));
   }, []);
@@ -188,18 +175,7 @@ export default function AssistantListScreen() {
         rightActions={isEditing ? undefined : rightActions}
         title={t('assistant.list.title')}
       />
-      {process.env.EXPO_OS === 'ios' && !isEditing ? (
-        <Stack.SearchBar
-          autoCapitalize="none"
-          hideNavigationBar={false}
-          hideWhenScrolling={false}
-          obscureBackground={false}
-          placeholder={t('navigation.search')}
-          placement="stacked"
-          onCancelButtonPress={() => setSearchText('')}
-          onChangeText={(event) => setSearchText(event.nativeEvent.text)}
-        />
-      ) : null}
+      <AssistantListSearchBar isEditing={isEditing} setSearchText={setSearchText} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
