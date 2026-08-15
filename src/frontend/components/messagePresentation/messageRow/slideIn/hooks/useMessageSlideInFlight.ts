@@ -2,10 +2,17 @@ import { spring } from '@cherrystudio/ui/motion';
 import { useCallback, useLayoutEffect, useRef } from 'react';
 import {
   ReduceMotion,
+  runOnJS,
   type SharedValue,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
+
+import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
+
+function emitSlideInSettled(isFinished: boolean) {
+  emitLayoutBenchProbe('slideIn', { finished: isFinished, phase: 'settle' });
+}
 
 export type MessageSlideInFlight = {
   // 当前这次飞行属于哪条消息。行在 worklet 里比对自己是不是它——同一时刻只有一条消息在飞，
@@ -28,10 +35,14 @@ export type MessageSlideInFlight = {
  * 副产品是**第一条消息和后续消息终于走同一条路径**：transform 不依赖可滚动距离，而新建话题
  * 里内容不足一屏、可滚动距离恒为 0，正是「第一条没有入场动画」的根因。
  *
- * transform 不参与布局，所以飞行中的气泡会画在上一条回复之上。这不是缺陷，而是这个效果的
- * 来源——参照实现（ChatGPT）飞行途中同样遮住下面的正文。它用的是独立于列表的覆盖层，落地
- * 时把位置交接给真实行；实测在飞行中上滑打断会交接错位、硬跳 455pt。行内 transform 没有
- * 交接这一步，用户中途拖动时行跟着内容走、残余偏移继续收敛，结构上不会产生那一跳。
+ * transform 不参与布局，所以行飞过的那段路不需要真实存在——而它恰好是钉顶预留的空白
+ * （`anchoredEndSpace` 留出的正是「让新行贴到顶」所需的高度）。逐帧录像确认途中无内容可遮，
+ * 只有回复已开始流式、行却还没收敛完的最后几十毫秒会短暂压住回复首行。
+ *
+ * 参照实现（ChatGPT）走的是另一条路：独立于列表的覆盖层，飞行途中实打实地遮住上一条回复的
+ * 正文，落地时再把位置交接给真实行；实测在飞行中上滑打断会交接错位、硬跳 455pt。行内
+ * transform 没有交接这一步，用户中途拖动时行跟着内容走、残余偏移继续收敛，结构上不会产生
+ * 那一跳。
  */
 export function useMessageSlideInFlight({
   enteringMessageId,
@@ -44,6 +55,9 @@ export function useMessageSlideInFlight({
   const offset = useSharedValue(0);
   const armedMessageIdRef = useRef<string | undefined>(undefined);
   const isLaunchedRef = useRef(false);
+  // 只服务于探针：起飞距离要跟着 launch 事件一起报。装填那一刻探针常常还没 arm——它由假模型
+  // 在构造时打开，而那晚于 pendingUserMessage 出现，首轮的 arm 事件因此收不到。
+  const armedTravelRef = useRef(0);
 
   // 起飞点必须在行的**第一帧**就位：钉顶要等测量与 ready-gate 的静默窗口（≥150ms ≈ 9 帧），
   // 这段时间里若偏移量还是 0，新建话题的行会先在落点显形、等 launch 再跳回输入框飞一遍。
@@ -57,6 +71,7 @@ export function useMessageSlideInFlight({
 
     if (armedMessageIdRef.current === enteringMessageId) {
       if (!isLaunchedRef.current) {
+        armedTravelRef.current = travel;
         offset.set(travel);
       }
 
@@ -65,8 +80,10 @@ export function useMessageSlideInFlight({
 
     armedMessageIdRef.current = enteringMessageId;
     isLaunchedRef.current = false;
+    armedTravelRef.current = travel;
     activeMessageId.set(enteringMessageId);
     offset.set(travel);
+    emitLayoutBenchProbe('slideIn', { phase: 'arm', travel: Math.round(travel) });
   }, [activeMessageId, enteringMessageId, offset, travel]);
 
   // 开火只看「装填了没有、开过没有」，不看当前的 enteringMessageId：待发消息一落库它就被
@@ -81,7 +98,17 @@ export function useMessageSlideInFlight({
     }
 
     isLaunchedRef.current = true;
-    offset.set(withSpring(0, { ...spring.settle, reduceMotion: ReduceMotion.System }));
+    emitLayoutBenchProbe('slideIn', {
+      phase: 'launch',
+      travel: Math.round(armedTravelRef.current),
+    });
+    offset.set(
+      withSpring(0, { ...spring.settle, reduceMotion: ReduceMotion.System }, (isFinished) => {
+        'worklet';
+
+        runOnJS(emitSlideInSettled)(isFinished === true);
+      }),
+    );
   }, [offset]);
 
   return { activeMessageId, launch, offset };

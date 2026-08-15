@@ -489,6 +489,85 @@ function judgeEstimateCollapse(trace: Trace): JudgeReport {
   };
 }
 
+/**
+ * 发送后的可见位移由入场行自身的 transform 提供，不是滚动，所以 `scroll` 轨迹对它是平的。
+ * 这条判据盯的是这段运动的两个真实失效形态：
+ *
+ * - **装填了却没开火**：行被预置在起飞点后要等钉顶落位才收敛，那一刻若永远不来，消息就
+ *   永久停在输入框上方、既不在落点也不跟随内容。
+ * - **起飞距离为零**：入场从此看不见。这正是重构前第一条消息的老毛病（可滚动距离恒为 0，
+ *   滚动动画演不出任何东西），换成 transform 之后若几何算错就会原样复发。
+ */
+function judgeSlideInFlight(trace: Trace): JudgeReport {
+  const violations: Violation[] = [];
+  const armedAtMs: number[] = [];
+  let launches = 0;
+  let settles = 0;
+  let maxTravel = 0;
+  let maxArmToLaunchMs = 0;
+
+  for (const event of trace.events) {
+    if (event.e !== 'slideIn') {
+      continue;
+    }
+
+    const atMs = event.t - trace.originMs;
+
+    if (event.phase === 'arm') {
+      maxTravel = Math.max(maxTravel, readNumber(event, 'travel') ?? 0);
+      armedAtMs.push(atMs);
+      continue;
+    }
+
+    // 起飞距离在 launch 上判而不是在 arm 上：探针由假模型在构造时打开，而那晚于装填，
+    // 首轮的 arm 事件因此根本收不到。只认 arm 的话这条判据在 send-anchor 场景里恒绿。
+    if (event.phase === 'launch') {
+      const travel = readNumber(event, 'travel') ?? 0;
+      maxTravel = Math.max(maxTravel, travel);
+      launches += 1;
+
+      const pendingArmAtMs = armedAtMs.shift();
+      if (pendingArmAtMs !== undefined) {
+        maxArmToLaunchMs = Math.max(maxArmToLaunchMs, atMs - pendingArmAtMs);
+      }
+
+      if (travel <= 0) {
+        violations.push({
+          atMs,
+          detail: { travelPx: travel },
+          judge: 'slide-in-flight',
+          message: '入场行起飞距离为 0，这一条不会有可见的入场动画',
+          phase: trace.phaseAt(atMs),
+        });
+      }
+
+      continue;
+    }
+
+    if (event.phase === 'settle') {
+      settles += 1;
+    }
+  }
+
+  for (const atMs of armedAtMs) {
+    violations.push({
+      atMs,
+      detail: { armedAtMs: atMs },
+      judge: 'slide-in-flight',
+      message: '入场行装填后没有开火，消息会停在输入框上方',
+      phase: trace.phaseAt(atMs),
+    });
+  }
+
+  return {
+    description: '每条入场消息都要装填、开火，且起飞距离非零',
+    judge: 'slide-in-flight',
+    // settles 只做记录不设断言：连发时上一次弹簧被新的一次取消是正常的。
+    metrics: { launches, maxArmToLaunchMs, maxTravelPx: maxTravel, settles },
+    violations,
+  };
+}
+
 export function runJudges(trace: Trace): JudgeReport[] {
   return [
     judgeScrollButtonPhase(trace),
@@ -499,5 +578,6 @@ export function runJudges(trace: Trace): JudgeReport[] {
     judgeContentShrink(trace),
     judgeRowShrink(trace),
     judgeEstimateCollapse(trace),
+    judgeSlideInFlight(trace),
   ];
 }

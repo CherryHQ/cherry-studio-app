@@ -52,7 +52,13 @@ export type LayoutBenchProbeEvent =
   /** 每帧滚动位移轨迹。 */
   | 'scroll'
   /** 「滚动到底部」按钮显隐（值由 UI 线程的 shared value 驱动）。 */
-  | 'button';
+  | 'button'
+  /**
+   * 入场用户行的飞行：装填（起飞距离）、开火、落定。发送时的可见位移由行自身的 transform
+   * 提供而不是靠滚动，所以缺了这条，`scroll` 轨迹在 send-anchor 场景里会平得像什么都没
+   * 发生——harness 会对它本来就是为了量的那段运动完全失明。
+   */
+  | 'slideIn';
 
 type ProbePayload = Record<string, boolean | number | string | undefined>;
 
