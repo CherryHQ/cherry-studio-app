@@ -99,6 +99,7 @@ function RootStack() {
           // photo rather than on a themed surface: black behind, white on top,
           // in both themes. `PaintingViewerChrome` paints the same pair.
           contentStyle: { backgroundColor: constantBlack },
+          headerShown: !isIOS,
           headerTintColor: constantWhite,
           headerTransparent: true,
           title: '',
