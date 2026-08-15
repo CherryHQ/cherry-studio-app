@@ -7,7 +7,7 @@ import {
 } from '@cherrystudio/app-icons';
 import type { ComponentType } from 'react';
 
-import { builtInToolDefinitions, type BuiltInToolVisual } from './builtInToolDefinitions';
+import { builtInToolDefinitions, type BuiltInToolVisual } from '../builtInToolDefinitions';
 import type { BuiltInToolPresentation } from './builtInToolPresentation.types';
 
 const visualIcons: Record<BuiltInToolVisual, ComponentType<AppIconProps>> = {

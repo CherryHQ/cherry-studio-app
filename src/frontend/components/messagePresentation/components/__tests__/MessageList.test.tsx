@@ -7,8 +7,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps, MessagePresentationItem } from '../../types';
 import { MessageList } from '../MessageList';
-import { followingMaintainVisibleContentPosition as androidFollowingPosition } from '../messageListPlatform.android';
-import { followingMaintainVisibleContentPosition as iosFollowingPosition } from '../messageListPlatform.ios';
+import { followingMaintainVisibleContentPosition as androidFollowingPosition } from '../messageListPlatform/messageListPlatform.android';
+import { followingMaintainVisibleContentPosition as iosFollowingPosition } from '../messageListPlatform/messageListPlatform.ios';
 
 type AnchoredEndSpaceConfig = {
   anchorIndex?: number;

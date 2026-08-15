@@ -24,7 +24,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
 import type { MessageListProps, MessagePresentationItem } from '../types';
-import { followingMaintainVisibleContentPosition } from './messageListPlatform';
+import { followingMaintainVisibleContentPosition } from './messageListPlatform/messageListPlatform';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
 
 // 滚动/布局诊断埋点：记录会驱动列表位移的关键数值（scroll offset、内容高度、锚点就绪、

@@ -2,7 +2,7 @@ import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { createIcon } from '../createIcon';
-import { IconGlyph as AndroidIconGlyph } from '../icon-glyph.android';
+import { IconGlyph as AndroidIconGlyph } from '../icon-glyph/icon-glyph.android';
 
 // The global stub renders nothing; here the SymbolView props are the behavior under test.
 jest.mock('expo-symbols', () => {

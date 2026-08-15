@@ -1,7 +1,7 @@
 import { BellRingIcon } from '@cherrystudio/app-icons';
 
-import { getBuiltInToolPresentation as getAndroidPresentation } from '../builtInToolPresentation.android';
-import { getBuiltInToolPresentation as getIosPresentation } from '../builtInToolPresentation.ios';
+import { getBuiltInToolPresentation as getAndroidPresentation } from '../builtInToolPresentation/builtInToolPresentation.android';
+import { getBuiltInToolPresentation as getIosPresentation } from '../builtInToolPresentation/builtInToolPresentation.ios';
 
 describe('built-in tool presentation', () => {
   test('selects the platform visual while preserving the tool title', () => {

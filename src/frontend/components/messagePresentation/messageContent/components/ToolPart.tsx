@@ -2,7 +2,7 @@ import type { CherryMessagePart } from '@cherrystudio/universal/data/types/messa
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation';
+import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation/builtInToolPresentation';
 import { hasToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 

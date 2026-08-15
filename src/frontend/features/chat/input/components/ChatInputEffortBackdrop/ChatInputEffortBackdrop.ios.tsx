@@ -7,7 +7,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useUniwind } from 'uniwind';
 
-import type { ChatInputEffortBackdropProps } from './chatInputEffortBackdrop.types';
+import type { ChatInputEffortBackdropProps } from './ChatInputEffortBackdrop.types';
 
 const AnimatedBlurView = createAnimatedComponent(BlurView);
 const blurIntensity = 30;

@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native';
 import Animated, { useAnimatedStyle } from 'react-native-reanimated';
 
-import type { ChatInputEffortBackdropProps } from './chatInputEffortBackdrop.types';
+import type { ChatInputEffortBackdropProps } from './ChatInputEffortBackdrop.types';
 
 const scrimOpacity = { app: 0.2, keyboard: 0.24 } as const;
 

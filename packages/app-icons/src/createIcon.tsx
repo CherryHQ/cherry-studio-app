@@ -3,7 +3,7 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import type { SFSymbol } from 'sf-symbols-typescript';
 import { useResolveClassNames } from 'uniwind';
 
-import { IconGlyph } from './icon-glyph';
+import { IconGlyph } from './icon-glyph/icon-glyph';
 
 export type AppIconProps = {
   /** Tailwind classes; `size-*` drives width/height and `text-*` drives the glyph color. */

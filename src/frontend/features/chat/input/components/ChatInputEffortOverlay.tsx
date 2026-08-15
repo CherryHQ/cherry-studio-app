@@ -27,7 +27,7 @@ import {
 } from '../utils/chatInputEffortLayout';
 import type { ChatInputReasoningEffort } from '../utils/chatInputReasoning';
 import { getChatInputReasoningEffortOption } from '../utils/chatInputReasoning';
-import { ChatInputEffortBackdrop } from './ChatInputEffortBackdrop';
+import { ChatInputEffortBackdrop } from './ChatInputEffortBackdrop/ChatInputEffortBackdrop';
 import { ChatInputEffortGauge } from './ChatInputEffortGauge';
 
 const openDurationMs = 150;
