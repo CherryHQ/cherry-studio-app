@@ -1,14 +1,14 @@
 import { View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+
 import { getEffortSliderTrackGeometry, stopFraction } from '../utils/effortSliderMath';
 import {
-  effortSliderAccentColor,
   effortSliderProgressHeight,
   effortSliderThumbInset,
   effortSliderThumbSize,
   effortSliderTickSize,
-  effortSliderTrackColor,
   effortSliderTrackHeight,
 } from '../utils/effortSliderVisual';
 
@@ -19,23 +19,27 @@ type EffortSliderTrackProps = {
   position: SharedValue<number>;
   /** Measured track width in dp (React state, for tick layout). */
   measuredWidth: number;
-  constantBlack: string;
-  constantWhite: string;
 };
 
 /**
- * The reference uses a 64dp dark capsule around a 44dp blue progress pill.
- * The thumb sits inside the blue end cap, leaving its four-pixel blue ring
- * visible at the endpoints.
+ * A 64dp neutral capsule surrounds a 44dp brand progress pill. The capsule and
+ * exposed ticks follow the active theme. The thumb sits inside the progress end
+ * cap, leaving its four-pixel brand ring visible at the endpoints.
  */
 export function EffortSliderTrack({
   trackHeight,
   stopCount,
   position,
   measuredWidth,
-  constantBlack,
-  constantWhite,
 }: EffortSliderTrackProps) {
+  const [brandColor, trackColor, trackForegroundColor, constantBlack, constantWhite] =
+    useThemeColor([
+      'brand',
+      'secondary',
+      'secondary-foreground',
+      'constant-black',
+      'constant-white',
+    ]);
   const scale = trackHeight / effortSliderTrackHeight;
   const progressHeight = effortSliderProgressHeight * scale;
   const thumbInset = effortSliderThumbInset * scale;
@@ -66,7 +70,7 @@ export function EffortSliderTrack({
       <View
         className="absolute inset-0"
         style={{
-          backgroundColor: effortSliderTrackColor,
+          backgroundColor: trackColor,
           borderRadius: trackRadius,
         }}
       >
@@ -75,7 +79,7 @@ export function EffortSliderTrack({
             key={fraction}
             pointerEvents="none"
             style={{
-              backgroundColor: constantWhite,
+              backgroundColor: trackForegroundColor,
               borderRadius: tickSize / 2,
               height: tickSize,
               left: centerX - tickSize / 2,
@@ -90,7 +94,7 @@ export function EffortSliderTrack({
           className="absolute overflow-hidden"
           style={[
             {
-              backgroundColor: effortSliderAccentColor,
+              backgroundColor: brandColor,
               borderRadius: progressHeight / 2,
               height: progressHeight,
               left: progressInset,
@@ -123,7 +127,7 @@ export function EffortSliderTrack({
         <View
           pointerEvents="none"
           style={{
-            borderColor: constantWhite,
+            borderColor: trackForegroundColor,
             borderRadius: trackRadius,
             borderWidth: 1,
             bottom: 0,

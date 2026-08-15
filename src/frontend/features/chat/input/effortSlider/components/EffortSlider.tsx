@@ -4,8 +4,6 @@ import { type AccessibilityActionEvent, type LayoutChangeEvent, View } from 'rea
 import { GestureDetector } from 'react-native-gesture-handler';
 import { useReducedMotion, withTiming } from 'react-native-reanimated';
 
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-
 import { useEffortSliderGesture } from '../hooks/useEffortSliderGesture';
 import { effortSliderSnapTiming } from '../utils/constants';
 import { stopFraction } from '../utils/effortSliderMath';
@@ -50,7 +48,6 @@ export function EffortSlider({
   testID,
 }: EffortSliderProps) {
   const reducedMotion = useReducedMotion();
-  const [constantBlack, constantWhite] = useThemeColor(['constant-black', 'constant-white']);
   // 0 until the first onLayout lands: with travelDistance 0 the thumb/fill
   // would paint at the left edge, then teleport once measured — hide the
   // track for those frames (the panel's fade-in covers the gap).
@@ -133,8 +130,6 @@ export function EffortSlider({
         testID={testID}
       >
         <EffortSliderTrack
-          constantBlack={constantBlack}
-          constantWhite={constantWhite}
           measuredWidth={measuredWidth}
           position={position}
           stopCount={stopCount}
