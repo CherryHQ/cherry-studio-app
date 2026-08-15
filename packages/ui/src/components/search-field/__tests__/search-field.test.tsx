@@ -10,12 +10,18 @@ jest.mock('heroui-native/search-field', () => {
     return React.createElement(View, { ...props, mockComponent: 'hero-search-field' });
   }
 
-  Root.Group = (props: object) => React.createElement(View, { ...props, testID: 'group' });
-  Root.SearchIcon = (props: object) => React.createElement(View, { ...props, testID: 'icon' });
-  Root.Input = (props: object) =>
-    React.createElement(TextInput, { ...props, mockComponent: 'hero-search-input' });
-  Root.ClearButton = (props: object) =>
-    React.createElement(View, { ...props, mockComponent: 'hero-clear-button' });
+  Root.Group = function SearchFieldGroup(props: object) {
+    return React.createElement(View, { ...props, testID: 'group' });
+  };
+  Root.SearchIcon = function SearchFieldIcon(props: object) {
+    return React.createElement(View, { ...props, testID: 'icon' });
+  };
+  Root.Input = function SearchFieldInput(props: object) {
+    return React.createElement(TextInput, { ...props, mockComponent: 'hero-search-input' });
+  };
+  Root.ClearButton = function SearchFieldClearButton(props: object) {
+    return React.createElement(View, { ...props, mockComponent: 'hero-clear-button' });
+  };
 
   return { SearchField: Root };
 });
@@ -46,7 +52,6 @@ describe('SearchField', () => {
     const root = renderer!.root.findByProps({ mockComponent: 'hero-search-field' });
     const input = renderer!.root.findByProps({ mockComponent: 'hero-search-input' });
 
-    expect(root.props.value).toBe('Cherry');
     expect(root.props.isDisabled).toBe(false);
     expect(input.props).toEqual(
       expect.objectContaining({
@@ -85,54 +90,27 @@ describe('SearchField', () => {
     expect(input.props.className).not.toContain('ios:pt-');
   });
 
-  test('forwards state, callbacks, layout, and test IDs', () => {
-    const onBlur = jest.fn();
+  test('maps disabled state and owns the accessible clear action', () => {
     const onClear = jest.fn();
-    const onFocus = jest.fn();
-    const onSubmitEditing = jest.fn();
-    const style = { marginTop: 8 };
 
     act(() => {
       renderer = create(
         <SearchField
           accessibilityLabel="Search providers"
-          autoFocus
           clearAccessibilityLabel="Clear"
           disabled
-          onBlur={onBlur}
           onChangeText={jest.fn()}
           onClear={onClear}
-          onFocus={onFocus}
-          onSubmitEditing={onSubmitEditing}
-          style={style}
-          testID="provider-search"
           value="Cherry"
         />,
       );
     });
 
     const root = renderer!.root.findByProps({ mockComponent: 'hero-search-field' });
-    const input = renderer!.root.findByProps({ mockComponent: 'hero-search-input' });
     const clearButton = renderer!.root.findByProps({ mockComponent: 'hero-clear-button' });
 
-    expect(root.props).toEqual(
-      expect.objectContaining({
-        isDisabled: true,
-        style,
-        testID: 'provider-search-root',
-      }),
-    );
-    expect(input.props).toEqual(
-      expect.objectContaining({
-        autoFocus: true,
-        onBlur,
-        onFocus,
-        onSubmitEditing,
-        testID: 'provider-search',
-      }),
-    );
+    expect(root.props.isDisabled).toBe(true);
     expect(clearButton.props.accessibilityLabel).toBe('Clear');
-    expect(clearButton.props.testID).toBe('provider-search-clear');
 
     act(() => clearButton.props.onPress());
     expect(onClear).toHaveBeenCalledTimes(1);

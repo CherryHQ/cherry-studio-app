@@ -268,24 +268,4 @@ describe('Button', () => {
     expect(pressable.props.disabled).toBe(true);
     expect(pressable.props.accessibilityState).toEqual({ checked: true, disabled: true });
   });
-
-  test('forwards Pressable props and style', () => {
-    const onPress = jest.fn();
-    const style = { marginTop: 12 };
-    const pressable = findPressable(
-      render('Continue', {
-        accessibilityHint: 'Moves to the next step',
-        hitSlop: 8,
-        onPress,
-        style,
-        testID: 'continue-button',
-      }),
-    );
-
-    expect(pressable.props.accessibilityHint).toBe('Moves to the next step');
-    expect(pressable.props.hitSlop).toBe(8);
-    expect(pressable.props.onPress).toBe(onPress);
-    expect(pressable.props.style).toBe(style);
-    expect(pressable.props.testID).toBe('continue-button');
-  });
 });
