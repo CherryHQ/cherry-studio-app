@@ -1,9 +1,5 @@
-/**
- * Artwork exemption: these colors were sampled as one visual from the iOS
- * reference and must not theme-shift independently.
- */
+/** Sampled from the iOS reference; neutral track colors come from the theme. */
 export const effortSliderAccentColor = '#3995ff';
-export const effortSliderTrackColor = '#161616';
 export const effortSliderTrackHeight = 64;
 export const effortSliderProgressHeight = 44;
 export const effortSliderThumbSize = 36;
