@@ -1,4 +1,4 @@
-import { SearchField } from '@cherrystudio/ui';
+import { SearchField } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 

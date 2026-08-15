@@ -10,7 +10,6 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 
-import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 
 export function McpScreen() {
@@ -64,10 +63,9 @@ export function McpScreen() {
             <Text className="text-center text-foreground text-xs" selectable>
               {error instanceof Error ? error.message : String(error)}
             </Text>
-            <SettingsDialogActionButton
-              label={t('settings.mcp.retry')}
-              onPress={() => void refetch()}
-            />
+            <Button size="sm" variant="secondary" onPress={() => void refetch()}>
+              {t('settings.mcp.retry')}
+            </Button>
           </View>
         ) : servers.length === 0 ? (
           <View className="flex-1 items-center justify-center gap-4 px-6 pb-20">
