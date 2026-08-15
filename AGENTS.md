@@ -1,8 +1,19 @@
-# Repository Guidelines
+# Cherry Studio Mobile
 
-Follow the project naming rules in
-[docs/references/naming-conventions.md](docs/references/naming-conventions.md).
+Cherry Mobile is Cherry Studio's Expo and React Native client.
 
-# Operational Rules
-- **Write conventional commits**: Commit small, focused changes using Conventional Commit messages (e.g., `feat(data-api):`, `fix(lifecycle):`, `refactor(quick-assistant):`, `docs(testing):`, `chore(deps):`, `test(window-manager):`). Scope must be a specific kebab-case module, never generic like `main` — when `git log` conflicts with this rule, this rule wins.
-- **Test behaviour, at the lowest layer that has it**: A test earns its place by failing when a defect exists and only then. Never assert that a wrapper forwards its props, that a mock was called, or that a render produced something. Cover logic in pure functions and hooks instead of re-asserting it through a screen render — screen-level render suites are not written here at all, because device coverage runs through agent-device. Always cover data contracts (DB schema, migrations, anything serialized), upstream patch guards, and regressions for bugs that were actually fixed. When removing a test, the justification must be that it has no protective value; slowness is a reason to change how it runs, not whether it exists.
+Use `pnpm@11.8.0`. This repository has no root application build script: build workspace packages
+with `pnpm packages:build`, and run the complete repository type check with `pnpm typecheck`.
+
+- When naming or renaming files, directories, identifiers, or documentation, read
+  [Naming Conventions](docs/references/naming-conventions.md).
+- When adding, moving, or exposing modules, read
+  [Code Organization](docs/references/code-organization.md).
+- When adding, changing, removing, or running tests, read
+  [Testing And CI](docs/guides/testing-and-ci.md).
+- Before creating commits, splitting work, or opening a pull request, read
+  [Git Workflow](docs/guides/git-workflow.md).
+- When building or changing product UI, read
+  [UI Development](docs/guides/ui-development.md).
+- When running iOS device acceptance in a Conductor workspace, read
+  [Parallel Device Testing](docs/guides/parallel-device-testing.md).
