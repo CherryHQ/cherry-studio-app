@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 
+import { messagesHeaderShown } from '@/frontend/components/navigation/messagesStackPlatform';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { isIOS } from '@/frontend/utils/constants';
 
 export default function MessagesStackLayout() {
   const foregroundColor = useThemeColor('foreground');
@@ -10,7 +10,7 @@ export default function MessagesStackLayout() {
     <Stack
       screenOptions={{
         headerShadowVisible: false,
-        headerShown: isIOS,
+        headerShown: messagesHeaderShown,
         headerTransparent: false,
         headerTintColor: foregroundColor,
       }}
