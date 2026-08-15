@@ -6,7 +6,7 @@
  * 定的阈值会让整套断言失去说服力。
  */
 
-import type { ProbeEvent, TailFollowPhase, Trace } from './probe';
+import type { ProbeEvent, ScrollSample, TailFollowPhase, Trace } from './probe';
 
 export type Violation = {
   atMs: number;
@@ -49,8 +49,12 @@ export const THRESHOLDS = {
   rowShrinkPx: 8,
   /** 「滚动到底部」按钮在 1 秒窗口内允许的最大显隐翻转次数。 */
   scrollButtonTogglesPerSecond: 2,
-  /** 视口落在内容之外的比例上限。预留空白按设计最多占一屏，实测钉顶后稳态为 40%。 */
-  viewportBlankFraction: 0.6,
+  /**
+   * 视口里既没有内容、也不由钉顶预留空白解释的比例上限（`blankFraction` 已扣掉 endSpace，
+   * 见 `probe.ts`）。79 条历史轨迹重放后健康带是 0–10%，取 2 倍余量；唯一越界的样本是键盘
+   * 补丁前的 `exp2/follow-up-turn`，峰值 35%＝310px——正是那次补丁修掉的量。
+   */
+  viewportBlankFraction: 0.2,
   /** 视口空白超限需持续多久才算可见缺陷（毫秒）。单帧过冲不计。 */
   viewportBlankSustainMs: 100,
 } as const;
@@ -304,13 +308,35 @@ function judgeOffsetReversal(trace: Trace): JudgeReport {
 }
 
 /**
- * 视口落在内容末端之外的比例。钉顶设计本就会露出预留空白（实测稳态 40%），但整屏空白
- * 意味着列表滚过了没有渲染内容的区域——这正是「发送后内容消失一下」的可量化形态。
+ * 视口里有多少既没有内容、也不由钉顶预留空白解释——也就是「列表滚到了什么都没有的地方」，
+ * 「发送后内容消失一下」的可量化形态。
+ *
+ * 预留空白在 `probe.ts` 里就扣掉了，别在这里再判一次：钉顶设计本就要露出那一段，把它算进来
+ * 等于让判据去量设计本身，稳态直接吃掉近 60% 的余量。
  */
 function judgeViewportBlank(trace: Trace): JudgeReport {
   const violations: Violation[] = [];
   let maxBlank = 0;
   let breachStart: number | undefined;
+
+  const closeBreach = (sample: ScrollSample) => {
+    if (breachStart === undefined) {
+      return;
+    }
+
+    const durationMs = sample.atMs - breachStart;
+    if (durationMs >= THRESHOLDS.viewportBlankSustainMs) {
+      violations.push({
+        atMs: breachStart,
+        detail: { durationMs: Math.round(durationMs), peakFraction: Number(maxBlank.toFixed(2)) },
+        judge: 'viewport-blank',
+        message: `视口有超过 ${Math.round(THRESHOLDS.viewportBlankFraction * 100)}% 落在内容之外，持续 ${Math.round(durationMs)}ms`,
+        phase: sample.phase,
+      });
+    }
+
+    breachStart = undefined;
+  };
 
   for (const sample of trace.samples) {
     maxBlank = Math.max(maxBlank, sample.blankFraction);
@@ -320,19 +346,15 @@ function judgeViewportBlank(trace: Trace): JudgeReport {
       continue;
     }
 
-    if (breachStart !== undefined) {
-      const durationMs = sample.atMs - breachStart;
-      if (durationMs >= THRESHOLDS.viewportBlankSustainMs) {
-        violations.push({
-          atMs: breachStart,
-          detail: { durationMs: Math.round(durationMs), peakFraction: Number(maxBlank.toFixed(2)) },
-          judge: 'viewport-blank',
-          message: `视口有超过 ${Math.round(THRESHOLDS.viewportBlankFraction * 100)}% 落在内容之外，持续 ${Math.round(durationMs)}ms`,
-          phase: sample.phase,
-        });
-      }
-      breachStart = undefined;
-    }
+    closeBreach(sample);
+  }
+
+  // 轨迹结束时仍在越界 = 空白**再没恢复过**，也就是最严重的那种。只在「跌回阈值以下」时结算
+  // 的话，判据恰好会对它唯一沉默：实测键盘补丁前的 exp2 从 t=5233ms 一路 310px 空白到收尾，
+  // 65/93 个样本超限，报告却是全绿的。
+  const lastSample = trace.samples.at(-1);
+  if (lastSample) {
+    closeBreach(lastSample);
   }
 
   return {
