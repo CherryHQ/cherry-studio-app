@@ -166,7 +166,8 @@ export function MessageList({
   } = useTailFollow({ anchorMessageId, hasAnchor, listRef });
 
   // 入场行的起飞点：钉顶落点正下方、输入框上缘。三个量都是运行时布局值，所以它随机型、
-  // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。
+  // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。这是**总**行程，钉顶滚动与行的
+  // 弹簧各分走一段（见 useAnchorPin）。
   const slideInTravel = Math.max(0, viewportHeight - contentBottomInset - anchorOffset);
   const slideInFlight = useMessageSlideInFlight({ enteringMessageId, travel: slideInTravel });
 

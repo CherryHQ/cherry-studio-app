@@ -16,8 +16,9 @@ This module renders role-level chat message rows.
   the persisted message or its original part order.
 - Message body rendering is delegated to `messageContent` so row layout and part rendering stay
   separate.
-- `slideIn/` carries the whole entrance of a just-sent user row: it travels from the composer edge
-  to the pinned position under its own transform, so the motion no longer depends on the list having
-  somewhere to scroll. `MessageList` owns the flight because both its distance (viewport and insets)
-  and its trigger (the frame the anchor lands on) are list-level facts; the provider only delivers
-  it past `renderItem`.
+- `slideIn/` carries the entrance of a just-sent user row from the composer edge to the pinned
+  position. The pin scroll covers however much of that distance it takes to move the older content
+  out of the way, and this transform covers the rest, so a brand-new topic — where there is nothing
+  to scroll — still gets the same entrance. `MessageList` owns the flight because both its distance
+  (viewport and insets) and its trigger (the frame the anchor lands on) are list-level facts; the
+  provider only delivers it past `renderItem`.

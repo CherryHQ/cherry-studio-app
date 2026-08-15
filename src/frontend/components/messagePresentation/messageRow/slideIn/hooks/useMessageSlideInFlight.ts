@@ -24,16 +24,21 @@ export type MessageSlideInFlight = {
   activeMessageId: SharedValue<string | undefined>;
   // 入场行相对钉顶落点的纵向偏移（px，正值＝落点下方）。
   offset: SharedValue<number>;
-  // 在钉顶落位的同一帧调用，开始向落点收敛。
-  launch: () => void;
+  // 在钉顶落位的同一帧调用，开始向落点收敛。`pendingScrollPx` 是这一帧起列表还会自己滚掉的
+  // 距离——那一段由滚动动画承担，弹簧只走剩下的。
+  launch: (pendingScrollPx: number) => void;
 };
 
 /**
  * 刚发送的用户消息「从输入框飞到钉顶落点」的入场动画。
  *
- * 位移全部由行自身的 transform 提供，钉顶滚动则改成瞬时——两者叠加会走双倍距离。这样做的
- * 副产品是**第一条消息和后续消息终于走同一条路径**：transform 不依赖可滚动距离，而新建话题
- * 里内容不足一屏、可滚动距离恒为 0，正是「第一条没有入场动画」的根因。
+ * 可见行程由两段拼成，加起来恒等于 `travel`：钉顶滚动把旧内容送出视口、顺带把行抬高
+ * `pendingScrollPx`，剩下的由这里的弹簧走。**不能**让两段都走全程——那是双倍距离；也不能
+ * 为了避开双倍就把滚动改成瞬时——旧内容会一帧切掉（见 useAnchorPin 的说明）。
+ *
+ * 这样拆的收益是**第一条消息和后续消息走同一条路径**：新建话题里内容不足一屏、可滚动距离
+ * 恒为 0，于是弹簧独扛全程；那正是「第一条没有入场动画」的根因——旧实现把入场完全押在滚动
+ * 动画上，而没有可滚动距离的话，滚动动画演不出任何东西。
  *
  * transform 不参与布局，所以行飞过的那段路不需要真实存在——而它恰好是钉顶预留的空白
  * （`anchoredEndSpace` 留出的正是「让新行贴到顶」所需的高度）。逐帧录像确认途中无内容可遮，
@@ -92,24 +97,33 @@ export function useMessageSlideInFlight({
   //
   // 也不校验落位的是不是入场行：任何一次锚点落位都让已装填的飞行开始收敛。早收敛只是动画
   // 早播一点，等不到自己那次落位却是把行留在半空。
-  const launch = useCallback(() => {
-    if (armedMessageIdRef.current === undefined || isLaunchedRef.current) {
-      return;
-    }
+  const launch = useCallback(
+    (pendingScrollPx: number) => {
+      if (armedMessageIdRef.current === undefined || isLaunchedRef.current) {
+        return;
+      }
 
-    isLaunchedRef.current = true;
-    emitLayoutBenchProbe('slideIn', {
-      phase: 'launch',
-      travel: Math.round(armedTravelRef.current),
-    });
-    offset.set(
-      withSpring(0, { ...spring.settle, reduceMotion: ReduceMotion.System }, (isFinished) => {
-        'worklet';
+      isLaunchedRef.current = true;
+      // 装填时行还停在「滚动尚未发生」的布局位置上，偏移量按全程给，所以它此刻在输入框**之下**、
+      // 被输入框挡着看不见。开火这一帧把这段滚动从偏移量里扣掉，行正好显形在输入框上缘，随后
+      // 滚动与弹簧各走各的一段。
+      const springTravel = Math.max(0, armedTravelRef.current - pendingScrollPx);
+      emitLayoutBenchProbe('slideIn', {
+        phase: 'launch',
+        scroll: Math.round(pendingScrollPx),
+        travel: Math.round(armedTravelRef.current),
+      });
+      offset.set(springTravel);
+      offset.set(
+        withSpring(0, { ...spring.settle, reduceMotion: ReduceMotion.System }, (isFinished) => {
+          'worklet';
 
-        runOnJS(emitSlideInSettled)(isFinished === true);
-      }),
-    );
-  }, [offset]);
+          runOnJS(emitSlideInSettled)(isFinished === true);
+        }),
+      );
+    },
+    [offset],
+  );
 
   return { activeMessageId, launch, offset };
 }

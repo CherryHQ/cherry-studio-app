@@ -16,8 +16,9 @@ const READY_SETTLE_MS = 150;
 // 尾随状态机之外唯一会主动滚动列表的地方，所以必须拿到 useTailFollow 的 isUserInteractingRef
 // （只读）守同一个交互不变式，并在预留空白耗尽时经 notifyAnchorSpaceClosed 把相位交接给尾随。
 //
-// 这里只管**布局位置**，不管入场的可见位移——后者归行的 transform（useMessageSlideInFlight），
-// 由 onAnchorPinned 在落位那一帧开火。
+// 入场的可见位移由两段拼成：这里的钉顶滚动把**旧内容**送出视口，行自身的 transform
+// （useMessageSlideInFlight）走剩下的那段。落位那一帧经 onAnchorPinned 把「还差多少滚动」
+// 交给它，两段相加恒等于设计行程。
 export function useAnchorPin({
   contentBottomInset,
   endSpaceRef,
@@ -38,7 +39,7 @@ export function useAnchorPin({
   lastMessageId: string | undefined;
   listRef: RefObject<LegendListRef | null>;
   notifyAnchorSpaceClosed: () => void;
-  onAnchorPinned: () => void;
+  onAnchorPinned: (pendingScrollPx: number) => void;
   onReady: (() => void) | undefined;
   scrollMessageToEnd: (options: { animated: boolean; closeKeyboard: boolean }) => Promise<void>;
   viewportHeight: number;
@@ -62,10 +63,14 @@ export function useAnchorPin({
   // （含刚 mount 的助手 pending 占位、hasUnknownTailSize=false）后，才把预留空白算成真实值
   // 并回调 onReady。此刻落点已是终值。
   //
-  // 钉顶滚动一律瞬时。入场那段可见位移由行自身的 transform 提供（见 useMessageSlideInFlight），
-  // 两者叠加会走双倍距离，所以这里只负责把行的**布局位置**放到终点、让 transform 有个准确的
-  // 落点可收敛。副产品是新建话题的第一条终于和后续一致：它的可滚动距离恒为 0，滚动动画本来
-  // 就演不出任何东西。
+  // 钉顶滚动保持**动画**。它搬的不是入场行，是**旧内容**：新消息要贴到视口顶部，原先在屏上
+  // 的一切都得整体让位滑走。改成瞬时曾让这段一帧切掉（实测相邻两帧间整屏内容消失，模板相关度
+  // 1.000→0.239），而参照实现与本项目此前的实现都是滑的（~150ms / ~240ms）。**判据抓不到它**
+  // ——offset-reversal 只认往返，这是单向硬切，改成瞬时后它反而从 40px 变成 0。
+  //
+  // 与行的 transform 不会叠加成双倍行程：落位时把「还差多少滚动」交给 onAnchorPinned，弹簧
+  // 只走剩下那段（见 useMessageSlideInFlight.launch）。新建话题里这个量恒为 0，弹簧独扛全程，
+  // 所以第一条和后续走的总路程仍然一样。
   const scrolledAnchorKeyRef = useRef<string | undefined>(undefined);
   const handleAnchorReady = useCallback(
     (info: { anchorKey: string | undefined }) => {
@@ -81,7 +86,16 @@ export function useAnchorPin({
       });
       const isEnteringMessage = info.anchorKey === enteringMessageId;
       requestAnimationFrame(() => {
-        emitProgrammaticScroll('anchorReady', listRef, { animated: false });
+        // 这一帧还差多少滚动才到末端＝待会儿这次动画滚动会走的距离（onReady 保证预留空白与
+        // 内容高度都已是终值）。**必须问列表自己**，别拿组件里那几个 React state 去重建：
+        // contentBaseHeight 是上一次 onContentSizeChange 落下的值，助手占位行挂载带来的增高
+        // 常常还没回灌，实测据此算出 202px 而真实滚动是 305px，行会多飞 103px。
+        // getState().contentLength 已含预留空白（实测 3942 − 874 − 2762 = 306 = 实测滚动）。
+        const listState = listRef.current?.getState();
+        const pendingScrollPx = listState
+          ? Math.max(0, listState.contentLength - listState.scrollLength - listState.scroll)
+          : 0;
+        emitProgrammaticScroll('anchorReady', listRef, { animated: true });
         // 收键盘与钉顶滚动**必须**同时发起，别再试着把它挪到滚动之后：改成「先钉顶、
         // 动画结束再收键盘」实测反转从 1 处 310px 变成 2 处 334px（位移搬到动画终点，
         // 还要再被尾随滚动拉一次），更差。
@@ -94,11 +108,11 @@ export function useAnchorPin({
         // whenAtEnd 在键盘变矮时「夹到当下的合法区间」而不是「按记录量回退」，两者只在
         // 这一个情形下不同，其余逐值相同。补丁掉了这个跳动就会回来。
         void scrollMessageToEnd({
-          animated: false,
+          animated: true,
           closeKeyboard: isEnteringMessage,
         });
-        // 落位与开火同帧：此刻行的布局位置才是终点，transform 从这一帧起才有正确的收敛目标。
-        onAnchorPinned();
+        // 与滚动同帧开火：弹簧要从「扣掉这次滚动之后」的位置起跳，晚一帧就会先按全程显形。
+        onAnchorPinned(pendingScrollPx);
       });
     },
     [enteringMessageId, listRef, onAnchorPinned, scrollMessageToEnd],
