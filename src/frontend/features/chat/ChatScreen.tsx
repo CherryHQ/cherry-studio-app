@@ -6,6 +6,7 @@ import { useComposerDockLayout } from '@/frontend/components/composer';
 import { MainHeader } from '@/frontend/components/headers';
 import { useMessages, useTopic } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { armLayoutBenchProbe, LAYOUT_BENCH_ASSISTANT_ID } from '@/shared/devBench/layoutBenchProbe';
 
 import { ChatComposer, ChatEmptyState, ChatWorkspace } from './workspace';
 
@@ -35,6 +36,15 @@ export function ChatScreen() {
   const contentBottomInset = isPreview
     ? PREVIEW_CONTENT_BOTTOM_INSET
     : composerDockLayout.contentBottomInset;
+
+  // layout-bench 的探针开关：只有 harness 会带着这个 assistantId 进来（日常开发一次都不会
+  // 命中），而它比第一条消息早好几秒——假模型要到 streamText 才被构造，那时首轮的入场装填与
+  // 开火已经发生过了，判据会对第一条消息完全失明。
+  useEffect(() => {
+    if (__DEV__ && assistantId === LAYOUT_BENCH_ASSISTANT_ID) {
+      armLayoutBenchProbe();
+    }
+  }, [assistantId]);
 
   // ChatScreen 挂载 → topic/messages 两条 query 解析态每次变化取证，量化进入后的等待段。
   useEffect(() => {
