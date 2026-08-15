@@ -43,11 +43,23 @@ export type Scenario = {
   setup: Step[];
 };
 
-function composeAndSend(fixture: string): Step[] {
+/**
+ * 所有场景共用的 bench 指令。
+ *
+ * `+2000+2000` 让「待生成占位」和「思考块」各停 2 秒。默认的 120ms 首片延迟会让占位行一闪
+ * 而过，录像里根本看不见它，也就没法判断它出现的时机对不对；思考块同理——它出现时会带来一次
+ * 高度 settle，那一下必须落在能被看清的窗口里。
+ */
+const BENCH_PROMPT = 'bench:mixed@40+2000+2000';
+
+/** 送出 `BENCH_PROMPT` 之后，回复走完「占位 → 思考 → 正文」全程所需的时间。 */
+const TURN_DURATION_MS = 11_000;
+
+function composeAndSend(): Step[] {
   return [
     { kind: 'press', ...LAYOUT.composer },
     { kind: 'wait', ms: 1500 },
-    { kind: 'type', text: fixture },
+    { kind: 'type', text: BENCH_PROMPT },
     { kind: 'wait', ms: 1200 },
     { kind: 'send' },
   ];
@@ -65,12 +77,13 @@ export const SCENARIOS: Scenario[] = [
     description: '空话题里发出第一条消息：钉顶落点、预留空白、slide-in 期间的位移轨迹',
     id: 'send-anchor',
     measure: [
-      ...composeAndSend('bench:mixed@40'),
+      ...composeAndSend(),
+      // 三个截图分别落在三段状态里：待生成占位、思考块、正文写完。
       { kind: 'wait', ms: 1200 },
-      { kind: 'checkpoint', name: 'early' },
-      { kind: 'wait', ms: 2500 },
-      { kind: 'checkpoint', name: 'mid' },
-      { kind: 'wait', ms: 6000 },
+      { kind: 'checkpoint', name: 'pending' },
+      { kind: 'wait', ms: 2000 },
+      { kind: 'checkpoint', name: 'reasoning' },
+      { kind: 'wait', ms: 7000 },
       { kind: 'checkpoint', name: 'settled' },
     ],
     setup: openFreshTopic(),
@@ -79,8 +92,10 @@ export const SCENARIOS: Scenario[] = [
     description: '流式过程中用户上滑：手势与尾随滚动的对抗、按钮显隐状态机',
     id: 'stream-scroll',
     measure: [
-      ...composeAndSend('bench:mixed@40'),
-      { kind: 'wait', ms: 2500 },
+      ...composeAndSend(),
+      // 上滑必须发生在**正文**流式期间：占位与思考块两段内容还没超出视口，压根没有尾随滚动
+      // 可以对抗，那时候滑一下测不到这个场景要测的东西。
+      { kind: 'wait', ms: 4800 },
       { kind: 'checkpoint', name: 'before-drag' },
       { kind: 'swipe', ...LAYOUT.swipeDown },
       { kind: 'wait', ms: 1500 },
@@ -94,19 +109,19 @@ export const SCENARIOS: Scenario[] = [
     description: '已有长回复的话题里再发一条：新行的估算高度、内容塌陷与钉顶动画的相互作用',
     id: 'follow-up-turn',
     measure: [
-      ...composeAndSend('bench:mixed@40'),
+      ...composeAndSend(),
       { kind: 'wait', ms: 900 },
       { kind: 'checkpoint', name: 'anchoring' },
-      { kind: 'wait', ms: 2000 },
+      { kind: 'wait', ms: 4000 },
       { kind: 'checkpoint', name: 'streaming' },
       { kind: 'wait', ms: 6000 },
       { kind: 'checkpoint', name: 'settled' },
     ],
     setup: [
       ...openFreshTopic(),
-      ...composeAndSend('bench:mixed@40'),
+      ...composeAndSend(),
       // 等第一轮完整落地：后一条消息的估算高度取自它，没跑完就发下一条测不出真正的场景。
-      { kind: 'wait', ms: 14000 },
+      { kind: 'wait', ms: TURN_DURATION_MS + 7000 },
     ],
   },
 ];
