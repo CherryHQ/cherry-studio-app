@@ -9,7 +9,10 @@ import { BackHeader } from '@/frontend/components/headers';
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
 import { getPermissionSummaryKey, permissionConfig } from './permissionConfig';
-import { PermissionListLeading, visiblePermissionKinds } from './PermissionListPresentation';
+import {
+  PermissionListLeading,
+  visiblePermissionKinds,
+} from './PermissionListPresentation/PermissionListPresentation';
 
 export default function PermissionsSettingsScreen() {
   const { t } = useTranslation();

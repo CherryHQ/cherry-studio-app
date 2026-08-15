@@ -18,8 +18,8 @@ import { SelectionToolbar } from '@/frontend/components/messageTabs/SelectionToo
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
 
-import { AssistantListSearchBar } from './AssistantListSearchBar';
-import { useAssistantListEditing } from './useAssistantListEditing';
+import { AssistantListSearchBar } from './AssistantListSearchBar/AssistantListSearchBar';
+import { useAssistantListEditing } from './useAssistantListEditing/useAssistantListEditing';
 
 export default function AssistantListScreen() {
   const { t } = useTranslation();

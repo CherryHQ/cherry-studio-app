@@ -12,7 +12,10 @@ import { hiddenProviderListIds } from '@/frontend/utils/constants';
 
 import { ProviderAvatar } from './components/ProviderAvatar';
 import { SettingsServiceRow, type SettingsServiceRowProps } from './components/SettingsServiceRow';
-import { ProviderListSearch, providerListContentContainerStyle } from './ProviderListSearch';
+import {
+  ProviderListSearch,
+  providerListContentContainerStyle,
+} from './ProviderListSearch/ProviderListSearch';
 
 const providerListStaleTime = 1000 * 60 * 5;
 const PROVIDER_ROW_ESTIMATED_HEIGHT = 50;

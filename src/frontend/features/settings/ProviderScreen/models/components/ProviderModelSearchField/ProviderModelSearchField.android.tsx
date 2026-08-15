@@ -1,7 +1,7 @@
 import { SearchField } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import type { ProviderModelSearchFieldProps } from './providerModelSearchField.types';
+import type { ProviderModelSearchFieldProps } from './ProviderModelSearchField.types';
 
 export function ProviderModelSearchField({
   searchText,

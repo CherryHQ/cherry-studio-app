@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
 import { type ProviderModelListSelection } from '../models/components/ProviderModelListContent';
-import { ProviderModelListLayout } from '../models/components/ProviderModelListLayout';
+import { ProviderModelListLayout } from '../models/components/ProviderModelListLayout/ProviderModelListLayout';
 import type { ProviderModelAction } from '../models/types';
 import { filterModelsByKeywords } from '../models/utils/providerModelSearch';
 

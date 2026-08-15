@@ -6,7 +6,7 @@ import { ScrollView, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
 
-import { DataDirectorySection } from './DataDirectorySection';
+import { DataDirectorySection } from './DataDirectorySection/DataDirectorySection';
 
 export default function DataSettingsScreen() {
   const { t } = useTranslation();

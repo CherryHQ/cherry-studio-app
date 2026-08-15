@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
-import { ProviderModelSearchField } from './ProviderModelSearchField';
-import type { ProviderModelSearchFieldProps } from './providerModelSearchField.types';
+import { ProviderModelSearchField } from '../ProviderModelSearchField/ProviderModelSearchField';
+import type { ProviderModelSearchFieldProps } from '../ProviderModelSearchField/ProviderModelSearchField.types';
 
 type ProviderModelSearchControlsProps = ProviderModelSearchFieldProps & {
   children: ReactNode;

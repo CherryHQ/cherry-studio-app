@@ -6,7 +6,7 @@ import {
 } from '@cherrystudio/app-icons';
 import type { ComponentType } from 'react';
 
-import type { PermissionKind } from './permissionConfig';
+import type { PermissionKind } from '../permissionConfig';
 
 export const visiblePermissionKinds = [
   'location',

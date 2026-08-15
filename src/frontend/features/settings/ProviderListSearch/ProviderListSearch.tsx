@@ -2,4 +2,4 @@ export {
   ProviderListSearch,
   providerListContentContainerStyle,
 } from './ProviderListSearch.android';
-export type { ProviderListSearchProps } from './providerListSearch.types';
+export type { ProviderListSearchProps } from './ProviderListSearch.types';

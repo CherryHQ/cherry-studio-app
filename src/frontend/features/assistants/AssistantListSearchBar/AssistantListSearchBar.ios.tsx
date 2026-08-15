@@ -1,12 +1,12 @@
 import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import type { ProviderModelSearchFieldProps } from './providerModelSearchField.types';
+import type { AssistantListSearchBarProps } from './AssistantListSearchBar.types';
 
-export function ProviderModelSearchField({ setSearchText }: ProviderModelSearchFieldProps) {
+export function AssistantListSearchBar({ isEditing, setSearchText }: AssistantListSearchBarProps) {
   const { t } = useTranslation();
 
-  return (
+  return isEditing ? null : (
     <Stack.SearchBar
       autoCapitalize="none"
       hideNavigationBar={false}

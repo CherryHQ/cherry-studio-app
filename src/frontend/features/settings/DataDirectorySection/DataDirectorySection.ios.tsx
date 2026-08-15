@@ -2,7 +2,7 @@ import { Trash2Icon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
-import type { DataDirectorySectionProps } from './dataDirectorySection.types';
+import type { DataDirectorySectionProps } from './DataDirectorySection.types';
 
 export function DataDirectorySection({ onClearCache }: DataDirectorySectionProps) {
   const { t } = useTranslation();

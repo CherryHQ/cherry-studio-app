@@ -2,7 +2,7 @@ import { SearchField } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable } from 'react-native';
 
-import type { ProviderListSearchProps } from './providerListSearch.types';
+import type { ProviderListSearchProps } from './ProviderListSearch.types';
 
 export const providerListContentContainerStyle = undefined;
 

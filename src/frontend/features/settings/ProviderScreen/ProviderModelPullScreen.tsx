@@ -15,7 +15,7 @@ import {
   ProviderModelRow,
   providerModelRowEstimatedHeight,
 } from './models/components/ProviderModelRow';
-import { ProviderModelSearchControls } from './models/components/ProviderModelSearchControls';
+import { ProviderModelSearchControls } from './models/components/ProviderModelSearchControls/ProviderModelSearchControls';
 import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import {

@@ -18,7 +18,7 @@ import {
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
 
-import { ProviderModelSearchControls } from './ProviderScreen/models/components/ProviderModelSearchControls';
+import { ProviderModelSearchControls } from './ProviderScreen/models/components/ProviderModelSearchControls/ProviderModelSearchControls';
 import { ProviderModelTypeFilterBar } from './ProviderScreen/models/components/ProviderModelTypeFilterBar';
 import {
   getProviderModelTypeCounts,

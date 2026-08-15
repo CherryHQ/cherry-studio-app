@@ -5,7 +5,7 @@ import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DataDirectorySectionProps } from './dataDirectorySection.types';
+import type { DataDirectorySectionProps } from './DataDirectorySection.types';
 
 const ANDROID_GRANT_READ_URI_PERMISSION_FLAG = 1;
 

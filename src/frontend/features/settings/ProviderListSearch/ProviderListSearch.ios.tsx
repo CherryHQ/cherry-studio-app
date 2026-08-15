@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Platform, Pressable } from 'react-native';
 
-import type { ProviderListSearchProps } from './providerListSearch.types';
+import type { ProviderListSearchProps } from './ProviderListSearch.types';
 
 const usesNativeBottomSearch = Number.parseInt(String(Platform.Version), 10) >= 26;
 export const providerListContentContainerStyle = usesNativeBottomSearch

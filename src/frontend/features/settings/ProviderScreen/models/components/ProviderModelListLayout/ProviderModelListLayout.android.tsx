@@ -1,8 +1,8 @@
 import { View } from 'react-native';
 
-import { ProviderModelListContent } from './ProviderModelListContent';
-import type { ProviderModelListLayoutProps } from './providerModelListLayout.types';
-import { ProviderModelSearchField } from './ProviderModelSearchField';
+import { ProviderModelListContent } from '../ProviderModelListContent';
+import { ProviderModelSearchField } from '../ProviderModelSearchField/ProviderModelSearchField';
+import type { ProviderModelListLayoutProps } from './ProviderModelListLayout.types';
 
 export function ProviderModelListLayout({
   searchText,
