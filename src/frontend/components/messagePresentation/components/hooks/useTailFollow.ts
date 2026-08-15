@@ -97,7 +97,7 @@ export function useTailFollow({
   // 回报之间隔着一帧，用它算剩余距离等于每帧都从旧位置重新起步、一步跨到底，逼近直接退化
   // 回贴死底部。置空＝下一帧重新对表（进入尾随、手势打断、落位之后）。
   const followOffset = useSharedValue(TAIL_FOLLOW_NONE);
-  // 相位与交互锁都活在 JS 侧（state 与 ref），worklet 一个也读不到，镜像一份出来。
+  // 逼近器的开关。同样是给 worklet 看的镜像：相位是 React state、交互锁是 ref，两者它都读不到。
   const isFollowActive = useSharedValue(false);
   const isTouchingListRef = useRef(false);
   const isDraggingListRef = useRef(false);
@@ -110,15 +110,21 @@ export function useTailFollow({
   const tailFollowPhaseRef = useRef(tailFollowPhase);
   const isFollowing = tailFollowPhase === 'following';
 
+  // 逼近器只有一种停法：关掉开关、把落点和目标都置空。手势打断、离开尾随相位、卸载三处
+  // 共用它——写成三份副本，漏掉其中一个 set 就是「关了却还在追上一个目标」。
+  const stopTailFollow = useCallback(() => {
+    isFollowActive.set(false);
+    followOffset.set(TAIL_FOLLOW_NONE);
+    followTarget.set(TAIL_FOLLOW_NONE);
+  }, [followOffset, followTarget, isFollowActive]);
+
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;
     // 离开尾随相位就把逼近器停干净。它自己看不见相位，而**开**由 `scheduleTailFollow` 给、
     // **关**必须在这里兜住：新一轮消息会把状态机重置回 anchoring（见 resolveTailFollowState），
     // 那时钉顶滚动接管，逼近器若还醒着就是第二个改 offset 的力。
     if (tailFollowPhase !== 'following') {
-      isFollowActive.set(false);
-      followOffset.set(TAIL_FOLLOW_NONE);
-      followTarget.set(TAIL_FOLLOW_NONE);
+      stopTailFollow();
     }
 
     // anchoring 与 following 都由 app 主动把列表推向底部（钉顶滚动 / 尾随滚动），
@@ -127,21 +133,7 @@ export function useTailFollow({
     // 相位决定同一条位移轨迹该被判成合格还是缺陷（钉顶期应静止、尾随期应跟随），
     // 所以它必须作为独立信号进日志，否则 harness 无从判定。
     emitLayoutBenchProbe('phase', { anchorId: anchorMessageId, phase: tailFollowPhase });
-  }, [
-    anchorMessageId,
-    followOffset,
-    followTarget,
-    hasAnchor,
-    isFollowActive,
-    isTailControlled,
-    tailFollowPhase,
-  ]);
-
-  const cancelPendingTailFollow = useCallback(() => {
-    isFollowActive.set(false);
-    followOffset.set(TAIL_FOLLOW_NONE);
-    followTarget.set(TAIL_FOLLOW_NONE);
-  }, [followOffset, followTarget, isFollowActive]);
+  }, [anchorMessageId, hasAnchor, isTailControlled, stopTailFollow, tailFollowPhase]);
 
   // 落位由 JS 侧收尾：worklet 只知道 LegendList 记账的内容长度，`scrollToEnd` 才认原生
   // contentSize。每轮流式只发生一次（内容停止增长时），所以这一次跨线程回调不构成负担。
@@ -263,8 +255,8 @@ export function useTailFollow({
   const beginUserInteraction = useCallback(() => {
     isUserInteractingRef.current = true;
     cancelPendingInteractionEnd();
-    cancelPendingTailFollow();
-  }, [cancelPendingInteractionEnd, cancelPendingTailFollow]);
+    stopTailFollow();
+  }, [cancelPendingInteractionEnd, stopTailFollow]);
 
   // 钉顶预留空白耗尽（onSizeChanged 报 0）＝锚定阶段结束，进入尾随；用户手上有动作则
   // 直接进 paused，不跟。
@@ -351,9 +343,9 @@ export function useTailFollow({
   useEffect(() => {
     return () => {
       cancelPendingInteractionEnd();
-      cancelPendingTailFollow();
+      stopTailFollow();
     };
-  }, [cancelPendingInteractionEnd, cancelPendingTailFollow]);
+  }, [cancelPendingInteractionEnd, stopTailFollow]);
 
   return {
     handleEndVisible,

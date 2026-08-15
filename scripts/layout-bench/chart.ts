@@ -77,6 +77,19 @@ type Series = {
   points: Point[];
 };
 
+type Lane = {
+  /** 决定这张图画什么、有没有相位底色，也是它在代码里的名字。 */
+  id: 'steps' | 'offset' | 'sizes';
+  legend: LegendEntry[];
+  plotHeight: number;
+  /** 标题就是这张图回答的问题。 */
+  question: string;
+  /** 折线；柱状图（`steps`）不用。 */
+  series?: Series[];
+  /** 参与纵轴定标的全部值。 */
+  values: number[];
+};
+
 type LegendEntry = {
   color: string;
   dashed?: boolean;
@@ -218,15 +231,9 @@ export function renderTraceSvg(
     `<text x="${PAD_LEFT + 16}" y="66" font-size="12" fill="${COLOR.muted}">${escapeXml(cadenceSummary(judges))}</text>`,
   );
 
-  type Lane = {
-    /** 标题就是这张图回答的问题。 */
-    question: string;
-    legend: LegendEntry[];
-    plotHeight: number;
-  };
-
   const lanes: Lane[] = [
     {
+      id: 'steps',
       legend: [
         { color: COLOR.counted, shape: 'bar', text: '跟随期（判据统计的就是这些）' },
         {
@@ -244,8 +251,12 @@ export function renderTraceSvg(
       ],
       plotHeight: PRIMARY_PLOT_HEIGHT,
       question: '① 每次移动多远？柱子越矮越顺',
+      // 纵轴至少铺到判据线的两倍：否则自动缩放会把「柱子普遍 24px」和「柱子普遍 90px」画成
+      // 一模一样的高度，两轮的图并排放也看不出差别——而看出差别正是这张图存在的理由。
+      values: [...steps.map((step) => step.dy), 0, THRESHOLDS.followStepPx * 2],
     },
     {
+      id: 'offset',
       legend: [
         { color: PHASE_FILL.anchoring, shape: 'swatch', text: '钉顶' },
         { color: PHASE_FILL.following, shape: 'swatch', text: '跟随' },
@@ -259,8 +270,11 @@ export function renderTraceSvg(
       ],
       plotHeight: PLOT_HEIGHT,
       question: '② 滚到哪儿了？顶边的齿是程序化滚动',
+      series: [{ color: COLOR.offset, points: samples.map((s) => ({ atMs: s.atMs, value: s.y })) }],
+      values: samples.map((sample) => sample.y),
     },
     {
+      id: 'sizes',
       legend: [
         { color: COLOR.content, shape: 'line', text: '内容总高（消息在长）' },
         {
@@ -272,13 +286,22 @@ export function renderTraceSvg(
       ],
       plotHeight: PLOT_HEIGHT,
       question: '③ 列表长了多少？这是 ① 的动因',
+      series: [
+        { color: COLOR.content, points: contentPoints },
+        { color: COLOR.endSpace, dashed: true, points: endSpacePoints },
+      ],
+      values: [
+        ...contentPoints.map((point) => point.value),
+        ...endSpacePoints.map((point) => point.value),
+        0,
+      ],
     },
   ];
 
   const secondTicks = niceTicks(0, maxMs, 8);
   let cursorY = HEADER_HEIGHT;
 
-  lanes.forEach((lane, laneIndex) => {
+  for (const lane of lanes) {
     const top = cursorY + LANE_HEAD_HEIGHT;
     const bottom = top + lane.plotHeight;
 
@@ -295,29 +318,14 @@ export function renderTraceSvg(
       );
     }
 
-    const values: number[] = [];
-    if (laneIndex === 0) {
-      // 纵轴至少铺到判据线的两倍：否则自动缩放会把「柱子普遍 24px」和「柱子普遍 90px」画成
-      // 一模一样的高度，两轮的图并排放也看不出差别——而看出差别正是这张图存在的理由。
-      values.push(...steps.map((step) => step.dy), 0, THRESHOLDS.followStepPx * 2);
-    } else if (laneIndex === 1) {
-      values.push(...samples.map((sample) => sample.y));
-    } else {
-      values.push(
-        ...contentPoints.map((point) => point.value),
-        ...endSpacePoints.map((point) => point.value),
-        0,
-      );
-    }
-
-    const rawMin = Math.min(...values);
-    const rawMax = Math.max(...values);
+    const rawMin = Math.min(...lane.values);
+    const rawMax = Math.max(...lane.values);
     const span = rawMax - rawMin || 1;
     const min = rawMin - span * 0.08;
     const max = rawMax + span * 0.08;
     const yOf = (value: number) => bottom - ((value - min) / (max - min)) * lane.plotHeight;
 
-    if (laneIndex === 1) {
+    if (lane.id === 'offset') {
       // 相位底色：同一条位移曲线在钉顶期该静止、在尾随期该跟随，不铺相位就没法判断该不该动。
       let phaseStart = 0;
       let phase = trace.phaseAt(0);
@@ -355,7 +363,7 @@ export function renderTraceSvg(
       );
     }
 
-    if (laneIndex === 0) {
+    if (lane.id === 'steps') {
       const zero = yOf(0);
       const ruleY = yOf(THRESHOLDS.followStepPx);
       parts.push(
@@ -400,15 +408,7 @@ export function renderTraceSvg(
         labelled.add(violation.judge);
       }
     } else {
-      const seriesList: Series[] =
-        laneIndex === 1
-          ? [{ color: COLOR.offset, points: samples.map((s) => ({ atMs: s.atMs, value: s.y })) }]
-          : [
-              { color: COLOR.content, points: contentPoints },
-              { color: COLOR.endSpace, dashed: true, points: endSpacePoints },
-            ];
-
-      for (const series of seriesList) {
+      for (const series of lane.series ?? []) {
         if (series.points.length === 0) {
           continue;
         }
@@ -423,7 +423,7 @@ export function renderTraceSvg(
         );
       }
 
-      if (laneIndex === 1) {
+      if (lane.id === 'offset') {
         // 程序化滚动画成顶边的短齿而不是贯穿全高的竖线：一轮里有几十次，贯穿线会把曲线盖掉。
         for (const event of trace.events) {
           if (event.e !== 'progScroll') {
@@ -446,7 +446,7 @@ export function renderTraceSvg(
     );
 
     cursorY = bottom + LANE_GAP;
-  });
+  }
 
   for (const tick of secondTicks) {
     parts.push(

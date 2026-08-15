@@ -72,9 +72,6 @@ export function useMessageSlideInFlight({
   const offset = useSharedValue(0);
   const armedMessageIdRef = useRef<string | undefined>(undefined);
   const isLaunchedRef = useRef(false);
-  // 只服务于探针：起飞距离要跟着 launch 事件一起报。装填那一刻探针常常还没 arm——它由假模型
-  // 在构造时打开，而那晚于 pendingUserMessage 出现，首轮的 arm 事件因此收不到。
-  const armedTravelRef = useRef(0);
 
   // 起飞点必须在行的**第一帧**就位：钉顶要等测量与 ready-gate 的静默窗口（≥150ms ≈ 9 帧），
   // 这段时间里若偏移量还是 0，新建话题的行会先在落点显形、等 launch 再跳回输入框飞一遍。
@@ -88,7 +85,6 @@ export function useMessageSlideInFlight({
 
     if (armedMessageIdRef.current === enteringMessageId) {
       if (!isLaunchedRef.current) {
-        armedTravelRef.current = travel;
         offset.set(travel);
       }
 
@@ -97,7 +93,6 @@ export function useMessageSlideInFlight({
 
     armedMessageIdRef.current = enteringMessageId;
     isLaunchedRef.current = false;
-    armedTravelRef.current = travel;
     activeMessageId.set(enteringMessageId);
     followerMessageId.set(nextFollowerMessageId);
     landingProgress.set(0);
@@ -129,11 +124,15 @@ export function useMessageSlideInFlight({
       // 装填时行还停在「滚动尚未发生」的布局位置上，偏移量按全程给，所以它此刻在输入框**之下**、
       // 被输入框挡着看不见。开火这一帧把这段滚动从偏移量里扣掉，行正好显形在输入框上缘，随后
       // 滚动与弹簧各走各的一段。
-      const springTravel = Math.max(0, armedTravelRef.current - pendingScrollPx);
+      //
+      // 起飞距离直接读 `offset`，不另存一份：装填 effect 每次都把它设成当前的 travel，弹簧要到
+      // 下一行才开始跑，所以此刻它就是这次装填的全程。
+      const armedTravel = offset.get();
+      const springTravel = Math.max(0, armedTravel - pendingScrollPx);
       emitLayoutBenchProbe('slideIn', {
         phase: 'launch',
         scroll: Math.round(pendingScrollPx),
-        travel: Math.round(armedTravelRef.current),
+        travel: Math.round(armedTravel),
       });
       offset.set(springTravel);
       offset.set(
