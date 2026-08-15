@@ -10,7 +10,7 @@ import {
   MessageList,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
-import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset';
+import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 

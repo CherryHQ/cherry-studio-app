@@ -1,5 +1,5 @@
 import { SearchScopePager } from './components/SearchScopePager';
-import { GlobalSearchChrome } from './GlobalSearchChrome';
+import { GlobalSearchChrome } from './GlobalSearchChrome/GlobalSearchChrome';
 
 export function GlobalSearchScreen() {
   return (

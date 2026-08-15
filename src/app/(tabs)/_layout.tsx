@@ -20,7 +20,7 @@ import {
   getSettingsIcon,
   getTabBarPlatformProps,
   tabSceneStyle,
-} from '@/frontend/components/navigation/tabBarPlatform';
+} from '@/frontend/components/navigation/tabBarPlatform/tabBarPlatform';
 import { selectIsNestedTabScreen } from '@/frontend/components/navigation/tabBarVisibility';
 import {
   SearchScopeProvider,

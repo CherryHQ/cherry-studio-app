@@ -16,7 +16,7 @@ import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
-} from '@/frontend/components/navigation/rootStackPlatform';
+} from '@/frontend/components/navigation/rootStackPlatform/rootStackPlatform';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';

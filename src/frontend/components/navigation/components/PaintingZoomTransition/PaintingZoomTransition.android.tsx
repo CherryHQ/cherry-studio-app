@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import type {
   PaintingZoomLinkProps,
   PaintingZoomTargetProps,
-} from '../paintingZoomTransition.types';
+} from './PaintingZoomTransition.types';
 
 export function PaintingZoomLink({ children, fileEntryId, paintingId }: PaintingZoomLinkProps) {
   return (

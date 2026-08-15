@@ -2,4 +2,4 @@ export { PaintingZoomLink, PaintingZoomTarget } from './PaintingZoomTransition.a
 export type {
   PaintingZoomLinkProps,
   PaintingZoomTargetProps,
-} from '../paintingZoomTransition.types';
+} from './PaintingZoomTransition.types';

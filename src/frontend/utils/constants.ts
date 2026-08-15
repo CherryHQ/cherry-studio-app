@@ -3,7 +3,7 @@ import {
   isLiquidGlassAvailable as isSystemLiquidGlassAvailable,
 } from 'expo-glass-effect';
 
-import { nativeStackHeaderHeight } from './nativeNavigationMetrics';
+import { nativeStackHeaderHeight } from './nativeNavigationMetrics/nativeNavigationMetrics';
 
 export const defaultLanguage = 'en-US';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();

@@ -15,7 +15,7 @@ import {
   MessageList,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
-import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset';
+import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 
 import {
   type PaintingGenerationInput,

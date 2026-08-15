@@ -3,8 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { SearchScopeTabs } from './components/SearchScopeTabs';
-import type { GlobalSearchChromeProps } from './globalSearchChrome.types';
+import { SearchScopeTabs } from '../components/SearchScopeTabs';
+import type { GlobalSearchChromeProps } from './GlobalSearchChrome.types';
 
 export function GlobalSearchChrome({ children }: GlobalSearchChromeProps) {
   const { t } = useTranslation();

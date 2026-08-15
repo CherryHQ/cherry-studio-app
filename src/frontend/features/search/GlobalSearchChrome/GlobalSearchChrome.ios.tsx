@@ -9,8 +9,8 @@ import type { SearchBarCommands } from 'react-native-screens';
 
 import { searchBarAutoFocusDelayMs } from '@/frontend/utils/constants';
 
-import { SearchScopeTabs } from './components/SearchScopeTabs';
-import type { GlobalSearchChromeProps } from './globalSearchChrome.types';
+import { SearchScopeTabs } from '../components/SearchScopeTabs';
+import type { GlobalSearchChromeProps } from './GlobalSearchChrome.types';
 
 export function GlobalSearchChrome({ children }: GlobalSearchChromeProps) {
   const { t } = useTranslation();
