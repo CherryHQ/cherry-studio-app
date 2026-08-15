@@ -169,7 +169,22 @@ export function MessageList({
   // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。这是**总**行程，钉顶滚动与行的
   // 弹簧各分走一段（见 useAnchorPin）。
   const slideInTravel = Math.max(0, viewportHeight - contentBottomInset - anchorOffset);
-  const slideInFlight = useMessageSlideInFlight({ enteringMessageId, travel: slideInTravel });
+  // 入场那一轮的助手占位行：待发消息的下一条。它在同一次 overlay 注入里出现，所以装填时一定
+  // 已经在列表里；拿它做「等用户行落位再显形」的对象，而不是笼统的「最后一行」——流式期间
+  // 最后一行还是它，但那时飞行早已结束，不该再被 opacity 碰。
+  const enteringFollowerId = useMemo(() => {
+    if (!enteringMessageId) {
+      return undefined;
+    }
+
+    const enteringIndex = messages.findIndex((message) => message.id === enteringMessageId);
+    return enteringIndex < 0 ? undefined : messages[enteringIndex + 1]?.id;
+  }, [enteringMessageId, messages]);
+  const slideInFlight = useMessageSlideInFlight({
+    enteringMessageId,
+    followerMessageId: enteringFollowerId,
+    travel: slideInTravel,
+  });
 
   const { handleAnchorReady, handleAnchoredEndSpaceSizeChanged, handleContentSizeChange } =
     useAnchorPin({

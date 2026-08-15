@@ -809,6 +809,32 @@ describe('MessageList anchored tail following', () => {
     });
   });
 
+  test('holds the entering turn assistant row back until the user row has landed', () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([])} />);
+    });
+    act(() => {
+      mockLatestListProps?.onLayout?.({
+        nativeEvent: { layout: { height: 600, width: 390, x: 0, y: 0 } },
+      } as LayoutChangeEvent);
+    });
+    const turn = [
+      createMessage('user-1', 'user', [textPart('hi')]),
+      createMessage('assistant-1', 'assistant'),
+    ];
+    act(() => renderer?.update(<MessageList {...listProps(turn, 'user-1')} />));
+
+    // 跟随的是「待发消息的下一条」，不是笼统的最后一行——流式期间最后一行还是它，但那时
+    // 飞行早已结束，不该再被 opacity 碰。
+    expect(mockSlideInFlight?.followerMessageId.get()).toBe('assistant-1');
+    expect(mockSlideInFlight?.landingProgress.get()).toBe(0);
+
+    act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
+    act(() => flushAnimationFrames());
+
+    expect(mockSlideInFlight?.landingProgress.get()).toBe(1);
+  });
+
   test('still launches the entering row after the pending message has been cleared', () => {
     act(() => {
       renderer = create(<MessageList {...listProps([])} />);
