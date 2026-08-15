@@ -64,7 +64,3 @@ final head before marking it ready. The existing GitHub workflow runs the comple
 lint, format check, package build, and documentation link check only after the PR is ready.
 
 A PR is merge-ready only after its remote checks pass.
-
-`src/frontend/features/settings/__tests__/ModelSettingsScreen.test.tsx` predates the screen-suite
-rule. Treat it as follow-up migration debt: move any protected behavior to its owning hook or pure
-module before removing the render suite.

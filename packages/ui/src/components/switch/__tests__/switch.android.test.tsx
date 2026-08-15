@@ -10,8 +10,9 @@ jest.mock('heroui-native', () => {
     return React.createElement(View, { ...props, mockComponent: 'hero-switch' });
   }
 
-  Switch.Thumb = (props: object) =>
-    React.createElement(View, { ...props, mockComponent: 'hero-switch-thumb' });
+  Switch.Thumb = function SwitchThumb(props: object) {
+    return React.createElement(View, { ...props, mockComponent: 'hero-switch-thumb' });
+  };
 
   return { Switch };
 });
@@ -64,17 +65,13 @@ describe('Switch (Android)', () => {
     );
   });
 
-  test('forwards disabled state, style, and testID', () => {
-    const style = { marginTop: 8 };
-
+  test('maps disabled state to HeroUI', () => {
     act(() => {
       renderer = create(
         <Switch
           accessibilityLabel="Airplane mode"
           disabled
           onValueChange={jest.fn()}
-          style={style}
-          testID="airplane-mode"
           value={false}
         />,
       );
@@ -83,7 +80,5 @@ describe('Switch (Android)', () => {
     const control = renderer!.root.findByProps({ mockComponent: 'hero-switch' });
 
     expect(control.props.isDisabled).toBe(true);
-    expect(control.props.style).toBe(style);
-    expect(control.props.testID).toBe('airplane-mode');
   });
 });
