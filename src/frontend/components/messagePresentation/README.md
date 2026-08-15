@@ -47,7 +47,11 @@ and anchoring.
 
 ## Organization
 
-- `components/MessageList.tsx` owns virtualization, anchoring, readiness, and list controls.
+- `components/MessageList.tsx` is the wiring layer: virtualization config, layout derivations, and
+  list controls. The behavior engines live beside it in `components/hooks/` — `useTailFollow`
+  (tail-follow state machine, sole owner of the interaction lock), `useAnchorPin` (anchor pinning,
+  first-anchor staging, readiness gate), and `useLayoutBenchInstrumentation` (dev-only layout
+  probes). Measurement-backed comments travel with the code they explain.
 - `messageRow/` owns user and assistant row layouts plus the private slide-in provider.
 - `messageContent/` dispatches structured message parts and owns citation/file hooks.
 - `utils/` contains the private built-in tool presentation mapping.
