@@ -378,12 +378,26 @@ export function renderTraceSvg(
       }
 
       // 违规只标在主图上：三张图都标会把曲线埋掉，而违规本来就是「哪一刻不顺」的注脚。
+      // 同一条判据一轮里可能响几十次（v0.2 基线实测 scroll-button-phase 响 21 次），逐个写
+      // 判据名会在图顶糊成一片红字。竖线照画每一条，名字每条判据只写一次并带上次数。
+      const labelled = new Set<string>();
       for (const violation of violations) {
         const x = xOf(violation.atMs);
         parts.push(
           `<line x1="${x.toFixed(1)}" y1="${top}" x2="${x.toFixed(1)}" y2="${bottom}" stroke="${COLOR.reversal}" stroke-width="1.5" stroke-dasharray="4 3"/>`,
-          `<text x="${(x + 4).toFixed(1)}" y="${top + 12}" font-size="10" fill="${COLOR.reversal}">${escapeXml(violation.judge)}</text>`,
         );
+
+        if (labelled.has(violation.judge)) {
+          continue;
+        }
+        const count = violations.filter((other) => other.judge === violation.judge).length;
+        const text = count > 1 ? `${violation.judge} ×${count}` : violation.judge;
+        // 标签排在左上角固定位置而不是跟着竖线走：跟着走就会互相叠，而「第一次响在哪一刻」
+        // 竖线已经说清楚了。
+        parts.push(
+          `<text x="${PAD_LEFT + 6}" y="${top + 13 + labelled.size * 13}" font-size="10" fill="${COLOR.reversal}">${escapeXml(text)}</text>`,
+        );
+        labelled.add(violation.judge);
       }
     } else {
       const seriesList: Series[] =
