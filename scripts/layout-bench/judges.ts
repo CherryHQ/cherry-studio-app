@@ -527,6 +527,9 @@ function judgeSlideInFlight(trace: Trace): JudgeReport {
   let settles = 0;
   let maxTravel = 0;
   let maxArmToLaunchMs = 0;
+  // 总行程里由钉顶滚动分走的那一段。只作记录：它是 0（新话题）还是几百（已有话题）取决于
+  // 有多少旧内容要让位，两种都合法；要判的是**两段加起来**够不够，那看 travel。
+  let maxScrollAssist = 0;
 
   for (const event of trace.events) {
     if (event.e !== 'slideIn') {
@@ -545,7 +548,9 @@ function judgeSlideInFlight(trace: Trace): JudgeReport {
     // 首轮的 arm 事件因此根本收不到。只认 arm 的话这条判据在 send-anchor 场景里恒绿。
     if (event.phase === 'launch') {
       const travel = readNumber(event, 'travel') ?? 0;
+      const scrollAssist = readNumber(event, 'scroll') ?? 0;
       maxTravel = Math.max(maxTravel, travel);
+      maxScrollAssist = Math.max(maxScrollAssist, scrollAssist);
       launches += 1;
 
       const pendingArmAtMs = armedAtMs.shift();
@@ -585,7 +590,13 @@ function judgeSlideInFlight(trace: Trace): JudgeReport {
     description: '每条入场消息都要装填、开火，且起飞距离非零',
     judge: 'slide-in-flight',
     // settles 只做记录不设断言：连发时上一次弹簧被新的一次取消是正常的。
-    metrics: { launches, maxArmToLaunchMs, maxTravelPx: maxTravel, settles },
+    metrics: {
+      launches,
+      maxArmToLaunchMs,
+      maxScrollAssistPx: maxScrollAssist,
+      maxTravelPx: maxTravel,
+      settles,
+    },
     violations,
   };
 }

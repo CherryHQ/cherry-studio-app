@@ -699,7 +699,7 @@ describe('MessageList anchored tail following', () => {
 
     expect(mockScrollMessageToEnd).toHaveBeenCalledTimes(1);
     expect(mockScrollMessageToEnd).toHaveBeenLastCalledWith({
-      animated: false,
+      animated: true,
       closeKeyboard: true,
     });
     expect(mockLatestListProps?.freeze).toBe(mockFreeze);
@@ -713,9 +713,10 @@ describe('MessageList anchored tail following', () => {
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-2' }));
     act(() => flushAnimationFrames());
 
-    // 续轮和首轮一样瞬时：入场的可见位移归行的 transform，滚动动画叠上去就是双倍距离。
+    // 钉顶滚动始终带动画：它搬的是旧内容，瞬时会让整屏一帧切掉。与行的 transform 不叠加成
+    // 双倍——弹簧只走「总行程减去这次滚动」那一段。
     expect(mockScrollMessageToEnd).toHaveBeenLastCalledWith({
-      animated: false,
+      animated: true,
       closeKeyboard: true,
     });
 
@@ -729,7 +730,7 @@ describe('MessageList anchored tail following', () => {
     act(() => flushAnimationFrames());
 
     expect(mockScrollMessageToEnd).toHaveBeenLastCalledWith({
-      animated: false,
+      animated: true,
       closeKeyboard: false,
     });
   });
@@ -763,6 +764,49 @@ describe('MessageList anchored tail following', () => {
     act(() => flushAnimationFrames());
 
     expect(mockSlideInFlight?.offset.get()).toBe(0);
+  });
+
+  test('lets the pin scroll carry its share of the travel instead of the spring taking all of it', () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([])} />);
+    });
+    act(() => {
+      mockLatestListProps?.onLayout?.({
+        nativeEvent: { layout: { height: 600, width: 390, x: 0, y: 0 } },
+      } as LayoutChangeEvent);
+    });
+    act(() => {
+      renderer?.update(
+        <MessageList
+          {...listProps([createMessage('user-1', 'user', [textPart('hi')])], 'user-1')}
+        />,
+      );
+    });
+    // 已有话题：内容比视口长，钉顶要先把旧内容滚出视口。待滚的量取自列表自报的几何
+    // （内容 900 − 视口 600 − 当前位移 0 = 300），而不是组件里那几个会滞后的 React state。
+    mockListMetrics = { contentLength: 900, scroll: 0, scrollLength: 600 };
+    expect(mockSlideInFlight?.offset.get()).toBe(464);
+
+    // 弹簧被 mock 成直接落到终值，所以要看开火那一刻写进去的**起点**，不是终值。
+    const offset = mockSlideInFlight?.offset;
+    const setSpy = jest.fn();
+    const passThrough = offset?.set.bind(offset);
+    if (offset && passThrough) {
+      offset.set = (value: Parameters<typeof passThrough>[0]) => {
+        setSpy(value);
+        passThrough(value);
+      };
+    }
+
+    act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
+    act(() => flushAnimationFrames());
+
+    // 滚动分走 300、弹簧只走 164，两段相加仍是 464——行的可见总路程与新话题里一模一样。
+    expect(setSpy.mock.calls.map(([value]) => value)).toEqual([164, 0]);
+    expect(mockScrollMessageToEnd).toHaveBeenLastCalledWith({
+      animated: true,
+      closeKeyboard: true,
+    });
   });
 
   test('still launches the entering row after the pending message has been cleared', () => {
@@ -809,7 +853,7 @@ describe('MessageList anchored tail following', () => {
     act(() => flushAnimationFrames());
 
     expect(mockScrollMessageToEnd).toHaveBeenCalledWith({
-      animated: false,
+      animated: true,
       closeKeyboard: true,
     });
   });
