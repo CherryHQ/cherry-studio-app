@@ -1,1 +1,5 @@
-export { getRootHeaderStyle, getTransparentHeaderStyle } from './rootStackPlatform.android';
+export {
+  getRootHeaderStyle,
+  getTransparentHeaderStyle,
+  paintingViewerHeaderShown,
+} from './rootStackPlatform.android';

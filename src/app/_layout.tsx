@@ -16,6 +16,7 @@ import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
+  paintingViewerHeaderShown,
 } from '@/frontend/components/navigation/rootStackPlatform/rootStackPlatform';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -103,7 +104,7 @@ function RootStack() {
           // photo rather than on a themed surface: black behind, white on top,
           // in both themes. `PaintingViewerChrome` paints the same pair.
           contentStyle: { backgroundColor: constantBlack },
-          headerShown: !isIOS,
+          headerShown: paintingViewerHeaderShown,
           headerTintColor: constantWhite,
           headerTransparent: true,
           title: '',
