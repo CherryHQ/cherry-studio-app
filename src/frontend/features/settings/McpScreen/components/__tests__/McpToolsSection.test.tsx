@@ -1,6 +1,5 @@
 import { Switch } from '@cherrystudio/ui/components';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
-import type { ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
@@ -36,6 +35,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { Pressable: MockPressable, View: MockView } = jest.requireActual('react-native');
 
   return {
+    Button: (props: Record<string, unknown>) => <MockPressable {...props} />,
     Spinner: (props: Record<string, unknown>) => <MockView {...props} />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
   };
@@ -44,14 +44,6 @@ jest.mock('@cherrystudio/ui/components', () => {
 jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
-
-jest.mock('../../../components/SettingsDialogActionButton', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    SettingsDialogActionButton: (props: { children?: ReactNode }) => <MockView {...props} />,
-  };
-});
 
 const serverWildcard = 'mcp__myServer__*';
 

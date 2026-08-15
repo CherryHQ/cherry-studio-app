@@ -1,4 +1,4 @@
-import { Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
 import {
   withMcpToolRuleAdded,
   withMcpToolRuleCleared,
@@ -19,7 +19,6 @@ import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
-import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { McpHeadersEditor } from './components/McpHeadersEditor';
 import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';
 import { McpServerTabs } from './components/McpServerTabs/McpServerTabs';
@@ -104,7 +103,9 @@ function McpServerLoadState({
           </Text>
         ) : null}
         {onRetry ? (
-          <SettingsDialogActionButton label={t('settings.mcp.retry')} onPress={onRetry} />
+          <Button size="sm" variant="secondary" onPress={onRetry}>
+            {t('settings.mcp.retry')}
+          </Button>
         ) : null}
       </View>
     </>

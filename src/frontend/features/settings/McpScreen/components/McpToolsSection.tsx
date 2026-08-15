@@ -1,4 +1,4 @@
-import { Spinner, Switch } from '@cherrystudio/ui/components';
+import { Button, Spinner, Switch } from '@cherrystudio/ui/components';
 import {
   hasMcpServerWildcardRule,
   matchesMcpSourceToolRule,
@@ -11,8 +11,6 @@ import { Text, View } from 'react-native';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { queryKeys, useBackendModule } from '@/frontend/data';
-
-import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
 
 type McpToolsSectionProps = {
   isReadOnly?: boolean;
@@ -147,7 +145,9 @@ export function McpToolsSection({
         <Text className="text-foreground text-xs" selectable>
           {toolsQuery.error instanceof Error ? toolsQuery.error.message : String(toolsQuery.error)}
         </Text>
-        <SettingsDialogActionButton label={t('settings.mcp.tools.retry')} onPress={refetch} />
+        <Button size="sm" variant="secondary" onPress={refetch}>
+          {t('settings.mcp.tools.retry')}
+        </Button>
       </View>
     );
   }
