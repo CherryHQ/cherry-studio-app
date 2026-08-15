@@ -1,14 +1,5 @@
 import { type LegendListRef } from '@legendapp/list/react-native';
-import {
-  type RefObject,
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
-import { type LayoutChangeEvent } from 'react-native';
+import { type RefObject, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react';
 
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
@@ -21,14 +12,13 @@ import { emitProgrammaticScroll, scrollLog } from './useLayoutBenchInstrumentati
 // 依赖 contentBaseHeight 重跑）取消并重启计时，从而把迟到修正也挡在遮罩后，与设备快慢无关。
 const READY_SETTLE_MS = 150;
 
-// 锚定生命周期：新用户消息就绪后钉顶（handleAnchorReady）、单轮工作区的首锚 staging、
-// 以及首帧揭示前的 ready-gate。它是尾随状态机之外唯一会主动滚动列表的地方，所以必须
-// 拿到 useTailFollow 的 isUserInteractingRef（只读）守同一个交互不变式，并在预留空白
-// 耗尽时经 notifyAnchorSpaceClosed 把相位交接给尾随。
+// 锚定生命周期：新用户消息就绪后钉顶（handleAnchorReady）与首帧揭示前的 ready-gate。它是
+// 尾随状态机之外唯一会主动滚动列表的地方，所以必须拿到 useTailFollow 的 isUserInteractingRef
+// （只读）守同一个交互不变式，并在预留空白耗尽时经 notifyAnchorSpaceClosed 把相位交接给尾随。
+//
+// 这里只管**布局位置**，不管入场的可见位移——后者归行的 transform（useMessageSlideInFlight），
+// 由 onAnchorPinned 在落位那一帧开火。
 export function useAnchorPin({
-  anchorIndex,
-  anchorMessageId,
-  animateFirstEnteringMessage,
   contentBottomInset,
   endSpaceRef,
   enteringMessageId,
@@ -36,12 +26,11 @@ export function useAnchorPin({
   lastMessageId,
   listRef,
   notifyAnchorSpaceClosed,
+  onAnchorPinned,
   onReady,
   scrollMessageToEnd,
+  viewportHeight,
 }: {
-  anchorIndex: number;
-  anchorMessageId: string | undefined;
-  animateFirstEnteringMessage: boolean;
   contentBottomInset: number;
   endSpaceRef: RefObject<number>;
   enteringMessageId: string | undefined;
@@ -49,18 +38,16 @@ export function useAnchorPin({
   lastMessageId: string | undefined;
   listRef: RefObject<LegendListRef | null>;
   notifyAnchorSpaceClosed: () => void;
+  onAnchorPinned: () => void;
   onReady: (() => void) | undefined;
   scrollMessageToEnd: (options: { animated: boolean; closeKeyboard: boolean }) => Promise<void>;
+  viewportHeight: number;
 }): {
   handleAnchorReady: (info: { anchorKey: string | undefined }) => void;
   handleAnchoredEndSpaceSizeChanged: (size: number) => void;
   handleContentSizeChange: (width: number, height: number) => void;
-  handleLayout: (event: LayoutChangeEvent) => void;
-  isStagingFirstAnchor: boolean;
-  releaseStagedFirstAnchor: () => void;
 } {
   const [contentBaseHeight, setContentBaseHeight] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(0);
   const didReportReadyRef = useRef(false);
   const isMountedRef = useRef(true);
   const pendingReadyFrameRef = useRef<number | null>(null);
@@ -68,38 +55,6 @@ export function useAnchorPin({
   const readyGenerationRef = useRef(0);
   // 揭示前的定位只做一次，见下方 gate 处的说明。
   const didGateScrollRef = useRef(false);
-  const pendingFirstAnchorReleaseFrameRef = useRef<number | null>(null);
-
-  // A single-turn workspace has no previous content to scroll past. Keep its first live turn at
-  // the list end until the rows report a real size; then add the anchor space and animate to it.
-  const [releasedFirstAnchorId, setReleasedFirstAnchorId] = useState<string>();
-  const isFirstEnteringAnchor =
-    animateFirstEnteringMessage &&
-    anchorIndex === 0 &&
-    anchorMessageId !== undefined &&
-    anchorMessageId === enteringMessageId;
-  const isStagingFirstAnchor = isFirstEnteringAnchor && releasedFirstAnchorId !== anchorMessageId;
-  const stagedFirstAnchorIdRef = useRef<string | undefined>(undefined);
-
-  // Read from size and layout callbacks, which the platform dispatches well
-  // after commit, so mirroring the staged anchor here is soon enough.
-  useLayoutEffect(() => {
-    stagedFirstAnchorIdRef.current = isStagingFirstAnchor ? anchorMessageId : undefined;
-  }, [anchorMessageId, isStagingFirstAnchor]);
-
-  const releaseStagedFirstAnchor = useCallback(() => {
-    const stagedAnchorId = stagedFirstAnchorIdRef.current;
-    if (!stagedAnchorId || pendingFirstAnchorReleaseFrameRef.current !== null) {
-      return;
-    }
-
-    pendingFirstAnchorReleaseFrameRef.current = requestAnimationFrame(() => {
-      pendingFirstAnchorReleaseFrameRef.current = null;
-      if (stagedFirstAnchorIdRef.current === stagedAnchorId) {
-        setReleasedFirstAnchorId(stagedAnchorId);
-      }
-    });
-  }, []);
 
   // 把刚发送的用户消息锚定到内容区顶部，并在其下方补足空白，让助手回复流式生长其间。
   //
@@ -107,8 +62,10 @@ export function useAnchorPin({
   // （含刚 mount 的助手 pending 占位、hasUnknownTailSize=false）后，才把预留空白算成真实值
   // 并回调 onReady。此刻落点已是终值。
   //
-  // 默认首轮瞬时定位，后续实时发送在权威尺寸就绪后动画钉顶；需要单轮工作区也播放
-  // 完整锚定动画时，由调用方显式开启 animateFirstEnteringMessage。历史恢复仍瞬时定位。
+  // 钉顶滚动一律瞬时。入场那段可见位移由行自身的 transform 提供（见 useMessageSlideInFlight），
+  // 两者叠加会走双倍距离，所以这里只负责把行的**布局位置**放到终点、让 transform 有个准确的
+  // 落点可收敛。副产品是新建话题的第一条终于和后续一致：它的可滚动距离恒为 0，滚动动画本来
+  // 就演不出任何东西。
   const scrolledAnchorKeyRef = useRef<string | undefined>(undefined);
   const handleAnchorReady = useCallback(
     (info: { anchorKey: string | undefined }) => {
@@ -123,9 +80,8 @@ export function useAnchorPin({
         t: Date.now(),
       });
       const isEnteringMessage = info.anchorKey === enteringMessageId;
-      const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
-        emitProgrammaticScroll('anchorReady', listRef, { animated: shouldAnimate });
+        emitProgrammaticScroll('anchorReady', listRef, { animated: false });
         // 收键盘与钉顶滚动**必须**同时发起，别再试着把它挪到滚动之后：改成「先钉顶、
         // 动画结束再收键盘」实测反转从 1 处 310px 变成 2 处 334px（位移搬到动画终点，
         // 还要再被尾随滚动拉一次），更差。
@@ -138,12 +94,14 @@ export function useAnchorPin({
         // whenAtEnd 在键盘变矮时「夹到当下的合法区间」而不是「按记录量回退」，两者只在
         // 这一个情形下不同，其余逐值相同。补丁掉了这个跳动就会回来。
         void scrollMessageToEnd({
-          animated: shouldAnimate,
+          animated: false,
           closeKeyboard: isEnteringMessage,
         });
+        // 落位与开火同帧：此刻行的布局位置才是终点，transform 从这一帧起才有正确的收敛目标。
+        onAnchorPinned();
       });
     },
-    [animateFirstEnteringMessage, anchorIndex, enteringMessageId, listRef, scrollMessageToEnd],
+    [enteringMessageId, listRef, onAnchorPinned, scrollMessageToEnd],
   );
 
   const handleAnchoredEndSpaceSizeChanged = useCallback(
@@ -194,15 +152,9 @@ export function useAnchorPin({
         ready: didReportReadyRef.current,
       });
       setContentBaseHeight(Math.max(0, height - contentBottomInset));
-      releaseStagedFirstAnchor();
     },
-    [contentBottomInset, releaseStagedFirstAnchor],
+    [contentBottomInset],
   );
-
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    emitLayoutBenchProbe('viewport', { h: Math.round(event.nativeEvent.layout.height) });
-    setViewportHeight(event.nativeEvent.layout.height);
-  }, []);
 
   useEffect(() => {
     readyGenerationRef.current += 1;
@@ -295,10 +247,6 @@ export function useAnchorPin({
   useEffect(() => {
     return () => {
       isMountedRef.current = false;
-      if (pendingFirstAnchorReleaseFrameRef.current !== null) {
-        cancelAnimationFrame(pendingFirstAnchorReleaseFrameRef.current);
-        pendingFirstAnchorReleaseFrameRef.current = null;
-      }
       cancelPendingReadyFrame();
     };
   }, [cancelPendingReadyFrame]);
@@ -307,8 +255,5 @@ export function useAnchorPin({
     handleAnchorReady,
     handleAnchoredEndSpaceSizeChanged,
     handleContentSizeChange,
-    handleLayout,
-    isStagingFirstAnchor,
-    releaseStagedFirstAnchor,
   };
 }
