@@ -1,0 +1,98 @@
+diff --git a/android/src/main/java/com/rcttabview/RCTTabView.kt b/android/src/main/java/com/rcttabview/RCTTabView.kt
+index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..dbab3d6afa4337ecffd1be2f51cebd83816f4561 100644
+--- a/android/src/main/java/com/rcttabview/RCTTabView.kt
++++ b/android/src/main/java/com/rcttabview/RCTTabView.kt
+@@ -35,6 +35,8 @@ import coil3.size.Scale
+ import com.facebook.react.bridge.ReadableArray
+ import com.facebook.react.common.assets.ReactFontManager
+ import com.facebook.react.modules.core.ReactChoreographer
++import com.facebook.react.uimanager.PointerEvents
++import com.facebook.react.uimanager.ReactPointerEventsView
+ import com.facebook.react.views.text.ReactTypefaceUtils
+ import com.google.android.material.bottomnavigation.BottomNavigationView
+ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_AUTO
+@@ -42,7 +44,11 @@ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY
+ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_UNLABELED
+ import com.google.android.material.transition.platform.MaterialFadeThrough
+-
++
+-class ExtendedBottomNavigationView(context: Context) : BottomNavigationView(context) {
++class ExtendedBottomNavigationView(context: Context) :
++  BottomNavigationView(context), ReactPointerEventsView {
++  override val pointerEvents: PointerEvents
++    get() = if (visibility == VISIBLE) PointerEvents.AUTO else PointerEvents.NONE
++
+   override fun getMaxItemCount(): Int {
+     return 100
+   }
+@@ -100,23 +106,17 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
+     uiModeConfiguration = resources.configuration.uiMode
+ 
+     post {
+-      addOnLayoutChangeListener { _, left, top, right, bottom,
++      addOnLayoutChangeListener { _, _, _, _, _,
+                                   _, _, _, _ ->
+-        val newWidth = right - left
+-        val newHeight = bottom - top
+-
+         // Notify about tab bar height.
+         onTabBarMeasuredListener?.invoke(Utils.convertPixelsToDp(context, bottomNavigation.height).toInt())
+-
+-        if (newWidth != lastReportedSize?.width || newHeight != lastReportedSize?.height) {
+-          val dpWidth = Utils.convertPixelsToDp(context, layoutHolder.width)
+-          val dpHeight = Utils.convertPixelsToDp(context, layoutHolder.height)
+-
+-          onNativeLayoutListener?.invoke(dpWidth, dpHeight)
+-          lastReportedSize = Size(newWidth, newHeight)
+-        }
+       }
+     }
++
++    layoutHolder.addOnLayoutChangeListener { _, left, top, right, bottom,
++                                             _, _, _, _ ->
++      reportLayoutHolderSize(right - left, bottom - top)
++    }
+   }
+ 
+   private val layoutCallback = Choreographer.FrameCallback {
+@@ -124,6 +124,22 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
+     refreshLayout()
+   }
+ 
++  private fun reportLayoutHolderSize(width: Int, height: Int) {
++    if (width <= 0 || height <= 0) {
++      return
++    }
++
++    val newSize = Size(width, height)
++    if (newSize == lastReportedSize) {
++      return
++    }
++
++    val dpWidth = Utils.convertPixelsToDp(context, width)
++    val dpHeight = Utils.convertPixelsToDp(context, height)
++    onNativeLayoutListener?.invoke(dpWidth, dpHeight)
++    lastReportedSize = newSize
++  }
++
+   private fun refreshLayout() {
+     measure(
+       MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
+@@ -231,11 +247,13 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
+   }
+ 
+   fun setTabBarHidden(isHidden: Boolean) {
+-    if (isHidden) {
+-      bottomNavigation.visibility = GONE
+-    } else {
+-      bottomNavigation.visibility = VISIBLE
++    val targetVisibility = if (isHidden) GONE else VISIBLE
++    if (bottomNavigation.visibility == targetVisibility) {
++      return
+     }
++
++    bottomNavigation.visibility = targetVisibility
++    requestLayout()
+   }
+ 
+   fun updateItems(items: MutableList<TabInfo>) {

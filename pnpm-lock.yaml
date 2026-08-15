@@ -39,6 +39,7 @@ patchedDependencies:
   metro-runtime@0.84.4: 7f83ec93fe717bebba70d6301eac128b36bbb0b46d5db476fb5c43bac9daea6a
   metro@0.84.4: bc3c69aec12bccf391b5180caffd62a4043c81bcf5848949a4b50e79184be6f7
   ollama-ai-provider-v2@3.3.1: 4cb5921e69158814eeeed8d71c80621bd261f33d769b6afabba0db40931155eb
+  react-native-bottom-tabs@1.4.0: 5c3550119945bc0390d8c0da903beca995a81646735b775f7fd5c08afb4266ce
   react-native-nitro-healthkit@1.0.0: c1231cd559844fba1fa13c5d09d4f9a84ecd4211707055a1ea2c3ba9930108e7
   react-native-reanimated@4.5.0: 98a5ad9821aaded8cb131bcc4d0b77f31aa2489850cccfd2f13db70259fe1bd1
   uniwind@1.6.5: 791bd6e5e63c234764db0263b41a5f7aa5c6259270634d6fc7405845de987eeb
@@ -103,7 +104,7 @@ importers:
         version: 7.29.7
       '@bottom-tabs/react-navigation':
         specifier: 1.4.0
-        version: 1.4.0(patch_hash=3b020e5c2082d73190742b6c8fbdf6712b3db373d93c237c4ee935a92118a61e)(expo-router@57.0.6)(react-native-bottom-tabs@1.4.0(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+        version: 1.4.0(patch_hash=3b020e5c2082d73190742b6c8fbdf6712b3db373d93c237c4ee935a92118a61e)(expo-router@57.0.6)(react-native-bottom-tabs@1.4.0(patch_hash=5c3550119945bc0390d8c0da903beca995a81646735b775f7fd5c08afb4266ce)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       '@cherrystudio/ai-core':
         specifier: workspace:*
         version: link:packages/ai-core
@@ -298,7 +299,7 @@ importers:
         version: 0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3)
       react-native-bottom-tabs:
         specifier: 1.4.0
-        version: 1.4.0(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+        version: 1.4.0(patch_hash=5c3550119945bc0390d8c0da903beca995a81646735b775f7fd5c08afb4266ce)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       react-native-chart-kit:
         specifier: 7.0.2
         version: 7.0.2(react-native-svg@15.15.4(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
@@ -10214,13 +10215,13 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
-  '@bottom-tabs/react-navigation@1.4.0(patch_hash=3b020e5c2082d73190742b6c8fbdf6712b3db373d93c237c4ee935a92118a61e)(expo-router@57.0.6)(react-native-bottom-tabs@1.4.0(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)':
+  '@bottom-tabs/react-navigation@1.4.0(patch_hash=3b020e5c2082d73190742b6c8fbdf6712b3db373d93c237c4ee935a92118a61e)(expo-router@57.0.6)(react-native-bottom-tabs@1.4.0(patch_hash=5c3550119945bc0390d8c0da903beca995a81646735b775f7fd5c08afb4266ce)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)':
     dependencies:
       color: 5.0.3
       expo-router: 57.0.6(0affca755774a72a3e12455a1156c114)
       react: 19.2.3
       react-native: 0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3)
-      react-native-bottom-tabs: 1.4.0(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+      react-native-bottom-tabs: 1.4.0(patch_hash=5c3550119945bc0390d8c0da903beca995a81646735b775f7fd5c08afb4266ce)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
 
   '@drizzle-team/brocli@0.10.2': {}
 
@@ -16861,7 +16862,7 @@ snapshots:
 
   react-is@19.2.6: {}
 
-  react-native-bottom-tabs@1.4.0(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
+  react-native-bottom-tabs@1.4.0(patch_hash=5c3550119945bc0390d8c0da903beca995a81646735b775f7fd5c08afb4266ce)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3):
     dependencies:
       react: 19.2.3
       react-freeze: 1.0.4(react@19.2.3)
