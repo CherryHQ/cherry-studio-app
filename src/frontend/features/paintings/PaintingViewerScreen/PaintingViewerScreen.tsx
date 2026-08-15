@@ -12,7 +12,7 @@ import {
   useResolvedPaintingFiles,
 } from '../hooks/usePaintings';
 import { PaintingViewerChrome } from './components/PaintingViewerChrome';
-import { ViewerImage } from './components/ViewerImage';
+import { PaintingViewerImage } from './components/PaintingViewerImage';
 import { usePaintingViewerActions } from './hooks/usePaintingViewerActions';
 
 export function PaintingViewerScreen() {
@@ -73,7 +73,7 @@ function PaintingViewerContent({
         onViewConversation={actions.viewConversation}
       />
       <View className="flex-1">
-        <ViewerImage uri={current.uri} />
+        <PaintingViewerImage uri={current.uri} />
       </View>
     </>
   );
