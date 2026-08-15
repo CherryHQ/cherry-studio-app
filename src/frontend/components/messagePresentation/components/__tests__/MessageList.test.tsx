@@ -49,19 +49,20 @@ type MockLegendListProps = {
   onTouchStart?: () => void;
   ref?: Ref<LegendListRef>;
   renderItem?: (info: { index: number; item: MessagePresentationItem }) => ReactNode;
-  sharedValues?: { isAtEnd: SharedValue<boolean> };
+  sharedValues?: { isAtEnd: SharedValue<boolean>; scrollOffset: SharedValue<number> };
   showsVerticalScrollIndicator?: boolean;
 };
 
 let mockLatestListProps: MockLegendListProps | undefined;
 const mockFreeze = { get: jest.fn(), set: jest.fn(), value: false };
 const mockScrollMessageToEnd = jest.fn(async () => undefined);
-const mockListScrollTo = jest.fn();
+const mockScrollTo = jest.fn();
+let mockLatestFrameCallback: (() => void) | undefined;
 const mockListScrollToEnd = jest.fn();
 const mockListScrollToEndMethod = jest.fn(async () => undefined);
 let mockListMetrics = { contentLength: 500, scroll: 0, scrollLength: 500 };
 const mockLegendListRef = {
-  getNativeScrollRef: () => ({ scrollTo: mockListScrollTo, scrollToEnd: mockListScrollToEnd }),
+  getNativeScrollRef: () => ({ scrollToEnd: mockListScrollToEnd }),
   getState: () => mockListMetrics,
   scrollToEnd: mockListScrollToEndMethod,
 } as unknown as LegendListRef;
@@ -152,7 +153,21 @@ jest.mock('react-native-reanimated', () => {
     // 探针用 useAnimatedReaction 从 UI 线程回抛按钮显隐；这里只需存在即可，
     // 本套件不断言探针输出。
     runOnJS: (fn: unknown) => fn,
+    // 尾随逼近器在 UI 线程调 reanimated 的 scrollTo（不是 ScrollView 实例方法）。
+    scrollTo: (_ref: unknown, _x: number, y: number) => mockScrollTo(y),
     useAnimatedReaction: () => undefined,
+    // animated ref 只是被透传给列表再交给逼近器，本套件不碰它指向的东西。
+    useAnimatedRef: () => {
+      const ref = React.useRef<{ current: unknown } | null>(null);
+      ref.current ??= { current: null };
+      return ref.current;
+    },
+    // UI 线程的帧回调没法在 jest 里自然推进，交给测试手动驱动——逼近是逐帧的，
+    // 「每一帧走多少」正是本套件要断言的东西（见 flushFollowFrames）。
+    useFrameCallback: (callback: () => void) => {
+      mockLatestFrameCallback = callback;
+      return { isActive: true, setActive: jest.fn() };
+    },
     // 真实求值，好让「按钮显隐」的推导语义可断言。
     useDerivedValue: (compute: () => unknown) => ({ get: compute }),
     // 语义等价于「持有可变盒子的 useRef」：每个调用点一个独立实例（组件里有多个 shared
@@ -246,8 +261,25 @@ describe('MessageList anchored tail following', () => {
     callbacks.forEach((callback) => callback(0));
   };
 
+  /** 推进尾随逼近器若干个 UI 线程帧（真机上是显示刷新，jest 里只能手动喂）。 */
+  const flushFollowFrames = (frames = 1) => {
+    for (let frame = 0; frame < frames; frame += 1) {
+      act(() => mockLatestFrameCallback?.());
+    }
+  };
+
+  /**
+   * 列表位置只有一个事实，却有两个读法：`getState()` 的记账值和 UI 线程的实时位移。逼近器
+   * 对表读后者、`isListAtEnd` 读前者，真机上二者同源，只有在这里会分叉——所以一起设。
+   */
+  const setListPosition = (metrics: typeof mockListMetrics) => {
+    mockListMetrics = metrics;
+    mockLatestListProps?.sharedValues?.scrollOffset?.set(metrics.scroll);
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    mockLatestFrameCallback = undefined;
     mockListMetrics = { contentLength: 500, scroll: 0, scrollLength: 500 };
     mockFontSizeStep = 0;
     mockLatestListProps = undefined;
@@ -536,8 +568,10 @@ describe('MessageList anchored tail following', () => {
     expect(mockLatestListProps?.maintainScrollAtEnd).toBeUndefined();
     expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
 
+    // 内容与视口一样高，逼近器第一帧就够得着底部，落位回抛给 JS 侧的 scrollToEnd。
     act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
     act(() => flushAnimationFrames());
+    flushFollowFrames();
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
     expect(mockLatestListProps?.maintainVisibleContentPosition).toBeUndefined();
 
@@ -555,10 +589,12 @@ describe('MessageList anchored tail following', () => {
         size: 180,
       }),
     );
-    act(() => flushAnimationFrames());
+    // 手指还在列表上：内容长高也不该发布新目标，逼近器空转。
+    flushFollowFrames(2);
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
+    expect(mockScrollTo).not.toHaveBeenCalled();
 
-    mockListMetrics = { contentLength: 1_500, scroll: 200, scrollLength: 500 };
+    setListPosition({ contentLength: 1_500, scroll: 200, scrollLength: 500 });
     act(() => {
       mockLatestListProps?.onEndVisible?.(true);
       mockLatestListProps?.onTouchEnd?.();
@@ -567,11 +603,12 @@ describe('MessageList anchored tail following', () => {
     });
     expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
 
-    mockListMetrics = { contentLength: 1_500, scroll: 1_000, scrollLength: 500 };
+    setListPosition({ contentLength: 1_500, scroll: 1_000, scrollLength: 500 });
     act(() => {
       mockLatestListProps?.onEndVisible?.(true);
       flushAnimationFrames();
     });
+    flushFollowFrames();
     expect(mockLatestListProps?.maintainVisibleContentPosition).toBeUndefined();
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
   });
@@ -587,10 +624,11 @@ describe('MessageList anchored tail following', () => {
 
     act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
     act(() => flushAnimationFrames());
+    flushFollowFrames();
     mockListScrollToEnd.mockClear();
 
     // 正文流入，一次记上 1000px 的欠账（内容 1500 − 视口 500）。
-    mockListMetrics = { contentLength: 1_500, scroll: 0, scrollLength: 500 };
+    setListPosition({ contentLength: 1_500, scroll: 0, scrollLength: 500 });
     act(() =>
       mockLatestListProps?.onItemSizeChanged?.({
         index: 1,
@@ -600,20 +638,17 @@ describe('MessageList anchored tail following', () => {
       }),
     );
 
-    // 每次 flush 推进一帧：欠账按 0.3 的比例递减（1000→700→490），位移因此是 300/210/147
-    // 而不是第一帧就跨完 1000。这三个数就是「不再把内容阶跃原样复制成滚动」的判据。
-    act(() => flushAnimationFrames());
-    act(() => flushAnimationFrames());
-    act(() => flushAnimationFrames());
+    // 欠账按 0.3 的比例逐帧递减（1000→700→490），位移因此是 300/210/147 而不是第一帧就跨完
+    // 1000。这三个数就是「不再把内容阶跃原样复制成滚动」的判据。JS 侧只发布了一次目标，
+    // 后面两帧完全由 UI 线程自己推进——这正是它顶得住 JS 卡顿的地方。
+    flushFollowFrames(3);
 
-    expect(mockListScrollTo.mock.calls.map((call) => call[0].y)).toEqual([300, 510, 657]);
+    expect(mockScrollTo.mock.calls.map((call) => call[0])).toEqual([300, 510, 657]);
     expect(mockListScrollToEnd).not.toHaveBeenCalled();
 
-    // 逼近的尾巴无限长，但落位分支必须收得住：追进 1.5px 以内就交给 scrollToEnd 精确贴底，
-    // 循环随之停止（后续帧不再排队）。
-    for (let frame = 0; frame < 30; frame += 1) {
-      act(() => flushAnimationFrames());
-    }
+    // 逼近的尾巴无限长，但落位分支必须收得住：追进 1.5px 以内就回抛 JS 侧用 scrollToEnd 精确
+    // 贴底，且目标就地消费掉——否则之后每一帧都会再回抛一次。
+    flushFollowFrames(30);
 
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
   });
@@ -648,7 +683,7 @@ describe('MessageList anchored tail following', () => {
     expect(mockScrollButtonProps?.isHidden.get()).toBe(true);
   });
 
-  test('cancels a queued follow before a touch can begin dragging', () => {
+  test('stops the easer the moment a finger lands, mid-approach', () => {
     const messages = [
       createMessage('user-1', 'user', [textPart('hello')]),
       createMessage('assistant-1', 'assistant'),
@@ -657,14 +692,27 @@ describe('MessageList anchored tail following', () => {
       renderer = create(<MessageList {...listProps(messages)} />);
     });
     act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
+    act(() => flushAnimationFrames());
 
-    const escapedFollowCallback = [...frameCallbacks.values()][0];
-    expect(escapedFollowCallback).toBeDefined();
+    // 给逼近器一段真实的欠账，让它停在半路上——手指正是在这种时候落下的。
+    setListPosition({ contentLength: 1_500, scroll: 0, scrollLength: 500 });
+    act(() =>
+      mockLatestListProps?.onItemSizeChanged?.({
+        index: 1,
+        itemKey: 'assistant-1',
+        previous: 120,
+        size: 1_120,
+      }),
+    );
+    flushFollowFrames();
+    expect(mockScrollTo).toHaveBeenCalledTimes(1);
 
+    // 逼近器活在 UI 线程，帧照跑不误；停下它的是交互锁，不是「没人再排下一帧」。
+    mockScrollTo.mockClear();
     act(() => mockLatestListProps?.onTouchStart?.());
-    expect(frameCallbacks.size).toBe(0);
+    flushFollowFrames(3);
 
-    act(() => escapedFollowCallback?.(0));
+    expect(mockScrollTo).not.toHaveBeenCalled();
     expect(mockListScrollToEnd).not.toHaveBeenCalled();
   });
 
@@ -678,6 +726,7 @@ describe('MessageList anchored tail following', () => {
     });
     act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
     act(() => flushAnimationFrames());
+    flushFollowFrames();
 
     act(() => {
       mockLatestListProps?.onTouchStart?.();
@@ -688,6 +737,7 @@ describe('MessageList anchored tail following', () => {
       mockLatestListProps?.onEndVisible?.(true);
       flushAnimationFrames();
     });
+    flushFollowFrames(2);
     expect(mockLatestListProps?.maintainVisibleContentPosition).toMatchObject({ data: true });
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(1);
 
@@ -696,6 +746,7 @@ describe('MessageList anchored tail following', () => {
       flushAnimationFrames();
       flushAnimationFrames();
     });
+    flushFollowFrames();
     expect(mockLatestListProps?.maintainVisibleContentPosition).toBeUndefined();
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
   });

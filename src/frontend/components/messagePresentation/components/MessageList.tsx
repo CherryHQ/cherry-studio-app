@@ -1,9 +1,10 @@
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
-import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
+import type Animated from 'react-native-reanimated';
+import { useAnimatedRef, useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
@@ -96,6 +97,10 @@ export function MessageList({
   renderAssistantMessage,
 }: MessageListProps) {
   const listRef = useRef<LegendListRef | null>(null);
+  // 底层 Animated.ScrollView 的 animated ref，尾随逼近器要在 UI 线程对它调 `scrollTo`。
+  // `refScrollView` 由 KeyboardAwareLegendList 原样透传给 AnimatedLegendList，最终落到
+  // reanimated 包出来的那层组件上——这是这套组件栈唯一暴露底层滚动视图的口子。
+  const scrollViewRef = useAnimatedRef<Animated.ScrollView>();
   const isAtBottom = useSharedValue(true);
   // 位移轨迹的来源。注意**不能**用 `onScroll`：本列表经 KeyboardAwareLegendList →
   // AnimatedLegendList 渲染，滚动被 reanimated 的 `useScrollViewOffset` 接管，JS 侧的
@@ -163,7 +168,7 @@ export function MessageList({
     isUserInteractingRef,
     notifyAnchorSpaceClosed,
     scheduleTailFollow,
-  } = useTailFollow({ anchorMessageId, hasAnchor, listRef });
+  } = useTailFollow({ anchorMessageId, hasAnchor, listRef, scrollOffset, scrollViewRef });
 
   // 入场行的起飞点：钉顶落点正下方、输入框上缘。三个量都是运行时布局值，所以它随机型、
   // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。这是**总**行程，钉顶滚动与行的
@@ -321,6 +326,12 @@ export function MessageList({
             onTouchEnd={handleTouchEnd}
             onTouchStart={handleTouchStart}
             recycleItems={false}
+            // LegendList 把这个 prop 的类型写成 `React.Ref<React.ElementRef<typeof
+            // Animated.ScrollView>>`，而 `ElementRef` 在 React 19 的类型下解析成 `never`
+            // （一次性探针确证过），于是任何 ref 都塞不进去。运行时它被原样转发给 reanimated
+            // 包出来的滚动视图（`reanimated.mjs` 的 `ref: refScrollView`），正是 animated ref
+            // 该在的位置——断言的是库的类型缺陷，不是我们这边的用法。
+            refScrollView={scrollViewRef as unknown as Ref<never>}
             renderItem={renderMessageRow}
             scrollEventThrottle={16}
             scrollsToTop
