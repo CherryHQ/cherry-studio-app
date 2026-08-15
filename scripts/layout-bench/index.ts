@@ -19,6 +19,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+import { renderTraceSvg } from './chart';
 import { Device, resolveUdid } from './device';
 import { runJudges } from './judges';
 import { buildTrace, parseProbeLog } from './probe';
@@ -125,10 +126,24 @@ async function runStep(
   }
 }
 
-function judgeEvents(scenario: string, description: string, raw: string): ScenarioResult {
+function judgeEvents(
+  scenario: string,
+  description: string,
+  raw: string,
+  chartDir: string,
+): ScenarioResult {
   const events = parseProbeLog(raw);
-  const judges = runJudges(buildTrace(events));
+  const trace = buildTrace(events);
+  const judges = runJudges(trace);
   const partitioned = partitionViolations(judges, scenario, loadKnownIssues(KNOWN_ISSUES_FILE));
+
+  // 判据给的是「红还是绿」，轨迹图给的是「这一段动得顺不顺」。零违规的轨迹之间仍有好坏之
+  // 分（单调爬升 vs 阈值底下反复搓动），跨轮对比时先看图能省掉大半次翻 jsonl。
+  fs.mkdirSync(chartDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(chartDir, 'trace.svg'),
+    `${renderTraceSvg(trace, { scenario, violations: partitioned.violations })}\n`,
+  );
 
   for (const judge of judges) {
     const metrics = Object.entries(judge.metrics)
@@ -191,7 +206,7 @@ async function runScenario(
   }
 
   return {
-    ...judgeEvents(scenario.id, scenario.description, raw),
+    ...judgeEvents(scenario.id, scenario.description, raw, checkpointDir),
     checkpoints: context.checkpoints,
     durationMs,
   };
@@ -214,6 +229,7 @@ async function main(): Promise<void> {
         options.scenarios[0].id,
         `重放自 ${path.relative(ROOT, file)}`,
         fs.readFileSync(file, 'utf8'),
+        options.outputDir,
       ),
     );
     writeRun(options.outputDir, run);
