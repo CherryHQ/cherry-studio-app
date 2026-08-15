@@ -4,17 +4,12 @@ import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import type { ImageSource } from 'expo-image';
 import { type ComponentType, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Image } from '@/frontend/components/nativePrimitives';
+
+import { MessageStatusRow } from '../../components/MessageStatusRow';
 
 const toolSheetMediumFraction = 0.6;
 const toolSheetFullFraction = 0.94;
@@ -44,10 +39,8 @@ export function ToolPartTrigger({
   const isWarning = statusTone === 'warning';
 
   return (
-    <Pressable
+    <MessageStatusRow
       accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
-      accessibilityRole="button"
-      className="flex-row items-center gap-2 py-0.5 active:opacity-60"
       onPress={onPress}
       testID={testID}
     >
@@ -106,7 +99,7 @@ export function ToolPartTrigger({
               : 'size-4 shrink-0 text-foreground'
         }
       />
-    </Pressable>
+    </MessageStatusRow>
   );
 }
 
