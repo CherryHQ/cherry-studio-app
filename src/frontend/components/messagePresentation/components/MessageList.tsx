@@ -1,8 +1,8 @@
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type LayoutChangeEvent, View } from 'react-native';
 import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
@@ -10,6 +10,7 @@ import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
 import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
+import { useMessageSlideInFlight } from '../messageRow/slideIn/hooks/useMessageSlideInFlight';
 import type { MessageListProps, MessagePresentationItem } from '../types';
 import { useAnchorPin } from './hooks/useAnchorPin';
 import {
@@ -84,7 +85,6 @@ function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[
 }
 
 export function MessageList({
-  animateFirstEnteringMessage = false,
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
@@ -104,6 +104,12 @@ export function MessageList({
   const scrollOffset = useSharedValue(0);
   // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useLayoutBenchInstrumentation）。
   const endSpaceRef = useRef(0);
+  // 视口高度由列表自己测：ready-gate 与入场行的起飞距离都要用，谁也不该拥有另一个的测量。
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    emitLayoutBenchProbe('viewport', { h: Math.round(event.nativeEvent.layout.height) });
+    setViewportHeight(event.nativeEvent.layout.height);
+  }, []);
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
@@ -159,27 +165,25 @@ export function MessageList({
     scheduleTailFollow,
   } = useTailFollow({ anchorMessageId, hasAnchor, listRef });
 
-  const {
-    handleAnchorReady,
-    handleAnchoredEndSpaceSizeChanged,
-    handleContentSizeChange,
-    handleLayout,
-    isStagingFirstAnchor,
-    releaseStagedFirstAnchor,
-  } = useAnchorPin({
-    anchorIndex,
-    anchorMessageId,
-    animateFirstEnteringMessage,
-    contentBottomInset,
-    endSpaceRef,
-    enteringMessageId,
-    isUserInteractingRef,
-    lastMessageId,
-    listRef,
-    notifyAnchorSpaceClosed,
-    onReady,
-    scrollMessageToEnd,
-  });
+  // 入场行的起飞点：钉顶落点正下方、输入框上缘。三个量都是运行时布局值，所以它随机型、
+  // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。
+  const slideInTravel = Math.max(0, viewportHeight - contentBottomInset - anchorOffset);
+  const slideInFlight = useMessageSlideInFlight({ enteringMessageId, travel: slideInTravel });
+
+  const { handleAnchorReady, handleAnchoredEndSpaceSizeChanged, handleContentSizeChange } =
+    useAnchorPin({
+      contentBottomInset,
+      endSpaceRef,
+      enteringMessageId,
+      isUserInteractingRef,
+      lastMessageId,
+      listRef,
+      notifyAnchorSpaceClosed,
+      onAnchorPinned: slideInFlight.launch,
+      onReady,
+      scrollMessageToEnd,
+      viewportHeight,
+    });
 
   // 「滚动到底部」只在**用户自己**离开底部时才有意义。而 isAtEnd 用的是 ~0px 的判定边界，
   // 只要 app 正把列表往底部推（钉顶动画、流式尾随），内容每长一截都会先把视口挤离底部、
@@ -204,16 +208,15 @@ export function MessageList({
         prev: Math.round(info.previous),
         size: Math.round(info.size),
       });
-      releaseStagedFirstAnchor();
       scheduleTailFollow();
     },
-    [releaseStagedFirstAnchor, scheduleTailFollow],
+    [scheduleTailFollow],
   );
 
   // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
   const anchoredEndSpace = useMemo(
     () =>
-      hasAnchor && !isStagingFirstAnchor
+      hasAnchor
         ? {
             anchorIndex,
             anchorMaxSize,
@@ -229,7 +232,6 @@ export function MessageList({
       handleAnchorReady,
       handleAnchoredEndSpaceSizeChanged,
       hasAnchor,
-      isStagingFirstAnchor,
     ],
   );
 
@@ -253,12 +255,11 @@ export function MessageList({
   }, [isFollowing, messages, scheduleTailFollow]);
 
   return (
-    <MessageSlideInProvider slideInMessageId={enteringMessageId}>
+    <MessageSlideInProvider flight={slideInFlight}>
       <View className="flex-1">
         <ScrollShadow className="flex-1" visibility="bottom" size={80}>
           <KeyboardAwareLegendList
             ref={listRef}
-            alignItemsAtEnd={isStagingFirstAnchor}
             applyWorkaroundForContentInsetHitTestBug
             anchoredEndSpace={anchoredEndSpace}
             contentContainerStyle={contentContainerStyle}

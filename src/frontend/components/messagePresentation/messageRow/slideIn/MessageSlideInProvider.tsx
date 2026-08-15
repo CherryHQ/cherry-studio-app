@@ -1,46 +1,22 @@
-import { createContext, type ReactNode, useContext, useMemo, useRef, useState } from 'react';
+import { createContext, type ReactNode, use } from 'react';
 
-import { createSlideInGate } from './slideInGate';
+import type { MessageSlideInFlight } from './hooks/useMessageSlideInFlight';
 
-type MessageSlideInContextValue = {
-  // 在用户气泡 mount 时调用一次，返回该气泡是否应播 slide-in。
-  claim: (messageId: string) => boolean;
-};
-
-// 默认不播：没有 Provider 包裹时（例如被单独渲染的场景）安全降级为无动画。
-const MessageSlideInContext = createContext<MessageSlideInContextValue>({
-  claim: () => false,
-});
+// 没有 Provider 包裹时（例如行被单独渲染）降级为无动画：行读不到飞行就恒在落点。
+const MessageSlideInFlightContext = createContext<MessageSlideInFlight | undefined>(undefined);
 
 type MessageSlideInProviderProps = {
-  // 当前「刚发送、应播入场动画」的用户消息 id（取 pendingUserMessage.id）；
-  // 无正在发送的消息时为 undefined。
-  slideInMessageId: string | undefined;
   children: ReactNode;
+  // 飞行由列表持有而不是由本 Provider 自己起：起飞距离是**钉顶几何**（视口高、上下 inset、
+  // 落点偏移），这些量属于列表；而开火时机是钉顶落位那一帧，也只有列表知道。Provider 只负责
+  // 把它送到 renderItem 深处的行，那里没法走 props。
+  flight: MessageSlideInFlight;
 };
 
-export function MessageSlideInProvider({
-  slideInMessageId,
-  children,
-}: MessageSlideInProviderProps) {
-  // gate 的 played 记录跨 render 持久（每个会话一份），保证每条消息一生只播一次。
-  const gateRef = useRef(createSlideInGate());
-  const value = useMemo<MessageSlideInContextValue>(
-    () => ({ claim: (messageId) => gateRef.current.claim(messageId, slideInMessageId) }),
-    [slideInMessageId],
-  );
-
-  return <MessageSlideInContext.Provider value={value}>{children}</MessageSlideInContext.Provider>;
+export function MessageSlideInProvider({ children, flight }: MessageSlideInProviderProps) {
+  return <MessageSlideInFlightContext value={flight}>{children}</MessageSlideInFlightContext>;
 }
 
-/**
- * 在用户气泡 mount 时消费一次授权：仅当自己是当前发送目标且未播过时返回 true。
- * 用 useState 初始化器确保只在 mount 那一帧求值（与 reanimated entering 的一次性语义对齐），
- * 后续 re-render 不会改变结果。
- */
-export function useShouldSlideIn(messageId: string): boolean {
-  const { claim } = useContext(MessageSlideInContext);
-  const [shouldSlideIn] = useState(() => claim(messageId));
-
-  return shouldSlideIn;
+export function useMessageSlideInFlightContext(): MessageSlideInFlight | undefined {
+  return use(MessageSlideInFlightContext);
 }

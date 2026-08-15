@@ -5,6 +5,7 @@ import type { LayoutChangeEvent } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import type { MessageSlideInFlight } from '../../messageRow/slideIn/hooks/useMessageSlideInFlight';
 import type { MessageListProps, MessagePresentationItem } from '../../types';
 import { MessageList } from '../MessageList';
 import { followingMaintainVisibleContentPosition as androidFollowingPosition } from '../messageListPlatform/messageListPlatform.android';
@@ -76,7 +77,7 @@ function mockCreateSharedValue<T>(initial: T): SharedValue<T> {
 }
 const mockAssistantMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
 const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
-let mockSlideInMessageId: string | undefined;
+let mockSlideInFlight: MessageSlideInFlight | undefined;
 let mockScrollButtonProps:
   | {
       inputHeight: SharedValue<number>;
@@ -142,6 +143,11 @@ jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual<typeof import('react')>('react');
 
   return {
+    // motion 词汇表在模块顶层就求值这两个，缺了会让整套件加载失败。
+    Easing: { bezier: () => 'bezier', linear: 'linear' },
+    ReduceMotion: { System: 'system' },
+    // 入场飞行的弹簧直接落到终值：这里要断言的是「装填了多少、什么时候开火」，不是曲线本身。
+    withSpring: (toValue: number) => toValue,
     // 探针用 useAnimatedReaction 从 UI 线程回抛按钮显隐；这里只需存在即可，
     // 本套件不断言探针输出。
     runOnJS: (fn: unknown) => fn,
@@ -164,12 +170,12 @@ jest.mock('../../messageRow', () => ({
     mockAssistantMessageRow(props),
   MessageSlideInProvider: ({
     children,
-    slideInMessageId,
+    flight,
   }: {
     children: ReactNode;
-    slideInMessageId?: string;
+    flight: MessageSlideInFlight;
   }) => {
-    mockSlideInMessageId = slideInMessageId;
+    mockSlideInFlight = flight;
     return children;
   },
   UserMessageRow: (props: { message: MessagePresentationItem }) => mockUserMessageRow(props),
@@ -245,7 +251,7 @@ describe('MessageList anchored tail following', () => {
     mockFontSizeStep = 0;
     mockLatestListProps = undefined;
     mockScrollButtonProps = undefined;
-    mockSlideInMessageId = undefined;
+    mockSlideInFlight = undefined;
     frameCallbacks = new Map();
     nextFrameId = 1;
     requestAnimationFrameSpy = jest
@@ -398,7 +404,7 @@ describe('MessageList anchored tail following', () => {
       renderer = create(<MessageList {...props} />);
     });
 
-    expect(mockSlideInMessageId).toBe('user-1');
+    expect(mockSlideInFlight?.activeMessageId.get()).toBe('user-1');
     expect(mockScrollButtonProps?.inputHeight).toBe(bottomAccessoryHeight);
 
     // 停在底部时隐藏。离开底部要不要显示还取决于相位，见下方的 paused 用例。
@@ -413,7 +419,8 @@ describe('MessageList anchored tail following', () => {
     act(() => renderer?.update(<MessageList {...listProps(props.messages)} />));
 
     expect(mockScrollButtonProps).toBeUndefined();
-    expect(mockSlideInMessageId).toBeUndefined();
+    // 入场 id 落地后刻意不清：待发消息落库常在飞行中途，清掉会让行当帧跳回落点。
+    expect(mockSlideInFlight?.activeMessageId.get()).toBe('user-1');
   });
 
   test('reserves the composer height in the scrollable message content', () => {
@@ -706,8 +713,9 @@ describe('MessageList anchored tail following', () => {
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-2' }));
     act(() => flushAnimationFrames());
 
+    // 续轮和首轮一样瞬时：入场的可见位移归行的 transform，滚动动画叠上去就是双倍距离。
     expect(mockScrollMessageToEnd).toHaveBeenLastCalledWith({
-      animated: true,
+      animated: false,
       closeKeyboard: true,
     });
 
@@ -726,33 +734,82 @@ describe('MessageList anchored tail following', () => {
     });
   });
 
-  test('stages the first live turn at the list end before animating it to the anchor', () => {
+  test('arms the entering row at the composer edge and launches it when the anchor lands', () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([])} />);
+    });
+    act(() => {
+      mockLatestListProps?.onLayout?.({
+        nativeEvent: { layout: { height: 600, width: 390, x: 0, y: 0 } },
+      } as LayoutChangeEvent);
+    });
+    act(() => {
+      renderer?.update(
+        <MessageList
+          {...listProps([createMessage('user-1', 'user', [textPart('hi')])], 'user-1')}
+        />,
+      );
+    });
+
+    // 起飞距离＝视口 600 −（输入框占位 80）−（顶部 inset 44 + 落点间距 12）。全是运行时布局
+    // 值，换机型/字号/输入框行数都会跟着变，代码里没有任何写死的距离。
+    expect(mockSlideInFlight?.offset.get()).toBe(464);
+
+    // 钉顶落位前不许收敛：那段时间要等测量与 ready-gate 的静默窗口，行得一直待在起飞点。
+    act(() => flushAnimationFrames());
+    expect(mockSlideInFlight?.offset.get()).toBe(464);
+
+    act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
+    act(() => flushAnimationFrames());
+
+    expect(mockSlideInFlight?.offset.get()).toBe(0);
+  });
+
+  test('still launches the entering row after the pending message has been cleared', () => {
+    act(() => {
+      renderer = create(<MessageList {...listProps([])} />);
+    });
+    act(() => {
+      mockLatestListProps?.onLayout?.({
+        nativeEvent: { layout: { height: 600, width: 390, x: 0, y: 0 } },
+      } as LayoutChangeEvent);
+    });
+    const messages = [createMessage('user-1', 'user', [textPart('hi')])];
+    act(() => renderer?.update(<MessageList {...listProps(messages, 'user-1')} />));
+    expect(mockSlideInFlight?.offset.get()).toBe(464);
+
+    // 消息落库 → enteringMessageId 被清空，而这常常发生在飞行中途、钉顶落位之前。
+    act(() => renderer?.update(<MessageList {...listProps(messages)} />));
+    act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
+    act(() => flushAnimationFrames());
+
+    // 开火只看「装填了没有」，所以行照样收敛而不是永久停在半空。
+    expect(mockSlideInFlight?.offset.get()).toBe(0);
+  });
+
+  test('gives a brand-new topic the anchor space right away instead of staging it', () => {
+    // 首锚曾经先在列表末端 staging、再补空白动画过去，为的是给「没有可滚动距离」的第一条
+    // 制造一段位移。位移改由行的 transform 提供之后这套 staging 没有存在理由了，第一条从
+    // 一开始就拿到与续轮完全相同的锚点配置。
     const firstTurn = [
       createMessage('user-1', 'user', [textPart('hello')]),
       createMessage('assistant-1', 'assistant'),
     ];
     act(() => {
-      renderer = create(<MessageList {...listProps([])} animateFirstEnteringMessage />);
+      renderer = create(<MessageList {...listProps([])} />);
     });
     act(() => {
-      renderer?.update(
-        <MessageList {...listProps(firstTurn, 'user-1')} animateFirstEnteringMessage />,
-      );
+      renderer?.update(<MessageList {...listProps(firstTurn, 'user-1')} />);
     });
 
-    expect(mockLatestListProps?.anchoredEndSpace).toBeUndefined();
-    expect(mockLatestListProps?.alignItemsAtEnd).toBe(true);
-
-    act(() => mockLatestListProps?.onContentSizeChange?.(320, 260));
-    act(() => flushAnimationFrames());
-
     expect(mockLatestListProps?.anchoredEndSpace?.anchorIndex).toBe(0);
-    expect(mockLatestListProps?.alignItemsAtEnd).toBe(false);
+    expect(mockLatestListProps?.alignItemsAtEnd).toBeUndefined();
+
     act(() => mockLatestListProps?.anchoredEndSpace?.onReady?.({ anchorKey: 'user-1' }));
     act(() => flushAnimationFrames());
 
     expect(mockScrollMessageToEnd).toHaveBeenCalledWith({
-      animated: true,
+      animated: false,
       closeKeyboard: true,
     });
   });

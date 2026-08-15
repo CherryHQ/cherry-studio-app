@@ -41,10 +41,6 @@ jest.mock('../../slideIn/hooks/useUserMessageSlideInStyle', () => ({
   useUserMessageSlideInStyle: () => undefined,
 }));
 
-jest.mock('../../slideIn/MessageSlideInProvider', () => ({
-  useShouldSlideIn: () => false,
-}));
-
 describe('UserMessageRow', () => {
   test('keeps a text-only message in the bubble', () => {
     const message = createMessage([textPart('Hello')]);
