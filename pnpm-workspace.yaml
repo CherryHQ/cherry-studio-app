@@ -69,6 +69,7 @@ patchedDependencies:
   ai@6.0.183: patches/ai@6.0.183.patch
   react-native-nitro-healthkit@1.0.0: patches/react-native-nitro-healthkit@1.0.0.patch
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
+  react-native-bottom-tabs@1.4.0: patches/react-native-bottom-tabs@1.4.0.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
