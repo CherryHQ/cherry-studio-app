@@ -20,8 +20,8 @@ When CherryUI lacks a qualifying reusable component, create it in an independent
 the feature integration PR. Use a `gh-stack` layer when the integration depends on that component.
 
 When an implementation differs between iOS and Android, follow
-[Platform Variants](../references/naming-conventions.md#platform-variants) and use matching
-`.ios.tsx` and `.android.tsx` component files.
+[Platform Variants](../references/naming-conventions.md#platform-variants): keep the full component
+family in its own directory and use matching `.ios.tsx` and `.android.tsx` files.
 
 ## Compose Component APIs
 

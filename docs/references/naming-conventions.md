@@ -31,8 +31,19 @@ inside `utils` do not repeat a `Utils` suffix.
 
 When a React component needs different iOS and Android implementations, split it into matching
 `Name.ios.tsx` and `Name.android.tsx` files. Non-JSX modules use the corresponding `.ios.ts` and
-`.android.ts` suffixes. Keep shared types, APIs, and implementation in an unsuffixed file when both
-platform variants need them; Metro selects the platform file at build time.
+`.android.ts` suffixes. Place the complete platform family in a dedicated directory named after its
+shared stem instead of placing platform siblings alongside unrelated files:
+
+```text
+Name/
+├── Name.tsx
+├── Name.ios.tsx
+└── Name.android.tsx
+```
+
+Under `packages/**`, apply the package naming rule to both directory and file stems, for example
+`icon-glyph/icon-glyph.ios.tsx`. Keep shared types, APIs, and implementation in the same family
+directory when both platform variants need them; Metro selects the platform file at build time.
 
 ## Directories
 
