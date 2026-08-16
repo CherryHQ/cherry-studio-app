@@ -15,6 +15,13 @@ const PUNCTUATION_CHARACTER = /[\p{P}\p{S}]/u;
 const WHITESPACE_CHARACTER = /\s/u;
 
 export function projectMarkdownInlineForSpeech(markdown: string): string {
+  return markdown
+    .split(/(\n[\t ]*\n)/u)
+    .map(projectInlineSegmentForSpeech)
+    .join('');
+}
+
+function projectInlineSegmentForSpeech(markdown: string): string {
   const tokens = tokenizeInlineDelimiters(markdown);
   pairInlineDelimiters(tokens);
 
@@ -29,11 +36,22 @@ function tokenizeInlineDelimiters(markdown: string): InlineToken[] {
 
   for (let index = 0; index < characters.length;) {
     const character = characters[index];
-    const escapedCharacter = characters[index + 1];
-    if (character === '\\' && isDelimiterCharacter(escapedCharacter)) {
-      tokens.push({ type: 'text', value: escapedCharacter });
-      index += 2;
-      continue;
+    if (character === '\\') {
+      let end = index + 1;
+      while (characters[end] === '\\') {
+        end += 1;
+      }
+
+      const delimiter = characters[end];
+      if (isDelimiterCharacter(delimiter)) {
+        tokens.push({ type: 'text', value: '\\'.repeat(Math.floor((end - index) / 2)) });
+        if ((end - index) % 2 === 1) {
+          tokens.push({ type: 'text', value: delimiter });
+          end += 1;
+        }
+        index = end;
+        continue;
+      }
     }
 
     if (!isDelimiterCharacter(character)) {

@@ -159,6 +159,12 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('pairs emphasis after an even number of backslashes', () => {
+    const message = createMessage([textPart('\\\\*foo*')]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({ text: '\\foo' });
+  });
+
   test.each(['Keep *unclosed.', 'Keep _unclosed.', 'Keep **unclosed.'])(
     'preserves an unclosed emphasis delimiter in %p',
     (markdown) => {
@@ -167,6 +173,14 @@ describe('projectAssistantMessageReadAloud', () => {
       });
     },
   );
+
+  test('does not pair emphasis delimiters across a blank line', () => {
+    const markdown = 'First *unclosed.\n\nSecond close*';
+
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: markdown,
+    });
+  });
 
   test('projects nested emphasis markers without dropping their content', () => {
     const message = createMessage([textPart('Read **outer _inner_ text** and ***bold italic***.')]);
