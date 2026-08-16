@@ -53,7 +53,6 @@ import { providerService } from '@/backend/data/services/ProviderService';
 import { topicService } from '@/backend/data/services/TopicService';
 import type {
   BackgroundReplyLifecycle,
-  BackgroundReplyOutcome,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
 import { createMessageParts, discardInternalEntries } from '@/backend/services/file/fileStorage';
@@ -89,6 +88,7 @@ type ActiveExecution = {
 type ActiveTurn = {
   abortController: AbortController;
   backgroundReply?: BackgroundReplyTurn;
+  backgroundReplyModelId?: UniqueModelId;
   executions: Map<UniqueModelId, ActiveExecution>;
   hasHistoryBeforePendingTurn?: boolean;
   overlays: Map<UniqueModelId, Message>;
@@ -128,15 +128,6 @@ const defaultChatRuntimeConfig: ChatRuntimeConfig = {
   approvalIdleTimeoutMs: 2 * 60 * 60 * 1000,
   idleTimeoutMs: 30 * 60 * 1000,
 };
-
-const BACKGROUND_REPLY_OUTCOMES = {
-  aborted: 'cancelled',
-  done: 'completed',
-  error: 'failed',
-} satisfies Record<
-  Exclude<ReturnType<typeof resolveTurnOutcome>, 'awaiting-approval'>,
-  BackgroundReplyOutcome
->;
 
 /**
  * Everything a turn touches, bound to the installed host.
@@ -1309,16 +1300,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
     topicId: string;
   }): Promise<void> {
     const outcome = resolveTurnOutcome(input.activeTurn, input.terminalMessages);
-    const approvalMessage = input.terminalMessages.find((message) =>
-      hasPendingToolApproval(message.data.parts ?? []),
-    );
-    if (outcome === 'awaiting-approval') {
-      input.activeTurn.backgroundReply?.awaitApproval(
-        approvalMessage ? toCherryUIMessage(approvalMessage) : undefined,
-      );
-    } else {
-      input.activeTurn.backgroundReply?.finish(BACKGROUND_REPLY_OUTCOMES[outcome]);
-    }
+    this.settleBackgroundReply(input.activeTurn);
     input.activeTurn.streamStatus = outcome === 'awaiting-approval' ? 'awaiting-approval' : outcome;
     if (outcome === 'done') {
       input.activeTurn.lastCompletedAt = Date.now();
@@ -1524,7 +1506,9 @@ export class ChatRuntime extends BaseService implements ChatModule {
         stream,
       })) {
         latestAssistantMessage = nextAssistantMessage;
-        activeTurn.backgroundReply?.update(nextAssistantMessage);
+        if (activeTurn.backgroundReplyModelId === model.id) {
+          activeTurn.backgroundReply?.update(nextAssistantMessage);
+        }
         captureApprovalTiming(runtimeTiming, nextAssistantMessage.parts as CherryMessagePart[]);
         throwIfAborted(abortController.signal);
         activeTurn.overlays.set(
@@ -1982,6 +1966,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
         topicTitle: topic.name,
       });
       activeTurn.backgroundReply = backgroundReply;
+      activeTurn.backgroundReplyModelId = model.id;
       void backgroundReply.ready.catch((error) => {
         logger.error('Background reply lifecycle failed to initialize', toError(error), {
           topicId: topic.id,
@@ -2010,6 +1995,39 @@ export class ChatRuntime extends BaseService implements ChatModule {
         topicId: topic.id,
       });
       return fallbackName;
+    }
+  }
+
+  private settleBackgroundReply(activeTurn: ActiveTurn): void {
+    const turn = activeTurn.backgroundReply;
+    const modelId = activeTurn.backgroundReplyModelId;
+    if (!turn || !modelId) return;
+
+    const execution = activeTurn.executions.get(modelId);
+    const message = activeTurn.overlays.get(modelId);
+    if (!execution) return;
+
+    if (
+      execution.status === 'done' &&
+      message &&
+      hasPendingToolApproval(message.data.parts ?? [])
+    ) {
+      turn.awaitApproval(toCherryUIMessage(message));
+      return;
+    }
+
+    switch (execution.status) {
+      case 'aborted':
+        turn.finish('cancelled');
+        break;
+      case 'done':
+        turn.finish('completed');
+        break;
+      case 'error':
+        turn.finish('failed');
+        break;
+      case 'streaming':
+        break;
     }
   }
 

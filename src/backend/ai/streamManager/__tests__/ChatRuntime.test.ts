@@ -296,7 +296,7 @@ describe('ChatRuntime', () => {
     expect(cancelledTurn.finish).toHaveBeenCalledWith('cancelled');
   });
 
-  test('uses one background reply turn for multi-model sibling executions', async () => {
+  test('uses only the first sibling execution for a multi-model background reply', async () => {
     const services = createServices();
     const backgroundTurn = createBackgroundReplyTurn();
     const backgroundReply = createBackgroundReplyLifecycle(backgroundTurn);
@@ -306,7 +306,9 @@ describe('ChatRuntime', () => {
     ];
     configureDynamicReservation(services);
     mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
-      asyncIterable([createUiMessage(message.id, message.id)]),
+      message.id === 'assistant-reserved-2'
+        ? failingAsyncIterable(new Error('second model failed'))
+        : asyncIterable([createUiMessage(message.id, message.id)]),
     );
     const runtime = createRuntime({ backgroundReply, services });
 
@@ -317,8 +319,37 @@ describe('ChatRuntime', () => {
     });
 
     expect(backgroundReply.startTurn).toHaveBeenCalledTimes(1);
-    expect(backgroundTurn.update).toHaveBeenCalledTimes(2);
+    expect(backgroundTurn.update).toHaveBeenCalledTimes(1);
+    expect(backgroundTurn.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'assistant-reserved-1' }),
+    );
     expect(backgroundTurn.finish).toHaveBeenCalledWith('completed');
+  });
+
+  test('uses a failed first sibling as the multi-model background reply outcome', async () => {
+    const services = createServices();
+    const backgroundTurn = createBackgroundReplyTurn();
+    const backgroundReply = createBackgroundReplyLifecycle(backgroundTurn);
+    const modelIds = [
+      'provider-a::model-a' as UniqueModelId,
+      'provider-b::model-b' as UniqueModelId,
+    ];
+    configureDynamicReservation(services);
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      message.id === 'assistant-reserved-1'
+        ? failingAsyncIterable(new Error('first model failed'))
+        : asyncIterable([createUiMessage(message.id, message.id)]),
+    );
+    const runtime = createRuntime({ backgroundReply, services });
+
+    await runtime.sendMultiModelText({
+      selectedModelIds: modelIds,
+      text: 'compare',
+      topicId: 'topic-1',
+    });
+
+    expect(backgroundTurn.update).not.toHaveBeenCalled();
+    expect(backgroundTurn.finish).toHaveBeenCalledWith('failed');
   });
 
   test('uses the bound assistant model without reading the global default', async () => {
