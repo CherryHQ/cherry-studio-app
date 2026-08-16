@@ -27,12 +27,9 @@ export type TestRuntime = {
   runtime: JobRuntime;
 };
 
-/**
- * The container injects `AiService` so the runtime can build its production
- * handler registry; every suite here supplies its own handlers, so the slot is
- * never read.
- */
-export const noAiService = undefined as never;
+/** Every suite supplies handler overrides, so production collaborators stay inert. */
+export const noJobHandlerRegistry = { entries: [] };
+export const noKeepAliveCoordinator = { acquire: () => ({ release: () => {} }) };
 
 /**
  * Async because `JobService` resolves `DbService` through `application`: the
@@ -51,7 +48,7 @@ export async function createTestRuntime(
   const scopes = new ResourceScopeCoordinator();
   await installTestHost({ DbService: db.dbService, ResourceScopeCoordinator: scopes });
   const jobService = new JobService();
-  const runtime = new JobRuntime(db.dbService, noAiService, {
+  const runtime = new JobRuntime(db.dbService, noJobHandlerRegistry, noKeepAliveCoordinator, {
     handlers,
     jobService,
     ...overrides,

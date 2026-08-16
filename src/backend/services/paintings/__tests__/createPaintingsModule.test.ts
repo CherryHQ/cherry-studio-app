@@ -76,6 +76,7 @@ const generationInput = {
   ],
   mode: 'generate' as const,
   modelId,
+  modelName: 'GPT Image 2',
   paramValues: {},
   prompt: ' draw ',
 };
@@ -121,6 +122,7 @@ describe('createPaintingsModule', () => {
         images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///picked.png' }],
         mode: 'generate',
         modelId,
+        modelName: 'GPT Image 2',
         paintingId: 'painting-1',
         paramValues: {},
         prompt: 'draw',

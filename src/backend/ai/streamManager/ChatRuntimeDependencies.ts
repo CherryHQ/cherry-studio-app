@@ -23,6 +23,7 @@ import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import type { UIMessageChunk } from 'ai';
 
+import type { BackgroundReplyLifecycle } from '@/backend/services/backgroundReply';
 import type { ChatToolApprovalInput } from '@/shared/contracts';
 
 export type ChatStreamRequest = {
@@ -133,6 +134,7 @@ export type ChatRuntimeServices = {
 };
 
 export type ChatRuntimeDependencies = {
+  backgroundReply: BackgroundReplyLifecycle;
   files: {
     createParts(
       parts: readonly CherryMessagePart[],

@@ -17,6 +17,8 @@ export type PaintingGenerationInput = {
   images: readonly PaintingSourceImage[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
+  /** Display-name snapshot used by background presentation while the job runs. */
+  modelName: string;
   /**
    * Retry an interrupted receipt in place rather than minting a new one. The
    * receipt must have no outputs — passing a finished painting is rejected,

@@ -15,6 +15,8 @@ module.exports = {
   // otherwise collect (hundreds of failing foreign suites drowning real results).
   testPathIgnorePatterns: [
     '/node_modules/',
+    // Conductor review artifacts live here and are not repository test suites.
+    '/.context/',
     '/ios/',
     '/android/',
     '/packages/ai-core/',
@@ -28,12 +30,12 @@ module.exports = {
     // skips them and a full local run still covers them.
     ...(process.env.PRCI ? ['/scripts/__tests__/'] : []),
   ],
-  // Conductor's gitignored scratch directory, where agents park git worktrees of
-  // this same repo. A second copy of the tree is a second copy of every module,
-  // which makes haste map reject the run over duplicate package names — so it
-  // has to be off the module map, not just out of the test list.
-  modulePathIgnorePatterns: ['<rootDir>/.context/'],
+  // Local build/export artifacts can contain copied workspace packages. Keep
+  // them out of the Haste map so package names remain unique during tests.
+  modulePathIgnorePatterns: ['<rootDir>/.context/', '<rootDir>/.local/'],
   moduleNameMapper: {
+    '^@cherrystudio/ui/background-activity/ios$':
+      '<rootDir>/packages/ui/src/background-activity/background-activity.ios.tsx',
     '^@cherrystudio/ui/icons/providers$': '<rootDir>/packages/ui/src/icons-webp/providers/index.ts',
     '^vitest$': '<rootDir>/packages/provider-registry/vitestJestShim.ts',
     '^@cherrystudio/universal/(.*)$': '<rootDir>/packages/universal/src/$1',

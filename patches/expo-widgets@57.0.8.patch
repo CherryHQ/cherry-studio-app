@@ -1,0 +1,47 @@
+diff --git a/ios/Widgets/LiveActivityBanner.swift b/ios/Widgets/LiveActivityBanner.swift
+index 3e6ff0b55c0b6d57ddeb1ba6605536adae2ca62d..5845e5163b1447f9322fc6e94241cc4f28f4ce8f 100644
+--- a/ios/Widgets/LiveActivityBanner.swift
++++ b/ios/Widgets/LiveActivityBanner.swift
+@@ -10,8 +10,10 @@ struct LiveActivityBanner: View {
+   var body: some View {
+     if activityFamily == .small, let node = nodes?["bannerSmall"] as? [String: Any] {
+       WidgetsDynamicView(name: context.activityID, kind: .liveActivity, node: node)
++        .frame(maxWidth: .infinity, alignment: .leading)
+     } else if let node = nodes?["banner"] as? [String: Any] {
+       WidgetsDynamicView(name: context.activityID, kind: .liveActivity, node: node)
++        .frame(maxWidth: .infinity, alignment: .leading)
+     } else {
+       EmptyView()
+     }
+diff --git a/ios/Widgets/WidgetLiveActivity.swift b/ios/Widgets/WidgetLiveActivity.swift
+index 3e192e10b9bc6d76f0f27cc268fbbf8e48a4b870..cd7c16619657bc73a8dc0130189ed0beed408dad 100644
+--- a/ios/Widgets/WidgetLiveActivity.swift
++++ b/ios/Widgets/WidgetLiveActivity.swift
+@@ -71,8 +71,19 @@ private struct LiveActivitySectionView: View {
+   var body: some View {
+     if let node = nodes[sectionName] as? [String: Any] {
+       WidgetsDynamicView(name: context.activityID, kind: .liveActivity, node: node)
++        .frame(maxWidth: .infinity, alignment: sectionAlignment)
+     } else {
+       EmptyView()
+     }
+   }
++
++  private var sectionAlignment: Alignment {
++    if sectionName.hasSuffix("Leading") {
++      return .leading
++    }
++    if sectionName.hasSuffix("Trailing") {
++      return .trailing
++    }
++    return .center
++  }
+ }
+@@ -87,6 +98,7 @@ private struct LiveActivityBannerView: View {
+       LiveActivityBanner(context: context, nodes: nodes)
+     } else if let node = nodes["banner"] as? [String: Any] {
+       WidgetsDynamicView(name: context.activityID, kind: .liveActivity, node: node)
++        .frame(maxWidth: .infinity, alignment: .leading)
+     } else {
+       EmptyView()
+     }

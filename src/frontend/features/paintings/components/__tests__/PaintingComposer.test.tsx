@@ -74,6 +74,7 @@ const input: PaintingGenerationInput = {
   attachments: [],
   mode: 'generate',
   modelId: 'provider::image-model',
+  modelName: 'Image Model',
   paramValues: { size: '1664x928' },
   prompt: 'Draw a mountain lake',
 };

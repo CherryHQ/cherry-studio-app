@@ -38,6 +38,8 @@ export type TestDb = {
   dbService: DbService;
   /** Makes the next withWriteTx call reject before executing (one-shot). */
   failNextWriteTx: (error: Error) => void;
+  /** Fails and rolls back a future transaction after its callback succeeds. */
+  failWriteTxCommit: (error: Error, successfulCommitsBeforeFailure?: number) => void;
   sqlite: DatabaseSync;
 };
 
@@ -64,6 +66,7 @@ export function createTestDb(sqlite: DatabaseSync): TestDb {
 
   let writeTail: Promise<void> = Promise.resolve();
   let pendingFailure: Error | null = null;
+  let pendingCommitFailure: { error: Error; remaining: number } | null = null;
   const withWriteTx = async <T>(fn: (tx: Database) => Promise<T>): Promise<T> => {
     const previous = writeTail;
     let release: () => void = () => {};
@@ -80,6 +83,14 @@ export function createTestDb(sqlite: DatabaseSync): TestDb {
       sqlite.exec('BEGIN IMMEDIATE');
       try {
         const result = await fn(database);
+        if (pendingCommitFailure) {
+          if (pendingCommitFailure.remaining === 0) {
+            const failure = pendingCommitFailure.error;
+            pendingCommitFailure = null;
+            throw failure;
+          }
+          pendingCommitFailure.remaining -= 1;
+        }
         sqlite.exec('COMMIT');
         return result;
       } catch (error) {
@@ -97,6 +108,9 @@ export function createTestDb(sqlite: DatabaseSync): TestDb {
     dbService,
     failNextWriteTx: (error) => {
       pendingFailure = error;
+    },
+    failWriteTxCommit: (error, successfulCommitsBeforeFailure = 0) => {
+      pendingCommitFailure = { error, remaining: successfulCommitsBeforeFailure };
     },
     sqlite,
   };

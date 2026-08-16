@@ -36,7 +36,14 @@ import {
 import { loggerService } from '@logger';
 
 import { application } from '@/backend/core/application/Application';
-import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
 import type { OperationHandle } from '@/backend/core/resources/types';
 import { ScopeFencedError } from '@/backend/core/resources/types';
 import type { Database, DbService } from '@/backend/data/db/DbService';
@@ -46,13 +53,12 @@ import {
   type JobService,
   type TerminalJobStatus,
 } from '@/backend/data/services/JobService';
-import { paintingService } from '@/backend/data/services/PaintingService';
-import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
-import {
-  createPaintingGenerateJobHandler,
-  type PaintingAi,
-} from '@/backend/services/paintings/tasks/paintingGenerateJobHandler';
+import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
 
+import type { JobHandlerRegistry } from './JobHandlerRegistry';
 import type { JobPayloadOf, JobType } from './jobRegistry';
 import { computeBackoff } from './runtime/backoff';
 import { type RecoveryRepo, runStartupRecovery } from './runtime/recovery';
@@ -67,7 +73,7 @@ import {
   type JobContext,
   type JobHandle,
   type JobHandler,
-  type JobHandlerFor,
+  type JobExecutionClass,
   MAX_CANCEL_REASON_CHARS,
   MAX_INPUT_BYTES,
   type PumpRequest,
@@ -76,21 +82,20 @@ import {
 
 const logger = loggerService.withContext('JobRuntime');
 
-/**
- * How many dispatch-ordered candidates one claim transaction inspects.
- *
- * TOMBSTONE — read before adding a second handler. If every candidate in the
- * window is filtered out (no handler / not `foreground-only` / queue at cap),
- * this claim returns null and the pump stops, *without ever seeing runnable
- * rows past the window*. Ordering is `priority ASC, scheduledAt ASC, id ASC`,
- * so 10 older background rows can permanently starve a newer foreground one.
- * Unreachable today: the production registry is empty and every test handler
- * is `foreground-only`.
- * Fix before registering the first `bounded-background` handler: push the
- * executionClass filter down into SQL, or widen and retry when the whole
- * window is filtered.
- */
+/** Page size while scanning dispatch-ordered candidates past queue-capped rows. */
 const CLAIM_CANDIDATE_WINDOW = 10;
+const DELAYED_TIMER_READ_RETRY_MS = 1_000;
+
+/**
+ * `user-continued` states the product promise ("keeps running while you do
+ * something else"); a keep-alive lease around `execute` is the mechanism
+ * honoring it on iOS today. Honest OS leases (iOS Continued Processing,
+ * Android FGS) can replace the mechanism later without touching the class.
+ */
+const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<JobExecutionClass> = new Set([
+  'foreground-only',
+  'user-continued',
+]);
 
 /**
  * Bounded drain on teardown: long enough for an aborted handler to reject and
@@ -115,12 +120,20 @@ export class JobHandlerTimeoutError extends Error {
   }
 }
 
-/** Every entry is optional so the container can construct this with two arguments. */
+/** Optional test/runtime policy layered after the container-injected dependencies. */
 export type JobRuntimeOptions = {
-  /** Complete, immutable registry — frozen at construction. Defaults to {@link createHostHandlers}. */
+  /** Complete registry override for tests; production uses `JobHandlerRegistry`. */
   handlers?: readonly (readonly [string, JobHandler])[];
   jobService?: JobService;
   globalMaxConcurrency?: number;
+  /**
+   * Keep-alive lease source for `user-continued` handlers: the dispatch loop
+   * wraps their `execute` in acquire/release so the work survives
+   * backgrounding, and neither the coordinator observes job state nor the
+   * handler owns audio. Optional so tests without one keep exercising the
+   * pipeline.
+   */
+  keepAlive?: KeepAliveSource;
   /** Injectable clock for tests. */
   now?: () => number;
   /** Progress sink; defaults to a no-op until a consumer exists (Phase 2+). */
@@ -132,44 +145,23 @@ type FinishedResolver = {
   resolve: (snapshot: JobSnapshot) => void;
 };
 
+type PreparedExecution = {
+  controller: AbortController;
+  executed: Promise<void>;
+  release(): void;
+};
+
+type ClaimResult =
+  | { binding: PreparedExecution; handler: JobHandler; kind: 'claimed'; row: JobRow }
+  | { error: ScopeFencedError; jobId: string; kind: 'scope-fenced' };
+
 function makeError(code: string, message: string, params?: Record<string, unknown>): Error {
   return Object.assign(new Error(`${code}: ${message}`), { code, params, retryable: false });
 }
 
-/**
- * The production registry. Assembled here rather than in composition because
- * every piece a handler needs is reachable from the host: the AI capability
- * through `@DependsOn`, the rest as module singletons.
- *
- * It is typed as the handler's own narrow port, not as `AiService`: this layer
- * receives AI capabilities as interfaces, and the container's positional
- * injection hands over whatever `AiService` resolves to regardless.
- */
-function createHostHandlers(ai: PaintingAi): readonly (readonly [string, JobHandler])[] {
-  return [
-    jobHandlerEntry(
-      'painting.generate',
-      createPaintingGenerateJobHandler({
-        ai,
-        paintings: paintingService,
-        storage: paintingFileStorage,
-      }),
-    ),
-  ];
-}
-
-/**
- * The single place a typed handler is erased for storage, mirroring desktop's
- * `registerHandler<K>(type, handler)`. Composition passes an array rather than
- * calling a register method, so this is what still checks that the handler's
- * payload matches the type's registry entry — write the tuple by hand and that
- * check is gone.
- */
-export function jobHandlerEntry<K extends JobType>(
-  type: K,
-  handler: JobHandlerFor<K>,
-): readonly [string, JobHandler] {
-  return [type, handler as JobHandler];
+function toErrorMessage(reason: unknown): string | undefined {
+  if (reason instanceof Error) return reason.message;
+  return typeof reason === 'string' && reason.length > 0 ? reason : undefined;
 }
 
 /**
@@ -187,19 +179,24 @@ export function jobHandlerEntry<K extends JobType>(
  */
 @Injectable('JobRuntime')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['DbService', 'AiService'])
+@DependsOn(['DbService', 'JobHandlerRegistry', 'KeepAliveCoordinator'])
+@AppStatePolicy('continue')
 export class JobRuntime extends BaseService {
   private readonly dbService: DbService;
   private readonly jobService: JobService;
   private readonly handlers: ReadonlyMap<string, JobHandler>;
+  private readonly dispatchableTypes: readonly string[];
   private readonly globalMaxConcurrency: number;
+  private readonly keepAlive?: KeepAliveSource;
   private readonly now: () => number;
   private readonly onProgress: (jobId: string, progress: JobProgress) => void;
 
   private readonly abortControllers = new Map<string, AbortController>();
+  private readonly activeKeepAliveLeases = new Map<string, KeepAliveLease>();
   private readonly inFlightExecuted = new Map<string, Promise<void>>();
   private readonly finishedResolvers = new Map<string, FinishedResolver>();
   private readonly timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly timeoutGraceHandles = new Map<string, ReturnType<typeof setTimeout>>();
   /** enqueueTx rows awaiting post-commit existence verification. */
   private readonly pendingTxVerifications = new Set<string>();
   /**
@@ -229,24 +226,30 @@ export class JobRuntime extends BaseService {
   private delayedTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
-  /**
-   * The container passes `dbService` and the resolved `AiService`; a suite adds
-   * its own handlers, which is why `ai` — needed only to build the production
-   * registry — is then never read.
-   */
-  constructor(dbService: DbService, ai: PaintingAi, options: JobRuntimeOptions = {}) {
+  constructor(
+    dbService: DbService,
+    registry: Pick<JobHandlerRegistry, 'entries'>,
+    keepAlive: KeepAliveSource,
+    options: JobRuntimeOptions = {},
+  ) {
     super();
     this.dbService = dbService;
     this.jobService = options.jobService ?? hostJobService;
     const handlers = new Map<string, JobHandler>();
-    for (const [type, handler] of options.handlers ?? createHostHandlers(ai)) {
+    for (const [type, handler] of options.handlers ?? registry.entries) {
       if (handlers.has(type)) {
         throw new Error(`Duplicate job handler registration for type "${type}"`);
       }
       handlers.set(type, handler);
     }
     this.handlers = handlers;
+    this.dispatchableTypes = Object.freeze(
+      [...handlers]
+        .filter(([, handler]) => DISPATCHABLE_EXECUTION_CLASSES.has(handler.executionClass))
+        .map(([type]) => type),
+    );
     this.globalMaxConcurrency = options.globalMaxConcurrency ?? DEFAULT_GLOBAL_MAX_CONCURRENCY;
+    this.keepAlive = options.keepAlive ?? keepAlive;
     this.now = options.now ?? Date.now;
     this.onProgress = options.onProgress ?? (() => {});
   }
@@ -345,17 +348,21 @@ export class JobRuntime extends BaseService {
         });
         if (winner === 'timeout') {
           logger.warn('cancel timed out — forcing terminal state', { graceMs, jobId });
-          await this.finalizeJob(
-            jobId,
-            'cancelled',
-            undefined,
-            {
-              code: JOB_ERROR_CODES.CANCELLED,
-              message: `Cancel timed out after ${graceMs}ms${reason ? ` (reason: ${reason})` : ''}`,
-              retryable: false,
-            },
-            ['running'],
-          );
+          try {
+            await this.finalizeJob(
+              jobId,
+              'cancelled',
+              undefined,
+              {
+                code: JOB_ERROR_CODES.CANCELLED,
+                message: `Cancel timed out after ${graceMs}ms${reason ? ` (reason: ${reason})` : ''}`,
+                retryable: false,
+              },
+              ['running'],
+            );
+          } finally {
+            this.releaseKeepAliveLease(jobId);
+          }
           return { outcome: 'timed-out' };
         }
       }
@@ -393,10 +400,11 @@ export class JobRuntime extends BaseService {
   }
 
   /**
-   * Abort every in-flight handler, then wait (bounded) for them to write their
-   * terminal rows before `DbService` — a declared dependency, so it stops
-   * later — closes SQLite. Rows still `running` when the drain times out are
-   * left for the next cold start's recovery.
+   * Stop dispatch, abort every in-flight handler, then wait (bounded) for the
+   * pump and executions to write their terminal rows before `DbService` — a
+   * declared dependency, so it stops later — closes SQLite. Rows still
+   * `running` when the drain times out are left for the next cold start's
+   * recovery.
    */
   protected async onStop(): Promise<void> {
     if (this.disposed) return;
@@ -407,6 +415,8 @@ export class JobRuntime extends BaseService {
     }
     for (const handle of this.timeoutHandles.values()) clearTimeout(handle);
     this.timeoutHandles.clear();
+    for (const handle of this.timeoutGraceHandles.values()) clearTimeout(handle);
+    this.timeoutGraceHandles.clear();
     for (const controller of this.abortControllers.values()) {
       controller.abort(new Error('Job runtime disposed'));
     }
@@ -421,10 +431,12 @@ export class JobRuntime extends BaseService {
     this.pendingTxVerifications.clear();
 
     // Snapshot before awaiting: each task removes itself in its `finally`.
-    // These promises resolve *after* `finalizeJob`, so draining them is what
-    // buys the terminal write a chance to land before SQLite closes. Bounded,
-    // because a handler is allowed to ignore the abort signal entirely.
-    const inFlight = [...this.inFlightExecuted.values()];
+    // Executions resolve *after* `finalizeJob`; the pump covers a claim or
+    // recovery transaction already in progress when disposal began. Draining
+    // both is what prevents either path from reaching SQLite after it closes.
+    // Bounded because a handler is allowed to ignore its abort signal entirely.
+    const inFlight: Promise<unknown>[] = [...this.inFlightExecuted.values()];
+    if (this.currentLoop) inFlight.push(this.currentLoop);
     if (inFlight.length === 0) return;
     let drainTimer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
@@ -542,10 +554,50 @@ export class JobRuntime extends BaseService {
 
     let claimedCount = 0;
     while (!this.disposed) {
-      const row = await this.claimNext();
-      if (!row) break;
+      const claim = await this.claimNext();
+      if (!claim) break;
+
+      if (claim.kind === 'scope-fenced') {
+        logger.info('claimNext: scope fenced — cancelling instead of claiming', {
+          jobId: claim.jobId,
+          scope: `${claim.error.scope.kind}:${claim.error.scope.id}`,
+        });
+        await this.finalizeJob(
+          claim.jobId,
+          'cancelled',
+          undefined,
+          {
+            code: JOB_ERROR_CODES.CANCELLED,
+            message: claim.error.message,
+            retryable: false,
+          },
+          ['pending'],
+        );
+        continue;
+      }
+
       claimedCount += 1;
-      this.spawnExecute(row);
+      if (this.disposed || claim.binding.controller.signal.aborted) {
+        // The claim transaction began before stop set the flag. Do not let its
+        // row escape as `running`. The same path handles a scope invalidation
+        // that arrived after registration but before the guarded claim landed.
+        await this.finalizeJob(
+          claim.row.id,
+          'cancelled',
+          undefined,
+          {
+            code: JOB_ERROR_CODES.CANCELLED,
+            message:
+              toErrorMessage(claim.binding.controller.signal.reason) ??
+              'Job runtime disposed before execution',
+            retryable: false,
+          },
+          ['running'],
+        );
+        claim.binding.release();
+        break;
+      }
+      this.spawnExecute(claim.row, claim.handler, claim.binding);
     }
 
     if (this.gcRequested) {
@@ -556,32 +608,67 @@ export class JobRuntime extends BaseService {
     return claimedCount;
   }
 
-  private async claimNext(): Promise<JobRow | null> {
-    return this.dbService.withWriteTx(async (tx) => {
-      const globalRunning = await this.jobService.countRunningGlobalTx(tx);
-      if (globalRunning >= this.globalMaxConcurrency) return null;
-      const runningPerQueue = await this.jobService.countRunningPerQueueTx(tx);
-      const now = this.now();
-      const candidates = await this.jobService.getEligiblePendingTx(
-        tx,
-        now,
-        CLAIM_CANDIDATE_WINDOW,
-      );
-      for (const candidate of candidates) {
-        const handler = this.handlers.get(candidate.type);
-        // Orphan rows wait for recovery's sweep; never execute without a handler.
-        if (!handler) continue;
-        // Phase 1 runs a foreground window only; other classes stay enqueued
-        // until their platform adapters exist.
-        if (handler.executionClass !== 'foreground-only') continue;
-        if (this.inFlightExecuted.has(candidate.id)) continue;
-        const queueCap = handler.defaultConcurrency ?? 1;
-        if ((runningPerQueue.get(candidate.queue) ?? 0) >= queueCap) continue;
-        const claimed = await this.jobService.claimPendingByIdTx(tx, candidate.id, now);
-        if (claimed) return claimed;
-      }
-      return null;
-    });
+  private async claimNext(): Promise<ClaimResult | null> {
+    let prepared: PreparedExecution | undefined;
+    try {
+      const result = await this.dbService.withWriteTx<ClaimResult | null>(async (tx) => {
+        const globalRunning = await this.jobService.countRunningGlobalTx(tx);
+        if (globalRunning >= this.globalMaxConcurrency) return null;
+        const runningPerQueue = await this.jobService.countRunningPerQueueTx(tx);
+        const now = this.now();
+        let offset = 0;
+        for (;;) {
+          const candidates = await this.jobService.getEligiblePendingTx(
+            tx,
+            now,
+            this.dispatchableTypes,
+            CLAIM_CANDIDATE_WINDOW,
+            offset,
+          );
+          for (const candidate of candidates) {
+            const handler = this.handlers.get(candidate.type);
+            // The SQL filter is derived from the same frozen registry. Keep this
+            // defensive check so a malformed test double cannot execute an orphan.
+            if (!handler || !DISPATCHABLE_EXECUTION_CLASSES.has(handler.executionClass)) continue;
+            if (this.inFlightExecuted.has(candidate.id)) continue;
+            const queueCap = handler.defaultConcurrency ?? 1;
+            if ((runningPerQueue.get(candidate.queue) ?? 0) >= queueCap) continue;
+
+            // Register before the `pending -> running` write. A delete can fence
+            // this resource between any two awaits; claiming first would create a
+            // running job invisible to the coordinator's drain.
+            let binding: PreparedExecution;
+            try {
+              binding = this.prepareExecution(handler, candidate);
+              prepared = binding;
+            } catch (error) {
+              if (error instanceof ScopeFencedError) {
+                return { error, jobId: candidate.id, kind: 'scope-fenced' };
+              }
+              throw error;
+            }
+
+            try {
+              const claimed = await this.jobService.claimPendingByIdTx(tx, candidate.id, now);
+              if (claimed) return { binding, handler, kind: 'claimed', row: claimed };
+              binding.release();
+              prepared = undefined;
+            } catch (error) {
+              binding.release();
+              prepared = undefined;
+              throw error;
+            }
+          }
+          if (candidates.length < CLAIM_CANDIDATE_WINDOW) return null;
+          offset += candidates.length;
+        }
+      });
+      prepared = undefined;
+      return result;
+    } catch (error) {
+      prepared?.release();
+      throw error;
+    }
   }
 
   /** Drop resolvers of enqueueTx rows whose caller transaction rolled back. */
@@ -644,7 +731,22 @@ export class JobRuntime extends BaseService {
 
   private async armDelayedTimer(): Promise<void> {
     if (this.disposed) return;
-    const earliest = await this.jobService.earliestDelayedAt().catch(() => null);
+    let earliest: number | null;
+    try {
+      earliest = await this.jobService.earliestDelayedAt();
+    } catch (error) {
+      logger.warn('armDelayedTimer: failed to read delayed jobs — retrying', error as Error, {
+        retryMs: DELAYED_TIMER_READ_RETRY_MS,
+      });
+      if (this.delayedTimer) clearTimeout(this.delayedTimer);
+      if (!this.disposed) {
+        this.delayedTimer = setTimeout(() => {
+          this.delayedTimer = null;
+          void this.armDelayedTimer();
+        }, DELAYED_TIMER_READ_RETRY_MS);
+      }
+      return;
+    }
     if (this.delayedTimer) {
       clearTimeout(this.delayedTimer);
       this.delayedTimer = null;
@@ -677,84 +779,126 @@ export class JobRuntime extends BaseService {
     handler: JobHandler,
     row: JobRow,
     settled: Promise<void>,
+    controller: AbortController,
   ): OperationHandle | undefined {
     const scopes = handler.scopes?.(row.input);
     if (!scopes || scopes.length === 0) return undefined;
 
     return this.scopes.register({
-      // Fire-and-forget by contract: `cancel` is synchronous, and `cancel()`
-      // already does its own bounded wait plus force-finalization. The drain
-      // above is what actually waits.
-      cancel: (reason) => {
-        void this.cancel(row.id, reason).catch((error: unknown) => {
-          logger.error('scope cancel failed', error as Error, { jobId: row.id });
-        });
-      },
+      // Scope cancellation is a synchronous termination request. Persistence
+      // belongs to the execution pipeline below; `settled` covers its terminal
+      // write and deliberately does not let a forced public cancel make a
+      // stubborn handler look drained.
+      cancel: (reason) => controller.abort(new Error(`Job cancelled: ${reason}`)),
       kind: `job.${row.type}`,
       scopes,
       settled,
     });
   }
 
-  private spawnExecute(row: JobRow): void {
-    const handler = this.handlers.get(row.type);
-    if (!handler) {
-      void this.finalizeJob(
-        row.id,
-        'failed',
-        undefined,
-        {
-          code: JOB_ERROR_CODES.UNKNOWN_TYPE,
-          message: `No handler registered for type "${row.type}"`,
-          retryable: false,
-        },
-        ['running'],
-      );
-      return;
-    }
-    if (this.inFlightExecuted.has(row.id)) {
-      logger.warn('spawnExecute: job already in flight — skipping duplicate', { jobId: row.id });
-      return;
-    }
-
+  private prepareExecution(handler: JobHandler, row: JobRow): PreparedExecution {
     const controller = new AbortController();
     let resolveExecuted!: () => void;
     const executed = new Promise<void>((resolve) => {
       resolveExecuted = resolve;
     });
+    const scopeHandle = this.registerScopes(handler, row, executed, controller);
+    let released = false;
+    const binding: PreparedExecution = {
+      controller,
+      executed,
+      release: () => {
+        if (released) return;
+        released = true;
+        if (this.abortControllers.get(row.id) === controller) {
+          this.abortControllers.delete(row.id);
+        }
+        if (this.inFlightExecuted.get(row.id) === executed) {
+          this.inFlightExecuted.delete(row.id);
+        }
+        this.clearTimeoutGraceHandle(row.id);
+        scopeHandle?.release();
+        resolveExecuted();
+      },
+    };
+    this.abortControllers.set(row.id, controller);
+    this.inFlightExecuted.set(row.id, executed);
+    return binding;
+  }
 
-    // Claimed before anything observable happens: the resource this job writes
-    // through may be mid-deletion, and an execution that started first would be
-    // invisible to the pass draining that scope.
-    let scopeHandle: OperationHandle | undefined;
-    try {
-      scopeHandle = this.registerScopes(handler, row, executed);
-    } catch (error) {
-      if (!(error instanceof ScopeFencedError)) throw error;
-      // The resource is being deleted. Running would write through a row that is
-      // about to disappear, so the job ends here rather than racing the delete.
-      logger.info('spawnExecute: scope fenced — cancelling instead of running', {
+  private acquireKeepAliveLease(row: JobRow, handler: JobHandler): KeepAliveLease | undefined {
+    if (handler.executionClass !== 'user-continued' || !this.keepAlive) return undefined;
+
+    this.releaseKeepAliveLease(row.id);
+    const sourceLease = this.keepAlive.acquire(`job.${row.type}`);
+    let released = false;
+    const lease: KeepAliveLease = {
+      release: () => {
+        if (released) return;
+        released = true;
+        if (this.activeKeepAliveLeases.get(row.id) === lease) {
+          this.activeKeepAliveLeases.delete(row.id);
+        }
+        sourceLease.release();
+      },
+    };
+    this.activeKeepAliveLeases.set(row.id, lease);
+    return lease;
+  }
+
+  private releaseKeepAliveLease(jobId: string): void {
+    this.activeKeepAliveLeases.get(jobId)?.release();
+  }
+
+  private armTimeoutGrace(
+    row: JobRow,
+    handler: JobHandler,
+    binding: PreparedExecution,
+    timeoutError: JobHandlerTimeoutError,
+  ): void {
+    const graceMs = handler.cancelTimeoutMs ?? DEFAULT_CANCEL_TIMEOUT_MS;
+    const handle = setTimeout(() => {
+      this.timeoutGraceHandles.delete(row.id);
+      if (this.inFlightExecuted.get(row.id) !== binding.executed || this.disposed) return;
+
+      logger.warn('handler timeout grace expired — forcing terminal state', {
+        graceMs,
         jobId: row.id,
-        scope: `${error.scope.kind}:${error.scope.id}`,
       });
       void this.finalizeJob(
         row.id,
-        'cancelled',
+        'failed',
         undefined,
-        { code: JOB_ERROR_CODES.CANCELLED, message: error.message, retryable: false },
+        {
+          code: JOB_ERROR_CODES.HANDLER_TIMEOUT,
+          message: `Handler timed out and did not stop within ${graceMs}ms`,
+          retryable: true,
+        },
         ['running'],
-      );
-      return;
-    }
+      )
+        .catch((error: unknown) => {
+          logger.error('failed to force terminal state after handler timeout', error as Error, {
+            jobId: row.id,
+            timeout: timeoutError.message,
+          });
+        })
+        .finally(() => this.releaseKeepAliveLease(row.id));
+    }, graceMs);
+    this.timeoutGraceHandles.set(row.id, handle);
+  }
 
-    this.abortControllers.set(row.id, controller);
-    this.inFlightExecuted.set(row.id, executed);
+  private spawnExecute(row: JobRow, handler: JobHandler, binding: PreparedExecution): void {
+    const { controller } = binding;
+
+    const keepAliveLease = this.acquireKeepAliveLease(row, handler);
 
     if (row.timeoutMs !== null && row.timeoutMs > 0) {
-      const handle = setTimeout(
-        () => controller.abort(new JobHandlerTimeoutError()),
-        row.timeoutMs,
-      );
+      const handle = setTimeout(() => {
+        this.timeoutHandles.delete(row.id);
+        const timeoutError = new JobHandlerTimeoutError();
+        controller.abort(timeoutError);
+        this.armTimeoutGrace(row, handler, binding, timeoutError);
+      }, row.timeoutMs);
       this.timeoutHandles.set(row.id, handle);
     }
 
@@ -785,6 +929,12 @@ export class JobRuntime extends BaseService {
     const task = (async () => {
       try {
         const output = await handler.execute(ctx);
+        // Cancellation wins even when a handler ignored its signal and returned
+        // normally. Keeping this fence in the runtime gives every handler the
+        // same terminal semantics without requiring feature-local checks.
+        if (controller.signal.aborted) {
+          throw controller.signal.reason ?? new Error('Job cancelled');
+        }
         this.clearTimeoutHandle(row.id);
         await this.finalizeJob(row.id, 'completed', output, null, ['running']);
       } catch (err) {
@@ -819,13 +969,11 @@ export class JobRuntime extends BaseService {
           ]);
         }
       } finally {
+        keepAliveLease?.release();
         this.clearTimeoutHandle(row.id);
-        this.abortControllers.delete(row.id);
-        this.inFlightExecuted.delete(row.id);
         // Released before `executed` settles, so a drain that was waiting on
         // this execution does not then see it still registered.
-        scopeHandle?.release();
-        resolveExecuted();
+        binding.release();
       }
     })();
 
@@ -852,8 +1000,8 @@ export class JobRuntime extends BaseService {
   // -------------------------------------------------------------------------
 
   /**
-   * Side-effect order is load-bearing (desktop-verbatim): terminal write →
-   * re-read → resolve `finished` + kick the pump → await onSettled with
+   * Side-effect order is load-bearing: terminal write and snapshot in one
+   * transaction → resolve `finished` + kick the pump → await onSettled with
    * errors swallowed.
    */
   private async finalizeJob(
@@ -863,10 +1011,10 @@ export class JobRuntime extends BaseService {
     error: JobError | null,
     expectedStatuses: readonly JobStatus[],
   ): Promise<void> {
-    let updated = 0;
+    let terminalResult: Awaited<ReturnType<JobService['setTerminalTx']>> | undefined;
     let txFailed: Error | undefined;
     try {
-      updated = await this.dbService.withWriteTx((tx) =>
+      terminalResult = await this.dbService.withWriteTx((tx) =>
         this.jobService.setTerminalTx(tx, jobId, status, output, error, expectedStatuses),
       );
     } catch (err) {
@@ -874,9 +1022,9 @@ export class JobRuntime extends BaseService {
       logger.error('finalizeJob: terminal write failed — synthesizing snapshot', txFailed);
     }
 
-    const persisted = await this.jobService.getById(jobId).catch(() => null);
+    const persisted = terminalResult?.snapshot ?? null;
 
-    if (updated === 0 && !txFailed) {
+    if (terminalResult && !terminalResult.updated) {
       // Weak fence held: another path finalized (or retried) this row first.
       // Late callbacks release awaiters at most; they never overwrite state.
       if (persisted && isTerminalStatus(persisted.status)) {
@@ -893,7 +1041,10 @@ export class JobRuntime extends BaseService {
 
     const snapshot =
       persisted ??
-      this.synthesizeFailedSnapshot(jobId, txFailed ?? new Error('row disappeared after write'));
+      this.synthesizeFailedSnapshot(
+        jobId,
+        txFailed ?? new Error('terminal update returned no snapshot'),
+      );
     this.resolveFinished(jobId, snapshot);
     this.schedulePump();
 
@@ -996,6 +1147,14 @@ export class JobRuntime extends BaseService {
     if (handle !== undefined) {
       clearTimeout(handle);
       this.timeoutHandles.delete(jobId);
+    }
+  }
+
+  private clearTimeoutGraceHandle(jobId: string): void {
+    const handle = this.timeoutGraceHandles.get(jobId);
+    if (handle !== undefined) {
+      clearTimeout(handle);
+      this.timeoutGraceHandles.delete(jobId);
     }
   }
 

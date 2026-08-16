@@ -71,7 +71,7 @@ describe('JobService runtime writers', () => {
       await insertJob({ id: 'a', priority: 0, scheduledAt: 200 });
       await insertJob({ id: 'c', priority: -1, scheduledAt: 900 });
       await insertJob({ id: 'd', priority: 0, scheduledAt: 100 });
-      const rows = await service.getEligiblePendingTx(tx, 1000, 10);
+      const rows = await service.getEligiblePendingTx(tx, 1000, ['t'], 10);
       expect(rows.map((row) => row.id)).toEqual(['c', 'd', 'a', 'b']);
     });
 
@@ -80,7 +80,7 @@ describe('JobService runtime writers', () => {
       await insertJob({ cancelRequested: true, id: 'cancelling' });
       await insertJob({ id: 'active', status: 'running' });
       await insertJob({ id: 'due', scheduledAt: 500 });
-      const rows = await service.getEligiblePendingTx(tx, 1000, 10);
+      const rows = await service.getEligiblePendingTx(tx, 1000, ['t'], 10);
       expect(rows.map((row) => row.id)).toEqual(['due']);
     });
 
@@ -101,9 +101,13 @@ describe('JobService runtime writers', () => {
   describe('setTerminalTx (weak fence)', () => {
     it('finalizes a running row and never reopens a terminal one', async () => {
       const row = await insertJob({ status: 'running' });
-      expect(
-        await service.setTerminalTx(tx, row.id, 'completed', { ok: true }, null, ['running']),
-      ).toBe(1);
+      const completed = await service.setTerminalTx(tx, row.id, 'completed', { ok: true }, null, [
+        'running',
+      ]);
+      expect(completed).toMatchObject({
+        snapshot: { id: row.id, output: { ok: true }, status: 'completed' },
+        updated: true,
+      });
       const done = await service.getById(row.id);
       expect(done?.status).toBe('completed');
       expect(done?.output).toEqual({ ok: true });
@@ -112,7 +116,7 @@ describe('JobService runtime writers', () => {
       // A late callback presenting the same expectation is a no-op.
       expect(
         await service.setTerminalTx(tx, row.id, 'failed', undefined, someError, ['running']),
-      ).toBe(0);
+      ).toMatchObject({ snapshot: { id: row.id, status: 'completed' }, updated: false });
       expect((await service.getById(row.id))?.status).toBe('completed');
     });
 
@@ -120,13 +124,13 @@ describe('JobService runtime writers', () => {
       const row = await insertJob({ status: 'pending' });
       expect(
         await service.setTerminalTx(tx, row.id, 'cancelled', undefined, null, ['running']),
-      ).toBe(0);
+      ).toMatchObject({ snapshot: { id: row.id, status: 'pending' }, updated: false });
       expect(
         await service.setTerminalTx(tx, row.id, 'cancelled', undefined, null, [
           'pending',
           'delayed',
         ]),
-      ).toBe(1);
+      ).toMatchObject({ snapshot: { id: row.id, status: 'cancelled' }, updated: true });
     });
   });
 

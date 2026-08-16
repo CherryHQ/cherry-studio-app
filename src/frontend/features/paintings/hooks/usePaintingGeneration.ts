@@ -34,6 +34,7 @@ export type PaintingGenerationInput = {
   attachments: readonly ComposerAttachmentDraft[];
   mode: ImageGenerationMode;
   modelId: UniqueModelId;
+  modelName: string;
   paramValues: ParamValues;
   prompt: string;
 };
@@ -234,6 +235,7 @@ export function usePaintingGeneration({
           ),
           mode: input.mode,
           modelId: input.modelId,
+          modelName: input.modelName,
           // Retrying reuses the interrupted receipt so its gallery tile flips in
           // place; a receipt that already holds images is never passed here, and
           // the backend rejects it if one ever is.

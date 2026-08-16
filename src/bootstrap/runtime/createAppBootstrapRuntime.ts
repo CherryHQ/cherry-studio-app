@@ -1,5 +1,6 @@
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
+import { Uniwind } from 'uniwind';
 
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
@@ -12,6 +13,8 @@ import type { CacheService } from '@/backend/data/CacheService';
 import { DataApiService } from '@/backend/data/DataApiService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
@@ -20,6 +23,9 @@ import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
 import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
+import AssistantActivity from '@/frontend/features/chat/AssistantActivity/AssistantActivity';
+import PaintingActivity from '@/frontend/features/paintings/PaintingActivity/PaintingActivity';
+import i18n from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
 
 export type AppBootstrapRuntime = {
@@ -41,6 +47,15 @@ export function createAppBootstrapRuntime(
   // resolutions only construct — the connection opens in `DbService.onInit`,
   // inside `start()`.
   const host = new ApplicationHost({ overrides, services: serviceList });
+  const backgroundActivityEnvironment = host.container.get<BackgroundActivityEnvironment>(
+    'BackgroundActivityEnvironment',
+  );
+  backgroundActivityEnvironment.configure({
+    assistantPresenter: createLiveActivityPresenter(AssistantActivity),
+    getColorScheme: () => (Uniwind.currentTheme === 'dark' ? 'dark' : 'light'),
+    paintingPresenter: createLiveActivityPresenter(PaintingActivity),
+    translate: (key) => i18n.t(key),
+  });
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
   const chat = host.container.get<ChatRuntime>('ChatRuntime');
@@ -108,15 +123,14 @@ export function createAppBootstrapRuntime(
     dispose: () => {
       // Nothing to drain ahead of the host any more: `ChatRuntime` and
       // `JobRuntime` are services, so reverse-order teardown settles them before
-      // the database they write through. Uninstalling is only correct while this
-      // is still the installed host — a runtime disposed out of order must not
-      // take down whichever host replaced it.
+      // the database they write through.
       disposePromise ??= (async () => {
-        if (application.current === host) {
-          await application.uninstall();
-        } else {
-          await host.dispose();
-        }
+        // The expected-host check runs inside Application's serialized
+        // transition, closing the replacement/dispose race. Calling the host
+        // directly afterwards also covers a runtime disposed before install;
+        // disposal is idempotent when Application already handled it.
+        await application.uninstall(host);
+        await host.dispose();
       })();
       return disposePromise;
     },

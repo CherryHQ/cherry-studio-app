@@ -8,7 +8,7 @@ import { loggerService } from '@logger';
 
 import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
-import { jobHandlerEntry } from '@/backend/services/jobs/JobRuntime';
+import { jobHandlerEntry } from '@/backend/services/jobs/JobHandlerRegistry';
 import type { JobContext } from '@/backend/services/jobs/types';
 
 import {
@@ -73,6 +73,7 @@ const jobInput: PaintingGenerateJobInput = {
   images: [{ fileEntryId: inputFileId, mediaType: 'image/png', uri: 'file:///picked.png' }],
   mode: 'generate',
   modelId,
+  modelName: 'GPT Image 2',
   paintingId: 'painting-1',
   paramValues: {},
   prompt: 'draw',
@@ -144,6 +145,19 @@ describe('createPaintingGenerateJobHandler', () => {
     ]);
   });
 
+  it('preserves the original persistence error when compensating discard also fails', async () => {
+    const dependencies = createDependencies();
+    const persistenceError = new Error('database failed');
+    jest.mocked(dependencies.paintings.replaceOutputs).mockRejectedValue(persistenceError);
+    jest.mocked(dependencies.storage.discard).mockRejectedValue(new Error('discard failed'));
+    const handler = createPaintingGenerateJobHandler(dependencies);
+
+    await expect(handler.execute(createContext())).rejects.toBe(persistenceError);
+    expect(dependencies.storage.discard).toHaveBeenCalledWith([
+      expect.objectContaining({ id: outputFileId }),
+    ]);
+  });
+
   it('keeps referenced outputs when their URI cannot be resolved', async () => {
     const dependencies = createDependencies();
     jest.mocked(dependencies.storage.getUri).mockReturnValue(undefined);
@@ -165,6 +179,93 @@ describe('createPaintingGenerateJobHandler', () => {
       'Job cancelled: user',
     );
     expect(dependencies.ai.generateImage).not.toHaveBeenCalled();
+  });
+
+  describe('background activity session', () => {
+    function createSessionDependencies() {
+      const dependencies = createDependencies();
+      dependencies.translate = (key) =>
+        ({
+          'backgroundActivity.cancelled': '已取消',
+          'backgroundActivity.completed': '已完成',
+          'painting.backgroundActivity.failed': '生成失败',
+          'painting.backgroundActivity.title': '绘图',
+        })[key] ?? key;
+      const sessions: { cancel: jest.Mock; finish: jest.Mock; update: jest.Mock }[] = [];
+      const startSession = jest.fn((_input: unknown) => {
+        const session = {
+          cancel: jest.fn(),
+          finish: jest.fn(),
+          update: jest.fn(),
+        };
+        sessions.push(session);
+        return session;
+      });
+      dependencies.activities = { startSession };
+      return { dependencies, sessions, startSession };
+    }
+
+    it('opens a session while generating and finishes it as completed', async () => {
+      const { dependencies, sessions, startSession } = createSessionDependencies();
+      const handler = createPaintingGenerateJobHandler(dependencies);
+
+      await handler.execute(createContext());
+
+      expect(startSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deepLinkUrl: 'cherrystudio://paintings/painting-1',
+          keepAlive: false,
+          props: expect.objectContaining({
+            attribution: 'GPT Image 2',
+            compactIcon: 'paintbrush',
+            icon: 'paintbrush',
+            phase: 'generating',
+            preview: 'draw',
+            title: '绘图',
+          }),
+          tag: 'painting.generate',
+        }),
+      );
+      const activityInput = startSession.mock.calls[0]?.[0] as { props: unknown } | undefined;
+      expect(activityInput?.props).not.toHaveProperty('compactLabel');
+      expect(sessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          compactIcon: 'paintbrush',
+          compactLabel: '已完成',
+          icon: 'check-circle',
+          phase: 'completed',
+        }),
+      );
+    });
+
+    it('finishes the session as failed when generation throws', async () => {
+      const { dependencies, sessions } = createSessionDependencies();
+      jest.mocked(dependencies.ai.generateImage).mockRejectedValue(new Error('provider down'));
+      const handler = createPaintingGenerateJobHandler(dependencies);
+
+      await expect(handler.execute(createContext())).rejects.toThrow('provider down');
+      expect(sessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({
+          compactLabel: '生成失败',
+          icon: 'warning-triangle',
+          phase: 'failed',
+        }),
+      );
+    });
+
+    it('finishes the session as cancelled when the signal aborted', async () => {
+      const { dependencies, sessions } = createSessionDependencies();
+      const controller = new AbortController();
+      controller.abort(new Error('Job cancelled: user'));
+      const handler = createPaintingGenerateJobHandler(dependencies);
+
+      await expect(handler.execute(createContext({ signal: controller.signal }))).rejects.toThrow(
+        'Job cancelled: user',
+      );
+      expect(sessions[0]?.finish).toHaveBeenCalledWith(
+        expect.objectContaining({ compactLabel: '已取消', icon: 'x-circle', phase: 'cancelled' }),
+      );
+    });
   });
 
   describe('through the job runtime', () => {

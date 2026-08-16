@@ -15,6 +15,7 @@ const mockOauth = { kind: 'oauth' };
 const mockOauthSession = { kind: 'oauth-session' };
 const mockPreference = { kind: 'preference' };
 const mockWebSearch = { kind: 'web-search' };
+const mockBackgroundActivityEnvironment = { configure: jest.fn() };
 const mockServices = {
   ai: mockAi,
   cache: mockCache,
@@ -29,7 +30,7 @@ const mockServices = {
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
 const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
-const mockCreateBackend = jest.fn((_services: unknown) => ({
+const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
   dataApiDependencies: mockDataApiDependencies,
 }));
@@ -50,7 +51,17 @@ jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),
 }));
 jest.mock('@/bootstrap/composition/createBackend', () => ({
-  createBackend: (services: unknown) => mockCreateBackend(services),
+  createBackend: (services: unknown, dependencies: unknown) =>
+    mockCreateBackend(services, dependencies),
+}));
+// The real layouts touch the ExpoWidgets native module at import time.
+jest.mock('@/frontend/features/chat/AssistantActivity/AssistantActivity', () => ({
+  __esModule: true,
+  default: { getInstances: jest.fn(() => []), start: jest.fn() },
+}));
+jest.mock('@/frontend/features/paintings/PaintingActivity/PaintingActivity', () => ({
+  __esModule: true,
+  default: { getInstances: jest.fn(() => []), start: jest.fn() },
 }));
 
 /**
@@ -65,6 +76,7 @@ jest.mock('@/bootstrap/composition/createBackend', () => ({
 const createRuntime = () =>
   createAppBootstrapRuntime({
     AiService: mockAi,
+    BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
     ChatRuntime: mockChat,
     DbService: mockDb,
@@ -103,6 +115,13 @@ describe('createAppBootstrapRuntime', () => {
       preference: mockPreference,
       webSearch: mockWebSearch,
     });
+    expect(mockBackgroundActivityEnvironment.configure).toHaveBeenCalledWith({
+      assistantPresenter: expect.any(Object),
+      getColorScheme: expect.any(Function),
+      paintingPresenter: expect.any(Object),
+      translate: expect.any(Function),
+    });
+    expect(mockCreateBackend).toHaveBeenCalledWith(mockServices, { dbService: mockDb });
     expect(mockInitializeAppRuntime).toHaveBeenCalledWith(mockServices);
     expect(runtime.backend).toBe(mockBackend);
     expect(runtime.dataApi).toBe(mockDataApi);

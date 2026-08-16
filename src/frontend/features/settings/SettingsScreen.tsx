@@ -6,19 +6,21 @@ import {
   LockIcon,
   NetworkIcon,
   PersonCropSquareOnSquareAngledIcon,
+  RadioIcon,
   SparklesIcon,
 } from '@cherrystudio/app-icons';
-import { Section } from '@cherrystudio/ui/components';
+import { Section, Switch } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
+import { useAlert } from '@/frontend/components/AlertProvider';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -26,11 +28,15 @@ import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './prof
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
+  const { alert } = useAlert();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const tabBarHeight = useBottomTabBarHeight();
   const [userName] = usePreference('app.user.name');
+  const [backgroundReplyEnabled, setBackgroundReplyEnabled] = usePreference(
+    'chat.background_reply.enabled',
+  );
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
 
@@ -48,6 +54,12 @@ export default function SettingsScreen() {
   // animation depends on. No top padding: the hero box is pinned to content y=0
   // and draws under the status bar, exactly like the reference header.
   const contentContainerStyle = useMemo(() => ({ paddingBottom: tabBarHeight }), [tabBarHeight]);
+
+  const setBackgroundReplyPreference = (enabled: boolean) => {
+    void setBackgroundReplyEnabled(enabled).catch(() => {
+      alert.show({ title: t('settings.backgroundReply.saveFailed') });
+    });
+  };
 
   return (
     <View className="flex-1 bg-grouped-background">
@@ -73,6 +85,24 @@ export default function SettingsScreen() {
               onPress={openProfileSettings}
             />
           </Section>
+          {Platform.OS === 'ios' ? (
+            <Section>
+              <Section.Item
+                accessibilityRole="switch"
+                accessibilityState={{ checked: backgroundReplyEnabled }}
+                label={t('settings.items.backgroundReply')}
+                leading={<RadioIcon className="size-5 text-foreground" />}
+                onPress={() => setBackgroundReplyPreference(!backgroundReplyEnabled)}
+                trailing={
+                  <Switch
+                    accessibilityLabel={t('settings.items.backgroundReply')}
+                    onValueChange={setBackgroundReplyPreference}
+                    value={backgroundReplyEnabled}
+                  />
+                }
+              />
+            </Section>
+          ) : null}
           <Section>
             <Section.Item
               label={t('settings.items.modelService')}

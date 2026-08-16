@@ -276,6 +276,29 @@ package's own components, and the app still has its own easings to bring across.
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
 
+## Background Activities
+
+`@cherrystudio/ui/background-activity` exposes the platform-neutral presentation model and a
+registered icon union. Callers supply title, detail, compact label, optional preview, timing, and
+one registered icon. They cannot supply children, render functions, arbitrary components, colors,
+spacing, typography, or layout overrides. Feature services keep their phase and state machines and
+map those values into this presentation model. `BackgroundActivityNativePresentation` adds the
+theme and staged-logo fields used only by the host presenter; feature contracts do not expose them.
+
+`@cherrystudio/ui/background-activity/ios` exposes the serializable `expo-widgets` renderer. It owns
+the Lock Screen and Dynamic Island layouts, colors, type, spacing, truncation, compact timer/status, logo
+placement, and SF Symbol mapping. Feature activity files only register that renderer under their
+typed activity name. Infrastructure injects the resolved theme and staged logo and stamps terminal
+time. Compact and banner surfaces show their timer when `compactLabel` is absent and replace the
+timer with that short status when present. The banner presents `title` and optional `attribution` on its first
+row, then the latest single-line `preview` with elapsed time on its second row. Overflow is truncated
+from the head so the newest content remains visible. A future Android renderer should consume the
+same presentation semantics while owning its own native layout in this package.
+
+The expanded surface repeats the title and attribution header, shows up to three lines of the latest
+`preview`, and puts elapsed time at the lower trailing edge. When `compactLabel` is present, banner
+and expanded timers both show that short status instead.
+
 ## Storybook
 
 Stories are development-only assets kept outside the runtime source tree, matching the desktop UI

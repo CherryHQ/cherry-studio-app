@@ -35,8 +35,8 @@ export abstract class BaseService {
 
   private activated = false;
 
-  /** Guards against concurrent activate/deactivate. */
-  private activating = false;
+  /** Serializes activation changes so preference events cannot overtake teardown. */
+  private activationTransition: Promise<void> = Promise.resolve();
 
   /**
    * Whether `_doStop()` is currently running. Distinct from
@@ -182,14 +182,20 @@ export abstract class BaseService {
     this.lifecycleState = LifecycleState.Stopping;
     this.stopInFlight = true;
     try {
-      if (this.activated && isActivatable(this)) {
-        try {
-          await this.onDeactivate();
-        } catch {
-          // Best effort — the service logs its own failure, and it must not
-          // block onStop.
-        }
-        this.activated = false;
+      // An activation that started while Ready owns resources until its hook
+      // settles. Wait for it before deciding whether deactivation is needed;
+      // setting Stopping first also makes queued activations no-op.
+      if (isActivatable(this)) {
+        await this.enqueueActivationTransition(async () => {
+          if (!this.activated) return;
+          try {
+            await this.onDeactivate();
+          } catch {
+            // Best effort — the service logs its own failure, and it must not
+            // block onStop.
+          }
+          this.activated = false;
+        });
       }
       await this.onStop();
     } finally {
@@ -218,13 +224,19 @@ export abstract class BaseService {
       return;
     }
 
-    if (this.activated && isActivatable(this)) {
-      try {
-        await this.onDeactivate();
-      } catch {
-        // Best effort.
-      }
-      this.activated = false;
+    // Destroy is terminal. Closing the Ready window before waiting prevents an
+    // activation queued concurrently from reacquiring resources underneath it.
+    this.lifecycleState = LifecycleState.Stopping;
+    if (isActivatable(this)) {
+      await this.enqueueActivationTransition(async () => {
+        if (!this.activated) return;
+        try {
+          await this.onDeactivate();
+        } catch {
+          // Best effort.
+        }
+        this.activated = false;
+      });
     }
 
     await this.onDestroy();
@@ -235,32 +247,33 @@ export abstract class BaseService {
   /** Framework entry point. Idempotent; returns the resulting activation state. */
   async _doActivate(): Promise<boolean> {
     if (!isActivatable(this)) return false;
-    if (this.activated || this.activating) return this.activated;
-    if (this.lifecycleState !== LifecycleState.Ready) return false;
-
-    this.activating = true;
-    try {
+    return this.enqueueActivationTransition(async () => {
+      if (this.lifecycleState !== LifecycleState.Ready) return false;
+      if (this.activated) return true;
       await this.onActivate();
       this.activated = true;
       return true;
-    } finally {
-      this.activating = false;
-    }
+    });
   }
 
   /** Framework entry point. Idempotent. */
   async _doDeactivate(): Promise<boolean> {
     if (!isActivatable(this)) return false;
-    if (!this.activated || this.activating) return !this.activated;
-
-    this.activating = true;
-    try {
+    return this.enqueueActivationTransition(async () => {
+      if (!this.activated) return true;
       await this.onDeactivate();
       this.activated = false;
       return true;
-    } finally {
-      this.activating = false;
-    }
+    });
+  }
+
+  private enqueueActivationTransition<T>(transition: () => Promise<T>): Promise<T> {
+    const run = this.activationTransition.then(transition);
+    this.activationTransition = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
   }
 
   /** Self-activation, for use inside the service. External callers go through the host. */
