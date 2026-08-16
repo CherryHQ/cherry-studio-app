@@ -15,10 +15,7 @@ const PUNCTUATION_CHARACTER = /[\p{P}\p{S}]/u;
 const WHITESPACE_CHARACTER = /\s/u;
 
 export function projectMarkdownInlineForSpeech(markdown: string): string {
-  return markdown
-    .split(/(\n[\t ]*\n)/u)
-    .map(projectInlineSegmentForSpeech)
-    .join('');
+  return markdown.split('\n').map(projectInlineSegmentForSpeech).join('\n');
 }
 
 function projectInlineSegmentForSpeech(markdown: string): string {

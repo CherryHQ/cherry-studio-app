@@ -182,6 +182,14 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('does not pair emphasis delimiters across adjacent block lines', () => {
+    const message = createMessage([textPart('# First *unclosed\n- Second close*')]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'First *unclosed\nSecond close*',
+    });
+  });
+
   test('projects nested emphasis markers without dropping their content', () => {
     const message = createMessage([textPart('Read **outer _inner_ text** and ***bold italic***.')]);
 
