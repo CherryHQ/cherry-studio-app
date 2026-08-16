@@ -9,11 +9,9 @@ import type { Backend } from '@/shared/contracts';
 import { AppBootstrapGate } from '../AppBootstrapGate';
 import { AppBootstrapProvider, useAppBootstrapState } from '../AppBootstrapProvider';
 
-const mockPreventAutoHide = jest.fn(async () => undefined);
 const mockHideAsync = jest.fn(async () => undefined);
 
 jest.mock('expo-splash-screen', () => ({
-  preventAutoHideAsync: () => mockPreventAutoHide(),
   hideAsync: () => mockHideAsync(),
 }));
 
@@ -64,13 +62,12 @@ function StatusProbe() {
 }
 
 beforeEach(() => {
-  mockPreventAutoHide.mockClear();
   mockHideAsync.mockClear();
 });
 
 describe('AppBootstrapProvider startup gate', () => {
   test('holds the gate closed (renders null) while the runtime initializes', async () => {
-    // init never settles: the gate must stay closed and the splash must remain up.
+    // Initialization state is this provider's only startup responsibility.
     const { runtime } = makeRuntime(() => new Promise<void>(() => {}));
     let renderer: ReactTestRenderer | undefined;
 
@@ -90,7 +87,7 @@ describe('AppBootstrapProvider startup gate', () => {
     await act(async () => renderer?.unmount());
   });
 
-  test('opens the gate, hides the splash, and fires post-ready tasks once ready', async () => {
+  test('opens the gate and fires post-ready tasks without owning the native splash', async () => {
     const { dispose, initialize, runPostReadyTasks, runtime } = makeRuntime(async () => undefined);
     let renderer: ReactTestRenderer | undefined;
 
@@ -106,7 +103,7 @@ describe('AppBootstrapProvider startup gate', () => {
     await flush();
 
     expect(renderer && hasText(renderer, 'gate-open')).toBe(true);
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
+    expect(mockHideAsync).not.toHaveBeenCalled();
     expect(initialize).toHaveBeenCalledTimes(1);
     expect(runPostReadyTasks).toHaveBeenCalledTimes(1);
     // Post-ready work runs after initialization, never before the gate opens.
@@ -118,7 +115,7 @@ describe('AppBootstrapProvider startup gate', () => {
     expect(dispose).toHaveBeenCalledTimes(1);
   });
 
-  test('hides the splash and surfaces the error without running post-ready tasks', async () => {
+  test('surfaces the error without hiding the splash or running post-ready tasks', async () => {
     const { runPostReadyTasks, runtime } = makeRuntime(async () => {
       throw new Error('init failed');
     });
@@ -134,7 +131,7 @@ describe('AppBootstrapProvider startup gate', () => {
     await flush();
 
     expect(renderer && hasText(renderer, 'status:error')).toBe(true);
-    expect(mockHideAsync).toHaveBeenCalledTimes(1);
+    expect(mockHideAsync).not.toHaveBeenCalled();
     expect(runPostReadyTasks).not.toHaveBeenCalled();
 
     await act(async () => renderer?.unmount());

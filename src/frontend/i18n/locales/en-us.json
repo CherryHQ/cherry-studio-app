@@ -160,6 +160,7 @@
   "navigation.home": "Home",
   "navigation.backHome": "Back to home",
   "navigation.closeSearch": "Close search",
+  "navigation.chatsLoadFailed": "Failed to load chats",
   "navigation.noMatchingChats": "No matching chats",
   "navigation.newChat": "New chat",
   "navigation.messages": "Messages",

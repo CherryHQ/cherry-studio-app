@@ -53,7 +53,8 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 
 - creates `CacheService`, `DbService`, and the private backend service graph;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
-- initializes the backend cache before SQLite seeding, then preferences, boot theme, and i18n;
+- initializes the backend cache before SQLite seeding and preferences, then applies boot theme and
+  i18n after the native splash handoff;
 - starts best-effort post-ready tasks after the gate opens;
 - disposes the Chat Runtime first, then MCP and web-search state, the backend cache, and SQLite on
   unmount.
@@ -64,8 +65,11 @@ providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` 
 `BackendProvider` for workflow modules, including any caller-owned session factories.
 
 `AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
-initialization error. The root layout retains the native splash, and `AppBootstrapProvider` hides it
-when initialization settles, including the error path.
+initialization error. The root layout retains the native splash, while the app-shell
+`StartupCoordinator` hides it only after its matching React Native cover has laid out and crossed
+two composited frames. The provider owns initialization state and post-ready work; it does not own
+splash visibility. `startupCoverHandoff` prevents Uniwind's native appearance synchronization from
+running until the native surface is gone.
 
 ## Query Runtime
 
@@ -118,8 +122,9 @@ sessions never share receipt state.
 
 ## Startup Work
 
-`initializeAppRuntime()` reads cached boot preferences, applies the frontend theme, and initializes
-i18n. It must not refresh catalogs, prefetch history, repair data, or run diagnostics.
+`initializeAppRuntime()` reads cached boot preferences, waits for the native-to-React cover handoff,
+then applies the frontend theme and initializes i18n. It must not refresh catalogs, prefetch history,
+repair data, or run diagnostics.
 
 `runPostReadyTasks()` starts after status becomes `ready`. It currently repairs crash-orphaned
 pending assistant messages and prewarms active MCP servers. It is fire-and-forget, best-effort, and
