@@ -26,6 +26,33 @@ the matching icon-only padding when no label is provided. Icon-only buttons must
 `accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
 need an Expo UI `Host`.
 
+`Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
+surfaces: the background is the lightest, the border is stronger, and the label has the highest
+contrast. Selected chips strengthen the neutral background and border without introducing another
+accent color. The semantic tokens adapt this hierarchy to light and dark themes.
+
+```tsx
+import { Chip } from '@cherrystudio/ui/components';
+
+<Chip.Removable
+  onRemove={removeSearch}
+  removeAccessibilityLabel="Remove Web search"
+>
+  Web search
+</Chip.Removable>;
+
+<Chip.Selectable selected={isReasoningEnabled} onSelectedChange={setIsReasoningEnabled}>
+  Reasoning
+</Chip.Selectable>;
+
+<Chip.Tag>128k context</Chip.Tag>;
+```
+
+`Chip.Removable` keeps removal on its trailing close button, `Chip.Selectable` toggles when the
+whole chip is pressed, and `Chip.Tag` is non-interactive. Selection and removal remain controlled by
+the caller. Removal labels are required so the icon-only action can be localized and announced by
+assistive technology.
+
 Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
