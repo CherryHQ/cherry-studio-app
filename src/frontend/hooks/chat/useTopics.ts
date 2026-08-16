@@ -13,6 +13,7 @@ export type TopicsOptions = {
 };
 
 export type TopicsViewModel = {
+  error?: Error;
   isLoadingInitial: boolean;
   loadMore: () => Promise<void>;
   topics: readonly TopicListItem[];
@@ -32,6 +33,7 @@ export function useTopics(options: TopicsOptions): TopicsViewModel {
   useHydrateTopicDetails(topics);
 
   return {
+    error: query.error,
     isLoadingInitial: query.isLoading,
     loadMore: query.loadNext,
     topics,

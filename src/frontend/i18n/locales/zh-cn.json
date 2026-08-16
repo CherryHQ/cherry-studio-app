@@ -159,6 +159,7 @@
   "navigation.home": "主页",
   "navigation.backHome": "回到首页",
   "navigation.closeSearch": "关闭搜索",
+  "navigation.chatsLoadFailed": "聊天加载失败",
   "navigation.noMatchingChats": "没有匹配的聊天",
   "navigation.newChat": "新建聊天",
   "navigation.messages": "消息",

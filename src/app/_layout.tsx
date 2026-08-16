@@ -6,11 +6,13 @@ import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
+import type { PropsWithChildren } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
-import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
+import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
+import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { AlertProvider } from '@/frontend/components/AlertProvider';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import {
@@ -18,12 +20,13 @@ import {
   getTransparentHeaderStyle,
   paintingViewerHeaderShown,
 } from '@/frontend/components/navigation/rootStackPlatform/rootStackPlatform';
+import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/components/startup';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
-// Hold the native splash across app bootstrap so the gate never exposes a
-// blank frame. `AppBootstrapProvider` hides it once initialization settles.
+// Hold the native surface until the matching React Native startup cover has
+// committed its first layout.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 const RootGestureView = withUniwind(GestureHandlerRootView);
@@ -35,20 +38,37 @@ export default function RootLayout() {
         <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
           <QueryProvider>
             <AppBootstrapProvider>
-              <AppBootstrapGate>
-                <NavigationThemeProvider>
-                  <AlertProvider>
-                    <BottomSheetProvider>
-                      <RootStack />
-                    </BottomSheetProvider>
-                  </AlertProvider>
-                </NavigationThemeProvider>
-              </AppBootstrapGate>
+              <BootstrapStartupCoordinator>
+                <AppBootstrapGate>
+                  <StartupRouteReadyReporter>
+                    <NavigationThemeProvider>
+                      <AlertProvider>
+                        <BottomSheetProvider>
+                          <RootStack />
+                        </BottomSheetProvider>
+                      </AlertProvider>
+                    </NavigationThemeProvider>
+                  </StartupRouteReadyReporter>
+                </AppBootstrapGate>
+              </BootstrapStartupCoordinator>
             </AppBootstrapProvider>
           </QueryProvider>
         </HeroUINativeProvider>
       </KeyboardProvider>
     </RootGestureView>
+  );
+}
+
+function BootstrapStartupCoordinator({ children }: PropsWithChildren) {
+  const bootstrapState = useAppBootstrapState();
+
+  return (
+    <StartupCoordinator
+      bootstrapReady={bootstrapState.status !== 'loading'}
+      onCoverPresented={reportStartupCoverPresented}
+    >
+      {children}
+    </StartupCoordinator>
   );
 }
 
