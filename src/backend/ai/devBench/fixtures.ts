@@ -23,7 +23,7 @@ export const BENCH_FIXTURE_IDS = [
 export type BenchFixtureId = (typeof BENCH_FIXTURE_IDS)[number];
 
 export type BenchFixture = {
-  /** 思考块正文；仅 reasoning 夹具提供，用于驱动 ReasoningPart 的渐进渲染。 */
+  /** 思考块正文；提供了就会先于正文流入，用于驱动 ReasoningPart 的渐进渲染。 */
   reasoning?: string;
   text: string;
 };
@@ -167,7 +167,9 @@ const REASONING_THINKING = `先确认当前处于哪个阶段。用户刚发送�
 
 结论：阶段必须作为独立信号记录下来。`;
 
-// 混合夹具：把上述形状串在一条回复里，模拟真实长回复的复合渲染负载。
+// 混合夹具：把上述形状串在一条回复里，模拟真实长回复的复合渲染负载。它也是所有场景默认使用
+// 的夹具，所以思考块也归它——真实的一轮对话是「待生成 → 思考 → 正文」三段，少了中间那段，
+// 思考块出现时的高度 settle 就完全没有被基准覆盖过。
 const MIXED_FIXTURE = `${TEXT_FIXTURE}
 
 ${CODE_FIXTURE}
@@ -181,7 +183,7 @@ export const BENCH_FIXTURES: Record<BenchFixtureId, BenchFixture> = {
   emoji: { text: EMOJI_FIXTURE },
   list: { text: LIST_FIXTURE },
   longline: { text: LONGLINE_FIXTURE },
-  mixed: { text: MIXED_FIXTURE },
+  mixed: { reasoning: REASONING_THINKING, text: MIXED_FIXTURE },
   reasoning: { reasoning: REASONING_THINKING, text: REASONING_FIXTURE },
   table: { text: TABLE_FIXTURE },
   text: { text: TEXT_FIXTURE },

@@ -7,10 +7,10 @@ import { useComposerMeta } from '../context/ComposerProvider';
  * Takes the keyboard down and gives up first responder. Pickers and settings
  * sheets that replace the input context call this before opening.
  *
- * The ＋ menu is the deliberate exception: it dismisses the keyboard without
- * blurring, which is what makes iOS restore it the instant the menu closes.
- * The effort slider is another exception: it keeps focus and covers the live
- * keyboard while it is open.
+ * Two surfaces deliberately do not call it, because they sit *over* the input
+ * context rather than replacing it: the ＋ menu grows upward out of its button
+ * and clears the keyboard, and the effort slider covers the live keyboard while
+ * it is open. Both keep focus and the keyboard exactly where they were.
  */
 export function useComposerFieldDismiss() {
   const { inputRef } = useComposerMeta();

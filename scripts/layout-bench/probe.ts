@@ -185,7 +185,12 @@ export function buildTrace(events: ProbeEvent[]): Trace {
     }
 
     const atMs = event.t - originMs;
-    const past = y + viewportHeight - contentHeight;
+    // LegendList 的 contentSize **不含** anchoredEndSpace（实测：空话题里 content=357、
+    // viewport=874、endSpace=517，三者严格满足 874-357=517），所以「视口越过内容末端」这个
+    // 量把钉顶刻意预留的那段也算了进去。不扣掉的话判据量的是设计本身：稳态就占掉 59%，只剩
+    // 1 个百分点留给真正的越界。扣掉之后它问的才是该问的那句——**有没有滚到既没内容、也不是
+    // 预留空白的地方去**。
+    const past = y + viewportHeight - contentHeight - endSpace;
     samples.push({
       atMs,
       blankFraction: contentHeight > 0 ? Math.min(1, Math.max(0, past / viewportHeight)) : 0,

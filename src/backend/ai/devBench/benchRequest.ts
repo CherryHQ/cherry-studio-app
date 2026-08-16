@@ -5,7 +5,12 @@
  * 回什么夹具、以什么速率流式返回。好处是场景控制完全落在 harness 一侧，app 不需要任何额外
  * 配置界面或全局状态，日常开发使用这个 provider 也不会被影响。
  *
- * 语法：`bench:<fixture>[@<chunksPerSecond>]`，例如 `bench:code@20`。
+ * 语法：`bench:<fixture>[@<chunksPerSecond>][+<pendingMs>[+<reasoningMs>]]`，
+ * 例如 `bench:code@20`、`bench:mixed@40+2000+2000`。
+ *
+ * 两个 `+` 段按顺序对应「待生成占位」和「思考块」两段的**可见时长**。它们是时长而不是速率：
+ * 这两段在界面上是两种独立状态，要被看见的正是它们各自停留了多久；正文那段关心的才是生长
+ * 速率，所以仍用 `@<chunksPerSecond>`。
  */
 
 import { type BenchFixtureId, isBenchFixtureId } from './fixtures';
@@ -20,16 +25,35 @@ const DEFAULT_CHUNKS_PER_SECOND = 20;
 const MIN_CHUNKS_PER_SECOND = 1;
 const MAX_CHUNKS_PER_SECOND = 1000;
 
-/** 首个 chunk 之前的固定延迟，模拟真实请求的首 token 等待。 */
-const INITIAL_DELAY_MS = 120;
+/**
+ * 首个流式分片之前的默认延迟，模拟真实请求的首 token 等待。默认值只求「别把待生成占位一闪
+ * 而过」，真要看清那段状态请在指令里显式给时长——日常开发用这个 provider 时不该被迫等两秒。
+ */
+const DEFAULT_PENDING_DELAY_MS = 120;
 
-const BENCH_PATTERN = /^bench:([a-z]+)(?:@(\d+))?$/i;
+/** 夹具带思考块但指令没给时长时，思考块的默认可见时长。 */
+const DEFAULT_REASONING_DURATION_MS = 400;
+
+const MAX_PHASE_DURATION_MS = 60_000;
+
+const BENCH_PATTERN = /^bench:([a-z]+)(?:@(\d+))?(?:\+(\d+))?(?:\+(\d+))?$/i;
 
 export type BenchRequest = {
   chunkDelayInMs: number;
   fixtureId: BenchFixtureId;
-  initialDelayInMs: number;
+  /** 送出第一个流式分片前的等待，等同于界面上「待生成占位」的可见时长。 */
+  pendingDelayInMs: number;
+  /** 思考块从出现到写完的总时长；分片数由夹具决定，所以这里存总时长而非单片延迟。 */
+  reasoningDurationInMs: number;
 };
+
+function clampDuration(raw: string | undefined, fallback: number): number {
+  if (raw === undefined) {
+    return fallback;
+  }
+
+  return Math.min(Number(raw), MAX_PHASE_DURATION_MS);
+}
 
 /**
  * 从用户输入解析 bench 指令。返回 null 表示这不是一条 bench 指令——调用方据此回退到
@@ -41,7 +65,7 @@ export function parseBenchRequest(text: string): BenchRequest | null {
     return null;
   }
 
-  const [, rawFixture, rawRate] = match;
+  const [, rawFixture, rawRate, rawPending, rawReasoning] = match;
   const fixtureId = rawFixture.toLowerCase();
   if (!isBenchFixtureId(fixtureId)) {
     return null;
@@ -53,7 +77,8 @@ export function parseBenchRequest(text: string): BenchRequest | null {
   return {
     chunkDelayInMs: Math.round(1000 / clampedRate),
     fixtureId,
-    initialDelayInMs: INITIAL_DELAY_MS,
+    pendingDelayInMs: clampDuration(rawPending, DEFAULT_PENDING_DELAY_MS),
+    reasoningDurationInMs: clampDuration(rawReasoning, DEFAULT_REASONING_DURATION_MS),
   };
 }
 

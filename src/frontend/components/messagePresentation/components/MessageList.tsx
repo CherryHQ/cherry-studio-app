@@ -1,15 +1,17 @@
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { View } from 'react-native';
-import { useDerivedValue, useSharedValue } from 'react-native-reanimated';
+import { type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
+import type Animated from 'react-native-reanimated';
+import { useAnimatedRef, useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
 import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
+import { useMessageSlideInFlight } from '../messageRow/slideIn/hooks/useMessageSlideInFlight';
 import type { MessageListProps, MessagePresentationItem } from '../types';
 import { useAnchorPin } from './hooks/useAnchorPin';
 import {
@@ -53,7 +55,7 @@ function messageKeyExtractor(item: MessagePresentationItem) {
 // 各自类型的真实均值定位 → MVCP/初始 bootstrap 的「估算→真实」修正幅度大幅收窄，减少可见跳动。
 //
 // 「还没有内容的助手行」必须单独成一类，否则同一机制会反过来制造跳动：刚发出消息时新建的
-// 助手行只是个加载点（实测 48px），若按 assistant 的均值估算，它会先占住上一条长回复的高度
+// 助手行只是个加载点（实测 52px），若按 assistant 的均值估算，它会先占住上一条长回复的高度
 // （实测 3012px）再塌回去——一帧内内容少了 2964px，预留空白与钉顶落点都要跟着重算。
 // 分类后修正量 2964px → 5px。
 //
@@ -84,7 +86,6 @@ function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[
 }
 
 export function MessageList({
-  animateFirstEnteringMessage = false,
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
@@ -96,6 +97,10 @@ export function MessageList({
   renderAssistantMessage,
 }: MessageListProps) {
   const listRef = useRef<LegendListRef | null>(null);
+  // 底层 Animated.ScrollView 的 animated ref，尾随逼近器要在 UI 线程对它调 `scrollTo`。
+  // `refScrollView` 由 KeyboardAwareLegendList 原样透传给 AnimatedLegendList，最终落到
+  // reanimated 包出来的那层组件上——这是这套组件栈唯一暴露底层滚动视图的口子。
+  const scrollViewRef = useAnimatedRef<Animated.ScrollView>();
   const isAtBottom = useSharedValue(true);
   // 位移轨迹的来源。注意**不能**用 `onScroll`：本列表经 KeyboardAwareLegendList →
   // AnimatedLegendList 渲染，滚动被 reanimated 的 `useScrollViewOffset` 接管，JS 侧的
@@ -104,6 +109,12 @@ export function MessageList({
   const scrollOffset = useSharedValue(0);
   // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useLayoutBenchInstrumentation）。
   const endSpaceRef = useRef(0);
+  // 视口高度由列表自己测：ready-gate 与入场行的起飞距离都要用，谁也不该拥有另一个的测量。
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    emitLayoutBenchProbe('viewport', { h: Math.round(event.nativeEvent.layout.height) });
+    setViewportHeight(event.nativeEvent.layout.height);
+  }, []);
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
@@ -157,29 +168,52 @@ export function MessageList({
     isUserInteractingRef,
     notifyAnchorSpaceClosed,
     scheduleTailFollow,
-  } = useTailFollow({ anchorMessageId, hasAnchor, listRef });
+  } = useTailFollow({ anchorMessageId, hasAnchor, listRef, scrollOffset, scrollViewRef });
 
-  const {
-    handleAnchorReady,
-    handleAnchoredEndSpaceSizeChanged,
-    handleContentSizeChange,
-    handleLayout,
-    isStagingFirstAnchor,
-    releaseStagedFirstAnchor,
-  } = useAnchorPin({
-    anchorIndex,
-    anchorMessageId,
-    animateFirstEnteringMessage,
-    contentBottomInset,
-    endSpaceRef,
+  // 入场行的起飞点：钉顶落点正下方、输入框上缘。三个量都是运行时布局值，所以它随机型、
+  // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。这是**总**行程，钉顶滚动与行的
+  // 弹簧各分走一段（见 useAnchorPin）。
+  //
+  // 新话题的第一条消息会让列表**带着数据**挂载，而 viewportHeight 是 onLayout 回填的 state、
+  // 首帧还是 0：不兜底的话行程为 0，气泡会先在落点画一帧再跳回起飞点飞一遍。窗口高度偏大只
+  // 意味着停得更靠下（本来就在视口外，看不见），实测值到达后装填 effect 会在开火前校正。
+  // ready-gate 不用这个兜底值——它必须等真实测量（见 useAnchorPin 的 viewportHeight 早退）。
+  const { height: windowHeight } = useWindowDimensions();
+  const slideInTravel = Math.max(
+    0,
+    (viewportHeight || windowHeight) - contentBottomInset - anchorOffset,
+  );
+  // 入场那一轮的助手占位行：待发消息的下一条。它在同一次 overlay 注入里出现，所以装填时一定
+  // 已经在列表里；拿它做「等用户行落位再显形」的对象，而不是笼统的「最后一行」——流式期间
+  // 最后一行还是它，但那时飞行早已结束，不该再被 opacity 碰。
+  const enteringFollowerId = useMemo(() => {
+    if (!enteringMessageId) {
+      return undefined;
+    }
+
+    const enteringIndex = messages.findIndex((message) => message.id === enteringMessageId);
+    return enteringIndex < 0 ? undefined : messages[enteringIndex + 1]?.id;
+  }, [enteringMessageId, messages]);
+  const slideInFlight = useMessageSlideInFlight({
     enteringMessageId,
-    isUserInteractingRef,
-    lastMessageId,
-    listRef,
-    notifyAnchorSpaceClosed,
-    onReady,
-    scrollMessageToEnd,
+    followerMessageId: enteringFollowerId,
+    travel: slideInTravel,
   });
+
+  const { handleAnchorReady, handleAnchoredEndSpaceSizeChanged, handleContentSizeChange } =
+    useAnchorPin({
+      contentBottomInset,
+      endSpaceRef,
+      enteringMessageId,
+      isUserInteractingRef,
+      lastMessageId,
+      listRef,
+      notifyAnchorSpaceClosed,
+      onAnchorPinned: slideInFlight.launch,
+      onReady,
+      scrollMessageToEnd,
+      viewportHeight,
+    });
 
   // 「滚动到底部」只在**用户自己**离开底部时才有意义。而 isAtEnd 用的是 ~0px 的判定边界，
   // 只要 app 正把列表往底部推（钉顶动画、流式尾随），内容每长一截都会先把视口挤离底部、
@@ -204,16 +238,15 @@ export function MessageList({
         prev: Math.round(info.previous),
         size: Math.round(info.size),
       });
-      releaseStagedFirstAnchor();
       scheduleTailFollow();
     },
-    [releaseStagedFirstAnchor, scheduleTailFollow],
+    [scheduleTailFollow],
   );
 
   // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
   const anchoredEndSpace = useMemo(
     () =>
-      hasAnchor && !isStagingFirstAnchor
+      hasAnchor
         ? {
             anchorIndex,
             anchorMaxSize,
@@ -229,7 +262,6 @@ export function MessageList({
       handleAnchorReady,
       handleAnchoredEndSpaceSizeChanged,
       hasAnchor,
-      isStagingFirstAnchor,
     ],
   );
 
@@ -253,12 +285,11 @@ export function MessageList({
   }, [isFollowing, messages, scheduleTailFollow]);
 
   return (
-    <MessageSlideInProvider slideInMessageId={enteringMessageId}>
+    <MessageSlideInProvider flight={slideInFlight}>
       <View className="flex-1">
         <ScrollShadow className="flex-1" visibility="bottom" size={80}>
           <KeyboardAwareLegendList
             ref={listRef}
-            alignItemsAtEnd={isStagingFirstAnchor}
             applyWorkaroundForContentInsetHitTestBug
             anchoredEndSpace={anchoredEndSpace}
             contentContainerStyle={contentContainerStyle}
@@ -295,6 +326,12 @@ export function MessageList({
             onTouchEnd={handleTouchEnd}
             onTouchStart={handleTouchStart}
             recycleItems={false}
+            // LegendList 把这个 prop 的类型写成 `React.Ref<React.ElementRef<typeof
+            // Animated.ScrollView>>`，而 `ElementRef` 在 React 19 的类型下解析成 `never`
+            // （一次性探针确证过），于是任何 ref 都塞不进去。运行时它被原样转发给 reanimated
+            // 包出来的滚动视图（`reanimated.mjs` 的 `ref: refScrollView`），正是 animated ref
+            // 该在的位置——断言的是库的类型缺陷，不是我们这边的用法。
+            refScrollView={scrollViewRef as unknown as Ref<never>}
             renderItem={renderMessageRow}
             scrollEventThrottle={16}
             scrollsToTop

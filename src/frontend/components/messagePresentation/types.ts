@@ -9,7 +9,6 @@ export type MessagePresentationItem = Readonly<
 >;
 
 export type MessageListProps = {
-  animateFirstEnteringMessage?: boolean;
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;

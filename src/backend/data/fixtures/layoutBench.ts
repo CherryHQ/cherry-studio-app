@@ -14,6 +14,7 @@ import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 
 import type { CreateProviderInput } from '@/backend/data/services/ProviderService';
+import { LAYOUT_BENCH_ASSISTANT_ID } from '@/shared/devBench/layoutBenchProbe';
 
 /** provider 行 id；`buildOpenAICompatibleConfig` 会把它原样写进 `providerSettings.name`。 */
 export const LAYOUT_BENCH_PROVIDER_ID = 'layout-bench-mock';
@@ -46,12 +47,11 @@ export const layoutBenchModel = {
   supportsStreaming: true,
 } as const;
 
-export const layoutBenchAssistantId = 'layout-bench-assistant';
-
 export const layoutBenchAssistant = {
   description: '布局基准专用：发送 bench:<fixture> 回放确定性流式回复',
   emoji: '📐',
-  id: layoutBenchAssistantId,
+  // harness 的入口深链接按这个 id 进来，聊天屏也据它 arm 探针，所以 id 由探针模块持有。
+  id: LAYOUT_BENCH_ASSISTANT_ID,
   modelId: layoutBenchModel.id,
   name: 'Layout Bench',
   orderKey: 'a0-bench',
