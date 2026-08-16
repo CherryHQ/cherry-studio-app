@@ -4,9 +4,9 @@ import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
-import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivities/BackgroundActivityEnvironment';
-import { BackgroundActivityManager } from '@/backend/services/backgroundActivities/BackgroundActivityManager';
-import { BackgroundReplyService } from '@/backend/services/backgroundReply';
+import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
+import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
@@ -39,7 +39,7 @@ export const services = {
   BackgroundActivityEnvironment,
   KeepAliveCoordinator,
   BackgroundActivityManager,
-  BackgroundReplyService,
+  BackgroundReplyRuntime,
   WebSearchService,
   McpRuntimeService,
   OAuthRuntimeService,

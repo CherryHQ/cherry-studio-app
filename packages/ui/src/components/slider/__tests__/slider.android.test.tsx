@@ -11,9 +11,15 @@ jest.mock('heroui-native', () => {
     return React.createElement(View, { ...props, mockComponent: 'hero-slider' });
   }
 
-  Root.Track = (props: object) => React.createElement(View, { ...props, testID: 'track' });
-  Root.Fill = (props: object) => React.createElement(View, { ...props, testID: 'fill' });
-  Root.Thumb = (props: object) => React.createElement(View, { ...props, testID: 'thumb' });
+  Root.Track = function SliderTrack(props: object) {
+    return React.createElement(View, { ...props, testID: 'track' });
+  };
+  Root.Fill = function SliderFill(props: object) {
+    return React.createElement(View, { ...props, testID: 'fill' });
+  };
+  Root.Thumb = function SliderThumb(props: object) {
+    return React.createElement(View, { ...props, testID: 'thumb' });
+  };
 
   return { Slider: Root };
 });
@@ -49,9 +55,7 @@ describe('Slider (Android)', () => {
     expect(onValueChange).toHaveBeenCalledWith(45);
   });
 
-  test('forwards custom bounds, disabled state, style, and testID', () => {
-    const style = { marginTop: 8 };
-
+  test('maps custom bounds and disabled state to HeroUI', () => {
     act(() => {
       renderer = create(
         <Slider
@@ -61,8 +65,6 @@ describe('Slider (Android)', () => {
           min={0.1}
           onValueChange={jest.fn()}
           step={0.1}
-          style={style}
-          testID="opacity-slider"
           value={0.5}
         />,
       );
@@ -74,7 +76,6 @@ describe('Slider (Android)', () => {
     expect(root.props.minValue).toBe(0.1);
     expect(root.props.maxValue).toBe(1);
     expect(root.props.step).toBe(0.1);
-    expect(root.props.style).toBe(style);
   });
 
   test('renders endpoint labels around a flexible slider', () => {

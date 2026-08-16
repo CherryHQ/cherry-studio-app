@@ -610,8 +610,8 @@ type + active statuses).
 
 Phase 1 ships `painting.generate` as `foreground-only`: backgrounding the app mid-generation
 suspends the JS runtime, and the job settles only on resume (or is abandoned by the next
-cold-start recovery). PR #473's `BackgroundReplyService`
-(`src/backend/services/backgroundReply/BackgroundReplyService.ts` on that branch) proves the
+cold-start recovery). PR #473's `BackgroundReplyRuntime`
+(`src/backend/services/backgroundReply/BackgroundReplyRuntime.ts` on that branch) proves the
 missing capability for chat: a silent audio session keeps Hermes scheduled while a reply streams
 in the background — the OpenMinis approach, already shipped on the App Store. The mechanism is
 not chat-specific; only its packaging is. The first draft of this document ruled silent audio
@@ -646,11 +646,11 @@ type KeepAliveLease = { release(): void }; // 1→0 stops the session; idempoten
   `chat.background_reply.enabled` gate would let the chat toggle silently kill painting's
   background continuation, a cross-feature coupling no user could predict. Chat's gate now just
   means "chat does not acquire when disabled".
-- Consumer 1 — chat: `BackgroundReplyService` keeps its turns; `reconcileAudio` collapsed into a
+- Consumer 1 — chat: `BackgroundReplyRuntime` keeps its turns; `reconcileAudio` collapsed into a
   per-session `keepAlive` bit (generating phases → held, approval/terminal → released).
   **As-built deviation:** the Live Activity half did not stay in the service — it was extracted
   into the feature-agnostic `BackgroundActivityManager`
-  (`src/backend/services/backgroundActivities/`), which owns throttling, AppState handling,
+  (`src/backend/services/backgroundActivity/`), which owns throttling, AppState handling,
   orphan sweeps, and mirrors each session's keep-alive bit into a coordinator lease.
 - Consumer 2 — jobs (wired as designed): the dispatch loop wraps a `user-continued` handler's
   `execute` in acquire/release, so the coordinator never observes job state and the runtime

@@ -5,9 +5,10 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MessageStatusRow } from '../../components/MessageStatusRow';
 import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';
 import { PartMarkdown } from './PartMarkdown';
 
@@ -47,18 +48,13 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
     <View className="gap-1.5">
       {/* 点状态行打开推理详情 sheet（思考中也可打开、内部实时流式）；不再内联展开，避免改变
           消息高度、干扰锚定列表的滚动位置。 */}
-      <Pressable
-        accessibilityLabel={statusText}
-        accessibilityRole="button"
-        className="flex-row items-center gap-2 py-0.5 active:opacity-60"
-        onPress={() => setIsSheetOpen(true)}
-      >
+      <MessageStatusRow accessibilityLabel={statusText} onPress={() => setIsSheetOpen(true)}>
         {isThinking ? <PrismSweep active /> : null}
         <Text className="flex-1 text-foreground text-base" numberOfLines={1}>
           {statusText}
         </Text>
         <ChevronRightIcon className="size-4 text-foreground" />
-      </Pressable>
+      </MessageStatusRow>
       {isSheetOpen ? (
         <ReasoningDetailSheet
           isStreaming={isStreaming}

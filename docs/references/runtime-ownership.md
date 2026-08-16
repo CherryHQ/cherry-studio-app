@@ -4,6 +4,32 @@ This reference defines ownership for long-lived resources, startup work, caller-
 cleanup.
 Terms follow [Domain Language](./domain-language.md).
 
+## Role Names
+
+Name an owner by who calls it and who controls its lifetime. A class that directly corresponds to a
+Cherry Desktop service keeps the upstream `XxxService` name and public methods. This includes
+`DbService`, `CacheService`, `PreferenceService`, persistence services, `DataApiService`,
+`AiService`, `McpRuntimeService`, `OAuthRuntimeService`, and `WebSearchService`.
+
+Use these roles for mobile-owned code:
+
+| Role | Use when the type is | Example |
+| --- | --- | --- |
+| `Module` | A frontend-visible workflow capability exposed through `Backend` | `ChatModule` |
+| `Runtime` | One app- or bootstrap-owned executor whose state spans calls or routes | `ChatRuntime` |
+| `Session` | One caller-owned isolated unit with explicit cancellation or disposal | `PaintingGenerationSession` |
+| `Client` | A boundary to one external account, protocol, or remote API | `PkceOAuthClient` |
+| `Adapter` | A translation boundary for a platform or SDK; a precise capability noun may stand alone | `DevicePermissions` |
+| `Manager` | A coordinator whose defining job is owning a homogeneous pool or registry | `ConnectionManager` |
+
+`Backend`, `BackendProvider`, and `useBackendModule()` are intentional aggregate and React
+integration names. Leaf workflows use `XxxModule`; do not add parallel `XxxBackend`, `XxxService`,
+and `XxxImpl` layers for the same operations. Factory-shaped modules use `createXxxModule()`.
+
+An app-owned runtime is created once by bootstrap and is not disposed by route or component
+unmount. A caller-owned session exposes its own lifecycle. Use `Manager` only for a real pool or
+registry; otherwise prefer a precise domain noun or a plain function. Do not use the `Impl` suffix.
+
 ## Principles
 
 - Mobile adopts the desktop lifecycle framework, service registry, and a mobile-specific phase pair;

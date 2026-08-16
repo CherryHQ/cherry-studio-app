@@ -14,12 +14,6 @@ import {
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
 
-const MODEL_SETTING_ICONS = {
-  default: '⭐',
-  fast: '⚡',
-  translate: '🌐',
-} as const;
-
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -34,10 +28,7 @@ export default function ModelSettingsScreen() {
       MODEL_SETTING_KINDS.map((kind: ModelSettingKind) => ({
         key: kind,
         label: t(MODEL_SETTING_KIND_TITLE_KEYS[kind]),
-        leading: (
-          <Text className="min-w-5 text-center text-emoji-xl">{MODEL_SETTING_ICONS[kind]}</Text>
-        ),
-        onPress: () => router.push({ pathname: '/settings/model/[kind]', params: { kind } }),
+        onPress: () => router.push(`/settings/model/${kind}`),
         showChevron: true,
         trailing: (
           <SelectedModelName

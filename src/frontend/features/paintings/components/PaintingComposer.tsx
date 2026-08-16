@@ -15,7 +15,7 @@ import {
   MessageList,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
-import { isIOS } from '@/frontend/utils/constants';
+import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 
 import {
   type PaintingGenerationInput,
@@ -165,10 +165,9 @@ export function PaintingComposer({
   return (
     <View className="flex-1 bg-background">
       <MessageList
-        animateFirstEnteringMessage
         bottomAccessoryHeight={inputHeightShared}
         contentBottomInset={contentBottomInset}
-        contentTopInset={isIOS ? headerHeight : 0}
+        contentTopInset={resolveHeaderContentInset(headerHeight)}
         enteringMessageId={activeTurn?.userMessageId}
         keyboardOffset={keyboardOffset}
         messages={messages}

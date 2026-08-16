@@ -54,8 +54,8 @@ import {
   type TerminalJobStatus,
 } from '@/backend/data/services/JobService';
 import { paintingService } from '@/backend/data/services/PaintingService';
-import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivities/BackgroundActivityEnvironment';
-import type { BackgroundActivityManager } from '@/backend/services/backgroundActivities/BackgroundActivityManager';
+import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import type { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type {
   KeepAliveCoordinator,
   KeepAliveLease,

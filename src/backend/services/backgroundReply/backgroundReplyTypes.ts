@@ -1,6 +1,6 @@
 import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 
-import type { BackgroundReplyPhase } from '@/shared/backgroundActivities/chatReply';
+import type { BackgroundReplyPhase } from '@/shared/backgroundActivity/chatReply';
 
 // The feature contract lives in shared so the service and activity
 // registration agree on props; these re-exports keep the service-local import
@@ -9,7 +9,7 @@ export type {
   BackgroundReplyActivityProps,
   BackgroundReplyContent,
   BackgroundReplyPhase,
-} from '@/shared/backgroundActivities/chatReply';
+} from '@/shared/backgroundActivity/chatReply';
 
 export type BackgroundReplyOutcome = Extract<
   BackgroundReplyPhase,

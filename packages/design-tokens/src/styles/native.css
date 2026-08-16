@@ -147,7 +147,7 @@
       --popover: var(--background-100);
       --popover-foreground: var(--gray-1000);
       --primary: var(--brand);
-      --primary-foreground: var(--background-100);
+      --primary-foreground: var(--constant-white);
       --secondary: var(--gray-alpha-100);
       --secondary-foreground: var(--gray-1000);
       --muted: var(--gray-alpha-100);
@@ -202,7 +202,7 @@
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);
-      --brand: var(--green-900);
+      --brand: #ff5757;
       --chat-user: var(--gray-alpha-100);
       --constant-black: oklch(0 0 0);
       --constant-white: oklch(1 0 0);
@@ -263,7 +263,7 @@
       --popover: var(--gray-100);
       --popover-foreground: var(--gray-1000);
       --primary: var(--brand);
-      --primary-foreground: var(--background-100);
+      --primary-foreground: var(--constant-white);
       --secondary: var(--gray-alpha-100);
       --secondary-foreground: var(--gray-1000);
       --muted: var(--gray-alpha-100);
@@ -318,7 +318,7 @@
       --code-block: var(--gray-100);
       --inline-code: var(--gray-alpha-100);
       --inline-code-foreground: var(--red-900);
-      --brand: var(--green-900);
+      --brand: #ff5757;
       --chat-user: var(--gray-alpha-100);
       --constant-black: oklch(0 0 0);
       --constant-white: oklch(1 0 0);

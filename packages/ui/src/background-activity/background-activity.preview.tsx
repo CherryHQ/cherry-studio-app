@@ -25,7 +25,7 @@ const BRAND_COLOR = '#F65D5D';
 
 export type BackgroundActivityPreviewProps = Omit<
   BackgroundActivityPresentation,
-  'colorScheme' | 'finishedAtEpochMs' | 'logoUri' | 'startedAtEpochMs'
+  'finishedAtEpochMs' | 'startedAtEpochMs'
 > & {
   elapsedSeconds: number;
   liveTimer: boolean;

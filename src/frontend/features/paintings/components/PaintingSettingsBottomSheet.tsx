@@ -410,7 +410,7 @@ function EnumChipsField({
               accessibilityState={{ selected: isSelected }}
               className={
                 isSelected
-                  ? 'h-14 items-center justify-center gap-1 rounded-lg border border-primary bg-primary/10 px-2 active:opacity-70'
+                  ? 'h-14 items-center justify-center gap-1 rounded-lg border border-border-strong bg-secondary px-2 active:opacity-70'
                   : 'h-14 items-center justify-center gap-1 rounded-lg border border-border bg-secondary px-2 active:opacity-70'
               }
               key={option}
@@ -418,10 +418,7 @@ function EnumChipsField({
               style={{ width: chipWidth }}
             >
               <RatioPreview value={option} />
-              <Text
-                className={isSelected ? 'text-primary text-xs' : 'text-foreground text-xs'}
-                numberOfLines={1}
-              >
+              <Text className="text-foreground text-xs" numberOfLines={1}>
                 {imageParamOptionLabel(t, field.key, option)}
               </Text>
             </Pressable>
@@ -504,7 +501,7 @@ function EnumSelectionPage({
               onPress={() => onValueChange(field.key, option)}
               showChevron={false}
               testID={`painting-setting-option-${field.key}-${option}`}
-              trailing={isSelected ? <CheckIcon className="size-5 text-primary" /> : undefined}
+              trailing={isSelected ? <CheckIcon className="size-5 text-foreground" /> : undefined}
             />
           );
         })}

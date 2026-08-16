@@ -91,7 +91,7 @@ describe('service registry', () => {
   test('declares the background policy of long-running and native-surface owners', () => {
     expect(getAppStatePolicy(services.ChatRuntime)).toBe('continue');
     expect(getAppStatePolicy(services.JobRuntime)).toBe('continue');
-    expect(getAppStatePolicy(services.BackgroundReplyService)).toBe('background-presentation');
+    expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');
     expect(getAppStatePolicy(services.BackgroundActivityManager)).toBe('background-presentation');
     expect(getAppStatePolicy(services.KeepAliveCoordinator)).toBe('background-presentation');
   });

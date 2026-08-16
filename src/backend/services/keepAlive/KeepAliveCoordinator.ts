@@ -87,8 +87,8 @@ export class KeepAliveCoordinator extends BaseService {
       // Resolve it only when an iOS lease actually needs audio so the service
       // registry remains importable in non-native runtimes and tests.
       // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
-      const { createAudioPlayer, setAudioModeAsync } =
-        require('expo-audio') as typeof import('expo-audio');
+      const expoAudio = require('expo-audio') as typeof import('expo-audio');
+      const { createAudioPlayer, setAudioModeAsync } = expoAudio;
       await setAudioModeAsync({
         allowsRecording: false,
         interruptionMode: 'mixWithOthers',

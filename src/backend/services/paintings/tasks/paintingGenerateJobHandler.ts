@@ -7,12 +7,12 @@ import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import type {
   BackgroundActivitySession,
   BackgroundActivitySessionInput,
-} from '@/backend/services/backgroundActivities/BackgroundActivityManager';
+} from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type { JobHandlerFor } from '@/backend/services/jobs/types';
 import type {
   PaintingActivityPhase,
   PaintingActivityProps,
-} from '@/shared/backgroundActivities/painting';
+} from '@/shared/backgroundActivity/painting';
 import type { PaintingGenerationResult } from '@/shared/contracts';
 
 import type { CreateInternalEntryInput } from '../../file/fileStorage';

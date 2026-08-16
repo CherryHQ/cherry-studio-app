@@ -29,7 +29,17 @@ jest.mock('react-native-streamdown', () => {
   };
 });
 
+let mockTheme = 'light';
+
+jest.mock('uniwind', () => ({
+  useUniwind: () => ({ theme: mockTheme }),
+}));
+
 describe('MarkdownText', () => {
+  beforeEach(() => {
+    mockTheme = 'light';
+  });
+
   test.each([
     [true, 'StreamdownText', 'EnrichedMarkdownText'],
     [false, 'EnrichedMarkdownText', 'StreamdownText'],
@@ -66,19 +76,38 @@ describe('MarkdownText', () => {
             color: 'inline-code-foreground',
             fontFamily: 'GeistMono-Regular',
           },
-          codeBlock: {
+          codeBlock: expect.objectContaining({
             backgroundColor: 'code-block',
             borderColor: 'border',
             color: 'foreground',
             fontFamily: 'GeistMono-Regular',
             fontSize: 18,
             lineHeight: 28,
-          },
+          }),
         }),
       );
       expect(renderer.root.findAllByType(excluded)).toHaveLength(0);
     },
   );
+
+  // Native syntax highlighting draws every token type it was not given a color
+  // for in the plain code color, so an absent or half-filled `syntaxColors`
+  // silently renders as no highlighting at all.
+  test.each(['light', 'dark'] as const)('%s mode highlights code with its own palette', (mode) => {
+    mockTheme = mode;
+    const renderer = render(<MarkdownText markdown="Hello" />);
+    const { syntaxColors } =
+      renderer.root.findByType('EnrichedMarkdownText').props.markdownStyle.codeBlock;
+
+    expect(syntaxColors).toEqual(
+      expect.objectContaining({
+        keyword: mode === 'dark' ? '#C792EA' : '#A626A4',
+        // Both upstream themes pick a comment gray against their own editor
+        // background that lands near 2:1 on ours, so this one slot is a token.
+        comment: 'muted-foreground',
+      }),
+    );
+  });
 });
 
 function render(element: ReactElement): ReactTestRenderer {

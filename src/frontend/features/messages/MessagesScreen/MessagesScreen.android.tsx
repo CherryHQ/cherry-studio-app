@@ -1,4 +1,4 @@
-import { SearchField } from '@cherrystudio/ui';
+import { SearchField } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -68,7 +68,11 @@ export function MessagesScreen() {
           />
         </View>
       ) : null}
-      <MessagePager showRecentsHeading topicSearchText={searchText} />
+      <MessagePager
+        showRecentsHeading
+        onScopeChange={handleScopeChange}
+        topicSearchText={searchText}
+      />
       <SelectionControls />
     </SafeAreaView>
   );

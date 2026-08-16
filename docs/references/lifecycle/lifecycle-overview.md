@@ -77,7 +77,7 @@ Created → Initializing → Ready ⇄ Paused
 
 `Pausable` and `Activatable` stay type-guard capability interfaces rather than base-class members,
 as on desktop. Activation transitions are serialized with each other and with stop/destroy, so a
-preference event cannot reacquire resources after host teardown begins. `BackgroundReplyService`
+preference event cannot reacquire resources after host teardown begins. `BackgroundReplyRuntime`
 uses this capability for the `chat.background_reply.enabled` gate.
 
 ## BaseService
@@ -143,7 +143,7 @@ export class JobRuntime extends BaseService {
 export const services = {
   ResourceScopeCoordinator, CacheService, DbService, PreferenceService,
   BackgroundActivityEnvironment, KeepAliveCoordinator, BackgroundActivityManager,
-  BackgroundReplyService, WebSearchService, McpRuntimeService, OAuthRuntimeService,
+  BackgroundReplyRuntime, WebSearchService, McpRuntimeService, OAuthRuntimeService,
   ProviderOAuthService, AiService, ChatRuntime, JobRuntime,
 } as const
 

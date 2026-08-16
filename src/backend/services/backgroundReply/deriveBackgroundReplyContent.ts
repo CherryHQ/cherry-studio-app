@@ -6,7 +6,7 @@ import type {
 import type {
   BackgroundReplyContent,
   BackgroundReplyPhase,
-} from '@/shared/backgroundActivities/chatReply';
+} from '@/shared/backgroundActivity/chatReply';
 
 import type { BackgroundReplyOutcome } from './backgroundReplyTypes';
 

@@ -1,4 +1,4 @@
-import { SearchField } from '@cherrystudio/ui';
+import { SearchField } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 type SelectionSheetSearchFieldProps = {

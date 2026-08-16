@@ -17,9 +17,7 @@ export type BackgroundActivityIcon =
  * placement, and platform adaptation.
  */
 export type BackgroundActivityBasePresentation = {
-  colorScheme?: 'dark' | 'light';
   finishedAtEpochMs?: number;
-  logoUri?: string;
   startedAtEpochMs: number;
 };
 
@@ -33,4 +31,12 @@ export type BackgroundActivityPresentation = BackgroundActivityBasePresentation 
   icon: BackgroundActivityIcon;
   preview?: string;
   title: string;
+};
+
+/** Host-only values injected after a feature supplies its presentation content. */
+export type BackgroundActivityNativePresentation<
+  Presentation extends BackgroundActivityBasePresentation = BackgroundActivityPresentation,
+> = Presentation & {
+  colorScheme?: 'dark' | 'light';
+  logoUri?: string;
 };

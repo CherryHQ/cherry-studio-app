@@ -1,19 +1,17 @@
+import { Button } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
-import { SettingsDialogActionButton } from '../../components/SettingsDialogActionButton';
-import {
-  ProviderModelListContent,
-  type ProviderModelListSelection,
-} from '../models/components/ProviderModelListContent';
-import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';
+import { type ProviderModelListSelection } from '../models/components/ProviderModelListContent';
+import { ProviderModelListLayout } from '../models/components/ProviderModelListLayout/ProviderModelListLayout';
 import type { ProviderModelAction } from '../models/types';
 import { filterModelsByKeywords } from '../models/utils/providerModelSearch';
 
 type ProviderModelListProps = {
+  addAction?: ProviderModelAction;
   isDefaultModel: (model: Model) => boolean;
   isLoading: boolean;
   models: Model[];
@@ -25,6 +23,7 @@ type ProviderModelListProps = {
 };
 
 export function ProviderModelList({
+  addAction,
   isDefaultModel,
   isLoading,
   models,
@@ -50,16 +49,11 @@ export function ProviderModelList({
 
   return (
     <>
-      {/* Searching while selecting would hide rows that stay selected, so the
-          field goes away for the duration. */}
-      {!hasNoModels && !selection && process.env.EXPO_OS === 'ios' ? (
-        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-      ) : null}
-      <ProviderModelListContent
+      <ProviderModelListLayout
         isDefaultModel={isDefaultModel}
         ListEmptyComponent={
-          hasNoModels && pullAction ? (
-            <ProviderModelPullCta action={pullAction} />
+          hasNoModels && pullAction && addAction ? (
+            <ProviderModelEmptyActions addAction={addAction} pullAction={pullAction} />
           ) : (
             <ProviderModelEmptyState
               title={
@@ -72,38 +66,52 @@ export function ProviderModelList({
             />
           )
         }
-        // Swapping the header rather than the whole tree keeps the underlying list
-        // mounted, so its automatic content inset survives the transition.
-        ListHeaderComponent={
-          hasNoModels || selection || process.env.EXPO_OS === 'ios' ? undefined : (
-            // 12 all round, the one gap the pull screen uses between every
-            // control and the list below it.
-            <View className="px-4 py-3">
-              <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-            </View>
-          )
-        }
         models={displayedModels}
         provider={provider}
+        searchText={searchText}
         selection={selection}
+        setSearchText={setSearchText}
+        // Searching while selecting would hide rows that stay selected, so the
+        // field goes away for the duration.
+        showSearch={!hasNoModels && !selection}
         onScrollBeginDrag={Keyboard.dismiss}
       />
     </>
   );
 }
 
-function ProviderModelPullCta({ action }: { action: ProviderModelAction }) {
+function ProviderModelEmptyActions({
+  addAction,
+  pullAction,
+}: {
+  addAction: ProviderModelAction;
+  pullAction: ProviderModelAction;
+}) {
   const { t } = useTranslation();
 
   return (
-    <View className="items-center px-4 py-5">
-      <SettingsDialogActionButton
-        isDisabled={action.isDisabled || action.isLoading}
-        isLoading={action.isLoading}
-        isPrimary
-        label={t('settings.provider.models.emptyAction')}
-        onPress={action.onPress}
-      />
+    <View className="flex-1 items-center justify-center gap-4 px-6 pb-24">
+      <Text className="text-center text-base text-foreground">
+        {t('settings.provider.models.empty')}
+      </Text>
+      <View className="flex-row gap-3">
+        <Button
+          disabled={pullAction.isDisabled}
+          loading={pullAction.isLoading}
+          onPress={pullAction.onPress}
+          variant="default"
+        >
+          <Button.Label>{t('settings.provider.models.emptyAction')}</Button.Label>
+        </Button>
+        <Button
+          disabled={addAction.isDisabled}
+          loading={addAction.isLoading}
+          onPress={addAction.onPress}
+          variant="secondary"
+        >
+          <Button.Label>{t('settings.provider.models.addSubmit')}</Button.Label>
+        </Button>
+      </View>
     </View>
   );
 }

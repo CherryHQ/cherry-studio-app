@@ -6,12 +6,15 @@ import {
   type MarkdownStyle,
 } from 'react-native-enriched-markdown';
 import { StreamdownText } from 'react-native-streamdown';
+import { useUniwind } from 'uniwind';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { monoFontFamily } from '@/frontend/utils/constants';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
+
+import { resolveSyntaxColors } from './syntaxColors';
 
 type MarkdownTextProps = {
   fontSizeStep?: FontSizeStep;
@@ -47,12 +50,12 @@ function createMarkdownTypographyStyle(fontSizeStep: FontSizeStep): MarkdownStyl
 
 export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: MarkdownTextProps) {
   const [storedFontSizeStep] = usePreference('ui.font_size_step');
+  const { theme } = useUniwind();
   const [
     foreground,
     background,
     mutedForeground,
     link,
-    primary,
     border,
     secondary,
     codeBlock,
@@ -63,7 +66,6 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
     'background',
     'muted-foreground',
     'link',
-    'primary',
     'border',
     'secondary',
     'code-block',
@@ -112,6 +114,7 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
         backgroundColor: codeBlock,
         borderColor: border,
         color: foreground,
+        syntaxColors: resolveSyntaxColors(theme, mutedForeground),
       },
       link: { color: link },
       strong: { color: foreground },
@@ -130,7 +133,7 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
       },
       taskList: {
         borderColor: mutedForeground,
-        checkedColor: primary,
+        checkedColor: foreground,
         checkedTextColor: mutedForeground,
         checkmarkColor: foreground,
       },
@@ -151,9 +154,9 @@ export function MarkdownText({ fontSizeStep, isStreaming = false, markdown }: Ma
     inlineCodeForeground,
     link,
     mutedForeground,
-    primary,
     resolvedStep,
     secondary,
+    theme,
   ]);
 
   return (

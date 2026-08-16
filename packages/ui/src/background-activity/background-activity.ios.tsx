@@ -14,12 +14,11 @@ import {
 } from '@expo/ui/swift-ui/modifiers';
 import type { LiveActivityComponent } from 'expo-widgets';
 
-import type { BackgroundActivityPresentation } from './background-activity.types';
+import type { BackgroundActivityNativePresentation } from './background-activity.types';
 
-export const renderBackgroundActivity: LiveActivityComponent<BackgroundActivityPresentation> = (
-  props,
-  environment,
-) => {
+export const renderBackgroundActivity: LiveActivityComponent<
+  BackgroundActivityNativePresentation
+> = (props, environment) => {
   'widget';
   // Widget layouts execute as isolated function strings, so runtime values must be local.
   const brandColor = '#F65D5D';

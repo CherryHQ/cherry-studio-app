@@ -33,6 +33,13 @@ The latest user message is anchored below the content header. Text anchors use a
 cap; messages containing files use their full measured height. After reserved anchor space is
 exhausted, item-size changes follow the tail until touch, drag, or momentum pauses the behavior.
 
+Keyboard lift is `whenAtEnd`, and it depends on `patches/react-native-keyboard-controller@…`: the
+patch makes a shrinking keyboard clamp the offset into the range that is valid *now* instead of
+rewinding the displacement recorded when it opened. Sending grows the reserved anchor space while
+the keyboard is still up, which moves the end — rewinding then drags the content 310px away from
+it, one frame before the pin animation. Changing the lift mode or losing the patch brings that
+back; `MessageList.tsx` carries the measurements.
+
 User message rows visually separate managed file parts from the text bubble: a right-aligned,
 horizontally scrollable attachment strip sits above the optional bubble. This is a presentation
 projection only; files remain parts of the same message for model input, persistence, references,
@@ -40,7 +47,11 @@ and anchoring.
 
 ## Organization
 
-- `components/MessageList.tsx` owns virtualization, anchoring, readiness, and list controls.
+- `components/MessageList.tsx` is the wiring layer: virtualization config, layout derivations, and
+  list controls. The behavior engines live beside it in `components/hooks/` — `useTailFollow`
+  (tail-follow state machine, sole owner of the interaction lock), `useAnchorPin` (anchor pinning,
+  first-anchor staging, readiness gate), and `useLayoutBenchInstrumentation` (dev-only layout
+  probes). Measurement-backed comments travel with the code they explain.
 - `messageRow/` owns user and assistant row layouts plus the private slide-in provider.
 - `messageContent/` dispatches structured message parts and owns citation/file hooks.
 - `utils/` contains the private built-in tool presentation mapping.

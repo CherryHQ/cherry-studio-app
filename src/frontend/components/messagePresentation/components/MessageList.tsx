@@ -1,48 +1,33 @@
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import {
-  type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  Platform,
-  View,
-} from 'react-native';
-import { useSharedValue } from 'react-native-reanimated';
+import { type Ref, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
+import type Animated from 'react-native-reanimated';
+import { useAnimatedRef, useDerivedValue, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
 import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
+import { useMessageSlideInFlight } from '../messageRow/slideIn/hooks/useMessageSlideInFlight';
 import type { MessageListProps, MessagePresentationItem } from '../types';
+import { useAnchorPin } from './hooks/useAnchorPin';
+import {
+  emitProgrammaticScroll,
+  scrollLog,
+  useLayoutBenchInstrumentation,
+} from './hooks/useLayoutBenchInstrumentation';
+import { useTailFollow } from './hooks/useTailFollow';
+import { followingMaintainVisibleContentPosition } from './messageListPlatform/messageListPlatform';
 import { ScrollToBottomButton } from './ScrollToBottomButton';
-
-// 滚动/布局诊断埋点：记录会驱动列表位移的关键数值（scroll offset、内容高度、锚点就绪、
-// 翻页触发、钉顶滚动），用于把「界面跳动」量化成时间-位移轨迹。走 logger.debug → 仅 dev
-// 输出（生产环境被日志级别过滤），故长期保留无碍。用 `[SCROLL]` 前缀便于从 Metro 日志过滤。
-const scrollLog = loggerService.withContext('ChatScroll');
 
 // 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
 const ANCHOR_TOP_GAP = 12;
 const ANCHOR_MAX_TEXT_LINES = 2;
 const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 5;
 const USER_MESSAGE_VERTICAL_PADDING = 32;
-// 撤遮罩（onReady）前要求内容高度保持「静默」的窗口：这段时间内没有任何 contentSize 变化才判定
-// settle 完成。用于覆盖**冷 markdown 解析**——首次进入 topic 时 streamdown/代码/数学的 tokenize
-// 与 layout 全冷、耗时最长，行的真实高度可能在初始 rAF 之后才测出。若此时已 reportReady 撤遮罩，
-// 迟到的高度修正就泄漏成「第一次进入才有的跳动」。静默窗口内任何 contentSize 变化都会（经 effect
-// 依赖 contentBaseHeight 重跑）取消并重启计时，从而把迟到修正也挡在遮罩后，与设备快慢无关。
-const READY_SETTLE_MS = 150;
 
 // 流式/待生成的助手消息高度会持续变化（loading 圆点 → 思考块 → 正文流入）。若它被
 // maintainVisibleContentPosition 选作锚点，列表会为「保持它的位置不变」而反向平移整块内容，
@@ -59,26 +44,6 @@ const MAINTAIN_VISIBLE_CONTENT_POSITION = {
   shouldRestorePosition: shouldRestoreMessagePosition,
 };
 
-const TAIL_FOLLOW_END_THRESHOLD = 20;
-
-type TailFollowPhase = 'anchoring' | 'following' | 'paused';
-
-type TailFollowState = {
-  anchorMessageId: string | undefined;
-  phase: TailFollowPhase;
-};
-
-function createTailFollowState(anchorMessageId: string | undefined): TailFollowState {
-  return { anchorMessageId, phase: 'anchoring' };
-}
-
-function resolveTailFollowState(
-  state: TailFollowState,
-  anchorMessageId: string | undefined,
-): TailFollowState {
-  return state.anchorMessageId === anchorMessageId ? state : createTailFollowState(anchorMessageId);
-}
-
 function messageKeyExtractor(item: MessagePresentationItem) {
   return item.id;
 }
@@ -88,8 +53,26 @@ function messageKeyExtractor(item: MessagePresentationItem) {
 // LegendList 内部（react-native.mjs getItemSize）优先用「已测量的同类型行的真实均值 averageSizes[type].avg」
 // 估算未测量行，无则才退回 estimatedItemSize。按 role 分类后，向上翻页 prepend / 滚回历史时，新行用
 // 各自类型的真实均值定位 → MVCP/初始 bootstrap 的「估算→真实」修正幅度大幅收窄，减少可见跳动。
+//
+// 「还没有内容的助手行」必须单独成一类，否则同一机制会反过来制造跳动：刚发出消息时新建的
+// 助手行只是个加载点（实测 52px），若按 assistant 的均值估算，它会先占住上一条长回复的高度
+// （实测 3012px）再塌回去——一帧内内容少了 2964px，预留空白与钉顶落点都要跟着重算。
+// 分类后修正量 2964px → 5px。
+//
+// 注意它**不是**「发送后跳一下」的成因：分类修好之后，续轮发送前那一帧 -310px 的突跳原样
+// 还在，另有其因（收键盘按记录量回退，见 useAnchorPin 里 handleAnchorReady 的说明与
+// patches/）。两件事都在同一瞬间发生，别再合并归因。
+//
+// 判据用「有没有 part」而不是 status：类型翻转因此发生在第一个 chunk 落地时，那一刻行还只有
+// 几十像素，翻转本身不产生可见修正；而 status 要到整条回复结束才变，翻转时行已有数千像素。
+// 翻转后这一行的后续增长计入 assistant 均值，空行阶段的尺寸留在 assistant-empty，两个均值
+// 各自都稳定。
 function getMessageRowType(item: MessagePresentationItem) {
-  return item.role;
+  if (item.role !== 'assistant') {
+    return item.role;
+  }
+
+  return item.data.parts?.length ? 'assistant' : 'assistant-empty';
 }
 
 function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[]) {
@@ -103,7 +86,6 @@ function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[
 }
 
 export function MessageList({
-  animateFirstEnteringMessage = false,
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
@@ -115,22 +97,25 @@ export function MessageList({
   renderAssistantMessage,
 }: MessageListProps) {
   const listRef = useRef<LegendListRef | null>(null);
+  // 底层 Animated.ScrollView 的 animated ref，尾随逼近器要在 UI 线程对它调 `scrollTo`。
+  // `refScrollView` 由 KeyboardAwareLegendList 原样透传给 AnimatedLegendList，最终落到
+  // reanimated 包出来的那层组件上——这是这套组件栈唯一暴露底层滚动视图的口子。
+  const scrollViewRef = useAnimatedRef<Animated.ScrollView>();
   const isAtBottom = useSharedValue(true);
-  const [fontSizeStep] = usePreference('ui.font_size_step');
-  const [contentBaseHeight, setContentBaseHeight] = useState(0);
+  // 位移轨迹的来源。注意**不能**用 `onScroll`：本列表经 KeyboardAwareLegendList →
+  // AnimatedLegendList 渲染，滚动被 reanimated 的 `useScrollViewOffset` 接管，JS 侧的
+  // `onScroll` 回调实测一次都不触发。`sharedValues.scrollOffset` 才是这套组件栈支持的
+  // 读法，且它在 UI 线程逐帧更新，比 JS 回调更贴近真实位移。
+  const scrollOffset = useSharedValue(0);
+  // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useLayoutBenchInstrumentation）。
+  const endSpaceRef = useRef(0);
+  // 视口高度由列表自己测：ready-gate 与入场行的起飞距离都要用，谁也不该拥有另一个的测量。
   const [viewportHeight, setViewportHeight] = useState(0);
-  const didReportReadyRef = useRef(false);
-  const isMountedRef = useRef(true);
-  const pendingReadyFrameRef = useRef<number | null>(null);
-  const pendingReadySettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const readyGenerationRef = useRef(0);
-  const pendingFirstAnchorReleaseFrameRef = useRef<number | null>(null);
-  const pendingTailFollowFrameRef = useRef<number | null>(null);
-  const pendingInteractionEndFrameRef = useRef<number | null>(null);
-  const isTouchingListRef = useRef(false);
-  const isDraggingListRef = useRef(false);
-  const isMomentumScrollingRef = useRef(false);
-  const isUserInteractingRef = useRef(false);
+  const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    emitLayoutBenchProbe('viewport', { h: Math.round(event.nativeEvent.layout.height) });
+    setViewportHeight(event.nativeEvent.layout.height);
+  }, []);
+  const [fontSizeStep] = usePreference('ui.font_size_step');
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
@@ -156,22 +141,6 @@ export function MessageList({
   const hasAnchor = anchorIndex >= 0;
   const anchorMessage = hasAnchor ? messages[anchorIndex] : undefined;
   const anchorMessageId = anchorMessage?.id;
-  // A single-turn workspace has no previous content to scroll past. Keep its first live turn at
-  // the list end until the rows report a real size; then add the anchor space and animate to it.
-  const [releasedFirstAnchorId, setReleasedFirstAnchorId] = useState<string>();
-  const isFirstEnteringAnchor =
-    animateFirstEnteringMessage &&
-    anchorIndex === 0 &&
-    anchorMessageId !== undefined &&
-    anchorMessageId === enteringMessageId;
-  const isStagingFirstAnchor = isFirstEnteringAnchor && releasedFirstAnchorId !== anchorMessageId;
-  const stagedFirstAnchorIdRef = useRef<string | undefined>(undefined);
-  const [tailFollowState, setTailFollowState] = useState<TailFollowState>(() =>
-    createTailFollowState(anchorMessageId),
-  );
-  const tailFollowPhase = resolveTailFollowState(tailFollowState, anchorMessageId).phase;
-  const tailFollowPhaseRef = useRef(tailFollowPhase);
-  const isFollowing = tailFollowPhase === 'following';
   const anchorHasFile = anchorMessage?.data.parts?.some((part) => part.type === 'file') ?? false;
   const anchorMaxSize = anchorHasFile
     ? undefined
@@ -186,238 +155,98 @@ export function MessageList({
     [contentBottomInset],
   );
 
-  useLayoutEffect(() => {
-    tailFollowPhaseRef.current = tailFollowPhase;
-  }, [tailFollowPhase]);
+  const {
+    handleEndVisible,
+    handleMomentumScrollBegin,
+    handleMomentumScrollEnd,
+    handleScrollBeginDrag,
+    handleScrollEndDrag,
+    handleTouchEnd,
+    handleTouchStart,
+    isFollowing,
+    isTailControlled,
+    isUserInteractingRef,
+    notifyAnchorSpaceClosed,
+    scheduleTailFollow,
+  } = useTailFollow({ anchorMessageId, hasAnchor, listRef, scrollOffset, scrollViewRef });
 
-  // Read from size and layout callbacks, which the platform dispatches well
-  // after commit, so mirroring the staged anchor here is soon enough.
-  useLayoutEffect(() => {
-    stagedFirstAnchorIdRef.current = isStagingFirstAnchor ? anchorMessageId : undefined;
-  }, [anchorMessageId, isStagingFirstAnchor]);
-
-  // LegendList 的 maintainScrollAtEnd 会在 rAF 中捕获旧配置，拖动已暂停后仍可能执行一次。
-  // 在应用层合并 follow 请求，并在直接派发给原生 ScrollView 前重新检查同步交互锁。
-  const cancelPendingTailFollow = useCallback(() => {
-    if (pendingTailFollowFrameRef.current !== null) {
-      cancelAnimationFrame(pendingTailFollowFrameRef.current);
-      pendingTailFollowFrameRef.current = null;
+  // 入场行的起飞点：钉顶落点正下方、输入框上缘。三个量都是运行时布局值，所以它随机型、
+  // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。这是**总**行程，钉顶滚动与行的
+  // 弹簧各分走一段（见 useAnchorPin）。
+  //
+  // 新话题的第一条消息会让列表**带着数据**挂载，而 viewportHeight 是 onLayout 回填的 state、
+  // 首帧还是 0：不兜底的话行程为 0，气泡会先在落点画一帧再跳回起飞点飞一遍。窗口高度偏大只
+  // 意味着停得更靠下（本来就在视口外，看不见），实测值到达后装填 effect 会在开火前校正。
+  // ready-gate 不用这个兜底值——它必须等真实测量（见 useAnchorPin 的 viewportHeight 早退）。
+  const { height: windowHeight } = useWindowDimensions();
+  const slideInTravel = Math.max(
+    0,
+    (viewportHeight || windowHeight) - contentBottomInset - anchorOffset,
+  );
+  // 入场那一轮的助手占位行：待发消息的下一条。它在同一次 overlay 注入里出现，所以装填时一定
+  // 已经在列表里；拿它做「等用户行落位再显形」的对象，而不是笼统的「最后一行」——流式期间
+  // 最后一行还是它，但那时飞行早已结束，不该再被 opacity 碰。
+  const enteringFollowerId = useMemo(() => {
+    if (!enteringMessageId) {
+      return undefined;
     }
-  }, []);
 
-  const releaseStagedFirstAnchor = useCallback(() => {
-    const stagedAnchorId = stagedFirstAnchorIdRef.current;
-    if (!stagedAnchorId || pendingFirstAnchorReleaseFrameRef.current !== null) {
-      return;
-    }
+    const enteringIndex = messages.findIndex((message) => message.id === enteringMessageId);
+    return enteringIndex < 0 ? undefined : messages[enteringIndex + 1]?.id;
+  }, [enteringMessageId, messages]);
+  const slideInFlight = useMessageSlideInFlight({
+    enteringMessageId,
+    followerMessageId: enteringFollowerId,
+    travel: slideInTravel,
+  });
 
-    pendingFirstAnchorReleaseFrameRef.current = requestAnimationFrame(() => {
-      pendingFirstAnchorReleaseFrameRef.current = null;
-      if (stagedFirstAnchorIdRef.current === stagedAnchorId) {
-        setReleasedFirstAnchorId(stagedAnchorId);
-      }
+  const { handleAnchorReady, handleAnchoredEndSpaceSizeChanged, handleContentSizeChange } =
+    useAnchorPin({
+      contentBottomInset,
+      endSpaceRef,
+      enteringMessageId,
+      isUserInteractingRef,
+      lastMessageId,
+      listRef,
+      notifyAnchorSpaceClosed,
+      onAnchorPinned: slideInFlight.launch,
+      onReady,
+      scrollMessageToEnd,
+      viewportHeight,
     });
-  }, []);
 
-  const scheduleTailFollow = useCallback(() => {
-    if (
-      tailFollowPhaseRef.current !== 'following' ||
-      isUserInteractingRef.current ||
-      pendingTailFollowFrameRef.current !== null
-    ) {
-      return;
-    }
+  // 「滚动到底部」只在**用户自己**离开底部时才有意义。而 isAtEnd 用的是 ~0px 的判定边界，
+  // 只要 app 正把列表往底部推（钉顶动画、流式尾随），内容每长一截都会先把视口挤离底部、
+  // 下一帧滚动再吸回来，isAtEnd 就跟着以帧为周期翻转（实测一轮流式 33 次）。
+  //
+  // 关键是**不能**拿「是否在尾随」去否决它：相位是 React state，镜像进 shared value 必然是
+  // JS→UI 的跨线程写，落地比 UI 线程自己翻的 isAtEnd 晚一帧，那一帧里两个条件都为假，按钮
+  // 照闪不误（实测把镜像挪进 layout effect 也没用，晚的是线程不是 React 时序）。
+  // 换成「列表是否正被程序化接管」后，延迟的方向就全是安全的：进入接管态发生在用户刚发出
+  // 消息、列表本就贴底的那一刻，anchoring→following 根本不改变它；退出接管态只会让按钮晚
+  // 一帧出现。paused 是唯一不会自动滚的相位，也正是按钮该出现的相位。
+  const isScrollButtonHidden = useDerivedValue(() => isAtBottom.get() || isTailControlled.get());
 
-    pendingTailFollowFrameRef.current = requestAnimationFrame(() => {
-      pendingTailFollowFrameRef.current = null;
+  useLayoutBenchInstrumentation({ endSpaceRef, freeze, isScrollButtonHidden, scrollOffset });
 
-      if (tailFollowPhaseRef.current !== 'following' || isUserInteractingRef.current) {
-        return;
-      }
-
-      const nativeScrollRef = listRef.current?.getNativeScrollRef() as
-        | { scrollToEnd?: (options: { animated?: boolean }) => void }
-        | null
-        | undefined;
-      nativeScrollRef?.scrollToEnd?.({ animated: false });
-    });
-  }, [listRef]);
-
-  const isListAtEnd = useCallback(() => {
-    const listState = listRef.current?.getState();
-    if (!listState || listState.scrollLength <= 0) {
-      return false;
-    }
-
-    const distanceFromEnd = listState.contentLength - listState.scrollLength - listState.scroll;
-    return Number.isFinite(distanceFromEnd) && distanceFromEnd <= TAIL_FOLLOW_END_THRESHOLD;
-  }, [listRef]);
-
-  const resumeTailFollowAtEnd = useCallback(() => {
-    if (!anchorMessageId || tailFollowPhaseRef.current !== 'paused' || !isListAtEnd()) {
-      return;
-    }
-
-    tailFollowPhaseRef.current = 'following';
-    setTailFollowState((previous) => {
-      const current = resolveTailFollowState(previous, anchorMessageId);
-      return current.phase === 'paused' ? { ...current, phase: 'following' } : current;
-    });
-    scheduleTailFollow();
-  }, [anchorMessageId, isListAtEnd, scheduleTailFollow]);
-
-  const cancelPendingInteractionEnd = useCallback(() => {
-    if (pendingInteractionEndFrameRef.current !== null) {
-      cancelAnimationFrame(pendingInteractionEndFrameRef.current);
-      pendingInteractionEndFrameRef.current = null;
-    }
-  }, []);
-
-  const finishUserInteraction = useCallback(() => {
-    if (isTouchingListRef.current || isDraggingListRef.current || isMomentumScrollingRef.current) {
-      return;
-    }
-
-    isUserInteractingRef.current = false;
-    if (tailFollowPhaseRef.current === 'paused') {
-      resumeTailFollowAtEnd();
-    } else {
+  const handleItemSizeChanged = useCallback(
+    (info: { index: number; itemKey: string; previous: number; size: number }) => {
+      // 同一行的高度反复变化 = 渲染抖动，是「流式期间内容上下弹」最直接的量化指标。
+      emitLayoutBenchProbe('itemSize', {
+        index: info.index,
+        key: info.itemKey,
+        prev: Math.round(info.previous),
+        size: Math.round(info.size),
+      });
       scheduleTailFollow();
-    }
-  }, [resumeTailFollowAtEnd, scheduleTailFollow]);
-
-  const scheduleInteractionEnd = useCallback(() => {
-    cancelPendingInteractionEnd();
-    pendingInteractionEndFrameRef.current = requestAnimationFrame(() => {
-      pendingInteractionEndFrameRef.current = null;
-      finishUserInteraction();
-    });
-  }, [cancelPendingInteractionEnd, finishUserInteraction]);
-
-  const beginUserInteraction = useCallback(() => {
-    isUserInteractingRef.current = true;
-    cancelPendingInteractionEnd();
-    cancelPendingTailFollow();
-  }, [cancelPendingInteractionEnd, cancelPendingTailFollow]);
-
-  // 把刚发送的用户消息锚定到内容区顶部，并在其下方补足空白，让助手回复流式生长其间。
-  //
-  // onReady 是钉顶的正确触发点：LegendList 只在「锚点下方所有 item 尺寸都已**真实测量**」
-  // （含刚 mount 的助手 pending 占位、hasUnknownTailSize=false）后，才把预留空白算成真实值
-  // 并回调 onReady。此刻落点已是终值。
-  //
-  // 默认首轮瞬时定位，后续实时发送在权威尺寸就绪后动画钉顶；需要单轮工作区也播放
-  // 完整锚定动画时，由调用方显式开启 animateFirstEnteringMessage。历史恢复仍瞬时定位。
-  const scrolledAnchorKeyRef = useRef<string | undefined>(undefined);
-  const handleAnchorReady = useCallback(
-    (info: { anchorKey: string | undefined }) => {
-      // 只在锚点切换到「新一条用户消息」时钉顶一次；回复流式增长（同一 anchorKey）不重滚。
-      if (!info.anchorKey || scrolledAnchorKeyRef.current === info.anchorKey) {
-        return;
-      }
-
-      scrolledAnchorKeyRef.current = info.anchorKey;
-      scrollLog.debug('[SCROLL] anchorReady->scrollToEnd', {
-        anchorKey: info.anchorKey,
-        t: Date.now(),
-      });
-      const isEnteringMessage = info.anchorKey === enteringMessageId;
-      const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
-      requestAnimationFrame(() => {
-        void scrollMessageToEnd({
-          animated: shouldAnimate,
-          closeKeyboard: isEnteringMessage,
-        });
-      });
     },
-    [animateFirstEnteringMessage, anchorIndex, enteringMessageId, scrollMessageToEnd],
+    [scheduleTailFollow],
   );
-
-  const handleAnchoredEndSpaceSizeChanged = useCallback(
-    (size: number) => {
-      if (size > 0 || !anchorMessageId) {
-        return;
-      }
-
-      const nextPhase = isUserInteractingRef.current ? 'paused' : 'following';
-      tailFollowPhaseRef.current = nextPhase;
-      setTailFollowState((previous) => {
-        const current = resolveTailFollowState(previous, anchorMessageId);
-        if (current.phase !== 'anchoring') {
-          return current;
-        }
-
-        return { ...current, phase: nextPhase };
-      });
-    },
-    [anchorMessageId],
-  );
-
-  const handleEndVisible = useCallback(
-    (visible: boolean) => {
-      if (!visible || isUserInteractingRef.current) {
-        return;
-      }
-
-      resumeTailFollowAtEnd();
-    },
-    [resumeTailFollowAtEnd],
-  );
-
-  const handleScrollBeginDrag = useCallback(() => {
-    isDraggingListRef.current = true;
-    beginUserInteraction();
-
-    if (!anchorMessageId) {
-      return;
-    }
-
-    tailFollowPhaseRef.current =
-      tailFollowPhaseRef.current === 'following' ? 'paused' : tailFollowPhaseRef.current;
-    setTailFollowState((previous) => {
-      const current = resolveTailFollowState(previous, anchorMessageId);
-      if (current.phase !== 'following') {
-        return current;
-      }
-
-      return { ...current, phase: 'paused' };
-    });
-  }, [anchorMessageId, beginUserInteraction]);
-
-  const handleScrollEndDrag = useCallback(() => {
-    isDraggingListRef.current = false;
-    scheduleInteractionEnd();
-  }, [scheduleInteractionEnd]);
-
-  const handleMomentumScrollBegin = useCallback(() => {
-    isMomentumScrollingRef.current = true;
-    beginUserInteraction();
-  }, [beginUserInteraction]);
-
-  const handleMomentumScrollEnd = useCallback(() => {
-    isMomentumScrollingRef.current = false;
-    scheduleInteractionEnd();
-  }, [scheduleInteractionEnd]);
-
-  const handleTouchStart = useCallback(() => {
-    isTouchingListRef.current = true;
-    beginUserInteraction();
-  }, [beginUserInteraction]);
-
-  const handleTouchEnd = useCallback(() => {
-    isTouchingListRef.current = false;
-    scheduleInteractionEnd();
-  }, [scheduleInteractionEnd]);
-
-  const handleItemSizeChanged = useCallback(() => {
-    releaseStagedFirstAnchor();
-    scheduleTailFollow();
-  }, [releaseStagedFirstAnchor, scheduleTailFollow]);
 
   // 纯文本按当前字号最多以两行参与锚点计算；文件/图片使用完整实测高度，避免媒体被顶出屏幕。
   const anchoredEndSpace = useMemo(
     () =>
-      hasAnchor && !isStagingFirstAnchor
+      hasAnchor
         ? {
             anchorIndex,
             anchorMaxSize,
@@ -433,70 +262,20 @@ export function MessageList({
       handleAnchorReady,
       handleAnchoredEndSpaceSizeChanged,
       hasAnchor,
-      isStagingFirstAnchor,
     ],
   );
 
   const maintainVisibleContentPosition = isFollowing
-    ? Platform.OS === 'android'
-      ? false
-      : undefined
+    ? followingMaintainVisibleContentPosition
     : MAINTAIN_VISIBLE_CONTENT_POSITION;
   // 把列表「是否精确在最底部」同步到共享值，驱动悬浮的「滚动到底部」按钮显隐。
-  const sharedValues = useMemo(() => ({ isAtEnd: isAtBottom }), [isAtBottom]);
-  const handleScrollToEnd = useCallback(() => {
-    void listRef.current?.scrollToEnd({ animated: true });
-  }, []);
-
-  const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    // 滚动位移轨迹：y=当前滚动偏移，ch=内容总高，vh=视口高。逐帧连成时间-位移曲线后，
-    // 「跳动」= y 的非单调突变。scrollEventThrottle 见下方 props（诊断期设 16 取每帧）。
-    scrollLog.debug('[SCROLL] scroll', {
-      y: Math.round(contentOffset.y),
-      ch: Math.round(contentSize.height),
-      vh: Math.round(layoutMeasurement.height),
-      t: Date.now(),
-    });
-  }, []);
-
-  const cancelPendingReadyFrame = useCallback(() => {
-    if (pendingReadyFrameRef.current !== null) {
-      cancelAnimationFrame(pendingReadyFrameRef.current);
-      pendingReadyFrameRef.current = null;
-    }
-    if (pendingReadySettleRef.current !== null) {
-      clearTimeout(pendingReadySettleRef.current);
-      pendingReadySettleRef.current = null;
-    }
-  }, []);
-
-  const reportReady = useEffectEvent(() => {
-    if (didReportReadyRef.current || !isMountedRef.current) {
-      return;
-    }
-
-    didReportReadyRef.current = true;
-    onReady?.();
-  });
-
-  const handleContentSizeChange = useCallback(
-    (_width: number, height: number) => {
-      // ready=true 的 contentSize 变化 = 遮罩已撤/即将撤之后仍有高度修正 = 泄漏到可见区的跳动源。
-      // 冷首次进入 markdown 解析慢，末次修正可能迟到落在 ready 之后 → 复现「第一次进入才跳」。
-      scrollLog.debug('[SCROLL] contentSize', {
-        h: Math.round(height),
-        ready: didReportReadyRef.current,
-        t: Date.now(),
-      });
-      setContentBaseHeight(Math.max(0, height - contentBottomInset));
-      releaseStagedFirstAnchor();
-    },
-    [contentBottomInset, releaseStagedFirstAnchor],
+  const sharedValues = useMemo(
+    () => ({ isAtEnd: isAtBottom, scrollOffset }),
+    [isAtBottom, scrollOffset],
   );
-
-  const handleLayout = useCallback((event: LayoutChangeEvent) => {
-    setViewportHeight(event.nativeEvent.layout.height);
+  const handleScrollToEnd = useCallback(() => {
+    emitProgrammaticScroll('button', listRef);
+    void listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
   useEffect(() => {
@@ -505,91 +284,12 @@ export function MessageList({
     }
   }, [isFollowing, messages, scheduleTailFollow]);
 
-  useEffect(() => {
-    readyGenerationRef.current += 1;
-    const generation = readyGenerationRef.current;
-
-    cancelPendingReadyFrame();
-
-    if (
-      didReportReadyRef.current ||
-      contentBaseHeight <= 0 ||
-      !lastMessageId ||
-      viewportHeight <= 0
-    ) {
-      return;
-    }
-
-    const shouldScrollToEndBeforeReady = contentBottomInset > 0;
-
-    pendingReadyFrameRef.current = requestAnimationFrame(() => {
-      pendingReadyFrameRef.current = requestAnimationFrame(() => {
-        pendingReadyFrameRef.current = null;
-
-        if (
-          didReportReadyRef.current ||
-          !isMountedRef.current ||
-          readyGenerationRef.current !== generation
-        ) {
-          return;
-        }
-
-        // 揭示前再等一个静默窗口（READY_SETTLE_MS）：期间若有任何 contentSize 变化，effect（依赖
-        // contentBaseHeight）会重跑、经 cancelPendingReadyFrame 清掉此计时并重启，从而把冷 markdown
-        // 迟到的高度修正也挡在遮罩后再揭示，消除「reload 后第一次进入才跳」。
-        const reportReadyAfterSettle = () => {
-          pendingReadySettleRef.current = setTimeout(() => {
-            pendingReadySettleRef.current = null;
-
-            if (readyGenerationRef.current === generation) {
-              reportReady();
-            }
-          }, READY_SETTLE_MS);
-        };
-
-        if (shouldScrollToEndBeforeReady) {
-          scrollLog.debug('[SCROLL] gateScrollToEnd', {
-            contentBottomInset,
-            contentBaseHeight: Math.round(contentBaseHeight),
-            viewportHeight: Math.round(viewportHeight),
-            t: Date.now(),
-          });
-          void listRef.current?.scrollToEnd({ animated: false }).finally(reportReadyAfterSettle);
-          return;
-        }
-
-        reportReadyAfterSettle();
-      });
-    });
-  }, [
-    cancelPendingReadyFrame,
-    contentBottomInset,
-    contentBaseHeight,
-    lastMessageId,
-    listRef,
-    viewportHeight,
-  ]);
-
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false;
-      cancelPendingInteractionEnd();
-      if (pendingFirstAnchorReleaseFrameRef.current !== null) {
-        cancelAnimationFrame(pendingFirstAnchorReleaseFrameRef.current);
-        pendingFirstAnchorReleaseFrameRef.current = null;
-      }
-      cancelPendingReadyFrame();
-      cancelPendingTailFollow();
-    };
-  }, [cancelPendingInteractionEnd, cancelPendingReadyFrame, cancelPendingTailFollow]);
-
   return (
-    <MessageSlideInProvider slideInMessageId={enteringMessageId}>
+    <MessageSlideInProvider flight={slideInFlight}>
       <View className="flex-1">
         <ScrollShadow className="flex-1" visibility="bottom" size={80}>
           <KeyboardAwareLegendList
             ref={listRef}
-            alignItemsAtEnd={isStagingFirstAnchor}
             applyWorkaroundForContentInsetHitTestBug
             anchoredEndSpace={anchoredEndSpace}
             contentContainerStyle={contentContainerStyle}
@@ -602,6 +302,10 @@ export function MessageList({
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}
             keyboardDismissMode="interactive"
+            // 贴底时才让键盘抬起内容——在历史里翻看时点输入框，内容不该跟着动。
+            // 别改成 persistent：它的收起分支确实不产生位移（那正是 patches/ 里给
+            // whenAtEnd 补上的语义），但它的抬起分支恒抬、且收起时把抬起量保住，
+            // 在历史区反复聚焦/失焦会像棘轮一样把列表一格格推到底。
             keyboardLiftBehavior="whenAtEnd"
             keyboardOffset={keyboardOffset}
             keyboardShouldPersistTaps="handled"
@@ -614,7 +318,6 @@ export function MessageList({
             onLayout={handleLayout}
             onMomentumScrollBegin={handleMomentumScrollBegin}
             onMomentumScrollEnd={handleMomentumScrollEnd}
-            onScroll={handleScroll}
             onScrollBeginDrag={handleScrollBeginDrag}
             onScrollEndDrag={handleScrollEndDrag}
             onStartReached={onLoadOlder ? handleStartReached : undefined}
@@ -623,6 +326,12 @@ export function MessageList({
             onTouchEnd={handleTouchEnd}
             onTouchStart={handleTouchStart}
             recycleItems={false}
+            // LegendList 把这个 prop 的类型写成 `React.Ref<React.ElementRef<typeof
+            // Animated.ScrollView>>`，而 `ElementRef` 在 React 19 的类型下解析成 `never`
+            // （一次性探针确证过），于是任何 ref 都塞不进去。运行时它被原样转发给 reanimated
+            // 包出来的滚动视图（`reanimated.mjs` 的 `ref: refScrollView`），正是 animated ref
+            // 该在的位置——断言的是库的类型缺陷，不是我们这边的用法。
+            refScrollView={scrollViewRef as unknown as Ref<never>}
             renderItem={renderMessageRow}
             scrollEventThrottle={16}
             scrollsToTop
@@ -635,7 +344,7 @@ export function MessageList({
           <ScrollToBottomButton
             gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
             inputHeight={bottomAccessoryHeight}
-            isAtBottom={isAtBottom}
+            isHidden={isScrollButtonHidden}
             onPress={handleScrollToEnd}
           />
         ) : null}

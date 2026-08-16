@@ -13,9 +13,14 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider } from '@/bootstrap';
 import { AlertProvider } from '@/frontend/components/AlertProvider';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
+import {
+  getRootHeaderStyle,
+  getTransparentHeaderStyle,
+  paintingViewerHeaderShown,
+} from '@/frontend/components/navigation/rootStackPlatform/rootStackPlatform';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { isIOS, isLiquidGlassAvailable } from '@/frontend/utils/constants';
+import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 // Hold the native splash across app bootstrap so the gate never exposes a
 // blank frame. `AppBootstrapProvider` hides it once initialization settles.
@@ -59,7 +64,7 @@ function RootStack() {
     <Stack
       screenOptions={{
         headerShadowVisible: false,
-        headerStyle: isIOS ? undefined : { backgroundColor },
+        headerStyle: getRootHeaderStyle(backgroundColor),
         headerTransparent: isLiquidGlassAvailable,
         headerTintColor: foregroundColor,
       }}
@@ -79,7 +84,7 @@ function RootStack() {
         options={{
           contentStyle: { backgroundColor: 'transparent' },
           headerBackButtonDisplayMode: 'minimal',
-          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerStyle: getTransparentHeaderStyle(),
           headerTransparent: isLiquidGlassAvailable,
         }}
       />
@@ -88,7 +93,7 @@ function RootStack() {
         options={{
           contentStyle: { backgroundColor: 'transparent' },
           headerBackButtonDisplayMode: 'minimal',
-          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerStyle: getTransparentHeaderStyle(),
           headerTransparent: isLiquidGlassAvailable,
         }}
       />
@@ -99,6 +104,7 @@ function RootStack() {
           // photo rather than on a themed surface: black behind, white on top,
           // in both themes. `PaintingViewerChrome` paints the same pair.
           contentStyle: { backgroundColor: constantBlack },
+          headerShown: paintingViewerHeaderShown,
           headerTintColor: constantWhite,
           headerTransparent: true,
           title: '',
@@ -109,7 +115,7 @@ function RootStack() {
         options={{
           contentStyle: { backgroundColor: 'transparent' },
           headerBackButtonDisplayMode: 'minimal',
-          headerStyle: isIOS ? undefined : { backgroundColor: 'transparent' },
+          headerStyle: getTransparentHeaderStyle(),
           headerTransparent: isLiquidGlassAvailable,
         }}
       />

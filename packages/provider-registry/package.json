@@ -6,7 +6,6 @@
   "main": "src/index.ts",
   "module": "src/index.ts",
   "types": "src/index.ts",
-  "packageManager": "pnpm@10.27.0",
   "scripts": {
     "build": "tsdown",
     "dev": "tsc -w",

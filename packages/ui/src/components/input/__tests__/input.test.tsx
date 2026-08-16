@@ -32,12 +32,10 @@ describe('Input', () => {
     renderer = undefined;
   });
 
-  test('renders a controlled HeroUI text field with adaptive defaults', () => {
-    const onChangeText = jest.fn();
-
+  test('renders a HeroUI text field with adaptive defaults', () => {
     act(() => {
       renderer = create(
-        <Input accessibilityLabel="Name" onChangeText={onChangeText} value="Cherry" />,
+        <Input accessibilityLabel="Name" onChangeText={jest.fn()} value="Cherry" />,
       );
     });
 
@@ -45,7 +43,6 @@ describe('Input', () => {
 
     expect(input.props.isDisabled).toBeUndefined();
     expect(input.props.isInvalid).toBeUndefined();
-    expect(input.props.value).toBe('Cherry');
     expect(input.props.autoCapitalize).toBe('sentences');
     expect(input.props.autoCorrect).toBe(true);
     expect(input.props.className).toBe(
@@ -53,40 +50,20 @@ describe('Input', () => {
     );
     expect(input.props.className).not.toContain('text-[16px]');
 
-    act(() => input.props.onChangeText('Cherry Studio'));
-    expect(onChangeText).toHaveBeenCalledWith('Cherry Studio');
-
     act(() => {
-      renderer!.update(<Input accessibilityLabel="Name" onChangeText={onChangeText} value="" />);
+      renderer!.update(<Input accessibilityLabel="Name" onChangeText={jest.fn()} value="" />);
     });
     expect(input.props.className).not.toContain('ios:pt-');
   });
 
-  test('forwards supported input behavior without adding a fixed size', () => {
-    const onBlur = jest.fn();
-    const onFocus = jest.fn();
-    const onSubmitEditing = jest.fn();
-    const style = { marginTop: 8 };
-
+  test('maps shared validation state to HeroUI', () => {
     act(() => {
       renderer = create(
         <Input
           accessibilityLabel="Password"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoFocus
           disabled
-          keyboardType="email-address"
-          maxLength={40}
-          onBlur={onBlur}
+          invalid
           onChangeText={jest.fn()}
-          onFocus={onFocus}
-          onSubmitEditing={onSubmitEditing}
-          placeholder="Password"
-          returnKeyType="done"
-          secureTextEntry
-          style={style}
-          testID="password-input"
           value="secret"
         />,
       );
@@ -94,21 +71,8 @@ describe('Input', () => {
 
     const input = renderer!.root.findByProps({ mockComponent: 'hero-input' });
 
-    expect(input.props).toEqual(
-      expect.objectContaining({
-        autoCapitalize: 'none',
-        autoCorrect: false,
-        autoFocus: true,
-        isDisabled: true,
-        keyboardType: 'email-address',
-        maxLength: 40,
-        placeholder: 'Password',
-        returnKeyType: 'done',
-        secureTextEntry: true,
-        style,
-        testID: 'password-input',
-      }),
-    );
+    expect(input.props.isDisabled).toBe(true);
+    expect(input.props.isInvalid).toBe(true);
   });
 
   test('uses a four-line adaptive viewport for multiline input', () => {

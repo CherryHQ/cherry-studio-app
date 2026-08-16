@@ -2,6 +2,7 @@ import { Composer } from '@cherrystudio/ui/components';
 import { resolveIcon } from '@cherrystudio/ui/icons';
 import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
 
 import {
   ComposerAttachments,
@@ -35,9 +36,8 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatTopic } from '../runtime';
-import { ChatInputEffortBadge } from './components/ChatInputEffortBadge';
+import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenuItems } from './components/ChatInputMenuItems';
-import { ChatInputReasoningSection } from './components/ChatInputReasoningSection';
 import { ChatInputToolTag } from './components/ChatInputToolTag';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
@@ -104,7 +104,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
         selectedModelProvider?.presetProviderId ?? selectedModel.providerId,
       )
     : undefined;
-  const reasoningEfforts = useChatInputReasoningEfforts();
+  const reasoningEfforts = useChatInputReasoningEfforts(selectedModel);
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
     useChatInputReasoningEffortSelection(
       reasoningEfforts,
@@ -302,46 +302,49 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
 
   return (
     <>
-      <ComposerSurface
-        dismissKeyboardOnSend={dismissKeyboardOnSend}
-        onSend={handleSendPress}
-        onStop={chatTopic.abort}
-        streaming={chatTopic.isBusy}
+      <ChatInputEffortOverlay
+        key={`${selectedModelId ?? 'no-model'}:${reasoningEfforts.join(',')}`}
+        modelLabel={selectedModelLabel}
+        onChange={handleReasoningEffortSelect}
+        reasoningEffort={reasoningEffort}
+        reasoningEfforts={reasoningEfforts}
       >
-        <Composer.Collapsible>
-          {selectedTool ? <ChatInputToolTag onClear={handleToolClear} tool={selectedTool} /> : null}
-        </Composer.Collapsible>
-        <ComposerAttachments />
-        <ComposerField />
-        <Composer.Toolbar>
-          <ComposerMenu>
-            <ChatInputMenuItems
-              onActionPress={handleActionSelect}
-              selectedToolId={selectedToolId}
-            />
-          </ComposerMenu>
-          <ComposerModelPill
-            icon={selectedModelIcon}
-            label={selectedModelLabel}
-            onPress={openModelPicker}
+        {(effortGauge) => (
+          <ComposerSurface
+            dismissKeyboardOnSend={dismissKeyboardOnSend}
+            onSend={handleSendPress}
+            onStop={chatTopic.abort}
+            streaming={chatTopic.isBusy}
           >
-            {reasoningEfforts.length > 0 ? (
-              <ChatInputEffortBadge reasoningEffort={reasoningEffort} />
-            ) : null}
-          </ComposerModelPill>
-          <Composer.Send />
-        </Composer.Toolbar>
-      </ComposerSurface>
+            <Composer.Collapsible>
+              {selectedTool ? (
+                <ChatInputToolTag onClear={handleToolClear} tool={selectedTool} />
+              ) : null}
+            </Composer.Collapsible>
+            <ComposerAttachments />
+            <ComposerField />
+            <Composer.Toolbar>
+              <ComposerMenu>
+                <ChatInputMenuItems
+                  onActionPress={handleActionSelect}
+                  selectedToolId={selectedToolId}
+                />
+              </ComposerMenu>
+              <ComposerModelPill
+                icon={selectedModelIcon}
+                label={selectedModelLabel}
+                onPress={openModelPicker}
+              />
+              <View className="ml-auto flex-row items-center gap-2">
+                {effortGauge}
+                <Composer.Send />
+              </View>
+            </Composer.Toolbar>
+          </ComposerSurface>
+        )}
+      </ChatInputEffortOverlay>
       {isModelPickerOpen ? (
         <ModelPickerBottomSheet
-          footer={
-            reasoningEfforts.length > 0 ? (
-              <ChatInputReasoningSection
-                reasoningEffort={reasoningEffort}
-                onSelectReasoningEffort={handleReasoningEffortSelect}
-              />
-            ) : undefined
-          }
           isOpen
           onClose={closeModelPicker}
           onSelect={handleModelSelect}

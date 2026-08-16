@@ -18,7 +18,7 @@ import {
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
 
-import { ProviderModelSearchField } from './ProviderScreen/models/components/ProviderModelSearchField';
+import { ProviderModelSearchControls } from './ProviderScreen/models/components/ProviderModelSearchControls/ProviderModelSearchControls';
 import { ProviderModelTypeFilterBar } from './ProviderScreen/models/components/ProviderModelTypeFilterBar';
 import {
   getProviderModelTypeCounts,
@@ -81,24 +81,17 @@ function ModelSettingPicker({ kind }: { kind: ModelSettingKind }) {
   return (
     <>
       <BackHeader title={t(MODEL_SETTING_KIND_TITLE_KEYS[kind])} />
-      {process.env.EXPO_OS === 'ios' ? (
-        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-      ) : null}
       {/* Pinned above the list rather than scrolling away with it: this is every
           model on the device in one column, and a filter you have to scroll back
-          up to reach is one you stop reaching for. iOS pads nothing at the top —
-          its search field belongs to the navigation bar, which leaves a gap of
-          its own below itself. */}
-      <View className={process.env.EXPO_OS === 'ios' ? 'gap-3 px-4 pb-3' : 'gap-3 px-4 py-3'}>
-        {process.env.EXPO_OS === 'ios' ? null : (
-          <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-        )}
+          up to reach is one you stop reaching for. The platform controls own
+          whether search sits in the navigation bar or in this content row. */}
+      <ProviderModelSearchControls searchText={searchText} setSearchText={setSearchText}>
         <ProviderModelTypeFilterBar
           counts={typeCounts}
           selectedFilter={typeFilter}
           onSelect={setTypeFilter}
         />
-      </View>
+      </ProviderModelSearchControls>
       <View className="flex-1" style={{ paddingBottom: insets.bottom }}>
         <ModelPickerList
           emptyText={t('settings.provider.models.search.empty')}

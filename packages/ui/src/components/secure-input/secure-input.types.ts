@@ -1,3 +1,5 @@
+import type { StyleProp, ViewStyle } from 'react-native';
+
 import type { InputProps } from '../input';
 
 export type SecureInputVisibilityAccessibilityLabels = {
@@ -7,8 +9,9 @@ export type SecureInputVisibilityAccessibilityLabels = {
 
 export type SecureInputProps = Omit<
   InputProps,
-  'autoCapitalize' | 'autoCorrect' | 'multiline' | 'secureTextEntry'
+  'autoCapitalize' | 'autoCorrect' | 'multiline' | 'secureTextEntry' | 'style'
 > & {
   blurOnVisibilityToggle?: boolean;
+  style?: StyleProp<ViewStyle>;
   visibilityAccessibilityLabels: SecureInputVisibilityAccessibilityLabels;
 };

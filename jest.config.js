@@ -24,6 +24,11 @@ module.exports = {
     '/packages/ai-sdk-provider/',
     // Underscore-prefixed files inside __tests__ are shared harnesses, not suites.
     '/__tests__/_',
+    // The desktop-sync audits spawn hundreds of real git subprocesses against
+    // fixture repos in tmpdir (~13s of the run). They guard against desktop
+    // drift, which is a local-sync concern rather than a per-PR one, so PR CI
+    // skips them and a full local run still covers them.
+    ...(process.env.PRCI ? ['/scripts/__tests__/'] : []),
   ],
   // Local build/export artifacts can contain copied workspace packages. Keep
   // them out of the Haste map so package names remain unique during tests.

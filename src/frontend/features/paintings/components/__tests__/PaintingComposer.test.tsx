@@ -250,7 +250,6 @@ describe('PaintingComposer', () => {
       type: 'text',
     });
     expect(mockMessageListProps?.messages[1].status).toBe('pending');
-    expect(mockMessageListProps?.animateFirstEnteringMessage).toBe(true);
     expect(mockMessageListProps?.enteringMessageId).toBe('uuid-2');
 
     await act(async () => {

@@ -51,8 +51,8 @@ import { SecureInput } from '@cherrystudio/ui/components';
 Visibility starts hidden on every mount. Toggling keeps input focus by default; set
 `blurOnVisibilityToggle` only when a consumer intentionally relies on blur to dismiss the keyboard
 or commit its draft value. `SecureInput` fixes `multiline`, `secureTextEntry`, `autoCapitalize`, and
-`autoCorrect`, while forwarding the remaining `Input` props. Disabling the field also disables its
-visibility action.
+`autoCorrect`, while forwarding the remaining `Input` props. Its `style` prop targets the composed
+field container. Disabling the field also disables its visibility action.
 
 `Menu` is the shared native action menu. It accepts one trigger element and a flat, stable `items`
 array; the package owns Nitro wiring, native action dispatch, and platform gesture behavior:
@@ -282,7 +282,8 @@ tokens. This workspace does so in `src/frontend/styles/global.css`.
 registered icon union. Callers supply title, detail, compact label, optional preview, timing, and
 one registered icon. They cannot supply children, render functions, arbitrary components, colors,
 spacing, typography, or layout overrides. Feature services keep their phase and state machines and
-map those values into this presentation model.
+map those values into this presentation model. `BackgroundActivityNativePresentation` adds the
+theme and staged-logo fields used only by the host presenter; feature contracts do not expose them.
 
 `@cherrystudio/ui/background-activity/ios` exposes the serializable `expo-widgets` renderer. It owns
 the Lock Screen and Dynamic Island layouts, colors, type, spacing, truncation, compact timer/status, logo

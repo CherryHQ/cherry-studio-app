@@ -1,7 +1,19 @@
-# Repository Guidelines
+# Cherry Studio Mobile
 
-Follow the project naming rules in
-[docs/references/naming-conventions.md](docs/references/naming-conventions.md).
+Cherry Mobile is Cherry Studio's Expo and React Native client.
 
-# Operational Rules
-- **Write conventional commits**: Commit small, focused changes using Conventional Commit messages (e.g., `feat(data-api):`, `fix(lifecycle):`, `refactor(quick-assistant):`, `docs(testing):`, `chore(deps):`, `test(window-manager):`). Scope must be a specific kebab-case module, never generic like `main` — when `git log` conflicts with this rule, this rule wins.
+Use `pnpm@11.8.0`. This repository has no root application build script: build workspace packages
+with `pnpm packages:build`, and run the complete repository type check with `pnpm typecheck`.
+
+- When naming or renaming files, directories, identifiers, or documentation, read
+  [Naming Conventions](docs/references/naming-conventions.md).
+- When adding, moving, or exposing modules, read
+  [Code Organization](docs/references/code-organization.md).
+- When adding, changing, removing, or running tests, read
+  [Testing And CI](docs/guides/testing-and-ci.md).
+- Before creating commits, splitting work, or opening a pull request, read
+  [Git Workflow](docs/guides/git-workflow.md).
+- When building or changing product UI, read
+  [UI Development](docs/guides/ui-development.md).
+- When running iOS device acceptance in a Conductor workspace, read
+  [Parallel Device Testing](docs/guides/parallel-device-testing.md).

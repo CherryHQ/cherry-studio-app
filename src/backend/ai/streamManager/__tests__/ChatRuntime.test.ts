@@ -857,6 +857,67 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
+  test('publishes the new-topic turn before navigating and before persisting it', async () => {
+    const services = createServices();
+    const snapshotAtNavigation: ReturnType<typeof runtime.getTopicSnapshot>[] = [];
+    let reservationsAtNavigation = -1;
+    const openTopic = jest.fn((topicId: string) => {
+      snapshotAtNavigation.push(runtime.getTopicSnapshot(topicId));
+      reservationsAtNavigation = (services.message.createUserMessageWithPlaceholders as jest.Mock)
+        .mock.calls.length;
+    });
+    const runtime = createRuntime({ openTopic, services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendNewTopicText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'first message from empty topic',
+    });
+
+    // 目的地挂载的那一刻要展示的东西必须已经在快照里，否则就是导航到一个空界面。
+    expect(openTopic).toHaveBeenCalledWith('topic-1');
+    const published = snapshotAtNavigation[0];
+    expect(published?.status).toBe('reserving');
+    expect(published?.hasHistoryBeforePendingTurn).toBe(false);
+    expect(published?.pendingUserMessage?.data.parts).toEqual([
+      { type: 'text', text: 'first message from empty topic' },
+    ]);
+    expect(published?.overlayMessage?.status).toBe('pending');
+    // 而且它比落库更早：这一版把导航从「写完之后」挪到了「写之前」。
+    expect(reservationsAtNavigation).toBe(0);
+  });
+
+  test('persists the turn under the ids it already published', async () => {
+    const services = createServices();
+    let publishedSnapshot: ReturnType<typeof runtime.getTopicSnapshot> | undefined;
+    const runtime = createRuntime({
+      openTopic: (topicId) => {
+        publishedSnapshot = runtime.getTopicSnapshot(topicId);
+      },
+      services,
+    });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendNewTopicText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'first message from empty topic',
+    });
+
+    // 乐观行与落库行同一身份，投影才会就地替换而不是追加出一条重复气泡。
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0]?.[0];
+    expect(reservation.userMessage.id).toBe(publishedSnapshot?.pendingUserMessage?.id);
+    expect(reservation.placeholders.map((placeholder: { id: string }) => placeholder.id)).toEqual(
+      publishedSnapshot?.overlayMessages?.map((message) => message.id),
+    );
+    expect(reservation.userMessage.id).toEqual(expect.any(String));
+    expect(reservation.placeholders[0].id).not.toBe(reservation.userMessage.id);
+  });
+
   test('starts another new topic while the previous one is still streaming', async () => {
     const services = createServices();
     const createTopicMock = jest
@@ -1882,12 +1943,14 @@ describe('ChatRuntime', () => {
 
   test('does not open a new topic when aborted after topic creation', async () => {
     const services = createServices();
-    const invalidateTopics = createDeferredInvalidation({ blockOnCall: 1 });
     const openTopic = jest.fn();
-    const runtime = createRuntime({
-      invalidateTopics: invalidateTopics.fn,
-      openTopic,
-      services,
+    const runtime = createRuntime({ openTopic, services });
+    // 话题已经建出来、这一轮还没发布出去的那个窗口。挂在附件落盘上，因为它是话题创建之后、
+    // 乐观发布之前唯一一个 await 点——导航如今就挂在那次发布上。
+    const partsGate = createDeferred();
+    mockCreateMessageParts.mockImplementationOnce(async (parts: readonly CherryMessagePart[]) => {
+      await partsGate.promise;
+      return { entries: [], parts: [...parts] };
     });
 
     const sendPromise = runtime.sendNewTopicText({
@@ -1895,9 +1958,9 @@ describe('ChatRuntime', () => {
       text: 'first',
     });
 
-    await waitUntil(() => invalidateTopics.callCount > 0);
+    await waitUntil(() => mockCreateMessageParts.mock.calls.length > 0);
     runtime.abort(NEW_TOPIC_SNAPSHOT_KEY);
-    invalidateTopics.resolve();
+    partsGate.resolve();
     await sendPromise;
 
     expect(openTopic).not.toHaveBeenCalled();
@@ -2824,9 +2887,10 @@ function delay(durationMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
-function createDeferredInvalidation(options: { blockOnCall?: number } = {}) {
+function createDeferredInvalidation() {
   const deferred = createDeferred();
-  const blockOnCall = options.blockOnCall ?? 2;
+  // 第一次调用放行、第二次卡住，把测试停在两次失效通知之间的那个窗口。
+  const blockOnCall = 2;
   let callCount = 0;
 
   return {
@@ -2940,6 +3004,7 @@ function createServices() {
   const userMessage = createMessage('user-1', 'user');
   const assistantMessage = createMessage('assistant-1', 'assistant');
   const model = createModel();
+  let mintedIdSequence = 0;
   const finalizeAssistantMessage = jest.fn(
     async (
       _id: string,
@@ -2980,6 +3045,8 @@ function createServices() {
       getChildrenByParentId: jest.fn(async () => []),
       getPathToNode: jest.fn(async () => [userMessage]),
       getPathThrough: jest.fn(async () => [userMessage, assistantMessage]),
+      // 确定性的铸币机：真实实现是 uuidv7，测试只需要「每次不同、可预期」。
+      newMessageId: jest.fn(() => `minted-${(mintedIdSequence += 1)}`),
       updateSiblingsGroupId: jest.fn(async () => undefined),
     },
     model: {

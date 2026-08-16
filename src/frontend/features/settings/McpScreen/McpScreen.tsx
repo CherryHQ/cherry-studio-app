@@ -1,4 +1,5 @@
 import { PlusIcon } from '@cherrystudio/app-icons';
+import { Button } from '@cherrystudio/ui/components';
 import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -9,7 +10,6 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 
-import { SettingsDialogActionButton } from '../components/SettingsDialogActionButton';
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 
 export function McpScreen() {
@@ -46,7 +46,7 @@ export function McpScreen() {
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
-        contentContainerClassName="gap-6 px-4 py-5"
+        contentContainerClassName="flex-grow gap-6 px-4 py-5"
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
@@ -63,18 +63,16 @@ export function McpScreen() {
             <Text className="text-center text-foreground text-xs" selectable>
               {error instanceof Error ? error.message : String(error)}
             </Text>
-            <SettingsDialogActionButton
-              label={t('settings.mcp.retry')}
-              onPress={() => void refetch()}
-            />
+            <Button size="sm" variant="secondary" onPress={() => void refetch()}>
+              {t('settings.mcp.retry')}
+            </Button>
           </View>
         ) : servers.length === 0 ? (
-          <View className="items-center px-1">
-            <SettingsDialogActionButton
-              isPrimary
-              label={t('settings.mcp.emptyAction')}
-              onPress={openCreate}
-            />
+          <View className="flex-1 items-center justify-center gap-4 px-6 pb-20">
+            <Text className="text-center text-base text-foreground">{t('settings.mcp.empty')}</Text>
+            <Button onPress={openCreate} testID="mcp-empty-create" variant="default">
+              <Button.Label>{t('settings.mcp.emptyAction')}</Button.Label>
+            </Button>
           </View>
         ) : (
           <View className="overflow-hidden rounded-2xl bg-grouped-surface">

@@ -30,6 +30,13 @@ jest.mock('expo-glass-effect', () => ({
 // "display radius unknown" answer, which every caller already handles.
 jest.mock('expo-screen-corner-radius', () => ({ getCornerRadiusSync: () => null }));
 
+// The library resolves its native module at import time. Its own jest entry is
+// the sanctioned stand-in and keeps the hooks/event emitters callable, which the
+// chat list needs the moment it imports KeyboardEvents.
+jest.mock('react-native-keyboard-controller', () =>
+  require('react-native-keyboard-controller/jest'),
+);
+
 // expo-symbols' SymbolView is a native view (jest-expo runs as iOS, so every
 // @cherrystudio/app-icons icon reaches it). Icon behavior is asserted through
 // per-suite icon mocks, not the native symbol, so render nothing.
@@ -79,7 +86,9 @@ jest.mock('@shopify/react-native-skia', () => {
 
   return {
     Canvas: inert('SkiaCanvas'),
+    Circle: inert('SkiaCircle'),
     Group: inert('SkiaGroup'),
+    Line: inert('SkiaLine'),
     Text: inert('SkiaText'),
     BlurMask: inert('SkiaBlurMask'),
     Rect: inert('SkiaRect'),
@@ -88,13 +97,14 @@ jest.mock('@shopify/react-native-skia', () => {
     ImageShader: inert('SkiaImageShader'),
     Path: inert('SkiaPath'),
     Mask: inert('SkiaMask'),
+    vec: (x: number, y: number) => ({ x, y }),
     matchFont: () => ({
       getGlyphIDs: (text: string) => Array.from(text).map((_, index) => index),
       getGlyphWidths: (ids: number[]) => ids.map(() => 8),
       getMetrics: () => ({ ascent: -11, descent: 3 }),
     }),
-    // thinkingPixelField.ts compiles its SkSL at module scope, so RuntimeEffect.Make
-    // must return a truthy stub or the ChatInputSurface import chain throws under test.
+    // The image-generation loader compiles SkSL at module scope, so
+    // RuntimeEffect.Make must return a truthy stub under test.
     Skia: {
       Color: (color: number | string) => color,
       RuntimeEffect: {
@@ -128,6 +138,16 @@ jest.mock('react-native-mmkv', () => {
 
   return { createMMKV };
 });
+
+// react-native-nitro-theme-transition is another Nitro HybridObject. The library
+// already degrades to "just run the callback" when the native side is missing, so
+// this is not about avoiding a crash — it is about not dragging
+// react-native-nitro-modules into every suite whose import chain reaches
+// useSettingPreferences. Running the callback inline keeps the theme swap
+// synchronous, which is what the real thing does under the snapshot.
+jest.mock('react-native-nitro-theme-transition', () => ({
+  withThemeTransition: (applyTheme: () => void) => applyTheme(),
+}));
 
 // gesture-handler 真模块在 jest 下要求 Reanimated.default.createAnimatedComponent，
 // 而 jest 环境的 reanimated 没有这个 API。GestureDetector 透传 children，

@@ -27,6 +27,11 @@ export const ListTopicsQuerySchema = z.strictObject({
 });
 export type ListTopicsQuery = z.infer<typeof ListTopicsQuerySchema>;
 
+export const TopicListItemSchema = TopicSchema.extend({
+  latestMessageText: z.string(),
+});
+export type TopicListItem = z.infer<typeof TopicListItemSchema>;
+
 export const SetActiveNodeSchema = z.strictObject({
   nodeId: z.string().min(1),
 });
@@ -87,7 +92,7 @@ export type TopicSchemas = {
     };
     GET: {
       query?: ListTopicsQuery;
-      response: CursorPaginationResponse<Topic>;
+      response: CursorPaginationResponse<TopicListItem>;
     };
     POST: {
       body: CreateTopicDto;

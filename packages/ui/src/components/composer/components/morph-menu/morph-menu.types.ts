@@ -13,7 +13,6 @@ export type MorphMenuProps = {
   width?: number;
   /** The closed circle, and the footprint it reserves in the parent's flow. Defaults to the toolbar's button size. */
   triggerSize?: number;
-  onOpenChange?: (isOpen: boolean) => void;
   style?: StyleProp<ViewStyle>;
   testID?: string;
 };

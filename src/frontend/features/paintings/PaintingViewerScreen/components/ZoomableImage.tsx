@@ -18,10 +18,12 @@ const DOUBLE_TAP_SCALE = 2.5;
 // rest so it does not compete with the navigation gesture.
 export function ZoomableImage({
   height,
+  onZoomChange,
   uri,
   width,
 }: {
   height: number;
+  onZoomChange?: (isZoomed: boolean) => void;
   uri: string;
   width: number;
 }) {
@@ -35,6 +37,11 @@ export function ZoomableImage({
   const savedX = useSharedValue(0);
   const savedY = useSharedValue(0);
 
+  const updateZoomState = (nextIsZoomed: boolean) => {
+    setIsZoomed(nextIsZoomed);
+    onZoomChange?.(nextIsZoomed);
+  };
+
   const clampTranslate = () => {
     'worklet';
     const maxX = (width * (scale.value - 1)) / 2;
@@ -45,13 +52,16 @@ export function ZoomableImage({
 
   const resetZoom = () => {
     'worklet';
-    scale.value = withTiming(1);
+    scale.value = withTiming(1, undefined, (finished) => {
+      if (finished) {
+        runOnJS(updateZoomState)(false);
+      }
+    });
     savedScale.value = 1;
     translateX.value = withTiming(0);
     translateY.value = withTiming(0);
     savedX.value = 0;
     savedY.value = 0;
-    runOnJS(setIsZoomed)(false);
   };
 
   const pinch = Gesture.Pinch()
@@ -69,7 +79,7 @@ export function ZoomableImage({
       clampTranslate();
       savedX.value = translateX.value;
       savedY.value = translateY.value;
-      runOnJS(setIsZoomed)(true);
+      runOnJS(updateZoomState)(true);
     });
 
   const pan = Gesture.Pan()
@@ -107,7 +117,7 @@ export function ZoomableImage({
       translateY.value = withTiming(targetY);
       savedX.value = targetX;
       savedY.value = targetY;
-      runOnJS(setIsZoomed)(true);
+      runOnJS(updateZoomState)(true);
     });
 
   const gesture = Gesture.Race(doubleTap, Gesture.Simultaneous(pinch, pan));

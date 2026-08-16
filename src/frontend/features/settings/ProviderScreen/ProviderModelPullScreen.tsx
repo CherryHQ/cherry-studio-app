@@ -15,7 +15,7 @@ import {
   ProviderModelRow,
   providerModelRowEstimatedHeight,
 } from './models/components/ProviderModelRow';
-import { ProviderModelSearchField } from './models/components/ProviderModelSearchField';
+import { ProviderModelSearchControls } from './models/components/ProviderModelSearchControls/ProviderModelSearchControls';
 import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import {
@@ -206,9 +206,6 @@ function ProviderModelPullPreviewPage({
 
   return (
     <>
-      {process.env.EXPO_OS === 'ios' ? (
-        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-      ) : null}
       <LegendList
         alwaysBounceVertical={false}
         contentContainerStyle={styles.listContent}
@@ -231,20 +228,15 @@ function ProviderModelPullPreviewPage({
           ) : null
         }
         ListHeaderComponent={
-          // One gap for the whole screen: the Android search field, the filter
-          // bar and the first section are all 12 apart. iOS pads nothing above
-          // the filter bar — its search field belongs to the navigation bar,
-          // which already leaves a gap of its own below itself.
-          <View className={process.env.EXPO_OS === 'ios' ? 'gap-3 px-4 pb-3' : 'gap-3 px-4 py-3'}>
-            {process.env.EXPO_OS === 'ios' ? null : (
-              <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-            )}
+          // The platform controls put native iOS search in the navigation bar
+          // and Android search in the list header while keeping the filter here.
+          <ProviderModelSearchControls searchText={searchText} setSearchText={setSearchText}>
             <ProviderModelTypeFilterBar
               counts={typeCounts}
               selectedFilter={typeFilter}
               onSelect={setTypeFilter}
             />
-          </View>
+          </ProviderModelSearchControls>
         }
         maintainVisibleContentPosition={false}
         recycleItems
@@ -349,7 +341,7 @@ function PullSectionHeader({
         hitSlop={6}
         onPress={onActionPress}
       >
-        <Text className="font-medium text-primary text-sm">{actionLabel}</Text>
+        <Text className="font-medium text-foreground text-sm">{actionLabel}</Text>
       </Pressable>
     </Section.Header>
   );

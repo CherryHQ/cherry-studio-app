@@ -1,3 +1,4 @@
+import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
@@ -13,13 +14,13 @@ import {
 import { usePins, useTopics } from '@/frontend/hooks/chat';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 
-type TopicListData = InfiniteData<CursorPaginationResponse<Topic>, string | undefined>;
+type TopicListData = InfiniteData<CursorPaginationResponse<TopicListItem>, string | undefined>;
 
 type TopicListTopicsContextValue = {
   isPinActionDisabled: boolean;
   isTopicListLoading: boolean;
   pinnedTopicIds: readonly string[];
-  topics: readonly Topic[];
+  topics: readonly TopicListItem[];
 };
 
 type TopicListActionsContextValue = {

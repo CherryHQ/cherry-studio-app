@@ -78,7 +78,6 @@ export function useComposerMenu() {
 function MorphMenuRoot({
   accessibilityLabel,
   children,
-  onOpenChange,
   style,
   testID,
   triggerSize = defaultTriggerSize,
@@ -128,10 +127,7 @@ function MorphMenuRoot({
     );
   }, [isOpen, isReducedMotion, progress]);
 
-  const close = useCallback(() => {
-    setIsOpen(false);
-    onOpenChange?.(false);
-  }, [onOpenChange]);
+  const close = useCallback(() => setIsOpen(false), []);
   const toggle = () => {
     if (isOpen) {
       close();
@@ -140,10 +136,14 @@ function MorphMenuRoot({
 
     // Measured before the state flip so the floating copy mounts exactly where
     // the inline trigger was — otherwise the morph starts from a jump.
+    //
+    // Nothing may move the composer between this measurement and the open: the
+    // anchor is a snapshot and never re-measures, so a layout change here leaves
+    // the panel floating away from its trigger. The ＋ menu used to take the
+    // keyboard down right after this callback and did exactly that.
     footprintRef.current?.measureInWindow((x, y) => {
       setAnchor({ left: x, top: y });
       setIsOpen(true);
-      onOpenChange?.(true);
     });
   };
   // Every item subscribes to this, so a fresh object each render would re-render

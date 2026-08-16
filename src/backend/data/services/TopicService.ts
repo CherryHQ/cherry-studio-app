@@ -5,6 +5,7 @@ import type {
   DeleteTopicsResult,
   DuplicateTopicDto,
   ListTopicsQuery,
+  TopicListItem,
   UpdateTopicDto,
 } from '@cherrystudio/universal/data/api/schemas/topics';
 import {
@@ -350,11 +351,13 @@ export class TopicService {
     }
   }
 
-  async listByCursor(query: ListTopicsQuery = {}): Promise<CursorPaginationResponse<Topic>> {
+  async listByCursor(
+    query: ListTopicsQuery = {},
+  ): Promise<CursorPaginationResponse<TopicListItem>> {
     const limit = Math.min(query.limit ?? defaultLimit, maxLimit);
     const cursor = decodeTopicCursor(query.cursor);
     const search = buildSearchPredicate(query.q);
-    const items: Array<{ pinOrderKey?: string; topic: Topic }> = [];
+    const items: Array<{ pinOrderKey?: string; topic: TopicListItem }> = [];
 
     if (cursor.section === 'pin') {
       const pinAfter = cursor.orderKey
@@ -364,11 +367,19 @@ export class TopicService {
           )
         : undefined;
       const rows = await this.db
-        .select({ pinOrderKey: pinTable.orderKey, topic: topicTable })
+        .select({
+          latestMessageText: messageTable.searchableText,
+          pinOrderKey: pinTable.orderKey,
+          topic: topicTable,
+        })
         .from(topicTable)
         .innerJoin(
           pinTable,
           and(eq(pinTable.entityType, 'topic'), eq(pinTable.entityId, topicTable.id)),
+        )
+        .leftJoin(
+          messageTable,
+          and(eq(messageTable.id, topicTable.activeNodeId), isNull(messageTable.deletedAt)),
         )
         .where(and(isNull(topicTable.deletedAt), pinAfter, search))
         .orderBy(asc(pinTable.orderKey), asc(topicTable.id))
@@ -378,7 +389,10 @@ export class TopicService {
         return { items: [], nextCursor: encodeEntitySectionStart() };
       }
       for (const row of rows.slice(0, limit)) {
-        items.push({ pinOrderKey: row.pinOrderKey, topic: rowToTopic(row.topic) });
+        items.push({
+          pinOrderKey: row.pinOrderKey,
+          topic: rowToTopicListItem(row.topic, row.latestMessageText),
+        });
       }
       if (rows.length > limit) {
         const last = items.at(-1);
@@ -408,8 +422,12 @@ export class TopicService {
           )
         : undefined;
     const rows = await this.db
-      .select()
+      .select({ latestMessageText: messageTable.searchableText, topic: topicTable })
       .from(topicTable)
+      .leftJoin(
+        messageTable,
+        and(eq(messageTable.id, topicTable.activeNodeId), isNull(messageTable.deletedAt)),
+      )
       .where(
         and(
           isNull(topicTable.deletedAt),
@@ -421,18 +439,18 @@ export class TopicService {
       .orderBy(asc(topicTable.orderKey), asc(topicTable.id))
       .limit(remaining + 1);
     for (const row of rows.slice(0, remaining)) {
-      items.push({ topic: rowToTopic(row) });
+      items.push({ topic: rowToTopicListItem(row.topic, row.latestMessageText) });
     }
     const last = rows[remaining - 1];
     return {
       items: items.map((item) => item.topic),
       ...(rows.length > remaining && last
-        ? { nextCursor: encodeEntityCursor(last.orderKey, last.id) }
+        ? { nextCursor: encodeEntityCursor(last.topic.orderKey, last.topic.id) }
         : {}),
     };
   }
 
-  listPage(query?: ListTopicsQuery): Promise<CursorPaginationResponse<Topic>> {
+  listPage(query?: ListTopicsQuery): Promise<CursorPaginationResponse<TopicListItem>> {
     return this.listByCursor(query);
   }
 
@@ -502,6 +520,13 @@ export function rowToTopic(row: TopicRow): Topic {
     orderKey: row.orderKey,
     ...(row.traceId ? { traceId: row.traceId } : {}),
     updatedAt: timestampToISO(row.updatedAt),
+  };
+}
+
+function rowToTopicListItem(row: TopicRow, latestMessageText: string | null): TopicListItem {
+  return {
+    ...rowToTopic(row),
+    latestMessageText: latestMessageText ?? '',
   };
 }
 
