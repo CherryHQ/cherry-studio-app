@@ -1,6 +1,10 @@
 import { loggerService } from '@logger';
 
-import { LifecycleManager } from '../lifecycle/LifecycleManager';
+import {
+  LifecycleManager,
+  raceWithTimeout,
+  SERVICE_TEARDOWN_TIMEOUT_MS,
+} from '../lifecycle/LifecycleManager';
 import { ServiceContainer } from '../lifecycle/ServiceContainer';
 import { Phase, type ServiceConstructor, type TeardownSummary } from '../lifecycle/types';
 
@@ -110,7 +114,15 @@ export class ApplicationHost {
     // it is already initializing, let it finish before deriving the reverse
     // stop order; otherwise a service can become Ready after the stop pass and
     // keep subscriptions, timers, or native resources from a dead generation.
-    await this.postReady;
+    const postReadyOutcome = await raceWithTimeout(
+      (this.postReady ?? Promise.resolve()).then(() => 'completed' as const),
+      SERVICE_TEARDOWN_TIMEOUT_MS,
+    );
+    if (postReadyOutcome === 'timed_out') {
+      logger.warn(
+        `Post-ready initialization exceeded ${SERVICE_TEARDOWN_TIMEOUT_MS}ms; continuing disposal`,
+      );
+    }
 
     const stopped = await this.lifecycle.stopAll();
     const destroyed = await this.lifecycle.destroyAll();

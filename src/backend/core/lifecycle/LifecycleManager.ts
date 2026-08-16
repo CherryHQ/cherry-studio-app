@@ -26,7 +26,7 @@ export const SERVICE_TEARDOWN_TIMEOUT_MS = 5000;
  * The timer must be cleared, or one leaked multi-second timer per service
  * outlives an otherwise instant teardown.
  */
-async function raceWithTimeout(
+export async function raceWithTimeout(
   run: Promise<TeardownOutcome>,
   timeoutMs: number,
 ): Promise<TeardownOutcome> {

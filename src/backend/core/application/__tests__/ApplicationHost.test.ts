@@ -1,5 +1,6 @@
 import { BaseService } from '../../lifecycle/BaseService';
 import { DependsOn, Injectable, ServicePhase } from '../../lifecycle/decorators';
+import { SERVICE_TEARDOWN_TIMEOUT_MS } from '../../lifecycle/LifecycleManager';
 import { Phase } from '../../lifecycle/types';
 import { application } from '../Application';
 import { ApplicationHost } from '../ApplicationHost';
@@ -154,6 +155,48 @@ describe('ApplicationHost construction', () => {
       'SlowPostReady:init-finished',
       'SlowPostReady:stop',
     ]);
+  });
+
+  it('continues disposal and a queued install when post-ready never settles', async () => {
+    jest.useFakeTimers();
+    try {
+      let markInitializationStarted!: () => void;
+      const initializationStarted = new Promise<void>((resolve) => {
+        markInitializationStarted = resolve;
+      });
+
+      @Injectable('NeverPostReady')
+      @ServicePhase(Phase.PostReady)
+      class NeverPostReady extends BaseService {
+        protected async onInit(): Promise<void> {
+          journal.push('NeverPostReady:init');
+          markInitializationStarted();
+          await new Promise<void>(() => {});
+        }
+      }
+
+      const outgoing = new ApplicationHost({ services: [Connection, NeverPostReady] });
+      await application.install(outgoing);
+      outgoing.runPostReady();
+      await initializationStarted;
+
+      const incoming = new ApplicationHost({ services: [Connection] });
+      const replacing = application.install(incoming);
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(SERVICE_TEARDOWN_TIMEOUT_MS);
+      await expect(replacing).resolves.toBeUndefined();
+
+      expect(outgoing.state).toBe('disposed');
+      expect(incoming.state).toBe('ready');
+      expect(journal).toEqual([
+        'Connection:open',
+        'NeverPostReady:init',
+        'Connection:close',
+        'Connection:open',
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('shares one promise across repeated disposals', async () => {
