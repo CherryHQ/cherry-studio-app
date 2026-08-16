@@ -10,7 +10,26 @@ type InlineToken =
       type: 'delimiter';
     };
 
+type DelimiterToken = Extract<InlineToken, { type: 'delimiter' }>;
+
+type Opener = {
+  active: boolean;
+  order: number;
+  token: DelimiterToken;
+  version: number;
+};
+
+type OpenerHandle = { opener: Opener; version: number };
+
+const DECIMAL_DIGIT_CHARACTER = /\p{Decimal_Number}/u;
 const DELIMITER_CHARACTER = /[*_~]/u;
+const DELIMITER_CHARACTER_INDEX: Record<DelimiterCharacter, number> = {
+  '*': 0,
+  _: 1,
+  '~': 2,
+};
+const OPENER_BUCKETS_PER_CHARACTER = 6;
+const OPENER_BUCKET_COUNT = 18;
 const PUNCTUATION_CHARACTER = /[\p{P}\p{S}]/u;
 const WHITESPACE_CHARACTER = /\s/u;
 
@@ -63,14 +82,26 @@ function tokenizeInlineDelimiters(markdown: string): InlineToken[] {
     }
 
     const length = end - index;
+    const leftCharacter = characters[index - 1];
+    const rightCharacter = characters[end];
+    if (
+      character === '*' &&
+      length === 1 &&
+      leftCharacter !== undefined &&
+      DECIMAL_DIGIT_CHARACTER.test(leftCharacter) &&
+      rightCharacter !== undefined &&
+      DECIMAL_DIGIT_CHARACTER.test(rightCharacter)
+    ) {
+      tokens.push({ type: 'text', value: character });
+      index = end;
+      continue;
+    }
     if (character === '~' && length !== 2) {
       tokens.push({ type: 'text', value: character.repeat(length) });
       index = end;
       continue;
     }
 
-    const leftCharacter = characters[index - 1];
-    const rightCharacter = characters[end];
     const leftIsWhitespace =
       leftCharacter === undefined || WHITESPACE_CHARACTER.test(leftCharacter);
     const rightIsWhitespace =
@@ -104,84 +135,104 @@ function tokenizeInlineDelimiters(markdown: string): InlineToken[] {
 }
 
 function pairInlineDelimiters(tokens: InlineToken[]) {
-  const delimiterIndexes = tokens.flatMap((token, index) =>
-    token.type === 'delimiter' ? [index] : [],
-  );
-  const blockedOpeners = new Set<number>();
+  const activeOpeners: Opener[] = [];
+  const openerBuckets = Array.from({ length: OPENER_BUCKET_COUNT }, (): OpenerHandle[] => []);
+  let delimiterOrder = 0;
 
-  for (let closerPosition = 0; closerPosition < delimiterIndexes.length; closerPosition += 1) {
-    const closerIndex = delimiterIndexes[closerPosition];
-    const closer = tokens[closerIndex];
-    if (closer.type !== 'delimiter' || !closer.canClose) {
+  for (const token of tokens) {
+    if (token.type !== 'delimiter') {
       continue;
     }
 
-    while (closer.remaining > 0) {
-      const openerPosition = findMatchingOpener(
-        tokens,
-        delimiterIndexes,
-        closerPosition,
-        closer,
-        blockedOpeners,
-      );
-      if (openerPosition === undefined) {
-        break;
-      }
+    if (token.canClose) {
+      while (token.remaining > 0) {
+        const opener = findMatchingOpener(token, openerBuckets);
+        if (!opener) {
+          break;
+        }
 
-      const openerIndex = delimiterIndexes[openerPosition];
-      const opener = tokens[openerIndex];
-      if (opener.type !== 'delimiter') {
-        break;
-      }
+        invalidateOpenersAfter(opener, activeOpeners);
+        const delimiterCount =
+          token.character === '~' || (opener.token.remaining >= 2 && token.remaining >= 2) ? 2 : 1;
+        opener.token.remaining -= delimiterCount;
+        token.remaining -= delimiterCount;
 
-      const delimiterCount =
-        closer.character === '~' || (opener.remaining >= 2 && closer.remaining >= 2) ? 2 : 1;
-      opener.remaining -= delimiterCount;
-      closer.remaining -= delimiterCount;
-
-      for (let position = openerPosition + 1; position < closerPosition; position += 1) {
-        const nestedIndex = delimiterIndexes[position];
-        const nested = tokens[nestedIndex];
-        if (nested.type === 'delimiter' && nested.remaining > 0) {
-          blockedOpeners.add(nestedIndex);
+        if (opener.token.remaining === 0) {
+          opener.active = false;
+          activeOpeners.pop();
+        } else {
+          opener.version += 1;
+          indexOpener(opener, openerBuckets);
         }
       }
     }
+
+    if (token.canOpen && token.remaining > 0) {
+      const opener: Opener = {
+        active: true,
+        order: delimiterOrder,
+        token,
+        version: 0,
+      };
+      activeOpeners.push(opener);
+      indexOpener(opener, openerBuckets);
+    }
+    delimiterOrder += 1;
   }
 }
 
 function findMatchingOpener(
-  tokens: InlineToken[],
-  delimiterIndexes: number[],
-  closerPosition: number,
-  closer: Extract<InlineToken, { type: 'delimiter' }>,
-  blockedOpeners: Set<number>,
-): number | undefined {
-  for (let position = closerPosition - 1; position >= 0; position -= 1) {
-    const openerIndex = delimiterIndexes[position];
-    const opener = tokens[openerIndex];
+  closer: DelimiterToken,
+  openerBuckets: OpenerHandle[][],
+): Opener | undefined {
+  const firstBucket = DELIMITER_CHARACTER_INDEX[closer.character] * OPENER_BUCKETS_PER_CHARACTER;
+  let nearest: Opener | undefined;
+
+  for (let offset = 0; offset < OPENER_BUCKETS_PER_CHARACTER; offset += 1) {
+    const opener = peekCurrentOpener(openerBuckets[firstBucket + offset]);
     if (
-      opener.type !== 'delimiter' ||
-      blockedOpeners.has(openerIndex) ||
-      !opener.canOpen ||
-      opener.character !== closer.character ||
-      opener.remaining === 0 ||
-      (closer.character === '~' && opener.remaining < 2) ||
-      violatesMultipleOfThreeRule(opener, closer)
+      !opener ||
+      (closer.character === '~' && opener.token.remaining < 2) ||
+      violatesMultipleOfThreeRule(opener.token, closer)
     ) {
       continue;
     }
 
-    return position;
+    if (!nearest || opener.order > nearest.order) {
+      nearest = opener;
+    }
   }
 
-  return undefined;
+  return nearest;
 }
 
-function violatesMultipleOfThreeRule(
-  opener: Extract<InlineToken, { type: 'delimiter' }>,
-  closer: Extract<InlineToken, { type: 'delimiter' }>,
-): boolean {
+function peekCurrentOpener(bucket: OpenerHandle[]): Opener | undefined {
+  let handle = bucket.at(-1);
+  while (handle && (!handle.opener.active || handle.version !== handle.opener.version)) {
+    bucket.pop();
+    handle = bucket.at(-1);
+  }
+  return handle?.opener;
+}
+
+function invalidateOpenersAfter(opener: Opener, activeOpeners: Opener[]) {
+  let active = activeOpeners.at(-1);
+  while (active && active !== opener) {
+    active.active = false;
+    activeOpeners.pop();
+    active = activeOpeners.at(-1);
+  }
+}
+
+function indexOpener(opener: Opener, openerBuckets: OpenerHandle[][]) {
+  const bucketIndex =
+    DELIMITER_CHARACTER_INDEX[opener.token.character] * OPENER_BUCKETS_PER_CHARACTER +
+    Number(opener.token.canClose) * 3 +
+    (opener.token.remaining % 3);
+  openerBuckets[bucketIndex].push({ opener, version: opener.version });
+}
+
+function violatesMultipleOfThreeRule(opener: DelimiterToken, closer: DelimiterToken): boolean {
   if (!(opener.canClose || closer.canOpen)) {
     return false;
   }

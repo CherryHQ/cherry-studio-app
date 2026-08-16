@@ -143,9 +143,18 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
-  test.each(['snake_case', '2 * 3'])('preserves delimiter-like literal text %p', (markdown) => {
-    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
-      text: markdown,
+  test.each(['snake_case', '2 * 3', '2*3*4', '2*3 + 4*5'])(
+    'preserves delimiter-like literal text %p',
+    (markdown) => {
+      expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+        text: markdown,
+      });
+    },
+  );
+
+  test('preserves multiplication operators projected from simple inline math', () => {
+    expect(projectAssistantMessageReadAloud(createMessage([textPart('$2*3*4$')]))).toEqual({
+      text: '2*3*4',
     });
   });
 
@@ -187,6 +196,14 @@ describe('projectAssistantMessageReadAloud', () => {
 
     expect(projectAssistantMessageReadAloud(message)).toEqual({
       text: 'First *unclosed\nSecond close*',
+    });
+  });
+
+  test('preserves a large sequence of unmatched emphasis delimiters', () => {
+    const markdown = Array.from({ length: 4096 }, () => 'term*').join(' ');
+
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: markdown,
     });
   });
 
