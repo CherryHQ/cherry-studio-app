@@ -143,6 +143,39 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test.each(['snake_case', '2 * 3'])('preserves delimiter-like literal text %p', (markdown) => {
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: markdown,
+    });
+  });
+
+  test.each([
+    ['Keep \\*literal\\*.', 'Keep *literal*.'],
+    ['Keep \\_literal\\_.', 'Keep _literal_.'],
+    ['\\* literal at the start of a line', '* literal at the start of a line'],
+  ])('preserves escaped emphasis delimiters in %p', (markdown, expectedText) => {
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: expectedText,
+    });
+  });
+
+  test.each(['Keep *unclosed.', 'Keep _unclosed.', 'Keep **unclosed.'])(
+    'preserves an unclosed emphasis delimiter in %p',
+    (markdown) => {
+      expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+        text: markdown,
+      });
+    },
+  );
+
+  test('projects nested emphasis markers without dropping their content', () => {
+    const message = createMessage([textPart('Read **outer _inner_ text** and ***bold italic***.')]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'Read outer inner text and bold italic.',
+    });
+  });
+
   test('keeps simple inline math and removes block or complex LaTeX math', () => {
     const message = createMessage([
       textPart(

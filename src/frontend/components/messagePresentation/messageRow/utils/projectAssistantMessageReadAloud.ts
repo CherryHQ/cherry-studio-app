@@ -1,4 +1,5 @@
 import type { MessagePresentationItem } from '../../types';
+import { projectMarkdownInlineForSpeech } from './projectMarkdownInlineForSpeech';
 
 export type AssistantReadAloudContent = { language?: string; text: string };
 
@@ -62,9 +63,9 @@ function cleanMarkdownForSpeech(markdown: string): string {
     isSimpleMath(expression) ? expression : '',
   );
   text = text.replace(/(`+)([^`\n]*?)\1/g, '$2');
-  text = text.replace(/(?:\*\*|__|~~|[*_])/g, '');
 
-  return normalizeSpeechWhitespace(text.split('\n').map(removeBlockMarkers).join('\n'));
+  const withoutBlockMarkers = text.split('\n').map(removeBlockMarkers).join('\n');
+  return normalizeSpeechWhitespace(projectMarkdownInlineForSpeech(withoutBlockMarkers));
 }
 
 function removeFencedCodeBlocks(markdown: string): string {

@@ -21,6 +21,9 @@ details. Callers import only from `@/frontend/components/messagePresentation`.
 The module accepts only visible `user` and `assistant` messages. A feature that stores additional
 roles must explicitly filter or adapt them before crossing this interface. Feature runtime,
 persistence entities, composer state, and tool-approval orchestration remain with their owners.
+Private speech projection utilities select and Markdown-clean speakable text from completed replies
+without changing message data. An explicit translation `targetLanguage` takes priority; otherwise
+only kana and Hangul provide Japanese or Korean hints, while ambiguous scripts use the system voice.
 
 ## List Behavior
 
