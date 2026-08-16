@@ -1,22 +1,9 @@
-import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activity';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
 import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivity/types';
 
 import { BackgroundActivityManager } from '../BackgroundActivityManager';
 import type { BackgroundActivityPresenter } from '../presenter';
-
-const mockFileWrite = jest.fn();
-
-jest.mock('expo-file-system', () => ({
-  File: class MockFile {
-    exists = true;
-    uri = 'file:///widgets/cherry-studio-logo.png';
-    copy = jest.fn(async () => {});
-    write = mockFileWrite;
-  },
-}));
-jest.mock('expo-widgets', () => ({ widgetsDirectory: 'file:///widgets' }));
 
 type TestProps = BackgroundActivityBaseProps & { detail: string };
 
@@ -39,6 +26,7 @@ function createMockPresenter() {
 describe('BackgroundActivityManager', () => {
   let appStateListener: ((state: AppStateStatus) => void) | undefined;
   const mockLeases: { release: jest.Mock }[] = [];
+  const mockPrepareLogo = jest.fn(async () => 'file:///widgets/cherry-studio-logo.png');
   const mockAcquire = jest.fn((_tag: string) => {
     const lease = { release: jest.fn() };
     mockLeases.push(lease);
@@ -61,10 +49,11 @@ describe('BackgroundActivityManager', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
-  test('sweeps orphaned surfaces from every presenter at construction', async () => {
+  test('sweeps orphaned surfaces and prepares the shared logo at initialization', async () => {
     const first = createMockPresenter();
     const second = createMockPresenter();
     first.presenter.clearOrphans.mockResolvedValueOnce(2);
@@ -73,9 +62,7 @@ describe('BackgroundActivityManager', () => {
 
     expect(first.presenter.clearOrphans).toHaveBeenCalledTimes(1);
     expect(second.presenter.clearOrphans).toHaveBeenCalledTimes(1);
-    expect(mockFileWrite).toHaveBeenCalledWith(CHERRY_ACTIVITY_LOGO_BASE64, {
-      encoding: 'base64',
-    });
+    expect(mockPrepareLogo).toHaveBeenCalledTimes(1);
     await manager._doStop();
   });
 
@@ -97,8 +84,6 @@ describe('BackgroundActivityManager', () => {
       }),
       'cherrystudio://topics?topicId=t-1',
     );
-    await session.ready;
-
     appStateListener?.('inactive');
     appStateListener?.('background');
     appStateListener?.('active');
@@ -125,7 +110,6 @@ describe('BackgroundActivityManager', () => {
       tag: 'chat.topic-1',
     });
     session.update(makeProps('two'), { urgent: true });
-    await session.ready;
     expect(presenter.start).not.toHaveBeenCalled();
 
     appStateListener?.('active');
@@ -142,6 +126,35 @@ describe('BackgroundActivityManager', () => {
     await manager._doStop();
   });
 
+  test('refreshes AppState during initialization instead of using the constructor snapshot', async () => {
+    const { presenter } = createMockPresenter();
+    const manager = new BackgroundActivityManager(
+      { acquire: mockAcquire },
+      {
+        getColorScheme: () => 'dark',
+        prepareLogo: mockPrepareLogo,
+        presenters: [presenter],
+      },
+    );
+    Object.defineProperty(AppState, 'currentState', {
+      configurable: true,
+      value: 'background',
+    });
+    await manager._doInit();
+
+    const session = manager.startSession({
+      presenter,
+      props: makeProps('background'),
+      tag: 'chat.topic-1',
+    });
+    expect(presenter.start).not.toHaveBeenCalled();
+    appStateListener?.('active');
+    expect(presenter.start).toHaveBeenCalledTimes(1);
+
+    session.cancel();
+    await manager._doStop();
+  });
+
   test('mirrors the keepAlive bit into coordinator leases', async () => {
     const { presenter } = createMockPresenter();
     const manager = await createManager([presenter]);
@@ -151,7 +164,6 @@ describe('BackgroundActivityManager', () => {
       props: makeProps('generating'),
       tag: 'chat.topic-1',
     });
-    await session.ready;
     expect(mockAcquire).toHaveBeenCalledTimes(1);
     expect(mockAcquire).toHaveBeenCalledWith('chat.topic-1');
 
@@ -167,6 +179,7 @@ describe('BackgroundActivityManager', () => {
   });
 
   test('applies urgent updates immediately and throttles updates across AppState changes', async () => {
+    jest.useFakeTimers();
     const { handles, presenter } = createMockPresenter();
     const manager = await createManager([presenter]);
     const session = manager.startSession({
@@ -174,23 +187,22 @@ describe('BackgroundActivityManager', () => {
       props: makeProps('one'),
       tag: 'chat.topic-1',
     });
-    await session.ready;
     expect(presenter.start).toHaveBeenCalledTimes(1);
 
     session.update(makeProps('two'));
-    await flushOperations();
+    await flushMicrotasks();
     expect(handles[0]?.update).not.toHaveBeenCalled();
 
     session.update(makeProps('three'), { urgent: true });
-    await flushOperations();
+    await flushMicrotasks();
     expect(handles[0]?.update).toHaveBeenCalledTimes(1);
 
     appStateListener?.('background');
     session.update(makeProps('four'));
-    await flushOperations();
+    await flushMicrotasks();
     expect(handles[0]?.update).toHaveBeenCalledTimes(1);
-    await new Promise((resolve) => setTimeout(resolve, 1050));
-    await flushOperations();
+    await jest.advanceTimersByTimeAsync(1_000);
+    await flushMicrotasks();
     expect(handles[0]?.update).toHaveBeenCalledTimes(2);
 
     session.cancel();
@@ -202,8 +214,6 @@ describe('BackgroundActivityManager', () => {
     const manager = await createManager([presenter]);
     const props = makeProps('same');
     const session = manager.startSession({ presenter, props, tag: 'chat.topic-1' });
-    await session.ready;
-
     session.update({ ...props }, { urgent: true });
     await flushOperations();
     expect(handles[0]?.update).not.toHaveBeenCalled();
@@ -220,8 +230,6 @@ describe('BackgroundActivityManager', () => {
       props: makeProps('running'),
       tag: 'chat.topic-1',
     });
-    await session.ready;
-
     session.finish(makeProps('done'));
     session.finish(makeProps('late-finish'));
     await flushOperations();
@@ -252,7 +260,6 @@ describe('BackgroundActivityManager', () => {
       tag: 'chat.topic-1',
     });
 
-    await expect(session.ready).resolves.toBeUndefined();
     appStateListener?.('background');
     appStateListener?.('active');
     session.update(makeProps('update'), { urgent: true });
@@ -266,14 +273,12 @@ describe('BackgroundActivityManager', () => {
   test('stop ends every session, releases leases, and no-ops later sessions', async () => {
     const { handles, presenter } = createMockPresenter();
     const manager = await createManager([presenter]);
-    const session = manager.startSession({
+    manager.startSession({
       keepAlive: true,
       presenter,
       props: makeProps('running'),
       tag: 'chat.topic-1',
     });
-    await session.ready;
-
     await manager._doStop();
     expect(handles[0]?.end).toHaveBeenCalledWith(
       'immediate',
@@ -281,20 +286,19 @@ describe('BackgroundActivityManager', () => {
     );
     expect(mockLeases[0]?.release).toHaveBeenCalledTimes(1);
 
-    const late = manager.startSession({
+    manager.startSession({
       keepAlive: true,
       presenter,
       props: makeProps('late'),
       tag: 'chat.topic-2',
     });
-    await late.ready;
     expect(mockAcquire).toHaveBeenCalledTimes(1);
   });
 
   async function createManager(presenters: readonly { clearOrphans(): Promise<number> }[]) {
     const manager = new BackgroundActivityManager(
       { acquire: mockAcquire },
-      { getColorScheme: () => 'dark', presenters },
+      { getColorScheme: () => 'dark', prepareLogo: mockPrepareLogo, presenters },
     );
     await manager._doInit();
     return manager;
@@ -308,4 +312,8 @@ function makeProps(detail: string): TestProps {
 async function flushOperations() {
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
+}
+
+async function flushMicrotasks() {
+  for (let index = 0; index < 4; index += 1) await Promise.resolve();
 }

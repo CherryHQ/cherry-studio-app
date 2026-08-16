@@ -1967,11 +1967,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
       });
       activeTurn.backgroundReply = backgroundReply;
       activeTurn.backgroundReplyModelId = model.id;
-      void backgroundReply.ready.catch((error) => {
-        logger.error('Background reply lifecycle failed to initialize', toError(error), {
-          topicId: topic.id,
-        });
-      });
     } catch (error) {
       this.dependencies.backgroundReply.clearTopic(topic.id);
       logger.warn('Failed to start background reply lifecycle', toError(error), {

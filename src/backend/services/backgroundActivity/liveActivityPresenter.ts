@@ -23,7 +23,8 @@ export function createLiveActivityPresenter<Props extends BackgroundActivityBase
     start: (props, deepLinkUrl) => {
       const activity = factory.start(props, deepLinkUrl);
       return {
-        end: (policy, endProps) => activity.end(policy, endProps, new Date()),
+        end: (policy, endProps) =>
+          activity.end(policy, endProps, new Date(endProps.finishedAtEpochMs ?? Date.now())),
         update: (updateProps) => activity.update(updateProps),
       };
     },

@@ -1,8 +1,4 @@
-import {
-  CHERRY_ACTIVITY_LOGO_BASE64,
-  type BackgroundActivityNativePresentation,
-} from '@cherrystudio/ui/background-activity';
-import { File } from 'expo-file-system';
+import type { BackgroundActivityNativePresentation } from '@cherrystudio/ui/background-activity';
 import { AppState, type AppStateStatus, Platform } from 'react-native';
 
 import {
@@ -13,7 +9,10 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import type { KeepAliveLease } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import type {
+  KeepAliveLease,
+  KeepAliveSource,
+} from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import type { BackgroundActivityBaseProps } from '@/shared/backgroundActivity/types';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -28,7 +27,7 @@ export type BackgroundActivitySessionInput<Props extends BackgroundActivityBaseP
   keepAlive?: boolean;
   presenter: BackgroundActivityPresenter<Props>;
   props: Props;
-  /** Stable owner id — keep-alive attribution and log correlation. */
+  /** Diagnostic label for keep-alive attribution and log correlation; not unique. */
   tag: string;
 };
 
@@ -37,8 +36,6 @@ export type BackgroundActivitySessionInput<Props extends BackgroundActivityBaseP
  * after `finish`/`cancel` (or manager disposal) are no-ops.
  */
 export type BackgroundActivitySession<Props extends BackgroundActivityBaseProps> = {
-  /** Resolves after registration as pending or the first foreground start attempt; never rejects. */
-  ready: Promise<void>;
   /** Terminal: ends the surface immediately (domain cleanup, deletions). */
   cancel(): void;
   /** Terminal: shows `props` as the final content under the default dismissal. */
@@ -64,11 +61,11 @@ type SurfaceState =
   | { status: 'unavailable' }
   | { status: 'ended' };
 
-type KeepAlivePort = { acquire: (tag: string) => KeepAliveLease };
 type BackgroundActivityEnvironmentPort = {
   /** Every presenter whose orphaned surfaces must be swept at cold start. */
   presenters: readonly { clearOrphans(): Promise<number> }[];
   getColorScheme(): 'dark' | 'light';
+  prepareLogo(): Promise<string | undefined>;
 };
 
 /**
@@ -93,7 +90,7 @@ export class BackgroundActivityManager extends BaseService {
   private sessions = new Set<SessionRecord>();
 
   constructor(
-    private readonly keepAlive: KeepAlivePort,
+    private readonly keepAlive: KeepAliveSource,
     private readonly environment: BackgroundActivityEnvironmentPort,
   ) {
     super();
@@ -104,9 +101,10 @@ export class BackgroundActivityManager extends BaseService {
     // today; session bookkeeping still works elsewhere via no-op presenters.
     if (Platform.OS !== 'ios') return;
 
+    this.appState = AppState.currentState;
     this.registerAppStateListener(this.handleAppStateChange);
     await this.clearOrphanedSurfaces();
-    await this.prepareLogo();
+    this.logoUri = await this.environment.prepareLogo();
   }
 
   startSession<Props extends BackgroundActivityBaseProps>(
@@ -128,7 +126,6 @@ export class BackgroundActivityManager extends BaseService {
     this.startNative(record);
 
     return {
-      ready: Promise.resolve(),
       cancel: () => this.settle(record, 'immediate'),
       finish: (props) => {
         if (record.surface.status === 'ended' || this.disposed) return;
@@ -293,21 +290,6 @@ export class BackgroundActivityManager extends BaseService {
     }
   }
 
-  private async prepareLogo(): Promise<void> {
-    try {
-      // `expo-widgets` resolves its iOS native module at import time. Loading it
-      // here keeps the service registry importable on platforms and in tests
-      // where that native module does not exist; this method only runs on iOS.
-      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
-      const { widgetsDirectory } = require('expo-widgets') as typeof import('expo-widgets');
-      const destination = new File(widgetsDirectory, 'cherry-studio-logo.png');
-      destination.write(CHERRY_ACTIVITY_LOGO_BASE64, { encoding: 'base64' });
-      this.logoUri = destination.uri;
-    } catch (error) {
-      logger.warn('Background activity logo preparation failed', error as Error);
-    }
-  }
-
   private clearUpdateTimer(record: SessionRecord): void {
     if (record.updateTimer) clearTimeout(record.updateTimer);
     record.updateTimer = undefined;
@@ -324,7 +306,6 @@ function noOpSession<
   Props extends BackgroundActivityBaseProps,
 >(): BackgroundActivitySession<Props> {
   return {
-    ready: Promise.resolve(),
     cancel: () => {},
     finish: () => {},
     update: () => {},

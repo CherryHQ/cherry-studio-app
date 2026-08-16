@@ -1,8 +1,14 @@
+import { CHERRY_ACTIVITY_LOGO_BASE64 } from '@cherrystudio/ui/background-activity';
+import { File } from 'expo-file-system';
+
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
 import type { PaintingActivityProps } from '@/shared/backgroundActivity/painting';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { noopBackgroundActivityPresenter, type BackgroundActivityPresenter } from './presenter';
+
+const logger = loggerService.withContext('BackgroundActivityEnvironment');
 
 export type BackgroundActivityTranslate = (key: string) => string;
 
@@ -51,5 +57,23 @@ export class BackgroundActivityEnvironment extends BaseService {
 
   get presenters(): readonly { clearOrphans(): Promise<number> }[] {
     return [this.config.assistantPresenter, this.config.paintingPresenter];
+  }
+
+  async prepareLogo(): Promise<string | undefined> {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy native-module load
+      const { widgetsDirectory } = require('expo-widgets') as {
+        widgetsDirectory?: string | null;
+      };
+      if (!widgetsDirectory) {
+        return undefined;
+      }
+      const destination = new File(widgetsDirectory, 'cherry-studio-logo.png');
+      destination.write(CHERRY_ACTIVITY_LOGO_BASE64, { encoding: 'base64' });
+      return destination.uri;
+    } catch (error) {
+      logger.warn('Background activity logo preparation failed', error as Error);
+      return undefined;
+    }
   }
 }

@@ -11,7 +11,6 @@ type MockSession = {
   cancel: jest.Mock;
   finish: jest.Mock;
   input: SessionInput;
-  ready: Promise<void>;
   update: jest.Mock;
 };
 
@@ -24,7 +23,6 @@ describe('BackgroundReplyRuntime', () => {
       cancel: jest.fn(),
       finish: jest.fn(),
       input,
-      ready: Promise.resolve(),
       update: jest.fn(),
     };
     mockSessions.push(session);
@@ -59,8 +57,6 @@ describe('BackgroundReplyRuntime', () => {
       topicTitle: 'Second topic',
     });
     expect(first).not.toBe(second);
-    await Promise.all([first.ready, second.ready]);
-
     expect(mockStartSession).toHaveBeenCalledTimes(2);
     expect(mockSessions[0]?.input).toMatchObject({
       deepLinkUrl: 'cherrystudio://topics?topicId=topic-1',
@@ -89,9 +85,7 @@ describe('BackgroundReplyRuntime', () => {
 
   test('uses the localized assistant fallback when no assistant or model name is available', async () => {
     const runtime = await createRuntime();
-    const turn = runtime.startTurn({ assistantName: ' ', topicId: 'topic-1', topicTitle: ' ' });
-    await turn.ready;
-
+    runtime.startTurn({ assistantName: ' ', topicId: 'topic-1', topicTitle: ' ' });
     expect(mockSessions[0]?.input.props).toMatchObject({ title: 'Localized assistant' });
 
     await runtime._doStop();
@@ -104,7 +98,6 @@ describe('BackgroundReplyRuntime', () => {
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await turn.ready;
     const session = mockSessions[0];
 
     turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'hello' }], role: 'assistant' });
@@ -174,8 +167,6 @@ describe('BackgroundReplyRuntime', () => {
         topicId: 'topic-1',
         topicTitle: 'First topic',
       });
-      await turn.ready;
-
       turn.finish(outcome);
       await flushOperations();
 
@@ -193,7 +184,6 @@ describe('BackgroundReplyRuntime', () => {
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await first.ready;
     const session = mockSessions[0];
 
     first.finish('completed');
@@ -202,7 +192,6 @@ describe('BackgroundReplyRuntime', () => {
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await second.ready;
     await flushOperations();
 
     expect(mockStartSession).toHaveBeenCalledTimes(1);
@@ -225,8 +214,6 @@ describe('BackgroundReplyRuntime', () => {
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await turn.ready;
-
     turn.awaitApproval();
     runtime.clearTopic('topic-1');
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
@@ -243,8 +230,6 @@ describe('BackgroundReplyRuntime', () => {
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await turn.ready;
-
     enabled = false;
     preferenceListener?.();
     await flushOperations();
@@ -287,13 +272,11 @@ describe('BackgroundReplyRuntime', () => {
 
   test('ends sessions when stopped during an active turn and stops idempotently', async () => {
     const runtime = await createRuntime();
-    const turn = runtime.startTurn({
+    runtime.startTurn({
       assistantName: 'Alpha',
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await turn.ready;
-
     await expect(runtime._doStop()).resolves.toBeUndefined();
     await expect(runtime._doStop()).resolves.toBeUndefined();
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
@@ -302,12 +285,11 @@ describe('BackgroundReplyRuntime', () => {
   test('uses no-op turns on Android and when the preference is disabled at startup', async () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const androidRuntime = await createRuntime();
-    const androidTurn = androidRuntime.startTurn({
+    androidRuntime.startTurn({
       assistantName: 'Alpha',
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await androidTurn.ready;
     expect(mockStartSession).not.toHaveBeenCalled();
     await androidRuntime._doStop();
 
@@ -315,12 +297,11 @@ describe('BackgroundReplyRuntime', () => {
     enabled = false;
     const disabledRuntime = await createRuntime();
     expect(disabledRuntime.isActivated).toBe(false);
-    const disabledTurn = disabledRuntime.startTurn({
+    disabledRuntime.startTurn({
       assistantName: 'Alpha',
       topicId: 'topic-2',
       topicTitle: 'Second topic',
     });
-    await disabledTurn.ready;
     expect(mockStartSession).not.toHaveBeenCalled();
     await disabledRuntime._doStop();
   });
@@ -341,8 +322,6 @@ describe('BackgroundReplyRuntime', () => {
       topicId: 'topic-1',
       topicTitle: 'First topic',
     });
-    await turn.ready;
-
     expect(() =>
       turn.update({
         id: 'assistant-1',

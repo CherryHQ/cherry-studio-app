@@ -3,10 +3,17 @@ import type {
   CherryUIMessage,
 } from '@cherrystudio/universal/data/types/message';
 
-import { deriveBackgroundReplyContent, extractReplyPreview } from '../deriveBackgroundReplyContent';
+import {
+  deriveBackgroundReplyContent,
+  extractReplyPreview,
+  getTerminalBackgroundReplyContent,
+} from '../deriveBackgroundReplyContent';
 
 const translations: Record<string, string> = {
   'chat.backgroundReply.awaitingApproval': 'Awaiting approval',
+  'chat.backgroundReply.cancelled': 'Cancelled',
+  'chat.backgroundReply.completed': 'Completed',
+  'chat.backgroundReply.failed': 'Failed',
   'chat.backgroundReply.preparing': 'Preparing',
   'chat.backgroundReply.responding': 'Replying',
   'chat.backgroundReply.thinking': 'Thinking',
@@ -92,6 +99,22 @@ describe('deriveBackgroundReplyContent', () => {
     expect(Array.from(preview ?? '')).toHaveLength(160);
     expect(preview?.endsWith('😀末尾')).toBe(true);
     expect(preview?.startsWith('…')).toBe(true);
+  });
+
+  test('keeps preview only for completed terminal content', () => {
+    expect(getTerminalBackgroundReplyContent('completed', 'final answer', t)).toEqual({
+      detail: 'Completed',
+      phase: 'completed',
+      preview: 'final answer',
+    });
+    expect(getTerminalBackgroundReplyContent('failed', 'partial answer', t)).toEqual({
+      detail: 'Failed',
+      phase: 'failed',
+    });
+    expect(getTerminalBackgroundReplyContent('cancelled', 'partial answer', t)).toEqual({
+      detail: 'Cancelled',
+      phase: 'cancelled',
+    });
   });
 });
 

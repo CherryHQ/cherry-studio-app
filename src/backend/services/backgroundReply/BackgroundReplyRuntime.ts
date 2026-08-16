@@ -149,7 +149,6 @@ export class BackgroundReplyRuntime
     this.ensureSession(record);
 
     return {
-      ready: record.session?.ready ?? Promise.resolve(),
       awaitApproval: (message) =>
         this.runTurnCallback(input.topicId, 'mark approval pending', () => {
           if (!this.isCurrent(input.topicId, generation)) return;
@@ -312,7 +311,6 @@ export class BackgroundReplyRuntime
 }
 
 const noOpTurn: BackgroundReplyTurn = {
-  ready: Promise.resolve(),
   awaitApproval: () => {},
   finish: () => {},
   update: () => {},

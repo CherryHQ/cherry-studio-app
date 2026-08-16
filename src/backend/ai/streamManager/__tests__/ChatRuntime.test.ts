@@ -158,36 +158,7 @@ describe('ChatRuntime', () => {
     expect(backgroundTurn.finish).toHaveBeenCalledWith('completed');
   });
 
-  test('does not wait for native background reply readiness before streaming', async () => {
-    const services = createServices();
-    const readiness = createDeferred();
-    const backgroundTurn = createBackgroundReplyTurn();
-    backgroundTurn.ready = readiness.promise;
-    const runtime = createRuntime({
-      backgroundReply: createBackgroundReplyLifecycle(backgroundTurn),
-      services,
-    });
-    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
-
-    const result = await Promise.race([
-      runtime
-        .sendText({
-          selectedModelId: 'provider::model' as UniqueModelId,
-          text: 'hi',
-          topicId: 'topic-1',
-        })
-        .then(() => 'completed'),
-      delay(1_000).then(() => 'timed-out'),
-    ]);
-
-    expect(result).toBe('completed');
-    expect(services.message.finalizeAssistantMessage).toHaveBeenCalledWith(
-      'assistant-1',
-      expect.objectContaining({ status: 'success' }),
-    );
-  });
-
-  test('keeps streaming when the background reply lifecycle throws or rejects', async () => {
+  test('keeps streaming when the background reply lifecycle throws', async () => {
     const throwingServices = createServices();
     const throwingLifecycle: BackgroundReplyLifecycle = {
       clearTopic: jest.fn(),
@@ -209,30 +180,6 @@ describe('ChatRuntime', () => {
       }),
     ).resolves.toBeUndefined();
     expect(throwingLifecycle.clearTopic).toHaveBeenCalledWith('topic-1');
-
-    const rejectingServices = createServices();
-    const readiness = createDeferred();
-    const rejectingTurn = createBackgroundReplyTurn();
-    rejectingTurn.ready = readiness.promise;
-    const rejectingLifecycle = createBackgroundReplyLifecycle(rejectingTurn);
-    const rejectingRuntime = createRuntime({
-      backgroundReply: rejectingLifecycle,
-      services: rejectingServices,
-    });
-    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
-    const sendPromise = rejectingRuntime.sendText({
-      selectedModelId: 'provider::model' as UniqueModelId,
-      text: 'hi',
-      topicId: 'topic-1',
-    });
-    await waitUntil(() => (rejectingLifecycle.startTurn as jest.Mock).mock.calls.length > 0);
-    readiness.reject(new Error('native readiness failed'));
-
-    await expect(sendPromise).resolves.toBeUndefined();
-    expect(rejectingServices.message.finalizeAssistantMessage).toHaveBeenCalledWith(
-      'assistant-1',
-      expect.objectContaining({ status: 'success' }),
-    );
   });
 
   test('pauses the background reply lifecycle while tool approval is pending', async () => {
@@ -3024,7 +2971,6 @@ function createBackgroundReplyLifecycle(
 
 function createBackgroundReplyTurn(): BackgroundReplyTurn {
   return {
-    ready: Promise.resolve(),
     awaitApproval: jest.fn(),
     finish: jest.fn(),
     update: jest.fn(),

@@ -21,8 +21,6 @@ export type BackgroundReplyOutcome = Extract<
  * superseded by a newer generation become no-ops.
  */
 export type BackgroundReplyTurn = {
-  /** Settles after the initial native reconciliation and never rejects. */
-  ready: Promise<void>;
   awaitApproval: (message?: CherryUIMessage) => void;
   finish: (outcome: BackgroundReplyOutcome) => void;
   update: (message: CherryUIMessage) => void;
