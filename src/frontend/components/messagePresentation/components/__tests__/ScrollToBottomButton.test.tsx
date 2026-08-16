@@ -68,7 +68,7 @@ describe('ScrollToBottomButton', () => {
         <ScrollToBottomButton
           gap={8}
           inputHeight={sharedValue(72)}
-          isAtBottom={sharedValue(false)}
+          isHidden={sharedValue(false)}
           onPress={onPress}
         />,
       );

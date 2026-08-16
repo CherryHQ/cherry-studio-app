@@ -63,18 +63,24 @@ const mockLegendListRef = {
   getState: () => mockListMetrics,
   scrollToEnd: mockListScrollToEndMethod,
 } as unknown as LegendListRef;
-const mockIsAtBottom = {
-  get: jest.fn(() => true),
-  set: jest.fn(),
-  value: true,
-} as unknown as SharedValue<boolean>;
+function mockCreateSharedValue<T>(initial: T): SharedValue<T> {
+  const shared = {
+    get: () => shared.value,
+    set: (next: T) => {
+      shared.value = next;
+    },
+    value: initial,
+  };
+
+  return shared as unknown as SharedValue<T>;
+}
 const mockAssistantMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
 const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
 let mockSlideInMessageId: string | undefined;
 let mockScrollButtonProps:
   | {
       inputHeight: SharedValue<number>;
-      isAtBottom: SharedValue<boolean>;
+      isHidden: SharedValue<boolean>;
       onPress: () => void;
     }
   | undefined;
@@ -132,13 +138,26 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
-jest.mock('react-native-reanimated', () => ({
-  // 探针用 useAnimatedReaction 从 UI 线程回抛按钮显隐；这里只需存在即可，
-  // 本套件不断言探针输出。
-  runOnJS: (fn: unknown) => fn,
-  useAnimatedReaction: () => undefined,
-  useSharedValue: () => mockIsAtBottom,
-}));
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual<typeof import('react')>('react');
+
+  return {
+    // 探针用 useAnimatedReaction 从 UI 线程回抛按钮显隐；这里只需存在即可，
+    // 本套件不断言探针输出。
+    runOnJS: (fn: unknown) => fn,
+    useAnimatedReaction: () => undefined,
+    // 真实求值，好让「按钮显隐」的推导语义可断言。
+    useDerivedValue: (compute: () => unknown) => ({ get: compute }),
+    // 语义等价于「持有可变盒子的 useRef」：每个调用点一个独立实例（组件里有多个 shared
+    // value，共用一个对象会互相污染），且跨渲染保持同一身份——否则重渲后组件换用新盒子，
+    // 测试握着的旧引用就再也影响不了组件，断言会静默失真。
+    useSharedValue: <T,>(initial: T) => {
+      const ref = React.useRef<SharedValue<T> | null>(null);
+      ref.current ??= mockCreateSharedValue(initial);
+      return ref.current;
+    },
+  };
+});
 
 jest.mock('../../messageRow', () => ({
   AssistantMessageRow: (props: { message: MessagePresentationItem }) =>
@@ -159,7 +178,7 @@ jest.mock('../../messageRow', () => ({
 jest.mock('../ScrollToBottomButton', () => ({
   ScrollToBottomButton: (props: {
     inputHeight: SharedValue<number>;
-    isAtBottom: SharedValue<boolean>;
+    isHidden: SharedValue<boolean>;
     onPress: () => void;
   }) => {
     mockScrollButtonProps = props;
@@ -381,7 +400,11 @@ describe('MessageList anchored tail following', () => {
 
     expect(mockSlideInMessageId).toBe('user-1');
     expect(mockScrollButtonProps?.inputHeight).toBe(bottomAccessoryHeight);
-    expect(mockScrollButtonProps?.isAtBottom).toBe(mockLatestListProps?.sharedValues?.isAtEnd);
+
+    // 停在底部时隐藏。离开底部要不要显示还取决于相位，见下方的 paused 用例。
+    const isAtEnd = mockLatestListProps?.sharedValues?.isAtEnd;
+    isAtEnd?.set(true);
+    expect(mockScrollButtonProps?.isHidden.get()).toBe(true);
 
     act(() => mockScrollButtonProps?.onPress());
     expect(mockListScrollToEndMethod).toHaveBeenCalledWith({ animated: true });
@@ -515,6 +538,36 @@ describe('MessageList anchored tail following', () => {
     });
     expect(mockLatestListProps?.maintainVisibleContentPosition).toBeUndefined();
     expect(mockListScrollToEnd).toHaveBeenCalledTimes(2);
+  });
+
+  test('shows the scroll control only once the user pauses tail following', () => {
+    const messages = [
+      createMessage('user-1', 'user', [textPart('hello')]),
+      createMessage('assistant-1', 'assistant'),
+    ];
+    act(() => {
+      renderer = create(
+        <MessageList {...listProps(messages)} bottomAccessoryHeight={mockCreateSharedValue(88)} />,
+      );
+    });
+
+    // 钉顶期与尾随期都由 app 主动把列表推向底部：内容每长一截都会先把视口挤离底部、
+    // 下一帧滚动再吸回来，isAtEnd 因此逐帧翻转。这两个相位必须一律隐藏，否则按钮脉动。
+    const isAtEnd = mockLatestListProps?.sharedValues?.isAtEnd;
+    isAtEnd?.set(false);
+    expect(mockScrollButtonProps?.isHidden.get()).toBe(true);
+
+    act(() => mockLatestListProps?.anchoredEndSpace?.onSizeChanged?.(0));
+    act(() => flushAnimationFrames());
+    isAtEnd?.set(false);
+    expect(mockScrollButtonProps?.isHidden.get()).toBe(true);
+
+    // 用户拖动打断尾随后不再有自动滚动，此时离开底部才是真的「用户自己走开了」。
+    act(() => mockLatestListProps?.onScrollBeginDrag?.());
+    expect(mockScrollButtonProps?.isHidden.get()).toBe(false);
+
+    isAtEnd?.set(true);
+    expect(mockScrollButtonProps?.isHidden.get()).toBe(true);
   });
 
   test('cancels a queued follow before a touch can begin dragging', () => {
