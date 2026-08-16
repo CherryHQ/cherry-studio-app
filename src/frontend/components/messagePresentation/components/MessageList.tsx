@@ -2,6 +2,7 @@ import { ScrollShadow } from '@cherrystudio/ui/components';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import {
+  type RefObject,
   useCallback,
   useEffect,
   useEffectEvent,
@@ -11,6 +12,7 @@ import {
   useState,
 } from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
+import { KeyboardEvents } from 'react-native-keyboard-controller';
 import {
   runOnJS,
   useAnimatedReaction,
@@ -95,6 +97,10 @@ function messageKeyExtractor(item: MessagePresentationItem) {
 // （实测 3012px）再塌回去——一帧内内容少了 2964px，预留空白与钉顶落点都要跟着重算。
 // 分类后修正量 2964px → 5px。
 //
+// 注意它**不是**「发送后跳一下」的成因：分类修好之后，续轮发送前那一帧 -310px 的突跳原样
+// 还在，另有其因（收键盘按记录量回退，见下面 handleAnchorReady 的说明与 patches/）。两件事
+// 都在同一瞬间发生，别再合并归因。
+//
 // 判据用「有没有 part」而不是 status：类型翻转因此发生在第一个 chunk 落地时，那一刻行还只有
 // 几十像素，翻转本身不产生可见修正；而 status 要到整条回复结束才变，翻转时行已有数千像素。
 // 翻转后这一行的后续增长计入 assistant 均值，空行阶段的尺寸留在 assistant-empty，两个均值
@@ -115,6 +121,66 @@ function emitButtonVisibility(visible: boolean) {
 
 function emitScrollOffset(y: number) {
   emitLayoutBenchProbe('scroll', { y: Math.round(y) });
+}
+
+function emitFreeze(on: boolean) {
+  emitLayoutBenchProbe('freeze', { on });
+}
+
+// 键盘收放挪动内容却不改 contentSize、不改视口，因此不留下任何其它探针能看见的痕迹。发送时
+// `scrollMessageToEnd` 正好同时发起收键盘与钉顶滚动，缺了这条时间线就没法判断那一帧的位移
+// 是谁造成的。
+//
+// 一起记下当时的预留空白，是因为键盘造成净位移的充要条件就是它：抬起时按「当时的预留空白
+// 能吸收多少」决定抬多少，收起时回退的是抬起那一刻记下来的量——**两次之间预留空白变了，
+// 回退量就不再对**（实测续轮发送 0 → 512，净位移 310px）。没有这两个数，这类位移只能靠
+// 猜（上一轮就据此错误地怀疑过 MVCP）。
+//
+// 订阅不能按 `isLayoutBenchProbeArmed()` 开关：探针由假模型在**第一次发送**时 arm，而这个
+// effect 在列表挂载时就跑完了，按 armed 判断等于永远不订阅（实测整轮零 keyboard 事件）。
+// 改成 dev 下常驻订阅、由 emit 自己按 armed 过滤——键盘事件只在收放时各一条，不像 onScroll
+// 那样每帧都有，常驻的代价可以忽略。
+function useKeyboardProbe(endSpaceRef: RefObject<number>) {
+  useEffect(() => {
+    if (!__DEV__) {
+      return;
+    }
+
+    const subscriptions = (['keyboardWillShow', 'keyboardWillHide'] as const).map((event) =>
+      KeyboardEvents.addListener(event, ({ duration, height }) => {
+        emitLayoutBenchProbe('keyboard', {
+          dur: duration,
+          endSpace: Math.round(endSpaceRef.current),
+          event,
+          h: Math.round(height),
+        });
+      }),
+    );
+
+    return () => subscriptions.forEach((subscription) => subscription.remove());
+  }, [endSpaceRef]);
+}
+
+// 程序化滚动只记「谁调的」不够：同一个 scrollToEnd 落到哪里，取决于调用瞬间列表认为的
+// 内容长度与视口长度。发送消息时这两个量正在剧烈变化（新行未测量、预留空白在重算），
+// 落点因此可能远离用户当前位置——把三个量与调用点一起记下才谈得上归因。
+function emitProgrammaticScroll(
+  src: string,
+  listRef: RefObject<LegendListRef | null>,
+  extra?: Record<string, boolean | number | string | undefined>,
+) {
+  if (!isLayoutBenchProbeArmed()) {
+    return;
+  }
+
+  const listState = listRef.current?.getState();
+  emitLayoutBenchProbe('progScroll', {
+    ...extra,
+    content: listState ? Math.round(listState.contentLength) : undefined,
+    scroll: listState ? Math.round(listState.scroll) : undefined,
+    src,
+    viewport: listState ? Math.round(listState.scrollLength) : undefined,
+  });
 }
 
 function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[]) {
@@ -166,6 +232,8 @@ export function MessageList({
   const isDraggingListRef = useRef(false);
   const isMomentumScrollingRef = useRef(false);
   const isUserInteractingRef = useRef(false);
+  // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useKeyboardProbe）。
+  const endSpaceRef = useRef(0);
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
@@ -255,6 +323,17 @@ export function MessageList({
     },
   );
 
+  useAnimatedReaction(
+    () => freeze.get(),
+    (current, previous) => {
+      if (probeArmed.get() && previous !== null && current !== previous) {
+        runOnJS(emitFreeze)(current);
+      }
+    },
+  );
+
+  useKeyboardProbe(endSpaceRef);
+
   useLayoutEffect(() => {
     tailFollowPhaseRef.current = tailFollowPhase;
     // anchoring 与 following 都由 app 主动把列表推向底部（钉顶滚动 / 尾随滚动），
@@ -314,7 +393,7 @@ export function MessageList({
         | { scrollToEnd?: (options: { animated?: boolean }) => void }
         | null
         | undefined;
-      emitLayoutBenchProbe('progScroll', { src: 'tailFollow' });
+      emitProgrammaticScroll('tailFollow', listRef);
       nativeScrollRef?.scrollToEnd?.({ animated: false });
     });
   }, [listRef]);
@@ -400,16 +479,18 @@ export function MessageList({
       const isEnteringMessage = info.anchorKey === enteringMessageId;
       const shouldAnimate = isEnteringMessage && (animateFirstEnteringMessage || anchorIndex > 0);
       requestAnimationFrame(() => {
-        emitLayoutBenchProbe('progScroll', { animated: shouldAnimate, src: 'anchorReady' });
-        // 收键盘与钉顶滚动同时发起，别试着把它挪到滚动之后：实测「先钉顶、动画结束再收
-        // 键盘」会把位移搬到动画终点、还要再被尾随滚动拉一次，反转从 1 处 310px 变 2 处
-        // 334px，更差。
+        emitProgrammaticScroll('anchorReady', listRef, { animated: shouldAnimate });
+        // 收键盘与钉顶滚动**必须**同时发起，别再试着把它挪到滚动之后：改成「先钉顶、
+        // 动画结束再收键盘」实测反转从 1 处 310px 变成 2 处 334px（位移搬到动画终点，
+        // 还要再被尾随滚动拉一次），更差。
         //
-        // 这一句能安全地和钉顶同帧，前提是 patches/ 里那个键盘补丁。收键盘时
-        // react-native-keyboard-controller 默认按**键盘抬起那一刻记录的抬升量**回退，而
-        // 发送恰好在两次键盘事件之间把钉顶预留空白从 0 顶到 512、可滚动末端跟着下移，
-        // 回退的前提已经不成立——补丁前这里有一帧 -310px 的突跳，动画因此走 616px 而非
-        // 306px。补丁改成「夹到当下的合法区间」。补丁掉了这个跳动就会回来。
+        // 这里曾经有一帧 -310px 的突跳，成因**不是**「收键盘抽掉底部 inset 触发原生夹回」
+        // ——inset 全程是 max(预留空白 512, 键盘 310) = 512，一动没动。真正写值的是
+        // react-native-keyboard-controller 的 keyboardWillHide worklet：它按**键盘抬起
+        // 那一刻记录下来的抬升量**原样回退，而这两次键盘事件之间预留空白从 0 涨到了 512、
+        // 可滚动末端跟着下移，回退的前提已经不成立。修法是 patches/ 里那个补丁：让
+        // whenAtEnd 在键盘变矮时「夹到当下的合法区间」而不是「按记录量回退」，两者只在
+        // 这一个情形下不同，其余逐值相同。补丁掉了这个跳动就会回来。
         void scrollMessageToEnd({
           animated: shouldAnimate,
           closeKeyboard: isEnteringMessage,
@@ -421,6 +502,9 @@ export function MessageList({
 
   const handleAnchoredEndSpaceSizeChanged = useCallback(
     (size: number) => {
+      endSpaceRef.current = size;
+      emitLayoutBenchProbe('endSpace', { size: Math.round(size) });
+
       if (size > 0 || !anchorMessageId) {
         return;
       }
@@ -549,7 +633,7 @@ export function MessageList({
     [isAtBottom, scrollOffset],
   );
   const handleScrollToEnd = useCallback(() => {
-    emitLayoutBenchProbe('progScroll', { src: 'button' });
+    emitProgrammaticScroll('button', listRef);
     void listRef.current?.scrollToEnd({ animated: true });
   }, []);
 
@@ -593,6 +677,7 @@ export function MessageList({
   );
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
+    emitLayoutBenchProbe('viewport', { h: Math.round(event.nativeEvent.layout.height) });
     setViewportHeight(event.nativeEvent.layout.height);
   }, []);
 
@@ -647,7 +732,8 @@ export function MessageList({
         // 本 effect 依赖 contentBaseHeight，而流式每来一个 chunk 内容高度就变一次 → 静默窗口
         // 反复重启、gate 在整段流式里每帧重跑，这个 scrollToEnd 于是变成第二条不受尾随状态机
         // 管的自动滚动。它必须和 scheduleTailFollow 守同一个不变式：用户手上有动作时一律不滚，
-        // 否则拖动过程中列表会被硬拽回底部（实测一次拖动被拽 +198px）。
+        // 否则拖动过程中列表会被硬拽回底部（实测一次拖动被拽 +198px，harness 的
+        // gesture-conflict 判据就是这么抓到的）。
         // 跳过滚动但照常进入 settle：遮罩存在的意义是挡住布局抖动，人都已经在拖了就别再挡着。
         if (shouldScrollToEndBeforeReady && !isUserInteractingRef.current) {
           scrollLog.debug('[SCROLL] gateScrollToEnd', {
@@ -656,7 +742,7 @@ export function MessageList({
             viewportHeight: Math.round(viewportHeight),
             t: Date.now(),
           });
-          emitLayoutBenchProbe('progScroll', { src: 'readyGate' });
+          emitProgrammaticScroll('readyGate', listRef);
           void listRef.current?.scrollToEnd({ animated: false }).finally(reportReadyAfterSettle);
           return;
         }

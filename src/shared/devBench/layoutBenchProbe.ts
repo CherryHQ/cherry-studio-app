@@ -26,8 +26,23 @@ export const LAYOUT_BENCH_PROBE_PREFIX = '[LBP]';
 export type LayoutBenchProbeEvent =
   /** 内容总高变化；`ready` 为真表示遮罩已撤，此后的高度修正会泄漏成可见跳动。 */
   | 'content'
+  /** 锚点下方预留空白的实测尺寸。它决定钉顶落点，也是发送瞬间位移突变的第一嫌疑。 */
+  | 'endSpace'
+  /**
+   * 键盘收放。它移动内容却不留下 `content` 或 `viewport` 事件，是唯一无法从其它探针
+   * 反推出来的位移来源。带上当时的 `endSpace`：键盘造成**净**位移的充要条件就是「抬起
+   * 与收起两次之间预留空白变了」，只记事件不记这个数就判不出来。
+   */
+  | 'keyboard'
+  /**
+   * 发送时对键盘驱动的位移补偿所设的闸门（`useKeyboardScrollToEnd` 的 freeze）。
+   * 它是 shared value，JS 写入要跨线程才落地，与键盘收起谁先谁后必须能对时才说得清。
+   */
+  | 'freeze'
   /** 用户交互窗口边界（拖动/惯性/触摸），据此判定「手势期间是否有程序化滚动」。 */
   | 'interaction'
+  /** 列表视口尺寸；没有它就无法把 contentLength 换算成「距底还有多远」。 */
+  | 'viewport'
   /** 单行尺寸变化，用于统计行高振荡。 */
   | 'itemSize'
   /** 尾随状态机相位切换；不知道相位就无法判定同一条轨迹是合格还是缺陷。 */
