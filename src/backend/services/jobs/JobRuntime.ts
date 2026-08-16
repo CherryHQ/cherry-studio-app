@@ -53,19 +53,12 @@ import {
   type JobService,
   type TerminalJobStatus,
 } from '@/backend/data/services/JobService';
-import { paintingService } from '@/backend/data/services/PaintingService';
-import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
-import type { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type {
-  KeepAliveCoordinator,
   KeepAliveLease,
+  KeepAliveSource,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
-import {
-  createPaintingGenerateJobHandler,
-  type PaintingAi,
-} from '@/backend/services/paintings/tasks/paintingGenerateJobHandler';
 
+import type { JobHandlerRegistry } from './JobHandlerRegistry';
 import type { JobPayloadOf, JobType } from './jobRegistry';
 import { computeBackoff } from './runtime/backoff';
 import { type RecoveryRepo, runStartupRecovery } from './runtime/recovery';
@@ -80,7 +73,7 @@ import {
   type JobContext,
   type JobHandle,
   type JobHandler,
-  type JobHandlerFor,
+  type JobExecutionClass,
   MAX_CANCEL_REASON_CHARS,
   MAX_INPUT_BYTES,
   type PumpRequest,
@@ -89,20 +82,9 @@ import {
 
 const logger = loggerService.withContext('JobRuntime');
 
-/**
- * How many dispatch-ordered candidates one claim transaction inspects.
- *
- * TOMBSTONE — read before adding a second handler. If every candidate in the
- * window is filtered out (no handler / undispatchable class / queue at cap),
- * this claim returns null and the pump stops, *without ever seeing runnable
- * rows past the window*. Ordering is `priority ASC, scheduledAt ASC, id ASC`,
- * so 10 older background rows can permanently starve a newer foreground one.
- * Unreachable today: every registered handler's class is dispatchable.
- * Fix before registering the first `bounded-background` handler: push the
- * executionClass filter down into SQL, or widen and retry when the whole
- * window is filtered.
- */
+/** Page size while scanning dispatch-ordered candidates past queue-capped rows. */
 const CLAIM_CANDIDATE_WINDOW = 10;
+const DELAYED_TIMER_READ_RETRY_MS = 1_000;
 
 /**
  * `user-continued` states the product promise ("keeps running while you do
@@ -110,7 +92,7 @@ const CLAIM_CANDIDATE_WINDOW = 10;
  * honoring it on iOS today. Honest OS leases (iOS Continued Processing,
  * Android FGS) can replace the mechanism later without touching the class.
  */
-const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<string> = new Set([
+const DISPATCHABLE_EXECUTION_CLASSES: ReadonlySet<JobExecutionClass> = new Set([
   'foreground-only',
   'user-continued',
 ]);
@@ -140,7 +122,7 @@ export class JobHandlerTimeoutError extends Error {
 
 /** Optional test/runtime policy layered after the container-injected dependencies. */
 export type JobRuntimeOptions = {
-  /** Complete, immutable registry — frozen at construction. Defaults to {@link createHostHandlers}. */
+  /** Complete registry override for tests; production uses `JobHandlerRegistry`. */
   handlers?: readonly (readonly [string, JobHandler])[];
   jobService?: JobService;
   globalMaxConcurrency?: number;
@@ -151,7 +133,7 @@ export type JobRuntimeOptions = {
    * handler owns audio. Optional so tests without one keep exercising the
    * pipeline.
    */
-  keepAlive?: { acquire: (tag: string) => KeepAliveLease };
+  keepAlive?: KeepAliveSource;
   /** Injectable clock for tests. */
   now?: () => number;
   /** Progress sink; defaults to a no-op until a consumer exists (Phase 2+). */
@@ -166,8 +148,7 @@ type FinishedResolver = {
 type PreparedExecution = {
   controller: AbortController;
   executed: Promise<void>;
-  resolveExecuted(): void;
-  scopeHandle?: OperationHandle;
+  release(): void;
 };
 
 type ClaimResult =
@@ -181,54 +162,6 @@ function makeError(code: string, message: string, params?: Record<string, unknow
 function toErrorMessage(reason: unknown): string | undefined {
   if (reason instanceof Error) return reason.message;
   return typeof reason === 'string' && reason.length > 0 ? reason : undefined;
-}
-
-/**
- * The production registry. Assembled here rather than in composition because
- * every piece a handler needs is reachable from the host: the AI capability
- * through `@DependsOn`, the rest as module singletons.
- *
- * It is typed as the handler's own narrow port, not as `AiService`: this layer
- * receives AI capabilities as interfaces, and the container's positional
- * injection hands over whatever `AiService` resolves to regardless.
- */
-function createHostHandlers(
-  ai: PaintingAi,
-  backgroundActivities: Pick<BackgroundActivityManager, 'startSession'>,
-  environment: Pick<BackgroundActivityEnvironment, 'paintingPresenter' | 'translate'>,
-): readonly (readonly [string, JobHandler])[] {
-  return [
-    jobHandlerEntry(
-      'painting.generate',
-      createPaintingGenerateJobHandler({
-        activities: {
-          startSession: (input) =>
-            backgroundActivities.startSession({
-              ...input,
-              presenter: environment.paintingPresenter,
-            }),
-        },
-        ai,
-        paintings: paintingService,
-        storage: paintingFileStorage,
-        translate: environment.translate,
-      }),
-    ),
-  ];
-}
-
-/**
- * The single place a typed handler is erased for storage, mirroring desktop's
- * `registerHandler<K>(type, handler)`. Composition passes an array rather than
- * calling a register method, so this is what still checks that the handler's
- * payload matches the type's registry entry — write the tuple by hand and that
- * check is gone.
- */
-export function jobHandlerEntry<K extends JobType>(
-  type: K,
-  handler: JobHandlerFor<K>,
-): readonly [string, JobHandler] {
-  return [type, handler as JobHandler];
 }
 
 /**
@@ -246,27 +179,24 @@ export function jobHandlerEntry<K extends JobType>(
  */
 @Injectable('JobRuntime')
 @ServicePhase(Phase.PostReady)
-@DependsOn([
-  'DbService',
-  'AiService',
-  'BackgroundActivityManager',
-  'BackgroundActivityEnvironment',
-  'KeepAliveCoordinator',
-])
+@DependsOn(['DbService', 'JobHandlerRegistry', 'KeepAliveCoordinator'])
 @AppStatePolicy('continue')
 export class JobRuntime extends BaseService {
   private readonly dbService: DbService;
   private readonly jobService: JobService;
   private readonly handlers: ReadonlyMap<string, JobHandler>;
+  private readonly dispatchableTypes: readonly string[];
   private readonly globalMaxConcurrency: number;
-  private readonly keepAlive?: { acquire: (tag: string) => KeepAliveLease };
+  private readonly keepAlive?: KeepAliveSource;
   private readonly now: () => number;
   private readonly onProgress: (jobId: string, progress: JobProgress) => void;
 
   private readonly abortControllers = new Map<string, AbortController>();
+  private readonly activeKeepAliveLeases = new Map<string, KeepAliveLease>();
   private readonly inFlightExecuted = new Map<string, Promise<void>>();
   private readonly finishedResolvers = new Map<string, FinishedResolver>();
   private readonly timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
+  private readonly timeoutGraceHandles = new Map<string, ReturnType<typeof setTimeout>>();
   /** enqueueTx rows awaiting post-commit existence verification. */
   private readonly pendingTxVerifications = new Set<string>();
   /**
@@ -296,31 +226,28 @@ export class JobRuntime extends BaseService {
   private delayedTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
 
-  /**
-   * The container passes `dbService` and the resolved `AiService`; a suite adds
-   * its own handlers, which is why `ai` — needed only to build the production
-   * registry — is then never read.
-   */
   constructor(
     dbService: DbService,
-    ai: PaintingAi,
-    backgroundActivities: Pick<BackgroundActivityManager, 'startSession'>,
-    environment: Pick<BackgroundActivityEnvironment, 'paintingPresenter' | 'translate'>,
-    keepAlive: Pick<KeepAliveCoordinator, 'acquire'>,
+    registry: Pick<JobHandlerRegistry, 'entries'>,
+    keepAlive: KeepAliveSource,
     options: JobRuntimeOptions = {},
   ) {
     super();
     this.dbService = dbService;
     this.jobService = options.jobService ?? hostJobService;
     const handlers = new Map<string, JobHandler>();
-    for (const [type, handler] of options.handlers ??
-      createHostHandlers(ai, backgroundActivities, environment)) {
+    for (const [type, handler] of options.handlers ?? registry.entries) {
       if (handlers.has(type)) {
         throw new Error(`Duplicate job handler registration for type "${type}"`);
       }
       handlers.set(type, handler);
     }
     this.handlers = handlers;
+    this.dispatchableTypes = Object.freeze(
+      [...handlers]
+        .filter(([, handler]) => DISPATCHABLE_EXECUTION_CLASSES.has(handler.executionClass))
+        .map(([type]) => type),
+    );
     this.globalMaxConcurrency = options.globalMaxConcurrency ?? DEFAULT_GLOBAL_MAX_CONCURRENCY;
     this.keepAlive = options.keepAlive ?? keepAlive;
     this.now = options.now ?? Date.now;
@@ -421,17 +348,21 @@ export class JobRuntime extends BaseService {
         });
         if (winner === 'timeout') {
           logger.warn('cancel timed out — forcing terminal state', { graceMs, jobId });
-          await this.finalizeJob(
-            jobId,
-            'cancelled',
-            undefined,
-            {
-              code: JOB_ERROR_CODES.CANCELLED,
-              message: `Cancel timed out after ${graceMs}ms${reason ? ` (reason: ${reason})` : ''}`,
-              retryable: false,
-            },
-            ['running'],
-          );
+          try {
+            await this.finalizeJob(
+              jobId,
+              'cancelled',
+              undefined,
+              {
+                code: JOB_ERROR_CODES.CANCELLED,
+                message: `Cancel timed out after ${graceMs}ms${reason ? ` (reason: ${reason})` : ''}`,
+                retryable: false,
+              },
+              ['running'],
+            );
+          } finally {
+            this.releaseKeepAliveLease(jobId);
+          }
           return { outcome: 'timed-out' };
         }
       }
@@ -484,6 +415,8 @@ export class JobRuntime extends BaseService {
     }
     for (const handle of this.timeoutHandles.values()) clearTimeout(handle);
     this.timeoutHandles.clear();
+    for (const handle of this.timeoutGraceHandles.values()) clearTimeout(handle);
+    this.timeoutGraceHandles.clear();
     for (const controller of this.abortControllers.values()) {
       controller.abort(new Error('Job runtime disposed'));
     }
@@ -661,7 +594,7 @@ export class JobRuntime extends BaseService {
           },
           ['running'],
         );
-        this.releasePreparedExecution(claim.row.id, claim.binding);
+        claim.binding.release();
         break;
       }
       this.spawnExecute(claim.row, claim.handler, claim.binding);
@@ -676,52 +609,66 @@ export class JobRuntime extends BaseService {
   }
 
   private async claimNext(): Promise<ClaimResult | null> {
-    return this.dbService.withWriteTx(async (tx) => {
-      const globalRunning = await this.jobService.countRunningGlobalTx(tx);
-      if (globalRunning >= this.globalMaxConcurrency) return null;
-      const runningPerQueue = await this.jobService.countRunningPerQueueTx(tx);
-      const now = this.now();
-      const candidates = await this.jobService.getEligiblePendingTx(
-        tx,
-        now,
-        CLAIM_CANDIDATE_WINDOW,
-      );
-      for (const candidate of candidates) {
-        const handler = this.handlers.get(candidate.type);
-        // Orphan rows wait for recovery's sweep; never execute without a handler.
-        if (!handler) continue;
-        // The dispatch window covers foreground work plus `user-continued`
-        // work (kept schedulable after backgrounding by a keep-alive lease);
-        // remaining classes stay enqueued until their platform adapters exist.
-        if (!DISPATCHABLE_EXECUTION_CLASSES.has(handler.executionClass)) continue;
-        if (this.inFlightExecuted.has(candidate.id)) continue;
-        const queueCap = handler.defaultConcurrency ?? 1;
-        if ((runningPerQueue.get(candidate.queue) ?? 0) >= queueCap) continue;
+    let prepared: PreparedExecution | undefined;
+    try {
+      const result = await this.dbService.withWriteTx<ClaimResult | null>(async (tx) => {
+        const globalRunning = await this.jobService.countRunningGlobalTx(tx);
+        if (globalRunning >= this.globalMaxConcurrency) return null;
+        const runningPerQueue = await this.jobService.countRunningPerQueueTx(tx);
+        const now = this.now();
+        let offset = 0;
+        for (;;) {
+          const candidates = await this.jobService.getEligiblePendingTx(
+            tx,
+            now,
+            this.dispatchableTypes,
+            CLAIM_CANDIDATE_WINDOW,
+            offset,
+          );
+          for (const candidate of candidates) {
+            const handler = this.handlers.get(candidate.type);
+            // The SQL filter is derived from the same frozen registry. Keep this
+            // defensive check so a malformed test double cannot execute an orphan.
+            if (!handler || !DISPATCHABLE_EXECUTION_CLASSES.has(handler.executionClass)) continue;
+            if (this.inFlightExecuted.has(candidate.id)) continue;
+            const queueCap = handler.defaultConcurrency ?? 1;
+            if ((runningPerQueue.get(candidate.queue) ?? 0) >= queueCap) continue;
 
-        // Register before the `pending -> running` write. A delete can fence
-        // this resource between any two awaits; claiming first would create a
-        // running job invisible to the coordinator's drain.
-        let binding: PreparedExecution;
-        try {
-          binding = this.prepareExecution(handler, candidate);
-        } catch (error) {
-          if (error instanceof ScopeFencedError) {
-            return { error, jobId: candidate.id, kind: 'scope-fenced' };
+            // Register before the `pending -> running` write. A delete can fence
+            // this resource between any two awaits; claiming first would create a
+            // running job invisible to the coordinator's drain.
+            let binding: PreparedExecution;
+            try {
+              binding = this.prepareExecution(handler, candidate);
+              prepared = binding;
+            } catch (error) {
+              if (error instanceof ScopeFencedError) {
+                return { error, jobId: candidate.id, kind: 'scope-fenced' };
+              }
+              throw error;
+            }
+
+            try {
+              const claimed = await this.jobService.claimPendingByIdTx(tx, candidate.id, now);
+              if (claimed) return { binding, handler, kind: 'claimed', row: claimed };
+              binding.release();
+              prepared = undefined;
+            } catch (error) {
+              binding.release();
+              prepared = undefined;
+              throw error;
+            }
           }
-          throw error;
+          if (candidates.length < CLAIM_CANDIDATE_WINDOW) return null;
+          offset += candidates.length;
         }
-
-        try {
-          const claimed = await this.jobService.claimPendingByIdTx(tx, candidate.id, now);
-          if (claimed) return { binding, handler, kind: 'claimed', row: claimed };
-          this.releasePreparedExecution(candidate.id, binding);
-        } catch (error) {
-          this.releasePreparedExecution(candidate.id, binding);
-          throw error;
-        }
-      }
-      return null;
-    });
+      });
+      prepared = undefined;
+      return result;
+    } catch (error) {
+      prepared?.release();
+      throw error;
+    }
   }
 
   /** Drop resolvers of enqueueTx rows whose caller transaction rolled back. */
@@ -784,7 +731,22 @@ export class JobRuntime extends BaseService {
 
   private async armDelayedTimer(): Promise<void> {
     if (this.disposed) return;
-    const earliest = await this.jobService.earliestDelayedAt().catch(() => null);
+    let earliest: number | null;
+    try {
+      earliest = await this.jobService.earliestDelayedAt();
+    } catch (error) {
+      logger.warn('armDelayedTimer: failed to read delayed jobs — retrying', error as Error, {
+        retryMs: DELAYED_TIMER_READ_RETRY_MS,
+      });
+      if (this.delayedTimer) clearTimeout(this.delayedTimer);
+      if (!this.disposed) {
+        this.delayedTimer = setTimeout(() => {
+          this.delayedTimer = null;
+          void this.armDelayedTimer();
+        }, DELAYED_TIMER_READ_RETRY_MS);
+      }
+      return;
+    }
     if (this.delayedTimer) {
       clearTimeout(this.delayedTimer);
       this.delayedTimer = null;
@@ -841,41 +803,102 @@ export class JobRuntime extends BaseService {
       resolveExecuted = resolve;
     });
     const scopeHandle = this.registerScopes(handler, row, executed, controller);
+    let released = false;
     const binding: PreparedExecution = {
       controller,
       executed,
-      resolveExecuted,
-      ...(scopeHandle ? { scopeHandle } : {}),
+      release: () => {
+        if (released) return;
+        released = true;
+        if (this.abortControllers.get(row.id) === controller) {
+          this.abortControllers.delete(row.id);
+        }
+        if (this.inFlightExecuted.get(row.id) === executed) {
+          this.inFlightExecuted.delete(row.id);
+        }
+        this.clearTimeoutGraceHandle(row.id);
+        scopeHandle?.release();
+        resolveExecuted();
+      },
     };
     this.abortControllers.set(row.id, controller);
     this.inFlightExecuted.set(row.id, executed);
     return binding;
   }
 
-  private releasePreparedExecution(rowId: string, binding: PreparedExecution): void {
-    if (this.abortControllers.get(rowId) === binding.controller) {
-      this.abortControllers.delete(rowId);
-    }
-    if (this.inFlightExecuted.get(rowId) === binding.executed) {
-      this.inFlightExecuted.delete(rowId);
-    }
-    binding.scopeHandle?.release();
-    binding.resolveExecuted();
+  private acquireKeepAliveLease(row: JobRow, handler: JobHandler): KeepAliveLease | undefined {
+    if (handler.executionClass !== 'user-continued' || !this.keepAlive) return undefined;
+
+    this.releaseKeepAliveLease(row.id);
+    const sourceLease = this.keepAlive.acquire(`job.${row.type}`);
+    let released = false;
+    const lease: KeepAliveLease = {
+      release: () => {
+        if (released) return;
+        released = true;
+        if (this.activeKeepAliveLeases.get(row.id) === lease) {
+          this.activeKeepAliveLeases.delete(row.id);
+        }
+        sourceLease.release();
+      },
+    };
+    this.activeKeepAliveLeases.set(row.id, lease);
+    return lease;
+  }
+
+  private releaseKeepAliveLease(jobId: string): void {
+    this.activeKeepAliveLeases.get(jobId)?.release();
+  }
+
+  private armTimeoutGrace(
+    row: JobRow,
+    handler: JobHandler,
+    binding: PreparedExecution,
+    timeoutError: JobHandlerTimeoutError,
+  ): void {
+    const graceMs = handler.cancelTimeoutMs ?? DEFAULT_CANCEL_TIMEOUT_MS;
+    const handle = setTimeout(() => {
+      this.timeoutGraceHandles.delete(row.id);
+      if (this.inFlightExecuted.get(row.id) !== binding.executed || this.disposed) return;
+
+      logger.warn('handler timeout grace expired — forcing terminal state', {
+        graceMs,
+        jobId: row.id,
+      });
+      void this.finalizeJob(
+        row.id,
+        'failed',
+        undefined,
+        {
+          code: JOB_ERROR_CODES.HANDLER_TIMEOUT,
+          message: `Handler timed out and did not stop within ${graceMs}ms`,
+          retryable: true,
+        },
+        ['running'],
+      )
+        .catch((error: unknown) => {
+          logger.error('failed to force terminal state after handler timeout', error as Error, {
+            jobId: row.id,
+            timeout: timeoutError.message,
+          });
+        })
+        .finally(() => this.releaseKeepAliveLease(row.id));
+    }, graceMs);
+    this.timeoutGraceHandles.set(row.id, handle);
   }
 
   private spawnExecute(row: JobRow, handler: JobHandler, binding: PreparedExecution): void {
     const { controller } = binding;
 
-    const keepAliveLease =
-      handler.executionClass === 'user-continued' && this.keepAlive
-        ? this.keepAlive.acquire(`job.${row.type}`)
-        : undefined;
+    const keepAliveLease = this.acquireKeepAliveLease(row, handler);
 
     if (row.timeoutMs !== null && row.timeoutMs > 0) {
-      const handle = setTimeout(
-        () => controller.abort(new JobHandlerTimeoutError()),
-        row.timeoutMs,
-      );
+      const handle = setTimeout(() => {
+        this.timeoutHandles.delete(row.id);
+        const timeoutError = new JobHandlerTimeoutError();
+        controller.abort(timeoutError);
+        this.armTimeoutGrace(row, handler, binding, timeoutError);
+      }, row.timeoutMs);
       this.timeoutHandles.set(row.id, handle);
     }
 
@@ -950,7 +973,7 @@ export class JobRuntime extends BaseService {
         this.clearTimeoutHandle(row.id);
         // Released before `executed` settles, so a drain that was waiting on
         // this execution does not then see it still registered.
-        this.releasePreparedExecution(row.id, binding);
+        binding.release();
       }
     })();
 
@@ -977,8 +1000,8 @@ export class JobRuntime extends BaseService {
   // -------------------------------------------------------------------------
 
   /**
-   * Side-effect order is load-bearing (desktop-verbatim): terminal write →
-   * re-read → resolve `finished` + kick the pump → await onSettled with
+   * Side-effect order is load-bearing: terminal write and snapshot in one
+   * transaction → resolve `finished` + kick the pump → await onSettled with
    * errors swallowed.
    */
   private async finalizeJob(
@@ -988,10 +1011,10 @@ export class JobRuntime extends BaseService {
     error: JobError | null,
     expectedStatuses: readonly JobStatus[],
   ): Promise<void> {
-    let updated = 0;
+    let terminalResult: Awaited<ReturnType<JobService['setTerminalTx']>> | undefined;
     let txFailed: Error | undefined;
     try {
-      updated = await this.dbService.withWriteTx((tx) =>
+      terminalResult = await this.dbService.withWriteTx((tx) =>
         this.jobService.setTerminalTx(tx, jobId, status, output, error, expectedStatuses),
       );
     } catch (err) {
@@ -999,9 +1022,9 @@ export class JobRuntime extends BaseService {
       logger.error('finalizeJob: terminal write failed — synthesizing snapshot', txFailed);
     }
 
-    const persisted = await this.jobService.getById(jobId).catch(() => null);
+    const persisted = terminalResult?.snapshot ?? null;
 
-    if (updated === 0 && !txFailed) {
+    if (terminalResult && !terminalResult.updated) {
       // Weak fence held: another path finalized (or retried) this row first.
       // Late callbacks release awaiters at most; they never overwrite state.
       if (persisted && isTerminalStatus(persisted.status)) {
@@ -1018,7 +1041,10 @@ export class JobRuntime extends BaseService {
 
     const snapshot =
       persisted ??
-      this.synthesizeFailedSnapshot(jobId, txFailed ?? new Error('row disappeared after write'));
+      this.synthesizeFailedSnapshot(
+        jobId,
+        txFailed ?? new Error('terminal update returned no snapshot'),
+      );
     this.resolveFinished(jobId, snapshot);
     this.schedulePump();
 
@@ -1121,6 +1147,14 @@ export class JobRuntime extends BaseService {
     if (handle !== undefined) {
       clearTimeout(handle);
       this.timeoutHandles.delete(jobId);
+    }
+  }
+
+  private clearTimeoutGraceHandle(jobId: string): void {
+    const handle = this.timeoutGraceHandles.get(jobId);
+    if (handle !== undefined) {
+      clearTimeout(handle);
+      this.timeoutGraceHandles.delete(jobId);
     }
   }
 

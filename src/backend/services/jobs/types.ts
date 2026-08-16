@@ -106,6 +106,12 @@ export interface JobHandler<TPayload = unknown> {
    *
    * Called with the persisted input, so it must be pure and total — a throw
    * here would fail an execution that was otherwise ready to run.
+   *
+   * TOMBSTONE: before registering the first scoped handler with
+   * `recovery: 'retry'`, persist scope-cancellation intent. Scope cancellation
+   * currently aborts synchronously without setting `cancelRequested`; after a
+   * process death, retry recovery could otherwise revive work for a resource
+   * whose deletion or invalidation initiated that cancellation.
    */
   scopes?(input: TPayload): readonly ResourceScope[];
   /** Throw to fail; reject with the abort reason to cancel. */

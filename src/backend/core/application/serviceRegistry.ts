@@ -7,6 +7,7 @@ import { PreferenceService } from '@/backend/data/PreferenceService';
 import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
+import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
@@ -46,6 +47,7 @@ export const services = {
   ProviderOAuthService,
   AiService,
   ChatRuntime,
+  JobHandlerRegistry,
   JobRuntime,
 } as const;
 

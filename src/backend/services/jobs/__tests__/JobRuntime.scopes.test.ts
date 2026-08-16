@@ -1,6 +1,8 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
+import { JOB_ERROR_CODES } from '@cherrystudio/universal/data/api/schemas/jobs';
+
 import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { ScopeDrainTimeoutError } from '@/backend/core/resources/types';
 
@@ -125,6 +127,40 @@ describe('JobRuntime resource scopes', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it('releases a prepared scope when the claim transaction fails to commit', async () => {
+    let clock = 1_000;
+    const execute = jest.fn(async () => 'claimed-after-rollback');
+    const { db, jobService, runtime, scopes } = await setup(
+      [['painting.generate', makeEchoHandler({ execute, scopes: () => [PAINTING] })]],
+      { now: () => clock },
+    );
+    const handle = await enqueueTest(
+      runtime,
+      'painting.generate',
+      { paintingId: 'p1' },
+      { scheduledAt: clock + 1_000 },
+    );
+    clock += 1_000;
+    // Let delayed promotion commit, then fail after the claim callback has
+    // registered its scope and changed the row inside the transaction.
+    db.failWriteTxCommit(new Error('commit failed'), 1);
+
+    expect((await runtime.pump({ reason: 'manual' })).claimed).toBe(0);
+    expect((await jobService.getById(handle.id))?.status).toBe('pending');
+    const mutate = jest.fn(async () => undefined);
+    await expect(
+      scopes.invalidate([PAINTING], mutate, { drainTimeoutMs: 50 }),
+    ).resolves.toBeUndefined();
+    expect(mutate).toHaveBeenCalledTimes(1);
+
+    expect((await runtime.pump({ reason: 'manual' })).claimed).toBe(1);
+    await expect(handle.finished).resolves.toMatchObject({
+      output: 'claimed-after-rollback',
+      status: 'completed',
+    });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
   it('leaves a job whose handler declares no scopes uncoordinated', async () => {
     const gate = makeGate();
     const { jobService, runtime, scopes } = await setup([['internal.hold', makeHoldHandler(gate)]]);
@@ -159,5 +195,58 @@ describe('JobRuntime resource scopes', () => {
 
     gate.release();
     expect((await handle.finished).status).toBe('cancelled');
+  });
+
+  it('force-fails a stubborn timeout while releasing its lease but retaining its scope', async () => {
+    const gate = makeGate();
+    const releaseLease = jest.fn();
+    const acquire = jest.fn(() => ({ release: releaseLease }));
+    const { runtime, scopes } = await setup(
+      [
+        [
+          'painting.stubborn',
+          makeStubbornHandler(gate, {
+            cancelTimeoutMs: 20,
+            executionClass: 'user-continued',
+            scopes: () => [PAINTING],
+          }),
+        ],
+        ['internal.echo', makeEchoHandler()],
+      ],
+      { keepAlive: { acquire } },
+    );
+    const timedOut = await enqueueTest(
+      runtime,
+      'painting.stubborn',
+      { paintingId: 'p1' },
+      { maxAttempts: 3, queue: 'shared', timeoutMs: 20 },
+    );
+
+    await expect(timedOut.finished).resolves.toMatchObject({
+      error: { code: JOB_ERROR_CODES.HANDLER_TIMEOUT, retryable: true },
+      status: 'failed',
+    });
+    expect(acquire).toHaveBeenCalledTimes(1);
+    await waitFor(() => releaseLease.mock.calls.length === 1);
+    expect(releaseLease).toHaveBeenCalledTimes(1);
+
+    // The terminal row frees the queue slot, but the still-running handler
+    // remains registered with its resource scope until its real promise exits.
+    const next = await enqueueTest(
+      runtime,
+      'internal.echo',
+      { message: 'next' },
+      { queue: 'shared' },
+    );
+    await expect(next.finished).resolves.toMatchObject({ status: 'completed' });
+    await expect(
+      scopes.invalidate([PAINTING], async () => undefined, { drainTimeoutMs: 30 }),
+    ).rejects.toThrow(ScopeDrainTimeoutError);
+
+    gate.release();
+    await expect(
+      scopes.invalidate([PAINTING], async () => undefined, { drainTimeoutMs: 200 }),
+    ).resolves.toBeUndefined();
+    expect(acquire).toHaveBeenCalledTimes(1);
   });
 });

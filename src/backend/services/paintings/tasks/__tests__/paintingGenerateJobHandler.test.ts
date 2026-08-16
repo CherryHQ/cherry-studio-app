@@ -8,7 +8,7 @@ import { loggerService } from '@logger';
 
 import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__tests__/_helpers';
-import { jobHandlerEntry } from '@/backend/services/jobs/JobRuntime';
+import { jobHandlerEntry } from '@/backend/services/jobs/JobHandlerRegistry';
 import type { JobContext } from '@/backend/services/jobs/types';
 
 import {
@@ -145,6 +145,19 @@ describe('createPaintingGenerateJobHandler', () => {
     ]);
   });
 
+  it('preserves the original persistence error when compensating discard also fails', async () => {
+    const dependencies = createDependencies();
+    const persistenceError = new Error('database failed');
+    jest.mocked(dependencies.paintings.replaceOutputs).mockRejectedValue(persistenceError);
+    jest.mocked(dependencies.storage.discard).mockRejectedValue(new Error('discard failed'));
+    const handler = createPaintingGenerateJobHandler(dependencies);
+
+    await expect(handler.execute(createContext())).rejects.toBe(persistenceError);
+    expect(dependencies.storage.discard).toHaveBeenCalledWith([
+      expect.objectContaining({ id: outputFileId }),
+    ]);
+  });
+
   it('keeps referenced outputs when their URI cannot be resolved', async () => {
     const dependencies = createDependencies();
     jest.mocked(dependencies.storage.getUri).mockReturnValue(undefined);
@@ -183,7 +196,6 @@ describe('createPaintingGenerateJobHandler', () => {
         const session = {
           cancel: jest.fn(),
           finish: jest.fn(),
-          ready: Promise.resolve(),
           update: jest.fn(),
         };
         sessions.push(session);

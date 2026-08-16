@@ -3,6 +3,7 @@ import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activit
 import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
+import { loggerService } from '@logger';
 
 import type {
   BackgroundActivitySession,
@@ -16,6 +17,8 @@ import type {
 import type { PaintingGenerationResult } from '@/shared/contracts';
 
 import type { CreateInternalEntryInput } from '../../file/fileStorage';
+
+const logger = loggerService.withContext('PaintingGenerateJobHandler');
 
 export const PAINTING_GENERATE_JOB_TYPE = 'painting.generate';
 export const PAINTING_JOB_QUEUE = 'painting';
@@ -176,7 +179,13 @@ export function createPaintingGenerateJobHandler(
           return { outputs, painting };
         } catch (error) {
           if (!outputRefsCommitted) {
-            await storage.discard(createdOutputs);
+            try {
+              await storage.discard(createdOutputs);
+            } catch (discardError) {
+              logger.warn('Failed to discard uncommitted painting outputs', discardError as Error, {
+                paintingId,
+              });
+            }
           }
           throw error;
         }
