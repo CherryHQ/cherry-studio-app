@@ -15,8 +15,7 @@ export type AssistantMessageActions = {
   onRegenerate: (messageId: string) => void;
 };
 
-export type MessageListProps = {
-  assistantActions?: AssistantMessageActions;
+type MessageListBaseProps = {
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
@@ -25,5 +24,17 @@ export type MessageListProps = {
   messages: readonly MessagePresentationItem[];
   onLoadOlder?: () => Promise<void>;
   onReady?: () => void;
-  renderAssistantMessage?: (message: MessagePresentationItem) => ReactNode;
 };
+
+type DefaultAssistantMessageRenderingProps = {
+  assistantActions?: AssistantMessageActions;
+  renderAssistantMessage?: never;
+};
+
+type CustomAssistantMessageRenderingProps = {
+  assistantActions?: never;
+  renderAssistantMessage: (message: MessagePresentationItem) => ReactNode;
+};
+
+export type MessageListProps = MessageListBaseProps &
+  (DefaultAssistantMessageRenderingProps | CustomAssistantMessageRenderingProps);

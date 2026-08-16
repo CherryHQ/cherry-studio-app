@@ -243,10 +243,7 @@ function filePart(): NonNullable<Message['data']['parts']>[number] {
   };
 }
 
-function listProps(
-  messages: readonly MessagePresentationItem[],
-  enteringMessageId?: string,
-): MessageListProps {
+function listProps(messages: readonly MessagePresentationItem[], enteringMessageId?: string) {
   return {
     contentBottomInset: 80,
     contentTopInset: 44,
@@ -254,10 +251,10 @@ function listProps(
     keyboardOffset: 26,
     messages,
     onLoadOlder: jest.fn(async () => undefined),
-  };
+  } satisfies MessageListProps;
 }
 
-describe('MessageList', () => {
+describe('MessageList anchored tail following', () => {
   let renderer: ReactTestRenderer | undefined;
   let cancelAnimationFrameSpy: jest.SpyInstance;
   let frameCallbacks: Map<number, FrameRequestCallback>;
@@ -345,29 +342,6 @@ describe('MessageList', () => {
     act(() => renderer?.unmount());
     cancelAnimationFrameSpy.mockRestore();
     requestAnimationFrameSpy.mockRestore();
-  });
-
-  test('forwards controlled actions only to assistant rows', () => {
-    const actions: AssistantMessageActions = {
-      isRegenerateDisabled: false,
-      onCopy: jest.fn(),
-      onRegenerate: jest.fn(),
-    };
-    const user = createMessage('user-1', 'user', [textPart('hello')]);
-    const assistant = {
-      ...createMessage('assistant-1', 'assistant', [textPart('answer')]),
-      status: 'success' as const,
-    };
-
-    act(() => {
-      renderer = create(
-        <MessageList {...listProps([user, assistant])} assistantActions={actions} />,
-      );
-    });
-
-    expect(mockAssistantMessageRow).toHaveBeenCalledWith({ actions, message: assistant });
-    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: user });
-    expect(mockLatestListProps?.extraData).toBe(actions);
   });
 
   test('caps text anchors at two current body lines and leaves file anchors uncapped', () => {
