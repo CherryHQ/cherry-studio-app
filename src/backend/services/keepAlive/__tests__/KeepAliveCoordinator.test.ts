@@ -42,6 +42,8 @@ describe('KeepAliveCoordinator', () => {
     mockPlayer.loop = false;
     mockPlayer.volume = 1;
     jest.clearAllMocks();
+    mockCreateAudioPlayer.mockImplementation(() => mockPlayer);
+    mockSetAudioModeAsync.mockResolvedValue(undefined);
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
     jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, listener) => {
       appStateListener = listener;
@@ -49,9 +51,11 @@ describe('KeepAliveCoordinator', () => {
     });
     jest.spyOn(console, 'info').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -135,6 +139,65 @@ describe('KeepAliveCoordinator', () => {
     await coordinator._doStop();
   });
 
+  test('retries one failed start at a time with capped exponential backoff', async () => {
+    jest.useFakeTimers();
+    mockSetAudioModeAsync.mockRejectedValue(new Error('audio session busy'));
+    const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
+    const lease = coordinator.acquire('chat');
+    await flushMicrotasks();
+    expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(1);
+
+    for (const [index, delayMs] of [1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000].entries()) {
+      await jest.advanceTimersByTimeAsync(delayMs - 1);
+      expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(index + 1);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(index + 2);
+    }
+    expect(jest.getTimerCount()).toBe(1);
+
+    lease.release();
+    await flushMicrotasks();
+    expect(jest.getTimerCount()).toBe(0);
+    await coordinator._doStop();
+  });
+
+  test('clears a pending retry when the last lease is released', async () => {
+    jest.useFakeTimers();
+    mockSetAudioModeAsync.mockRejectedValueOnce(new Error('audio session busy'));
+    const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
+    const lease = coordinator.acquire('chat');
+    await flushMicrotasks();
+    expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(1);
+
+    lease.release();
+    await flushMicrotasks();
+    expect(jest.getTimerCount()).toBe(0);
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(1);
+    await coordinator._doStop();
+  });
+
+  test('clears retry state after a successful retry', async () => {
+    jest.useFakeTimers();
+    mockSetAudioModeAsync.mockRejectedValueOnce(new Error('audio session busy'));
+    const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
+    const lease = coordinator.acquire('chat');
+    await flushMicrotasks();
+
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(mockSetAudioModeAsync).toHaveBeenCalledTimes(2);
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(1);
+    expect(jest.getTimerCount()).toBe(0);
+
+    lease.release();
+    await flushMicrotasks();
+    await coordinator._doStop();
+  });
+
   test('removes the audio player even when pause throws', async () => {
     const coordinator = new KeepAliveCoordinator();
     await coordinator._doInit();
@@ -149,6 +212,24 @@ describe('KeepAliveCoordinator', () => {
     expect(mockPlayer.remove).toHaveBeenCalledTimes(1);
     expect(mockPlayerStatusRemove).toHaveBeenCalledTimes(1);
 
+    await coordinator._doStop();
+  });
+
+  test('creates a new player after the previous session stops cleanly', async () => {
+    const coordinator = new KeepAliveCoordinator();
+    await coordinator._doInit();
+    const first = coordinator.acquire('chat');
+    await flushOperations();
+    first.release();
+    await flushOperations();
+
+    const second = coordinator.acquire('jobs');
+    await flushOperations();
+    expect(mockCreateAudioPlayer).toHaveBeenCalledTimes(2);
+    expect(mockPlayer.play).toHaveBeenCalledTimes(2);
+
+    second.release();
+    await flushOperations();
     await coordinator._doStop();
   });
 
@@ -190,4 +271,8 @@ async function flushOperations() {
   for (let index = 0; index < 4; index += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
+}
+
+async function flushMicrotasks() {
+  for (let index = 0; index < 8; index += 1) await Promise.resolve();
 }

@@ -12,11 +12,17 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const KEEP_ALIVE_VOLUME = 0.001;
 const AUDIO_STATUS_UPDATE_INTERVAL_MS = 1000;
+const KEEP_ALIVE_RETRY_BASE_MS = 1_000;
+const KEEP_ALIVE_RETRY_MAX_MS = 30_000;
 const logger = loggerService.withContext('KeepAlive');
 
 export type KeepAliveLease = {
   /** Idempotent; the last release across all holders stops the session. */
   release(): void;
+};
+
+export type KeepAliveSource = {
+  acquire(tag: string): KeepAliveLease;
 };
 
 /**
@@ -35,6 +41,8 @@ export class KeepAliveCoordinator extends BaseService {
   private operationTail: Promise<void> = Promise.resolve();
   private player?: AudioPlayer;
   private playerStatusSubscription?: { remove: () => void };
+  private retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
+  private retryTimer?: ReturnType<typeof setTimeout>;
 
   protected onInit(): void {
     if (Platform.OS !== 'ios') return;
@@ -66,20 +74,29 @@ export class KeepAliveCoordinator extends BaseService {
     if (this.disposed) return;
     this.disposed = true;
     this.holderCount = 0;
+    this.clearRetryTimer();
     await this.enqueue(() => this.stopAudio());
   }
 
   private readonly handleAppStateChange = (nextState: AppStateStatus) => {
     if (this.disposed || nextState === 'active') return;
+    this.clearRetryTimer();
+    this.retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
     void this.enqueue(() => this.reconcile());
   };
 
   private async reconcile(): Promise<void> {
     if (this.holderCount === 0 || this.disposed) {
+      this.clearRetryTimer();
+      this.retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
       await this.stopAudio();
       return;
     }
-    if (this.player) return;
+    if (this.player) {
+      this.clearRetryTimer();
+      this.retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
+      return;
+    }
 
     let player: AudioPlayer | undefined;
     try {
@@ -107,12 +124,15 @@ export class KeepAliveCoordinator extends BaseService {
         'playbackStatusUpdate',
         (status: AudioStatus) => this.handlePlayerStatusUpdate(activePlayer, status),
       );
+      this.clearRetryTimer();
+      this.retryDelayMs = KEEP_ALIVE_RETRY_BASE_MS;
       logger.info('Background audio started', { holderCount: this.holderCount });
     } catch (error) {
       if (player) this.releasePlayer(player);
       logger.error('Background audio failed to start', error as Error, {
         holderCount: this.holderCount,
       });
+      this.scheduleRetry();
     }
   }
 
@@ -175,6 +195,22 @@ export class KeepAliveCoordinator extends BaseService {
     } catch (error) {
       logger.error('Background audio removal failed after start error', error as Error);
     }
+  }
+
+  private scheduleRetry(): void {
+    if (this.retryTimer || this.holderCount === 0 || this.disposed || this.player) return;
+    const delayMs = this.retryDelayMs;
+    this.retryDelayMs = Math.min(this.retryDelayMs * 2, KEEP_ALIVE_RETRY_MAX_MS);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = undefined;
+      void this.enqueue(() => this.reconcile());
+    }, delayMs);
+    logger.warn('Scheduling background audio retry', { delayMs, holderCount: this.holderCount });
+  }
+
+  private clearRetryTimer(): void {
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = undefined;
   }
 
   private enqueue(operation: () => Promise<void>): Promise<void> {
