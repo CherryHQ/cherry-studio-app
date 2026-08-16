@@ -5,5 +5,5 @@ type UnknownPartProps = {
 };
 
 export function UnknownPart({ type }: UnknownPartProps) {
-  return <PartPlaceholder icon="data" label={type} />;
+  return <PartPlaceholder label={type} />;
 }

@@ -1,5 +1,4 @@
 import { Composer } from '@cherrystudio/ui/components';
-import { resolveIcon } from '@cherrystudio/ui/icons';
 import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
@@ -18,6 +17,7 @@ import {
 } from '@/frontend/components/composer/utils/composerAttachments';
 import {
   getNextModelSelection,
+  ModelPickerIcon,
   ModelPickerBottomSheet,
   type ModelPickerModelItem,
   useModelSettingSelections,
@@ -97,12 +97,6 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const { providers } = useProviders();
   const selectedModelProvider = selectedModel
     ? providers.find((provider) => provider.id === selectedModel.providerId)
-    : undefined;
-  const selectedModelIcon = selectedModel
-    ? resolveIcon(
-        selectedModel.modelId,
-        selectedModelProvider?.presetProviderId ?? selectedModel.providerId,
-      )
     : undefined;
   const reasoningEfforts = useChatInputReasoningEfforts(selectedModel);
   const { isReasoningEffortSelected, reasoningEffort, selectReasoningEffort } =
@@ -331,7 +325,16 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
                 />
               </ComposerMenu>
               <ComposerModelPill
-                icon={selectedModelIcon}
+                icon={
+                  selectedModel ? (
+                    <ModelPickerIcon
+                      model={selectedModel}
+                      provider={selectedModelProvider}
+                      providerIconSize={18}
+                      size={20}
+                    />
+                  ) : undefined
+                }
                 label={selectedModelLabel}
                 onPress={openModelPicker}
               />

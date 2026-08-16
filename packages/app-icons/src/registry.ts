@@ -74,7 +74,7 @@ export const iconRegistry = {
   HeartPulseIcon: { sf: 'heart', material: 'monitor_heart' },
   ImageIcon: { sf: 'photo', material: 'image' },
   ImageUpIcon: { sf: 'photo.badge.plus', material: 'add_photo_alternate' },
-  ImagesIcon: { sf: 'photo.on.rectangle', material: 'photo_library' },
+  ImagesIcon: { sf: 'photo.on.rectangle.angled', material: 'photo_library' },
   InfoIcon: { sf: 'info.circle', material: 'info' },
   HourglassIcon: { sf: 'hourglass', material: 'hourglass_top' },
   KeyRoundIcon: { sf: 'key', material: 'key' },
