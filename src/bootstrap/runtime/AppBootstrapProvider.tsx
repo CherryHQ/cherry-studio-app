@@ -1,4 +1,3 @@
-import * as SplashScreen from 'expo-splash-screen';
 import { createContext, type PropsWithChildren, use, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -82,12 +81,6 @@ async function initializeApp({
     if (!isDisposed()) {
       setState({ error: toError(error), status: 'error' });
     }
-  } finally {
-    // The native splash is held up by `preventAutoHideAsync` in the root
-    // layout; reveal the app once init settles either way. Imperative (not
-    // an effect) because the error path throws during `AppBootstrapGate`
-    // render and would never run a commit-phase effect.
-    void SplashScreen.hideAsync().catch(() => {});
   }
 }
 

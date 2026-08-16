@@ -5,7 +5,7 @@ import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AccessibilityActionEvent, Text, View } from 'react-native';
+import { ActivityIndicator, type AccessibilityActionEvent, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
@@ -19,6 +19,7 @@ import {
 } from '@/frontend/components/messageTabs';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { useTopicActionAlerts } from './components/useTopicActionAlerts';
 import {
@@ -26,6 +27,7 @@ import {
   useTopicListActions,
   useTopicListTopics,
 } from './context/TopicListProvider';
+import { useTopicListStartupReadiness } from './hooks/useTopicListStartupReadiness';
 import { useTopicSelectionSource } from './hooks/useTopicSelectionSource';
 
 type TopicRowProps = {
@@ -85,9 +87,28 @@ const TopicListView = memo(function TopicListView() {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const bottomInset = useMessageListBottomInset();
-  const { isPinActionDisabled, isTopicListLoading, pinnedTopicIds, topics } = useTopicListTopics();
+  const {
+    isPinActionDisabled,
+    isPinsLoading,
+    isTopicListLoading,
+    pinQueryError,
+    pinnedTopicIds,
+    topicQueryError,
+    topics,
+  } = useTopicListTopics();
   const { loadMoreTopics, toggleTopicPin } = useTopicListActions();
-  const { assistants } = useAssistantsApi();
+  const {
+    assistants,
+    error: assistantsQueryError,
+    isLoading: isAssistantsLoading,
+  } = useAssistantsApi();
+  const primaryColor = useThemeColor('primary');
+  const { handleListLoad, isInitialDataSettled } = useTopicListStartupReadiness({
+    assistants: { error: assistantsQueryError, isLoading: isAssistantsLoading },
+    pins: { error: pinQueryError, isLoading: isPinsLoading },
+    topics: { error: topicQueryError, isLoading: isTopicListLoading },
+  });
+  const initialLoadError = topicQueryError ?? pinQueryError ?? assistantsQueryError;
   const { toggleId } = useMessageSelectionActions();
   const { isEditing, selectedIds } = useMessageSelectionState();
   const pendingDeletionIds = useMessagePendingDeletionIds('conversations');
@@ -156,15 +177,21 @@ const TopicListView = memo(function TopicListView() {
   const listEmptyComponent = useCallback(
     () => (
       <View className="items-center justify-center px-6 py-8">
-        {isTopicListLoading ? null : (
-          <Text className="text-center text-foreground text-sm">
-            {t('navigation.noMatchingChats')}
-          </Text>
-        )}
+        <Text className="text-center text-foreground text-sm">
+          {t(initialLoadError ? 'navigation.chatsLoadFailed' : 'navigation.noMatchingChats')}
+        </Text>
       </View>
     ),
-    [isTopicListLoading, t],
+    [initialLoadError, t],
   );
+
+  if (!isInitialDataSettled) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background">
+        <ActivityIndicator color={primaryColor} />
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1">
@@ -181,6 +208,7 @@ const TopicListView = memo(function TopicListView() {
         ListEmptyComponent={listEmptyComponent}
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
+        onLoad={handleListLoad}
         recycleItems
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}

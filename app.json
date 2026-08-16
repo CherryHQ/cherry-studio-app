@@ -63,16 +63,11 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#FFFFFF",
+          "image": "./assets/cherry-studio-splash-logo.png",
+          "imageWidth": 96,
+          "resizeMode": "contain",
           "dark": {
             "backgroundColor": "#000000"
-          },
-          "android": {
-            "image": "./assets/icon.png",
-            "imageWidth": 76,
-            "dark": {
-              "image": "./assets/icon.png",
-              "backgroundColor": "#000000"
-            }
           }
         }
       ],
