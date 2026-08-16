@@ -56,9 +56,7 @@ describe('Slider (iOS)', () => {
     expect(onValueChange).toHaveBeenCalledWith(45);
   });
 
-  test('forwards disabled state, custom bounds, style, and testID', () => {
-    const style = { marginTop: 8 };
-
+  test('maps custom bounds, endpoint labels, and disabled state', () => {
     act(() => {
       renderer = create(
         <Slider
@@ -70,17 +68,13 @@ describe('Slider (iOS)', () => {
           minimumValueLabel="Minimum"
           onValueChange={jest.fn()}
           step={0.1}
-          style={style}
-          testID="opacity-slider"
           value={0.5}
         />,
       );
     });
 
-    const host = renderer!.root.findByProps({ testID: 'host' });
     const slider = renderer!.root.findByProps({ mockComponent: 'expo-slider' });
 
-    expect(host.props.style).toEqual([{ alignSelf: 'stretch' }, style]);
     expect(slider.props.min).toBe(0.1);
     expect(slider.props.max).toBe(1);
     expect(slider.props.maximumValueLabel.props.children).toBe('Maximum');

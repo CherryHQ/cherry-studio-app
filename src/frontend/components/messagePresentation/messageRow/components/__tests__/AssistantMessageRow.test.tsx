@@ -14,6 +14,16 @@ jest.mock('@cherrystudio/ui/components', () => ({
   PrismSweep: (props: { active: boolean }) => mockPrismSweep(props),
 }));
 
+// 真模块在 jest 下会去装 worklets 的原生 unpacker 并崩掉，本套件只关心渲染出什么。
+jest.mock('react-native-reanimated', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return { __esModule: true, default: { View: MockView } };
+});
+
+jest.mock('../../slideIn/hooks/useAssistantSlideInStyle', () => ({
+  useAssistantSlideInStyle: () => undefined,
+}));
+
 function createAssistantMessage(
   status: MessagePresentationItem['status'],
   parts: MessagePresentationItem['data']['parts'] = [],

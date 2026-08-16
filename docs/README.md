@@ -9,6 +9,10 @@ Guides are task-oriented procedures for changing or extending the application.
 | Document | Description |
 | --- | --- |
 | [Extending Cherry Mobile](./guides/extending.md) | Add resource endpoints, workflows, persistence, backend behavior, and UI |
+| [Git Workflow](./guides/git-workflow.md) | Commits, stacked PRs, review readiness, and case-only renames |
+| [Parallel Device Testing](./guides/parallel-device-testing.md) | Conductor port and iOS simulator isolation and cleanup |
+| [Testing And CI](./guides/testing-and-ci.md) | Focused checks, test value, local PR gates, and remote CI |
+| [UI Development](./guides/ui-development.md) | CherryUI ownership and reusable React component composition |
 
 ## References
 
@@ -20,6 +24,7 @@ They are the source of truth for how the repository works today.
 | Document | Description |
 | --- | --- |
 | [Architecture Overview](./references/architecture-overview.md) | Runtime model, source ownership, dependency boundaries, and frontend/backend interfaces |
+| [Code Organization](./references/code-organization.md) | Module placement, domain promotion, layer ownership, and public surfaces |
 | [Domain Language](./references/domain-language.md) | Shared product and architecture terminology |
 | [Naming Conventions](./references/naming-conventions.md) | File, directory, identifier, and documentation naming rules |
 | [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, app runtimes, caller-owned sessions, cleanup, and post-ready work |

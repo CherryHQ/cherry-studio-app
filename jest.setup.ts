@@ -30,6 +30,13 @@ jest.mock('expo-glass-effect', () => ({
 // "display radius unknown" answer, which every caller already handles.
 jest.mock('expo-screen-corner-radius', () => ({ getCornerRadiusSync: () => null }));
 
+// The library resolves its native module at import time. Its own jest entry is
+// the sanctioned stand-in and keeps the hooks/event emitters callable, which the
+// chat list needs the moment it imports KeyboardEvents.
+jest.mock('react-native-keyboard-controller', () =>
+  require('react-native-keyboard-controller/jest'),
+);
+
 // expo-symbols' SymbolView is a native view (jest-expo runs as iOS, so every
 // @cherrystudio/app-icons icon reaches it). Icon behavior is asserted through
 // per-suite icon mocks, not the native symbol, so render nothing.
@@ -79,7 +86,9 @@ jest.mock('@shopify/react-native-skia', () => {
 
   return {
     Canvas: inert('SkiaCanvas'),
+    Circle: inert('SkiaCircle'),
     Group: inert('SkiaGroup'),
+    Line: inert('SkiaLine'),
     Text: inert('SkiaText'),
     BlurMask: inert('SkiaBlurMask'),
     Rect: inert('SkiaRect'),
@@ -88,13 +97,14 @@ jest.mock('@shopify/react-native-skia', () => {
     ImageShader: inert('SkiaImageShader'),
     Path: inert('SkiaPath'),
     Mask: inert('SkiaMask'),
+    vec: (x: number, y: number) => ({ x, y }),
     matchFont: () => ({
       getGlyphIDs: (text: string) => Array.from(text).map((_, index) => index),
       getGlyphWidths: (ids: number[]) => ids.map(() => 8),
       getMetrics: () => ({ ascent: -11, descent: 3 }),
     }),
-    // thinkingPixelField.ts compiles its SkSL at module scope, so RuntimeEffect.Make
-    // must return a truthy stub or the ChatInputSurface import chain throws under test.
+    // The image-generation loader compiles SkSL at module scope, so
+    // RuntimeEffect.Make must return a truthy stub under test.
     Skia: {
       Color: (color: number | string) => color,
       RuntimeEffect: {

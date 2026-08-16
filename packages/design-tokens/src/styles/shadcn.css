@@ -36,9 +36,12 @@
    * 服务的是一个改不了的设置。偏好键本身留在 packages/universal（持久化数据、与桌
    * 面共享），真做了主题色界面再把这层接回来。
    *
-   * Logo 红 #ff5757 上使用黑色前景；白字对这个红色的对比度不足。 */
+   * 前景恒为白。这对 token 的唯一消费者是发送/停止主按钮，白色是实心品牌填充上的
+   * 通行做法，也与紧邻的 `--destructive-foreground` 一致。#521 把品牌色从绿换成
+   * #ff5757 时一并改成过黑色，理由写的是「白字对比度不足」——那是按正文的 4.5:1 判
+   * 的，而这里画的是图标，适用的是非文本的 3:1，白对 #ff5757 为 3.1:1，达标。 */
   --primary: var(--brand);
-  --primary-foreground: var(--constant-black);
+  --primary-foreground: var(--constant-white);
   --secondary: var(--gray-alpha-100);
   --secondary-foreground: var(--gray-1000);
   --muted: var(--gray-alpha-100);

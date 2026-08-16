@@ -1,0 +1,69 @@
+diff --git a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
+index 2073da84b8b2be291aa3181700c2b18a75d0fc56..f9d232fd97e25116058b58a339346ff7ad0256d7 100644
+--- a/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
++++ b/lib/commonjs/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
+@@ -82,9 +82,12 @@ function useChatKeyboard(scrollViewRef, options) {
+         return;
+       }
+ 
+-      // never mode: when keyboard shrinks, clamp to valid range
+-      // to avoid ghost padding
+-      if (keyboardLiftBehavior === "never" && effective < padding.value && atEnd) {
++      // never/whenAtEnd mode: when keyboard shrinks, clamp to valid range
++      // to avoid ghost padding. The unwind below rewinds the displacement
++      // recorded when the keyboard opened, which is only correct while the
++      // scrollable range has not moved in between; clamping expresses the same
++      // intent without that assumption.
++      if ((keyboardLiftBehavior === "never" || keyboardLiftBehavior === "whenAtEnd") && effective < padding.value && atEnd) {
+         padding.value = effective;
+         prevAbsorption.value = minimumPaddingAbsorbed;
+         if (inverted) {
+diff --git a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
+index 52943c3a7d6a68fe2094dc1d112c07e6b9d890e4..fd9dc4d98975be5fc185ffb1712a7c8259b19477 100644
+--- a/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
++++ b/lib/module/components/KeyboardChatScrollView/useChatKeyboard/index.ios.js
+@@ -75,9 +75,12 @@ function useChatKeyboard(scrollViewRef, options) {
+         return;
+       }
+ 
+-      // never mode: when keyboard shrinks, clamp to valid range
+-      // to avoid ghost padding
+-      if (keyboardLiftBehavior === "never" && effective < padding.value && atEnd) {
++      // never/whenAtEnd mode: when keyboard shrinks, clamp to valid range
++      // to avoid ghost padding. The unwind below rewinds the displacement
++      // recorded when the keyboard opened, which is only correct while the
++      // scrollable range has not moved in between; clamping expresses the same
++      // intent without that assumption.
++      if ((keyboardLiftBehavior === "never" || keyboardLiftBehavior === "whenAtEnd") && effective < padding.value && atEnd) {
+         padding.value = effective;
+         prevAbsorption.value = minimumPaddingAbsorbed;
+         if (inverted) {
+diff --git a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
+index 560df54bae1a8c41a2e9ac0e2a8d2fd9b843968a..350e18b841f8b7f6d8c224e52cafa0eb6d9ecab4 100644
+--- a/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
++++ b/src/components/KeyboardChatScrollView/useChatKeyboard/index.ios.ts
+@@ -142,10 +142,21 @@ function useChatKeyboard(
+           return;
+         }
+ 
+-        // never mode: when keyboard shrinks, clamp to valid range
+-        // to avoid ghost padding
++        // never/whenAtEnd mode: when keyboard shrinks, clamp to valid range
++        // to avoid ghost padding.
++        //
++        // The unwind below rewinds the displacement recorded when the keyboard
++        // *opened*. That is only correct while the scrollable range has not
++        // moved in between. `blankSpace` (an anchored end space, say) can grow
++        // while the keyboard is up, which pushes the end further down — the
++        // recorded displacement is then no longer the amount that has to come
++        // back, and rewinding it drags the content away from the end by the
++        // difference. Clamping expresses the same intent without depending on
++        // the range having stayed put: keep the offset if it is still legal,
++        // otherwise take it back to the new end.
+         if (
+-          keyboardLiftBehavior === "never" &&
++          (keyboardLiftBehavior === "never" ||
++            keyboardLiftBehavior === "whenAtEnd") &&
+           effective < padding.value &&
+           atEnd
+         ) {

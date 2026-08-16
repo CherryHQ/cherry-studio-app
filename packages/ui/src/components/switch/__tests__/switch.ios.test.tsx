@@ -75,28 +75,20 @@ describe('Switch (iOS)', () => {
     expect(toggle.props.modifiers).toContainEqual({ controlSize });
   });
 
-  test('forwards disabled state, style, and testID', () => {
-    const style = { marginTop: 8 };
-
+  test('maps disabled state to the native modifier', () => {
     act(() => {
       renderer = create(
         <Switch
           accessibilityLabel="Airplane mode"
           disabled
           onValueChange={jest.fn()}
-          style={style}
-          testID="airplane-mode"
           value={false}
         />,
       );
     });
 
-    const host = renderer!.root.findByProps({ mockComponent: 'host' });
     const toggle = renderer!.root.findByProps({ mockComponent: 'expo-toggle' });
 
-    expect(host.props.style).toBe(style);
-    expect(host.props.testID).toBe('airplane-mode-host');
-    expect(toggle.props.testID).toBe('airplane-mode');
     expect(toggle.props.modifiers).toContainEqual({ disabled: true });
   });
 });

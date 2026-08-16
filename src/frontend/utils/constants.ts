@@ -3,9 +3,9 @@ import {
   isLiquidGlassAvailable as isSystemLiquidGlassAvailable,
 } from 'expo-glass-effect';
 
+import { nativeStackHeaderHeight } from './nativeNavigationMetrics/nativeNavigationMetrics';
+
 export const defaultLanguage = 'en-US';
-export const isAndroid = process.env.EXPO_OS === 'android';
-export const isIOS = process.env.EXPO_OS === 'ios';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 // Geist Mono, embedded natively by the expo-font plugin (see app.json). This is
@@ -101,7 +101,7 @@ export const profileHero = {
   avatarRestTop: 80, // resting avatar top inside the box (clears the status bar / dynamic island)
   restingHeight: 238, // compact resting hero box height
   expandedHeightRatio: 0.46, // locked photo height as a fraction of the screen height (~half screen)
-  barHeight: isIOS ? 44 : 56, // sticky bar content height, matched to the native native-stack header (iOS 44pt / Android 56dp) so it lines up with every other screen's real header; excludes the safe-area top inset
+  barHeight: nativeStackHeaderHeight, // sticky bar content height, matched to the platform native-stack header so it lines up with every other screen's real header; excludes the safe-area top inset
   collapseDistance: 200, // scroll distance over which the hero hands off to the sticky bar
   scrollFadeDistance: 180, // scroll distance over which the resting hero fades out (before the sticky bar fully takes over)
   nameRestPaddingBottom: 12, // name's inset from the box bottom; the name is bottom-pinned, so this places it just under the resting avatar and near the photo's bottom edge when expanded

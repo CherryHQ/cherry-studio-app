@@ -97,10 +97,10 @@ describe('MorphMenu', () => {
     jest.clearAllMocks();
   });
 
-  function render(onPress = jest.fn(), onOpenChange?: (isOpen: boolean) => void) {
+  function render(onPress = jest.fn()) {
     act(() => {
       renderer = create(
-        <MorphMenu accessibilityLabel="Add" onOpenChange={onOpenChange} testID="menu">
+        <MorphMenu accessibilityLabel="Add" testID="menu">
           <MorphMenu.Item label="Camera" onPress={onPress} testID="menu-camera" />
         </MorphMenu>,
       );
@@ -149,13 +149,11 @@ describe('MorphMenu', () => {
   });
 
   it('floats the open menu in a portal anchored to the measured trigger', () => {
-    const onOpenChange = jest.fn();
-    const tree = render(jest.fn(), onOpenChange);
+    const tree = render();
 
     press(tree, 'menu-trigger');
 
     expect(portal(tree).findAllByProps({ testID: 'menu-panel' }).length).toBeGreaterThan(0);
-    expect(onOpenChange).toHaveBeenCalledWith(true);
     // The floating copy sits where the inline footprint was measured.
     const positioned = portal(tree).findAll((node) => {
       const style = StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
@@ -183,27 +181,23 @@ describe('MorphMenu', () => {
 
   it('closes on the backdrop without choosing anything', () => {
     const onPress = jest.fn();
-    const onOpenChange = jest.fn();
-    const tree = render(onPress, onOpenChange);
+    const tree = render(onPress);
 
     press(tree, 'menu-trigger');
     press(tree, 'menu-backdrop');
 
     expect(onPress).not.toHaveBeenCalled();
-    expect(onOpenChange).toHaveBeenLastCalledWith(false);
     expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
   });
 
   it('closes itself before running an item, so callers do not have to', () => {
     const onPress = jest.fn();
-    const onOpenChange = jest.fn();
-    const tree = render(onPress, onOpenChange);
+    const tree = render(onPress);
 
     press(tree, 'menu-trigger');
     press(tree, 'menu-camera');
 
     expect(onPress).toHaveBeenCalledTimes(1);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false);
     expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
   });
 

@@ -1,8 +1,8 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
-import { Platform, Text } from 'react-native';
+import { Text } from 'react-native';
 
-import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation';
+import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation/builtInToolPresentation';
 import { hasToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 
@@ -17,8 +17,6 @@ export function ToolPart({ part }: ToolPartProps) {
   const toolPresentation = getBuiltInToolPresentation(getToolName(part));
   const title = getToolLabel(part, toolPresentation?.titleKey, t);
   const statusText = getToolStatusText(part, t);
-  const iosImageSource = Platform.OS === 'ios' ? toolPresentation?.iosImageSource : undefined;
-  const icon = iosImageSource ? undefined : toolPresentation?.androidIcon;
   const isRunning =
     part.state === 'input-streaming' ||
     part.state === 'input-available' ||
@@ -26,8 +24,8 @@ export function ToolPart({ part }: ToolPartProps) {
 
   return (
     <ToolPartDisclosure
-      icon={icon}
-      imageSource={iosImageSource}
+      icon={toolPresentation?.icon}
+      imageSource={toolPresentation?.imageSource}
       isRunning={isRunning}
       statusText={statusText}
       statusTone={getToolStatusTone(part)}

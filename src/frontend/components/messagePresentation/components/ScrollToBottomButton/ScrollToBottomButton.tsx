@@ -12,16 +12,16 @@ const visibilityMotion = { duration: duration.fast, easing: easing.settle } as c
 export function ScrollToBottomButton({
   gap,
   inputHeight,
-  isAtBottom,
+  isHidden,
   onPress,
 }: ScrollToBottomButtonProps) {
   const wrapStyle = useAnimatedStyle(() => ({ bottom: inputHeight.get() + gap }));
   const containerStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(isAtBottom.get() ? 0 : 1, visibilityMotion),
-    transform: [{ scale: withTiming(isAtBottom.get() ? 0.8 : 1, visibilityMotion) }],
+    opacity: withTiming(isHidden.get() ? 0 : 1, visibilityMotion),
+    transform: [{ scale: withTiming(isHidden.get() ? 0.8 : 1, visibilityMotion) }],
   }));
   const containerProps = useAnimatedProps(() => ({
-    pointerEvents: (isAtBottom.get() ? 'none' : 'auto') as 'auto' | 'none',
+    pointerEvents: (isHidden.get() ? 'none' : 'auto') as 'auto' | 'none',
   }));
 
   return (

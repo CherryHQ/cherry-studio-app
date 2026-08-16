@@ -1,72 +1,47 @@
 # UI Components
 
-This reference defines Cherry Studio Mobile interaction component boundaries, button/control
-ownership, top navigation actions, and platform enhancement strategy. Terms follow
-[Domain Language](./domain-language.md).
+This reference defines current shared component ownership and platform boundaries. Follow
+[UI Development](../guides/ui-development.md) when creating or changing product UI.
 
-## Principles
+## Ownership
 
-- Product UI does not use React Native `Button` as the general button foundation.
-- Product buttons should move toward Cherry-owned or feature-local `Pressable` wrappers that centralize pressed, disabled, loading, hit slop, accessibility, and visual states.
-- Platform features are enhancements, not the base interaction contract. iOS Liquid Glass can enhance appearance, while Android and older iOS must keep equally usable fallbacks.
-- Expo Router / React Navigation top-bar buttons use `headerRight` / `headerLeft` with Cherry-owned content.
-- Product horizontal gestures must not start from Android system edge zones, so they do not steal platform-native back gestures.
+`@cherrystudio/ui/components` is the public entry point for reusable, platform-neutral product
+interaction components. The package currently owns buttons, fields, menus, sheets, composer parts,
+surfaces, loading states, tabs, sliders, switches, sections, portals, and related primitives. Its
+[package README](../../packages/ui/README.md) is the component API reference.
 
-## Current Component Layers
-
-`HeaderIconButton`:
-
-- Shared Android header icon button used by header adapters.
-- Wraps `Pressable`, accessibility role/label, disabled behavior, hit slop, and active opacity.
-- iOS header adapters currently use Expo Router `Stack.Toolbar` instead of this wrapper.
-
-Feature-local Pressable wrappers:
-
-- Settings, chat input, and provider/model screens still contain local `Pressable` controls.
-- Local wrappers are acceptable when the state and styling are feature-specific.
-- Repeated interaction behavior should be extracted into a shared wrapper before it spreads across modules.
-
-HeroUI and Expo UI controls:
-
-- The app uses `heroui-native` controls for some settings and search-field surfaces.
-- The app uses `@expo/ui` community menus directly and platform controls for native-feeling
-  surfaces; bottom sheets use the package-owned `@cherrystudio/ui/components` wrapper over
-  `@swmansion/react-native-bottom-sheet`. Its `PageTransition` gives multi-level sheet content one
-  depth-aware push/pop motion while features retain their own navigation state.
-- These libraries are component choices, not replacements for Cherry-owned product interaction rules.
-
-Planned shared wrappers:
-
-- `AppPressable`, `AppButton`, `IconButton`, and glass variants are not current shared components.
-- Add them only when they remove repeated behavior from multiple product modules.
-- If a glass variant is added, it must remain a visual enhancement with Android and older-iOS fallbacks.
-
-## React Native Button Boundary
-
-RN `Button` is acceptable for temporary code, demos, system examples, or non-product test screens. Product screens default away from it because it:
-
-- Has limited styling and is hard to align with Cherry's visual system.
-- Does not carry custom pressed/loading/disabled behavior well.
-- Is not a good entry point for Liquid Glass enhancement.
-- Has less controllable cross-platform behavior.
-
-## Top Navigation Actions
-
-Android top navigation actions use shared header wrappers and self-rendered headers where needed:
+Runtime component imports use that entry point so Metro does not traverse icon registries:
 
 ```tsx
-<HeaderIconButton accessibilityLabel={t('navigation.newChat')} onPress={openNewTopic}>
-  <SquarePenIcon className="size-6 text-foreground" strokeWidth={2} />
-</HeaderIconButton>
+import { Button, Section, TextField } from '@cherrystudio/ui/components';
 ```
 
-iOS header adapters currently use Expo Router `Stack.Toolbar`. The base capability must remain available on Android through app-owned components.
+`@cherrystudio/app-icons` owns the cross-platform icon registry. Feature code owns business state,
+translations, query behavior, and workflow-specific composition. A local `Pressable` wrapper is
+appropriate only while its interaction remains specific to that feature. Shared navigation and
+platform adapters may remain under `src/frontend/components` when their contract depends on app
+navigation rather than a general product control.
+
+Direct `heroui-native` and `@expo/ui` usage remains limited to capabilities whose native or
+third-party behavior is itself part of the contract. A package-owned CherryUI wrapper is the public
+surface once the app standardizes behavior around such a dependency.
+
+## Platform Boundaries
+
+- Platform features enhance the common interaction contract. iOS Liquid Glass may enhance
+  appearance; Android and older iOS retain a complete fallback.
+- Expo Router and React Navigation top-bar actions use `headerRight`, `headerLeft`, or
+  `Stack.Toolbar` with Cherry-owned content.
+- Android horizontal product gestures start outside system back-gesture edge zones.
+- React Native `Button` is reserved for temporary examples and non-product test screens. Product UI
+  uses CherryUI or a feature-owned `Pressable` while the interaction remains local.
 
 ## Acceptance
 
-- Every product button has accessibility state, and any disabled/loading behavior that the feature exposes.
-- Header buttons keep consistent tap targets on iOS and Android.
-- Buttons remain recognizable, tappable, and accessible when platform-specific enhancement is unavailable.
-- Icon buttons do not require nearby explanatory text to be understood. Ambiguous icons need a tooltip or menu context.
-- New repeated button variants should extend Cherry wrappers instead of repeating `Pressable` state logic inside feature components.
-- Swipe actions, carousels, and similar horizontal components must avoid Android system edge back areas.
+- Controls expose accessible labels, state, disabled/loading behavior, and usable touch targets.
+- Text scales and wraps without fixed dimensions clipping its content.
+- Platform enhancement failure leaves the control recognizable and usable.
+- Ambiguous icon-only actions provide an accessible label and tooltip or menu context where the
+  platform supports it.
+- Repeated product interaction behavior moves to CherryUI through the workflow in
+  [UI Development](../guides/ui-development.md).

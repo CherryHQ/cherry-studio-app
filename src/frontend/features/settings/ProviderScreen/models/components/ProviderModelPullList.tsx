@@ -1,4 +1,4 @@
-import { Section } from '@cherrystudio/ui/components';
+import { SearchField, Section } from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
@@ -19,10 +19,7 @@ import {
   type ProviderModelTypeFilter,
 } from '../utils/providerModelTypeFilter';
 import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
-import {
-  ProviderModelSearchField,
-  type ProviderModelSearchFieldPlacement,
-} from './ProviderModelSearchField';
+import { ProviderModelSearchControls } from './ProviderModelSearchControls/ProviderModelSearchControls';
 import { ProviderModelTypeFilterBar } from './ProviderModelTypeFilterBar';
 
 type PullTranslator = ReturnType<typeof useTranslation>['t'];
@@ -69,7 +66,7 @@ export function ProviderModelPullList({
   preview: ProviderModelPullPreview;
   provider: Provider | undefined;
   renderAccessory?: (state: ProviderModelPullListRenderState) => ReactNode;
-  searchFieldPlacement?: ProviderModelSearchFieldPlacement;
+  searchFieldPlacement?: 'automatic' | 'inline';
 }) {
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
@@ -114,14 +111,16 @@ export function ProviderModelPullList({
     () => ({ paddingBottom: contentBottomInset }),
     [contentBottomInset],
   );
-  const usesNavigationSearch =
-    process.env.EXPO_OS === 'ios' && searchFieldPlacement === 'automatic';
+  const filterBar = (
+    <ProviderModelTypeFilterBar
+      counts={typeCounts}
+      selectedFilter={typeFilter}
+      onSelect={setTypeFilter}
+    />
+  );
 
   return (
     <>
-      {usesNavigationSearch ? (
-        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-      ) : null}
       <LegendList
         alwaysBounceVertical={false}
         contentContainerStyle={listContentStyle}
@@ -145,21 +144,25 @@ export function ProviderModelPullList({
           footerContent ? <View className="px-4">{footerContent}</View> : undefined
         }
         ListHeaderComponent={
-          <View className={usesNavigationSearch ? 'gap-3 px-4 pb-3' : 'gap-3 px-4 py-3'}>
-            {headerContent}
-            {usesNavigationSearch ? null : (
-              <ProviderModelSearchField
-                searchFieldPlacement="inline"
-                searchText={searchText}
-                setSearchText={setSearchText}
+          searchFieldPlacement === 'inline' ? (
+            <View className="gap-3 px-4 py-3">
+              {headerContent}
+              <SearchField
+                accessibilityLabel={t('navigation.search')}
+                clearAccessibilityLabel={t('common.clear')}
+                onChangeText={setSearchText}
+                onClear={() => setSearchText('')}
+                placeholder={t('navigation.search')}
+                value={searchText}
               />
-            )}
-            <ProviderModelTypeFilterBar
-              counts={typeCounts}
-              selectedFilter={typeFilter}
-              onSelect={setTypeFilter}
-            />
-          </View>
+              {filterBar}
+            </View>
+          ) : (
+            <ProviderModelSearchControls searchText={searchText} setSearchText={setSearchText}>
+              {headerContent}
+              {filterBar}
+            </ProviderModelSearchControls>
+          )
         }
         maintainVisibleContentPosition={false}
         recycleItems

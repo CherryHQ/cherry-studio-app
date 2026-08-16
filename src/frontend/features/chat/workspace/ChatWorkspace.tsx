@@ -4,16 +4,16 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import type { SharedValue } from 'react-native-reanimated';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
-import { useComposerDockLayout } from '@/frontend/components/composer';
 import {
   MessageList,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
+import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 import { refreshProviderConfigurationQueries } from '@/frontend/features/settings/providerConfigurationQueries';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
-import { isIOS } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
@@ -24,7 +24,6 @@ import {
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
 } from '../runtime/chatRuntimeProjection';
-import { ChatComposer } from './components/ChatComposer';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import {
@@ -37,7 +36,10 @@ const logger = loggerService.withContext('ChatWorkspace');
 const gateLog = loggerService.withContext('ChatGate');
 
 type ChatWorkspaceProps = {
-  isPreview: boolean;
+  /** 输入框实测高度，用于定位悬浮按钮；预览态没有输入框，留空即可。 */
+  bottomAccessoryHeight?: SharedValue<number>;
+  contentBottomInset: number;
+  keyboardOffset: number;
   messageWindow: Pick<
     MessagesViewModel,
     'isLoadingInitial' | 'isLoadingOlder' | 'loadOlder' | 'messages'
@@ -47,7 +49,9 @@ type ChatWorkspaceProps = {
 };
 
 export function ChatWorkspace({
-  isPreview,
+  bottomAccessoryHeight,
+  contentBottomInset,
+  keyboardOffset,
   messageWindow,
   renderGateKey,
   topicId,
@@ -107,10 +111,7 @@ export function ChatWorkspace({
     renderGateKey,
     requiresInitialHistoryLayout,
   });
-  const contentTopInset = isIOS ? headerHeight : 0;
-  const composerDockLayout = useComposerDockLayout();
-  const contentBottomInset = isPreview ? 12 : composerDockLayout.contentBottomInset;
-  const keyboardOffset = isPreview ? 0 : composerDockLayout.keyboardOffset;
+  const contentTopInset = resolveHeaderContentInset(headerHeight);
 
   // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
   useEffect(() => {
@@ -127,7 +128,7 @@ export function ChatWorkspace({
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <MessageList
         key={listRenderKey}
-        bottomAccessoryHeight={isPreview ? undefined : composerDockLayout.inputHeightShared}
+        bottomAccessoryHeight={bottomAccessoryHeight}
         contentBottomInset={contentBottomInset}
         contentTopInset={contentTopInset}
         enteringMessageId={chatTopic.pendingUserMessage?.id}
@@ -136,13 +137,6 @@ export function ChatWorkspace({
         onLoadOlder={loadOlder}
         onReady={markListLoaded}
       />
-      {isPreview ? null : (
-        <ChatComposer
-          dismissKeyboardOnSend={false}
-          onHeightChange={composerDockLayout.handleInputHeightChange}
-          topicId={topicId}
-        />
-      )}
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet
         approvals={pendingApprovals}

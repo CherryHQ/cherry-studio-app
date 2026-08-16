@@ -21,7 +21,7 @@ jest.mock('../../models/components/ProviderModelListContent', () => ({
     ListEmptyComponent ?? null,
 }));
 
-jest.mock('../../models/components/ProviderModelSearchField', () => ({
+jest.mock('../../models/components/ProviderModelSearchField/ProviderModelSearchField', () => ({
   ProviderModelSearchField: () => null,
 }));
 

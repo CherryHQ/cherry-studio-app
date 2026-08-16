@@ -16,7 +16,6 @@ import type { HeroLock } from './useHeroLock.types';
  * releases it (a tap on the avatar toggles the same latch). `lockState` is a
  * discrete 0/1 latch so shading the trigger boundary can't chatter;
  * `lockProgress` is the continuous clock the styles interpolate against.
- * Range-matches `useThinkingReveal`'s reaction pattern.
  */
 export function useHeroLock(scrollY: SharedValue<number>): HeroLock {
   const lockState = useSharedValue(0);

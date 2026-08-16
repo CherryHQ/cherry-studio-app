@@ -1,106 +1,159 @@
-import type { PropsWithChildren } from 'react';
 import { View } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle } from 'react-native-reanimated';
 
-const trackPadding = 2;
-const thumbWidth = 24;
-// Every stop gets a round dot (the original's `.tick`, 0.25rem).
-const tickSize = 4;
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
-export const effortSliderTrackRadius = 10;
+import { getEffortSliderTrackGeometry, stopFraction } from '../utils/effortSliderMath';
+import {
+  effortSliderProgressHeight,
+  effortSliderThumbInset,
+  effortSliderThumbSize,
+  effortSliderTickSize,
+  effortSliderTrackHeight,
+} from '../utils/effortSliderVisual';
 
-type EffortSliderTrackProps = PropsWithChildren<{
+type EffortSliderTrackProps = {
   trackHeight: number;
   stopCount: number;
   /** Normalized thumb position, 0..1. */
   position: SharedValue<number>;
   /** Measured track width in dp (React state, for tick layout). */
   measuredWidth: number;
-  /** Stop index that ignites the pixel field; its dot gets the accent color. */
-  pixelStopIndex: number;
-  /** Accent color for the top (pixel-field) stop's dot. */
-  accentColor: string;
-  /** Color for every other stop's dot. */
-  tickColor: string;
-  /** Hide the dots while the pixel field owns the track (top stop). */
-  hideTicks: boolean;
-}>;
+};
 
 /**
- * Track visuals. Layering (bottom → top): base + progress fill + pixel-field
- * overlay (`children`) inside the clipped track, then the stop dots, then
- * the thumb. Dots sit above every track element but below the thumb, so the
- * only thing that can cover a dot is the thumb parked on it — the fill and
- * background never hide them. They're suppressed once the top stop's pixel
- * field is lit.
+ * A 64dp neutral capsule surrounds a 44dp brand progress pill. The capsule and
+ * exposed ticks follow the active theme. The thumb sits inside the progress end
+ * cap, leaving its four-pixel brand ring visible at the endpoints.
  */
 export function EffortSliderTrack({
   trackHeight,
   stopCount,
   position,
   measuredWidth,
-  pixelStopIndex,
-  accentColor,
-  tickColor,
-  hideTicks,
-  children,
 }: EffortSliderTrackProps) {
-  const thumbHeight = trackHeight - trackPadding * 2 - 2;
-  // Precompute outside the worklets: measuredWidth is React state, not a shared
-  // value, so calling a plain JS helper inside useAnimatedStyle would trip
-  // Worklets' "synchronously called a Remote Function" guard.
-  const travelDistance = Math.max(measuredWidth - thumbWidth - trackPadding * 2, 0);
+  const [brandColor, trackColor, trackForegroundColor, constantBlack, constantWhite] =
+    useThemeColor([
+      'brand',
+      'secondary',
+      'secondary-foreground',
+      'constant-black',
+      'constant-white',
+    ]);
+  const scale = trackHeight / effortSliderTrackHeight;
+  const progressHeight = effortSliderProgressHeight * scale;
+  const thumbInset = effortSliderThumbInset * scale;
+  const thumbSize = effortSliderThumbSize * scale;
+  const tickSize = effortSliderTickSize * scale;
+  const trackRadius = trackHeight / 2;
+  const { thumbCenterStart, tickCenters, travelDistance } = getEffortSliderTrackGeometry(
+    measuredWidth,
+    stopCount,
+    thumbSize,
+    thumbInset,
+  );
+  const progressInset = thumbCenterStart - progressHeight / 2;
+  const stops = tickCenters.map((centerX, index) => ({
+    centerX,
+    fraction: stopFraction(index, stopCount),
+  }));
 
   const fillStyle = useAnimatedStyle(() => ({
-    width: trackPadding + thumbWidth * 0.5 + travelDistance * position.value,
+    width: progressHeight + travelDistance * position.value,
   }));
   const thumbStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: trackPadding + travelDistance * position.value }],
+    transform: [{ translateX: thumbInset + travelDistance * position.value }],
   }));
-
-  const tickCenters =
-    measuredWidth > 0 && stopCount > 1
-      ? Array.from({ length: stopCount }, (_, index) => {
-          return trackPadding + thumbWidth * 0.5 + (travelDistance * index) / (stopCount - 1);
-        })
-      : [];
 
   return (
     <View className="w-full" style={{ height: trackHeight }}>
       <View
-        className="absolute inset-0 overflow-hidden bg-secondary"
-        style={{ borderRadius: effortSliderTrackRadius }}
+        className="absolute inset-0"
+        style={{
+          backgroundColor: trackColor,
+          borderRadius: trackRadius,
+        }}
       >
-        <Animated.View className="absolute top-0 bottom-0 left-0 bg-secondary" style={fillStyle} />
-        {children}
+        {stops.map(({ centerX, fraction }) => (
+          <View
+            key={fraction}
+            pointerEvents="none"
+            style={{
+              backgroundColor: trackForegroundColor,
+              borderRadius: tickSize / 2,
+              height: tickSize,
+              left: centerX - tickSize / 2,
+              opacity: 0.2,
+              position: 'absolute',
+              top: (trackHeight - tickSize) / 2,
+              width: tickSize,
+            }}
+          />
+        ))}
+        <Animated.View
+          className="absolute overflow-hidden"
+          style={[
+            {
+              backgroundColor: brandColor,
+              borderRadius: progressHeight / 2,
+              height: progressHeight,
+              left: progressInset,
+              top: (trackHeight - progressHeight) / 2,
+            },
+            fillStyle,
+          ]}
+        >
+          <View
+            pointerEvents="none"
+            style={{ height: progressHeight, left: -progressInset, width: measuredWidth }}
+          >
+            {stops.map(({ centerX, fraction }) => (
+              <View
+                key={fraction}
+                style={{
+                  backgroundColor: constantWhite,
+                  borderRadius: tickSize / 2,
+                  height: tickSize,
+                  left: centerX - tickSize / 2,
+                  opacity: 0.16,
+                  position: 'absolute',
+                  top: (progressHeight - tickSize) / 2,
+                  width: tickSize,
+                }}
+              />
+            ))}
+          </View>
+        </Animated.View>
+        <View
+          pointerEvents="none"
+          style={{
+            borderColor: trackForegroundColor,
+            borderRadius: trackRadius,
+            borderWidth: 1,
+            bottom: 0,
+            left: 0,
+            opacity: 0.04,
+            position: 'absolute',
+            right: 0,
+            top: 0,
+          }}
+        />
       </View>
-      {hideTicks
-        ? null
-        : tickCenters.map((centerX, index) => (
-            <View
-              key={centerX}
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: (trackHeight - tickSize) / 2,
-                left: centerX - tickSize / 2,
-                width: tickSize,
-                height: tickSize,
-                borderRadius: tickSize / 2,
-                backgroundColor: index === pixelStopIndex ? accentColor : tickColor,
-              }}
-            />
-          ))}
       <Animated.View
-        className="absolute border border-black/10 bg-white"
+        className="absolute"
         style={[
           {
-            top: trackPadding + 1,
+            backgroundColor: constantWhite,
+            borderRadius: thumbSize / 2,
+            elevation: 1,
+            height: thumbSize,
             left: 0,
-            width: thumbWidth,
-            height: thumbHeight,
-            borderRadius: 8,
-            boxShadow: '0 1px 2px rgba(62, 56, 50, 0.15)',
+            shadowColor: constantBlack,
+            shadowOffset: thumbShadowOffset,
+            shadowOpacity: 0.22,
+            shadowRadius: 1.5,
+            top: (trackHeight - thumbSize) / 2,
+            width: thumbSize,
           },
           thumbStyle,
         ]}
@@ -108,3 +161,5 @@ export function EffortSliderTrack({
     </View>
   );
 }
+
+const thumbShadowOffset = { height: 1, width: 0 } as const;

@@ -1,9 +1,10 @@
 # Extending Cherry Mobile
 
 This is a placement guide for extending the in-process frontend/backend architecture. Prefer an
-existing deep module over a new registry or pass-through wrapper. Read the
-[Architecture Overview](../references/architecture-overview.md) and [Data Layer](../references/data/README.md)
-before introducing a new cross-layer interface.
+existing deep module over a new registry or pass-through wrapper. Read
+[Code Organization](../references/code-organization.md), the
+[Architecture Overview](../references/architecture-overview.md), and
+[Data Layer](../references/data/README.md) before introducing a new cross-layer interface.
 
 ## Add A Resource Endpoint
 
@@ -60,7 +61,7 @@ including model capability checks.
 Keep a direct Cherry Desktop service counterpart's `Service` name and public methods. Name
 mobile-only owners by role: `Module`, `Runtime`, `Session`, `Client`, `Adapter`, or `Manager`; never
 add an `Impl` suffix or a forwarding `Service` wrapper. See
-[Naming Conventions](../references/naming-conventions.md#52-architectural-role-names).
+[Runtime Ownership](../references/runtime-ownership.md#role-names).
 
 App-level tools are resolved by `ToolResolver` and attached in
 `src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`. Provider plugins are

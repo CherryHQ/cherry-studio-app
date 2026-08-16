@@ -7,7 +7,6 @@ import Animated from 'react-native-reanimated';
 import { MessageParts } from '../../messageContent';
 import type { MessagePresentationItem } from '../../types';
 import { useUserMessageSlideInStyle } from '../slideIn/hooks/useUserMessageSlideInStyle';
-import { useShouldSlideIn } from '../slideIn/MessageSlideInProvider';
 import { partitionUserMessageParts } from '../utils/partitionUserMessageParts';
 import { UserMessageAttachmentStrip } from './UserMessageAttachmentStrip';
 
@@ -17,8 +16,7 @@ type UserMessageRowProps = {
 
 export function UserMessageRow({ message }: UserMessageRowProps) {
   const { t } = useTranslation();
-  const shouldSlideIn = useShouldSlideIn(message.id);
-  const slideInStyle = useUserMessageSlideInStyle(shouldSlideIn);
+  const slideInStyle = useUserMessageSlideInStyle(message.id);
   const { attachments, bodyMessage } = useMemo(() => partitionUserMessageParts(message), [message]);
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [

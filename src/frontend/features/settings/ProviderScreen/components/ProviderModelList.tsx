@@ -5,11 +5,8 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 
-import {
-  ProviderModelListContent,
-  type ProviderModelListSelection,
-} from '../models/components/ProviderModelListContent';
-import { ProviderModelSearchField } from '../models/components/ProviderModelSearchField';
+import { type ProviderModelListSelection } from '../models/components/ProviderModelListContent';
+import { ProviderModelListLayout } from '../models/components/ProviderModelListLayout/ProviderModelListLayout';
 import type { ProviderModelAction } from '../models/types';
 import { filterModelsByKeywords } from '../models/utils/providerModelSearch';
 
@@ -52,12 +49,7 @@ export function ProviderModelList({
 
   return (
     <>
-      {/* Searching while selecting would hide rows that stay selected, so the
-          field goes away for the duration. */}
-      {!hasNoModels && !selection && process.env.EXPO_OS === 'ios' ? (
-        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-      ) : null}
-      <ProviderModelListContent
+      <ProviderModelListLayout
         isDefaultModel={isDefaultModel}
         ListEmptyComponent={
           hasNoModels && pullAction && addAction ? (
@@ -74,20 +66,14 @@ export function ProviderModelList({
             />
           )
         }
-        // Swapping the header rather than the whole tree keeps the underlying list
-        // mounted, so its automatic content inset survives the transition.
-        ListHeaderComponent={
-          hasNoModels || selection || process.env.EXPO_OS === 'ios' ? undefined : (
-            // 12 all round, the one gap the pull screen uses between every
-            // control and the list below it.
-            <View className="px-4 py-3">
-              <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
-            </View>
-          )
-        }
         models={displayedModels}
         provider={provider}
+        searchText={searchText}
         selection={selection}
+        setSearchText={setSearchText}
+        // Searching while selecting would hide rows that stay selected, so the
+        // field goes away for the duration.
+        showSearch={!hasNoModels && !selection}
         onScrollBeginDrag={Keyboard.dismiss}
       />
     </>

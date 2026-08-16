@@ -1,6 +1,7 @@
 import type { DbService } from '../DbService';
 import { CherryAiDefaultModelSeeder } from './seeders/CherryAiDefaultModelSeeder';
 import { DefaultAssistantSeeder } from './seeders/DefaultAssistantSeeder';
+import { LayoutBenchSeeder } from './seeders/LayoutBenchSeeder';
 import { MockChatSeeder } from './seeders/MockChatSeeder';
 import { PreferenceSeeder } from './seeders/PreferenceSeeder';
 import { PresetProviderSeeder } from './seeders/PresetProviderSeeder';
@@ -21,6 +22,7 @@ async function createSeeders(): Promise<DatabaseSeeder[]> {
 
   if (isDevelopmentBuild()) {
     seeders.push(new MockChatSeeder());
+    seeders.push(new LayoutBenchSeeder());
   }
 
   return seeders;
