@@ -1,17 +1,13 @@
 import { Composer } from '@cherrystudio/ui/components';
-import type { IconSource } from '@cherrystudio/ui/icons';
-import { type PropsWithChildren, useCallback } from 'react';
+import { type PropsWithChildren, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
-import { useUniwind } from 'uniwind';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import { useComposerFieldDismiss } from '../hooks/useComposerFieldDismiss';
 
 type ComposerModelPillProps = PropsWithChildren<{
-  /** Themed icon for the model; the pill falls back to the label's initial. */
-  icon?: IconSource;
+  /** Composed model icon; the pill falls back to the label's initial. */
+  icon?: ReactNode;
   label?: string;
   onPress: () => void;
 }>;
@@ -22,7 +18,6 @@ type ComposerModelPillProps = PropsWithChildren<{
  */
 export function ComposerModelPill({ children, icon, label, onPress }: ComposerModelPillProps) {
   const { t } = useTranslation();
-  const { theme } = useUniwind();
   const dismissField = useComposerFieldDismiss();
 
   const handlePress = useCallback(() => {
@@ -44,14 +39,7 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
     <Composer.Pill
       accessibilityLabel={label}
       icon={
-        icon ? (
-          <Image
-            cachePolicy="memory-disk"
-            contentFit="contain"
-            source={icon[theme === 'dark' ? 'dark' : 'light']}
-            style={modelIconStyle}
-          />
-        ) : (
+        icon ?? (
           <Text className="font-semibold text-foreground text-sm">
             {label.trim().charAt(0).toUpperCase() || 'M'}
           </Text>
@@ -67,5 +55,3 @@ export function ComposerModelPill({ children, icon, label, onPress }: ComposerMo
     </Composer.Pill>
   );
 }
-
-const modelIconStyle = { height: 18, width: 18 } as const;

@@ -220,10 +220,12 @@ inside the box — is what this did while the buttons were bare glyphs. Once the
 circles the circle's edge became what the eye lines up against, and a row above the field is as
 likely to be a filled pill as it is to be text.
 
-Every circular surface in here is tinted rather than left as plain glass. A `GlassView` renders
+Visible toolbar actions and pills are tinted rather than left as plain glass. A `GlassView` renders
 nothing when it sits on another one — the material has nothing behind it to refract — so an untinted
 button on the composer's own surface is invisible, not merely faint. `Composer.Action` resolves the
-tint from its `className` and hands it to both branches, which is why callers never pass one.
+tint from its `className` and hands it to both branches, which is why callers never pass one. The
+morph menu is the exception: its shared trigger/panel surface deliberately keeps the native glass
+untinted while retaining `bg-secondary` for non-glass fallbacks.
 
 Rows above the field — an attachment strip, a status line, a selected-tool tag — are placed by the
 order they are written, not by named slots, and a row that never disappears is just a `View`. What is
