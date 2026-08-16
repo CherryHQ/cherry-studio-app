@@ -111,6 +111,7 @@
   "chat.assistant.edit": "编辑助手",
   "chat.attachments.image": "图片附件",
   "chat.attachments.importFailed": "有 {{count}} 个附件导入失败。",
+  "chat.attachments.unsupportedImageFormat": "仅支持 JPEG、PNG、GIF 和 WebP 格式的图片。",
   "chat.default.description": "你好，我是默认助手。你可以立刻开始跟我聊天",
   "chat.default.name": "默认助手",
   "chat.default.topic.name": "默认话题",
