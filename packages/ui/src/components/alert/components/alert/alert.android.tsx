@@ -1,10 +1,10 @@
 import { Dialog as HeroDialog } from 'heroui-native';
 import { View } from 'react-native';
 
-import { Button } from '../button';
-import { Input } from '../input';
-import { TextField } from '../text-field';
-import type { AlertProps, DialogActionRole } from './alert.types';
+import { Button } from '../../../button';
+import { Input } from '../../../input';
+import { TextField } from '../../../text-field';
+import type { AlertProps, DialogActionRole } from '../../alert.types';
 
 const buttonVariants: Record<DialogActionRole, 'default' | 'destructive' | 'outline'> = {
   cancel: 'outline',

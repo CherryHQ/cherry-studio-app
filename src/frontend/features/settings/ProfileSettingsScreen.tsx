@@ -1,4 +1,11 @@
-import { Input, Label, Menu, type MenuItem, TextField } from '@cherrystudio/ui/components';
+import {
+  Input,
+  Label,
+  Menu,
+  type MenuItem,
+  TextField,
+  useAlert,
+} from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
@@ -6,7 +13,6 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, TextInput, View } from 'react-native';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { ProfileEditableAvatar } from '@/frontend/components/avatar';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';

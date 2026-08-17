@@ -1,7 +1,7 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Alert } from '../alert.android';
+import { Alert } from '../components/alert/alert.android';
 
 jest.mock('heroui-native', () => {
   const React = require('react');

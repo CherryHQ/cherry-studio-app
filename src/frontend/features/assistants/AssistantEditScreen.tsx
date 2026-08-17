@@ -6,6 +6,7 @@ import {
   Label,
   Switch,
   TextField,
+  useAlert,
 } from '@cherrystudio/ui/components';
 import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
@@ -22,7 +23,6 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useModelPickerData } from '@/frontend/components/modelPicker';
 import { usePreference } from '@/frontend/data/hooks';

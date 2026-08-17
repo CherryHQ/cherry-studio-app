@@ -1,3 +1,4 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import {
   WEB_SEARCH_PROVIDER_IDS,
   type WebSearchProviderId,
@@ -8,7 +9,6 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
 
 import {

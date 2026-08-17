@@ -1,23 +1,22 @@
 import { useEffect } from 'react';
+import { Keyboard } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { AlertProvider, useAlert } from '../AlertProvider';
+import { AlertProvider } from '../components/alert-provider';
+import { useAlert } from '../hooks/use-alert';
 
-jest.mock('@cherrystudio/ui/components', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+jest.mock('../components/alert/alert', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
 
   return {
     Alert: (props: object) => React.createElement(View, { ...props, mockComponent: 'alert' }),
   };
 });
 
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 type AlertController = ReturnType<typeof useAlert>['alert'];
 
+const labels = { cancel: 'Cancel', ok: 'OK' };
 let alertController: AlertController | undefined;
 let renderer: ReactTestRenderer | undefined;
 
@@ -40,9 +39,10 @@ async function flushEffects() {
 describe('AlertProvider', () => {
   beforeEach(async () => {
     alertController = undefined;
+    jest.spyOn(Keyboard, 'dismiss').mockImplementation(() => undefined);
     await act(async () => {
       renderer = create(
-        <AlertProvider>
+        <AlertProvider labels={labels}>
           <Probe />
         </AlertProvider>,
       );
@@ -52,6 +52,7 @@ describe('AlertProvider', () => {
   afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   it('closes a confirmation without awaiting its action', async () => {
@@ -70,7 +71,7 @@ describe('AlertProvider', () => {
     let alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.isOpen).toBe(true);
     expect(alert.props.actions.map((action: { label: string }) => action.label)).toEqual([
-      'common.cancel',
+      'Cancel',
       'Delete',
     ]);
 
@@ -86,37 +87,34 @@ describe('AlertProvider', () => {
     await confirmation.promise;
   });
 
-  it('presents queued messages in order after a closed confirmation', async () => {
+  it('keeps the active alert until native close and then advances the queue', async () => {
+    const onConfirm = jest.fn(() => alertController?.show({ title: 'Delete failed' }));
+
     act(() => {
-      alertController?.confirm({
-        confirmLabel: 'Delete',
-        onConfirm: () => {
-          alertController?.show({ title: 'Delete failed' });
-        },
-        title: 'Delete item?',
-      });
+      alertController?.confirm({ confirmLabel: 'Delete', onConfirm, title: 'Delete item?' });
     });
     await flushEffects();
 
     let alert = renderer!.root.findByProps({ mockComponent: 'alert' });
-    act(() => {
-      alert.props.actions[1].onPress();
-      alert.props.onOpenChange(false);
-    });
-    await flushEffects();
+    act(() => alert.props.actions[1].onPress());
+
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(renderer!.root.findByProps({ mockComponent: 'alert' }).props.title).toBe('Delete item?');
+
+    act(() => alert.props.onOpenChange(false));
     await flushEffects();
 
     alert = renderer!.root.findByProps({ mockComponent: 'alert' });
     expect(alert.props.isOpen).toBe(true);
     expect(alert.props.title).toBe('Delete failed');
-    expect(alert.props.actions[0].label).toBe('common.ok');
+    expect(alert.props.actions[0].label).toBe('OK');
   });
 
   it('keeps showing messages after the requesting consumer unmounts', async () => {
     const persistentAlert = alertController;
 
     await act(async () => {
-      renderer?.update(<AlertProvider />);
+      renderer?.update(<AlertProvider labels={labels} />);
     });
     act(() => {
       persistentAlert?.show({ title: 'Background failure' });
@@ -169,6 +167,25 @@ describe('AlertProvider', () => {
     expect(onConfirm).toHaveBeenCalledWith('Renamed topic');
     await flushEffects();
     expect(renderer!.root.findByProps({ mockComponent: 'alert' }).props.isOpen).toBe(false);
+  });
+
+  it('dismisses the keyboard before confirm and prompt alerts', () => {
+    act(() => {
+      alertController?.confirm({
+        confirmLabel: 'Continue',
+        onConfirm: jest.fn(),
+        title: 'Confirm',
+      });
+      alertController?.prompt({
+        confirmLabel: 'Save',
+        input: { accessibilityLabel: 'Prompt value', initialValue: '' },
+        onConfirm: jest.fn(),
+        title: 'Prompt',
+      });
+      alertController?.show({ title: 'Information' });
+    });
+
+    expect(Keyboard.dismiss).toHaveBeenCalledTimes(2);
   });
 });
 

@@ -21,6 +21,20 @@ import { PlusIcon } from '@cherrystudio/app-icons';
 `Image` wraps `expo-image` with Uniwind `className` support while preserving the underlying image
 API.
 
+`Alert` is the shared native dialog primitive. Mount one provider at the application root and
+inject localized default action labels there; feature code can then enqueue informational,
+confirmation, and prompt dialogs through `useAlert()` without owning dialog rendering:
+
+```tsx
+<Alert.Provider labels={{ cancel: t('common.cancel'), ok: t('common.ok') }}>
+  <App />
+</Alert.Provider>
+```
+
+The provider presents queued dialogs in request order. Confirmation and prompt actions close
+without waiting for asynchronous business work, so failures can enqueue their own follow-up alert.
+The standalone `<Alert>` primitive remains available for controlled dialog composition.
+
 `Avatar` composes an image or fallback inside a clipped face while keeping badges outside that
 clipping boundary. It accepts numeric sizes so product avatars can follow their surrounding layout,
 and supports circular and rounded-square faces:

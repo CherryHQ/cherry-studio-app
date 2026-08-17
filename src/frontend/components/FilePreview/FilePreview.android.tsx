@@ -1,7 +1,7 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 import { useTranslation } from 'react-i18next';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { FallbackPreview } from './components/FallbackPreview/FallbackPreview';

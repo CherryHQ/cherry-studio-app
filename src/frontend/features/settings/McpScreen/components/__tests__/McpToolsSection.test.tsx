@@ -38,12 +38,9 @@ jest.mock('@cherrystudio/ui/components', () => {
     Button: (props: Record<string, unknown>) => <MockPressable {...props} />,
     Spinner: (props: Record<string, unknown>) => <MockView {...props} />,
     Switch: (props: Record<string, unknown>) => <MockPressable {...props} />,
+    useAlert: () => ({ alert: { show: mockAlertShow } }),
   };
 });
-
-jest.mock('@/frontend/components/AlertProvider', () => ({
-  useAlert: () => ({ alert: { show: mockAlertShow } }),
-}));
 
 const serverWildcard = 'mcp__myServer__*';
 

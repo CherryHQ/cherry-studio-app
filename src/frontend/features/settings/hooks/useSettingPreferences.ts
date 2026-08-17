@@ -1,9 +1,9 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import { type LanguageVarious, ThemeMode } from '@cherrystudio/universal/data/preference';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { withThemeTransition } from 'react-native-nitro-theme-transition';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { useMultiplePreferences } from '@/frontend/data/hooks';
 import { initI18n, resolveLanguage } from '@/frontend/i18n';
 import { themeTransition } from '@/frontend/utils/constants';

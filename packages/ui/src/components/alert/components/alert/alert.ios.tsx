@@ -11,7 +11,7 @@ import { accessibilityLabel as accessibilityLabelModifier } from '@expo/ui/swift
 import { useEffect } from 'react';
 import { useUniwind } from 'uniwind';
 
-import type { AlertProps } from './alert.types';
+import type { AlertProps } from '../../alert.types';
 
 export function Alert({
   actions,

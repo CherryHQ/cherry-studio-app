@@ -8,6 +8,7 @@ import {
   type MenuItem,
   SecureInput,
   TextField,
+  useAlert,
 } from '@cherrystudio/ui/components';
 import { ENDPOINT_TYPE, type EndpointType } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
@@ -19,7 +20,6 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';

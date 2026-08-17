@@ -1,5 +1,5 @@
 import { CheckIcon, ImageIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
-import { Button, Image, ImageGenerationLoader } from '@cherrystudio/ui/components';
+import { Button, Image, ImageGenerationLoader, useAlert } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
   type ComposerInitialAttachment,

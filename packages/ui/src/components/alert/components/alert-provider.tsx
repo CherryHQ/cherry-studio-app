@@ -1,42 +1,16 @@
-import {
-  Alert,
-  type AlertInput,
-  type DialogAction,
-  type DialogActionRole,
-} from '@cherrystudio/ui/components';
-import {
-  createContext,
-  type PropsWithChildren,
-  use,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { useTranslation } from 'react-i18next';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Keyboard } from 'react-native';
 
-export type AlertShowOptions = {
-  actionLabel?: string;
-  description?: string;
-  title: string;
-};
-
-export type AlertConfirmOptions = {
-  confirmLabel: string;
-  description?: string;
-  onConfirm: () => Promise<void> | void;
-  role?: Exclude<DialogActionRole, 'cancel'>;
-  title: string;
-};
-
-export type AlertPromptOptions = {
-  confirmLabel: string;
-  description?: string;
-  input: Omit<AlertInput, 'onChangeText' | 'value'> & { initialValue: string };
-  onConfirm: (value: string) => Promise<void> | void;
-  title: string;
-};
+import type {
+  AlertConfirmOptions,
+  AlertController,
+  AlertPromptOptions,
+  AlertProviderProps,
+  AlertShowOptions,
+} from '../alert-controller.types';
+import type { AlertInput, DialogAction } from '../alert.types';
+import { AlertContext } from '../hooks/use-alert';
+import { Alert as AlertPrimitive } from './alert/alert';
 
 type QueuedAlert = {
   actions: (Omit<DialogAction, 'onPress'> & {
@@ -48,20 +22,7 @@ type QueuedAlert = {
   title: string;
 };
 
-export type AlertController = {
-  confirm: (options: AlertConfirmOptions) => void;
-  prompt: (options: AlertPromptOptions) => void;
-  show: (options: AlertShowOptions) => void;
-};
-
-type AlertContextValue = {
-  alert: AlertController;
-};
-
-const AlertContext = createContext<AlertContextValue | null>(null);
-
-export function AlertProvider({ children }: PropsWithChildren) {
-  const { t } = useTranslation();
+export function AlertProvider({ children, labels }: AlertProviderProps) {
   const nextAlertIdRef = useRef(0);
   const [queue, setQueue] = useState<QueuedAlert[]>([]);
   const activeAlert = queue[0];
@@ -77,7 +38,7 @@ export function AlertProvider({ children }: PropsWithChildren) {
       Keyboard.dismiss();
       enqueue({
         actions: [
-          { label: t('common.cancel'), role: 'cancel' },
+          { label: labels.cancel, role: 'cancel' },
           {
             label: confirmLabel,
             onPress: () => {
@@ -90,14 +51,14 @@ export function AlertProvider({ children }: PropsWithChildren) {
         title,
       });
     },
-    [enqueue, t],
+    [enqueue, labels.cancel],
   );
 
   const show = useCallback(
-    ({ actionLabel = t('common.ok'), description, title }: AlertShowOptions) => {
+    ({ actionLabel = labels.ok, description, title }: AlertShowOptions) => {
       enqueue({ actions: [{ label: actionLabel }], description, title });
     },
-    [enqueue, t],
+    [enqueue, labels.ok],
   );
 
   const prompt = useCallback(
@@ -105,7 +66,7 @@ export function AlertProvider({ children }: PropsWithChildren) {
       Keyboard.dismiss();
       enqueue({
         actions: [
-          { label: t('common.cancel'), role: 'cancel' },
+          { label: labels.cancel, role: 'cancel' },
           {
             label: confirmLabel,
             onPress: (inputValue) => {
@@ -125,7 +86,7 @@ export function AlertProvider({ children }: PropsWithChildren) {
         title,
       });
     },
-    [enqueue, t],
+    [enqueue, labels.cancel],
   );
 
   const handleInputChange = useCallback((value: string) => {
@@ -139,18 +100,16 @@ export function AlertProvider({ children }: PropsWithChildren) {
     });
   }, []);
 
-  const handleOpenChange = useCallback((nextIsOpen: boolean) => {
-    if (!nextIsOpen) {
+  const handleOpenChange = useCallback((isOpen: boolean) => {
+    if (!isOpen) {
       setQueue((current) => current.slice(1));
     }
   }, []);
 
-  const alert = useMemo<AlertController>(
+  const controller = useMemo<AlertController>(
     () => ({ confirm, prompt, show }),
     [confirm, prompt, show],
   );
-  const contextValue = useMemo(() => ({ alert }), [alert]);
-
   const actions =
     activeAlert?.actions.map(({ onPress, ...action }) => ({
       ...action,
@@ -161,9 +120,9 @@ export function AlertProvider({ children }: PropsWithChildren) {
     : undefined;
 
   return (
-    <AlertContext value={contextValue}>
+    <AlertContext value={controller}>
       {children}
-      <Alert
+      <AlertPrimitive
         key={activeAlert?.id ?? 'empty'}
         actions={actions}
         description={activeAlert?.description}
@@ -175,14 +134,4 @@ export function AlertProvider({ children }: PropsWithChildren) {
       />
     </AlertContext>
   );
-}
-
-export function useAlert() {
-  const context = use(AlertContext);
-
-  if (!context) {
-    throw new Error('useAlert must be used within AlertProvider');
-  }
-
-  return context;
 }

@@ -1,4 +1,5 @@
 import { CheckIcon } from '@cherrystudio/app-icons';
+import { useAlert } from '@cherrystudio/ui/components';
 import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
@@ -9,7 +10,6 @@ import { ActivityIndicator, type AccessibilityActionEvent, Text, View } from 're
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   useMessageListBottomInset,
   useMessagePendingDeletionIds,

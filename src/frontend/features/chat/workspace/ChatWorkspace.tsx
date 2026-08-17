@@ -1,3 +1,4 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import type { Message } from '@cherrystudio/universal/data/types/message';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -5,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   MessageList,
   type MessagePresentationItem,
