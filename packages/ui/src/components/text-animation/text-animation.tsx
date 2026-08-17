@@ -76,9 +76,16 @@ export type TextAnimationRotatingProps = Omit<TextProps, 'children' | 'className
     enabled?: boolean;
     /** Styles every phrase. */
     textClassName?: string;
-    /** Phrases to cycle through. A single string remains static. */
+    /** A changing string to animate, or phrases to cycle through. */
     text: string | readonly string[];
   }>;
+
+type RotatingContentProps = Omit<
+  TextAnimationRotatingProps,
+  'delay' | 'duration' | 'enabled' | 'text'
+> & {
+  still: boolean;
+};
 
 function TextAnimationRotating({
   className,
@@ -93,21 +100,41 @@ function TextAnimationRotating({
   const initialDelay = useTextAnimationSetting('delay', delay, 0);
   const isEnabled = useTextAnimationSetting('enabled', enabled, true);
   const isStill = useReducedMotion() || !isEnabled;
-  const phrases = useMemo(() => (typeof text === 'string' ? [text] : text), [text]);
-  const phraseItems = useMemo(() => {
-    const occurrences = new Map<string, number>();
 
-    return phrases.map((phrase) => {
-      const occurrence = occurrences.get(phrase) ?? 0;
-      occurrences.set(phrase, occurrence + 1);
-      return { key: `${phrase}-${occurrence}`, phrase };
-    });
-  }, [phrases]);
+  const contentProps = { className, still: isStill, textClassName, ...textProps };
+
+  return typeof text === 'string' ? (
+    <RotatingValue {...contentProps} text={text} />
+  ) : (
+    <RotatingSequence
+      {...contentProps}
+      initialDelay={initialDelay}
+      period={period}
+      phrases={text}
+    />
+  );
+}
+
+TextAnimationRotating.displayName = 'TextAnimation.Rotating';
+
+type RotatingSequenceProps = RotatingContentProps & {
+  initialDelay: number;
+  period: number;
+  phrases: readonly string[];
+};
+
+function RotatingSequence({
+  initialDelay,
+  period,
+  phrases,
+  still,
+  ...props
+}: RotatingSequenceProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const normalizedActiveIndex = phrases.length === 0 ? 0 : activeIndex % phrases.length;
 
   useEffect(() => {
-    if (isStill || phrases.length < 2) {
+    if (still || phrases.length < 2) {
       return;
     }
 
@@ -126,10 +153,92 @@ function TextAnimationRotating({
         clearInterval(interval);
       }
     };
-  }, [initialDelay, isStill, period, phrases.length]);
+  }, [initialDelay, period, phrases.length, still]);
 
   return (
-    <View className={cn('overflow-hidden', className)}>
+    <RotatingLayout
+      activeIndex={normalizedActiveIndex}
+      phrases={phrases}
+      still={still}
+      {...props}
+    />
+  );
+}
+
+type RotatingValueProps = RotatingContentProps & {
+  text: string;
+};
+
+type RotatingValueState = {
+  current: string;
+  previous?: string;
+  transitionId: number;
+};
+
+function RotatingValue({ still, text, ...props }: RotatingValueProps) {
+  const [value, setValue] = useState<RotatingValueState>(() => ({
+    current: text,
+    transitionId: 0,
+  }));
+
+  // Retarget before commit so a new value cannot flash at its final position.
+  if (value.current !== text) {
+    setValue({
+      current: text,
+      previous: still ? undefined : value.current,
+      transitionId: value.transitionId + 1,
+    });
+  }
+
+  useEffect(() => {
+    if (value.previous === undefined) {
+      return;
+    }
+
+    const transitionId = value.transitionId;
+    const timeout = setTimeout(() => {
+      setValue((current) =>
+        current.transitionId === transitionId ? { ...current, previous: undefined } : current,
+      );
+    }, motionDuration.base);
+
+    return () => clearTimeout(timeout);
+  }, [value.previous, value.transitionId]);
+
+  const phrases =
+    still || value.previous === undefined ? [value.current] : [value.previous, value.current];
+
+  return (
+    <RotatingLayout activeIndex={phrases.length - 1} phrases={phrases} still={still} {...props} />
+  );
+}
+
+type RotatingLayoutProps = RotatingContentProps & {
+  activeIndex: number;
+  phrases: readonly string[];
+};
+
+function RotatingLayout({
+  activeIndex,
+  className,
+  phrases,
+  still,
+  testID,
+  textClassName,
+  ...textProps
+}: RotatingLayoutProps) {
+  const phraseItems = useMemo(() => {
+    const occurrences = new Map<string, number>();
+
+    return phrases.map((phrase) => {
+      const occurrence = occurrences.get(phrase) ?? 0;
+      occurrences.set(phrase, occurrence + 1);
+      return { key: `${phrase}-${occurrence}`, phrase };
+    });
+  }, [phrases]);
+
+  return (
+    <View className={cn('overflow-hidden', className)} testID={testID}>
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
@@ -145,11 +254,11 @@ function TextAnimationRotating({
 
       {phraseItems.map(({ key, phrase }, index) => (
         <RotatingPhrase
-          active={index === normalizedActiveIndex}
+          active={index === activeIndex}
           key={`phrase-${key}`}
           measured={index === 0}
           phrase={phrase}
-          still={isStill}
+          still={still}
           textClassName={textClassName}
           textProps={textProps}
         />
@@ -157,8 +266,6 @@ function TextAnimationRotating({
     </View>
   );
 }
-
-TextAnimationRotating.displayName = 'TextAnimation.Rotating';
 
 type RotatingPhraseProps = {
   active: boolean;

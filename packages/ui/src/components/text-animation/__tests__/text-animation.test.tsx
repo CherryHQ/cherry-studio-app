@@ -176,4 +176,70 @@ describe('TextAnimation.Rotating', () => {
     });
     expect(activePhrase(renderer!)).toBe('Only');
   });
+
+  it('rotates between changing string values and removes the previous value afterward', () => {
+    act(() => {
+      renderer = create(<TextAnimation.Rotating testID="status" text="Working" />);
+    });
+
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating testID="status" text="Complete" />);
+    });
+
+    expect(activePhrase(renderer!)).toBe('Complete');
+    expect(
+      renderer!.root
+        .findByProps({ pointerEvents: 'none' })
+        .findAllByType(Text)
+        .map((node) => node.props.children),
+    ).toEqual(['Working', 'Complete']);
+    expect(
+      renderer!.root.findAllByProps({ testID: 'status' }).filter((node) => node.type === View),
+    ).toHaveLength(1);
+
+    act(() => jest.advanceTimersByTime(250));
+
+    expect(
+      renderer!.root
+        .findByProps({ pointerEvents: 'none' })
+        .findAllByType(Text)
+        .map((node) => node.props.children),
+    ).toEqual(['Complete']);
+  });
+
+  it('updates a changing string immediately with Reduce Motion enabled', () => {
+    mockReducedMotion = true;
+
+    act(() => {
+      renderer = create(<TextAnimation.Rotating text="Before" />);
+    });
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating text="After" />);
+    });
+
+    expect(activePhrase(renderer!)).toBe('After');
+    expect(
+      renderer!.root
+        .findByProps({ pointerEvents: 'none' })
+        .findAllByType(Text)
+        .map((node) => node.props.children),
+    ).toEqual(['After']);
+  });
+
+  it('animates from an empty string value', () => {
+    act(() => {
+      renderer = create(<TextAnimation.Rotating text="" />);
+    });
+    act(() => {
+      renderer!.update(<TextAnimation.Rotating text="Ready" />);
+    });
+
+    expect(activePhrase(renderer!)).toBe('Ready');
+    expect(
+      renderer!.root
+        .findByProps({ pointerEvents: 'none' })
+        .findAllByType(Text)
+        .map((node) => node.props.children),
+    ).toEqual(['', 'Ready']);
+  });
 });
