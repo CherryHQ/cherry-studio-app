@@ -1,5 +1,5 @@
 diff --git a/android/src/main/java/com/rcttabview/RCTTabView.kt b/android/src/main/java/com/rcttabview/RCTTabView.kt
-index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..dbab3d6afa4337ecffd1be2f51cebd83816f4561 100644
+index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..7e5384366e6b8930ac1b65e99b27de980098f7d6 100644
 --- a/android/src/main/java/com/rcttabview/RCTTabView.kt
 +++ b/android/src/main/java/com/rcttabview/RCTTabView.kt
 @@ -35,6 +35,8 @@ import coil3.size.Scale
@@ -14,8 +14,7 @@ index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..dbab3d6afa4337ecffd1be2f51cebd83
 @@ -42,7 +44,11 @@ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY
  import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_UNLABELED
  import com.google.android.material.transition.platform.MaterialFadeThrough
--
-+
+ 
 -class ExtendedBottomNavigationView(context: Context) : BottomNavigationView(context) {
 +class ExtendedBottomNavigationView(context: Context) :
 +  BottomNavigationView(context), ReactPointerEventsView {
@@ -25,7 +24,7 @@ index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..dbab3d6afa4337ecffd1be2f51cebd83
    override fun getMaxItemCount(): Int {
      return 100
    }
-@@ -100,23 +106,17 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
+@@ -100,25 +106,36 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
      uiModeConfiguration = resources.configuration.uiMode
  
      post {
@@ -37,7 +36,7 @@ index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..dbab3d6afa4337ecffd1be2f51cebd83
 -
          // Notify about tab bar height.
          onTabBarMeasuredListener?.invoke(Utils.convertPixelsToDp(context, bottomNavigation.height).toInt())
--
+ 
 -        if (newWidth != lastReportedSize?.width || newHeight != lastReportedSize?.height) {
 -          val dpWidth = Utils.convertPixelsToDp(context, layoutHolder.width)
 -          val dpHeight = Utils.convertPixelsToDp(context, layoutHolder.height)
@@ -45,54 +44,31 @@ index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..dbab3d6afa4337ecffd1be2f51cebd83
 -          onNativeLayoutListener?.invoke(dpWidth, dpHeight)
 -          lastReportedSize = Size(newWidth, newHeight)
 -        }
++        reportLayoutHolderSizeIfChanged()
++      }
++      // When only the tab bar visibility changes (tabBarHidden), the container keeps
++      // its bounds so the listener above never fires — only layoutHolder grows or
++      // shrinks. Observe layoutHolder itself so the new content size reaches JS.
++      layoutHolder.addOnLayoutChangeListener { _, _, _, _, _,
++                                               _, _, _, _ ->
++        reportLayoutHolderSizeIfChanged()
        }
      }
-+
-+    layoutHolder.addOnLayoutChangeListener { _, left, top, right, bottom,
-+                                             _, _, _, _ ->
-+      reportLayoutHolderSize(right - left, bottom - top)
-+    }
    }
  
-   private val layoutCallback = Choreographer.FrameCallback {
-@@ -124,6 +124,22 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
-     refreshLayout()
-   }
- 
-+  private fun reportLayoutHolderSize(width: Int, height: Int) {
-+    if (width <= 0 || height <= 0) {
-+      return
-+    }
++  private fun reportLayoutHolderSizeIfChanged() {
++    val newWidth = layoutHolder.width
++    val newHeight = layoutHolder.height
 +
-+    val newSize = Size(width, height)
-+    if (newSize == lastReportedSize) {
-+      return
-+    }
++    if (newWidth != lastReportedSize?.width || newHeight != lastReportedSize?.height) {
++      val dpWidth = Utils.convertPixelsToDp(context, newWidth)
++      val dpHeight = Utils.convertPixelsToDp(context, newHeight)
 +
-+    val dpWidth = Utils.convertPixelsToDp(context, width)
-+    val dpHeight = Utils.convertPixelsToDp(context, height)
-+    onNativeLayoutListener?.invoke(dpWidth, dpHeight)
-+    lastReportedSize = newSize
++      onNativeLayoutListener?.invoke(dpWidth, dpHeight)
++      lastReportedSize = Size(newWidth, newHeight)
++    }
 +  }
 +
-   private fun refreshLayout() {
-     measure(
-       MeasureSpec.makeMeasureSpec(width, MeasureSpec.EXACTLY),
-@@ -231,11 +247,13 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
-   }
- 
-   fun setTabBarHidden(isHidden: Boolean) {
--    if (isHidden) {
--      bottomNavigation.visibility = GONE
--    } else {
--      bottomNavigation.visibility = VISIBLE
-+    val targetVisibility = if (isHidden) GONE else VISIBLE
-+    if (bottomNavigation.visibility == targetVisibility) {
-+      return
-     }
-+
-+    bottomNavigation.visibility = targetVisibility
-+    requestLayout()
-   }
- 
-   fun updateItems(items: MutableList<TabInfo>) {
+   private val layoutCallback = Choreographer.FrameCallback {
+     isLayoutEnqueued = false
+     refreshLayout()
