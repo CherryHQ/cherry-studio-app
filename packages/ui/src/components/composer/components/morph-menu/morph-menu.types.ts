@@ -8,7 +8,7 @@ export type MorphMenuProps = {
   accessibilityLabel: string;
   /**
    * Floor for the panel's width. Both axes are measured from the children, so
-   * content wider than this drives the panel.
+   * content wider than this drives the panel. Defaults to 60% of the screen.
    */
   width?: number;
   /** The closed circle, and the footprint it reserves in the parent's flow. Defaults to the toolbar's button size. */
@@ -28,4 +28,15 @@ export type MorphMenuItemProps = {
   testID?: string;
   /** Rendered after the label, pushed to the row's end — a checkmark, a value, a chevron. */
   trailing?: ReactNode;
+};
+
+export type MorphMenuToggleProps = {
+  disabled?: boolean;
+  /** Rendered before the label; size it via className on the icon itself. */
+  icon?: ReactNode;
+  label: string;
+  /** The menu closes itself before this fires, same as an item's `onPress`. */
+  onValueChange: (value: boolean) => void;
+  testID?: string;
+  value: boolean;
 };

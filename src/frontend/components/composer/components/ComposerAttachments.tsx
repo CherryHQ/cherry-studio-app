@@ -14,11 +14,14 @@ export function ComposerAttachments() {
   const { attachments } = useComposerState();
   const { removeAttachment } = useComposerActions();
 
+  // A collapsed row keeps its last frame mounted while it animates out. File
+  // previews can keep that native frame visible after the composer state has
+  // already cleared, so the empty attachment row must leave the tree entirely.
+  if (attachments.length === 0) return null;
+
   return (
     <Composer.Collapsible style={attachmentRowStyle}>
-      {attachments.length > 0 ? (
-        <ComposerAttachmentStrip attachments={attachments} onAttachmentRemove={removeAttachment} />
-      ) : null}
+      <ComposerAttachmentStrip attachments={attachments} onAttachmentRemove={removeAttachment} />
     </Composer.Collapsible>
   );
 }

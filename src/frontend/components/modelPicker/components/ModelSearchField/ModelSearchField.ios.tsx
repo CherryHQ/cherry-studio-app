@@ -1,9 +1,9 @@
 import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import type { ProviderModelSearchFieldProps } from './ProviderModelSearchField.types';
+import type { ModelSearchFieldProps } from './ModelSearchField.types';
 
-export function ProviderModelSearchField({ setSearchText }: ProviderModelSearchFieldProps) {
+export function ModelSearchField({ setSearchText }: ModelSearchFieldProps) {
   const { t } = useTranslation();
 
   return (

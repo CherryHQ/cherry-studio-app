@@ -12,9 +12,8 @@ import { emitProgrammaticScroll, scrollLog } from './useLayoutBenchInstrumentati
 // 依赖 contentBaseHeight 重跑）取消并重启计时，从而把迟到修正也挡在遮罩后，与设备快慢无关。
 const READY_SETTLE_MS = 150;
 
-// 锚定生命周期：新用户消息就绪后钉顶（handleAnchorReady）与首帧揭示前的 ready-gate。它是
-// 尾随状态机之外唯一会主动滚动列表的地方，所以必须拿到 useTailFollow 的 isUserInteractingRef
-// （只读）守同一个交互不变式，并在预留空白耗尽时经 notifyAnchorSpaceClosed 把相位交接给尾随。
+// 锚定生命周期：新用户消息就绪后钉顶（handleAnchorReady）与首帧揭示前的 ready-gate。它持有
+// 列表的交互锁，保证这两次一次性定位不会与用户正在进行的手势冲突；流式内容增长不再主动滚动。
 //
 // 入场的可见位移由两段拼成：这里的钉顶滚动把**旧内容**送出视口，行自身的 transform
 // （useMessageSlideInFlight）走剩下的那段。落位那一帧经 onAnchorPinned 把「还差多少滚动」
@@ -23,10 +22,8 @@ export function useAnchorPin({
   contentBottomInset,
   endSpaceRef,
   enteringMessageId,
-  isUserInteractingRef,
   lastMessageId,
   listRef,
-  notifyAnchorSpaceClosed,
   onAnchorPinned,
   onReady,
   scrollMessageToEnd,
@@ -35,10 +32,8 @@ export function useAnchorPin({
   contentBottomInset: number;
   endSpaceRef: RefObject<number>;
   enteringMessageId: string | undefined;
-  isUserInteractingRef: RefObject<boolean>;
   lastMessageId: string | undefined;
   listRef: RefObject<LegendListRef | null>;
-  notifyAnchorSpaceClosed: () => void;
   onAnchorPinned: (pendingScrollPx: number) => void;
   onReady: (() => void) | undefined;
   scrollMessageToEnd: (options: { animated: boolean; closeKeyboard: boolean }) => Promise<void>;
@@ -47,6 +42,12 @@ export function useAnchorPin({
   handleAnchorReady: (info: { anchorKey: string | undefined }) => void;
   handleAnchoredEndSpaceSizeChanged: (size: number) => void;
   handleContentSizeChange: (width: number, height: number) => void;
+  handleMomentumScrollBegin: () => void;
+  handleMomentumScrollEnd: () => void;
+  handleScrollBeginDrag: () => void;
+  handleScrollEndDrag: () => void;
+  handleTouchEnd: () => void;
+  handleTouchStart: () => void;
 } {
   const [contentBaseHeight, setContentBaseHeight] = useState(0);
   const didReportReadyRef = useRef(false);
@@ -54,6 +55,11 @@ export function useAnchorPin({
   const pendingReadyFrameRef = useRef<number | null>(null);
   const pendingReadySettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readyGenerationRef = useRef(0);
+  const isTouchingListRef = useRef(false);
+  const isDraggingListRef = useRef(false);
+  const isMomentumScrollingRef = useRef(false);
+  const isUserInteractingRef = useRef(false);
+  const pendingInteractionEndFrameRef = useRef<number | null>(null);
   // 揭示前的定位只做一次，见下方 gate 处的说明。
   const didGateScrollRef = useRef(false);
 
@@ -98,7 +104,7 @@ export function useAnchorPin({
         emitProgrammaticScroll('anchorReady', listRef, { animated: true });
         // 收键盘与钉顶滚动**必须**同时发起，别再试着把它挪到滚动之后：改成「先钉顶、
         // 动画结束再收键盘」实测反转从 1 处 310px 变成 2 处 334px（位移搬到动画终点，
-        // 还要再被尾随滚动拉一次），更差。
+        // 还会与当时的列表补偿叠加），更差。
         //
         // 这里曾经有一帧 -310px 的突跳，成因**不是**「收键盘抽掉底部 inset 触发原生夹回」
         // ——inset 全程是 max(预留空白 512, 键盘 310) = 512，一动没动。真正写值的是
@@ -122,15 +128,73 @@ export function useAnchorPin({
     (size: number) => {
       endSpaceRef.current = size;
       emitLayoutBenchProbe('endSpace', { size: Math.round(size) });
-
-      if (size > 0) {
-        return;
-      }
-
-      notifyAnchorSpaceClosed();
     },
-    [endSpaceRef, notifyAnchorSpaceClosed],
+    [endSpaceRef],
   );
+
+  const cancelPendingInteractionEnd = useCallback(() => {
+    if (pendingInteractionEndFrameRef.current !== null) {
+      cancelAnimationFrame(pendingInteractionEndFrameRef.current);
+      pendingInteractionEndFrameRef.current = null;
+    }
+  }, []);
+
+  const finishUserInteraction = useCallback(() => {
+    if (isTouchingListRef.current || isDraggingListRef.current || isMomentumScrollingRef.current) {
+      return;
+    }
+
+    isUserInteractingRef.current = false;
+  }, []);
+
+  const scheduleInteractionEnd = useCallback(() => {
+    cancelPendingInteractionEnd();
+    pendingInteractionEndFrameRef.current = requestAnimationFrame(() => {
+      pendingInteractionEndFrameRef.current = null;
+      finishUserInteraction();
+    });
+  }, [cancelPendingInteractionEnd, finishUserInteraction]);
+
+  const beginUserInteraction = useCallback(() => {
+    isUserInteractingRef.current = true;
+    cancelPendingInteractionEnd();
+  }, [cancelPendingInteractionEnd]);
+
+  const handleScrollBeginDrag = useCallback(() => {
+    isDraggingListRef.current = true;
+    emitLayoutBenchProbe('interaction', { kind: 'drag', state: 'begin' });
+    beginUserInteraction();
+  }, [beginUserInteraction]);
+
+  const handleScrollEndDrag = useCallback(() => {
+    isDraggingListRef.current = false;
+    emitLayoutBenchProbe('interaction', { kind: 'drag', state: 'end' });
+    scheduleInteractionEnd();
+  }, [scheduleInteractionEnd]);
+
+  const handleMomentumScrollBegin = useCallback(() => {
+    isMomentumScrollingRef.current = true;
+    emitLayoutBenchProbe('interaction', { kind: 'momentum', state: 'begin' });
+    beginUserInteraction();
+  }, [beginUserInteraction]);
+
+  const handleMomentumScrollEnd = useCallback(() => {
+    isMomentumScrollingRef.current = false;
+    emitLayoutBenchProbe('interaction', { kind: 'momentum', state: 'end' });
+    scheduleInteractionEnd();
+  }, [scheduleInteractionEnd]);
+
+  const handleTouchStart = useCallback(() => {
+    isTouchingListRef.current = true;
+    emitLayoutBenchProbe('interaction', { kind: 'touch', state: 'begin' });
+    beginUserInteraction();
+  }, [beginUserInteraction]);
+
+  const handleTouchEnd = useCallback(() => {
+    isTouchingListRef.current = false;
+    emitLayoutBenchProbe('interaction', { kind: 'touch', state: 'end' });
+    scheduleInteractionEnd();
+  }, [scheduleInteractionEnd]);
 
   const cancelPendingReadyFrame = useCallback(() => {
     if (pendingReadyFrameRef.current !== null) {
@@ -213,10 +277,8 @@ export function useAnchorPin({
         };
 
         // 本 effect 依赖 contentBaseHeight，而流式每来一个 chunk 内容高度就变一次 → 静默窗口
-        // 反复重启、gate 在整段流式里每帧重跑，这个 scrollToEnd 于是变成第二条不受尾随状态机
-        // 管的自动滚动。它必须和 scheduleTailFollow 守同一个不变式：用户手上有动作时一律不滚，
-        // 否则拖动过程中列表会被硬拽回底部（实测一次拖动被拽 +198px，harness 的
-        // gesture-conflict 判据就是这么抓到的）。
+        // 会反复重启。揭示前的这次定位必须守住交互锁：用户手上有动作时一律不滚，否则拖动
+        // 过程中列表会被硬拽回底部（实测一次拖动被拽 +198px）。
         // 跳过滚动但照常进入 settle：遮罩存在的意义是挡住布局抖动，人都已经在拖了就别再挡着。
         //
         // 交互锁只挡住「用户在拖」，挡不住重跑本身：在**新建话题**里发第一条时，流式让静默窗口
@@ -225,9 +287,8 @@ export function useAnchorPin({
         // 于是表现为 offset 在 0 与 24/40 之间来回弹四五次。续轮发送一次都不出现，只因为它
         // 进话题时 ready 早就报过、gate 已关闭——这个不对称本身就是「gate 越界」的证据。
         //
-        // 因此揭示前的定位只做一次：它的语义是「首屏揭示前把列表放到正确位置」，本就是一次性
-        // 事件。此后位置维护归尾随状态机（scheduleTailFollow）与 anchoredEndSpace，gate 只负责
-        // 继续守静默窗口、把迟到的高度修正挡在遮罩后——这一半没有变。
+        // 因此揭示前的定位只做一次：它的语义是「首屏揭示前把列表放到正确位置」。此后流式
+        // 内容增长保持当前位置，gate 只继续守静默窗口、把迟到的高度修正挡在遮罩后。
         if (
           shouldScrollToEndBeforeReady &&
           !didGateScrollRef.current &&
@@ -259,6 +320,10 @@ export function useAnchorPin({
   ]);
 
   useEffect(() => {
+    return cancelPendingInteractionEnd;
+  }, [cancelPendingInteractionEnd]);
+
+  useEffect(() => {
     return () => {
       isMountedRef.current = false;
       cancelPendingReadyFrame();
@@ -269,5 +334,11 @@ export function useAnchorPin({
     handleAnchorReady,
     handleAnchoredEndSpaceSizeChanged,
     handleContentSizeChange,
+    handleMomentumScrollBegin,
+    handleMomentumScrollEnd,
+    handleScrollBeginDrag,
+    handleScrollEndDrag,
+    handleTouchEnd,
+    handleTouchStart,
   };
 }

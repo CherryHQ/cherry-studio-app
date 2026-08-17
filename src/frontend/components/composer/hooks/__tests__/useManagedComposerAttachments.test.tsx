@@ -13,6 +13,8 @@ import { useManagedComposerAttachments } from '../useManagedComposerAttachments'
 const mockCreateInternalEntry = jest.fn();
 const mockDeleteIfUnreferenced = jest.fn(async () => true);
 const mockAlertShow = jest.fn();
+const mockLoggerDebug = jest.fn();
+const mockLoggerWarn = jest.fn();
 const mockFileModule = {
   createInternalEntry: mockCreateInternalEntry,
   deleteIfUnreferenced: mockDeleteIfUnreferenced,
@@ -25,6 +27,15 @@ jest.mock('@/frontend/data', () => ({
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
+}));
+
+jest.mock('@/shared/core/logger/LoggerService', () => ({
+  loggerService: {
+    withContext: () => ({
+      debug: (...args: unknown[]) => mockLoggerDebug(...args),
+      warn: (...args: unknown[]) => mockLoggerWarn(...args),
+    }),
+  },
 }));
 
 jest.mock('react-i18next', () => ({
@@ -46,6 +57,7 @@ describe('useManagedComposerAttachments', () => {
   afterEach(async () => {
     await act(async () => renderer?.unmount());
     renderer = undefined;
+    jest.restoreAllMocks();
   });
 
   it('preserves source order and keeps successful imports when one item fails', async () => {
@@ -136,6 +148,27 @@ describe('useManagedComposerAttachments', () => {
       { name: 'source.pdf', status: 'ready' },
       { name: 'ready.pdf', status: 'ready' },
     ]);
+  });
+
+  it('logs import duration without file identity or location', async () => {
+    const pending = deferred<ReturnType<typeof resolvedFile>>();
+    const now = jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    mockCreateInternalEntry.mockReturnValue(pending.promise);
+    await renderHook();
+
+    await act(async () => snapshot?.addAttachments([source('private.pdf')]));
+    now.mockReturnValue(1_830);
+    await act(async () => {
+      pending.resolve(resolvedFile('00000000-0000-7000-8000-000000000015', 'private.pdf'));
+      await pending.promise;
+    });
+
+    expect(mockLoggerDebug).toHaveBeenCalledWith('Attachment import finished', {
+      durationMs: 830,
+      kind: 'file',
+      result: 'ready',
+      size: 128,
+    });
   });
 
   it('rejects unsupported images before importing them', async () => {

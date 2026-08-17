@@ -8,6 +8,13 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { BackHeader } from '@/frontend/components/headers';
+import {
+  filterModelsByType,
+  getModelTypeCounts,
+  ModelSearchControls,
+  ModelTypeFilterBar,
+  type ModelTypeFilter,
+} from '@/frontend/components/modelPicker';
 
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelPullChrome } from './models/components/ProviderModelPullChrome/ProviderModelPullChrome';
@@ -15,8 +22,6 @@ import {
   ProviderModelRow,
   providerModelRowEstimatedHeight,
 } from './models/components/ProviderModelRow';
-import { ProviderModelSearchControls } from './models/components/ProviderModelSearchControls/ProviderModelSearchControls';
-import { ProviderModelTypeFilterBar } from './models/components/ProviderModelTypeFilterBar';
 import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import {
   type ProviderModelPullApplyChange,
@@ -30,11 +35,6 @@ import {
   type ProviderModelPullSectionKey,
 } from './models/utils/providerModelPullPreview';
 import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
-import {
-  filterModelsByProviderModelType,
-  getProviderModelTypeCounts,
-  type ProviderModelTypeFilter,
-} from './models/utils/providerModelTypeFilter';
 
 type PullTranslator = ReturnType<typeof useTranslation>['t'];
 
@@ -145,7 +145,7 @@ function ProviderModelPullPreviewPage({
   const { t } = useTranslation();
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
-  const [typeFilter, setTypeFilter] = useState<ProviderModelTypeFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<ModelTypeFilter>('all');
   const missingCount = preview.missing.length;
   const searchedPreview = useMemo(
     () => filterProviderModelPullPreview(preview, deferredSearchText),
@@ -153,15 +153,15 @@ function ProviderModelPullPreviewPage({
   );
   const displayedPreview = useMemo(
     () => ({
-      added: filterModelsByProviderModelType(searchedPreview.added, typeFilter),
-      missing: filterModelsByProviderModelType(searchedPreview.missing, typeFilter),
+      added: filterModelsByType(searchedPreview.added, typeFilter),
+      missing: filterModelsByType(searchedPreview.missing, typeFilter),
     }),
     [searchedPreview, typeFilter],
   );
   // Counted over what the search left behind but before the type filter, so a
   // tab's number says how many models picking it would show.
   const typeCounts = useMemo(
-    () => getProviderModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
+    () => getModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
     [searchedPreview],
   );
   const { applySelection, isApplying, selectedIds, toggleAll, toggleModel } =
@@ -230,13 +230,13 @@ function ProviderModelPullPreviewPage({
         ListHeaderComponent={
           // The platform controls put native iOS search in the navigation bar
           // and Android search in the list header while keeping the filter here.
-          <ProviderModelSearchControls searchText={searchText} setSearchText={setSearchText}>
-            <ProviderModelTypeFilterBar
+          <ModelSearchControls searchText={searchText} setSearchText={setSearchText}>
+            <ModelTypeFilterBar
               counts={typeCounts}
               selectedFilter={typeFilter}
               onSelect={setTypeFilter}
             />
-          </ProviderModelSearchControls>
+          </ModelSearchControls>
         }
         maintainVisibleContentPosition={false}
         recycleItems

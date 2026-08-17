@@ -104,6 +104,7 @@
     "@cherrystudio/app-icons": "workspace:*",
     "react": "*",
     "react-native": "*",
+    "react-native-enriched-markdown": "*",
     "react-native-nitro-modules": "*",
     "react-native-reanimated": "*",
     "react-native-safe-area-context": "*",

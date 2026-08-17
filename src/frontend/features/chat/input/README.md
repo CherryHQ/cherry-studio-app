@@ -12,9 +12,8 @@ them as one input:
 2. `@/frontend/components/composer` — attachments, the pickers, the model pill, async send with
    recovery. Shared with painting, so it knows nothing about assistants either.
 3. This directory — assistants, models, reasoning effort, web search. It assembles the composer's
-   parts itself (see `ChatInput.tsx`) and drops its own nodes in: the tool tag as a
-   `Composer.Collapsible`, the tools as `ComposerMenu` children, and the effort gauge/slider overlay
-   above the live surface.
+   parts itself (see `ChatInput.tsx`) and drops its own nodes in: the tools as `ComposerMenu`
+   children, and the effort gauge/slider overlay above the live surface.
 
 ## Why this document exists
 
@@ -35,12 +34,41 @@ Two consequences to take seriously:
 
 ## Contract
 
+### The field
+
+- [ ] The field is `EnrichedMarkdownTextInput`, not RN's `TextInput`, and it is **uncontrolled**: it
+      owns its buffer, reports changes out, and only accepts a value pushed in when that value
+      differs from what it last reported. Round-tripping every keystroke would fight it for the caret.
+- [ ] `value` / `onChangeText` therefore carry **Markdown**, not the glyphs on screen. That is what
+      lets a tool mention survive leaving the field — its identity is a URL, and plain text has
+      nowhere to keep one.
+- [ ] Nothing parses what the user **types**. The input only applies styles it is told to apply and
+      the serializer only writes delimiters around ranges that were actually styled, so typed
+      `**stars**` arrive as `**stars**`.
+- [ ] Pasted text **is** parsed, and this is not configurable — iOS routes `paste:` straight into
+      the library's `pasteMarkdown:`. So pasting `**stars**` yields bold *stars* and the message
+      loses the asterisks, while typing the same characters keeps them. Verified on device; if it
+      ever needs to stop, the fix is upstream, not here.
+- [ ] Auto-link detection is off (`linkRegex={null}`), and the selection menu's Format submenu and
+      "Copy as Markdown" are both disabled. A mention is the only entity this field can hold, and it
+      is the only one the rest of the app can render.
+- [ ] Adding to what the user wrote goes through `useComposerMeta().inputRef`, never `setDraft`.
+      `setDraft` replaces the whole buffer and is for send and send-failure only.
+- [ ] **Accessibility regression, iOS only.** The field is one VoiceOver element reading its whole
+      text, and is *not* announced with the native "text field" role — the library says so in its
+      own `docs/ACCESSIBILITY.md`, because exposing the inner `UITextView` is unreliable under its
+      TextKit stack. Android keeps a real `EditText`. The visible symptom for us is that XCUITest
+      cannot find a field to type into, so `agent-device type` / `fill` no longer reach the
+      composer; drive it with the simulator's hardware keyboard instead.
+
 ### Sending
 
 - [ ] `onSendPress` receives `{ attachments, text }` with `text` **trimmed**. The draft in state is
       not trimmed — only what is sent.
 - [ ] The draft and attachments clear **before** the send is awaited, so the field is empty
       immediately.
+- [ ] Only one send may be in flight. Repeated triggers before its Promise settles are ignored and
+      cannot snapshot, clear, restore, or call the sender a second time.
 - [ ] If the send rejects: the draft is restored **verbatim, untrimmed**, the attachments are
       restored, a `danger` toast shows `chat.input.sendFailed`, and the error is logged. The toast is
       deliberately vague, so without the log a failed send leaves no trace to debug from.
@@ -53,6 +81,8 @@ Two consequences to take seriously:
 - [ ] Sendability defaults to "there is text or an attachment". A caller that passes `canSend`
       replaces that outright — painting does, because a promptless image model can send
       `{ attachments: [], text: '' }`.
+- [ ] Any attachment still marked `importing` disables send. Its tile shows a spinner and filename;
+      editing text, removing attachments, and opening tools remain available.
 - [ ] While streaming the send control becomes stop (`chat.input.action.stopGenerating`). It does not
       exist when not streaming.
 
@@ -73,9 +103,10 @@ Two consequences to take seriously:
 - [ ] The image-settings button (painting only) does the same. It is assembled by painting rather
       than by the composer, so it calls `useComposerFieldDismiss()` explicitly — the one thing
       assembling made the caller's job.
-- [ ] Opening the ＋ menu dismisses the keyboard but does **not** blur the field. The panel grows
-      upward into the space the keyboard occupies, so the keyboard has to go; leaving the field as
-      first responder is what makes iOS restore it the instant the menu closes.
+- [ ] Opening the ＋ menu leaves the keyboard and field focus unchanged, preserving the trigger
+      position used by its portalled panel. Choosing camera, photos, or file closes the menu, awaits
+      keyboard dismissal and field blur, then opens the system picker. Choosing a tool does not
+      dismiss or blur.
 
 ### Model and reasoning controls
 
@@ -94,18 +125,42 @@ Two consequences to take seriously:
 - [ ] Tapping outside closes the slider. The transparent dismissal regions do not cover its track,
       so tap-to-seek and dragging remain available.
 
-### The selected-tool row
+### Tools
 
-- [ ] A selected tool shows above the field as a tag carrying the tool's localized short title.
-- [ ] The tag can be cleared from the tag itself, without opening the ＋ menu.
+The two tools do not share a control, because they do not share a lifetime. Web search is a setting
+on the assistant that outlives the message being written; a mention applies to that message only.
+Everything below follows from that split.
+
+- [ ] Web search is a switch in the ＋ menu, reading and writing `assistant.settings.enableWebSearch`.
+      There is no separate composer state for it.
+- [ ] The switch is the **only** place its state is shown. There is deliberately no tag above the
+      field: the switch reads its own state whenever the menu is open, and a second indicator for
+      one setting was not worth a permanent row above the field. The cost is real — with the menu
+      closed nothing says the next message will search.
+- [ ] A mention tool has no selected state anywhere. Choosing it inserts a Markdown link —
+      `[<localized name>](tool://<id>)` — at the caret, and the draft text is the only record that
+      the message asked for it.
+- [ ] Neither the field nor the sent message shows the link syntax: both render the name alone, in
+      the brand color. The `@` the first version used is gone.
+- [ ] The field treats the mention as one thing — the caret will not sit inside it, and one
+      backspace removes the whole mention. That is the underlying input's own behavior for links,
+      not something this directory implements.
+- [ ] A mention can only be inserted, never typed. Prose that happens to contain the tool's name is
+      ordinary text, and `splitToolMentions` (`@/frontend/utils/toolMentions`) leaves it alone.
+- [ ] The tool id lives in the URL, so a message keeps meaning the same tool after the app's
+      language changes. The name in the link text is a snapshot of what the sender saw.
+- [ ] A link to an id this build does not know, and any ordinary link, stay plain text.
 
 ### The ＋ menu
 
 The panel grows out of the ＋ button itself, up and to the right, and is measured from its own
-rows. It is a menu and nothing else: every row closes it and hands off to a system picker.
+rows. It is a menu and nothing else: every row is one decision and closes it.
 
-- [ ] The rows are camera, photos, file, then — behind a separator — the tools. All of them close the
-      menu on tap.
+- [ ] The rows are camera, photos, file, then — behind a separator — the tools.
+- [ ] Every row closes the menu on tap, including `Composer.Menu.Toggle`. A switch row that stayed
+      put would read as a different kind of control than the ones above it.
+- [ ] The panel is at least 60% of the screen wide, so a translated label still fits beside a
+      trailing control. Content wider than that drives the panel instead.
 - [ ] The tools appear only for a caller that puts them in the menu's `children`. Painting does not:
       web search and "create image" are chat concepts, and nothing in the menu can act on one
       without a caller to persist it.
@@ -116,24 +171,27 @@ rows. It is a menu and nothing else: every row closes it and hands off to a syst
       in it, whether or not the app can see the rest of the library.
 - [ ] The photo picker takes at most `COMPOSER_PHOTO_SELECTION_LIMIT` (9) images, in the order
       they were selected.
-- [ ] Cancelling any picker adds nothing and leaves the menu closed.
+- [ ] Cancelling any picker adds nothing and leaves both the menu and keyboard closed. Selecting or
+      cancelling never restores field focus; the user can tap the field to type again.
 - [ ] A picker that fails to launch is logged. The menu has already closed by then, so without the
       log the gesture just looks ignored.
-- [ ] Choosing a tool toggles it and closes the menu.
+- [ ] Choosing a mention tool appends its name to the draft and closes the menu.
 
 ### Assistant, model, and web search
 
-*None of this has test coverage. See below.*
+*Covered by `useChatInputWebSearchToggle.test.tsx`, except the model reconcile.*
 
-- [ ] Switching assistant resets the selected tool to `web-search` if and only if that assistant has
-      `settings.enableWebSearch`.
-- [ ] With no assistant, a selected `web-search` tool is cleared and any pending write is dropped.
-- [ ] Toggling web search persists to the assistant through a **serialised** write loop: a toggle
-      during an in-flight write updates the pending target rather than queueing a second write.
-- [ ] If the write fails and no newer target arrived meanwhile, the selected tool rolls back to the
+- [ ] The assistant record is the source of truth. `useChatInputWebSearchToggle` holds the user's
+      flip only until the persisted value catches up, and retires it **during render** — a value
+      mirrored in through an effect is stale for exactly as long as the query takes to catch up,
+      which is what made the previous version of this the repository's only
+      `react-hooks/set-state-in-effect` suppression.
+- [ ] Switching assistant drops an un-landed flip; the switch reads the new assistant's setting.
+- [ ] With no assistant, flipping the switch does nothing and writes nothing.
+- [ ] Writes are **serialised**: a flip during an in-flight write updates that write's target rather
+      than queueing a second one, so a burst of taps settles on the last one.
+- [ ] If a write fails and no newer target arrived meanwhile, the switch rolls back to the
       assistant's persisted value and the failure is logged.
-- [ ] While a write is pending, the assistant-sync effect must not fight it: it defers until the
-      persisted value agrees with the pending target.
 - [ ] Picking a different model for an assistant writes `modelId` **and** reconciles
       `reasoning_effort` and web search for the new model, in one patch
       (`reconcileReasoningEffortForModel` / `reconcileWebSearchForModel`).
@@ -147,13 +205,19 @@ rows. It is a menu and nothing else: every row closes it and hands off to a syst
 
 ## Not covered by tests
 
-Walk these on device before shipping. They are the ones with no net at all:
+Walk these on device before shipping. They are the ones with no automated net:
 
-1. Send failure recovery — send with the network off and confirm the draft, the attachments, and the
-   toast.
-2. Pasting an image into the field.
-3. Switching assistants and watching the web-search tag follow the new assistant's setting.
-4. Switching models on an assistant whose effort the new model does not support.
+1. Pasting an **image** into the field. `expo-paste-input`'s wrapper now wraps a rich text input
+   rather than RN's `TextInput`, and nothing in Jest reaches that seam. Text paste is verified and
+   works; `xcrun simctl pbcopy` only carries text, so the image half has no simulator route either.
+2. Switching assistants and watching the web-search switch follow the new assistant.
+3. Switching models on an assistant whose effort the new model does not support.
+4. Flipping the web search switch, reopening the menu, and confirming it stayed where it was put.
+5. Choosing a mention tool with a draft already typed, then sending, and reading the highlight back
+   in the sent message.
+6. Backspacing a mention away in one press, and failing to put the caret inside it. Jest's stand-in
+   for the field is a plain `TextInput`, so neither is reachable there.
+7. The field's height: one line when empty, growing to the 132pt cap, scrolling past it.
 
 ## Deliberately dropped
 
@@ -177,21 +241,15 @@ Do not restore these; their absence is the design, not a regression.
 - **`ReduceMotion.Never`.** The old motion config opted every animation out of the system setting.
   Reduced motion is now respected, via `Composer`'s own motion.
 
-## Known defects, not fixed here
-
-- The web-search mirror in `ChatInput.tsx` is the repository's only
-  `react-hooks/set-state-in-effect` suppression. The rule is right that most such effects are
-  derivable — the reasoning effort next to it was — but this one reconciles an optimistic write
-  against the query it is racing, which cannot be read off render state. Untangling it needs tests
-  it does not have.
-
 ## Ownership
 
 - `@/frontend/components/composer` owns the draft, the attachments, the pickers, the send, and the
   docking geometry. Whether the ＋ panel is open is `Composer.Menu`'s, not anyone else's.
-- `ChatInput.tsx` owns the selected tool, the reasoning effort, everything that talks to assistants
-  and models, **and the arrangement** — it assembles the composer's parts rather than configuring a
-  single component.
+- `ChatInput.tsx` owns the web search switch, the reasoning effort, everything that talks to
+  assistants and models, **and the arrangement** — it assembles the composer's parts rather than
+  configuring a single component.
+- `@/frontend/utils/toolMentions` owns what a mention is and how to find one in text. It is shared
+  rather than owned here because the message list highlights mentions it never wrote.
 - `effortSlider/` owns the reusable track and gesture math. `ChatInputEffortOverlay` owns its
   composer-specific morph, dismissal regions, and floating label.
 - Leaf components here render from what they are passed. They must not keep parallel state for
@@ -202,5 +260,17 @@ Do not restore these; their absence is the design, not a regression.
 Provision the workspace simulator, Metro port, and agent-device session through
 [Parallel Device Testing](../../../../../docs/guides/parallel-device-testing.md).
 
-Then walk the contract above. The four items under "Not covered by tests" are mandatory; the rest are
+Then walk the contract above. The items under "Not covered by tests" are mandatory; the rest are
 worth a pass whenever this directory changes shape.
+
+**agent-device cannot type into this field.** `type` and `fill` both resolve an XCUITest text-field
+element, and the field does not expose one (see the accessibility note above); `type` fails with
+`XCTEST_RECORDED_FAILURE` and restarts the runner, which sends the app to the home screen — it looks
+like a crash and is not one. Everything else (taps, snapshots, screenshots) works normally, so drive
+the ＋ menu with agent-device and type through the simulator's own keyboard:
+
+```
+osascript -e 'tell application "Simulator" to activate' \
+  -e 'tell application "System Events" to tell process "Simulator" to keystroke "draw a cat"'
+# backspace is key code 51
+```

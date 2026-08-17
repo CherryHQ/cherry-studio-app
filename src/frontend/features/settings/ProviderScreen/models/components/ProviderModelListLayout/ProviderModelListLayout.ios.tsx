@@ -1,5 +1,6 @@
+import { ModelSearchField } from '@/frontend/components/modelPicker';
+
 import { ProviderModelListContent } from '../ProviderModelListContent';
-import { ProviderModelSearchField } from '../ProviderModelSearchField/ProviderModelSearchField';
 import type { ProviderModelListLayoutProps } from './ProviderModelListLayout.types';
 
 export function ProviderModelListLayout({
@@ -11,7 +12,7 @@ export function ProviderModelListLayout({
   return (
     <>
       {showSearch ? (
-        <ProviderModelSearchField searchText={searchText} setSearchText={setSearchText} />
+        <ModelSearchField searchText={searchText} setSearchText={setSearchText} />
       ) : null}
       <ProviderModelListContent {...listProps} />
     </>

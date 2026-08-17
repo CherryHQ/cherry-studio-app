@@ -21,8 +21,8 @@ jest.mock('../../models/components/ProviderModelListContent', () => ({
     ListEmptyComponent ?? null,
 }));
 
-jest.mock('../../models/components/ProviderModelSearchField/ProviderModelSearchField', () => ({
-  ProviderModelSearchField: () => null,
+jest.mock('@/frontend/components/modelPicker', () => ({
+  ModelSearchField: () => null,
 }));
 
 jest.mock('react-i18next', () => ({
