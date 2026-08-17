@@ -1,6 +1,7 @@
 import type { CherryMessagePart, MessageStatus } from '@cherrystudio/universal/data/types/message';
 
-import type { MessagePresentationItem } from '../../../types';
+import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
+
 import { projectAssistantMessageReadAloud } from '../projectAssistantMessageReadAloud';
 
 describe('projectAssistantMessageReadAloud', () => {

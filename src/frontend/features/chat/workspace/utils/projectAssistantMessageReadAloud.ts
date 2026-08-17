@@ -1,4 +1,5 @@
-import type { MessagePresentationItem } from '../../types';
+import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
+
 import { projectMarkdownInlineForSpeech } from './projectMarkdownInlineForSpeech';
 
 export type AssistantReadAloudContent = { language?: string; text: string };
