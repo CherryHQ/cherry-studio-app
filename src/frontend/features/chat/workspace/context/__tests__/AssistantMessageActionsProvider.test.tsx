@@ -1,4 +1,4 @@
-import { createRef, type ReactNode, type Ref, useImperativeHandle } from 'react';
+import { createRef, type Ref, useImperativeHandle } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
@@ -52,12 +52,10 @@ function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
 }
 
 function ProviderHarness({
-  children,
   isRegenerateDisabled = false,
   onRegenerate,
   probeRef,
 }: {
-  children?: ReactNode;
   isRegenerateDisabled?: boolean;
   onRegenerate: (input: { messageId: string }) => Promise<unknown>;
   probeRef: Ref<ContextProbeHandle>;
@@ -68,13 +66,13 @@ function ProviderHarness({
       onRegenerate={onRegenerate}
     >
       <ContextProbe ref={probeRef} />
-      {children}
     </AssistantMessageActionsProvider>
   );
 }
 
 describe('AssistantMessageActionsProvider', () => {
   let renderer: ReactTestRenderer | undefined;
+  let probeRef = createRef<ContextProbeHandle>();
   const onRegenerate = jest.fn(
     async (_input: { messageId: string }): Promise<unknown> => undefined,
   );
@@ -82,27 +80,59 @@ describe('AssistantMessageActionsProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    probeRef = createRef<ContextProbeHandle>();
   });
 
   afterEach(() => {
-    act(() => renderer?.unmount());
+    unmountProvider();
     jest.useRealTimers();
   });
 
-  test('keeps commands stable while copied feedback updates and expires', async () => {
-    const probeRef = createRef<ContextProbeHandle>();
+  function renderProvider(isRegenerateDisabled = false) {
     act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
+      renderer = create(
+        <ProviderHarness
+          isRegenerateDisabled={isRegenerateDisabled}
+          onRegenerate={onRegenerate}
+          probeRef={probeRef}
+        />,
+      );
     });
-    const commandsAtMount = probeRef.current?.commands;
+  }
 
+  function updateProvider(isRegenerateDisabled: boolean) {
+    act(() => {
+      renderer?.update(
+        <ProviderHarness
+          isRegenerateDisabled={isRegenerateDisabled}
+          onRegenerate={onRegenerate}
+          probeRef={probeRef}
+        />,
+      );
+    });
+  }
+
+  function startCopy(messageId: string, text: string) {
+    act(() => probeRef.current?.commands.copyAssistantMessage({ messageId, text }));
+  }
+
+  async function copyAndFlush(messageId: string, text: string) {
     await act(async () => {
-      probeRef.current?.commands.copyAssistantMessage({
-        messageId: 'assistant-1',
-        text: 'Answer',
-      });
+      probeRef.current?.commands.copyAssistantMessage({ messageId, text });
       await Promise.resolve();
     });
+  }
+
+  function unmountProvider() {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+  }
+
+  test('keeps commands stable while copied feedback updates and expires', async () => {
+    renderProvider();
+    const commandsAtMount = probeRef.current?.commands;
+
+    await copyAndFlush('assistant-1', 'Answer');
 
     expect(mockSetStringAsync).toHaveBeenCalledWith('Answer');
     expect(probeRef.current?.state.copiedMessageId).toBe('assistant-1');
@@ -115,58 +145,33 @@ describe('AssistantMessageActionsProvider', () => {
   });
 
   test('updates busy state without changing the commands context', () => {
-    const probeRef = createRef<ContextProbeHandle>();
-    act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
-    });
+    renderProvider();
     const commandsAtMount = probeRef.current?.commands;
 
-    act(() => {
-      renderer?.update(
-        <ProviderHarness isRegenerateDisabled onRegenerate={onRegenerate} probeRef={probeRef} />,
-      );
-    });
+    updateProvider(true);
 
     expect(probeRef.current?.state.isRegenerateDisabled).toBe(true);
     expect(probeRef.current?.commands).toBe(commandsAtMount);
   });
 
   test('routes copy failures to logging and user feedback', async () => {
-    const probeRef = createRef<ContextProbeHandle>();
     const error = new Error('copy failed');
     mockSetStringAsync.mockRejectedValueOnce(error);
-    act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
-    });
+    renderProvider();
 
-    await act(async () => {
-      probeRef.current?.commands.copyAssistantMessage({
-        messageId: 'assistant-1',
-        text: 'Answer',
-      });
-      await Promise.resolve();
-    });
+    await copyAndFlush('assistant-1', 'Answer');
 
     expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
     expect(mockAlertShow).toHaveBeenCalledWith({ title: 'chat.messageActions.copyFailed' });
   });
 
   test('ignores a pending copy after unmount', async () => {
-    const probeRef = createRef<ContextProbeHandle>();
     const clipboardWrite = createDeferred<void>();
     mockSetStringAsync.mockReturnValueOnce(clipboardWrite.promise);
-    act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
-    });
+    renderProvider();
 
-    act(() => {
-      probeRef.current?.commands.copyAssistantMessage({
-        messageId: 'assistant-1',
-        text: 'Answer',
-      });
-      renderer?.unmount();
-      renderer = undefined;
-    });
+    startCopy('assistant-1', 'Answer');
+    unmountProvider();
     const setTimeoutSpy = jest.spyOn(global, 'setTimeout');
     setTimeoutSpy.mockClear();
     await act(async () => clipboardWrite.resolve());
@@ -177,20 +182,11 @@ describe('AssistantMessageActionsProvider', () => {
   });
 
   test('keeps only the latest copy feedback timer', async () => {
-    const probeRef = createRef<ContextProbeHandle>();
-    act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
-    });
+    renderProvider();
 
-    await act(async () => {
-      probeRef.current?.commands.copyAssistantMessage({ messageId: 'assistant-1', text: 'First' });
-      await Promise.resolve();
-    });
+    await copyAndFlush('assistant-1', 'First');
     act(() => jest.advanceTimersByTime(600));
-    await act(async () => {
-      probeRef.current?.commands.copyAssistantMessage({ messageId: 'assistant-2', text: 'Second' });
-      await Promise.resolve();
-    });
+    await copyAndFlush('assistant-2', 'Second');
 
     act(() => jest.advanceTimersByTime(600));
     expect(probeRef.current?.state.copiedMessageId).toBe('assistant-2');
@@ -200,32 +196,21 @@ describe('AssistantMessageActionsProvider', () => {
   });
 
   test('expires existing feedback while a newer copy is pending', async () => {
-    const probeRef = createRef<ContextProbeHandle>();
     const pendingClipboardWrite = createDeferred<void>();
-    act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
-    });
+    renderProvider();
 
-    await act(async () => {
-      probeRef.current?.commands.copyAssistantMessage({ messageId: 'assistant-1', text: 'First' });
-      await Promise.resolve();
-    });
+    await copyAndFlush('assistant-1', 'First');
     mockSetStringAsync.mockReturnValueOnce(pendingClipboardWrite.promise);
-    act(() => {
-      probeRef.current?.commands.copyAssistantMessage({ messageId: 'assistant-2', text: 'Second' });
-      jest.advanceTimersByTime(1_200);
-    });
+    startCopy('assistant-2', 'Second');
+    act(() => jest.advanceTimersByTime(1_200));
 
     expect(probeRef.current?.state.copiedMessageId).toBeUndefined();
   });
 
   test('routes regenerate failures to logging and user feedback', async () => {
-    const probeRef = createRef<ContextProbeHandle>();
     const error = new Error('regenerate failed');
     onRegenerate.mockRejectedValueOnce(error);
-    act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
-    });
+    renderProvider();
 
     await act(async () => {
       probeRef.current?.commands.regenerateAssistantMessage('assistant-1');
@@ -239,18 +224,14 @@ describe('AssistantMessageActionsProvider', () => {
   });
 
   test('ignores a pending regenerate failure after unmount', async () => {
-    const probeRef = createRef<ContextProbeHandle>();
     const regeneration = createDeferred<unknown>();
     onRegenerate.mockReturnValueOnce(regeneration.promise);
-    act(() => {
-      renderer = create(<ProviderHarness onRegenerate={onRegenerate} probeRef={probeRef} />);
-    });
+    renderProvider();
 
     act(() => {
       probeRef.current?.commands.regenerateAssistantMessage('assistant-1');
-      renderer?.unmount();
-      renderer = undefined;
     });
+    unmountProvider();
     await act(async () => regeneration.reject(new Error('regenerate failed')));
 
     expect(mockAlertShow).not.toHaveBeenCalled();
