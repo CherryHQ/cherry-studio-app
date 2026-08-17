@@ -11,6 +11,8 @@ import type {
 import type { BackgroundReplyOutcome } from './backgroundReplyTypes';
 
 const PREVIEW_CHARACTER_LIMIT = 160;
+const PREVIEW_MIN_COMPLETE_SUFFIX_LENGTH = 24;
+const SENTENCE_ENDINGS = new Set(['!', '.', '?', '。', '！', '？']);
 const WEB_SEARCH_TOOL_NAMES = new Set([
   'builtin_web_search',
   'builtin_web_search_preview',
@@ -82,8 +84,20 @@ export function extractReplyPreview(parts: readonly CherryMessagePart[]): string
   if (!plainText) return undefined;
 
   const characters = Array.from(plainText);
-  return characters.length <= PREVIEW_CHARACTER_LIMIT
-    ? plainText
+  if (characters.length <= PREVIEW_CHARACTER_LIMIT) return plainText;
+
+  const tail = characters.slice(-PREVIEW_CHARACTER_LIMIT);
+  const sentenceBoundary = tail.findIndex(
+    (character, index) =>
+      SENTENCE_ENDINGS.has(character) &&
+      tail.length - index - 1 >= PREVIEW_MIN_COMPLETE_SUFFIX_LENGTH,
+  );
+
+  return sentenceBoundary >= 0
+    ? tail
+        .slice(sentenceBoundary + 1)
+        .join('')
+        .trimStart()
     : `…${characters.slice(-(PREVIEW_CHARACTER_LIMIT - 1)).join('')}`;
 }
 
