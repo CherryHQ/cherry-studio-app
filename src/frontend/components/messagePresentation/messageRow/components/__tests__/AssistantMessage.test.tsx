@@ -1,7 +1,7 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessagePresentationItem } from '../../../types';
-import { AssistantMessageRow } from '../AssistantMessageRow';
+import { AssistantMessage } from '../AssistantMessage';
 
 const mockMessageParts = jest.fn((_props: { message: MessagePresentationItem }) => null);
 const mockDotMatrixSquare20 = jest.fn((_props: { active: boolean; size: number }) => null);
@@ -36,7 +36,7 @@ function createAssistantMessage(
   };
 }
 
-describe('AssistantMessageRow', () => {
+describe('AssistantMessage', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
@@ -49,7 +49,7 @@ describe('AssistantMessageRow', () => {
 
   test('shows the pending placeholder for an empty pending assistant message', () => {
     act(() => {
-      renderer = create(<AssistantMessageRow message={createAssistantMessage('pending')} />);
+      renderer = create(<AssistantMessage message={createAssistantMessage('pending')} />);
     });
 
     expect(mockDotMatrixSquare20).toHaveBeenCalledWith({ active: true, size: 20 });
@@ -60,7 +60,7 @@ describe('AssistantMessageRow', () => {
     const message = createAssistantMessage('pending', [{ text: 'Thinking', type: 'text' }]);
 
     act(() => {
-      renderer = create(<AssistantMessageRow message={message} />);
+      renderer = create(<AssistantMessage message={message} />);
     });
 
     expect(mockMessageParts).toHaveBeenCalledWith({ message });

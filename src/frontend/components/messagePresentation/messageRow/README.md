@@ -4,7 +4,7 @@ This module renders role-level chat message rows.
 
 ## Internal Interface
 
-- `AssistantMessageRow`, `UserMessageRow`, and `MessageSlideInProvider` are exported from the local
+- `AssistantMessage`, `UserMessageRow`, and `MessageSlideInProvider` are exported from the local
   `index.ts` only for `MessageList`.
 
 ## Organization

@@ -6,11 +6,11 @@ import { MessageParts } from '../../messageContent';
 import type { MessagePresentationItem } from '../../types';
 import { useAssistantSlideInStyle } from '../slideIn/hooks/useAssistantSlideInStyle';
 
-type AssistantMessageRowProps = {
+type AssistantMessageProps = {
   message: MessagePresentationItem;
 };
 
-export function AssistantMessageRow({ message }: AssistantMessageRowProps) {
+export function AssistantMessage({ message }: AssistantMessageProps) {
   const isPendingEmptyMessage = message.status === 'pending' && !message.data.parts?.length;
   // 行高从第一帧起就要占住（预留空白与钉顶落点都靠它），所以显形只走 opacity。
   const slideInStyle = useAssistantSlideInStyle(message.id);

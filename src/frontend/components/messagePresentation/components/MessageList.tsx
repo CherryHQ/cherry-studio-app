@@ -9,7 +9,7 @@ import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
-import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
+import { AssistantMessage, MessageSlideInProvider, UserMessageRow } from '../messageRow';
 import { useMessageSlideInFlight } from '../messageRow/slideIn/hooks/useMessageSlideInFlight';
 import type { MessageListProps, MessagePresentationItem } from '../types';
 import { useAnchorPin } from './hooks/useAnchorPin';
@@ -132,7 +132,7 @@ export function MessageList({
       ) : renderAssistantMessage ? (
         renderAssistantMessage(item)
       ) : (
-        <AssistantMessageRow message={item} />
+        <AssistantMessage message={item} />
       ),
     [renderAssistantMessage],
   );
