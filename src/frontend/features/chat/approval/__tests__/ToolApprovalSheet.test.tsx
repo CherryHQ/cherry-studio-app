@@ -115,6 +115,14 @@ describe('ToolApprovalSheet', () => {
     expect(renderer.root.findByType(BottomSheet).props.isCloseDisabled).toBe(true);
   });
 
+  test('does not mount a sheet before an approval exists', () => {
+    act(() => {
+      renderer = create(<ToolApprovalSheet approvals={[]} isOpen={false} onRespond={jest.fn()} />);
+    });
+
+    expect(renderer.root.findAllByType(BottomSheet)).toHaveLength(0);
+  });
+
   test('hides the arguments preview scroll indicator', () => {
     render();
 

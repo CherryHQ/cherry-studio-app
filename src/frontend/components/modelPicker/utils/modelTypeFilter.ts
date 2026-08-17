@@ -10,7 +10,7 @@ import type { Model } from '@cherrystudio/universal/data/types/model';
  * The pull screen filters by what a model is *for*, not by the overlapping
  * capability flags a row's tags show. Order mirrors desktop's tab row.
  */
-export const PROVIDER_MODEL_TYPE_FILTERS = [
+export const MODEL_TYPE_FILTERS = [
   'all',
   'text',
   'image',
@@ -22,11 +22,11 @@ export const PROVIDER_MODEL_TYPE_FILTERS = [
   'transcription',
 ] as const;
 
-export type ProviderModelTypeFilter = (typeof PROVIDER_MODEL_TYPE_FILTERS)[number];
+export type ModelTypeFilter = (typeof MODEL_TYPE_FILTERS)[number];
 
-export type ProviderModelTypeCounts = Record<ProviderModelTypeFilter, number>;
+export type ModelTypeCounts = Record<ModelTypeFilter, number>;
 
-export const PROVIDER_MODEL_TYPE_LABEL_KEYS = {
+export const MODEL_TYPE_LABEL_KEYS = {
   all: 'models.all',
   audio: 'models.type.audio',
   embedding: 'models.type.embedding',
@@ -36,12 +36,9 @@ export const PROVIDER_MODEL_TYPE_LABEL_KEYS = {
   text: 'models.type.text',
   transcription: 'models.type.transcription',
   video: 'models.type.video',
-} as const satisfies Record<ProviderModelTypeFilter, string>;
+} as const satisfies Record<ModelTypeFilter, string>;
 
-export function matchesProviderModelTypeFilter(
-  model: Model,
-  filter: ProviderModelTypeFilter,
-): boolean {
+export function matchesModelTypeFilter(model: Model, filter: ModelTypeFilter): boolean {
   switch (filter) {
     case 'text':
       return !isNonChatModel(model);
@@ -69,15 +66,15 @@ export function matchesProviderModelTypeFilter(
  * `all` is the total rather than the sum of the rest: a model can answer to more
  * than one type filter, so the per-type counts overlap.
  */
-export function getProviderModelTypeCounts(models: readonly Model[]): ProviderModelTypeCounts {
+export function getModelTypeCounts(models: readonly Model[]): ModelTypeCounts {
   const counts = Object.fromEntries(
-    PROVIDER_MODEL_TYPE_FILTERS.map((filter) => [filter, 0]),
-  ) as ProviderModelTypeCounts;
+    MODEL_TYPE_FILTERS.map((filter) => [filter, 0]),
+  ) as ModelTypeCounts;
   counts.all = models.length;
 
   for (const model of models) {
-    for (const filter of PROVIDER_MODEL_TYPE_FILTERS) {
-      if (filter !== 'all' && matchesProviderModelTypeFilter(model, filter)) {
+    for (const filter of MODEL_TYPE_FILTERS) {
+      if (filter !== 'all' && matchesModelTypeFilter(model, filter)) {
         counts[filter] += 1;
       }
     }
@@ -86,13 +83,10 @@ export function getProviderModelTypeCounts(models: readonly Model[]): ProviderMo
   return counts;
 }
 
-export function filterModelsByProviderModelType(
-  models: readonly Model[],
-  filter: ProviderModelTypeFilter,
-): Model[] {
+export function filterModelsByType(models: readonly Model[], filter: ModelTypeFilter): Model[] {
   return filter === 'all'
     ? [...models]
-    : models.filter((model) => matchesProviderModelTypeFilter(model, filter));
+    : models.filter((model) => matchesModelTypeFilter(model, filter));
 }
 
 // Text-to-speech is the only audio-output sub-kind that can be singled out from
