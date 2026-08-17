@@ -64,22 +64,37 @@ export function useManagedComposerAttachments(
 
   const importAttachment = useCallback(
     async (source: ComposerAttachmentSource, token: symbol): Promise<ImportResult> => {
+      const startedAt = Date.now();
+      let importedSize = source.size;
+      const finishImport = (result: ImportResult) => {
+        if (__DEV__) {
+          logger.debug('Attachment import finished', {
+            durationMs: Date.now() - startedAt,
+            kind: source.kind,
+            result,
+            size: importedSize ?? null,
+          });
+        }
+        return result;
+      };
+
       try {
         const resolved = await file.createInternalEntry({
           name: source.name,
           uri: source.uri,
         });
+        importedSize = resolved.entry.origin === 'internal' ? resolved.entry.size : source.size;
 
         if (cancelledImportTokensRef.current.delete(token)) {
           await deleteEntry(resolved.entry.id);
-          return 'ignored';
+          return finishImport('ignored');
         }
         if (!isMountedRef.current) {
-          return 'ignored';
+          return finishImport('ignored');
         }
         if (importTokensRef.current.get(source.id) !== token) {
           await deleteEntry(resolved.entry.id);
-          return 'ignored';
+          return finishImport('ignored');
         }
 
         importTokensRef.current.delete(source.id);
@@ -89,20 +104,20 @@ export function useManagedComposerAttachments(
               ? {
                   ...source,
                   fileEntryId: resolved.entry.id,
-                  size: resolved.entry.origin === 'internal' ? resolved.entry.size : source.size,
+                  size: importedSize,
                   status: 'ready' as const,
                   uri: resolved.uri,
                 }
               : attachment,
           ),
         );
-        return 'ready';
+        return finishImport('ready');
       } catch (error) {
         if (cancelledImportTokensRef.current.delete(token)) {
-          return 'ignored';
+          return finishImport('ignored');
         }
         if (importTokensRef.current.get(source.id) !== token || !isMountedRef.current) {
-          return 'ignored';
+          return finishImport('ignored');
         }
 
         importTokensRef.current.delete(source.id);
@@ -111,7 +126,7 @@ export function useManagedComposerAttachments(
           name: source.name,
           uri: source.uri,
         });
-        return 'failed';
+        return finishImport('failed');
       }
     },
     [commitAttachments, deleteEntry, file],
