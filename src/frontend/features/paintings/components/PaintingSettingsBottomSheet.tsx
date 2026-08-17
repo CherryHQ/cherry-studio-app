@@ -9,6 +9,7 @@ import {
   Section,
   Slider,
   Switch,
+  TextAnimation,
   TextField,
   useBottomSheet,
 } from '@cherrystudio/ui/components';
@@ -17,8 +18,6 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { SlotText } from '@/frontend/components/SlotText';
 
 import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 import type {
@@ -282,7 +281,10 @@ function AspectRatioField({
     <View className="gap-2">
       <View className="flex-row items-center justify-between gap-3">
         <Text className="font-medium text-foreground text-sm">{imageParamLabel(t, field.key)}</Text>
-        <SlotText text={headerText} textClassName="font-medium text-foreground text-sm" />
+        <TextAnimation.Rotating
+          text={headerText}
+          textClassName="font-medium text-foreground text-sm"
+        />
       </View>
       <Section>
         <Section.Item className="p-4">
