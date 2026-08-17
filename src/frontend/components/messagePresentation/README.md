@@ -12,9 +12,21 @@ history, message rows and parts, live-turn anchoring, entry motion, and scroll-t
   bottom-accessory inputs, and a feature-owned assistant renderer. Chat uses the default assistant
   row; painting supplies its proportional loader and image result without changing message data.
   Single-turn workspaces can opt into animating their first entering anchor.
+- `AssistantMessage` is the default assistant row — pending placeholder, structured parts, and entry
+  motion. Its `children` render after the message body, so a feature composes its own accessory
+  (a toolbar, for example) into an otherwise standard message instead of teaching this module about
+  that feature's state. The slot is unconditional, including while the placeholder is up; an
+  accessory holds the message and decides for itself when to appear.
 
-Message rows, part renderers, animation providers, and platform controls are private implementation
-details. Callers import only from `@/frontend/components/messagePresentation`.
+A feature-owned assistant row wraps `AssistantMessage` and reaches `MessageList` through
+`renderAssistantMessage`, which must be a stable reference. LegendList refreshes mounted rows
+through `itemKey`, `data`, and `extraData` — a new `renderItem` identity is not a channel for
+pushing state into them. Dynamic state therefore has to arrive either as changed message items
+(painting's route) or through the feature's own context or external store read inside the accessory
+(the route for message actions).
+
+Other message rows, part renderers, animation providers, and platform controls are private
+implementation details. Callers import only from `@/frontend/components/messagePresentation`.
 
 ## Ownership
 

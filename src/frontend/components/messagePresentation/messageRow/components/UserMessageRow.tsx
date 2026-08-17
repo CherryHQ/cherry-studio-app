@@ -1,5 +1,5 @@
 import { Menu, type MenuItem } from '@cherrystudio/ui/components';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import Animated from 'react-native-reanimated';
@@ -14,7 +14,7 @@ type UserMessageRowProps = {
   message: MessagePresentationItem;
 };
 
-export function UserMessageRow({ message }: UserMessageRowProps) {
+export const UserMessageRow = memo(function UserMessageRow({ message }: UserMessageRowProps) {
   const { t } = useTranslation();
   const slideInStyle = useUserMessageSlideInStyle(message.id);
   const { attachments, bodyMessage } = useMemo(() => partitionUserMessageParts(message), [message]);
@@ -54,6 +54,6 @@ export function UserMessageRow({ message }: UserMessageRowProps) {
       </View>
     </Animated.View>
   );
-}
+});
 
 function noopMessageAction() {}
