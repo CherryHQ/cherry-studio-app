@@ -72,7 +72,7 @@ function formatViolation(violation: Violation): string {
   const detail = Object.entries(violation.detail)
     .map(([key, value]) => `${key}=${String(value)}`)
     .join(' ');
-  return `  - \`+${(violation.atMs / 1000).toFixed(2)}s\` [${violation.phase}] ${violation.message}${detail ? ` (${detail})` : ''}`;
+  return `  - \`+${(violation.atMs / 1000).toFixed(2)}s\` ${violation.message}${detail ? ` (${detail})` : ''}`;
 }
 
 export function renderSummary(run: RunResult): string {

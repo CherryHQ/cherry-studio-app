@@ -93,12 +93,12 @@ export function emitProgrammaticScroll(
 export function useLayoutBenchInstrumentation({
   endSpaceRef,
   freeze,
-  isScrollButtonHidden,
+  isAtBottom,
   scrollOffset,
 }: {
   endSpaceRef: RefObject<number>;
   freeze: SharedValue<boolean>;
-  isScrollButtonHidden: SharedValue<boolean>;
+  isAtBottom: SharedValue<boolean>;
   scrollOffset: SharedValue<number>;
 }) {
   // arm 发生在假模型被构造时（晚于本组件挂载），worklet 读不到 JS 侧的模块变量，
@@ -110,7 +110,7 @@ export function useLayoutBenchInstrumentation({
   });
 
   useAnimatedReaction(
-    () => isScrollButtonHidden.get(),
+    () => isAtBottom.get(),
     (current, previous) => {
       if (previous !== null && current !== previous) {
         runOnJS(emitButtonVisibility)(!current);

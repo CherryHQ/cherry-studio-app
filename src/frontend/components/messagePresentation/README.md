@@ -25,13 +25,15 @@ persistence entities, composer state, and tool-approval orchestration remain wit
 ## List Behavior
 
 `MessageList` owns its `LegendList` ref, role-based recycling types, latest-user anchor derivation,
-keyboard lift, at-bottom shared value, entry-animation provider, tail-follow state, and optional
-scroll-to-bottom button. Callers provide stable presentation item references and only the layout
-insets and callbacks they own.
+keyboard lift, at-bottom shared value, entry-animation provider, and optional scroll-to-bottom
+button. Callers provide stable presentation item references and only the layout insets and
+callbacks they own.
 
 The latest user message is anchored below the content header. Text anchors use a two-line height
-cap; messages containing files use their full measured height. After reserved anchor space is
-exhausted, item-size changes follow the tail until touch, drag, or momentum pauses the behavior.
+cap; messages containing files use their full measured height. Initial topic entry and sending a
+message may position the list once. Streaming content and item-size changes never scroll it; after
+reserved anchor space is exhausted, `isAtEnd` reveals the scroll-to-bottom button. Clicking that
+button scrolls once and does not enable any ongoing follow behavior.
 
 Keyboard lift is `whenAtEnd`, and it depends on `patches/react-native-keyboard-controller@…`: the
 patch makes a shrinking keyboard clamp the offset into the range that is valid *now* instead of
@@ -48,10 +50,10 @@ and anchoring.
 ## Organization
 
 - `components/MessageList.tsx` is the wiring layer: virtualization config, layout derivations, and
-  list controls. The behavior engines live beside it in `components/hooks/` — `useTailFollow`
-  (tail-follow state machine, sole owner of the interaction lock), `useAnchorPin` (anchor pinning,
-  first-anchor staging, readiness gate), and `useLayoutBenchInstrumentation` (dev-only layout
-  probes). Measurement-backed comments travel with the code they explain.
+  list controls. The behavior engines live beside it in `components/hooks/` — `useAnchorPin`
+  (anchor pinning, first-anchor staging, readiness gate, and its interaction lock) and
+  `useLayoutBenchInstrumentation` (dev-only layout probes). Measurement-backed comments travel
+  with the code they explain.
 - `messageRow/` owns user and assistant row layouts plus the private slide-in provider.
 - `messageContent/` dispatches structured message parts and owns citation/file hooks.
 - `utils/` contains the private built-in tool presentation mapping.

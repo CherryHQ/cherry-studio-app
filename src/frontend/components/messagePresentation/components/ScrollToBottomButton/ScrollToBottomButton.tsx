@@ -2,31 +2,41 @@ import { ArrowDownIcon } from '@cherrystudio/app-icons';
 import { Surface } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { Pressable, StyleSheet } from 'react-native';
-import Animated, { useAnimatedProps, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { useResolveClassNames } from 'uniwind';
 
 import type { ScrollToBottomButtonProps } from './types';
 
 const BUTTON_SIZE = 40;
+const SURFACE_CLASS_NAME = 'border border-border bg-secondary';
 const visibilityMotion = { duration: duration.fast, easing: easing.settle } as const;
 
 export function ScrollToBottomButton({
   gap,
   inputHeight,
-  isHidden,
+  isAtBottom,
   onPress,
 }: ScrollToBottomButtonProps) {
+  const surfaceTokens = useResolveClassNames(SURFACE_CLASS_NAME);
+  const tintColor =
+    typeof surfaceTokens.backgroundColor === 'string' ? surfaceTokens.backgroundColor : undefined;
+  const surfaceStyle = [
+    styles.surface,
+    { borderColor: surfaceTokens.borderColor, borderWidth: surfaceTokens.borderWidth },
+  ];
+
   const wrapStyle = useAnimatedStyle(() => ({ bottom: inputHeight.get() + gap }));
-  const containerStyle = useAnimatedStyle(() => ({
-    opacity: withTiming(isHidden.get() ? 0 : 1, visibilityMotion),
-    transform: [{ scale: withTiming(isHidden.get() ? 0.8 : 1, visibilityMotion) }],
-  }));
-  const containerProps = useAnimatedProps(() => ({
-    pointerEvents: (isHidden.get() ? 'none' : 'auto') as 'auto' | 'none',
-  }));
+  const containerStyle = useAnimatedStyle(
+    () => ({ transform: [{ scale: withTiming(isAtBottom ? 0.8 : 1, visibilityMotion) }] }),
+    [isAtBottom],
+  );
 
   return (
     <Animated.View pointerEvents="box-none" style={[styles.wrap, wrapStyle]}>
-      <Animated.View animatedProps={containerProps} style={containerStyle}>
+      <Animated.View
+        pointerEvents={isAtBottom ? 'none' : 'auto'}
+        style={[containerStyle, { opacity: isAtBottom ? 0 : 1 }]}
+      >
         <Pressable
           accessibilityLabel="滚动到底部"
           accessibilityRole="button"
@@ -35,10 +45,11 @@ export function ScrollToBottomButton({
           onPress={onPress}
         >
           <Surface
-            className="border border-border bg-secondary"
+            className={SURFACE_CLASS_NAME}
             cornerRadius={BUTTON_SIZE / 2}
             interactive
-            style={styles.surface}
+            style={surfaceStyle}
+            tintColor={tintColor}
           >
             <ArrowDownIcon className="size-5 text-foreground" />
           </Surface>
