@@ -4,9 +4,12 @@ import {
   font,
   foregroundStyle,
   frame,
+  layoutPriority,
+  lineHeight,
   lineLimit,
   monospacedDigit,
   multilineTextAlignment,
+  offset,
   padding,
   resizable,
   truncationMode,
@@ -22,11 +25,11 @@ export const renderBackgroundActivity: LiveActivityComponent<
   'widget';
   // Widget layouts execute as isolated function strings, so runtime values must be local.
   const brandColor = '#F65D5D';
-  const colorScheme = props.colorScheme ?? environment.colorScheme;
-  const foreground = colorScheme === 'dark' ? '#FFFFFF' : '#151515';
-  const secondary = colorScheme === 'dark' ? '#C7C7CC' : '#5E5E63';
-  const background = colorScheme === 'dark' ? '#1C1C1E' : '#FFFFFF';
   const hasCompactLabel = props.compactLabel !== undefined;
+  const isSimplified =
+    environment.levelOfDetail === 'simplified' || environment.activityFamily === 'small';
+  const summary = props.preview && !isSimplified ? props.preview : props.title;
+  const expandedContent = props.preview && !isSimplified ? props.preview : props.detail;
   const timerInterval = {
     lower: new Date(props.startedAtEpochMs),
     upper: new Date(props.finishedAtEpochMs ?? props.startedAtEpochMs + 24 * 60 * 60 * 1000),
@@ -74,8 +77,8 @@ export const renderBackgroundActivity: LiveActivityComponent<
         alignment="center"
         spacing={10}
         modifiers={[
-          activityBackgroundTint(background),
-          padding({ all: 14 }),
+          activityBackgroundTint(null),
+          padding({ horizontal: 14, vertical: 12 }),
           frame({ maxWidth: Infinity, alignment: 'leading' }),
         ]}
       >
@@ -84,7 +87,7 @@ export const renderBackgroundActivity: LiveActivityComponent<
             uiImage={props.logoUri}
             modifiers={[
               resizable(),
-              frame({ height: 36, width: 36 }),
+              frame({ height: 32, width: 32 }),
               widgetAccentedRenderingMode('fullColor'),
             ]}
           />
@@ -93,26 +96,30 @@ export const renderBackgroundActivity: LiveActivityComponent<
         )}
         <VStack
           alignment="leading"
-          spacing={3}
+          spacing={4}
           modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
         >
-          <HStack spacing={8}>
+          <HStack
+            alignment="center"
+            spacing={6}
+            modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+          >
             <Text
               modifiers={[
-                font({ size: 15, weight: 'semibold' }),
-                foregroundStyle(foreground),
+                font({ size: 14, weight: 'semibold' }),
+                foregroundStyle({ type: 'hierarchical', style: 'primary' }),
                 lineLimit(1),
                 truncationMode('tail'),
+                layoutPriority(1),
               ]}
             >
-              {props.title}
+              {props.detail}
             </Text>
-            {props.attribution ? <Spacer /> : null}
             {props.attribution ? (
               <Text
                 modifiers={[
                   font({ size: 12, weight: 'medium' }),
-                  foregroundStyle(secondary),
+                  foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
                   lineLimit(1),
                   truncationMode('tail'),
                 ]}
@@ -120,46 +127,90 @@ export const renderBackgroundActivity: LiveActivityComponent<
                 {props.attribution}
               </Text>
             ) : null}
-          </HStack>
-          <HStack alignment="bottom" spacing={8}>
-            {props.preview ? (
-              <Text
-                modifiers={[
-                  font({ size: 12 }),
-                  foregroundStyle(secondary),
-                  lineLimit(1),
-                  multilineTextAlignment('leading'),
-                  truncationMode('head'),
-                ]}
-              >
-                {props.preview}
-              </Text>
-            ) : null}
             <Spacer />
-            {hasCompactLabel ? (
-              <Text
-                modifiers={[
-                  font({ size: 12, weight: 'medium' }),
-                  foregroundStyle(secondary),
-                  lineLimit(1),
-                  truncationMode('tail'),
-                ]}
-              >
-                {props.compactLabel}
-              </Text>
-            ) : (
+            {!hasCompactLabel ? (
               <Text
                 countsDown={false}
                 timerInterval={timerInterval}
                 modifiers={[
                   font({ size: 12, weight: 'medium' }),
                   monospacedDigit(),
-                  foregroundStyle(secondary),
+                  foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
                 ]}
               />
-            )}
+            ) : null}
           </HStack>
+          <Text
+            modifiers={[
+              font({ size: 12 }),
+              foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+              lineLimit(1),
+              multilineTextAlignment('leading'),
+              truncationMode('tail'),
+              frame({ maxWidth: Infinity, alignment: 'leading' }),
+            ]}
+          >
+            {summary}
+          </Text>
         </VStack>
+      </HStack>
+    ),
+    bannerSmall: (
+      <HStack
+        alignment="center"
+        spacing={8}
+        modifiers={[
+          activityBackgroundTint(null),
+          padding({ horizontal: 12, vertical: 10 }),
+          frame({ maxWidth: Infinity, alignment: 'leading' }),
+        ]}
+      >
+        {props.logoUri ? (
+          <Image
+            uiImage={props.logoUri}
+            modifiers={[
+              resizable(),
+              frame({ height: 24, width: 24 }),
+              widgetAccentedRenderingMode('fullColor'),
+            ]}
+          />
+        ) : (
+          <Image color={brandColor} size={20} systemName={iconSymbol} />
+        )}
+        <Text
+          modifiers={[
+            font({ size: 13, weight: 'semibold' }),
+            foregroundStyle({ type: 'hierarchical', style: 'primary' }),
+            lineLimit(1),
+            truncationMode('tail'),
+            layoutPriority(1),
+          ]}
+        >
+          {props.detail}
+        </Text>
+        <Spacer />
+        {hasCompactLabel ? (
+          <Text
+            modifiers={[
+              font({ size: 11, weight: 'medium' }),
+              foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+              lineLimit(1),
+              truncationMode('tail'),
+            ]}
+          >
+            {props.compactLabel}
+          </Text>
+        ) : (
+          <Text
+            countsDown={false}
+            timerInterval={timerInterval}
+            modifiers={[
+              font({ size: 11, weight: 'medium' }),
+              monospacedDigit(),
+              foregroundStyle({ type: 'hierarchical', style: 'secondary' }),
+            ]}
+          />
+        )}
       </HStack>
     ),
     compactLeading: <Image color={brandColor} size={16} systemName={compactIconSymbol} />,
@@ -182,91 +233,91 @@ export const renderBackgroundActivity: LiveActivityComponent<
           font({ size: 13, weight: 'medium' }),
           monospacedDigit(),
           foregroundStyle('#FFFFFF'),
+          frame({ width: 40, alignment: 'trailing' }),
+          offset({ x: 3.5 }),
         ]}
       />
     ),
     minimal: <Image color={brandColor} size={16} systemName={iconSymbol} />,
-    expandedLeading: (
-      <HStack spacing={8} modifiers={[padding({ leading: 12, top: 10 })]}>
-        {props.logoUri ? (
-          <Image
-            uiImage={props.logoUri}
-            modifiers={[
-              resizable(),
-              frame({ height: 28, width: 28 }),
-              widgetAccentedRenderingMode('fullColor'),
-            ]}
-          />
-        ) : null}
-        <Text
-          modifiers={[
-            font({ size: 14, weight: 'semibold' }),
-            foregroundStyle('#FFFFFF'),
-            lineLimit(1),
-            truncationMode('tail'),
-          ]}
-        >
-          {props.title}
-        </Text>
-      </HStack>
-    ),
-    expandedTrailing: (
-      <Text
-        modifiers={[
-          font({ size: 12, weight: 'medium' }),
-          foregroundStyle('#C7C7CC'),
-          lineLimit(1),
-          truncationMode('tail'),
-          padding({ trailing: 12, top: 10 }),
-        ]}
-      >
-        {props.attribution}
-      </Text>
-    ),
+    expandedLeading: null,
+    expandedTrailing: null,
     expandedCenter: null,
     expandedBottom: (
-      <HStack
-        alignment="bottom"
-        spacing={8}
-        modifiers={[padding({ bottom: 12, horizontal: 12, top: 6 })]}
+      <VStack
+        alignment="leading"
+        spacing={6}
+        modifiers={[
+          padding({ bottom: 12, horizontal: 12, top: 6 }),
+          frame({ maxWidth: Infinity, alignment: 'leading' }),
+        ]}
       >
-        {props.preview ? (
+        <HStack
+          alignment="center"
+          spacing={8}
+          modifiers={[frame({ maxWidth: Infinity, alignment: 'leading' })]}
+        >
+          {props.logoUri ? (
+            <Image
+              uiImage={props.logoUri}
+              modifiers={[
+                resizable(),
+                frame({ height: 24, width: 24 }),
+                widgetAccentedRenderingMode('fullColor'),
+              ]}
+            />
+          ) : (
+            <Image color={brandColor} size={18} systemName={iconSymbol} />
+          )}
           <Text
             modifiers={[
-              font({ size: 13 }),
-              foregroundStyle('#C7C7CC'),
-              lineLimit(3),
-              multilineTextAlignment('leading'),
-              truncationMode('head'),
-            ]}
-          >
-            {props.preview}
-          </Text>
-        ) : null}
-        <Spacer />
-        {hasCompactLabel ? (
-          <Text
-            modifiers={[
-              font({ size: 12, weight: 'medium' }),
-              foregroundStyle('#C7C7CC'),
+              font({ size: 14, weight: 'semibold' }),
+              foregroundStyle('#FFFFFF'),
               lineLimit(1),
               truncationMode('tail'),
+              layoutPriority(1),
             ]}
           >
-            {props.compactLabel}
+            {props.title}
           </Text>
-        ) : (
-          <Text
-            countsDown={false}
-            timerInterval={timerInterval}
-            modifiers={[
-              font({ size: 12, weight: 'medium' }),
-              monospacedDigit(),
-              foregroundStyle('#C7C7CC'),
-            ]}
-          />
-        )}
-      </HStack>
+          <Spacer />
+          {hasCompactLabel ? (
+            <Text
+              modifiers={[
+                font({ size: 12, weight: 'semibold' }),
+                foregroundStyle('#FFFFFF'),
+                lineLimit(1),
+                truncationMode('tail'),
+              ]}
+            >
+              {props.compactLabel}
+            </Text>
+          ) : (
+            <Text
+              countsDown={false}
+              timerInterval={timerInterval}
+              modifiers={[
+                font({ size: 12, weight: 'medium' }),
+                monospacedDigit(),
+                foregroundStyle('#FFFFFF'),
+                frame({ width: 40, alignment: 'trailing' }),
+              ]}
+            />
+          )}
+        </HStack>
+        <Text
+          modifiers={[
+            font({ size: 13 }),
+            foregroundStyle('#C7C7CC'),
+            lineHeight(17),
+            lineLimit(isSimplified ? 1 : 2),
+            multilineTextAlignment('leading'),
+            truncationMode('tail'),
+            frame({ maxWidth: Infinity, alignment: 'leading' }),
+          ]}
+        >
+          {expandedContent}
+        </Text>
+      </VStack>
     ),
   };
 };
