@@ -57,6 +57,26 @@ Shared components with text must be content-driven: avoid fixed width or height,
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
 
+`TextAnimation.Rotating` cycles short, single-line phrases vertically while reserving the width of
+the longest phrase, so surrounding content does not move between changes. Use the compound root to
+share timing across animated values, or use the variant by itself:
+
+```tsx
+import { TextAnimation } from '@cherrystudio/ui/components';
+import { Text } from 'react-native';
+
+<TextAnimation duration={2200}>
+  <Text>Cherry Studio is </Text>
+  <TextAnimation.Rotating
+    text={['focused', 'fluid', 'yours']}
+    textClassName="font-semibold text-primary"
+  />
+</TextAnimation>;
+```
+
+The variant respects Reduce Motion and `enabled={false}`. Its `className` styles the clipping
+container; `textClassName` styles the phrases.
+
 `SecureInput` is the shared single-line field for passwords, API keys, and other sensitive text. It
 keeps the controlled value with the caller, owns only whether that value is revealed, and renders
 the visibility action inside the field. Callers must provide localized action labels:
