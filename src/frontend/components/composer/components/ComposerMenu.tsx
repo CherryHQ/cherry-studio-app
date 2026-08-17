@@ -68,6 +68,8 @@ export function ComposerMenu({ children }: PropsWithChildren) {
       allowsMultipleSelection: true,
       mediaTypes: ['images'],
       orderedSelection: true,
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       quality: 1,
       selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
     });

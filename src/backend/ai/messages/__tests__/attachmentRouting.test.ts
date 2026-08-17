@@ -122,16 +122,35 @@ describe('resolveUIMessageFileUrls', () => {
     ]);
     expect(consoleWarnSpy).toHaveBeenCalledTimes(1);
   });
+
+  test('drops unsupported image formats before building an AI request', async () => {
+    testState.contents.set('file:///managed/photo.heic', {
+      base64: 'heic-data',
+      type: 'image/heic',
+    });
+
+    const [message] = await resolveUIMessageFileUrls(
+      [createMessage([filePart('file:///legacy/photo.heic', 'entry-1', 'image/heic')])],
+      async () => 'file:///managed/photo.heic',
+    );
+
+    expect(message.parts).toEqual([]);
+    expect(testState.reads).toEqual([]);
+  });
 });
 
 function createMessage(parts: UIMessage['parts']): UIMessage {
   return { id: 'message-1', parts, role: 'user' };
 }
 
-function filePart(url: string, fileEntryId: string): UIMessage['parts'][number] {
+function filePart(
+  url: string,
+  fileEntryId: string,
+  mediaType = 'application/pdf',
+): UIMessage['parts'][number] {
   return {
-    filename: 'brief.pdf',
-    mediaType: 'application/pdf',
+    filename: url.split('/').pop() ?? 'attachment',
+    mediaType,
     providerMetadata: { cherry: { fileEntryId } },
     type: 'file',
     url,
