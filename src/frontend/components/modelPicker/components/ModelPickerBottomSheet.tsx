@@ -4,8 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { SelectionSheetSearchField } from '@/frontend/components/selectionSheet';
-
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
@@ -13,6 +11,7 @@ import { ModelPickerList } from './ModelPickerList';
 
 const initialModelPickerListItemCount = 24;
 const modelPickerListItemBatchSize = 24;
+const defaultSelectedTags: readonly ModelPickerTag[] = [];
 // Fraction of the available height the picker fills, giving the list room to scroll.
 const modelPickerSnapPointFraction = 0.85;
 
@@ -39,7 +38,7 @@ export function ModelPickerBottomSheet({
   isOpen,
   onClose,
   onSelect,
-  selectedTags = [],
+  selectedTags = defaultSelectedTags,
   selectedModelId,
   showPinnedModels = true,
   title,
@@ -112,44 +111,46 @@ export function ModelPickerBottomSheet({
   }, [totalListItemCount]);
 
   return (
-    <BottomSheet
-      closeAccessibilityLabel={t('common.close')}
-      height={sheetHeight}
-      isOpen={isOpen}
-      onClose={handleClose}
-      testID="model-picker"
-      title={title ?? t('modelPicker.title')}
-    >
-      {/* The card's fixed height + this flex column bound the list, so
-          LegendList (flex:1) virtualizes without any manual height math. */}
-      <View style={styles.body}>
-        <View className="px-4 pt-2">
-          <SelectionSheetSearchField onChange={handleSearchTextChange} value={searchText} />
-        </View>
-        <View style={styles.modelListViewport}>
-          <ModelPickerList
-            emptyText={t('settings.provider.models.search.empty')}
-            hasMoreItems={hasMoreListItems}
-            isLoading={isLoading}
-            isOpen={isOpen ?? true}
-            listItems={listItems}
-            loadingText={t('settings.provider.models.loading')}
-            onEndReached={handleListEndReached}
-            onSelect={onSelect}
-            pinnedModelIds={pinnedModelIds}
-            selectedModelId={selectedModelId}
-          />
-        </View>
-        {footer ? <View>{footer}</View> : null}
-      </View>
+    <BottomSheet open={isOpen ?? true}>
+      <BottomSheet.Content height={sheetHeight} onClose={handleClose} testID="model-picker">
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
+          <BottomSheet.Title>{title ?? t('modelPicker.title')}</BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <BottomSheet.SearchField
+          accessibilityLabel={t('navigation.search')}
+          clearAccessibilityLabel={t('common.clear')}
+          onChangeText={handleSearchTextChange}
+          onClear={() => handleSearchTextChange('')}
+          placeholder={t('navigation.search')}
+          value={searchText}
+        />
+        {/* The card's fixed height + this flex body bound the list, so
+            LegendList virtualizes without any manual height math. */}
+        <BottomSheet.Body>
+          <View style={styles.modelListViewport}>
+            <ModelPickerList
+              emptyText={t('settings.provider.models.search.empty')}
+              hasMoreItems={hasMoreListItems}
+              isLoading={isLoading}
+              isOpen={isOpen ?? true}
+              listItems={listItems}
+              loadingText={t('settings.provider.models.loading')}
+              onEndReached={handleListEndReached}
+              onSelect={onSelect}
+              pinnedModelIds={pinnedModelIds}
+              selectedModelId={selectedModelId}
+            />
+          </View>
+        </BottomSheet.Body>
+        {footer ? <BottomSheet.Footer>{footer}</BottomSheet.Footer> : null}
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  body: {
-    flex: 1,
-  },
   modelListViewport: {
     flex: 1,
     minHeight: 0,

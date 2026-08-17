@@ -5,7 +5,7 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageStatusRow } from '../../components/MessageStatusRow';
@@ -86,21 +86,26 @@ function ReasoningDetailSheet({
   );
 
   return (
-    <BottomSheet
-      closeAccessibilityLabel={t('common.close')}
-      detents={detents}
-      height={fullHeight}
-      onClose={onClose}
-      testID="reasoning-detail"
-      title={t('chat.reasoningStatus.title')}
-    >
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="px-4 pb-4"
-        showsVerticalScrollIndicator={false}
+    <BottomSheet defaultOpen>
+      <BottomSheet.Content
+        detents={detents}
+        height={fullHeight}
+        onClose={onClose}
+        testID="reasoning-detail"
       >
-        <PartMarkdown isStreaming={isStreaming} markdown={markdown} />
-      </ScrollView>
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
+          <BottomSheet.Title>{t('chat.reasoningStatus.title')}</BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <BottomSheet.ScrollView
+          className="flex-1"
+          contentContainerClassName="px-4 pb-4"
+          showsVerticalScrollIndicator={false}
+        >
+          <PartMarkdown isStreaming={isStreaming} markdown={markdown} />
+        </BottomSheet.ScrollView>
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }

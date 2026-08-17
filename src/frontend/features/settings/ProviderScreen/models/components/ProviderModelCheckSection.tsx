@@ -1,15 +1,15 @@
 import { ChevronDownIcon } from '@cherrystudio/app-icons';
-import { Button, Section } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  type BottomSheetSelectionOption,
+  Button,
+  Section,
+} from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-
-import {
-  SingleSelectionSheet,
-  type SingleSelectionSheetOption,
-} from '@/frontend/components/selectionSheet';
 
 import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
 import { ProviderModelSelectSheet } from './ProviderModelSelectSheet';
@@ -44,7 +44,7 @@ export function ProviderModelCheckSection({
     setSelectedModelId,
     startCheck,
   } = useProviderModelCheck({ apiKeys, models, providerId });
-  const apiKeySelectionOptions: SingleSelectionSheetOption<string>[] = apiKeyOptions.map(
+  const apiKeySelectionOptions: BottomSheetSelectionOption<string>[] = apiKeyOptions.map(
     (option) => ({ label: option.label, value: option.value }),
   );
 
@@ -102,13 +102,13 @@ export function ProviderModelCheckSection({
         selectedModelId={selectedModel?.id ?? null}
         title={t('settings.provider.models.checkModelSection')}
       />
-      <SingleSelectionSheet
+      <BottomSheet.Selection
         closeAccessibilityLabel={t('common.close')}
         emptyText={t('settings.select.placeholder')}
         heightFraction={0.6}
-        isOpen={selectionKind === 'api-key'}
         onClose={() => setSelectionKind(null)}
         onSelect={setSelectedApiKeyId}
+        open={selectionKind === 'api-key'}
         options={apiKeySelectionOptions}
         selectedValue={selectedApiKey?.value ?? null}
         testID="provider-api-key-selection"

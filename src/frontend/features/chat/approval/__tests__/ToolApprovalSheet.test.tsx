@@ -27,7 +27,21 @@ jest.mock('@cherrystudio/ui/components', () => {
     return <MockView {...props}>{children}</MockView>;
   }
 
-  return { BottomSheet: MockBottomSheet, Button: MockButton };
+  const component = () =>
+    function MockBottomSheetPart({ children, ...props }: { children?: ReactNode }) {
+      return <MockView {...props}>{children}</MockView>;
+    };
+
+  const BottomSheet = Object.assign(MockBottomSheet, {
+    Body: component(),
+    CloseButton: component(),
+    Content: component(),
+    Header: component(),
+    HeaderSpacer: component(),
+    Title: component(),
+  });
+
+  return { BottomSheet, Button: MockButton };
 });
 
 const allowLabel = 'chat.tool.approval.allow';
@@ -112,7 +126,7 @@ describe('ToolApprovalSheet', () => {
   test('cannot be dismissed while an approval is pending', () => {
     render();
 
-    expect(renderer.root.findByType(BottomSheet).props.isCloseDisabled).toBe(true);
+    expect(renderer.root.findByType(BottomSheet.Content).props.isCloseDisabled).toBe(true);
   });
 
   test('does not mount a sheet before an approval exists', () => {
@@ -213,7 +227,7 @@ describe('ToolApprovalSheet', () => {
     ]);
 
     expect(renderedTexts()).toContain('serverTwo: createFile');
-    expect(renderer.root.findByType(BottomSheet).props.isOpen).toBe(true);
+    expect(renderer.root.findByType(BottomSheet).props.open).toBe(true);
   });
 
   test('formats built-in tool names without exposing the internal prefix', () => {

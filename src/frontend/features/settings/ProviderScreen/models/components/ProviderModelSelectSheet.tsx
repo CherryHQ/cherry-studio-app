@@ -11,10 +11,9 @@ import {
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { SelectionSheetSearchField } from '@/frontend/components/selectionSheet';
 
 import { filterModelsByKeywords } from '../utils/providerModelSearch';
 import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
@@ -54,6 +53,7 @@ export function ProviderModelSelectSheet({
   selectedModelId: UniqueModelId | null;
   title: string;
 }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const [searchText, setSearchText] = useState('');
@@ -83,29 +83,38 @@ export function ProviderModelSelectSheet({
   }, []);
 
   return (
-    <BottomSheet
-      closeAccessibilityLabel={title}
-      height={sheetHeight}
-      isOpen={isOpen}
-      onClose={handleSheetClose}
-      testID="provider-model-selection"
-      title={title}
-    >
-      {/* The sheet's fixed height plus this column bound the list, so it
-          virtualizes without any height math of its own. */}
-      <View style={styles.body}>
-        <View className="px-4 pt-2">
-          <SelectionSheetSearchField onChange={setSearchText} value={searchText} />
-        </View>
-        <ProviderModelSelectList
-          emptyText={emptyText}
-          isOpen={isOpen}
-          models={displayedModels}
-          onSelect={handleSelect}
-          provider={provider}
-          selectedModelId={selectedModelId}
+    <BottomSheet open={isOpen}>
+      <BottomSheet.Content
+        height={sheetHeight}
+        onClose={handleSheetClose}
+        testID="provider-model-selection"
+      >
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={title} />
+          <BottomSheet.Title>{title}</BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <BottomSheet.SearchField
+          accessibilityLabel={t('navigation.search')}
+          clearAccessibilityLabel={t('common.clear')}
+          onChangeText={setSearchText}
+          onClear={() => setSearchText('')}
+          placeholder={t('navigation.search')}
+          value={searchText}
         />
-      </View>
+        {/* The sheet's fixed height plus this body bound the list, so it
+            virtualizes without any height math of its own. */}
+        <BottomSheet.Body>
+          <ProviderModelSelectList
+            emptyText={emptyText}
+            isOpen={isOpen}
+            models={displayedModels}
+            onSelect={handleSelect}
+            provider={provider}
+            selectedModelId={selectedModelId}
+          />
+        </BottomSheet.Body>
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }
@@ -233,7 +242,6 @@ const ProviderModelSelectRow = memo(function ProviderModelSelectRow({
 });
 
 const styles = StyleSheet.create({
-  body: { flex: 1 },
   list: { flex: 1 },
   // 8 rather than the 16 the sheet's other chrome sits on: the rows carry their
   // own, which is what leaves the selected row's fill room outside its text.

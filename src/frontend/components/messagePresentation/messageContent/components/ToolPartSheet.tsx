@@ -4,7 +4,7 @@ import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import type { ImageSource } from 'expo-image';
 import { type ComponentType, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageStatusRow } from '../../components/MessageStatusRow';
@@ -93,21 +93,21 @@ export function ToolPartSheet({ children, onClose, testID, title }: ToolPartShee
   );
 
   return (
-    <BottomSheet
-      closeAccessibilityLabel={t('common.close')}
-      detents={detents}
-      height={fullHeight}
-      onClose={onClose}
-      testID={testID}
-      title={title}
-    >
-      <ScrollView
-        className="flex-1"
-        contentContainerClassName="gap-2.5 px-4 pb-4"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="gap-2.5">{children}</View>
-      </ScrollView>
+    <BottomSheet defaultOpen>
+      <BottomSheet.Content detents={detents} height={fullHeight} onClose={onClose} testID={testID}>
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
+          <BottomSheet.Title>{title}</BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <BottomSheet.ScrollView
+          className="flex-1"
+          contentContainerClassName="gap-2.5 px-4 pb-4"
+          showsVerticalScrollIndicator={false}
+        >
+          <View className="gap-2.5">{children}</View>
+        </BottomSheet.ScrollView>
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }

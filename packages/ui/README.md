@@ -113,19 +113,33 @@ The native implementation is adapted from MIT-licensed Nitro menu projects. See
 
 `BottomSheet` is the shared floating-card sheet over
 `@swmansion/react-native-bottom-sheet`. It owns card geometry, Liquid Glass fallback, scrim,
-safe-area information, close reasons, and nested-page header controls. The host app keeps one
-`BottomSheetProvider` at its root.
-
-Multi-level flows keep their business stack in the feature and pass only the current page identity
-and depth to the package transition:
+safe-area information, and close reasons. The host app keeps one `BottomSheetProvider` at its root.
+Its compound components make fixed and scrolling regions explicit:
 
 ```tsx
-<BottomSheet title={current.title} onBack={stack.length > 1 ? pop : undefined} onClose={close}>
-  <BottomSheet.PageTransition depth={stack.length - 1} pageKey={current.key}>
-    {current.content}
-  </BottomSheet.PageTransition>
+<BottomSheet open={isOpen} onOpenChange={setIsOpen}>
+  <BottomSheet.Trigger>Open</BottomSheet.Trigger>
+  <BottomSheet.Content height={520} onClose={close}>
+    <BottomSheet.Header>
+      <BottomSheet.CloseButton accessibilityLabel="Close" />
+      <BottomSheet.Title>Models</BottomSheet.Title>
+      <BottomSheet.HeaderSpacer />
+    </BottomSheet.Header>
+    <BottomSheet.SearchField {...searchProps} />
+    <BottomSheet.Body>{list}</BottomSheet.Body>
+    <BottomSheet.Footer>{actions}</BottomSheet.Footer>
+  </BottomSheet.Content>
 </BottomSheet>
 ```
+
+`Trigger` is optional for sheets controlled by feature state. `Body` is a bounded viewport and does
+not scroll by itself, so virtualized lists can own scrolling without nesting. Use
+`BottomSheet.ScrollView` for ordinary scrolling content. `SearchField`, headers, and footers remain
+pinned because they are siblings of the scrolling region. `BottomSheet.Selection` is the explicit
+single-choice variant and remains under the same `BottomSheet` export.
+
+Multi-level flows keep their business stack in the feature and render it through
+`BottomSheet.PageTransition` inside `Content`.
 
 Increasing depth uses the package's forward push motion, decreasing depth reverses it, and a
 same-depth key change cross-fades in place. The transition keeps the outgoing page mounted only for

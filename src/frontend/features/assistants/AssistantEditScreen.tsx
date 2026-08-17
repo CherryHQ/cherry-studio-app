@@ -1,5 +1,12 @@
 import { ChevronDownIcon, ChevronRightIcon } from '@cherrystudio/app-icons';
-import { Description, Input, Label, Switch, TextField } from '@cherrystudio/ui/components';
+import {
+  BottomSheet,
+  Description,
+  Input,
+  Label,
+  Switch,
+  TextField,
+} from '@cherrystudio/ui/components';
 import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   type Assistant,
@@ -18,7 +25,6 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useModelPickerData } from '@/frontend/components/modelPicker';
-import { SingleSelectionSheet } from '@/frontend/components/selectionSheet';
 import { usePreference } from '@/frontend/data/hooks';
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
@@ -418,13 +424,13 @@ function AssistantEditForm({
         onClose={closeEmojiPicker}
         onSelect={handleEmojiSelect}
       />
-      <SingleSelectionSheet
+      <BottomSheet.Selection
         closeAccessibilityLabel={t('common.close')}
         emptyText={t('settings.select.placeholder')}
         heightFraction={0.6}
-        isOpen={isMcpModeSheetOpen}
         onClose={closeMcpModeSheet}
         onSelect={handleMcpModeSelect}
+        open={isMcpModeSheetOpen}
         options={mcpModeOptions}
         selectedValue={form.mcpMode}
         testID="assistant-mcp-mode-selection"

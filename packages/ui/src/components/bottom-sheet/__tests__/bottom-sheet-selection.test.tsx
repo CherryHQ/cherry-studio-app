@@ -1,23 +1,43 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { SingleSelectionSheet } from '../components/SingleSelectionSheet';
+import { BottomSheetSelection } from '../bottom-sheet-selection';
 
 let mockHandleSheetClose: ((reason: string) => void) | undefined;
 let mockListExtraData: unknown;
 const mockRequestClose = jest.fn((reason: string) => mockHandleSheetClose?.(reason));
 
-jest.mock('@cherrystudio/ui/components', () => ({
-  BottomSheet: ({
-    children,
-    onClose,
-  }: {
-    children: React.ReactNode;
-    onClose: typeof mockHandleSheetClose;
-  }) => {
-    const { View: MockView } = jest.requireActual('react-native');
-    mockHandleSheetClose = onClose;
-    return <MockView>{children}</MockView>;
-  },
+jest.mock('../bottom-sheet', () => {
+  const { View } = jest.requireActual('react-native');
+
+  return {
+    BottomSheetBody: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    BottomSheetContent: ({
+      children,
+      onClose,
+    }: {
+      children: React.ReactNode;
+      onClose: typeof mockHandleSheetClose;
+    }) => {
+      mockHandleSheetClose = onClose;
+      return <View>{children}</View>;
+    },
+    BottomSheetRoot: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+  };
+});
+
+jest.mock('../bottom-sheet-header', () => {
+  const { View } = jest.requireActual('react-native');
+  const Component = ({ children }: { children?: React.ReactNode }) => <View>{children}</View>;
+
+  return {
+    BottomSheetCloseButton: Component,
+    BottomSheetHeader: Component,
+    BottomSheetHeaderSpacer: Component,
+    BottomSheetTitle: Component,
+  };
+});
+
+jest.mock('../bottom-sheet.context', () => ({
   useBottomSheet: () => ({ requestClose: mockRequestClose }),
 }));
 
@@ -35,14 +55,14 @@ jest.mock('@legendapp/list/react-native', () => ({
     }) => React.ReactNode;
   }) => {
     const { Fragment } = jest.requireActual('react');
-    const { View: MockView } = jest.requireActual('react-native');
+    const { View } = jest.requireActual('react-native');
     mockListExtraData = extraData;
     return (
-      <MockView>
+      <View>
         {data.map((item, index) => (
           <Fragment key={item.value}>{renderItem({ index, item })}</Fragment>
         ))}
-      </MockView>
+      </View>
     );
   },
 }));
@@ -55,11 +75,7 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
 }));
 
-jest.mock('../components/SelectionSheetSearchField', () => ({
-  SelectionSheetSearchField: () => null,
-}));
-
-describe('SingleSelectionSheet', () => {
+describe('BottomSheet.Selection', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
@@ -80,12 +96,12 @@ describe('SingleSelectionSheet', () => {
 
     act(() => {
       renderer = create(
-        <SingleSelectionSheet
+        <BottomSheetSelection
           closeAccessibilityLabel="Close"
           emptyText="No options"
-          isOpen
           onClose={onClose}
           onSelect={onSelect}
+          open
           options={[
             { label: 'First', value: 'first' },
             { label: 'Second', value: 'second' },
@@ -117,9 +133,9 @@ describe('SingleSelectionSheet', () => {
     const props = {
       closeAccessibilityLabel: 'Close',
       emptyText: 'No options',
-      isOpen: true,
       onClose: jest.fn(),
       onSelect: jest.fn(),
+      open: true,
       options: [
         { label: 'First', value: 'first' },
         { label: 'Second', value: 'second' },
@@ -129,12 +145,12 @@ describe('SingleSelectionSheet', () => {
     } as const;
 
     act(() => {
-      renderer = create(<SingleSelectionSheet {...props} selectedValue="first" />);
+      renderer = create(<BottomSheetSelection {...props} selectedValue="first" />);
     });
     expect(mockListExtraData).toBe('first');
 
     act(() => {
-      renderer!.update(<SingleSelectionSheet {...props} selectedValue="second" />);
+      renderer!.update(<BottomSheetSelection {...props} selectedValue="second" />);
     });
     expect(mockListExtraData).toBe('second');
   });

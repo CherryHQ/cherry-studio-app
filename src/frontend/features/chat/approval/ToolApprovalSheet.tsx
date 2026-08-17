@@ -55,46 +55,48 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
   };
 
   return (
-    <BottomSheet
-      isCloseDisabled
-      isOpen={isOpen}
-      onClose={ignoreClose}
-      title={t('chat.tool.approval.title')}
-    >
-      <View className="gap-4 px-4 pb-4">
-        <View className="gap-1">
-          <Text className="text-foreground-tertiary text-sm">
-            {t('chat.tool.approval.description')}
-          </Text>
-          <Text className="font-semibold text-base text-foreground" selectable>
-            {formatApprovalTitle(approval, t)}
-          </Text>
-          {approvals.length > 1 ? (
-            <Text className="text-foreground-tertiary text-xs">
-              {t('chat.tool.approval.pendingCount', { count: approvals.length })}
+    <BottomSheet open={isOpen}>
+      <BottomSheet.Content isCloseDisabled onClose={ignoreClose}>
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
+          <BottomSheet.Title>{t('chat.tool.approval.title')}</BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <BottomSheet.Body className="gap-4 px-4 pb-4">
+          <View className="gap-1">
+            <Text className="text-foreground-tertiary text-sm">
+              {t('chat.tool.approval.description')}
             </Text>
-          ) : null}
-        </View>
-        <ApprovalArgumentsPreview input={approval.input} />
-        <View className="flex-row gap-3">
-          <Button
-            className="flex-1"
-            disabled={isSubmitting}
-            onPress={() => void submit(false)}
-            variant="destructive"
-          >
-            <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
-          </Button>
-          <Button
-            className="flex-1"
-            disabled={isSubmitting}
-            onPress={() => void submit(true)}
-            variant="default"
-          >
-            <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
-          </Button>
-        </View>
-      </View>
+            <Text className="font-semibold text-base text-foreground" selectable>
+              {formatApprovalTitle(approval, t)}
+            </Text>
+            {approvals.length > 1 ? (
+              <Text className="text-foreground-tertiary text-xs">
+                {t('chat.tool.approval.pendingCount', { count: approvals.length })}
+              </Text>
+            ) : null}
+          </View>
+          <ApprovalArgumentsPreview input={approval.input} />
+          <View className="flex-row gap-3">
+            <Button
+              className="flex-1"
+              disabled={isSubmitting}
+              onPress={() => void submit(false)}
+              variant="destructive"
+            >
+              <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
+            </Button>
+            <Button
+              className="flex-1"
+              disabled={isSubmitting}
+              onPress={() => void submit(true)}
+              variant="default"
+            >
+              <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+            </Button>
+          </View>
+        </BottomSheet.Body>
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }

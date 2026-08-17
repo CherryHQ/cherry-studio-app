@@ -39,21 +39,23 @@ export function PaintingTemplateBottomSheet({
   );
 
   return (
-    <BottomSheet
-      closeAccessibilityLabel={t('painting.templates.close')}
-      onClose={handleClose}
-      testID="painting-template"
-      title={
-        <Text
-          className="flex-1 px-3 text-center font-semibold text-foreground text-base"
-          numberOfLines={1}
-          testID="painting-template-author"
-        >
-          {template.author ?? ''}
-        </Text>
-      }
-    >
-      <PaintingTemplateSheetBody template={template} />
+    <BottomSheet defaultOpen>
+      <BottomSheet.Content onClose={handleClose} testID="painting-template">
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={t('painting.templates.close')} />
+          <BottomSheet.Title
+            className="flex-1 px-3 text-center font-semibold text-foreground text-base"
+            numberOfLines={1}
+            testID="painting-template-author"
+          >
+            {template.author ?? ''}
+          </BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <BottomSheet.Body>
+          <PaintingTemplateSheetBody template={template} />
+        </BottomSheet.Body>
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }
