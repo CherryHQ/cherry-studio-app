@@ -112,6 +112,7 @@
     "react-native-nitro-modules": "*",
     "react-native-reanimated": "*",
     "react-native-safe-area-context": "*",
+    "react-native-streamdown": "*",
     "react-native-worklets": "*",
     "uniwind": "*"
   },

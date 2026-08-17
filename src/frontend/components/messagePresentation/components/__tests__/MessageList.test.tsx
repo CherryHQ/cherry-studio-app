@@ -9,6 +9,10 @@ import type { MessageSlideInFlight } from '../../messageRow/slideIn/hooks/useMes
 import type { MessageListProps, MessagePresentationItem } from '../../types';
 import { MessageList } from '../MessageList';
 
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
+
 type AnchoredEndSpaceConfig = {
   anchorIndex?: number;
   anchorMaxSize?: number;

@@ -8,14 +8,6 @@ import { nativeStackHeaderHeight } from './nativeNavigationMetrics/nativeNavigat
 export const defaultLanguage = 'en-US';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
-// Geist Mono, embedded natively by the expo-font plugin (see app.json). This is
-// the font's PostScript name, which is also its filename, so iOS and Android
-// both resolve it from this single string. Components that style through
-// `className` should use the `font-mono` utility instead; this constant exists
-// for the few places that build RN style objects directly (MarkdownText).
-// Must stay in sync with `--font-mono` in src/frontend/styles/global.css.
-export const monoFontFamily = 'GeistMono-Regular';
-
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 

@@ -9,6 +9,7 @@ export * from './file-preview';
 export * from './image';
 export * from './input';
 export * from './loading';
+export * from './markdown-text';
 export * from './menu';
 export * from './portal';
 export * from './surface';

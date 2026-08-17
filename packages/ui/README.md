@@ -45,6 +45,24 @@ Quick Look thumbnail caching:
 while treating thumbnail generation as a recoverable fallback. CherryUI carries no file database,
 logging, or translation dependency.
 
+`MarkdownText` is the shared GitHub-flavored Markdown renderer. It uses the streaming renderer
+while content is arriving and the enriched native renderer afterward; both receive the same theme
+tokens, syntax palette, LaTeX flags, and typography scale. Product code supplies the active font
+size step and decides how links open:
+
+```tsx
+<MarkdownText
+  fontSizeStep={fontSizeStep}
+  isStreaming={isStreaming}
+  markdown={markdown}
+  onLinkPress={openLink}
+/>;
+```
+
+Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontSizeStep`,
+`resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
+variables, MessageList geometry, and settings previews on the same three-step scale.
+
 `Alert` is the shared native dialog primitive. Mount one provider at the application root and
 inject localized default action labels there; feature code can then enqueue informational,
 confirmation, and prompt dialogs through `useAlert()` without owning dialog rendering:

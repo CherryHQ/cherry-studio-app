@@ -1,4 +1,5 @@
 import { ScrollShadow } from '@cherrystudio/ui/components';
+import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -6,7 +7,6 @@ import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native'
 import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
-import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
 import { AssistantMessage, MessageSlideInProvider, UserMessageRow } from '../messageRow';
