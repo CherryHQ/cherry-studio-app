@@ -29,9 +29,11 @@ const defaultLabels: ComposerLabels = {
  * children, so the same component backs a chat screen, an image prompt, or
  * whatever comes next.
  *
- * Fully controlled — `value` and its callbacks are the caller's to own. Pass
- * `children` to arrange the parts yourself; the default is the standard layout
- * with a lone send button.
+ * Controlled — `value` and its callbacks are the caller's to own. The field
+ * underneath is a rich text input and owns its own buffer, so `value` is
+ * Markdown rather than the glyphs on screen, and it is pushed down only when it
+ * differs from what the field last reported. Pass `children` to arrange the
+ * parts yourself; the default is the standard layout with a lone send button.
  */
 function ComposerRoot({
   autoFocus = false,

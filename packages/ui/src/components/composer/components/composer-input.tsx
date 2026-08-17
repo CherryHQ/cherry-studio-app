@@ -1,19 +1,31 @@
 import { TextInputWrapper } from 'expo-paste-input';
-import { PixelRatio, TextInput } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { StyleSheet } from 'react-native';
+import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { useResolveClassNames } from 'uniwind';
 
 import { useComposerActions, useComposerState } from '../composer.context';
 import { pasteWrapperStyle, textInputBoxStyle } from '../composer.layout';
-import type { ComposerInputProps } from '../composer.types';
+import type { ComposerInputHandle, ComposerInputProps } from '../composer.types';
 import { composerTextStyle } from '../composerTextStyle';
 
 const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
-// Android receives 24 from `text-base`; iOS overrides it to a measured 20.
-const textLineHeight = composerTextStyle.lineHeight ?? 24;
 
-/** The text field, growing with its content up to a capped height. */
+/**
+ * The text field, growing with its content up to a capped height.
+ *
+ * The value the caller sees is **Markdown**, not the glyphs on screen: an
+ * inserted entity — a tool mention — is a link, and its identity lives in the
+ * URL rather than in the words it renders as. Plain text would throw that away
+ * the moment it left the field.
+ *
+ * Nothing here parses what the user types. The underlying input only applies
+ * styles it is told to apply, so typed `**stars**` stay stars, and the
+ * serializer only writes delimiters around ranges that were actually styled.
+ */
 export function ComposerInput({
   autoFocus = false,
+  markdownStyle,
   onPaste,
   placeholder,
   ref,
@@ -23,17 +35,36 @@ export function ComposerInput({
   const { value } = useComposerState('Composer.Input');
   const { changeText } = useComposerActions('Composer.Input');
   const placeholderStyle = useResolveClassNames('text-muted-foreground');
-  // Native multiline inputs can retain their previous intrinsic height after a
-  // controlled clear. Clamp only the empty state; non-empty text still grows
-  // naturally up to textInputBoxStyle.maxHeight.
-  const emptyInputStyle =
-    value.length === 0
-      ? {
-          height: Math.ceil(
-            textLineHeight * PixelRatio.getFontScale() + textInputBoxStyle.paddingVertical * 2,
-          ),
-        }
-      : undefined;
+  const fallbackRef = useRef<ComposerInputHandle | null>(null);
+  const inputRef = ref ?? fallbackRef;
+  // The field is uncontrolled — it owns its own text and we mirror it out. This
+  // records what it last told us so the sync below can tell a value that came
+  // back from the field from one the caller pushed in.
+  const emitted = useRef(value);
+  // Flattened rather than passed as an array: this input takes a single style
+  // object, not RN's `StyleProp`.
+  const resolvedStyle = useMemo(() => StyleSheet.flatten([inputStyle, style]), [style]);
+
+  const handleChangeMarkdown = useCallback(
+    (markdown: string) => {
+      emitted.current = markdown;
+      changeText(markdown);
+    },
+    [changeText],
+  );
+
+  // Pushes a caller-side change — send clearing the draft, a failed send
+  // restoring it — down into the field. Guarded on `emitted`, or every
+  // keystroke would round-trip through here and fight the native input for the
+  // caret.
+  useEffect(() => {
+    if (value === emitted.current) {
+      return;
+    }
+
+    emitted.current = value;
+    inputRef.current?.setValue(value);
+  }, [inputRef, value]);
 
   return (
     // Wrapped unconditionally, even with no `onPaste`. It costs one native view,
@@ -41,19 +72,27 @@ export function ComposerInput({
     // the field's own view hierarchy depend on a callback, so a caller adding
     // paste support later would be debugging a layout change they didn't make.
     <TextInputWrapper onPaste={onPaste} style={pasteWrapperStyle}>
-      <TextInput
+      <EnrichedMarkdownTextInput
         autoFocus={autoFocus}
-        className="text-base text-foreground"
+        // Set once. Every later change goes through the sync effect above.
+        defaultValue={value}
+        // Turning `google.com` into a link as the user types would mint the one
+        // entity this field is supposed to reserve for mentions.
+        linkRegex={null}
+        markdownStyle={markdownStyle}
         multiline
-        onChangeText={changeText}
+        onChangeMarkdown={handleChangeMarkdown}
         placeholder={placeholder}
         placeholderTextColor={
           typeof placeholderStyle.color === 'string' ? placeholderStyle.color : undefined
         }
-        ref={ref}
-        style={[inputStyle, emptyInputStyle, style]}
+        ref={inputRef}
+        // This is a composer, not an editor: the selection menu's Format
+        // submenu and "Copy as Markdown" both offer to do things the rest of
+        // the field gives no way to see or undo.
+        selectionMenuConfig={{ copyAsMarkdown: { enabled: false }, format: { enabled: false } }}
+        style={resolvedStyle}
         testID={testID}
-        value={value}
       />
     </TextInputWrapper>
   );

@@ -253,6 +253,52 @@ describe('MorphMenu', () => {
     consoleError.mockRestore();
   });
 
+  // A switch row is still one decision, so it leaves the same way an item does.
+  it('closes itself before flipping a toggle', () => {
+    const onValueChange = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <MorphMenu accessibilityLabel="Add" testID="menu">
+          <MorphMenu.Toggle
+            label="Web search"
+            onValueChange={onValueChange}
+            testID="menu-web-search"
+            value={false}
+          />
+        </MorphMenu>,
+      );
+    });
+
+    const tree = renderer!;
+
+    press(tree, 'menu-trigger');
+    press(tree, 'menu-web-search');
+
+    expect(onValueChange).toHaveBeenCalledWith(true);
+    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+  });
+
+  it('reports the toggle state to assistive tech', () => {
+    act(() => {
+      renderer = create(
+        <MorphMenu accessibilityLabel="Add" testID="menu">
+          <MorphMenu.Toggle
+            label="Web search"
+            onValueChange={jest.fn()}
+            testID="menu-web-search"
+            value
+          />
+        </MorphMenu>,
+      );
+    });
+
+    const toggle = findPressable(renderer!.root, 'menu-web-search');
+
+    expect(toggle.props.accessibilityRole).toBe('switch');
+    expect(toggle.props.accessibilityState).toEqual({ checked: true, disabled: undefined });
+  });
+
   it('renders an item icon alongside its label', () => {
     act(() => {
       renderer = create(

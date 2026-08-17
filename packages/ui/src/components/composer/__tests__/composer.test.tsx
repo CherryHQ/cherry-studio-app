@@ -1,8 +1,9 @@
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { createRef } from 'react';
+import { Text, TextInput, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Composer } from '../composer';
-import type { ComposerProps } from '../composer.types';
+import type { ComposerInputHandle, ComposerProps } from '../composer.types';
 
 jest.mock('heroui-native/utils', () => {
   const { twMerge } = require('tailwind-merge');
@@ -234,14 +235,14 @@ describe('Composer', () => {
     expect(onPaste).toHaveBeenNthCalledWith(2, { type: 'unsupported' });
   });
 
-  it('returns a controlled multiline input to its single-line height when cleared', () => {
+  // The field owns its own buffer, so a caller-side value has to be pushed into
+  // it. Send clearing the draft is the case this exists for.
+  it('pushes a value the caller changed into the field', () => {
+    const inputRef = createRef<ComposerInputHandle>();
     const onChangeText = jest.fn();
     const onSend = jest.fn();
-    const children = <Composer.Input testID="composer-input" />;
-    const tree = render({ children, onChangeText, onSend, value: 'first\nsecond\nthird' });
-    const populatedInput = tree.root.findByType(TextInput);
-
-    expect(StyleSheet.flatten(populatedInput.props.style)?.height).toBeUndefined();
+    const children = <Composer.Input ref={inputRef} testID="composer-input" />;
+    const tree = render({ children, onChangeText, onSend, value: 'draw a cat' });
 
     act(() => {
       tree.update(
@@ -251,19 +252,35 @@ describe('Composer', () => {
       );
     });
 
-    const input = tree.root.findByType(TextInput);
-    expect(StyleSheet.flatten(input.props.style)?.height).toEqual(expect.any(Number));
+    expect(inputRef.current?.setValue).toHaveBeenCalledWith('');
+    expect(tree.root.findByType(TextInput).props.value).toBe('');
+  });
+
+  // Round-tripping a keystroke would put the caret back where the field had
+  // just moved it away from, which is what makes typing unusable.
+  it('does not push a value that came from the field itself', () => {
+    const inputRef = createRef<ComposerInputHandle>();
+    const onSend = jest.fn();
+    let value = '';
+    const onChangeText = jest.fn((next: string) => {
+      value = next;
+    });
+    const children = <Composer.Input ref={inputRef} testID="composer-input" />;
+    const tree = render({ children, onChangeText, onSend, value });
 
     act(() => {
+      tree.root.findByType(TextInput).props.onChangeText('draw');
+    });
+    act(() => {
       tree.update(
-        <Composer onChangeText={onChangeText} onSend={onSend} value={'new\nmultiline'}>
+        <Composer onChangeText={onChangeText} onSend={onSend} value={value}>
           {children}
         </Composer>,
       );
     });
 
-    const repopulatedInput = tree.root.findByType(TextInput);
-    expect(StyleSheet.flatten(repopulatedInput.props.style)?.height).toBeUndefined();
+    expect(onChangeText).toHaveBeenCalledWith('draw');
+    expect(inputRef.current?.setValue).not.toHaveBeenCalled();
   });
 
   it('carries an icon and a label in a pill without letting the icon shrink', () => {
