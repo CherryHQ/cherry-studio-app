@@ -1,11 +1,9 @@
 /**
  * 把设备日志里的 `[LBP]` 探针行解析成一条可判定的轨迹。
  *
- * 探针本身只报「发生了什么」，判定需要的是派生量：某一时刻处于哪个尾随相位、是否落在用户
- * 手势窗口内、视口有多少比例落在内容之外。这些都在这里算好，判据只消费结果。
+ * 探针本身只报「发生了什么」，判定需要的是派生量：是否落在用户手势窗口内、视口有多少比例
+ * 落在内容之外。这些都在这里算好，判据只消费结果。
  */
-
-export type TailFollowPhase = 'anchoring' | 'following' | 'paused';
 
 export type ProbeEvent = {
   e: string;
@@ -24,7 +22,6 @@ export type ScrollSample = {
   contentHeight: number;
   endSpace: number;
   inInteraction: boolean;
-  phase: TailFollowPhase;
   /** 相对轨迹起点的毫秒数。 */
   atMs: number;
   y: number;
@@ -35,7 +32,6 @@ export type Trace = {
   interactionWindows: InteractionWindow[];
   /** 事件时间戳原点；所有对外暴露的时间都是相对它的毫秒数。 */
   originMs: number;
-  phaseAt: (atMs: number) => TailFollowPhase;
   samples: ScrollSample[];
   viewportHeight: number;
 };
@@ -126,14 +122,9 @@ const DEFAULT_VIEWPORT_HEIGHT = 874;
 
 export function buildTrace(events: ProbeEvent[]): Trace {
   const originMs = events.length > 0 ? events[0].t : 0;
-  const phaseChanges: Array<{ at: number; phase: TailFollowPhase }> = [];
   let viewportHeight = DEFAULT_VIEWPORT_HEIGHT;
 
   for (const event of events) {
-    if (event.e === 'phase' && typeof event.phase === 'string') {
-      phaseChanges.push({ at: event.t, phase: event.phase as TailFollowPhase });
-    }
-
     if (event.e === 'viewport') {
       viewportHeight = readNumber(event, 'h') ?? viewportHeight;
     }
@@ -143,17 +134,6 @@ export function buildTrace(events: ProbeEvent[]): Trace {
       viewportHeight = readNumber(event, 'viewport') ?? viewportHeight;
     }
   }
-
-  const phaseAt = (atMs: number): TailFollowPhase => {
-    let phase: TailFollowPhase = 'anchoring';
-    for (const change of phaseChanges) {
-      if (change.at - originMs > atMs) {
-        break;
-      }
-      phase = change.phase;
-    }
-    return phase;
-  };
 
   const interactionWindows = buildInteractionWindows(events).map((window) => ({
     end: window.end - originMs,
@@ -199,10 +179,9 @@ export function buildTrace(events: ProbeEvent[]): Trace {
       inInteraction: interactionWindows.some(
         (window) => atMs >= window.start && atMs <= window.end,
       ),
-      phase: phaseAt(atMs),
       y,
     });
   }
 
-  return { events, interactionWindows, originMs, phaseAt, samples, viewportHeight };
+  return { events, interactionWindows, originMs, samples, viewportHeight };
 }

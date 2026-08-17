@@ -28,6 +28,7 @@ export type BackgroundActivityPreviewProps = Omit<
   'finishedAtEpochMs' | 'startedAtEpochMs'
 > & {
   elapsedSeconds: number;
+  levelOfDetail: 'default' | 'simplified';
   liveTimer: boolean;
   showLogo: boolean;
   theme: 'dark' | 'light';
@@ -138,12 +139,16 @@ function BannerPreview({
   attribution,
   colors,
   compactLabel,
+  detail,
   elapsed,
   icon,
+  levelOfDetail,
   preview,
   showLogo,
   title,
 }: BackgroundActivityPreviewProps & { colors: PreviewColors; elapsed: string }) {
+  const summary = preview && levelOfDetail !== 'simplified' ? preview : title;
+
   return (
     <View
       style={{
@@ -154,31 +159,31 @@ function BannerPreview({
         borderRadius: 24,
         flexDirection: 'row',
         gap: 10,
-        minHeight: 64,
-        padding: 14,
+        minHeight: 60,
+        padding: 12,
       }}
     >
-      {showLogo ? <CherryLogo size={36} /> : <ActivityIcon icon={icon} size={24} />}
-      <View style={{ flex: 1, gap: 3, minWidth: 0 }}>
-        <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
+      {showLogo ? <CherryLogo size={32} /> : <ActivityIcon icon={icon} size={24} />}
+      <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
+        <View style={{ alignItems: 'center', flexDirection: 'row', gap: 6 }}>
           <Text
             numberOfLines={1}
             style={{
               color: colors.foreground,
-              flex: 1,
-              fontSize: 15,
+              flexShrink: 1,
+              fontSize: 14,
               fontWeight: '600',
               letterSpacing: 0,
             }}
           >
-            {title}
+            {detail}
           </Text>
           {attribution ? (
             <Text
               numberOfLines={1}
               style={{
                 color: colors.secondary,
-                flexShrink: 1,
+                flexShrink: 2,
                 fontSize: 12,
                 fontWeight: '500',
                 letterSpacing: 0,
@@ -187,37 +192,8 @@ function BannerPreview({
               {attribution}
             </Text>
           ) : null}
-        </View>
-        <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
-          {preview ? (
-            <Text
-              ellipsizeMode="head"
-              numberOfLines={1}
-              style={{
-                color: colors.secondary,
-                flex: 1,
-                fontSize: 12,
-                letterSpacing: 0,
-              }}
-            >
-              {preview}
-            </Text>
-          ) : (
-            <View style={{ flex: 1 }} />
-          )}
-          {compactLabel !== undefined ? (
-            <Text
-              numberOfLines={1}
-              style={{
-                color: colors.secondary,
-                fontSize: 12,
-                fontWeight: '500',
-                letterSpacing: 0,
-              }}
-            >
-              {compactLabel}
-            </Text>
-          ) : (
+          <View style={{ flex: 1 }} />
+          {compactLabel === undefined ? (
             <Text
               style={{
                 color: colors.secondary,
@@ -229,8 +205,15 @@ function BannerPreview({
             >
               {elapsed}
             </Text>
-          )}
+          ) : null}
         </View>
+        <Text
+          ellipsizeMode="tail"
+          numberOfLines={1}
+          style={{ color: colors.secondary, fontSize: 12, letterSpacing: 0 }}
+        >
+          {summary}
+        </Text>
       </View>
     </View>
   );
@@ -288,13 +271,16 @@ function Timer({ elapsed }: { elapsed: string }) {
 }
 
 function ExpandedPreview({
-  attribution,
   compactLabel,
+  detail,
   elapsed,
+  levelOfDetail,
   preview,
   showLogo,
   title,
 }: BackgroundActivityPreviewProps & { elapsed: string }) {
+  const content = preview && levelOfDetail !== 'simplified' ? preview : detail;
+
   return (
     <View
       style={{
@@ -302,61 +288,50 @@ function ExpandedPreview({
         backgroundColor: '#000000',
         borderCurve: 'continuous',
         borderRadius: 42,
-        gap: 10,
-        minHeight: 110,
-        paddingBottom: 16,
-        paddingHorizontal: 14,
-        paddingTop: 12,
+        gap: 6,
+        minHeight: 104,
+        paddingBottom: 14,
+        paddingHorizontal: 12,
+        paddingTop: 10,
       }}
     >
       <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8 }}>
-        {showLogo ? <CherryLogo size={28} /> : null}
-        <Text
-          numberOfLines={1}
-          style={{ color: '#FFFFFF', flex: 1, fontSize: 14, fontWeight: '600', letterSpacing: 0 }}
-        >
-          {title}
-        </Text>
-        {attribution ? (
-          <Text
-            numberOfLines={1}
-            style={{ color: '#C7C7CC', fontSize: 12, fontWeight: '500', letterSpacing: 0 }}
-          >
-            {attribution}
-          </Text>
-        ) : null}
-      </View>
-      <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 8 }}>
-        {preview ? (
-          <Text
-            ellipsizeMode="head"
-            numberOfLines={3}
-            style={{
-              color: '#C7C7CC',
-              flex: 1,
-              fontSize: 13,
-              letterSpacing: 0,
-              lineHeight: 18,
-            }}
-          >
-            {preview}
-          </Text>
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
+        {showLogo ? <CherryLogo size={24} /> : <View style={{ height: 24, width: 24 }} />}
         <Text
           numberOfLines={1}
           style={{
-            color: '#C7C7CC',
-            fontSize: 12,
-            fontVariant: compactLabel === undefined ? ['tabular-nums'] : undefined,
-            fontWeight: '500',
+            color: '#FFFFFF',
+            flex: 1,
+            fontSize: 14,
+            fontWeight: '600',
             letterSpacing: 0,
           }}
         >
-          {compactLabel ?? elapsed}
+          {title}
         </Text>
+        {compactLabel !== undefined ? (
+          <Text
+            numberOfLines={1}
+            style={{
+              color: '#FFFFFF',
+              fontSize: 12,
+              fontWeight: '600',
+              letterSpacing: 0,
+            }}
+          >
+            {compactLabel}
+          </Text>
+        ) : (
+          <Timer elapsed={elapsed} />
+        )}
       </View>
+      <Text
+        ellipsizeMode="tail"
+        numberOfLines={levelOfDetail === 'simplified' ? 1 : 2}
+        style={{ color: '#C7C7CC', fontSize: 13, letterSpacing: 0, lineHeight: 17 }}
+      >
+        {content}
+      </Text>
     </View>
   );
 }

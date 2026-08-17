@@ -14,13 +14,13 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
-  PROVIDER_MODEL_TYPE_FILTERS,
-  PROVIDER_MODEL_TYPE_LABEL_KEYS,
-  type ProviderModelTypeCounts,
-  type ProviderModelTypeFilter,
-} from '../utils/providerModelTypeFilter';
+  MODEL_TYPE_FILTERS,
+  MODEL_TYPE_LABEL_KEYS,
+  type ModelTypeCounts,
+  type ModelTypeFilter,
+} from '../utils/modelTypeFilter';
 
-const providerModelTypeIcons = {
+const modelTypeIcons = {
   all: null,
   audio: AudioLinesIcon,
   embedding: BoxesIcon,
@@ -30,20 +30,20 @@ const providerModelTypeIcons = {
   text: TypeIcon,
   transcription: MicIcon,
   video: VideoIcon,
-} as const satisfies Record<ProviderModelTypeFilter, typeof TypeIcon | null>;
+} as const satisfies Record<ModelTypeFilter, typeof TypeIcon | null>;
 
-function ProviderModelTypeTabContent({
+function ModelTypeTabContent({
   count,
   filter,
   isSelected,
   label,
 }: {
   count: number;
-  filter: ProviderModelTypeFilter;
+  filter: ModelTypeFilter;
   isSelected: boolean;
   label: string;
 }) {
-  const Icon = providerModelTypeIcons[filter];
+  const Icon = modelTypeIcons[filter];
 
   return (
     <View className="max-w-full flex-row items-center justify-center gap-1.5">
@@ -72,14 +72,14 @@ function ProviderModelTypeTabContent({
  * a zero tells you the provider has none of that kind, which is why the counts
  * are there in the first place.
  */
-export function ProviderModelTypeFilterBar({
+export function ModelTypeFilterBar({
   counts,
   onSelect,
   selectedFilter,
 }: {
-  counts: ProviderModelTypeCounts;
-  onSelect: (filter: ProviderModelTypeFilter) => void;
-  selectedFilter: ProviderModelTypeFilter;
+  counts: ModelTypeCounts;
+  onSelect: (filter: ModelTypeFilter) => void;
+  selectedFilter: ModelTypeFilter;
 }) {
   const { t } = useTranslation();
 
@@ -91,12 +91,12 @@ export function ProviderModelTypeFilterBar({
       style={styles.bar}
     >
       <Tabs
-        items={PROVIDER_MODEL_TYPE_FILTERS.map((filter) => {
-          const label = t(PROVIDER_MODEL_TYPE_LABEL_KEYS[filter]);
+        items={MODEL_TYPE_FILTERS.map((filter) => {
+          const label = t(MODEL_TYPE_LABEL_KEYS[filter]);
 
           return {
             children: (
-              <ProviderModelTypeTabContent
+              <ModelTypeTabContent
                 count={counts[filter]}
                 filter={filter}
                 isSelected={filter === selectedFilter}
@@ -104,13 +104,13 @@ export function ProviderModelTypeFilterBar({
               />
             ),
             label,
-            testID: `provider-model-type-tab-${filter}`,
+            testID: `model-type-tab-${filter}`,
             value: filter,
           };
         })}
         onValueChange={onSelect}
         style={styles.tabs}
-        testID="provider-model-type-tabs"
+        testID="model-type-tabs"
         value={selectedFilter}
       />
     </ScrollView>
@@ -122,6 +122,6 @@ const styles = StyleSheet.create({
     flexGrow: 0,
   },
   tabs: {
-    width: PROVIDER_MODEL_TYPE_FILTERS.length * 96,
+    width: MODEL_TYPE_FILTERS.length * 96,
   },
 });

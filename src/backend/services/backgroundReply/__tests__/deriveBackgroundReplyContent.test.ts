@@ -101,6 +101,17 @@ describe('deriveBackgroundReplyContent', () => {
     expect(preview?.startsWith('…')).toBe(true);
   });
 
+  test('starts a long preview at the latest complete sentence when possible', () => {
+    const preview = extractReplyPreview([
+      {
+        type: 'text',
+        text: `${'较早内容'.repeat(50)}。最近的完整句子保留用于实时活动预览。最后的结论也应该保持完整。`,
+      } as CherryMessagePart,
+    ]);
+
+    expect(preview).toBe('最近的完整句子保留用于实时活动预览。最后的结论也应该保持完整。');
+  });
+
   test('keeps preview only for completed terminal content', () => {
     expect(getTerminalBackgroundReplyContent('completed', 'final answer', t)).toEqual({
       detail: 'Completed',

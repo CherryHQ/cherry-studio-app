@@ -1,5 +1,5 @@
 /**
- * 布局基准的探针通道：把聊天列表的位移、相位与调度事件发成可机器解析的单行 JSON。
+ * 布局基准的探针通道：把聊天列表的位移、交互与调度事件发成可机器解析的单行 JSON。
  *
  * 为什么不复用 `MessageList` 里已有的 `[SCROLL]` 埋点：那些走 `logger.debug`，而
  * `LoggerService` 的 debug 落到 `console.debug`——实测 `console.debug` **不进 os_log**
@@ -57,8 +57,6 @@ export type LayoutBenchProbeEvent =
   | 'viewport'
   /** 单行尺寸变化，用于统计行高振荡。 */
   | 'itemSize'
-  /** 尾随状态机相位切换；不知道相位就无法判定同一条轨迹是合格还是缺陷。 */
-  | 'phase'
   /** 程序化滚动的调用点。 */
   | 'progScroll'
   /** 每帧滚动位移轨迹。 */

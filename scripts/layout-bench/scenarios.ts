@@ -18,7 +18,7 @@ export const LAYOUT = {
   composer: { x: 200, y: 774 },
   /** 发送键（键盘弹起后）。硬件键盘输入也会让软键盘保持弹起，所以位置稳定。 */
   sendWithKeyboard: { x: 358, y: 506 },
-  /** 流式期间向下滑动一段，用于制造「手势 vs 程序化滚动」的对抗窗口。 */
+  /** 流式期间向下滑动一段，用于验证位置只受用户手势控制。 */
   swipeDown: { fromX: 200, fromY: 300, toX: 200, toY: 650 },
 } as const;
 
@@ -89,12 +89,12 @@ export const SCENARIOS: Scenario[] = [
     setup: openFreshTopic(),
   },
   {
-    description: '流式过程中用户上滑：手势与尾随滚动的对抗、按钮显隐状态机',
+    description: '流式过程中用户滑动：手势独占列表位置、按钮显隐与后续内容增长',
     id: 'stream-scroll',
     measure: [
       ...composeAndSend(),
-      // 上滑必须发生在**正文**流式期间：占位与思考块两段内容还没超出视口，压根没有尾随滚动
-      // 可以对抗，那时候滑一下测不到这个场景要测的东西。
+      // 滑动必须发生在**正文**流式期间：占位与思考块两段内容尚未超出视口，那时还观察不到
+      // 「用户离开末端后，内容继续增长也不接管位置」这条契约。
       { kind: 'wait', ms: 4800 },
       { kind: 'checkpoint', name: 'before-drag' },
       { kind: 'swipe', ...LAYOUT.swipeDown },

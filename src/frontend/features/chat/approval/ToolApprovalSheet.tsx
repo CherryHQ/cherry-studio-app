@@ -33,8 +33,12 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
   }
   const approval = approvals[0] ?? lastApproval;
 
+  if (!approval) {
+    return null;
+  }
+
   const submit = async (approved: boolean) => {
-    if (!approval || isSubmitting) {
+    if (isSubmitting) {
       return;
     }
 
@@ -63,7 +67,7 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
             {t('chat.tool.approval.description')}
           </Text>
           <Text className="font-semibold text-base text-foreground" selectable>
-            {approval ? formatApprovalTitle(approval, t) : ''}
+            {formatApprovalTitle(approval, t)}
           </Text>
           {approvals.length > 1 ? (
             <Text className="text-foreground-tertiary text-xs">
@@ -71,7 +75,7 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
             </Text>
           ) : null}
         </View>
-        <ApprovalArgumentsPreview input={approval?.input} />
+        <ApprovalArgumentsPreview input={approval.input} />
         <View className="flex-row gap-3">
           <Button
             className="flex-1"

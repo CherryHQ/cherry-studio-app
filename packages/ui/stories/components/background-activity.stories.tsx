@@ -28,6 +28,7 @@ const meta = {
     detail: '回复中',
     elapsedSeconds: 37,
     icon: 'bubble-ellipsis',
+    levelOfDetail: 'default',
     liveTimer: false,
     preview: '第一章：记忆的碎片',
     showLogo: true,
@@ -41,6 +42,7 @@ const meta = {
     detail: { control: 'text' },
     elapsedSeconds: { control: { max: 7200, min: 0, step: 1, type: 'range' } },
     icon: { control: 'select', options: icons },
+    levelOfDetail: { control: 'select', options: ['default', 'simplified'] },
     liveTimer: { control: 'boolean' },
     preview: { control: 'text' },
     showLogo: { control: 'boolean' },
@@ -90,12 +92,12 @@ export const AwaitingApproval: Story = {
   render: (args) => <ControlledPreview {...args} />,
 };
 
-export const ExpandedThreeLines: Story = {
+export const ExpandedLongContent: Story = {
   args: {
     elapsedSeconds: 128,
     preview:
-      '第一行展示最新回复的主要结论。\n第二行补充必要的背景和关键细节。\n第三行保留下一步建议，超过三行的更早内容会被省略。',
-    title: '三行内容预览',
+      '第一行展示最新回复的主要结论。\n第二行补充必要的背景和关键细节。\n更多内容会在第二行末尾省略。',
+    title: '长内容预览',
   },
   render: (args) => <ControlledPreview {...args} />,
 };

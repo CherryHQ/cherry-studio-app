@@ -217,7 +217,7 @@
   "assistant.form.mcpMode.manual": "手动",
   "assistant.form.mcpNoServers": "尚未配置 MCP 服务器。请在「设置 → MCP」中添加。",
   "assistant.form.mcpSection": "工具与 MCP",
-  "assistant.form.model": "模型",
+  "assistant.form.modelSelect": "模型选择",
   "assistant.form.name": "名称",
   "assistant.form.namePlaceholder": "助手名称",
   "assistant.form.nameRequired": "助手名称不能为空。",
