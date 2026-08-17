@@ -107,12 +107,13 @@ export class AssistantService {
       throw DataApiErrorFactory.notFound('Assistant', id);
     }
 
-    const [relations, tags] = await Promise.all([
+    const [relations, tags, modelName] = await Promise.all([
       this.getRelationIdsByAssistantIds(this.db, [id]),
       tagService.getTagsByEntitiesTx(this.db, 'assistant', [id]),
+      this.getModelName(row.assistant.modelId),
     ]);
 
-    return rowToAssistant(row.assistant, relations.get(id), tags.get(id), row.modelName ?? null);
+    return rowToAssistant(row.assistant, relations.get(id), tags.get(id), modelName);
   }
 
   get(id: string): Promise<Assistant> {
@@ -198,9 +199,10 @@ export class AssistantService {
     ]);
 
     const assistantIds = rows.map((row) => row.assistant.id);
-    const [relations, tags] = await Promise.all([
+    const [relations, tags, modelNames] = await Promise.all([
       this.getRelationIdsByAssistantIds(this.db, assistantIds),
       tagService.getTagsByEntitiesTx(this.db, 'assistant', assistantIds),
+      modelService.getNamesByUniqueIds(rows.map((row) => row.assistant.modelId)),
     ]);
 
     return {
@@ -209,7 +211,7 @@ export class AssistantService {
           row.assistant,
           relations.get(row.assistant.id),
           tags.get(row.assistant.id),
-          row.modelName ?? null,
+          row.assistant.modelId ? (modelNames.get(row.assistant.modelId) ?? null) : null,
         ),
       ),
       page: query.page,

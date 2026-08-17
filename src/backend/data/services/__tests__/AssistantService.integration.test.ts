@@ -181,6 +181,21 @@ describe('AssistantService persistence', () => {
     ]);
   });
 
+  it('resolves inherited preset model names when reading assistants', async () => {
+    insertPresetModel(sqlite, 'openai-codex', 'gpt-5-6-sol');
+    insertAssistant(sqlite, 'assistant-with-preset', {
+      modelId: 'openai-codex::gpt-5-6-sol',
+    });
+
+    const listed = await assistantService.list({ limit: 100, page: 1 });
+    const fetched = await assistantService.getById('assistant-with-preset');
+
+    expect(listed.items).toEqual([
+      expect.objectContaining({ id: 'assistant-with-preset', modelName: 'GPT-5.6 Sol' }),
+    ]);
+    expect(fetched.modelName).toBe('GPT-5.6 Sol');
+  });
+
   it('reuses an exact-name group across atomic legacy imports', async () => {
     const groupName = 'x'.repeat(65);
     const first = await assistantService.createFromImport({ groupName, name: 'First' });
@@ -286,14 +301,31 @@ function applyMigrations(database: DatabaseSync) {
 function insertAssistant(
   database: DatabaseSync,
   id: string,
-  options: { groupId?: string; updatedAt?: number } = {},
+  options: { groupId?: string; modelId?: string; updatedAt?: number } = {},
 ) {
   database
     .prepare(
-      `INSERT INTO assistant (id, name, emoji, group_id, settings, order_key, created_at, updated_at)
-       VALUES (?, ?, 'x', ?, '{}', ?, 1, ?)`,
+      `INSERT INTO assistant (
+        id, name, emoji, group_id, model_id, settings, order_key, created_at, updated_at
+      ) VALUES (?, ?, 'x', ?, ?, '{}', ?, 1, ?)`,
     )
-    .run(id, id, options.groupId ?? null, id, options.updatedAt ?? 1);
+    .run(id, id, options.groupId ?? null, options.modelId ?? null, id, options.updatedAt ?? 1);
+}
+
+function insertPresetModel(database: DatabaseSync, providerId: string, modelId: string) {
+  database
+    .prepare(
+      `INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
+       VALUES (?, ?, ?, 1, 1)`,
+    )
+    .run(providerId, providerId, providerId);
+  database
+    .prepare(
+      `INSERT INTO user_model (
+        id, provider_id, model_id, preset_model_id, order_key, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, 1, 1)`,
+    )
+    .run(`${providerId}::${modelId}`, providerId, modelId, modelId, modelId);
 }
 
 function insertPin(database: DatabaseSync, assistantId: string) {

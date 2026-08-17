@@ -1,6 +1,6 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { useToast } from 'heroui-native/toast';
-import { type PropsWithChildren, useCallback } from 'react';
+import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardController } from 'react-native-keyboard-controller';
 
@@ -52,8 +52,21 @@ export function ComposerSurface({
   const { toast } = useToast();
   const { attachments, draft } = useComposerState();
   const { clearAttachments, setAttachments, setDraft } = useComposerActions();
+  const activeSendAttemptIdRef = useRef<number | null>(null);
+  const nextSendAttemptIdRef = useRef(0);
 
   const handleSend = useCallback(async () => {
+    if (activeSendAttemptIdRef.current !== null) {
+      logger.debug('Ignored duplicate message send', {
+        attemptId: activeSendAttemptIdRef.current,
+      });
+      return;
+    }
+
+    const attemptId = ++nextSendAttemptIdRef.current;
+    activeSendAttemptIdRef.current = attemptId;
+    logger.debug('Message send started', { attemptId });
+
     const draftSnapshot = draft;
     const attachmentSnapshot = [...attachments];
 
@@ -70,13 +83,18 @@ export function ComposerSurface({
     } catch (error) {
       // The toast is deliberately vague, so without this the failure leaves no
       // trace at all and there is nothing to go on when a send breaks on device.
-      logger.error('Message send failed', error instanceof Error ? error : { error });
+      logger.error('Message send failed', error instanceof Error ? error : { error }, {
+        attemptId,
+      });
       setDraft(draftSnapshot);
       setAttachments(attachmentSnapshot);
       toast.show({
         label: getSendErrorLabel?.(error) ?? t('chat.input.sendFailed'),
         variant: 'danger',
       });
+    } finally {
+      activeSendAttemptIdRef.current = null;
+      logger.debug('Message send finished', { attemptId });
     }
   }, [
     attachments,

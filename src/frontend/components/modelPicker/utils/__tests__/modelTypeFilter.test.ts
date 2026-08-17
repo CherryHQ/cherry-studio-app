@@ -1,11 +1,7 @@
 import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 
-import {
-  filterModelsByProviderModelType,
-  getProviderModelTypeCounts,
-  matchesProviderModelTypeFilter,
-} from '../providerModelTypeFilter';
+import { filterModelsByType, getModelTypeCounts, matchesModelTypeFilter } from '../modelTypeFilter';
 
 const chatModel = model('gpt-4o', { capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION] });
 const imageModel = model('dall-e-3', { capabilities: [MODEL_CAPABILITY.IMAGE_GENERATION] });
@@ -21,28 +17,28 @@ const transcriptionModel = model('whisper-1', {
   capabilities: [MODEL_CAPABILITY.AUDIO_TRANSCRIPT],
 });
 
-describe('provider model type filter', () => {
+describe('model type filter', () => {
   test('sorts each model into the type it exists for', () => {
-    expect(matchesProviderModelTypeFilter(chatModel, 'text')).toBe(true);
-    expect(matchesProviderModelTypeFilter(imageModel, 'image')).toBe(true);
-    expect(matchesProviderModelTypeFilter(embeddingModel, 'embedding')).toBe(true);
-    expect(matchesProviderModelTypeFilter(rerankModel, 'rerank')).toBe(true);
-    expect(matchesProviderModelTypeFilter(videoModel, 'video')).toBe(true);
-    expect(matchesProviderModelTypeFilter(speechModel, 'speech')).toBe(true);
-    expect(matchesProviderModelTypeFilter(transcriptionModel, 'transcription')).toBe(true);
+    expect(matchesModelTypeFilter(chatModel, 'text')).toBe(true);
+    expect(matchesModelTypeFilter(imageModel, 'image')).toBe(true);
+    expect(matchesModelTypeFilter(embeddingModel, 'embedding')).toBe(true);
+    expect(matchesModelTypeFilter(rerankModel, 'rerank')).toBe(true);
+    expect(matchesModelTypeFilter(videoModel, 'video')).toBe(true);
+    expect(matchesModelTypeFilter(speechModel, 'speech')).toBe(true);
+    expect(matchesModelTypeFilter(transcriptionModel, 'transcription')).toBe(true);
   });
 
   test('keeps non-chat models out of the text tab', () => {
     for (const nonChatModel of [imageModel, embeddingModel, rerankModel, videoModel, speechModel]) {
-      expect(matchesProviderModelTypeFilter(nonChatModel, 'text')).toBe(false);
+      expect(matchesModelTypeFilter(nonChatModel, 'text')).toBe(false);
     }
   });
 
   // `AUDIO_GENERATION` backs both, so only the endpoint separates them.
   test('splits text-to-speech off from generic audio generation', () => {
-    expect(matchesProviderModelTypeFilter(audioModel, 'audio')).toBe(true);
-    expect(matchesProviderModelTypeFilter(audioModel, 'speech')).toBe(false);
-    expect(matchesProviderModelTypeFilter(speechModel, 'audio')).toBe(false);
+    expect(matchesModelTypeFilter(audioModel, 'audio')).toBe(true);
+    expect(matchesModelTypeFilter(audioModel, 'speech')).toBe(false);
+    expect(matchesModelTypeFilter(speechModel, 'audio')).toBe(false);
   });
 
   // Audio in, text out, no text in — a dedicated transcriber, not a chat model
@@ -59,13 +55,13 @@ describe('provider model type filter', () => {
       outputModalities: [MODALITY.TEXT],
     });
 
-    expect(matchesProviderModelTypeFilter(modalityOnly, 'transcription')).toBe(true);
-    expect(matchesProviderModelTypeFilter(multimodalChat, 'transcription')).toBe(false);
-    expect(matchesProviderModelTypeFilter(multimodalChat, 'text')).toBe(true);
+    expect(matchesModelTypeFilter(modalityOnly, 'transcription')).toBe(true);
+    expect(matchesModelTypeFilter(multimodalChat, 'transcription')).toBe(false);
+    expect(matchesModelTypeFilter(multimodalChat, 'text')).toBe(true);
   });
 
   test('counts every type, and counts `all` as the total rather than the sum', () => {
-    const counts = getProviderModelTypeCounts([chatModel, imageModel, embeddingModel, speechModel]);
+    const counts = getModelTypeCounts([chatModel, imageModel, embeddingModel, speechModel]);
 
     expect(counts).toEqual({
       all: 4,
@@ -83,8 +79,8 @@ describe('provider model type filter', () => {
   test('leaves the list alone for the `all` tab', () => {
     const models = [chatModel, imageModel];
 
-    expect(filterModelsByProviderModelType(models, 'all')).toEqual(models);
-    expect(filterModelsByProviderModelType(models, 'image')).toEqual([imageModel]);
+    expect(filterModelsByType(models, 'all')).toEqual(models);
+    expect(filterModelsByType(models, 'image')).toEqual([imageModel]);
   });
 });
 

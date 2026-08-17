@@ -1,0 +1,74 @@
+diff --git a/android/src/main/java/com/rcttabview/RCTTabView.kt b/android/src/main/java/com/rcttabview/RCTTabView.kt
+index 3c3d4bdbe2b070f8cc177f6175429fdcdf2d2304..7e5384366e6b8930ac1b65e99b27de980098f7d6 100644
+--- a/android/src/main/java/com/rcttabview/RCTTabView.kt
++++ b/android/src/main/java/com/rcttabview/RCTTabView.kt
+@@ -35,6 +35,8 @@ import coil3.size.Scale
+ import com.facebook.react.bridge.ReadableArray
+ import com.facebook.react.common.assets.ReactFontManager
+ import com.facebook.react.modules.core.ReactChoreographer
++import com.facebook.react.uimanager.PointerEvents
++import com.facebook.react.uimanager.ReactPointerEventsView
+ import com.facebook.react.views.text.ReactTypefaceUtils
+ import com.google.android.material.bottomnavigation.BottomNavigationView
+ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_AUTO
+@@ -42,7 +44,11 @@ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY
+ import com.google.android.material.navigation.NavigationBarView.LABEL_VISIBILITY_UNLABELED
+ import com.google.android.material.transition.platform.MaterialFadeThrough
+ 
+-class ExtendedBottomNavigationView(context: Context) : BottomNavigationView(context) {
++class ExtendedBottomNavigationView(context: Context) :
++  BottomNavigationView(context), ReactPointerEventsView {
++  override val pointerEvents: PointerEvents
++    get() = if (visibility == VISIBLE) PointerEvents.AUTO else PointerEvents.NONE
++
+   override fun getMaxItemCount(): Int {
+     return 100
+   }
+@@ -100,25 +106,36 @@ class ReactBottomNavigationView(context: Context) : LinearLayout(context) {
+     uiModeConfiguration = resources.configuration.uiMode
+ 
+     post {
+-      addOnLayoutChangeListener { _, left, top, right, bottom,
++      addOnLayoutChangeListener { _, _, _, _, _,
+                                   _, _, _, _ ->
+-        val newWidth = right - left
+-        val newHeight = bottom - top
+-
+         // Notify about tab bar height.
+         onTabBarMeasuredListener?.invoke(Utils.convertPixelsToDp(context, bottomNavigation.height).toInt())
+ 
+-        if (newWidth != lastReportedSize?.width || newHeight != lastReportedSize?.height) {
+-          val dpWidth = Utils.convertPixelsToDp(context, layoutHolder.width)
+-          val dpHeight = Utils.convertPixelsToDp(context, layoutHolder.height)
+-
+-          onNativeLayoutListener?.invoke(dpWidth, dpHeight)
+-          lastReportedSize = Size(newWidth, newHeight)
+-        }
++        reportLayoutHolderSizeIfChanged()
++      }
++      // When only the tab bar visibility changes (tabBarHidden), the container keeps
++      // its bounds so the listener above never fires — only layoutHolder grows or
++      // shrinks. Observe layoutHolder itself so the new content size reaches JS.
++      layoutHolder.addOnLayoutChangeListener { _, _, _, _, _,
++                                               _, _, _, _ ->
++        reportLayoutHolderSizeIfChanged()
+       }
+     }
+   }
+ 
++  private fun reportLayoutHolderSizeIfChanged() {
++    val newWidth = layoutHolder.width
++    val newHeight = layoutHolder.height
++
++    if (newWidth != lastReportedSize?.width || newHeight != lastReportedSize?.height) {
++      val dpWidth = Utils.convertPixelsToDp(context, newWidth)
++      val dpHeight = Utils.convertPixelsToDp(context, newHeight)
++
++      onNativeLayoutListener?.invoke(dpWidth, dpHeight)
++      lastReportedSize = Size(newWidth, newHeight)
++    }
++  }
++
+   private val layoutCallback = Choreographer.FrameCallback {
+     isLayoutEnqueued = false
+     refreshLayout()

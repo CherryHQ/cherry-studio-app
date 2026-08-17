@@ -1,0 +1,245 @@
+import type { ComposerInputHandle } from '@cherrystudio/ui/components';
+import { Composer } from '@cherrystudio/ui/components';
+import { type ReactNode, useEffect } from 'react';
+import { KeyboardController } from 'react-native-keyboard-controller';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import {
+  ComposerProvider,
+  useComposerMeta,
+  useComposerState,
+} from '../../context/ComposerProvider';
+import { ComposerMenu } from '../ComposerMenu';
+
+type MockMenuItemProps = {
+  label: string;
+  onPress: () => void;
+};
+
+const mockBlur = jest.fn();
+const mockFocus = jest.fn();
+const mockLaunchCamera = jest.fn();
+const mockLaunchImageLibrary = jest.fn();
+const mockPickDocument = jest.fn();
+const mockRequestCameraPermission = jest.fn();
+const mockRequestMediaLibraryPermission = jest.fn();
+const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
+  typeof KeyboardController.dismiss
+>;
+let mockComposerState: ReturnType<typeof useComposerState> | undefined;
+
+jest.mock('@cherrystudio/app-icons', () => ({
+  CameraIcon: () => null,
+  FileIcon: () => null,
+  ImagesIcon: () => null,
+}));
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+  const { Pressable, View } = jest.requireActual('react-native');
+
+  function MockMenu({ children }: { children?: ReactNode }) {
+    return React.createElement(View, null, children);
+  }
+
+  function MockMenuItem(props: MockMenuItemProps) {
+    return React.createElement(Pressable, {
+      accessibilityLabel: props.label,
+      onPress: props.onPress,
+    });
+  }
+
+  return { Composer: { Menu: Object.assign(MockMenu, { Item: MockMenuItem }) } };
+});
+
+jest.mock('expo-image-picker', () => ({
+  UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' },
+  launchCameraAsync: (...args: unknown[]) => mockLaunchCamera(...args),
+  launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
+  requestCameraPermissionsAsync: (...args: unknown[]) => mockRequestCameraPermission(...args),
+  requestMediaLibraryPermissionsAsync: (...args: unknown[]) =>
+    mockRequestMediaLibraryPermission(...args),
+}));
+
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: (...args: unknown[]) => mockPickDocument(...args),
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
+jest.mock('@/shared/core/logger/LoggerService', () => ({
+  loggerService: {
+    withContext: () => ({ warn: jest.fn() }),
+  },
+}));
+
+describe('ComposerMenu', () => {
+  let renderer: ReactTestRenderer | undefined;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockComposerState = undefined;
+    mockKeyboardDismiss.mockResolvedValue(undefined);
+    mockRequestCameraPermission.mockResolvedValue({ granted: true });
+    mockRequestMediaLibraryPermission.mockResolvedValue({ granted: true });
+    mockLaunchCamera.mockResolvedValue({ canceled: true });
+    mockLaunchImageLibrary.mockResolvedValue({ canceled: true });
+    mockPickDocument.mockResolvedValue({ canceled: true });
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+  });
+
+  it('waits for field dismissal before opening the photo picker', async () => {
+    const dismissal = deferred<void>();
+    mockKeyboardDismiss.mockReturnValue(dismissal.promise);
+    render();
+
+    act(() => press('chat.media.photos'));
+
+    expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
+    expect(mockBlur).toHaveBeenCalledTimes(1);
+    expect(mockRequestMediaLibraryPermission).not.toHaveBeenCalled();
+    expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
+
+    await act(async () => {
+      dismissal.resolve();
+      await dismissal.promise;
+      await flushPromises();
+    });
+
+    expect(mockRequestMediaLibraryPermission).toHaveBeenCalledWith(false);
+    expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
+    expect(mockComposerState?.attachments).toEqual([]);
+    expect(mockFocus).not.toHaveBeenCalled();
+  });
+
+  it('waits for field dismissal before opening the camera and document pickers', async () => {
+    const cameraDismissal = deferred<void>();
+    const documentDismissal = deferred<void>();
+    mockKeyboardDismiss
+      .mockReturnValueOnce(cameraDismissal.promise)
+      .mockReturnValueOnce(documentDismissal.promise);
+    render();
+
+    act(() => press('chat.media.camera'));
+    expect(mockRequestCameraPermission).not.toHaveBeenCalled();
+    expect(mockLaunchCamera).not.toHaveBeenCalled();
+
+    await act(async () => {
+      cameraDismissal.resolve();
+      await cameraDismissal.promise;
+      await flushPromises();
+    });
+    expect(mockRequestCameraPermission).toHaveBeenCalledTimes(1);
+    expect(mockLaunchCamera).toHaveBeenCalledTimes(1);
+
+    act(() => press('chat.media.file'));
+    expect(mockPickDocument).not.toHaveBeenCalled();
+
+    await act(async () => {
+      documentDismissal.resolve();
+      await documentDismissal.promise;
+      await flushPromises();
+    });
+    expect(mockPickDocument).toHaveBeenCalledTimes(1);
+    expect(mockBlur).toHaveBeenCalledTimes(2);
+    expect(mockFocus).not.toHaveBeenCalled();
+  });
+
+  it('keeps the field blurred after a document is selected', async () => {
+    mockPickDocument.mockResolvedValue({
+      assets: [
+        {
+          mimeType: 'application/pdf',
+          name: 'notes.pdf',
+          size: 512,
+          uri: 'file:///source/notes.pdf',
+        },
+      ],
+      canceled: false,
+    });
+    render();
+
+    act(() => press('chat.media.file'));
+    await act(flushPromises);
+
+    expect(mockComposerState?.attachments).toEqual([
+      expect.objectContaining({
+        kind: 'file',
+        name: 'notes.pdf',
+        size: 512,
+        uri: 'file:///source/notes.pdf',
+      }),
+    ]);
+    expect(mockBlur).toHaveBeenCalledTimes(1);
+    expect(mockFocus).not.toHaveBeenCalled();
+  });
+
+  it('does not dismiss the field when a caller-owned tool is selected', () => {
+    const onToolPress = jest.fn();
+    render(<Composer.Menu.Item label="Web search" onPress={onToolPress} />);
+
+    act(() => press('Web search'));
+
+    expect(onToolPress).toHaveBeenCalledTimes(1);
+    expect(mockKeyboardDismiss).not.toHaveBeenCalled();
+    expect(mockBlur).not.toHaveBeenCalled();
+    expect(mockLaunchCamera).not.toHaveBeenCalled();
+    expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
+    expect(mockPickDocument).not.toHaveBeenCalled();
+  });
+
+  function render(children?: ReactNode) {
+    act(() => {
+      renderer = create(
+        <ComposerProvider>
+          <FieldProbe />
+          <ComposerMenu>{children}</ComposerMenu>
+        </ComposerProvider>,
+      );
+    });
+  }
+
+  function press(label: string) {
+    const item = renderer?.root
+      .findAllByProps({ accessibilityLabel: label })
+      .find((node) => typeof node.props.onPress === 'function');
+
+    if (!item) throw new Error(`Missing menu item: ${label}`);
+    item.props.onPress();
+  }
+});
+
+function FieldProbe() {
+  const { inputRef } = useComposerMeta();
+  const composerState = useComposerState();
+
+  useEffect(() => {
+    mockComposerState = composerState;
+    inputRef.current = { blur: mockBlur, focus: mockFocus } as unknown as ComposerInputHandle;
+    return () => {
+      inputRef.current = null;
+    };
+  }, [composerState, inputRef]);
+
+  return null;
+}
+
+function deferred<TValue>() {
+  let resolve!: (value: TValue) => void;
+  const promise = new Promise<TValue>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+
+  return { promise, resolve };
+}
+
+async function flushPromises() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
