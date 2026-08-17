@@ -18,4 +18,5 @@ export * from './shimmer-text';
 export * from './slider';
 export * from './switch';
 export * from './tabs';
+export * from './text-animation';
 export * from './text-field';

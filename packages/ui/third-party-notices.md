@@ -5,11 +5,17 @@ Parts of the native `Menu` implementation are adapted from:
 - `react-native-nitro-contextmenu`: https://github.com/vineyardbovines/react-native-nitro-contextmenu
 - `react-native-nitro-menu`: https://github.com/yyq1025/react-native-nitro-menu
 
+`TextAnimation.Rotating` is adapted from:
+
+- `PanelUI`: https://github.com/panel-ui/PanelUI
+
 ## MIT License
 
 Copyright (c) 2026 Spencer Pope (original author, react-native-nitro-contextmenu)
 
 Copyright (c) 2026 Yueqian Yang (modifications, @yyq1025/react-native-nitro-menu)
+
+Copyright (c) 2026 Khalid Abdi (PanelUI)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
 associated documentation files (the "Software"), to deal in the Software without restriction,
