@@ -28,7 +28,7 @@ const HELP_TEXT = `这是布局基准的 mock provider，不会发起真实请�
 
 - \`bench:text\`——长中文段落（行高基线对照组）
 - \`bench:code@20\`——代码块，每秒 20 个 chunk
-- \`bench:mixed@40\`——复合长回复，用于压满视口触发尾随阶段
+- \`bench:mixed@40\`——复合长回复，用于压满视口并验证手动滚动契约
 - \`bench:mixed@40+2000+2000\`——待生成占位停 2 秒、思考块再写 2 秒，然后才进正文
 
 可用夹具：${BENCH_FIXTURE_IDS.join('、')}`;
