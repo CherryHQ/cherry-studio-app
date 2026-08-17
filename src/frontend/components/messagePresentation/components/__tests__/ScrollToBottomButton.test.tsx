@@ -25,24 +25,24 @@ jest.mock('@cherrystudio/app-icons', () => {
   };
 });
 
+jest.mock('uniwind', () => ({
+  useResolveClassNames: () => ({
+    backgroundColor: 'rgba(120, 120, 120, 0.24)',
+    borderColor: 'rgba(160, 160, 160, 0.3)',
+    borderWidth: 1,
+  }),
+}));
+
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual('react');
 
-  function MockAnimatedView({
-    animatedProps,
-    children,
-    ...props
-  }: {
-    animatedProps?: object;
-    children?: React.ReactNode;
-  }) {
-    return React.createElement('AnimatedView', { ...props, ...animatedProps }, children);
+  function MockAnimatedView({ children, ...props }: { children?: React.ReactNode }) {
+    return React.createElement('AnimatedView', props, children);
   }
 
   return {
     __esModule: true,
     default: { View: MockAnimatedView },
-    useAnimatedProps: (factory: () => object) => factory(),
     useAnimatedStyle: (factory: () => object) => factory(),
     withTiming: (value: number) => value,
   };
@@ -68,7 +68,7 @@ describe('ScrollToBottomButton', () => {
         <ScrollToBottomButton
           gap={8}
           inputHeight={sharedValue(72)}
-          isHidden={sharedValue(false)}
+          isAtBottom={false}
           onPress={onPress}
         />,
       );
@@ -78,6 +78,17 @@ describe('ScrollToBottomButton', () => {
       className: 'border border-border bg-secondary',
       cornerRadius: 20,
       interactive: true,
+      style: [
+        { alignItems: 'center', height: 40, justifyContent: 'center', width: 40 },
+        { borderColor: 'rgba(160, 160, 160, 0.3)', borderWidth: 1 },
+      ],
+      tintColor: 'rgba(120, 120, 120, 0.24)',
+    });
+
+    const animatedViews = renderer!.root.findAllByType('AnimatedView');
+    expect(animatedViews[1].props).toMatchObject({
+      pointerEvents: 'auto',
+      style: [{ transform: [{ scale: 1 }] }, { opacity: 1 }],
     });
 
     const button = renderer!.root.findByProps({ accessibilityLabel: '滚动到底部' });
@@ -89,5 +100,30 @@ describe('ScrollToBottomButton', () => {
 
     act(() => button.props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      renderer?.update(
+        <ScrollToBottomButton gap={8} inputHeight={sharedValue(72)} isAtBottom onPress={onPress} />,
+      );
+    });
+    expect(renderer!.root.findAllByType('AnimatedView')[1].props).toMatchObject({
+      pointerEvents: 'none',
+      style: [{ transform: [{ scale: 0.8 }] }, { opacity: 0 }],
+    });
+
+    act(() => {
+      renderer?.update(
+        <ScrollToBottomButton
+          gap={8}
+          inputHeight={sharedValue(72)}
+          isAtBottom={false}
+          onPress={onPress}
+        />,
+      );
+    });
+    expect(renderer!.root.findAllByType('AnimatedView')[1].props).toMatchObject({
+      pointerEvents: 'auto',
+      style: [{ transform: [{ scale: 1 }] }, { opacity: 1 }],
+    });
   });
 });
