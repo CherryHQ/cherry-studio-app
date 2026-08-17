@@ -4,11 +4,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { Keyboard, ScrollView, TextInput, View } from 'react-native';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
+import { ProfileEditableAvatar } from '@/frontend/components/avatar';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { ProfileAvatarEditBadge, ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -186,35 +186,18 @@ function MenuAvatarTrigger({
   );
 
   return (
-    <View
-      onStartShouldSetResponderCapture={() => {
-        onPress();
-        return false;
-      }}
-      style={{ height: size, width: size }}
-    >
-      <ProfileAvatarImage size={size} />
-      <View style={styles.avatarMenuTrigger}>
-        <Menu items={menuItems} trigger="tap">
-          <View
-            accessibilityLabel={accessibilityLabel}
-            accessibilityRole="button"
-            style={{ height: size, width: size }}
-          >
-            <ProfileAvatarEditBadge icon="camera" size={size} />
-          </View>
-        </Menu>
+    <Menu items={menuItems} trigger="tap">
+      <View
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        onStartShouldSetResponderCapture={() => {
+          onPress();
+          return false;
+        }}
+        style={{ height: size, width: size }}
+      >
+        <ProfileEditableAvatar accessibilityLabel={accessibilityLabel} icon="camera" size={size} />
       </View>
-    </View>
+    </Menu>
   );
 }
-
-const styles = StyleSheet.create({
-  avatarMenuTrigger: {
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0,
-  },
-});

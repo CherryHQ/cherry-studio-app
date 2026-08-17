@@ -21,6 +21,22 @@ import { PlusIcon } from '@cherrystudio/app-icons';
 `Image` wraps `expo-image` with Uniwind `className` support while preserving the underlying image
 API.
 
+`Avatar` composes an image or fallback inside a clipped face while keeping badges outside that
+clipping boundary. It accepts numeric sizes so product avatars can follow their surrounding layout,
+and supports circular and rounded-square faces:
+
+```tsx
+<Avatar accessibilityLabel="OpenAI" shape="rounded" size={26}>
+  <Avatar.Image contentFit="contain" scale={0.8125} source={source} />
+  <Avatar.Badge placement="bottom-end">
+    <StatusDot />
+  </Avatar.Badge>
+</Avatar>
+```
+
+Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallback`, and
+`Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
+
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
 `destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
 behavior. The `sm`, `default`, and `lg` sizes use content-driven typography and padding without

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/BrandAvatar';
+import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/avatar';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
