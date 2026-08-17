@@ -16,6 +16,7 @@ export * from './surface';
 export * from './search-field';
 export * from './secure-input';
 export * from './scroll-shadow';
+export * from './scroll-to-bottom-button';
 export * from './section';
 export * from './shimmer-text';
 export * from './slider';

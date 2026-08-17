@@ -63,6 +63,20 @@ Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontS
 `resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
 variables, MessageList geometry, and settings previews on the same three-step scale.
 
+`ScrollToBottomButton` is a localized floating control for scrollable surfaces with a measured
+bottom accessory. It owns the CherryUI surface, position, and visibility motion; the caller owns
+the at-bottom state and the one-shot scroll action:
+
+```tsx
+<ScrollToBottomButton
+  accessibilityLabel={t('chat.message.scrollToBottom')}
+  bottomAccessoryHeight={composerHeight}
+  gap={5}
+  isAtBottom={isAtBottom}
+  onPress={scrollToBottom}
+/>;
+```
+
 `Alert` is the shared native dialog primitive. Mount one provider at the application root and
 inject localized default action labels there; feature code can then enqueue informational,
 confirmation, and prompt dialogs through `useAlert()` without owning dialog rendering:

@@ -1,8 +1,9 @@
-import { ScrollShadow } from '@cherrystudio/ui/components';
+import { ScrollShadow, ScrollToBottomButton } from '@cherrystudio/ui/components';
 import { resolveTypographyScale } from '@cherrystudio/ui/utils';
 import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list/keyboard';
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
 import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
@@ -18,7 +19,6 @@ import {
   scrollLog,
   useLayoutBenchInstrumentation,
 } from './hooks/useLayoutBenchInstrumentation';
-import { ScrollToBottomButton } from './ScrollToBottomButton';
 
 // 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
 const ANCHOR_TOP_GAP = 12;
@@ -93,6 +93,7 @@ export function MessageList({
   onReady,
   renderAssistantMessage,
 }: MessageListProps) {
+  const { t } = useTranslation();
   const listRef = useRef<LegendListRef | null>(null);
   const isAtBottom = useSharedValue(true);
   const [isAtBottomForButton, setIsAtBottomForButton] = useState(true);
@@ -311,8 +312,9 @@ export function MessageList({
         </ScrollShadow>
         {bottomAccessoryHeight && messages.length > 0 ? (
           <ScrollToBottomButton
+            accessibilityLabel={t('chat.message.scrollToBottom')}
+            bottomAccessoryHeight={bottomAccessoryHeight}
             gap={SCROLL_BUTTON_GAP_ABOVE_ACCESSORY}
-            inputHeight={bottomAccessoryHeight}
             isAtBottom={isAtBottomForButton}
             onPress={handleScrollToEnd}
           />

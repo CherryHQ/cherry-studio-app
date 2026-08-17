@@ -1,19 +1,27 @@
 import { ArrowDownIcon } from '@cherrystudio/app-icons';
-import { Surface } from '@cherrystudio/ui/components';
-import { duration, easing } from '@cherrystudio/ui/motion';
 import { Pressable, StyleSheet } from 'react-native';
-import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import Animated, { type SharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';
 
-import type { ScrollToBottomButtonProps } from './types';
+import { duration, easing } from '../../../motion';
+import { Surface } from '../../surface';
 
 const BUTTON_SIZE = 40;
 const SURFACE_CLASS_NAME = 'border border-border bg-secondary';
 const visibilityMotion = { duration: duration.fast, easing: easing.settle } as const;
 
+export type ScrollToBottomButtonProps = {
+  accessibilityLabel: string;
+  bottomAccessoryHeight: SharedValue<number>;
+  gap: number;
+  isAtBottom: boolean;
+  onPress: () => void;
+};
+
 export function ScrollToBottomButton({
+  accessibilityLabel,
+  bottomAccessoryHeight,
   gap,
-  inputHeight,
   isAtBottom,
   onPress,
 }: ScrollToBottomButtonProps) {
@@ -25,7 +33,7 @@ export function ScrollToBottomButton({
     { borderColor: surfaceTokens.borderColor, borderWidth: surfaceTokens.borderWidth },
   ];
 
-  const wrapStyle = useAnimatedStyle(() => ({ bottom: inputHeight.get() + gap }));
+  const wrapStyle = useAnimatedStyle(() => ({ bottom: bottomAccessoryHeight.get() + gap }));
   const containerStyle = useAnimatedStyle(
     () => ({ transform: [{ scale: withTiming(isAtBottom ? 0.8 : 1, visibilityMotion) }] }),
     [isAtBottom],
@@ -38,7 +46,7 @@ export function ScrollToBottomButton({
         style={[containerStyle, { opacity: isAtBottom ? 0 : 1 }]}
       >
         <Pressable
-          accessibilityLabel="滚动到底部"
+          accessibilityLabel={accessibilityLabel}
           accessibilityRole="button"
           className="rounded-full shadow-sm active:opacity-60"
           hitSlop={8}

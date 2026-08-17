@@ -127,6 +127,7 @@
   "chat.media.file": "File",
   "chat.media.fileUnavailable": "{{name}} is unavailable",
   "chat.media.unavailable": "Unavailable",
+  "chat.message.scrollToBottom": "Scroll to bottom",
   "chat.media.photos": "Photos",
   "chat.model.select": "Select model",
   "chat.newTopic.description": "Choose an assistant and model, then start chatting.",

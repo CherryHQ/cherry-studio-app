@@ -2,7 +2,7 @@
 
 This module owns the shared presentation of structured user and assistant messages. Chat and
 painting provide domain state and composer layout; this module renders the virtualized message
-history, message rows and parts, live-turn anchoring, entry motion, and scroll-to-bottom control.
+history, message rows and parts, live-turn anchoring, and entry motion.
 
 ## Public Interface
 
@@ -37,9 +37,9 @@ persistence entities, composer state, and tool-approval orchestration remain wit
 ## List Behavior
 
 `MessageList` owns its `LegendList` ref, role-based recycling types, latest-user anchor derivation,
-keyboard lift, at-bottom shared value, entry-animation provider, and optional scroll-to-bottom
-button. Callers provide stable presentation item references and only the layout insets and
-callbacks they own.
+keyboard lift, at-bottom shared value, entry-animation provider, and the business wiring for the
+optional CherryUI scroll-to-bottom button. Callers provide stable presentation item references and
+only the layout insets and callbacks they own.
 
 The latest user message is anchored below the content header. Text anchors use a two-line height
 cap; messages containing files use their full measured height. Initial topic entry and sending a

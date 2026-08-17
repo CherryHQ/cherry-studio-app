@@ -1,14 +1,14 @@
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { ScrollToBottomButton } from '../ScrollToBottomButton';
+import { ScrollToBottomButton } from '../components/scroll-to-bottom-button';
 
-jest.mock('@cherrystudio/ui/motion', () => ({
+jest.mock('../../../motion', () => ({
   duration: { fast: 160 },
   easing: { settle: 'settle' },
 }));
 
-jest.mock('@cherrystudio/ui/components', () => {
+jest.mock('../../surface', () => {
   const React = jest.requireActual('react');
 
   return {
@@ -60,14 +60,15 @@ describe('ScrollToBottomButton', () => {
     renderer = undefined;
   });
 
-  it('uses the Cherry UI surface and preserves the button interaction', () => {
+  it('positions above the accessory and preserves the visible button interaction', () => {
     const onPress = jest.fn();
 
     act(() => {
       renderer = create(
         <ScrollToBottomButton
+          accessibilityLabel="Scroll to bottom"
+          bottomAccessoryHeight={sharedValue(72)}
           gap={8}
-          inputHeight={sharedValue(72)}
           isAtBottom={false}
           onPress={onPress}
         />,
@@ -86,44 +87,42 @@ describe('ScrollToBottomButton', () => {
     });
 
     const animatedViews = renderer!.root.findAllByType('AnimatedView');
+    expect(animatedViews[0].props.style).toEqual([
+      { alignItems: 'center', left: 0, position: 'absolute', right: 0 },
+      { bottom: 80 },
+    ]);
     expect(animatedViews[1].props).toMatchObject({
       pointerEvents: 'auto',
       style: [{ transform: [{ scale: 1 }] }, { opacity: 1 }],
     });
 
-    const button = renderer!.root.findByProps({ accessibilityLabel: '滚动到底部' });
+    const button = renderer!.root.findByType('View');
     expect(button.props).toMatchObject({
-      accessibilityLabel: '滚动到底部',
+      accessibilityLabel: 'Scroll to bottom',
       accessibilityRole: 'button',
       hitSlop: 8,
     });
 
-    act(() => button.props.onPress());
+    act(() => button.props.onClick({}));
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
 
+  it('hides and disables the button at the bottom', () => {
     act(() => {
-      renderer?.update(
-        <ScrollToBottomButton gap={8} inputHeight={sharedValue(72)} isAtBottom onPress={onPress} />,
-      );
-    });
-    expect(renderer!.root.findAllByType('AnimatedView')[1].props).toMatchObject({
-      pointerEvents: 'none',
-      style: [{ transform: [{ scale: 0.8 }] }, { opacity: 0 }],
-    });
-
-    act(() => {
-      renderer?.update(
+      renderer = create(
         <ScrollToBottomButton
+          accessibilityLabel="Scroll to bottom"
+          bottomAccessoryHeight={sharedValue(72)}
           gap={8}
-          inputHeight={sharedValue(72)}
-          isAtBottom={false}
-          onPress={onPress}
+          isAtBottom
+          onPress={jest.fn()}
         />,
       );
     });
+
     expect(renderer!.root.findAllByType('AnimatedView')[1].props).toMatchObject({
-      pointerEvents: 'auto',
-      style: [{ transform: [{ scale: 1 }] }, { opacity: 1 }],
+      pointerEvents: 'none',
+      style: [{ transform: [{ scale: 0.8 }] }, { opacity: 0 }],
     });
   });
 });

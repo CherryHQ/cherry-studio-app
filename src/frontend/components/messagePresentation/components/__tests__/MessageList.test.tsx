@@ -77,7 +77,9 @@ const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }
 let mockSlideInFlight: MessageSlideInFlight | undefined;
 let mockScrollButtonProps:
   | {
-      inputHeight: SharedValue<number>;
+      accessibilityLabel: string;
+      bottomAccessoryHeight: SharedValue<number>;
+      gap: number;
       isAtBottom: boolean;
       onPress: () => void;
     }
@@ -128,7 +130,21 @@ jest.mock('@legendapp/list/keyboard', () => {
 });
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  ScrollToBottomButton: (props: {
+    accessibilityLabel: string;
+    bottomAccessoryHeight: SharedValue<number>;
+    gap: number;
+    isAtBottom: boolean;
+    onPress: () => void;
+  }) => {
+    mockScrollButtonProps = props;
+    return null;
+  },
   ScrollShadow: ({ children }: { children: ReactNode }) => children,
+}));
+
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => `translated:${key}` }),
 }));
 
 jest.mock('@/frontend/data/hooks', () => ({
@@ -189,17 +205,6 @@ jest.mock('../../messageRow', () => ({
     return children;
   },
   UserMessageRow: (props: { message: MessagePresentationItem }) => mockUserMessageRow(props),
-}));
-
-jest.mock('../ScrollToBottomButton', () => ({
-  ScrollToBottomButton: (props: {
-    inputHeight: SharedValue<number>;
-    isAtBottom: boolean;
-    onPress: () => void;
-  }) => {
-    mockScrollButtonProps = props;
-    return null;
-  },
 }));
 
 function createMessage(
@@ -416,7 +421,11 @@ describe('MessageList anchoring and manual scrolling', () => {
     });
 
     expect(mockSlideInFlight?.activeMessageId.get()).toBe('user-1');
-    expect(mockScrollButtonProps?.inputHeight).toBe(bottomAccessoryHeight);
+    expect(mockScrollButtonProps).toMatchObject({
+      accessibilityLabel: 'translated:chat.message.scrollToBottom',
+      bottomAccessoryHeight,
+      gap: 5,
+    });
 
     // 停在底部时隐藏。
     expect(mockScrollButtonProps?.isAtBottom).toBe(true);

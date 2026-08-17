@@ -126,6 +126,7 @@
   "chat.media.file": "文件",
   "chat.media.fileUnavailable": "{{name}} 不可用",
   "chat.media.unavailable": "不可用",
+  "chat.message.scrollToBottom": "滚动到底部",
   "chat.media.photos": "照片",
   "chat.model.select": "选择模型",
   "chat.newTopic.description": "选择助手和模型后开始对话。",
