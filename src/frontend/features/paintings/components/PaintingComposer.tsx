@@ -1,3 +1,4 @@
+import { Composer, useComposerDockLayout } from '@cherrystudio/ui/components';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import * as Crypto from 'expo-crypto';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -5,11 +6,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import {
-  ComposerDock,
-  ManagedComposerProvider,
-  useComposerDockLayout,
-} from '@/frontend/components/composer';
+import { ManagedComposerProvider } from '@/frontend/components/composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
 import {
   MessageList,
@@ -178,7 +175,7 @@ export function PaintingComposer({
         initialDraft={composerInitialDraft}
         key={composerKey}
       >
-        <ComposerDock onHeightChange={handleInputHeightChange}>
+        <Composer.Dock onHeightChange={handleInputHeightChange}>
           <PaintingInput
             initialParamValues={initialParamValues}
             onCancel={generation.cancel}
@@ -186,7 +183,7 @@ export function PaintingComposer({
             painting={painting}
             status={generation.status}
           />
-        </ComposerDock>
+        </Composer.Dock>
       </ManagedComposerProvider>
     </View>
   );

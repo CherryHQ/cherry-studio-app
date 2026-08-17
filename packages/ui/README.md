@@ -240,6 +240,20 @@ callers never need grouping views. `Composer.Action` is the button shell every t
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
 
+`Composer.Dock` floats a composed input above screen content, applies horizontal and safe-area
+insets, follows the keyboard, and reports its measured height. Pair it with
+`useComposerDockLayout()` when content above the dock needs the reserved inset, keyboard offset, or
+shared live height used by another floating control:
+
+```tsx
+const dock = useComposerDockLayout();
+
+<MessageList contentBottomInset={dock.contentBottomInset} />;
+<Composer.Dock onHeightChange={dock.handleInputHeightChange}>
+  <ComposerSurface />
+</Composer.Dock>;
+```
+
 `Composer.Pill` is its wide sibling, for a tool that has to say what it is *set to* rather than only
 what it does — the model in use, a mode. Same height and material, but sized to its label, and it is
 the one thing in the row that can be arbitrarily wide, so it is also the one thing that gives: it

@@ -1,6 +1,6 @@
 import { createContext, use } from 'react';
 
-import type { ComposerLabels } from './composer.types';
+import type { ComposerLabels } from '../composer.types';
 
 export type ComposerStateContextValue = {
   canSend: boolean;

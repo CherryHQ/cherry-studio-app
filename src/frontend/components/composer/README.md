@@ -54,10 +54,9 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   picker or settings surface that replaces the input context. The model pill
   does this itself; caller-owned buttons decide whether their overlay should
   dismiss or preserve the live input.
-- `ComposerDock` / `useComposerDockLayout` — floating the composer at the bottom
+- `Composer.Dock` / `useComposerDockLayout` from CherryUI — floating the composer at the bottom
   of a screen, and what the content above it reserves.
-- `utils/composerAttachments` and `utils/composerLayout` are deep-imported on
-  purpose (see `index.ts`).
+- `utils/composerAttachments` is deep-imported on purpose (see `index.ts`).
 
 ## What is deliberately *not* pluggable
 
@@ -86,13 +85,10 @@ walk to verify it.
 - `components/ManagedComposerProvider.tsx` and
   `hooks/useManagedComposerAttachments.ts`: import transient picker results into
   managed file entries before exposing them to Chat or Painting.
-- `components/ComposerDock.tsx` + `hooks/useComposerDockLayout.ts`: the docking
-  geometry, split because one half is per-frame and the other is not.
 - `context/ComposerProvider.tsx`: draft, attachments, field ref — split into
   three contexts so dispatch-only components skip keystroke re-renders.
 - `utils/composerAttachments.ts`: attachment drafts and the message parts they
   turn into, with tests.
-- `utils/composerLayout.ts`: the shared geometry constants.
 
 ## Behavior notes
 

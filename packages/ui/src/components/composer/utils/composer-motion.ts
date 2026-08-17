@@ -3,7 +3,7 @@
 // speeds reads as broken rather than as customisable, and that is only
 // enforceable if they share a definition.
 
-import { duration, easing } from '../../motion';
+import { duration, easing } from '../../../motion';
 
 // Anything that changes the composer's size.
 export const settleMotion = { duration: duration.base, easing: easing.settle } as const;

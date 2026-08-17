@@ -106,6 +106,7 @@
     "react": "*",
     "react-native": "*",
     "react-native-enriched-markdown": "*",
+    "react-native-keyboard-controller": "*",
     "react-native-nitro-modules": "*",
     "react-native-reanimated": "*",
     "react-native-safe-area-context": "*",

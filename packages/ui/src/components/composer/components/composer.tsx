@@ -1,22 +1,23 @@
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
-import { Surface } from '../surface';
-import { ComposerAction } from './components/composer-action';
-import { ComposerCollapsible } from './components/composer-collapsible';
-import { ComposerInput } from './components/composer-input';
-import { ComposerPill } from './components/composer-pill';
-import { ComposerSend } from './components/composer-send';
-import { ComposerToolbar } from './components/composer-toolbar';
-import { MorphMenu } from './components/morph-menu';
+import { Surface } from '../../surface';
+import type { ComposerLabels, ComposerProps } from '../composer.types';
 import {
   ComposerActionsContext,
   type ComposerActionsContextValue,
   ComposerStateContext,
   type ComposerStateContextValue,
-} from './composer.context';
-import { surfaceRadius, surfaceStyle } from './composer.layout';
-import type { ComposerLabels, ComposerProps } from './composer.types';
+} from '../hooks/use-composer-context';
+import { surfaceRadius, surfaceStyle } from '../utils/composer-layout';
+import { ComposerAction } from './composer-action';
+import { ComposerCollapsible } from './composer-collapsible';
+import { ComposerDock } from './composer-dock';
+import { ComposerInput } from './composer-input';
+import { ComposerPill } from './composer-pill';
+import { ComposerSend } from './composer-send';
+import { ComposerToolbar } from './composer-toolbar';
+import { MorphMenu } from './morph-menu';
 
 const defaultLabels: ComposerLabels = {
   send: 'Send message',
@@ -105,6 +106,7 @@ ComposerRoot.displayName = 'Composer';
 export const Composer = Object.assign(ComposerRoot, {
   Action: ComposerAction,
   Collapsible: ComposerCollapsible,
+  Dock: ComposerDock,
   Input: ComposerInput,
   Menu: MorphMenu,
   Pill: ComposerPill,

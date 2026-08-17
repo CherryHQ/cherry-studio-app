@@ -1,8 +1,8 @@
 import { ArrowUpIcon, SquareIcon } from '@cherrystudio/app-icons';
 
 import { cn } from '../../../utils';
-import { useComposerActions, useComposerState } from '../composer.context';
 import type { ComposerSendProps } from '../composer.types';
+import { useComposerActions, useComposerState } from '../hooks/use-composer-context';
 import { ComposerAction } from './composer-action';
 
 // Pins itself right, so tools written before it in the toolbar pack left and

@@ -28,7 +28,7 @@ const pillGap = 6;
 // clipped glyph row is what tells the reader the field scrolls.
 const maxTextHeight = 132;
 // Symmetric on purpose: asymmetric padding would only trade the glyphs'
-// centering for the caret's. See `composerTextStyle.ios`.
+// centering for the caret's. See `composer-text-style.ios`.
 const textPaddingVertical = 4;
 // The circle is well under the 44pt minimum on its own, so the rest of the
 // target comes from slop rather than from a bigger shape.

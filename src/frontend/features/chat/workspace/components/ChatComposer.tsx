@@ -1,4 +1,6 @@
-import { ComposerDock, ManagedComposerProvider } from '@/frontend/components/composer';
+import { Composer } from '@cherrystudio/ui/components';
+
+import { ManagedComposerProvider } from '@/frontend/components/composer';
 
 import { ChatInput } from '../../input';
 
@@ -24,13 +26,13 @@ export function ChatComposer({
 }: ChatComposerProps) {
   return (
     <ManagedComposerProvider>
-      <ComposerDock onHeightChange={onHeightChange}>
+      <Composer.Dock onHeightChange={onHeightChange}>
         <ChatInput
           assistantId={assistantId}
           dismissKeyboardOnSend={dismissKeyboardOnSend}
           topicId={topicId}
         />
-      </ComposerDock>
+      </Composer.Dock>
     </ManagedComposerProvider>
   );
 }

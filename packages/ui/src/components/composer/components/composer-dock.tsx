@@ -7,26 +7,14 @@ import {
   composerHorizontalScreenInset,
   composerMinBottomPadding,
   getComposerKeyboardStickyOffset,
-} from '../utils/composerLayout';
+} from '../utils/composer-dock-layout';
 
-type ComposerDockProps = PropsWithChildren<{
+export type ComposerDockProps = PropsWithChildren<{
   containerRef?: RefObject<View | null>;
-  /**
-   * The dock's measured height, which is what the list above it reserves. See
-   * `useComposerDockLayout` for why the two arrive separately.
-   */
   onHeightChange: (height: number) => void;
   onLayout?: (event: LayoutChangeEvent) => void;
 }>;
 
-/**
- * Floats a composer at the bottom of a screen: pinned over the content, inset
- * from the screen edges, riding the keyboard, and reporting its own height.
- *
- * Chat and painting both dock an input this way, and neither owns the geometry
- * — it comes from `composerLayout`, so the two stay aligned to the pixel by
- * construction rather than by two files agreeing.
- */
 export function ComposerDock({
   children,
   containerRef,

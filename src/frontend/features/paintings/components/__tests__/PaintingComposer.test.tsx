@@ -115,11 +115,9 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('@/frontend/utils/constants', () => ({ isIOS: false }));
 
-jest.mock('@/frontend/components/composer', () => ({
-  ComposerDock: ({ children }: { children: React.ReactNode }) => children,
-  ManagedComposerProvider: ({ children, ...props }: { children: React.ReactNode }) => {
-    mockProviderProps = props;
-    return children;
+jest.mock('@cherrystudio/ui/components', () => ({
+  Composer: {
+    Dock: ({ children }: { children: React.ReactNode }) => children,
   },
   useComposerDockLayout: () => ({
     contentBottomInset: 88,
@@ -127,6 +125,13 @@ jest.mock('@/frontend/components/composer', () => ({
     inputHeightShared: { value: 88 },
     keyboardOffset: 26,
   }),
+}));
+
+jest.mock('@/frontend/components/composer', () => ({
+  ManagedComposerProvider: ({ children, ...props }: { children: React.ReactNode }) => {
+    mockProviderProps = props;
+    return children;
+  },
 }));
 
 jest.mock('@/frontend/components/messagePresentation', () => ({

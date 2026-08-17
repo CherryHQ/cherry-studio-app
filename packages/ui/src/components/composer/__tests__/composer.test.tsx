@@ -2,7 +2,7 @@ import { createRef } from 'react';
 import { Text, TextInput, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Composer } from '../composer';
+import { Composer } from '../components/composer';
 import type { ComposerInputHandle, ComposerProps } from '../composer.types';
 
 jest.mock('heroui-native/utils', () => {

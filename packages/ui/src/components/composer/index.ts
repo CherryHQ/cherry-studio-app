@@ -1,4 +1,5 @@
-export { Composer } from './composer';
+export { Composer } from './components/composer';
+export type { ComposerDockProps } from './components/composer-dock';
 export { useComposerMenu } from './components/morph-menu';
 export type {
   MorphMenuItemProps,
@@ -16,3 +17,4 @@ export type {
   ComposerSendProps,
   ComposerToolbarProps,
 } from './composer.types';
+export { useComposerDockLayout } from './hooks/use-composer-dock-layout';
