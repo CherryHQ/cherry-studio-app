@@ -11,6 +11,7 @@ import {
   createPhotoAttachmentDraft,
   hasComposerSendableContent,
   hasImportingComposerAttachments,
+  isComposerAttachmentSupported,
   isComposerAttachmentReady,
   isComposerImageFileName,
   isComposerImageMediaType,
@@ -107,7 +108,25 @@ describe('composer attachments', () => {
         name: 'photo.webp',
         uri: 'file://photo.webp',
       }),
-    ).toMatchObject({ kind: 'image', mediaType: 'image/*' });
+    ).toMatchObject({ kind: 'image', mediaType: 'image/webp' });
+  });
+
+  test('allows only model-supported image attachment formats', () => {
+    expect(
+      isComposerAttachmentSupported(
+        createPhotoAttachmentDraft({ fileName: 'photo.jpg', id: 'jpg', uri: 'file://photo.jpg' }),
+      ),
+    ).toBe(true);
+    expect(
+      isComposerAttachmentSupported(
+        createDocumentAttachmentDraft({
+          lastModified: 0,
+          mimeType: 'image/heic',
+          name: 'photo.heic',
+          uri: 'file://photo.heic',
+        }),
+      ),
+    ).toBe(false);
   });
 
   test('classifies non-image documents as file attachments', () => {

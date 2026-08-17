@@ -116,6 +116,7 @@
   "chat.attachments.image": "Image attachment",
   "chat.attachments.importFailed_one": "Could not add {{count}} attachment.",
   "chat.attachments.importFailed_other": "Could not add {{count}} attachments.",
+  "chat.attachments.unsupportedImageFormat": "Only JPEG, PNG, GIF, and WebP images are supported.",
   "chat.default.description": "Hello, I'm Default Assistant. You can start chatting with me right away",
   "chat.default.name": "Default Assistant",
   "chat.default.topic.name": "Default Topic",

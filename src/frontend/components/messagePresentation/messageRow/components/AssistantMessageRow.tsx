@@ -1,4 +1,4 @@
-import { PrismSweep } from '@cherrystudio/ui/components';
+import { DotMatrixSquare20 } from '@cherrystudio/ui/components';
 import { memo } from 'react';
 import Animated from 'react-native-reanimated';
 
@@ -24,7 +24,7 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
     // 这一行不含文字，所以要自己撑到一行正文的高度——否则只有 20px 的圆点撑高，比接下来
     // 顶替它的思考行/工具行/正文矮 4px，切换那一帧整条消息在锚点正下方跳一下（48→52）。
     <MessageStatusRow>
-      <PrismSweep active />
+      <DotMatrixSquare20 active size={20} />
       <StatusRowTextFloor />
     </MessageStatusRow>
   ) : (

@@ -137,6 +137,18 @@ describe('useManagedComposerAttachments', () => {
       { name: 'ready.pdf', status: 'ready' },
     ]);
   });
+
+  it('rejects unsupported images before importing them', async () => {
+    await renderHook([imageSource('initial.heic', 'image/heic')]);
+
+    await act(async () => snapshot?.addAttachments([imageSource('file.avif', 'image/avif')]));
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockCreateInternalEntry).not.toHaveBeenCalled();
+    expect(mockAlertShow).toHaveBeenCalledWith({
+      title: 'chat.attachments.unsupportedImageFormat',
+    });
+  });
 });
 
 function Probe({
@@ -163,6 +175,16 @@ function source(name: string): ComposerAttachmentSource {
     id: `source:${name}`,
     kind: 'file',
     mediaType: 'application/pdf',
+    name,
+    uri: `file:///source/${name}`,
+  };
+}
+
+function imageSource(name: string, mediaType: string): ComposerAttachmentSource {
+  return {
+    id: `image:${name}`,
+    kind: 'image',
+    mediaType,
     name,
     uri: `file:///source/${name}`,
   };
