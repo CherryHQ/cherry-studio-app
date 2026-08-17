@@ -1,9 +1,9 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { FilePreviewFrame } from '../FilePreviewFrame';
+import { FilePreviewFrame } from '../components/file-preview-frame';
 
 describe('FilePreviewFrame', () => {
-  it('clips image and document previews to continuous rounded corners', () => {
+  it('clips previews to continuous rounded corners', () => {
     let renderer: ReactTestRenderer | undefined;
 
     act(() => {

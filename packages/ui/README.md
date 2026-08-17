@@ -21,6 +21,30 @@ import { PlusIcon } from '@cherrystudio/app-icons';
 `Image` wraps `expo-image` with Uniwind `className` support while preserving the underlying image
 API.
 
+`FilePreview` renders and opens a business-neutral file descriptor. The caller supplies display
+metadata, whether the file is an image or document, localized state labels, and an error callback;
+the component owns platform rendering, loading and unavailable states, system opening, and iOS
+Quick Look thumbnail caching:
+
+```tsx
+<FilePreview
+  file={{
+    displayName: 'brief.pdf',
+    extensionLabel: 'PDF',
+    id: 'file-1',
+    kind: 'document',
+    revision: 4,
+    uri: 'file:///documents/brief.pdf',
+  }}
+  labels={{ loading: 'Loading', openWith: 'Open with', unavailable: 'Unavailable' }}
+  onError={(error, operation) => reportPreviewError(error, operation)}
+/>;
+```
+
+`onError` distinguishes `open` from `thumbnail`, allowing product code to alert for a failed open
+while treating thumbnail generation as a recoverable fallback. CherryUI carries no file database,
+logging, or translation dependency.
+
 `Alert` is the shared native dialog primitive. Mount one provider at the application root and
 inject localized default action labels there; feature code can then enqueue informational,
 confirmation, and prompt dialogs through `useAlert()` without owning dialog rendering:

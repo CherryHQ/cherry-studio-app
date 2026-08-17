@@ -9,7 +9,7 @@ import {
   View,
 } from 'react-native';
 
-import { FilePreview } from '@/frontend/components/FilePreview';
+import { FileEntryPreview } from '@/frontend/components/FileEntryPreview';
 
 import {
   type ComposerAttachmentDraft,
@@ -24,7 +24,7 @@ type ComposerAttachmentStripProps = {
 /**
  * The row of pending attachments. Sources show import progress until they have
  * a managed file entry; ready files then delegate all presentation and opening
- * behavior to FilePreview.
+ * behavior to FileEntryPreview.
  */
 export function ComposerAttachmentStrip({
   attachments,
@@ -65,7 +65,7 @@ function ManagedAttachmentTile({
 }) {
   return (
     <View accessibilityLabel={attachment.name}>
-      <FilePreview entryId={attachment.fileEntryId} />
+      <FileEntryPreview entryId={attachment.fileEntryId} />
       <RemoveBadge onPress={onRemove} />
     </View>
   );

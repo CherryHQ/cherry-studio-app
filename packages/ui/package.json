@@ -90,10 +90,12 @@
   "peerDependencies": {
     "@expo/ui": "*",
     "@legendapp/list": "*",
+    "@magrinj/expo-quick-look": "*",
     "@react-native-masked-view/masked-view": "*",
     "@shopify/react-native-skia": "*",
     "@swmansion/react-native-bottom-sheet": "*",
     "expo-blur": "*",
+    "expo-file-system": "*",
     "expo-glass-effect": "*",
     "expo-haptics": "*",
     "expo-image": "*",

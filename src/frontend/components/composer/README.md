@@ -81,7 +81,7 @@ walk to verify it.
   to the system pickers (`expo-image-picker`, `expo-document-picker`) rather
   than drawing anything in-app.
 - `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`;
-  shows import progress, then delegates ready files to `FilePreview`.
+  shows import progress, then delegates ready files to `FileEntryPreview`.
 - `components/ManagedComposerProvider.tsx` and
   `hooks/useManagedComposerAttachments.ts`: import transient picker results into
   managed file entries before exposing them to Chat or Painting.

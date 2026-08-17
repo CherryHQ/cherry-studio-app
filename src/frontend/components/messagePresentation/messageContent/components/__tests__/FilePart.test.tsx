@@ -4,15 +4,15 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { FilePart } from '../FilePart';
 
-jest.mock('@/frontend/components/FilePreview', () => {
+jest.mock('@/frontend/components/FileEntryPreview', () => {
   const { createElement } = jest.requireActual('react');
   return {
-    FilePreview: (props: object) => createElement('FilePreview', props),
+    FileEntryPreview: (props: object) => createElement('FileEntryPreview', props),
   };
 });
 
 describe('FilePart', () => {
-  test('delegates managed attachments to FilePreview', () => {
+  test('delegates managed attachments to FileEntryPreview', () => {
     const part = {
       ...filePart('application/pdf'),
       providerMetadata: {
@@ -21,7 +21,7 @@ describe('FilePart', () => {
     };
     const renderer = render(<FilePart part={part} />);
 
-    expect(renderer.root.findByType('FilePreview').props.entryId).toBe(
+    expect(renderer.root.findByType('FileEntryPreview').props.entryId).toBe(
       '00000000-0000-7000-8000-000000000001',
     );
   });

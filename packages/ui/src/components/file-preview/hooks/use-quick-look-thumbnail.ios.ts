@@ -1,16 +1,12 @@
-import type { FileEntry } from '@cherrystudio/universal/data/types/file';
 import { useEffect, useState } from 'react';
 import { PixelRatio } from 'react-native';
 
-import { loggerService } from '@/shared/core/logger/LoggerService';
-
+import type { FilePreviewFile, FilePreviewOperation } from '../file-preview.types';
 import {
   getQuickLookThumbnail,
   quickLookThumbnailCacheKey,
   type QuickLookThumbnailInput,
-} from './quickLookThumbnailCache.ios';
-
-const logger = loggerService.withContext('useQuickLookThumbnail');
+} from '../utils/quick-look-thumbnail-cache.ios';
 
 type ThumbnailState = {
   key: string;
@@ -18,23 +14,23 @@ type ThumbnailState = {
 };
 
 export function useQuickLookThumbnail({
-  entry,
+  file,
   height,
-  uri,
+  onError,
   width,
 }: {
-  entry: FileEntry;
+  file: FilePreviewFile;
   height: number;
-  uri: string;
+  onError?: (error: Error, operation: FilePreviewOperation) => void;
   width: number;
 }) {
   const scale = PixelRatio.get();
   const input: QuickLookThumbnailInput = {
-    entryId: entry.id,
     height,
+    id: file.id,
+    revision: file.revision,
     scale,
-    updatedAt: entry.updatedAt,
-    uri,
+    uri: file.uri,
     width,
   };
   const key = quickLookThumbnailCacheKey(input);
@@ -43,11 +39,11 @@ export function useQuickLookThumbnail({
   useEffect(() => {
     let active = true;
     void getQuickLookThumbnail({
-      entryId: entry.id,
       height,
+      id: file.id,
+      revision: file.revision,
       scale,
-      updatedAt: entry.updatedAt,
-      uri,
+      uri: file.uri,
       width,
     })
       .then((thumbnailUri) => {
@@ -56,14 +52,12 @@ export function useQuickLookThumbnail({
         }
       })
       .catch((error) => {
-        logger.warn('Failed to generate Quick Look thumbnail', toError(error), {
-          entryId: entry.id,
-        });
+        onError?.(toError(error), 'thumbnail');
       });
     return () => {
       active = false;
     };
-  }, [entry.id, entry.updatedAt, height, key, scale, uri, width]);
+  }, [file.id, file.revision, file.uri, height, key, onError, scale, width]);
 
   return thumbnail.key === key ? thumbnail.uri : undefined;
 }

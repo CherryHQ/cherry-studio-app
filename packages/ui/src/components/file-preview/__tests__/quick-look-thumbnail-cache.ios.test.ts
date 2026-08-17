@@ -1,12 +1,10 @@
-import type { QuickLookThumbnailInput } from '../quickLookThumbnailCache.ios';
+import type { QuickLookThumbnailInput } from '../utils/quick-look-thumbnail-cache.ios';
 
 const mockGenerateThumbnail = jest.fn();
 
 jest.mock('@magrinj/expo-quick-look', () => ({
   __esModule: true,
-  default: {
-    generateThumbnail: (input: unknown) => mockGenerateThumbnail(input),
-  },
+  default: { generateThumbnail: (input: unknown) => mockGenerateThumbnail(input) },
 }));
 
 jest.mock('expo-file-system', () => {
@@ -66,17 +64,17 @@ jest.mock('expo-file-system', () => {
 });
 
 const { getQuickLookThumbnail, quickLookThumbnailCacheKey } = jest.requireActual<
-  typeof import('../quickLookThumbnailCache.ios')
->('../quickLookThumbnailCache.ios');
+  typeof import('../utils/quick-look-thumbnail-cache.ios')
+>('../utils/quick-look-thumbnail-cache.ios');
 const { testState } = jest.requireMock<{
   testState: { directories: Set<string>; files: Set<string> };
 }>('expo-file-system');
 
 const input: QuickLookThumbnailInput = {
-  entryId: '00000000-0000-7000-8000-000000000001',
   height: 52,
+  id: 'managed/file:1',
+  revision: 42,
   scale: 3,
-  updatedAt: 42,
   uri: 'file:///documents/brief.pdf',
   width: 112,
 };
@@ -90,11 +88,7 @@ describe('Quick Look thumbnail cache', () => {
 
   it('coalesces generation and reuses the deterministic disk cache', async () => {
     testState.files.add('file:///tmp/generated.png');
-    mockGenerateThumbnail.mockResolvedValue({
-      height: 156,
-      uri: 'file:///tmp/generated.png',
-      width: 336,
-    });
+    mockGenerateThumbnail.mockResolvedValue({ uri: 'file:///tmp/generated.png' });
 
     const [first, second] = await Promise.all([
       getQuickLookThumbnail(input),
@@ -112,12 +106,11 @@ describe('Quick Look thumbnail cache', () => {
     expect(mockGenerateThumbnail).toHaveBeenCalledTimes(1);
   });
 
-  it('changes keys when the file version or requested size changes', () => {
-    expect(quickLookThumbnailCacheKey(input)).not.toBe(
-      quickLookThumbnailCacheKey({ ...input, updatedAt: input.updatedAt + 1 }),
-    );
-    expect(quickLookThumbnailCacheKey(input)).not.toBe(
-      quickLookThumbnailCacheKey({ ...input, width: 160 }),
-    );
+  it('uses filename-safe identity and changes with revision or size', () => {
+    const key = quickLookThumbnailCacheKey(input);
+
+    expect(key).not.toContain('/');
+    expect(key).not.toBe(quickLookThumbnailCacheKey({ ...input, revision: 43 }));
+    expect(key).not.toBe(quickLookThumbnailCacheKey({ ...input, width: 160 }));
   });
 });

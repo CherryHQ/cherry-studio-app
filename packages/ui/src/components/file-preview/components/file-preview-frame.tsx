@@ -3,21 +3,19 @@ import { Pressable } from 'react-native-gesture-handler';
 
 const frameRadius = 16;
 
-type FilePreviewFrameProps = {
-  accessibilityLabel: string;
-  children: ReactNode;
-  disabled?: boolean;
-  onPress: () => void;
-  size: number;
-};
-
 export function FilePreviewFrame({
   accessibilityLabel,
   children,
   disabled,
   onPress,
   size,
-}: FilePreviewFrameProps) {
+}: {
+  accessibilityLabel: string;
+  children: ReactNode;
+  disabled?: boolean;
+  onPress: () => void;
+  size: number;
+}) {
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
