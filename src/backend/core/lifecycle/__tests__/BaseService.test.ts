@@ -277,6 +277,93 @@ describe('BaseService activation', () => {
     expect(service.isActivated).toBe(false);
   });
 
+  it('waits for an in-progress activation and deactivates it before stopping', async () => {
+    let finishActivation!: () => void;
+    let markActivationStarted!: () => void;
+    const activationStarted = new Promise<void>((resolve) => {
+      markActivationStarted = resolve;
+    });
+    const activationGate = new Promise<void>((resolve) => {
+      finishActivation = resolve;
+    });
+
+    @Injectable('SlowActivation')
+    class SlowActivation extends BaseService implements Activatable {
+      readonly calls: string[] = [];
+
+      async onActivate(): Promise<void> {
+        this.calls.push('activate:start');
+        markActivationStarted();
+        await activationGate;
+        this.calls.push('activate:end');
+      }
+
+      onDeactivate(): void {
+        this.calls.push('deactivate');
+      }
+
+      protected onStop(): void {
+        this.calls.push('stop');
+      }
+    }
+
+    const service = new SlowActivation();
+    await service._doInit();
+    const activation = service._doActivate();
+    await activationStarted;
+
+    let stopSettled = false;
+    const stopping = service._doStop().then(() => {
+      stopSettled = true;
+    });
+    await Promise.resolve();
+    expect(stopSettled).toBe(false);
+
+    finishActivation();
+    await Promise.all([activation, stopping]);
+
+    expect(service.calls).toEqual(['activate:start', 'activate:end', 'deactivate', 'stop']);
+    expect(service.isActivated).toBe(false);
+  });
+
+  it('does not re-enter deactivation when a change arrives during stop', async () => {
+    let finishDeactivation!: () => void;
+    let markDeactivationStarted!: () => void;
+    const deactivationStarted = new Promise<void>((resolve) => {
+      markDeactivationStarted = resolve;
+    });
+    const deactivationGate = new Promise<void>((resolve) => {
+      finishDeactivation = resolve;
+    });
+
+    @Injectable('SlowDeactivation')
+    class SlowDeactivation extends BaseService implements Activatable {
+      deactivations = 0;
+
+      onActivate(): void {}
+
+      async onDeactivate(): Promise<void> {
+        this.deactivations += 1;
+        markDeactivationStarted();
+        await deactivationGate;
+      }
+    }
+
+    const service = new SlowDeactivation();
+    await service._doInit();
+    await service._doActivate();
+
+    const stopping = service._doStop();
+    await deactivationStarted;
+    const lateDeactivation = service._doDeactivate();
+    await Promise.resolve();
+
+    expect(service.deactivations).toBe(1);
+    finishDeactivation();
+    await Promise.all([stopping, lateDeactivation]);
+    expect(service.deactivations).toBe(1);
+  });
+
   it('reports false for a service that is not activatable', async () => {
     const service = new Recorder();
     await service._doInit();

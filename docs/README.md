@@ -30,6 +30,7 @@ They are the source of truth for how the repository works today.
 | [Runtime Ownership](./references/runtime-ownership.md) | Bootstrap, app runtimes, caller-owned sessions, cleanup, and post-ready work |
 | [Universal Package](./references/universal-package.md) | `@cherrystudio/universal` scope, admission criteria, aliasing, and desktop sync |
 | [Navigation And Insets](./references/navigation-and-insets.md) | Router structure, native gestures, sheets, safe areas, and edge-to-edge layout |
+| [Splash Screen And Startup Animation](./references/splash-screen-and-startup-animation.md) | Native launch constraints, animated handoff, and onboarding boundaries |
 | [UI Components](./references/ui-components.md) | Interaction component ownership and platform enhancement rules |
 | [Expo UI Bottom Sheet Navigation](./references/expo-ui-bottom-sheet-navigation.md) | Sheet page transitions, physical stacking, and platform constraints |
 | [Design Spec](../DESIGN.md) | Visual decisions: token sourcing, contrast, type scale, hierarchy, and the literal-colour exemptions |

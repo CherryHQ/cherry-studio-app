@@ -1,5 +1,10 @@
 import { serviceList, services } from '@/backend/core/application/serviceRegistry';
-import { getDependencies, getServiceName, isInjectable } from '@/backend/core/lifecycle/decorators';
+import {
+  getAppStatePolicy,
+  getDependencies,
+  getServiceName,
+  isInjectable,
+} from '@/backend/core/lifecycle/decorators';
 import { DependencyResolver } from '@/backend/core/lifecycle/DependencyResolver';
 import { ServiceContainer } from '@/backend/core/lifecycle/ServiceContainer';
 import { Phase, type ServiceConstructor } from '@/backend/core/lifecycle/types';
@@ -81,5 +86,13 @@ describe('service registry', () => {
     expect(layerOf('CacheService')).toBeGreaterThanOrEqual(0);
     expect(layerOf('CacheService')).toBeLessThan(layerOf('DbService'));
     expect(layerOf('DbService')).toBeLessThan(layerOf('PreferenceService'));
+  });
+
+  test('declares the background policy of long-running and native-surface owners', () => {
+    expect(getAppStatePolicy(services.ChatRuntime)).toBe('continue');
+    expect(getAppStatePolicy(services.JobRuntime)).toBe('continue');
+    expect(getAppStatePolicy(services.BackgroundReplyRuntime)).toBe('background-presentation');
+    expect(getAppStatePolicy(services.BackgroundActivityManager)).toBe('background-presentation');
+    expect(getAppStatePolicy(services.KeepAliveCoordinator)).toBe('background-presentation');
   });
 });

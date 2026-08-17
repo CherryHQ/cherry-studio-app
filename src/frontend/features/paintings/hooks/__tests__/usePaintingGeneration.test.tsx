@@ -151,6 +151,7 @@ const request = {
   ],
   mode: 'generate' as const,
   modelId: 'provider::gpt-image-2' as const,
+  modelName: 'GPT Image 2',
   paramValues: {},
   prompt: 'draw a cherry',
 };
@@ -213,6 +214,7 @@ describe('usePaintingGeneration', () => {
       ],
       mode: 'generate',
       modelId: 'provider::gpt-image-2',
+      modelName: 'GPT Image 2',
       paramValues: {},
       prompt: 'draw a cherry',
     });

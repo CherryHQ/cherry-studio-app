@@ -26,6 +26,33 @@ the matching icon-only padding when no label is provided. Icon-only buttons must
 `accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
 need an Expo UI `Host`.
 
+`Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
+surfaces: the background is the lightest, the border is stronger, and the label has the highest
+contrast. Selected chips strengthen the neutral background and border without introducing another
+accent color. The semantic tokens adapt this hierarchy to light and dark themes.
+
+```tsx
+import { Chip } from '@cherrystudio/ui/components';
+
+<Chip.Removable
+  onRemove={removeSearch}
+  removeAccessibilityLabel="Remove Web search"
+>
+  Web search
+</Chip.Removable>;
+
+<Chip.Selectable selected={isReasoningEnabled} onSelectedChange={setIsReasoningEnabled}>
+  Reasoning
+</Chip.Selectable>;
+
+<Chip.Tag>128k context</Chip.Tag>;
+```
+
+`Chip.Removable` keeps removal on its trailing close button, `Chip.Selectable` toggles when the
+whole chip is pressed, and `Chip.Tag` is non-interactive. Selection and removal remain controlled by
+the caller. Removal labels are required so the icon-only action can be localized and announced by
+assistive technology.
+
 Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
@@ -193,10 +220,12 @@ inside the box — is what this did while the buttons were bare glyphs. Once the
 circles the circle's edge became what the eye lines up against, and a row above the field is as
 likely to be a filled pill as it is to be text.
 
-Every circular surface in here is tinted rather than left as plain glass. A `GlassView` renders
+Visible toolbar actions and pills are tinted rather than left as plain glass. A `GlassView` renders
 nothing when it sits on another one — the material has nothing behind it to refract — so an untinted
 button on the composer's own surface is invisible, not merely faint. `Composer.Action` resolves the
-tint from its `className` and hands it to both branches, which is why callers never pass one.
+tint from its `className` and hands it to both branches, which is why callers never pass one. The
+morph menu is the exception: its shared trigger/panel surface deliberately keeps the native glass
+untinted while retaining `bg-secondary` for non-glass fallbacks.
 
 Rows above the field — an attachment strip, a status line, a selected-tool tag — are placed by the
 order they are written, not by named slots, and a row that never disappears is just a `View`. What is
@@ -275,6 +304,29 @@ package's own components, and the app still has its own easings to bring across.
 
 The host app must configure Uniwind, scan `packages/ui/src`, and provide the shared semantic color
 tokens. This workspace does so in `src/frontend/styles/global.css`.
+
+## Background Activities
+
+`@cherrystudio/ui/background-activity` exposes the platform-neutral presentation model and a
+registered icon union. Callers supply title, detail, compact label, optional preview, timing, and
+one registered icon. They cannot supply children, render functions, arbitrary components, colors,
+spacing, typography, or layout overrides. Feature services keep their phase and state machines and
+map those values into this presentation model. `BackgroundActivityNativePresentation` adds the
+theme and staged-logo fields used only by the host presenter; feature contracts do not expose them.
+
+`@cherrystudio/ui/background-activity/ios` exposes the serializable `expo-widgets` renderer. It owns
+the Lock Screen and Dynamic Island layouts, colors, type, spacing, truncation, compact timer/status, logo
+placement, and SF Symbol mapping. Feature activity files only register that renderer under their
+typed activity name. Infrastructure injects the resolved theme and staged logo and stamps terminal
+time. Compact and banner surfaces show their timer when `compactLabel` is absent and replace the
+timer with that short status when present. The banner presents `title` and optional `attribution` on its first
+row, then the latest single-line `preview` with elapsed time on its second row. Overflow is truncated
+from the head so the newest content remains visible. A future Android renderer should consume the
+same presentation semantics while owning its own native layout in this package.
+
+The expanded surface repeats the title and attribution header, shows up to three lines of the latest
+`preview`, and puts elapsed time at the lower trailing edge. When `compactLabel` is present, banner
+and expanded timers both show that short status instead.
 
 ## Storybook
 

@@ -1,4 +1,4 @@
-import { GlobeIcon, ImageIcon, type AppIconProps } from '@cherrystudio/app-icons';
+import { GlobeIcon, PaintbrushIcon, type AppIconProps } from '@cherrystudio/app-icons';
 import type { ComponentType } from 'react';
 
 type ChatInputActionConfig = {
@@ -10,7 +10,7 @@ type ChatInputActionConfig = {
 
 export const chatInputActions = [
   {
-    icon: ImageIcon,
+    icon: PaintbrushIcon,
     id: 'create-image',
     tagTitleKey: 'chat.tools.createImage',
     titleKey: 'chat.actions.createImage',

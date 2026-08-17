@@ -38,6 +38,18 @@
       "import": "./src/components/index.ts",
       "default": "./src/components/index.ts"
     },
+    "./background-activity": {
+      "types": "./src/background-activity/index.ts",
+      "react-native": "./src/background-activity/index.ts",
+      "import": "./src/background-activity/index.ts",
+      "default": "./src/background-activity/index.ts"
+    },
+    "./background-activity/ios": {
+      "types": "./src/background-activity/background-activity.ios.tsx",
+      "react-native": "./src/background-activity/background-activity.ios.tsx",
+      "import": "./src/background-activity/background-activity.ios.tsx",
+      "default": "./src/background-activity/background-activity.ios.tsx"
+    },
     "./utils": {
       "types": "./src/utils/index.ts",
       "react-native": "./src/utils/index.ts",
@@ -83,9 +95,11 @@
     "expo-blur": "*",
     "expo-glass-effect": "*",
     "expo-haptics": "*",
+    "expo-image": "*",
     "expo-linear-gradient": "*",
     "expo-paste-input": "*",
     "expo-screen-corner-radius": "*",
+    "expo-widgets": "*",
     "heroui-native": "*",
     "@cherrystudio/app-icons": "workspace:*",
     "react": "*",

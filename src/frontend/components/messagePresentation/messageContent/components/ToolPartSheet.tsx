@@ -4,20 +4,23 @@ import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import type { ImageSource } from 'expo-image';
 import { type ComponentType, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  Text,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Image } from '@/frontend/components/nativePrimitives';
 
+import { MessageStatusRow } from '../../components/MessageStatusRow';
+
 const toolSheetMediumFraction = 0.6;
 const toolSheetFullFraction = 0.94;
+
+// 三档语气只改颜色，布局类完全相同。展开成「每个位置一串完整 className」时，
+// 调一次间距要同步改三份副本，而副本之间漂开是看不出来的。
+const statusToneClassName = {
+  danger: 'text-destructive',
+  default: 'text-foreground',
+  warning: 'text-warning',
+} as const;
 
 type ToolPartTriggerProps = {
   icon?: ComponentType<AppIconProps>;
@@ -40,14 +43,11 @@ export function ToolPartTrigger({
   testID,
   title,
 }: ToolPartTriggerProps) {
-  const isDanger = statusTone === 'danger';
-  const isWarning = statusTone === 'warning';
+  const toneClassName = statusToneClassName[statusTone];
 
   return (
-    <Pressable
+    <MessageStatusRow
       accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
-      accessibilityRole="button"
-      className="flex-row items-center gap-2 py-0.5 active:opacity-60"
       onPress={onPress}
       testID={testID}
     >
@@ -61,52 +61,18 @@ export function ToolPartTrigger({
           source={imageSource}
         />
       ) : (
-        <Icon
-          className={
-            isDanger
-              ? 'size-5 text-destructive'
-              : isWarning
-                ? 'size-5 text-warning'
-                : 'size-5 text-foreground'
-          }
-        />
+        <Icon className={`size-5 ${toneClassName}`} />
       )}
-      <Text
-        className={
-          isDanger
-            ? 'min-w-0 flex-1 text-destructive text-base'
-            : isWarning
-              ? 'min-w-0 flex-1 text-warning text-base'
-              : 'min-w-0 flex-1 text-foreground text-base'
-        }
-        numberOfLines={1}
-      >
+      <Text className={`min-w-0 flex-1 text-base ${toneClassName}`} numberOfLines={1}>
         {title}
       </Text>
       {statusText ? (
-        <Text
-          className={
-            isDanger
-              ? 'max-w-[38%] shrink-0 text-destructive text-base'
-              : isWarning
-                ? 'max-w-[38%] shrink-0 text-warning text-base'
-                : 'max-w-[38%] shrink-0 text-foreground text-base'
-          }
-          numberOfLines={1}
-        >
+        <Text className={`max-w-[38%] shrink-0 text-base ${toneClassName}`} numberOfLines={1}>
           {statusText}
         </Text>
       ) : null}
-      <ChevronRightIcon
-        className={
-          isDanger
-            ? 'size-4 shrink-0 text-destructive'
-            : isWarning
-              ? 'size-4 shrink-0 text-warning'
-              : 'size-4 shrink-0 text-foreground'
-        }
-      />
-    </Pressable>
+      <ChevronRightIcon className={`size-4 shrink-0 ${toneClassName}`} />
+    </MessageStatusRow>
   );
 }
 

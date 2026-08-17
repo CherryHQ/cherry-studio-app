@@ -3,7 +3,11 @@ import type { CherryMessagePart } from '@cherrystudio/universal/data/types/messa
 import { withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 
-import { imageMediaTypeFromExtension, isImageFileExtension } from '@/shared/utils/imageFileTypes';
+import {
+  imageMediaTypeFromExtension,
+  isAiSupportedImageMediaType,
+  isImageFileExtension,
+} from '@/shared/utils/imageFileTypes';
 
 export type ComposerAttachmentKind = 'file' | 'image';
 
@@ -44,7 +48,6 @@ type PhotoAttachmentInput = {
   uri: string;
 };
 
-const fallbackImageMediaType = 'image/*';
 const fallbackFileMediaType = 'application/octet-stream';
 const fallbackImageName = 'Image';
 const fallbackFileName = 'File';
@@ -127,15 +130,24 @@ export function createDocumentAttachmentDraft(
 ): ComposerAttachmentSource {
   const mediaType = asset.mimeType ?? fallbackFileMediaType;
   const isImage = isComposerImageMediaType(mediaType) || isComposerImageFileName(asset.name);
+  const extension = asset.name.trim().split('.').pop()?.toLowerCase();
+  const resolvedMediaType =
+    isImage && mediaType === fallbackFileMediaType
+      ? imageMediaTypeFromExtension(extension)
+      : mediaType;
 
   return {
     id: getFileAttachmentId(asset.uri),
     kind: isImage ? 'image' : 'file',
-    mediaType: isImage && mediaType === fallbackFileMediaType ? fallbackImageMediaType : mediaType,
+    mediaType: resolvedMediaType,
     name: asset.name || fallbackFileName,
     size: asset.size,
     uri: asset.uri,
   };
+}
+
+export function isComposerAttachmentSupported(attachment: ComposerAttachmentDraft): boolean {
+  return attachment.kind !== 'image' || isAiSupportedImageMediaType(attachment.mediaType);
 }
 
 export function getPhotoAttachmentId(photoId: string) {

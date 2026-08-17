@@ -165,7 +165,6 @@ export function PaintingComposer({
   return (
     <View className="flex-1 bg-background">
       <MessageList
-        animateFirstEnteringMessage
         bottomAccessoryHeight={inputHeightShared}
         contentBottomInset={contentBottomInset}
         contentTopInset={resolveHeaderContentInset(headerHeight)}

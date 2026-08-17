@@ -46,8 +46,8 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
   shrinks with them.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
   appended below a separator.
-- `ComposerModelPill` — the model button. `children` trail the label inside the
-  pill.
+- `ComposerModelPill` — the model button. Its `icon` is a composed `ModelPickerIcon`, and
+  `children` trail the label inside the pill.
 - `ComposerProvider` / `useComposerState` / `useComposerActions` — the draft and
   its attachments.
 - `useComposerFieldDismiss` — take the keyboard down and blur before opening a

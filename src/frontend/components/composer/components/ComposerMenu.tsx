@@ -5,7 +5,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { type PropsWithChildren, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { KeyboardController } from 'react-native-keyboard-controller';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -26,19 +25,20 @@ const logger = loggerService.withContext('ComposerMenu');
  *
  * `children` are `Composer.Menu.Item`s — chat puts its tools there; painting
  * has nothing to add, so its menu is media only.
+ *
+ * Opening it leaves the keyboard **up**. It used to take the keyboard down so
+ * the panel could grow into that space, but the panel is portalled and anchored
+ * to where the trigger was measured *before* the dismissal — so the composer
+ * dropped ~290pt while the panel stayed put, and the menu ended up floating in
+ * the middle of the screen with nothing under it. The panel grows upward out of
+ * the ＋ button and clears the keyboard on its own, so it never needed that
+ * space. Leaving the keyboard alone also means there is nothing to restore when
+ * the menu closes.
  */
 export function ComposerMenu({ children }: PropsWithChildren) {
   const { t } = useTranslation();
   const { addAttachments } = useComposerActions();
 
-  const handleOpenChange = useCallback((isOpen: boolean) => {
-    // The panel grows into the space the keyboard would occupy, so it takes the
-    // keyboard down. The field stays first responder, which is what makes iOS
-    // restore the keyboard the instant the menu closes.
-    if (isOpen) {
-      void KeyboardController.dismiss();
-    }
-  }, []);
   const openCamera = useCallback(async () => {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
 
@@ -68,6 +68,8 @@ export function ComposerMenu({ children }: PropsWithChildren) {
       allowsMultipleSelection: true,
       mediaTypes: ['images'],
       orderedSelection: true,
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
       quality: 1,
       selectionLimit: COMPOSER_PHOTO_SELECTION_LIMIT,
     });
@@ -114,11 +116,7 @@ export function ComposerMenu({ children }: PropsWithChildren) {
   }, []);
 
   return (
-    <Composer.Menu
-      accessibilityLabel={t('chat.media.attach')}
-      onOpenChange={handleOpenChange}
-      testID="composer-menu"
-    >
+    <Composer.Menu accessibilityLabel={t('chat.media.attach')} testID="composer-menu">
       <Composer.Menu.Item
         icon={<CameraIcon className="size-5 text-foreground" />}
         label={t('chat.media.camera')}

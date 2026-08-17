@@ -17,7 +17,8 @@ import {
   makeEchoHandler,
   makeGate,
   makeHoldHandler,
-  noAiService,
+  noJobHandlerRegistry,
+  noKeepAliveCoordinator,
   settlesWithin,
   type TestRuntime,
   waitFor,
@@ -86,7 +87,7 @@ describe('JobRuntime', () => {
     // async because it installs a host first.
     expect(
       () =>
-        new JobRuntime(createTestDb(db).dbService, noAiService, {
+        new JobRuntime(createTestDb(db).dbService, noJobHandlerRegistry, noKeepAliveCoordinator, {
           handlers: [
             ['internal.echo', makeEchoHandler()],
             ['internal.echo', makeEchoHandler()],
@@ -218,6 +219,46 @@ describe('JobRuntime', () => {
     expect(finals.map((f) => f.status)).toEqual(['completed', 'completed']);
   });
 
+  it('scans past a full candidate page of queue-capped jobs', async () => {
+    const gate = makeGate();
+    const { jobService, runtime } = await setup([
+      ['internal.hold', makeHoldHandler(gate)],
+      ['internal.echo', makeEchoHandler()],
+    ]);
+    const running = await enqueueTest(
+      runtime,
+      'internal.hold',
+      {},
+      {
+        priority: -1,
+        queue: 'blocked',
+      },
+    );
+    await waitFor(async () => (await jobService.getById(running.id))?.status === 'running');
+
+    const blocked = [];
+    for (let index = 0; index < 11; index += 1) {
+      blocked.push(
+        await enqueueTest(runtime, 'internal.hold', {}, { priority: 0, queue: 'blocked' }),
+      );
+    }
+    const runnable = await enqueueTest(
+      runtime,
+      'internal.echo',
+      { message: 'past-window' },
+      { priority: 1, queue: 'open' },
+    );
+
+    await expect(runnable.finished).resolves.toMatchObject({
+      output: { echoed: 'echo: past-window' },
+      status: 'completed',
+    });
+    expect((await jobService.getById(blocked[0]!.id))?.status).toBe('pending');
+
+    gate.release();
+    await Promise.all([running.finished, ...blocked.map((handle) => handle.finished)]);
+  });
+
   it('retries with backoff, increments attempt, and succeeds on re-claim', async () => {
     let clock = 1_000_000;
     const { jobService, runtime } = await setup([['internal.flaky', makeFlakyHandler(1)]], {
@@ -240,6 +281,43 @@ describe('JobRuntime', () => {
     expect(finished.status).toBe('completed');
     expect(finished.attempt).toBe(1);
     expect(finished.output).toEqual({ succeededOnAttempt: 1 });
+  });
+
+  it('releases and reacquires the keep-alive lease for each retry attempt', async () => {
+    let clock = 1_000_000;
+    let executions = 0;
+    const leases: { release: jest.Mock }[] = [];
+    const acquire = jest.fn(() => {
+      const lease = { release: jest.fn() };
+      leases.push(lease);
+      return lease;
+    });
+    const handler: JobHandler = {
+      executionClass: 'user-continued',
+      recovery: 'abandon',
+      async execute(ctx) {
+        executions += 1;
+        if (executions === 1) throw new Error('retry me');
+        return { attempt: ctx.attempt };
+      },
+    };
+    const { jobService, runtime } = await setup([['internal.retry-lease', handler]], {
+      keepAlive: { acquire },
+      now: () => clock,
+    });
+
+    const handle = await enqueueTest(runtime, 'internal.retry-lease', {});
+    await waitFor(async () => (await jobService.getById(handle.id))?.status === 'delayed');
+    await waitFor(() => (leases[0]?.release.mock.calls.length ?? 0) === 1);
+    expect(acquire).toHaveBeenCalledTimes(1);
+
+    clock += 1_000;
+    await runtime.pump({ reason: 'manual' });
+    await expect(handle.finished).resolves.toMatchObject({ status: 'completed' });
+    await waitFor(() => (leases[1]?.release.mock.calls.length ?? 0) === 1);
+    expect(acquire).toHaveBeenCalledTimes(2);
+    expect(leases[0]?.release).toHaveBeenCalledTimes(1);
+    expect(leases[1]?.release).toHaveBeenCalledTimes(1);
   });
 
   it('fails terminally once attempts are exhausted', async () => {
@@ -316,6 +394,51 @@ describe('JobRuntime', () => {
     expect(finished.error?.message).toContain('boom');
   });
 
+  it('uses the transaction snapshot even when a later getById read would fail', async () => {
+    const gate = makeGate();
+    const handler = makeEchoHandler({
+      async execute() {
+        await gate.promise;
+        return { ok: true };
+      },
+    });
+    const { jobService, runtime } = await setup([['internal.finalize', handler]]);
+    const handle = await enqueueTest(runtime, 'internal.finalize', {});
+    await waitFor(async () => (await jobService.getById(handle.id))?.status === 'running');
+    const postWriteRead = jest
+      .spyOn(jobService, 'getById')
+      .mockRejectedValue(new Error('post-write read failed'));
+
+    gate.release();
+    await expect(handle.finished).resolves.toMatchObject({
+      output: { ok: true },
+      status: 'completed',
+    });
+    expect(postWriteRead).not.toHaveBeenCalled();
+    postWriteRead.mockRestore();
+    expect((await jobService.getById(handle.id))?.status).toBe('completed');
+  });
+
+  it('retries the delayed-job read after a transient failure', async () => {
+    jest.useFakeTimers();
+    try {
+      const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]]);
+      const earliestDelayedAt = jest
+        .spyOn(jobService, 'earliestDelayedAt')
+        .mockRejectedValueOnce(new Error('read failed'))
+        .mockResolvedValue(null);
+
+      await runtime.pump({ reason: 'manual' });
+      expect(earliestDelayedAt).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(999);
+      expect(earliestDelayedAt).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1);
+      expect(earliestDelayedAt).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('coalesces concurrent pump requests into one loop plus one dirty rerun', async () => {
     const { jobService, runtime } = await setup([['internal.echo', makeEchoHandler()]]);
     const spy = jest.spyOn(jobService, 'promoteDelayedDueTx');
@@ -325,6 +448,41 @@ describe('JobRuntime', () => {
       runtime.pump({ reason: 'manual' }),
     ]);
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('waits for an in-progress claim and does not start work after stop begins', async () => {
+    let clock = 1_000;
+    const claimEntered = makeGate();
+    const claimGate = makeGate();
+    const execute = jest.fn(async () => 'should-not-run');
+    const handler = makeEchoHandler({ execute });
+    const { jobService, runtime } = await setup([['internal.echo', handler]], {
+      now: () => clock,
+    });
+    const handle = await enqueueTest(
+      runtime,
+      'internal.echo',
+      { message: 'late' },
+      { scheduledAt: clock + 1_000 },
+    );
+    const claim = jobService.claimPendingByIdTx.bind(jobService);
+    jest.spyOn(jobService, 'claimPendingByIdTx').mockImplementation(async (...args) => {
+      claimEntered.release();
+      await claimGate.promise;
+      return claim(...args);
+    });
+
+    clock += 1_000;
+    const pumping = runtime.pump({ reason: 'manual' });
+    await claimEntered.promise;
+    const stopping = runtime._doStop();
+
+    expect(await settlesWithin(stopping, 20)).toBe(false);
+    claimGate.release();
+    await Promise.all([pumping, stopping]);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect((await jobService.getById(handle.id))?.status).toBe('cancelled');
   });
 
   it('cold-start pump prunes terminal rows past the 7d TTL, keeping active ones', async () => {
@@ -385,7 +543,7 @@ describe('JobRuntime', () => {
     expect(orphan?.error?.message).toContain('Orphan job');
   });
 
-  it('leaves non-foreground execution classes pending (Phase 1 window filter)', async () => {
+  it('leaves undispatchable execution classes pending (window filter)', async () => {
     const { jobService, runtime } = await setup([
       ['internal.bg', makeEchoHandler({ executionClass: 'bounded-background' })],
     ]);
@@ -393,6 +551,56 @@ describe('JobRuntime', () => {
     expect((await runtime.pump({ reason: 'manual' })).claimed).toBe(0);
     expect((await jobService.getById(handle.id))?.status).toBe('pending');
     expect(await settlesWithin(handle.finished, 50)).toBe(false);
+  });
+
+  it('wraps user-continued handlers in a keep-alive lease for the duration of execute', async () => {
+    const gate = makeGate();
+    const leases: { release: jest.Mock }[] = [];
+    const acquire = jest.fn((_tag: string) => {
+      const lease = { release: jest.fn() };
+      leases.push(lease);
+      return lease;
+    });
+    const { runtime } = await setup(
+      [['internal.uc', makeHoldHandler(gate, { executionClass: 'user-continued' })]],
+      { keepAlive: { acquire } },
+    );
+
+    const handle = await enqueueTest(runtime, 'internal.uc', {});
+    await waitFor(() => acquire.mock.calls.length === 1);
+    expect(acquire).toHaveBeenCalledWith('job.internal.uc');
+    expect(leases[0]?.release).not.toHaveBeenCalled();
+
+    gate.release();
+    const finished = await handle.finished;
+    expect(finished.status).toBe('completed');
+    // finished resolves inside finalizeJob; the lease is released one
+    // microtask later in the execute pipeline's finally.
+    await waitFor(() => (leases[0]?.release.mock.calls.length ?? 0) === 1);
+    expect(leases[0]?.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('releases the keep-alive lease when a user-continued handler fails', async () => {
+    const leases: { release: jest.Mock }[] = [];
+    const acquire = jest.fn((_tag: string) => {
+      const lease = { release: jest.fn() };
+      leases.push(lease);
+      return lease;
+    });
+    const failing = makeEchoHandler({
+      executionClass: 'user-continued',
+      async execute() {
+        throw new Error('boom');
+      },
+    });
+    const { runtime } = await setup([['internal.ucFail', failing]], { keepAlive: { acquire } });
+
+    const handle = await enqueueTest(runtime, 'internal.ucFail', {}, { maxAttempts: 1 });
+    const finished = await handle.finished;
+    expect(finished.status).toBe('failed');
+    expect(acquire).toHaveBeenCalledTimes(1);
+    await waitFor(() => (leases[0]?.release.mock.calls.length ?? 0) === 1);
+    expect(leases[0]?.release).toHaveBeenCalledTimes(1);
   });
 
   it('resolves finished before onSettled completes, and swallows onSettled errors', async () => {

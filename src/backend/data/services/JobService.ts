@@ -19,6 +19,11 @@ const logger = loggerService.withContext('JobService');
 
 export type TerminalJobStatus = Extract<JobStatus, 'cancelled' | 'completed' | 'failed'>;
 
+export type SetTerminalResult = {
+  snapshot: JobSnapshot | null;
+  updated: boolean;
+};
+
 export type JobListFilter = {
   limit?: number;
   offset?: number;
@@ -174,7 +179,14 @@ export class JobService {
    * queue capacity in the runtime, so the select half lives here and the
    * guarded-update half in {@link claimPendingByIdTx}.
    */
-  async getEligiblePendingTx(tx: Database, now: number, limit: number): Promise<JobRow[]> {
+  async getEligiblePendingTx(
+    tx: Database,
+    now: number,
+    types: readonly string[],
+    limit: number,
+    offset = 0,
+  ): Promise<JobRow[]> {
+    if (types.length === 0) return [];
     return tx
       .select()
       .from(jobTable)
@@ -183,10 +195,12 @@ export class JobService {
           eq(jobTable.status, 'pending'),
           eq(jobTable.cancelRequested, false),
           lte(jobTable.scheduledAt, now),
+          inArray(jobTable.type, [...types]),
         ),
       )
       .orderBy(asc(jobTable.priority), asc(jobTable.scheduledAt), asc(jobTable.id))
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
   }
 
   /**
@@ -216,8 +230,8 @@ export class JobService {
   /**
    * Terminal write, fenced by `expectedStatuses` (mobile weak fence — desktop
    * updates by id alone because a stale finalizer cannot outlive its process
-   * there). Returns the number of rows updated; 0 means the fence held and the
-   * caller must not emit terminal side effects.
+   * there). Returns the transaction-consistent snapshot plus whether this call
+   * performed the update; `updated=false` means the fence held.
    */
   async setTerminalTx(
     tx: Database,
@@ -226,8 +240,8 @@ export class JobService {
     output: unknown | undefined,
     error: JobError | null,
     expectedStatuses: readonly JobStatus[],
-  ): Promise<number> {
-    const updated = await tx
+  ): Promise<SetTerminalResult> {
+    const [updated] = await tx
       .update(jobTable)
       .set({
         error,
@@ -236,8 +250,11 @@ export class JobService {
         status,
       })
       .where(and(eq(jobTable.id, id), inArray(jobTable.status, [...expectedStatuses])))
-      .returning({ id: jobTable.id });
-    return updated.length;
+      .returning();
+    if (updated) return { snapshot: rowToSnapshot(updated), updated: true };
+
+    const [current] = await tx.select().from(jobTable).where(eq(jobTable.id, id)).limit(1);
+    return { snapshot: current ? rowToSnapshot(current) : null, updated: false };
   }
 
   /**

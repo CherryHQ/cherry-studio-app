@@ -41,9 +41,13 @@ export function resolveProviderIcon(providerId: string): IconSource | undefined 
     return resolveGeneralIcon('open-code');
   }
 
-  const key = PROVIDER_ID_ALIASES[providerId] ?? providerId;
+  const providerIcon = resolveProviderAssetIcon(providerId);
+  if (providerIcon) {
+    return providerIcon;
+  }
 
-  return resolveProviderAssetIcon(key) ?? resolveModelAssetIcon(key);
+  const key = PROVIDER_ID_ALIASES[providerId] ?? providerId;
+  return resolveModelAssetIcon(key);
 }
 
 export function resolveModelProviderIcon(

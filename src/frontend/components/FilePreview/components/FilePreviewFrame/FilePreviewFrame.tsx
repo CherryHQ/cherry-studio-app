@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { Pressable } from 'react-native-gesture-handler';
 
+const frameRadius = 16;
+
 type FilePreviewFrameProps = {
   accessibilityLabel: string;
   children: ReactNode;
@@ -21,10 +23,16 @@ export function FilePreviewFrame({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       accessibilityState={disabled ? { disabled: true } : undefined}
-      className="overflow-hidden rounded-2xl active:opacity-70"
+      className="active:opacity-70"
       disabled={disabled}
       onPress={onPress}
-      style={{ borderCurve: 'continuous', height: size, width: size }}
+      style={{
+        borderCurve: 'continuous',
+        borderRadius: frameRadius,
+        height: size,
+        overflow: 'hidden',
+        width: size,
+      }}
     >
       {children}
     </Pressable>

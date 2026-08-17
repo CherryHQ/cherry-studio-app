@@ -126,22 +126,23 @@ continuation on those versions.
 
 ### Why PR #473 Is Not The Job Manager
 
-PR #473 adds a per-`ChatSession` `BackgroundReplyService` that loops a bundled silent AAC asset,
-updates a Live Activity, and records background timer/stream evidence. Simulator tests showed a
-controlled stream continuing for more than three minutes and a later run lasting about seven minutes
-and forty-seven seconds.
+PR #473 adds a host-owned `BackgroundReplyRuntime`, a feature-agnostic
+`BackgroundActivityManager`, and a reference-counted `KeepAliveCoordinator`. The coordinator loops
+a bundled silent AAC asset while chat turns or user-continued painting jobs hold a lease; the
+manager updates their Live Activities. Simulator tests showed a controlled stream continuing for
+more than three minutes and a later run lasting about seven minutes and forty-seven seconds.
 
 That evidence answers one narrow question: the React Native runtime can remain active while iOS
 treats the app as an audio app. It does not establish a production contract:
 
 1. Silent audio exists only to retain execution, while Apple's audio mode is for audible content.
    App Review Guideline 2.5.4 requires background modes to serve their intended purpose.
-2. The service cannot wake the app for a later schedule and does not survive force-quit.
+2. The coordinator cannot wake the app for a later schedule and does not survive force-quit.
 3. Live Activity reports state but grants no runtime.
-4. `ChatSessionProvider` disposes its session on unmount, and `ChatSession.dispose()` aborts active
-   turns. The experiment improves app-background behavior but still has route ownership.
-5. The PR description says runtime playback is Debug-only, while the inspected implementation does
-   not contain the stated `__DEV__` guard. That mismatch must be resolved even for further testing.
+4. Host ownership now lets chat turns and painting jobs outlive their initiating routes, but neither
+   workflow survives process death without a provider-specific resumable protocol.
+5. The background-reply preference gates chat leases; painting generation acquires independently,
+   so one feature cannot silently disable the other's continuation.
 6. Physical-device lock screen, low-power, interruption, thermal, memory-pressure, and App Review
    gates remain unproven.
 

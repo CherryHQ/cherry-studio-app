@@ -49,3 +49,6 @@ yarn-error.*
 
 # eslint
 .eslintcache
+
+# 本地基准与 e2e 的产物
+artifacts/

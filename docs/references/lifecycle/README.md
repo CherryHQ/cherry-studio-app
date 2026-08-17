@@ -1,7 +1,7 @@
 # Lifecycle
 
-> Status: Design complete, not yet wired. Stage A ships the framework only; no existing module is
-> migrated by it.
+> Status: Implemented. The framework, host-managed services, and resource-scope deletion paths are
+> wired in production.
 > Desktop source: `CherryHQ/cherry-studio@12498d68` — `src/main/core/lifecycle/`,
 > `src/main/core/application/`, `docs/references/lifecycle/`
 > Supersedes: the "no service registry, no lifecycle framework" stance previously recorded in
@@ -54,8 +54,9 @@ Do **not** register:
 | Per-screen listeners and timers | The React component that created them |
 
 Stateful data services are the exception to the CRUD rule: `PreferenceService` (cache plus async
-init) and `providerRegistryService` (catalog cache) hold per-generation state and therefore register
-as services.
+init) registers as a service. `providerRegistryService` deliberately does not: its package-level
+loader memoizes immutable bundled JSON below the app host, so a per-generation wrapper would add
+resolution churn without creating a new resource lifetime.
 
 ## Divergence from desktop
 
