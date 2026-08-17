@@ -41,6 +41,8 @@ Two consequences to take seriously:
       not trimmed — only what is sent.
 - [ ] The draft and attachments clear **before** the send is awaited, so the field is empty
       immediately.
+- [ ] Only one send may be in flight. Repeated triggers before its Promise settles are ignored and
+      cannot snapshot, clear, restore, or call the sender a second time.
 - [ ] If the send rejects: the draft is restored **verbatim, untrimmed**, the attachments are
       restored, a `danger` toast shows `chat.input.sendFailed`, and the error is logged. The toast is
       deliberately vague, so without the log a failed send leaves no trace to debug from.
@@ -53,6 +55,8 @@ Two consequences to take seriously:
 - [ ] Sendability defaults to "there is text or an attachment". A caller that passes `canSend`
       replaces that outright — painting does, because a promptless image model can send
       `{ attachments: [], text: '' }`.
+- [ ] Any attachment still marked `importing` disables send. Its tile shows a spinner and filename;
+      editing text, removing attachments, and opening tools remain available.
 - [ ] While streaming the send control becomes stop (`chat.input.action.stopGenerating`). It does not
       exist when not streaming.
 
@@ -73,9 +77,10 @@ Two consequences to take seriously:
 - [ ] The image-settings button (painting only) does the same. It is assembled by painting rather
       than by the composer, so it calls `useComposerFieldDismiss()` explicitly — the one thing
       assembling made the caller's job.
-- [ ] Opening the ＋ menu dismisses the keyboard but does **not** blur the field. The panel grows
-      upward into the space the keyboard occupies, so the keyboard has to go; leaving the field as
-      first responder is what makes iOS restore it the instant the menu closes.
+- [ ] Opening the ＋ menu leaves the keyboard and field focus unchanged, preserving the trigger
+      position used by its portalled panel. Choosing camera, photos, or file closes the menu, awaits
+      keyboard dismissal and field blur, then opens the system picker. Choosing a tool does not
+      dismiss or blur.
 
 ### Model and reasoning controls
 
@@ -116,7 +121,8 @@ rows. It is a menu and nothing else: every row closes it and hands off to a syst
       in it, whether or not the app can see the rest of the library.
 - [ ] The photo picker takes at most `COMPOSER_PHOTO_SELECTION_LIMIT` (9) images, in the order
       they were selected.
-- [ ] Cancelling any picker adds nothing and leaves the menu closed.
+- [ ] Cancelling any picker adds nothing and leaves both the menu and keyboard closed. Selecting or
+      cancelling never restores field focus; the user can tap the field to type again.
 - [ ] A picker that fails to launch is logged. The menu has already closed by then, so without the
       log the gesture just looks ignored.
 - [ ] Choosing a tool toggles it and closes the menu.
@@ -147,13 +153,11 @@ rows. It is a menu and nothing else: every row closes it and hands off to a syst
 
 ## Not covered by tests
 
-Walk these on device before shipping. They are the ones with no net at all:
+Walk these on device before shipping. They are the ones with no automated net:
 
-1. Send failure recovery — send with the network off and confirm the draft, the attachments, and the
-   toast.
-2. Pasting an image into the field.
-3. Switching assistants and watching the web-search tag follow the new assistant's setting.
-4. Switching models on an assistant whose effort the new model does not support.
+1. Pasting an image into the field.
+2. Switching assistants and watching the web-search tag follow the new assistant's setting.
+3. Switching models on an assistant whose effort the new model does not support.
 
 ## Deliberately dropped
 

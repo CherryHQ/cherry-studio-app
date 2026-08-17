@@ -65,8 +65,9 @@ Sending. Trim, clear before awaiting, restore the draft *and* the attachments if
 it rejects, toast, log, and the un-animated keyboard dismissal — that is a
 protocol, not a part, and two screens assembling it separately would be two
 implementations of it. It lives in `ComposerSurface`, which is what renders the
-surface, so there is no way to compose a composer that skips it. Pasting is
-baked into `ComposerField` for the same reason.
+surface, so there is no way to compose a composer that skips it. A synchronous
+in-flight lock also prevents a repeated gesture from snapshotting and restoring
+the same draft twice. Pasting is baked into `ComposerField` for the same reason.
 
 The full checklist for it is the behaviour contract in
 `src/frontend/features/chat/input/README.md` — that is the screen you actually
@@ -95,10 +96,16 @@ walk to verify it.
 
 ## Behavior notes
 
-- The ＋ menu takes the keyboard down but leaves the field first responder, so
-  iOS restores the keyboard the instant the menu closes. Pickers and settings
-  surfaces blur via `useComposerFieldDismiss`; the chat effort slider instead
+- Opening the ＋ menu leaves the keyboard and field focus unchanged so its
+  portalled panel stays anchored to the trigger. Camera, photo, and file rows
+  close the menu, await `useComposerFieldDismiss()`, and only then open their
+  system picker. Success and cancellation both return with the keyboard closed;
+  caller-owned tool rows do not dismiss or blur. The chat effort slider also
   keeps focus and covers the live keyboard.
+- Transient attachments render their own progress tile while they are imported
+  into managed storage. Any importing attachment disables send; text editing,
+  removal, and tools remain available. Import timing logs contain only kind,
+  size, result, and duration.
 - The i18n keys are still under `chat.*`. Two of them (`chat.media.camera`,
   `chat.media.photos`) are shared with the settings screens, so a `composer.*`
   namespace would fork strings rather than move them.
