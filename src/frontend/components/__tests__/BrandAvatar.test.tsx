@@ -5,7 +5,7 @@ import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '../BrandAvatar';
 
 const mockImage = jest.fn((_props: unknown) => null);
 
-jest.mock('@/frontend/components/nativePrimitives', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   Image: (props: unknown) => mockImage(props),
 }));
 

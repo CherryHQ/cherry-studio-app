@@ -18,6 +18,9 @@ import { PlusIcon } from '@cherrystudio/app-icons';
 <Button accessibilityLabel="Add" icon={<PlusIcon />} onPress={add} />;
 ```
 
+`Image` wraps `expo-image` with Uniwind `className` support while preserving the underlying image
+API.
+
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
 `destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
 behavior. The `sm`, `default`, and `lg` sizes use content-driven typography and padding without

@@ -1,3 +1,4 @@
+import { Image } from '@cherrystudio/ui/components';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
@@ -8,8 +9,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 const MAX_SCALE = 4;
 const DOUBLE_TAP_SCALE = 2.5;

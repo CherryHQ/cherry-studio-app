@@ -1,7 +1,7 @@
+import { Image } from '@cherrystudio/ui/components';
 import { createContext, type ComponentProps, type ReactNode, use } from 'react';
 import { Text, View } from 'react-native';
 
-import { Image } from '@/frontend/components/nativePrimitives';
 import {
   DEFAULT_BRAND_ICON_SCALE,
   getBrandAvatarFallback,

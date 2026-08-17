@@ -1,5 +1,5 @@
 import { CheckIcon, ImageIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
-import { Button, ImageGenerationLoader } from '@cherrystudio/ui/components';
+import { Button, Image, ImageGenerationLoader } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
@@ -29,7 +29,6 @@ import {
   useMessageSelectionState,
   useRegisterSelectionSource,
 } from '@/frontend/components/messageTabs';
-import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
 
 import {

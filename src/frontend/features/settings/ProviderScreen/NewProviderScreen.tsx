@@ -1,6 +1,7 @@
 import { ImageUpIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
 import {
   Button,
+  Image,
   Input,
   Label,
   Menu,
@@ -20,7 +21,6 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { Image } from '@/frontend/components/nativePrimitives';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 

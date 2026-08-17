@@ -1,8 +1,7 @@
+import { Image } from '@cherrystudio/ui/components';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import { PaintingTemplateBottomSheet } from './PaintingTemplateBottomSheet';
 import { type PaintingTemplate, paintingTemplates } from './paintingTemplates';

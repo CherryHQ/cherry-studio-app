@@ -1,13 +1,11 @@
 import { ChevronRightIcon, type AppIconProps, WrenchIcon } from '@cherrystudio/app-icons';
-import { BottomSheet } from '@cherrystudio/ui/components';
+import { BottomSheet, Image } from '@cherrystudio/ui/components';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import type { ImageSource } from 'expo-image';
 import { type ComponentType, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import { MessageStatusRow } from '../../components/MessageStatusRow';
 

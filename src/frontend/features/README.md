@@ -98,4 +98,4 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
 Reusable modules that remain in `src/frontend/components` include app shell modules (`headers`,
 `navigation`), shared flows such as `modelPicker`, the neutral `messageTabs`
 scope/selection/source-registry shared by the messages shell and its tab bodies, shared UI
-behavior such as `AlertProvider`, and native dependency adapters such as `nativePrimitives`.
+behavior such as `AlertProvider`. Reusable native UI adapters belong in CherryUI.

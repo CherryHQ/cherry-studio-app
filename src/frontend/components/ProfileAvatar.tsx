@@ -1,7 +1,7 @@
 import { CameraIcon, PencilIcon } from '@cherrystudio/app-icons';
+import { Image } from '@cherrystudio/ui/components';
 import { View } from 'react-native';
 
-import { Image } from '@/frontend/components/nativePrimitives';
 import { useAvatar } from '@/frontend/hooks/useAvatar';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 

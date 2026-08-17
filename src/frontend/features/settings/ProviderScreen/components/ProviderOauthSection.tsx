@@ -6,7 +6,7 @@ import {
   ReceiptTextIcon,
   XIcon,
 } from '@cherrystudio/app-icons';
-import { Button, Section } from '@cherrystudio/ui/components';
+import { Button, Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons/providers';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
@@ -17,7 +17,6 @@ import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
-import { Image } from '@/frontend/components/nativePrimitives';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import {

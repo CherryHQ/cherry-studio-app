@@ -1,7 +1,6 @@
+import { Image } from '@cherrystudio/ui/components';
 import type { FileEntry } from '@cherrystudio/universal/data/types/file';
 import { Text, View } from 'react-native';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import { fileEntryExtensionLabel } from '../../utils/fileEntryPresentation';
 import { FallbackPreview } from '../FallbackPreview/FallbackPreview';

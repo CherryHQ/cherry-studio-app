@@ -1,6 +1,5 @@
+import { Image } from '@cherrystudio/ui/components';
 import type { FileEntry } from '@cherrystudio/universal/data/types/file';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 type ImagePreviewProps = {
   entry: FileEntry;

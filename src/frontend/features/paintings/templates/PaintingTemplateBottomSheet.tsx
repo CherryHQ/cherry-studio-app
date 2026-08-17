@@ -2,13 +2,12 @@ import {
   BottomSheet,
   type BottomSheetCloseReason,
   Button,
+  Image,
   useBottomSheet,
 } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import type { PaintingTemplate } from './paintingTemplates';
 
