@@ -1,3 +1,4 @@
+import type { ComposerInputHandle } from '@cherrystudio/ui/components';
 import {
   createContext,
   type PropsWithChildren,
@@ -8,7 +9,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { type TextInput } from 'react-native';
 
 import {
   appendComposerAttachments,
@@ -32,6 +32,12 @@ type ComposerActionsContextValue = {
   clearAttachments: () => void;
   removeAttachment: (attachmentId: string) => void;
   setAttachments: (attachments: ComposerAttachmentDraft[]) => void;
+  /**
+   * Replaces the whole draft. Only for the cases that own it wholesale — send
+   * clearing it, a failed send restoring it. Anything that *adds* to what the
+   * user wrote goes through `inputRef` instead: the field owns the buffer and
+   * the caret, and a string handed in here would land at neither.
+   */
   setDraft: (draft: string) => void;
 };
 
@@ -43,7 +49,12 @@ export type ComposerAttachmentStore = Pick<
 };
 
 type ComposerMetaContextValue = {
-  inputRef: RefObject<TextInput | null>;
+  /**
+   * The field itself, for the two things no prop can express: taking focus
+   * away, and inserting an entity — a tool mention is a link, and no string
+   * handed to `setDraft` would carry its URL.
+   */
+  inputRef: RefObject<ComposerInputHandle | null>;
 };
 
 const ComposerStateContext = createContext<ComposerStateContextValue | null>(null);
@@ -68,7 +79,7 @@ export function ComposerProvider({
   initialAttachments = [],
   initialDraft = '',
 }: ComposerProviderProps) {
-  const inputRef = useRef<TextInput>(null);
+  const inputRef = useRef<ComposerInputHandle | null>(null);
   const [draft, setDraft] = useState(initialDraft);
   const [localAttachments, setLocalAttachments] = useState<ComposerAttachmentDraft[]>(() => [
     ...initialAttachments,

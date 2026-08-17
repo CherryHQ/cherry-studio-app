@@ -18,6 +18,7 @@ export {
   type ComposerAttachmentStore,
   ComposerProvider,
   useComposerActions,
+  useComposerMeta,
   useComposerState,
 } from './context/ComposerProvider';
 export { useComposerDockLayout } from './hooks/useComposerDockLayout';
