@@ -75,8 +75,8 @@ jest.mock('../components/ChatInitialRenderCover', () => ({
   },
 }));
 
-jest.mock('../components/ChatAssistantMessage', () => ({
-  ChatAssistantMessage: () => null,
+jest.mock('../components/AssistantMessageToolbar', () => ({
+  AssistantMessageToolbar: () => null,
 }));
 
 jest.mock('../components/ChatOlderMessagesIndicator', () => ({

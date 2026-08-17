@@ -7,6 +7,7 @@ import type { SharedValue } from 'react-native-reanimated';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
 import {
+  AssistantMessage,
   MessageList,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
@@ -20,7 +21,7 @@ import {
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
 } from '../runtime/chatRuntimeProjection';
-import { ChatAssistantMessage } from './components/ChatAssistantMessage';
+import { AssistantMessageToolbar } from './components/AssistantMessageToolbar';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
@@ -48,7 +49,11 @@ type ChatWorkspaceProps = {
 };
 
 function renderChatAssistantMessage(message: MessagePresentationItem) {
-  return <ChatAssistantMessage message={message} />;
+  return (
+    <AssistantMessage message={message}>
+      <AssistantMessageToolbar message={message} />
+    </AssistantMessage>
+  );
 }
 
 export function ChatWorkspace({
