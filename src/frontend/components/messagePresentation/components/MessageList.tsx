@@ -126,16 +126,46 @@ export function MessageList({
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
+  const copiedMessageId = assistantActions?.copiedMessageId;
+  const isRegenerateDisabled = assistantActions?.isRegenerateDisabled;
+  const onCopy = assistantActions?.onCopy;
+  const onRegenerate = assistantActions?.onRegenerate;
+  const hasAssistantActions = assistantActions !== undefined;
+  const listExtraData = useMemo(
+    () =>
+      hasAssistantActions
+        ? {
+            copiedMessageId,
+            isRegenerateDisabled,
+          }
+        : undefined,
+    [copiedMessageId, hasAssistantActions, isRegenerateDisabled],
+  );
   const renderMessageRow = useCallback(
     ({ item }: LegendListRenderItemProps<MessagePresentationItem>) =>
       item.role === 'user' ? (
         <UserMessageRow message={item} />
       ) : renderAssistantMessage ? (
         renderAssistantMessage(item)
+      ) : hasAssistantActions ? (
+        <AssistantMessageRow
+          isCopied={copiedMessageId === item.id}
+          isRegenerateDisabled={isRegenerateDisabled}
+          message={item}
+          onCopy={onCopy}
+          onRegenerate={onRegenerate}
+        />
       ) : (
-        <AssistantMessageRow actions={assistantActions} message={item} />
+        <AssistantMessageRow message={item} />
       ),
-    [assistantActions, renderAssistantMessage],
+    [
+      copiedMessageId,
+      hasAssistantActions,
+      isRegenerateDisabled,
+      onCopy,
+      onRegenerate,
+      renderAssistantMessage,
+    ],
   );
   const handleStartReached = useCallback(() => {
     if (!onLoadOlder) {
@@ -275,7 +305,7 @@ export function MessageList({
             drawDistance={80}
             estimatedItemSize={300}
             estimatedHeaderSize={contentTopInset}
-            extraData={assistantActions}
+            extraData={listExtraData}
             freeze={freeze}
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}

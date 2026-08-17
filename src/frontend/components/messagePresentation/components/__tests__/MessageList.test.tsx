@@ -74,7 +74,13 @@ function mockCreateSharedValue<T>(initial: T): SharedValue<T> {
   return shared as unknown as SharedValue<T>;
 }
 const mockAssistantMessageRow = jest.fn(
-  (_props: { actions?: AssistantMessageActions; message: MessagePresentationItem }) => null,
+  (_props: {
+    isCopied?: boolean;
+    isRegenerateDisabled?: boolean;
+    message: MessagePresentationItem;
+    onCopy?: AssistantMessageActions['onCopy'];
+    onRegenerate?: AssistantMessageActions['onRegenerate'];
+  }) => null,
 );
 const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
 let mockSlideInFlight: MessageSlideInFlight | undefined;
@@ -181,8 +187,11 @@ jest.mock('react-native-reanimated', () => {
 
 jest.mock('../../messageRow', () => ({
   AssistantMessageRow: (props: {
-    actions?: AssistantMessageActions;
+    isCopied?: boolean;
+    isRegenerateDisabled?: boolean;
     message: MessagePresentationItem;
+    onCopy?: AssistantMessageActions['onCopy'];
+    onRegenerate?: AssistantMessageActions['onRegenerate'];
   }) => mockAssistantMessageRow(props),
   MessageSlideInProvider: ({
     children,

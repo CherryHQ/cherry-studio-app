@@ -9,8 +9,11 @@ import { useAssistantSlideInStyle } from '../slideIn/hooks/useAssistantSlideInSt
 import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 
 type AssistantMessageRowProps = {
-  actions?: AssistantMessageActions;
+  isCopied?: boolean;
+  isRegenerateDisabled?: boolean;
   message: MessagePresentationItem;
+  onCopy?: AssistantMessageActions['onCopy'];
+  onRegenerate?: AssistantMessageActions['onRegenerate'];
 };
 
 const AssistantMessageBody = memo(function AssistantMessageBody({
@@ -32,23 +35,28 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
   );
 });
 
-export function AssistantMessageRow({ actions, message }: AssistantMessageRowProps) {
+export const AssistantMessageRow = memo(function AssistantMessageRow({
+  isCopied = false,
+  isRegenerateDisabled = false,
+  message,
+  onCopy,
+  onRegenerate,
+}: AssistantMessageRowProps) {
   // 行高从第一帧起就要占住（预留空白与钉顶落点都靠它），所以显形只走 opacity。
   const slideInStyle = useAssistantSlideInStyle(message.id);
-  const isCopied = actions?.copiedMessageId === message.id;
 
   return (
     <Animated.View className="w-full gap-2 px-4 py-3" style={slideInStyle}>
       <AssistantMessageBody message={message} />
-      {actions && message.status !== 'pending' ? (
+      {onCopy && onRegenerate && message.status !== 'pending' ? (
         <AssistantMessageToolbar
           isCopied={isCopied}
-          isRegenerateDisabled={actions.isRegenerateDisabled}
+          isRegenerateDisabled={isRegenerateDisabled}
           message={message}
-          onCopy={actions.onCopy}
-          onRegenerate={actions.onRegenerate}
+          onCopy={onCopy}
+          onRegenerate={onRegenerate}
         />
       ) : null}
     </Animated.View>
   );
-}
+});

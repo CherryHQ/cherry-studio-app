@@ -6,13 +6,17 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { MessagePresentationItem } from '../../../types';
 import { UserMessageRow } from '../UserMessageRow';
 
+let menuRenderCount = 0;
+
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
 
   const component =
     (type: string) =>
-    ({ children, ...props }: { children?: ReactNode }) =>
-      createElement(type, props, children);
+    ({ children, ...props }: { children?: ReactNode }) => {
+      menuRenderCount += 1;
+      return createElement(type, props, children);
+    };
 
   return {
     Menu: component('Menu'),
@@ -42,6 +46,19 @@ jest.mock('../../slideIn/hooks/useUserMessageSlideInStyle', () => ({
 }));
 
 describe('UserMessageRow', () => {
+  beforeEach(() => {
+    menuRenderCount = 0;
+  });
+
+  test('does not repeat row work when a parent updates with the same message', () => {
+    const message = createMessage([textPart('Hello')]);
+    const renderer = render(<UserMessageRow message={message} />);
+
+    act(() => renderer.update(<UserMessageRow message={message} />));
+
+    expect(menuRenderCount).toBe(1);
+  });
+
   test('keeps a text-only message in the bubble', () => {
     const message = createMessage([textPart('Hello')]);
     const renderer = render(<UserMessageRow message={message} />);
