@@ -1,21 +1,23 @@
 import { DotMatrixSquare20 } from '@cherrystudio/ui/components';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import Animated from 'react-native-reanimated';
 
 import { MessageStatusRow, StatusRowTextFloor } from '../../components/MessageStatusRow';
 import { MessageParts } from '../../messageContent';
-import type { AssistantMessageActions, MessagePresentationItem } from '../../types';
+import type { MessagePresentationItem } from '../../types';
 import { useAssistantSlideInStyle } from '../slideIn/hooks/useAssistantSlideInStyle';
-import { AssistantMessageToolbar } from './AssistantMessageToolbar';
 
-type AssistantMessageRowProps = {
-  isCopied?: boolean;
-  isRegenerateDisabled?: boolean;
+type AssistantMessageProps = {
+  /**
+   * 正文之后的组合槽位，留给功能方自己的配件（工具栏之类）。这里无条件渲染，包括
+   * 正文还没到的 pending 占位期——配件拿得到 message，什么时候现身由它自己决定。
+   */
+  children?: ReactNode;
   message: MessagePresentationItem;
-  onCopy?: AssistantMessageActions['onCopy'];
-  onRegenerate?: AssistantMessageActions['onRegenerate'];
 };
 
+// 正文渲染很贵（parts 分派、markdown），所以单独立一层 memo：配件重渲染时 children 的
+// JSX 身份必然变、外层 memo 必然被打穿，正文得由这一层按 message 引用挡住。
 const AssistantMessageBody = memo(function AssistantMessageBody({
   message,
 }: {
@@ -35,28 +37,17 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
   );
 });
 
-export const AssistantMessageRow = memo(function AssistantMessageRow({
-  isCopied = false,
-  isRegenerateDisabled = false,
+export const AssistantMessage = memo(function AssistantMessage({
+  children,
   message,
-  onCopy,
-  onRegenerate,
-}: AssistantMessageRowProps) {
+}: AssistantMessageProps) {
   // 行高从第一帧起就要占住（预留空白与钉顶落点都靠它），所以显形只走 opacity。
   const slideInStyle = useAssistantSlideInStyle(message.id);
 
   return (
     <Animated.View className="w-full gap-2 px-4 py-3" style={slideInStyle}>
       <AssistantMessageBody message={message} />
-      {onCopy && onRegenerate && message.status !== 'pending' ? (
-        <AssistantMessageToolbar
-          isCopied={isCopied}
-          isRegenerateDisabled={isRegenerateDisabled}
-          message={message}
-          onCopy={onCopy}
-          onRegenerate={onRegenerate}
-        />
-      ) : null}
+      {children}
     </Animated.View>
   );
 });

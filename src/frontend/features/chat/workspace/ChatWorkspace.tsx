@@ -1,7 +1,6 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
-import * as Clipboard from 'expo-clipboard';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
@@ -9,7 +8,6 @@ import type { SharedValue } from 'react-native-reanimated';
 import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   MessageList,
-  type AssistantMessageActions,
   type MessagePresentationItem,
 } from '@/frontend/components/messagePresentation';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
@@ -22,19 +20,21 @@ import {
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
 } from '../runtime/chatRuntimeProjection';
+import { ChatAssistantMessage } from './components/ChatAssistantMessage';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
+import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
 } from './hooks/useMessageListInitialRenderGate';
 
 const logger = loggerService.withContext('ChatWorkspace');
-const COPIED_FEEDBACK_DURATION_MS = 1_200;
 // 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
 const gateLog = loggerService.withContext('ChatGate');
 
 type ChatWorkspaceProps = {
+  isAssistantToolbarEnabled: boolean;
   /** 输入框实测高度，用于定位悬浮按钮；预览态没有输入框，留空即可。 */
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
@@ -47,12 +47,17 @@ type ChatWorkspaceProps = {
   topicId: string;
 };
 
+function renderChatAssistantMessage(message: MessagePresentationItem) {
+  return <ChatAssistantMessage message={message} />;
+}
+
 export function ChatWorkspace({
   bottomAccessoryHeight,
   contentBottomInset,
   keyboardOffset,
   messageWindow,
   renderGateKey,
+  isAssistantToolbarEnabled,
   topicId,
 }: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
@@ -61,8 +66,6 @@ export function ChatWorkspace({
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const [copiedMessageId, setCopiedMessageId] = useState<string>();
-  const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
   const presentationMessages = useMemo(
@@ -88,54 +91,6 @@ export function ChatWorkspace({
     },
     [alert, chat, t, topicId],
   );
-  const handleCopyAssistantMessage = useCallback(
-    ({ messageId, text }: { messageId: string; text: string }) => {
-      void Clipboard.setStringAsync(text)
-        .then(() => {
-          if (copiedFeedbackTimerRef.current !== null) {
-            clearTimeout(copiedFeedbackTimerRef.current);
-          }
-
-          setCopiedMessageId(messageId);
-          copiedFeedbackTimerRef.current = setTimeout(() => {
-            copiedFeedbackTimerRef.current = null;
-            setCopiedMessageId(undefined);
-          }, COPIED_FEEDBACK_DURATION_MS);
-        })
-        .catch((error) => {
-          logger.error('Copy assistant message failed', error as Error);
-          alert.show({ title: t('chat.messageActions.copyFailed') });
-        });
-    },
-    [alert, t],
-  );
-  const handleRegenerateAssistantMessage = useCallback(
-    (messageId: string) => {
-      void regenerateAssistantMessage({ messageId }).catch((error) => {
-        logger.error('Regenerate assistant message failed', error as Error);
-        alert.show({ title: t('chat.messageActions.regenerateFailed') });
-      });
-    },
-    [alert, regenerateAssistantMessage, t],
-  );
-  const assistantActions = useMemo<AssistantMessageActions | undefined>(
-    () =>
-      bottomAccessoryHeight === undefined
-        ? undefined
-        : {
-            copiedMessageId,
-            isRegenerateDisabled: chatTopic.isBusy,
-            onCopy: handleCopyAssistantMessage,
-            onRegenerate: handleRegenerateAssistantMessage,
-          },
-    [
-      chatTopic.isBusy,
-      copiedMessageId,
-      handleCopyAssistantMessage,
-      handleRegenerateAssistantMessage,
-      bottomAccessoryHeight,
-    ],
-  );
   const requiresInitialHistoryLayout = shouldWaitForInitialHistoryLayout({
     hasHistoryBeforePendingTurn: chatTopic.hasHistoryBeforePendingTurn,
     isLoadingInitial,
@@ -146,15 +101,6 @@ export function ChatWorkspace({
     requiresInitialHistoryLayout,
   });
   const contentTopInset = resolveHeaderContentInset(headerHeight);
-
-  useEffect(
-    () => () => {
-      if (copiedFeedbackTimerRef.current !== null) {
-        clearTimeout(copiedFeedbackTimerRef.current);
-      }
-    },
-    [],
-  );
 
   // 冷/暖进入差异取证：记录 数据加载态 + 遮罩可见性 + 可见消息数 + 锚点 的每次变化。
   useEffect(() => {
@@ -169,18 +115,26 @@ export function ChatWorkspace({
   return (
     <View className="flex-1 bg-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
-      <MessageList
-        assistantActions={assistantActions}
-        key={listRenderKey}
-        bottomAccessoryHeight={bottomAccessoryHeight}
-        contentBottomInset={contentBottomInset}
-        contentTopInset={contentTopInset}
-        enteringMessageId={chatTopic.pendingUserMessage?.id}
-        keyboardOffset={keyboardOffset}
-        messages={presentationMessages}
-        onLoadOlder={loadOlder}
-        onReady={markListLoaded}
-      />
+      <AssistantMessageActionsProvider
+        key={topicId}
+        isRegenerateDisabled={chatTopic.isBusy}
+        onRegenerate={regenerateAssistantMessage}
+      >
+        <MessageList
+          key={listRenderKey}
+          bottomAccessoryHeight={bottomAccessoryHeight}
+          contentBottomInset={contentBottomInset}
+          contentTopInset={contentTopInset}
+          enteringMessageId={chatTopic.pendingUserMessage?.id}
+          keyboardOffset={keyboardOffset}
+          messages={presentationMessages}
+          onLoadOlder={loadOlder}
+          onReady={markListLoaded}
+          renderAssistantMessage={
+            isAssistantToolbarEnabled ? renderChatAssistantMessage : undefined
+          }
+        />
+      </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet
         approvals={pendingApprovals}

@@ -8,14 +8,7 @@ export type MessagePresentationItem = Readonly<
   }
 >;
 
-export type AssistantMessageActions = {
-  copiedMessageId?: string;
-  isRegenerateDisabled: boolean;
-  onCopy: (input: { messageId: string; text: string }) => void;
-  onRegenerate: (messageId: string) => void;
-};
-
-type MessageListBaseProps = {
+export type MessageListProps = {
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
   contentTopInset: number;
@@ -24,17 +17,5 @@ type MessageListBaseProps = {
   messages: readonly MessagePresentationItem[];
   onLoadOlder?: () => Promise<void>;
   onReady?: () => void;
+  renderAssistantMessage?: (message: MessagePresentationItem) => ReactNode;
 };
-
-type DefaultAssistantMessageRenderingProps = {
-  assistantActions?: AssistantMessageActions;
-  renderAssistantMessage?: never;
-};
-
-type CustomAssistantMessageRenderingProps = {
-  assistantActions?: never;
-  renderAssistantMessage: (message: MessagePresentationItem) => ReactNode;
-};
-
-export type MessageListProps = MessageListBaseProps &
-  (DefaultAssistantMessageRenderingProps | CustomAssistantMessageRenderingProps);

@@ -1,6 +1,7 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
 import {
@@ -10,6 +11,7 @@ import {
   ComposerModelPill,
   type ComposerSendPayload,
   ComposerSurface,
+  useComposerMeta,
 } from '@/frontend/components/composer';
 import {
   createComposerMessageParts,
@@ -33,19 +35,15 @@ import {
   reconcileReasoningEffortForModel,
   reconcileWebSearchForModel,
 } from '@/frontend/hooks/chat/utils/modelReconcile';
+import { type ToolMentionId, toolMentions, toolMentionUrl } from '@/frontend/utils/toolMentions';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useChatTopic } from '../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenuItems } from './components/ChatInputMenuItems';
-import { ChatInputToolTag } from './components/ChatInputToolTag';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
-import {
-  type ChatInputActionId,
-  getChatInputAction,
-  toggleChatInputAction,
-} from './utils/chatInputActions';
+import { useChatInputWebSearchToggle } from './hooks/useChatInputWebSearchToggle';
 import { getChatInputReasoningEffortSnapshot } from './utils/chatInputReasoning';
 
 type ChatInputProps = {
@@ -59,16 +57,11 @@ type ChatInputProps = {
   topicId?: string;
 };
 
-type PendingWebSearchState = {
-  assistantId: string;
-  enabled: boolean;
-  isUpdating: boolean;
-};
-
 // 诊断埋点：量化输入框「真实 model 名」解析耗时（pref 段 + model DB 段）。`[PERF]` 前缀。
 const perfLog = loggerService.withContext('ChatPerf');
 
 export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatInputProps) {
+  const { t } = useTranslation();
   const modelSettings = useModelSettingSelections();
   const rawDefaultModel = modelSettings.selections.default;
   const defaultModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
@@ -110,119 +103,45 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
-  // The selected tool mirrors the assistant's `enableWebSearch`, so it is chat's
-  // own state rather than the composer's — the tag and the menu rows below are
-  // nodes this screen assembles, not something the composer models.
-  const [selectedToolId, setSelectedTool] = useState<ChatInputActionId | null>(null);
-  const selectedTool = getChatInputAction(selectedToolId);
-  const pendingWebSearch = useRef<PendingWebSearchState | undefined>(undefined);
-  const syncedAssistantId = useRef<string | null>(null);
-
-  // The one effect the reasoning effort's derive-on-read treatment does not fit:
-  // `enableWebSearch` is written back to the assistant, so this is not deriving
-  // a value but subscribing to an external store that the user's own optimistic
-  // write is racing. `pendingWebSearch` is what holds the optimistic value until
-  // the query reflects it, and it can only be checked once the query has moved.
-  /* eslint-disable react-hooks/set-state-in-effect -- see above */
-  useEffect(() => {
-    if (!selectedAssistantId) {
-      syncedAssistantId.current = null;
-      pendingWebSearch.current = undefined;
-      if (selectedToolId === 'web-search') setSelectedTool(null);
-      return;
-    }
-    if (!selectedAssistant) return;
-
-    if (syncedAssistantId.current !== selectedAssistantId) {
-      syncedAssistantId.current = selectedAssistantId;
-      pendingWebSearch.current = undefined;
-      setSelectedTool(selectedAssistant.settings.enableWebSearch ? 'web-search' : null);
-      return;
-    }
-
-    const pending = pendingWebSearch.current;
-    if (pending?.assistantId === selectedAssistantId) {
-      if (pending.enabled !== selectedAssistant.settings.enableWebSearch) return;
-      pendingWebSearch.current = undefined;
-    }
-
-    const canonicalToolId = selectedAssistant.settings.enableWebSearch ? 'web-search' : null;
-    if (selectedToolId === 'web-search' || selectedToolId === null) {
-      if (selectedToolId !== canonicalToolId) setSelectedTool(canonicalToolId);
-    }
-  }, [selectedAssistant, selectedAssistantId, selectedToolId]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  const { inputRef } = useComposerMeta();
 
   const persistWebSearch = useCallback(
-    (enabled: boolean) => {
-      if (!selectedAssistantId || !selectedAssistant) return;
-      const currentPending = pendingWebSearch.current;
-      if (!currentPending && selectedAssistant.settings.enableWebSearch === enabled) return;
+    (targetAssistantId: string, enabled: boolean) =>
+      updateAssistant(targetAssistantId, { settings: { enableWebSearch: enabled } }),
+    [updateAssistant],
+  );
+  const logWebSearchFailure = useCallback((error: unknown) => {
+    perfLog.warn('Failed to persist web search state', { error });
+  }, []);
+  const { enabled: isWebSearchEnabled, setEnabled: setWebSearchEnabled } =
+    useChatInputWebSearchToggle(
+      selectedAssistantId,
+      selectedAssistant?.settings.enableWebSearch ?? false,
+      persistWebSearch,
+      logWebSearchFailure,
+    );
 
-      if (currentPending?.assistantId === selectedAssistantId) {
-        currentPending.enabled = enabled;
-        if (currentPending.isUpdating) return;
-      } else {
-        pendingWebSearch.current = {
-          assistantId: selectedAssistantId,
-          enabled,
-          isUpdating: false,
-        };
+  // The menu only writes the mention into the field; the text is what carries
+  // it from here, through the sent message, into the conversation.
+  //
+  // Inserted at the caret rather than appended, and through the field rather
+  // than through the draft, because a mention is a link: the URL is what names
+  // the tool, and a string handed to `setDraft` has nowhere to put it.
+  const handleMentionPress = useCallback(
+    (mentionId: ToolMentionId) => {
+      const mention = toolMentions.find((candidate) => candidate.id === mentionId);
+
+      if (!mention) {
+        return;
       }
 
-      void (async () => {
-        while (pendingWebSearch.current?.assistantId === selectedAssistantId) {
-          const pending = pendingWebSearch.current;
-          const attemptedEnabled = pending.enabled;
-          pending.isUpdating = true;
-
-          try {
-            await updateAssistant(selectedAssistantId, {
-              settings: { enableWebSearch: attemptedEnabled },
-            });
-          } catch (error) {
-            const latestPending: PendingWebSearchState | undefined = pendingWebSearch.current;
-            if (
-              latestPending?.assistantId !== selectedAssistantId ||
-              latestPending.enabled === attemptedEnabled
-            ) {
-              pendingWebSearch.current = undefined;
-              setSelectedTool(selectedAssistant.settings.enableWebSearch ? 'web-search' : null);
-              perfLog.warn('Failed to persist web search state', { error });
-              return;
-            }
-          }
-
-          const latestPending: PendingWebSearchState | undefined = pendingWebSearch.current;
-          if (
-            latestPending?.assistantId !== selectedAssistantId ||
-            latestPending.enabled === attemptedEnabled
-          ) {
-            if (latestPending) latestPending.isUpdating = false;
-            return;
-          }
-          latestPending.isUpdating = false;
-        }
-      })();
+      inputRef.current?.insertLink(t(mention.titleKey), toolMentionUrl(mention.id));
+      // Typed text never joins a link, so this is spacing and nothing more —
+      // without it whatever the user writes next abuts the mention.
+      inputRef.current?.insertText(' ');
     },
-    [selectedAssistant, selectedAssistantId, setSelectedTool, updateAssistant],
+    [inputRef, t],
   );
-  const handleActionSelect = useCallback(
-    (actionId: ChatInputActionId) => {
-      const nextActionId = toggleChatInputAction(selectedToolId, actionId);
-      setSelectedTool(nextActionId);
-      if (actionId === 'web-search') {
-        persistWebSearch(nextActionId === 'web-search');
-      }
-    },
-    [persistWebSearch, selectedToolId, setSelectedTool],
-  );
-  const handleToolClear = useCallback(() => {
-    setSelectedTool(null);
-    if (selectedToolId === 'web-search') {
-      persistWebSearch(false);
-    }
-  }, [persistWebSearch, selectedToolId, setSelectedTool]);
   const handleReasoningEffortSelect = useCallback(
     (nextReasoningEffort: Parameters<typeof selectReasoningEffort>[0]) => {
       selectReasoningEffort(nextReasoningEffort);
@@ -310,18 +229,14 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
             onStop={chatTopic.abort}
             streaming={chatTopic.isBusy}
           >
-            <Composer.Collapsible>
-              {selectedTool ? (
-                <ChatInputToolTag onClear={handleToolClear} tool={selectedTool} />
-              ) : null}
-            </Composer.Collapsible>
             <ComposerAttachments />
             <ComposerField />
             <Composer.Toolbar>
               <ComposerMenu>
                 <ChatInputMenuItems
-                  onActionPress={handleActionSelect}
-                  selectedToolId={selectedToolId}
+                  isWebSearchEnabled={isWebSearchEnabled}
+                  onMentionPress={handleMentionPress}
+                  onWebSearchChange={setWebSearchEnabled}
                 />
               </ComposerMenu>
               <ComposerModelPill

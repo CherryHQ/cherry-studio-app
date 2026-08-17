@@ -1,6 +1,6 @@
+import type { ComposerInputHandle } from '@cherrystudio/ui/components';
 import { Composer } from '@cherrystudio/ui/components';
 import { type ReactNode, useEffect } from 'react';
-import type { TextInput } from 'react-native';
 import { KeyboardController } from 'react-native-keyboard-controller';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -221,7 +221,7 @@ function FieldProbe() {
 
   useEffect(() => {
     mockComposerState = composerState;
-    inputRef.current = { blur: mockBlur, focus: mockFocus } as unknown as TextInput;
+    inputRef.current = { blur: mockBlur, focus: mockFocus } as unknown as ComposerInputHandle;
     return () => {
       inputRef.current = null;
     };

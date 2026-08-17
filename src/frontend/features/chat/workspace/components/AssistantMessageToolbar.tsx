@@ -4,26 +4,30 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import type { AssistantMessageActions, MessagePresentationItem } from '../../types';
+import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
+
+import {
+  useAssistantMessageActionCommands,
+  useAssistantMessageActionState,
+} from '../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
 type AssistantMessageToolbarProps = {
-  isCopied: boolean;
-  isRegenerateDisabled: boolean;
   message: MessagePresentationItem;
-  onCopy: AssistantMessageActions['onCopy'];
-  onRegenerate: AssistantMessageActions['onRegenerate'];
 };
 
 export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
-  isCopied,
-  isRegenerateDisabled,
   message,
-  onCopy,
-  onRegenerate,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
+  const { copiedMessageId, isRegenerateDisabled } = useAssistantMessageActionState();
+  const { copyAssistantMessage, regenerateAssistantMessage } = useAssistantMessageActionCommands();
   const copyText = useMemo(() => copyAssistantMessageText(message.data.parts ?? []), [message]);
+  const isCopied = copiedMessageId === message.id;
+
+  if (message.status === 'pending') {
+    return null;
+  }
 
   return (
     <View className="-ml-3.5 flex-row items-center" testID="assistant-message-toolbar">
@@ -32,7 +36,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
           className="size-11 p-0"
           icon={isCopied ? <CheckIcon /> : <CopyIcon />}
-          onPress={() => onCopy({ messageId: message.id, text: copyText })}
+          onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
           size="sm"
           testID="assistant-message-copy"
           variant="ghost"
@@ -43,7 +47,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
         className="size-11 p-0"
         disabled={isRegenerateDisabled}
         icon={<RefreshCwIcon />}
-        onPress={() => onRegenerate(message.id)}
+        onPress={() => regenerateAssistantMessage(message.id)}
         size="sm"
         testID="assistant-message-regenerate"
         variant="ghost"

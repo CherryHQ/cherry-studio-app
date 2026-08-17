@@ -1,9 +1,13 @@
+import { createElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessagePresentationItem } from '../../../types';
-import { AssistantMessageRow } from '../AssistantMessageRow';
+import { AssistantMessage } from '../AssistantMessage';
 
-const mockMessageParts = jest.fn((_props: { message: MessagePresentationItem }) => null);
+// 正文渲染成宿主元素而不是 null，组合槽位的测试才能在树里定位它、断言正文与配件的先后。
+const mockMessageParts = jest.fn((props: { message: MessagePresentationItem }) =>
+  createElement('MessageParts', props),
+);
 const mockDotMatrixSquare20 = jest.fn((_props: { active: boolean; size: number }) => null);
 
 jest.mock('../../../messageContent', () => ({
@@ -40,7 +44,7 @@ function createAssistantMessage(
   };
 }
 
-describe('AssistantMessageRow', () => {
+describe('AssistantMessage', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
@@ -53,7 +57,7 @@ describe('AssistantMessageRow', () => {
 
   test('shows the pending placeholder for an empty pending assistant message', () => {
     act(() => {
-      renderer = create(<AssistantMessageRow message={createAssistantMessage('pending')} />);
+      renderer = create(<AssistantMessage message={createAssistantMessage('pending')} />);
     });
 
     expect(mockDotMatrixSquare20).toHaveBeenCalledWith({ active: true, size: 20 });
@@ -64,10 +68,45 @@ describe('AssistantMessageRow', () => {
     const message = createAssistantMessage('pending', [{ text: 'Thinking', type: 'text' }]);
 
     act(() => {
-      renderer = create(<AssistantMessageRow message={message} />);
+      renderer = create(<AssistantMessage message={message} />);
     });
 
     expect(mockMessageParts).toHaveBeenCalledWith({ message });
     expect(mockDotMatrixSquare20).not.toHaveBeenCalled();
   });
+
+  test('renders composed children after the message body', () => {
+    const message = createAssistantMessage('success', [{ text: 'Answer', type: 'text' }]);
+
+    act(() => {
+      renderer = create(
+        <AssistantMessage message={message}>
+          <AccessoryProbe />
+        </AssistantMessage>,
+      );
+    });
+
+    const rendered = renderer?.root.findAll(
+      (node) => node.type === 'MessageParts' || node.type === AccessoryProbe,
+    );
+
+    expect(rendered?.map((node) => node.type)).toEqual(['MessageParts', AccessoryProbe]);
+  });
+
+  test('keeps the composition slot during the pending placeholder', () => {
+    act(() => {
+      renderer = create(
+        <AssistantMessage message={createAssistantMessage('pending')}>
+          <AccessoryProbe />
+        </AssistantMessage>,
+      );
+    });
+
+    expect(mockDotMatrixSquare20).toHaveBeenCalledWith({ active: true, size: 20 });
+    expect(renderer?.root.findAllByType(AccessoryProbe)).toHaveLength(1);
+  });
 });
+
+function AccessoryProbe() {
+  return null;
+}

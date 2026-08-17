@@ -9,7 +9,7 @@ import { usePreference } from '@/frontend/data/hooks';
 import { resolveTypographyScale } from '@/frontend/utils/typographyScale';
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
-import { AssistantMessageRow, MessageSlideInProvider, UserMessageRow } from '../messageRow';
+import { AssistantMessage, MessageSlideInProvider, UserMessageRow } from '../messageRow';
 import { useMessageSlideInFlight } from '../messageRow/slideIn/hooks/useMessageSlideInFlight';
 import type { MessageListProps, MessagePresentationItem } from '../types';
 import { useAnchorPin } from './hooks/useAnchorPin';
@@ -83,7 +83,6 @@ function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[
 }
 
 export function MessageList({
-  assistantActions,
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
@@ -126,46 +125,16 @@ export function MessageList({
   const lastMessageId = messages[messages.length - 1]?.id;
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
-  const copiedMessageId = assistantActions?.copiedMessageId;
-  const isRegenerateDisabled = assistantActions?.isRegenerateDisabled;
-  const onCopy = assistantActions?.onCopy;
-  const onRegenerate = assistantActions?.onRegenerate;
-  const hasAssistantActions = assistantActions !== undefined;
-  const listExtraData = useMemo(
-    () =>
-      hasAssistantActions
-        ? {
-            copiedMessageId,
-            isRegenerateDisabled,
-          }
-        : undefined,
-    [copiedMessageId, hasAssistantActions, isRegenerateDisabled],
-  );
   const renderMessageRow = useCallback(
     ({ item }: LegendListRenderItemProps<MessagePresentationItem>) =>
       item.role === 'user' ? (
         <UserMessageRow message={item} />
       ) : renderAssistantMessage ? (
         renderAssistantMessage(item)
-      ) : hasAssistantActions ? (
-        <AssistantMessageRow
-          isCopied={copiedMessageId === item.id}
-          isRegenerateDisabled={isRegenerateDisabled}
-          message={item}
-          onCopy={onCopy}
-          onRegenerate={onRegenerate}
-        />
       ) : (
-        <AssistantMessageRow message={item} />
+        <AssistantMessage message={item} />
       ),
-    [
-      copiedMessageId,
-      hasAssistantActions,
-      isRegenerateDisabled,
-      onCopy,
-      onRegenerate,
-      renderAssistantMessage,
-    ],
+    [renderAssistantMessage],
   );
   const handleStartReached = useCallback(() => {
     if (!onLoadOlder) {
@@ -305,7 +274,6 @@ export function MessageList({
             drawDistance={80}
             estimatedItemSize={300}
             estimatedHeaderSize={contentTopInset}
-            extraData={listExtraData}
             freeze={freeze}
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}

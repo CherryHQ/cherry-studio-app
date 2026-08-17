@@ -75,6 +75,10 @@ jest.mock('../components/ChatInitialRenderCover', () => ({
   },
 }));
 
+jest.mock('../components/ChatAssistantMessage', () => ({
+  ChatAssistantMessage: () => null,
+}));
+
 jest.mock('../components/ChatOlderMessagesIndicator', () => ({
   ChatOlderMessagesIndicator: ({ isLoading }: { isLoading: boolean }) => {
     mockIsLoadingOlder = isLoading;
@@ -104,24 +108,29 @@ function renderWorkspace(isPreview: boolean, messages: readonly Message[]) {
   let renderer: ReactTestRenderer | undefined;
 
   act(() => {
-    renderer = create(
-      <ChatWorkspace
-        bottomAccessoryHeight={isPreview ? undefined : mockInputHeightShared}
-        contentBottomInset={isPreview ? 12 : 96}
-        keyboardOffset={isPreview ? 0 : 26}
-        messageWindow={{
-          isLoadingInitial: false,
-          isLoadingOlder: true,
-          loadOlder: mockLoadOlder,
-          messages,
-        }}
-        renderGateKey="topic-1:history"
-        topicId="topic-1"
-      />,
-    );
+    renderer = create(createWorkspaceElement(isPreview, messages));
   });
 
   return renderer;
+}
+
+function createWorkspaceElement(isPreview: boolean, messages: readonly Message[]) {
+  return (
+    <ChatWorkspace
+      bottomAccessoryHeight={isPreview ? undefined : mockInputHeightShared}
+      contentBottomInset={isPreview ? 12 : 96}
+      isAssistantToolbarEnabled={!isPreview}
+      keyboardOffset={isPreview ? 0 : 26}
+      messageWindow={{
+        isLoadingInitial: false,
+        isLoadingOlder: true,
+        loadOlder: mockLoadOlder,
+        messages,
+      }}
+      renderGateKey="topic-1:history"
+      topicId="topic-1"
+    />
+  );
 }
 
 describe('ChatWorkspace message presentation integration', () => {
@@ -156,13 +165,14 @@ describe('ChatWorkspace message presentation integration', () => {
 
   test('passes displayable messages, history loading, and dock layout on a normal page', () => {
     const pendingUserMessage = createMessage('user-pending', 'user');
-    mockChatTopic.pendingUserMessage = pendingUserMessage;
-
-    renderer = renderWorkspace(false, [
+    const messages = [
       createMessage('system-1', 'system'),
       createMessage('user-1', 'user'),
       createMessage('assistant-1', 'assistant'),
-    ]);
+    ];
+    mockChatTopic.pendingUserMessage = pendingUserMessage;
+
+    renderer = renderWorkspace(false, messages);
 
     expect(mockMessageListProps?.messages.map((message) => message.id)).toEqual([
       'user-1',
@@ -174,7 +184,14 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.contentBottomInset).toBe(96);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
+    expect(mockMessageListProps?.renderAssistantMessage).toEqual(expect.any(Function));
     expect(mockIsLoadingOlder).toBe(true);
+
+    const renderAssistantMessage = mockMessageListProps?.renderAssistantMessage;
+    mockChatTopic = { ...mockChatTopic, isBusy: true };
+    act(() => renderer?.update(createWorkspaceElement(false, messages)));
+
+    expect(mockMessageListProps?.renderAssistantMessage).toBe(renderAssistantMessage);
   });
 
   test('omits the internal scroll button accessory in preview', () => {
@@ -183,6 +200,7 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.bottomAccessoryHeight).toBeUndefined();
     expect(mockMessageListProps?.contentBottomInset).toBe(12);
     expect(mockMessageListProps?.keyboardOffset).toBe(0);
+    expect(mockMessageListProps?.renderAssistantMessage).toBeUndefined();
   });
 
   test('passes the initial-ready callback through to the history render gate', () => {

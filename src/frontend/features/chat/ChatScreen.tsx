@@ -72,6 +72,7 @@ export function ChatScreen() {
       <View className="flex-1 bg-background">
         {isTopicAvailable ? (
           <ChatWorkspace
+            isAssistantToolbarEnabled={!isPreview}
             bottomAccessoryHeight={isPreview ? undefined : composerDockLayout.inputHeightShared}
             contentBottomInset={contentBottomInset}
             keyboardOffset={isPreview ? 0 : composerDockLayout.keyboardOffset}
