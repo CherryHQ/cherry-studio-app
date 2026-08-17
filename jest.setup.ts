@@ -37,6 +37,12 @@ jest.mock('react-native-keyboard-controller', () =>
   require('react-native-keyboard-controller/jest'),
 );
 
+// Both of its components are Fabric views, so rendering one or calling any ref
+// method throws under Jest — and the composer's field is one of them. The
+// shipped entry renders a real `TextInput` and turns every imperative method
+// into a spy, which is what lets mention insertion be asserted at all.
+jest.mock('react-native-enriched-markdown', () => require('react-native-enriched-markdown/jest'));
+
 // expo-symbols' SymbolView is a native view (jest-expo runs as iOS, so every
 // @cherrystudio/app-icons icon reaches it). Icon behavior is asserted through
 // per-suite icon mocks, not the native symbol, so render nothing.

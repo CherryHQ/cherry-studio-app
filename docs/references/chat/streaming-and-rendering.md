@@ -102,7 +102,10 @@ Current rendering:
 - `text`, `reasoning`, `data-code`, `data-compact`, and `data-translation` parts render through `PartMarkdown`.
 - `PartMarkdown` uses `react-native-streamdown` with GitHub flavor and LaTeX support.
 - Active assistant Markdown and stable historical assistant Markdown deliberately share the same `StreamdownText` path.
-- User messages render `text` parts in plain-text mode.
+- User messages render `text` parts in plain-text mode, with tool mentions
+  (`[<name>](tool://<id>)`) picked out in the brand color by `splitToolMentions`, which renders the
+  name alone. Nested `Text` rather than a renderer: the mention is the only thing to style, and a
+  Markdown renderer would parse everything else the user typed along with it.
 - File, source, tool, step, video, and unknown parts render as dedicated placeholders or focused components.
 
 Current non-goals:

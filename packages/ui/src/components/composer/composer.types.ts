@@ -1,6 +1,10 @@
 import type { PasteEventPayload } from 'expo-paste-input';
-import type { ReactNode, Ref } from 'react';
-import type { StyleProp, TextInput, TextStyle, ViewStyle } from 'react-native';
+import type { ReactNode, RefObject } from 'react';
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
+import type {
+  EnrichedMarkdownTextInputInstance,
+  MarkdownTextInputStyle,
+} from 'react-native-enriched-markdown';
 
 /**
  * Every user-facing string the composer renders on the caller's behalf. Tools
@@ -83,15 +87,33 @@ export type ComposerCollapsibleProps = {
   testID?: string;
 };
 
+/**
+ * The field's imperative half — what a caller needs to insert an entity the
+ * text alone cannot express, or to take focus away. `Composer` is otherwise
+ * controlled; this exists because a link is a range with a URL attached, and
+ * there is no string a caller could hand to `onChangeText` that means one.
+ */
+export type ComposerInputHandle = EnrichedMarkdownTextInputInstance;
+
 export type ComposerInputProps = {
   autoFocus?: boolean;
+  /**
+   * Styling for the entities the field can contain. Left to the caller because
+   * what a link *means* here is the caller's: the composer has no idea one URL
+   * scheme is a tool mention and another is a web address.
+   */
+  markdownStyle?: MarkdownTextInputStyle;
   /**
    * Every paste, not just the ones the composer could use — text arrives here
    * too, already handled by the field. Callers filter for what they want.
    */
   onPaste?: (payload: PasteEventPayload) => void;
   placeholder?: string;
-  ref?: Ref<TextInput>;
+  /**
+   * A ref object, not a callback ref — the underlying input only accepts the
+   * former, and the field reads it too so it can push caller-side changes down.
+   */
+  ref?: RefObject<ComposerInputHandle | null>;
   style?: StyleProp<TextStyle>;
   testID?: string;
 };
