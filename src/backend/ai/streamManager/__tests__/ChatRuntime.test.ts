@@ -15,6 +15,10 @@ import type { UIMessageChunk } from 'ai';
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { ResourceScopeCoordinator } from '@/backend/core/resources/ResourceScopeCoordinator';
 import { ScopeFencedError } from '@/backend/core/resources/types';
+import type {
+  BackgroundReplyLifecycle,
+  BackgroundReplyTurn,
+} from '@/backend/services/backgroundReply';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
@@ -129,6 +133,170 @@ describe('ChatRuntime', () => {
     );
     expect(invalidateTopicMessages).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
+  });
+
+  test('reports assembled stream updates and completion to the background reply lifecycle', async () => {
+    const services = createServices();
+    const backgroundTurn = createBackgroundReplyTurn();
+    const backgroundReply = createBackgroundReplyLifecycle(backgroundTurn);
+    const runtime = createRuntime({ backgroundReply, services });
+    const assistantChunk = createUiMessage('assistant-1', 'hello');
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([assistantChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      assistantName: 'Assistant',
+      topicId: 'topic-1',
+      topicTitle: 'Topic',
+    });
+    expect(backgroundTurn.update).toHaveBeenCalledWith(assistantChunk);
+    expect(backgroundTurn.finish).toHaveBeenCalledWith('completed');
+  });
+
+  test('keeps streaming when the background reply lifecycle throws', async () => {
+    const throwingServices = createServices();
+    const throwingLifecycle: BackgroundReplyLifecycle = {
+      clearTopic: jest.fn(),
+      startTurn: jest.fn(() => {
+        throw new Error('native start failed');
+      }),
+    };
+    const throwingRuntime = createRuntime({
+      backgroundReply: throwingLifecycle,
+      services: throwingServices,
+    });
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([createUiMessage('assistant-1', 'ok')]));
+
+    await expect(
+      throwingRuntime.sendText({
+        selectedModelId: 'provider::model' as UniqueModelId,
+        text: 'hi',
+        topicId: 'topic-1',
+      }),
+    ).resolves.toBeUndefined();
+    expect(throwingLifecycle.clearTopic).toHaveBeenCalledWith('topic-1');
+  });
+
+  test('pauses the background reply lifecycle while tool approval is pending', async () => {
+    const services = createServices();
+    const backgroundTurn = createBackgroundReplyTurn();
+    const runtime = createRuntime({
+      backgroundReply: createBackgroundReplyLifecycle(backgroundTurn),
+      services,
+    });
+    const approvalChunk = {
+      id: 'assistant-1',
+      parts: [createApprovalPart('approval-1')],
+      role: 'assistant',
+    } as CherryUIMessage;
+    mockReadUIMessageStream.mockReturnValue(asyncIterable([approvalChunk]));
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'approve',
+      topicId: 'topic-1',
+    });
+
+    expect(backgroundTurn.awaitApproval).toHaveBeenCalledWith(approvalChunk);
+    expect(backgroundTurn.finish).not.toHaveBeenCalled();
+  });
+
+  test('reports failed and cancelled terminal outcomes to the background reply lifecycle', async () => {
+    const failedServices = createServices();
+    const failedTurn = createBackgroundReplyTurn();
+    mockReadUIMessageStream.mockReturnValue(failingAsyncIterable(new Error('stream failed')));
+    const failedRuntime = createRuntime({
+      backgroundReply: createBackgroundReplyLifecycle(failedTurn),
+      services: failedServices,
+    });
+
+    await failedRuntime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'fail',
+      topicId: 'topic-1',
+    });
+    expect(failedTurn.finish).toHaveBeenCalledWith('failed');
+
+    const cancelledServices = createServices();
+    const cancelledTurn = createBackgroundReplyTurn();
+    const cancelledRuntime = createRuntime({
+      backgroundReply: createBackgroundReplyLifecycle(cancelledTurn),
+      services: cancelledServices,
+    });
+    mockReadUIMessageStream.mockImplementation(() =>
+      (async function* () {
+        cancelledRuntime.abort('topic-1');
+        yield createUiMessage('assistant-1', 'partial');
+      })(),
+    );
+
+    await cancelledRuntime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'cancel',
+      topicId: 'topic-1',
+    });
+    expect(cancelledTurn.finish).toHaveBeenCalledWith('cancelled');
+  });
+
+  test('uses only the first sibling execution for a multi-model background reply', async () => {
+    const services = createServices();
+    const backgroundTurn = createBackgroundReplyTurn();
+    const backgroundReply = createBackgroundReplyLifecycle(backgroundTurn);
+    const modelIds = [
+      'provider-a::model-a' as UniqueModelId,
+      'provider-b::model-b' as UniqueModelId,
+    ];
+    configureDynamicReservation(services);
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      message.id === 'assistant-reserved-2'
+        ? failingAsyncIterable(new Error('second model failed'))
+        : asyncIterable([createUiMessage(message.id, message.id)]),
+    );
+    const runtime = createRuntime({ backgroundReply, services });
+
+    await runtime.sendMultiModelText({
+      selectedModelIds: modelIds,
+      text: 'compare',
+      topicId: 'topic-1',
+    });
+
+    expect(backgroundReply.startTurn).toHaveBeenCalledTimes(1);
+    expect(backgroundTurn.update).toHaveBeenCalledTimes(1);
+    expect(backgroundTurn.update).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'assistant-reserved-1' }),
+    );
+    expect(backgroundTurn.finish).toHaveBeenCalledWith('completed');
+  });
+
+  test('uses a failed first sibling as the multi-model background reply outcome', async () => {
+    const services = createServices();
+    const backgroundTurn = createBackgroundReplyTurn();
+    const backgroundReply = createBackgroundReplyLifecycle(backgroundTurn);
+    const modelIds = [
+      'provider-a::model-a' as UniqueModelId,
+      'provider-b::model-b' as UniqueModelId,
+    ];
+    configureDynamicReservation(services);
+    mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
+      message.id === 'assistant-reserved-1'
+        ? failingAsyncIterable(new Error('first model failed'))
+        : asyncIterable([createUiMessage(message.id, message.id)]),
+    );
+    const runtime = createRuntime({ backgroundReply, services });
+
+    await runtime.sendMultiModelText({
+      selectedModelIds: modelIds,
+      text: 'compare',
+      topicId: 'topic-1',
+    });
+
+    expect(backgroundTurn.update).not.toHaveBeenCalled();
+    expect(backgroundTurn.finish).toHaveBeenCalledWith('failed');
   });
 
   test('uses the bound assistant model without reading the global default', async () => {
@@ -667,6 +835,67 @@ describe('ChatRuntime', () => {
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
+  test('publishes the new-topic turn before navigating and before persisting it', async () => {
+    const services = createServices();
+    const snapshotAtNavigation: ReturnType<typeof runtime.getTopicSnapshot>[] = [];
+    let reservationsAtNavigation = -1;
+    const openTopic = jest.fn((topicId: string) => {
+      snapshotAtNavigation.push(runtime.getTopicSnapshot(topicId));
+      reservationsAtNavigation = (services.message.createUserMessageWithPlaceholders as jest.Mock)
+        .mock.calls.length;
+    });
+    const runtime = createRuntime({ openTopic, services });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendNewTopicText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'first message from empty topic',
+    });
+
+    // 目的地挂载的那一刻要展示的东西必须已经在快照里，否则就是导航到一个空界面。
+    expect(openTopic).toHaveBeenCalledWith('topic-1');
+    const published = snapshotAtNavigation[0];
+    expect(published?.status).toBe('reserving');
+    expect(published?.hasHistoryBeforePendingTurn).toBe(false);
+    expect(published?.pendingUserMessage?.data.parts).toEqual([
+      { type: 'text', text: 'first message from empty topic' },
+    ]);
+    expect(published?.overlayMessage?.status).toBe('pending');
+    // 而且它比落库更早：这一版把导航从「写完之后」挪到了「写之前」。
+    expect(reservationsAtNavigation).toBe(0);
+  });
+
+  test('persists the turn under the ids it already published', async () => {
+    const services = createServices();
+    let publishedSnapshot: ReturnType<typeof runtime.getTopicSnapshot> | undefined;
+    const runtime = createRuntime({
+      openTopic: (topicId) => {
+        publishedSnapshot = runtime.getTopicSnapshot(topicId);
+      },
+      services,
+    });
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendNewTopicText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'first message from empty topic',
+    });
+
+    // 乐观行与落库行同一身份，投影才会就地替换而不是追加出一条重复气泡。
+    const reservation = (services.message.createUserMessageWithPlaceholders as jest.Mock).mock
+      .calls[0]?.[0];
+    expect(reservation.userMessage.id).toBe(publishedSnapshot?.pendingUserMessage?.id);
+    expect(reservation.placeholders.map((placeholder: { id: string }) => placeholder.id)).toEqual(
+      publishedSnapshot?.overlayMessages?.map((message) => message.id),
+    );
+    expect(reservation.userMessage.id).toEqual(expect.any(String));
+    expect(reservation.placeholders[0].id).not.toBe(reservation.userMessage.id);
+  });
+
   test('starts another new topic while the previous one is still streaming', async () => {
     const services = createServices();
     const createTopicMock = jest
@@ -1169,7 +1398,8 @@ describe('ChatRuntime', () => {
     ]);
     services.model.getById = jest.fn(async (modelId: UniqueModelId) => createModel(modelId));
     const invalidateTopicMessages = jest.fn(async () => undefined);
-    const runtime = createRuntime({ invalidateTopicMessages, services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, invalidateTopicMessages, services });
     const finalChunk = createUiMessage('assistant-1', 'tool ran; here is the answer');
     mockReadUIMessageStream.mockReturnValue(asyncIterable([finalChunk]));
 
@@ -1185,6 +1415,11 @@ describe('ChatRuntime', () => {
       { approvalId: 'approval-1', approved: true, updatedInput: { query: 'revised' } },
     ]);
     expect(services.message.getPathToNode).toHaveBeenCalledWith('assistant-1');
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      assistantName: 'Assistant',
+      topicId: 'topic-1',
+      topicTitle: 'Topic',
+    });
     expect(services.ai.streamText).toHaveBeenCalledWith(
       expect.objectContaining({
         chatId: 'topic-1',
@@ -1241,7 +1476,8 @@ describe('ChatRuntime', () => {
       appliedApprovalIds: [],
       parts: [createRespondedApprovalPart('approval-1')],
     }));
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await runtime.respondToolApproval({
       approvalId: 'approval-1',
@@ -1252,6 +1488,7 @@ describe('ChatRuntime', () => {
 
     expect(services.message.getById).not.toHaveBeenCalled();
     expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(backgroundReply.clearTopic).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -1293,7 +1530,8 @@ describe('ChatRuntime', () => {
       appliedApprovalIds: [],
       parts: [createApprovalPart('approval-1')],
     }));
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await expect(
       runtime.respondToolApproval({
@@ -1305,13 +1543,15 @@ describe('ChatRuntime', () => {
     ).rejects.toThrow('The tool approval request was not found on the message.');
 
     expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(backgroundReply.clearTopic).not.toHaveBeenCalled();
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
   });
 
   test('reports a deleted approval message without starting a continuation', async () => {
     const services = createServices();
     services.message.applyToolApprovalDecisions = jest.fn(async () => null);
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await expect(
       runtime.respondToolApproval({
@@ -1323,7 +1563,8 @@ describe('ChatRuntime', () => {
     ).rejects.toThrow('The tool approval message no longer exists.');
 
     expect(services.ai.streamText).not.toHaveBeenCalled();
-    expect(runtime.getTopicSnapshot('topic-1').status).toBe('awaiting-approval');
+    expect(backgroundReply.clearTopic).toHaveBeenCalledWith('topic-1');
+    expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
   test('persists an error and keeps prior parts when the resumed stream fails before any chunk', async () => {
@@ -1616,7 +1857,8 @@ describe('ChatRuntime', () => {
     services.topic.getById = jest.fn(async () => {
       throw new Error('topic lookup failed');
     });
-    const runtime = createRuntime({ services });
+    const backgroundReply = createBackgroundReplyLifecycle();
+    const runtime = createRuntime({ backgroundReply, services });
 
     await expect(
       runtime.respondToolApproval({
@@ -1642,6 +1884,7 @@ describe('ChatRuntime', () => {
       }),
     );
     expect(services.ai.streamText).not.toHaveBeenCalled();
+    expect(backgroundReply.clearTopic).toHaveBeenCalledWith('topic-1');
     expect(runtime.getTopicSnapshot('topic-1').status).toBe('idle');
   });
 
@@ -1678,12 +1921,14 @@ describe('ChatRuntime', () => {
 
   test('does not open a new topic when aborted after topic creation', async () => {
     const services = createServices();
-    const invalidateTopics = createDeferredInvalidation({ blockOnCall: 1 });
     const openTopic = jest.fn();
-    const runtime = createRuntime({
-      invalidateTopics: invalidateTopics.fn,
-      openTopic,
-      services,
+    const runtime = createRuntime({ openTopic, services });
+    // 话题已经建出来、这一轮还没发布出去的那个窗口。挂在附件落盘上，因为它是话题创建之后、
+    // 乐观发布之前唯一一个 await 点——导航如今就挂在那次发布上。
+    const partsGate = createDeferred();
+    mockCreateMessageParts.mockImplementationOnce(async (parts: readonly CherryMessagePart[]) => {
+      await partsGate.promise;
+      return { entries: [], parts: [...parts] };
     });
 
     const sendPromise = runtime.sendNewTopicText({
@@ -1691,9 +1936,9 @@ describe('ChatRuntime', () => {
       text: 'first',
     });
 
-    await waitUntil(() => invalidateTopics.callCount > 0);
+    await waitUntil(() => mockCreateMessageParts.mock.calls.length > 0);
     runtime.abort(NEW_TOPIC_SNAPSHOT_KEY);
-    invalidateTopics.resolve();
+    partsGate.resolve();
     await sendPromise;
 
     expect(openTopic).not.toHaveBeenCalled();
@@ -2384,6 +2629,7 @@ describe('ChatRuntime', () => {
 
     test('deleting a topic aborts its live turn and lands the terminal write first', async () => {
       const services = createServices();
+      const backgroundReply = createBackgroundReplyLifecycle();
       let streamSignal: AbortSignal | undefined;
       services.ai.streamText = jest.fn(async (request: ChatStreamRequest) => {
         streamSignal = request.requestOptions.signal;
@@ -2392,7 +2638,7 @@ describe('ChatRuntime', () => {
       mockReadUIMessageStream.mockImplementation(({ message }: { message: CherryUIMessage }) =>
         abortableAsyncIterable(createUiMessage(message.id, 'partial'), streamSignal!),
       );
-      const runtime = createRuntime({ services });
+      const runtime = createRuntime({ backgroundReply, services });
 
       const turn = runtime.sendText({
         selectedModelId: 'provider::model' as UniqueModelId,
@@ -2408,6 +2654,7 @@ describe('ChatRuntime', () => {
         // its terminal row, so it cannot write into a topic that is gone.
         finalizedBeforeMutation =
           (services.message.finalizeAssistantMessage as jest.Mock).mock.calls.length > 0;
+        expect(backgroundReply.clearTopic).toHaveBeenCalledWith('topic-1');
       });
 
       expect(finalizedBeforeMutation).toBe(true);
@@ -2601,12 +2848,15 @@ function asyncIterableWithFailure<T>(items: T[], error: Error) {
 
 function createDeferred<T = void>() {
   let resolve: (value: T) => void = () => undefined;
-  const promise = new Promise<T>((nextResolve) => {
+  let reject: (reason?: unknown) => void = () => undefined;
+  const promise = new Promise<T>((nextResolve, nextReject) => {
     resolve = nextResolve;
+    reject = nextReject;
   });
 
   return {
     promise,
+    reject,
     resolve,
   };
 }
@@ -2615,9 +2865,10 @@ function delay(durationMs: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
-function createDeferredInvalidation(options: { blockOnCall?: number } = {}) {
+function createDeferredInvalidation() {
   const deferred = createDeferred();
-  const blockOnCall = options.blockOnCall ?? 2;
+  // 第一次调用放行、第二次卡住，把测试停在两次失效通知之间的那个窗口。
+  const blockOnCall = 2;
   let callCount = 0;
 
   return {
@@ -2669,6 +2920,7 @@ async function waitUntil(predicate: () => boolean) {
 }
 
 function createRuntime(input: {
+  backgroundReply?: BackgroundReplyLifecycle;
   config?: Partial<ChatRuntimeConfig>;
   invalidateTopicMessages?: (topicId: string) => Promise<void>;
   invalidateTopics?: () => Promise<void>;
@@ -2679,7 +2931,9 @@ function createRuntime(input: {
     // The container injects `AiService` here to build the production dependency
     // set; this suite supplies that set whole, so the slot is never read.
     undefined as never,
+    input.backgroundReply ?? createBackgroundReplyLifecycle(),
     {
+      backgroundReply: input.backgroundReply ?? createBackgroundReplyLifecycle(),
       files: {
         createParts: (parts) => mockCreateMessageParts(parts),
         discard: (...args) => mockDiscardInternalEntries(...args),
@@ -2706,10 +2960,28 @@ function createRuntime(input: {
   return runtime;
 }
 
+function createBackgroundReplyLifecycle(
+  turn: BackgroundReplyTurn = createBackgroundReplyTurn(),
+): BackgroundReplyLifecycle {
+  return {
+    clearTopic: jest.fn(),
+    startTurn: jest.fn(() => turn),
+  };
+}
+
+function createBackgroundReplyTurn(): BackgroundReplyTurn {
+  return {
+    awaitApproval: jest.fn(),
+    finish: jest.fn(),
+    update: jest.fn(),
+  };
+}
+
 function createServices() {
   const userMessage = createMessage('user-1', 'user');
   const assistantMessage = createMessage('assistant-1', 'assistant');
   const model = createModel();
+  let mintedIdSequence = 0;
   const finalizeAssistantMessage = jest.fn(
     async (
       _id: string,
@@ -2750,6 +3022,8 @@ function createServices() {
       getChildrenByParentId: jest.fn(async () => []),
       getPathToNode: jest.fn(async () => [userMessage]),
       getPathThrough: jest.fn(async () => [userMessage, assistantMessage]),
+      // 确定性的铸币机：真实实现是 uuidv7，测试只需要「每次不同、可预期」。
+      newMessageId: jest.fn(() => `minted-${(mintedIdSequence += 1)}`),
       updateSiblingsGroupId: jest.fn(async () => undefined),
     },
     model: {

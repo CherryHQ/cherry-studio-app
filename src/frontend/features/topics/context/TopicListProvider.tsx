@@ -18,8 +18,11 @@ type TopicListData = InfiniteData<CursorPaginationResponse<TopicListItem>, strin
 
 type TopicListTopicsContextValue = {
   isPinActionDisabled: boolean;
+  isPinsLoading: boolean;
   isTopicListLoading: boolean;
+  pinQueryError?: Error;
   pinnedTopicIds: readonly string[];
+  topicQueryError?: Error;
   topics: readonly TopicListItem[];
 };
 
@@ -159,11 +162,22 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
   const topicsValue = useMemo(
     () => ({
       isPinActionDisabled,
+      isPinsLoading: topicPins.isLoading,
       isTopicListLoading: topicList.isLoadingInitial,
+      pinQueryError: topicPins.error,
       pinnedTopicIds: topicPins.pinnedIds,
+      topicQueryError: topicList.error,
       topics: topicList.topics,
     }),
-    [isPinActionDisabled, topicList.isLoadingInitial, topicList.topics, topicPins.pinnedIds],
+    [
+      isPinActionDisabled,
+      topicList.error,
+      topicList.isLoadingInitial,
+      topicList.topics,
+      topicPins.error,
+      topicPins.isLoading,
+      topicPins.pinnedIds,
+    ],
   );
   const actionsValue = useMemo(
     () => ({

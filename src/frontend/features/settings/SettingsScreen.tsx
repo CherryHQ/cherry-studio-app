@@ -1,4 +1,5 @@
 import {
+  BellIcon,
   CircleHalfIcon,
   CloudIcon,
   DatabaseIcon,
@@ -13,7 +14,7 @@ import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -107,6 +108,13 @@ export default function SettingsScreen() {
             />
           </Section>
           <Section>
+            {Platform.OS === 'ios' ? (
+              <Section.Item
+                label={t('settings.items.notifications')}
+                leading={<BellIcon className="size-5 text-foreground" />}
+                onPress={() => router.push('/settings/notifications')}
+              />
+            ) : null}
             <Section.Item
               label={t('settings.items.dataBackup')}
               leading={<DatabaseIcon className="size-5 text-foreground" />}

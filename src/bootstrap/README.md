@@ -39,11 +39,12 @@ restore flat `create*`, provider, runtime-task, or polyfill files beside `index.
    `ApplicationHost` and resolves the services the workflow surface is built over. Construction
    claims nothing; the host is not installed yet.
 3. `initialize()` installs the host, running the `Gate` phase — cache, SQLite, preferences — ordered
-   by the dependency graph, not by the order written here. Boot theme and i18n follow.
-4. `AppBootstrapGate` opens after required startup work succeeds.
-5. Best-effort post-ready tasks start outside the first-paint critical path: the `PostReady` phase
+   by the dependency graph, not by the order written here.
+4. Once the React Native startup cover owns the surface, boot theme and i18n initialize behind it.
+5. `AppBootstrapGate` opens after required startup work succeeds.
+6. Best-effort post-ready tasks start outside the first-paint critical path: the `PostReady` phase
    plus the work no service owns.
-6. Provider unmount starts one idempotent asynchronous shutdown. It hand-orders nothing — the host
+7. Provider unmount starts one idempotent asynchronous shutdown. It hand-orders nothing — the host
    tears its services down in reverse dependency order, so the chat and job runtimes drain before
    the database they write through.
 

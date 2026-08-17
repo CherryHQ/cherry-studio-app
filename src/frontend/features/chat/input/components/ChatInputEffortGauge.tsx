@@ -16,8 +16,8 @@ import { effortGaugeNeedleAngle } from '../effortSlider/utils/effortSliderMath';
 import type { ChatInputEffortFrame } from '../utils/chatInputEffortLayout';
 
 const gaugeSize = 20;
-const gaugeCenter = vec(gaugeSize / 2, 13);
-const needleLength = 6;
+const gaugeCenter = vec(gaugeSize / 2, 14);
+const needleLength = 6.5;
 
 type ChatInputEffortGaugeProps = {
   accessibilityLabel: string;
@@ -70,7 +70,7 @@ export function ChatInputEffortGauge({
           <Path
             color={foregroundColor}
             end={0.98}
-            path="M 3.5 13 A 6.5 6.5 0 0 1 16.5 13"
+            path="M 3.5 14 A 6.5 7.5 0 0 1 16.5 14"
             start={0.02}
             strokeCap="round"
             strokeWidth={1.7}

@@ -13,8 +13,9 @@ dependency interfaces. It is wiring code, not a service locator and not a home f
 - `createBackend.ts` builds factory-shaped workflow modules, adapts the graph into the workflow-only
   `Backend` interface, and supplies the MCP mutation coordinator required by Data API handlers.
 
-`createAppBootstrapRuntime()` owns the top-level `CacheService`, `DbService`, and `DataApiService`
-instances and calls these composition functions. Concrete classes never enter frontend React state.
+`createAppBootstrapRuntime()` owns the `ApplicationHost` and `DataApiService`, resolves the host's
+infrastructure services, and calls these composition functions. Concrete classes never enter
+frontend React state.
 
 ## Admission Rules
 

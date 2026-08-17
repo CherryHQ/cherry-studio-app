@@ -114,6 +114,22 @@ describe('MainHeaderAssistantButton', () => {
     });
   });
 
+  it('keeps the route assistant while the topic is still loading', async () => {
+    // 发出新话题第一条消息时导航先于话题可读：`topicId` 已经在 URL 上、`useTopic` 还没
+    // 返回。按钮此刻若消失，iOS 的 toolbar 会连着旁边那个按钮一起原生重建。
+    mockAssistantId = 'assistant-1';
+    mockTopicAssistantId = undefined;
+    mockTopicId = 'topic-1';
+
+    await act(async () => {
+      renderer = create(<Harness />);
+    });
+
+    expect(
+      renderer?.root.findByProps({ testID: 'current-assistant-button' }).props.accessibilityLabel,
+    ).toBe('Peanut');
+  });
+
   it('starts a new topic with the current topic assistant', async () => {
     await act(async () => {
       renderer = create(<NewTopicHarness />);

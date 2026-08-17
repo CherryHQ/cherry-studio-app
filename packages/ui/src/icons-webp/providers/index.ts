@@ -2,13 +2,15 @@
  * Auto-generated provider icon registry
  * Do not edit manually.
  *
- * Total icons: 157
+ * Total icons: 158
  */
 
 import { resolveGeneralIcon } from '../general';
 import { PROVIDER_ID_ALIASES } from '../provider-aliases';
 
 import type { IconSource } from '../types';
+
+const MOBILE_ONLY_PROVIDER_ICON_IDS = new Set(["cherryai"]);
 
 export const PROVIDER_ICONS = {
   '302ai': {
@@ -118,6 +120,10 @@ export const PROVIDER_ICONS = {
   cerebras: {
     light: require('./light/cerebras.webp'),
     dark: require('./dark/cerebras.webp'),
+  },
+  cherryai: {
+    light: require('./light/cherryai.webp'),
+    dark: require('./light/cherryai.webp'),
   },
   cherryin: {
     light: require('./light/cherryin.webp'),
@@ -665,8 +671,10 @@ function toKebabCase(iconId: string) {
 export function resolveProviderAssetIcon(iconId: string): IconSource | undefined {
   if (!iconId) return undefined;
 
-  const key = PROVIDER_ID_ALIASES[iconId] ?? iconId;
   const icons = PROVIDER_ICONS as Record<string, IconSource>;
+  if (MOBILE_ONLY_PROVIDER_ICON_IDS.has(iconId)) return icons[iconId as ProviderIconKey];
+
+  const key = PROVIDER_ID_ALIASES[iconId] ?? iconId;
 
   return (
     icons[key as ProviderIconKey] ??

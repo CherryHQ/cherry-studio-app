@@ -1,6 +1,8 @@
 import {
+  AI_SUPPORTED_IMAGE_MEDIA_TYPES,
   generatedImageExtension,
   imageMediaTypeFromExtension,
+  isAiSupportedImageMediaType,
   isImageFileExtension,
 } from '../imageFileTypes';
 
@@ -25,5 +27,17 @@ describe('image file types', () => {
     expect(generatedImageExtension('unknown')).toBe('png');
     expect(isImageFileExtension('pdf')).toBe(false);
     expect(imageMediaTypeFromExtension(null)).toBe('image/*');
+  });
+
+  it('recognizes only model-supported image media types', () => {
+    expect(AI_SUPPORTED_IMAGE_MEDIA_TYPES).toEqual([
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+    ]);
+    expect(isAiSupportedImageMediaType('IMAGE/JPEG')).toBe(true);
+    expect(isAiSupportedImageMediaType('image/heic')).toBe(false);
+    expect(isAiSupportedImageMediaType('image/*')).toBe(false);
   });
 });

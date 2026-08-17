@@ -1,6 +1,6 @@
 # Mobile Job Manager Design
 
-> Updated: 2026-08-10
+> Updated: 2026-08-16
 > Status: Phase 1 landed and wired — `painting.generate` runs on the job ledger; see
 > [Phase 1 As-Built](#phase-1-as-built)
 > Desktop source: `CherryHQ/cherry-studio@d498753ecfd0f2572612456281ec222563ce7bf3`
@@ -27,7 +27,8 @@ The v0.2 merge already delivered the passive half — contracts, tables, migrati
 Data API. What remains is the active half, shipped deliberately small:
 
 - Phase 1 is a **foreground durable core**: enqueue/cancel/claim/retry/recovery on the existing
-  ledger, owned by `AppBootstrapRuntime`, with painting generation as the first real handler.
+  ledger, owned by the application service host, with painting generation as the first real
+  handler.
   It needs zero OS background APIs and is fully testable in jest.
 - Background wake (Expo BackgroundTask), user-visible leases (iOS 26 Continued Processing, Android
   FGS), transfers, and schedules come later, each behind its own device-validated gate.
@@ -68,10 +69,12 @@ deviation exists outside the mirrors: `job_file_ref` — see
 > Landed 2026-08-10. This section records where the implementation deviates from the design text
 > and which gaps are deliberate; the design sections themselves are left as written.
 
-**Wired surface.** `createBackend` (`src/bootstrap/composition/createBackend.ts`) constructs the
-runtime via `createJobRuntime({ dbService, jobService, handlers })` with the frozen handler array
-and chains `await jobRuntime.dispose()` ahead of `chat.dispose()`; `runPostReadyTasks` fires
-`pump({ reason: 'cold-start' })`, whose first pass lazily runs startup recovery and GC. The first
+**Wired surface.** The application service registry constructs `JobHandlerRegistry` as a
+composition assembly service. It depends on `AiService`, `BackgroundActivityManager`, and
+`BackgroundActivityEnvironment`, builds fully frozen handler entries, and passes them to
+`JobRuntime`. The runtime itself depends only on `DbService`, `JobHandlerRegistry`, and the
+`KeepAliveSource` implemented by `KeepAliveCoordinator`; its `PostReady` initialization pumps
+with `reason: 'cold-start'`, whose first pass lazily runs startup recovery and GC. The first
 consumer is `painting.generate`
 (`src/backend/services/paintings/tasks/paintingGenerateJobHandler.ts`): the paintings module
 creates the receipt and enqueues in one `withWriteTx` (with an idempotency pre-check so a
@@ -114,9 +117,9 @@ sits on the list.
   (`src/backend/services/jobs/__tests__/_helpers.ts`) registers inline test handlers, which serve
   the proof role without needing a production-registry exclusion mechanism.
 - **No `AppState` pump listener yet** (Ownership item 4). Phase 1's dispatch triggers are
-  enqueue, the delayed-retry timer, and cold start; with only `foreground-only` handlers, an
-  enqueue can only happen in the foreground, so the listener adds nothing until delayed retries
-  can span a backgrounding or a Phase 2 window exists. Add it with Phase 2.
+  enqueue, the delayed-retry timer, and cold start. A running `user-continued` attempt owns its
+  keep-alive lease, but overdue delayed work still waits for the next explicit pump if the OS
+  suspends its timer. Add the active-state pump with Phase 2.
 - **Image-less receipts are visible, and that is what makes the durability observable.**
   `PaintingService` no longer filters the list on having outputs: the receipt row *is* the tile
   for a generation in flight (an `ImageGenerationLoader`, tapping back into its progress) and for one
@@ -158,7 +161,7 @@ helpers, repositories, and shared zod contracts) splits cleanly along one line:
 | Recovery strategies `abandon`/`retry`/`singleton` + `cancelRequested` override + in-flight exclusion + orphan-type cancel | **Port verbatim** | We do NOT add a fourth "resume" strategy — see deviations |
 | GC (terminal TTL 7 d, keep latest 100 per type) | **Port, run from the pump** | Two independent prune steps are trivial |
 | Layer 1 per-queue `async-mutex` + `DispatchQueue` map | **Drop** | Existed to reduce wasted write-tx traffic at ~200 dispatch/s; mobile throughput is orders of magnitude lower and `DbService.withWriteTx` already serializes globally |
-| 60 s quiet window + `onInit`/`onAllReady` lifecycle framework | **Drop** | Mobile explicitly does not port the desktop lifecycle framework; registry is frozen at composition (kills the registration-timing race by construction) |
+| 60 s quiet window + mutable lifecycle registration | **Drop** | Mobile's lifecycle host assembles a complete frozen registry before `JobRuntime` starts, killing the partial-registration race by construction |
 | Pause/drain write quiesce + release compensation | **Drop** | Serves desktop backup-restore fingerprinting; no mobile consumer |
 | croner / `SchedulerService` timers | **Defer, foreground-only optimization** | Background timers freeze under Hermes/OS suspension; correctness moves to evaluate-on-pump (Phase 4) |
 | Shared-window cache progress (`jobs.state.*` / `jobs.progress.*`) | **Adapt** | Single JS context; replace transport, keep the snapshot shape |
@@ -175,6 +178,7 @@ packages/universal/src/data/api/schemas/jobs.ts   # landed — desktop mirror, d
 src/backend/data/db/schemas/job.ts                # landed — desktop mirror, do not fork
 src/backend/data/services/JobService.ts           # landed — reads + claim/terminal/retry writers
 src/backend/data/api/handlers/jobs.ts             # landed — GET-only, stays read-only
+src/backend/services/jobs/JobHandlerRegistry.ts   # landed — frozen production handler assembly
 src/backend/services/jobs/JobRuntime.ts           # landed — orchestrator (enqueue/cancel/pump)
 src/backend/services/jobs/jobRegistry.ts          # landed — declaration-merging JobRegistry
 src/backend/services/jobs/types.ts                # landed — JobHandler / JobContext / EnqueueOptions
@@ -193,21 +197,18 @@ runtime files carry the repo's alignment-comment convention
 
 ### Ownership and composition
 
-`AppBootstrapRuntime` owns the module, mirroring how `McpRuntimeService` is owned today:
+The application service host owns the module:
 
-1. `createBackendServices` already constructs `JobService`; it additionally constructs
-   `JobRuntime`, passing the **complete handler registry as a constructor argument** — an
-   immutable array assembled in composition from each domain's exported handler. There is no
-   `registerHandler` call at runtime. Desktop needs its `onInit`-only registration rule because
-   registration is distributed across lifecycle phases; mobile composition is explicit and
-   synchronous, so we eliminate the orphan-cancel race structurally instead of documenting it.
-2. `createAppBootstrapRuntime` adds `jobRuntime.dispose()` to the dispose sequence (abort all
-   controllers, drop `finished` resolvers without rejecting — desktop `onStop` semantics minus
-   drain).
-3. `runPostReadyTasks` calls `jobRuntime.pump({ reason: 'cold-start' })` fire-and-forget, next to
-   `reconcileStalePendingMessages`. The existing comment there is the load-bearing axiom for the
-   whole design: *cold start is the only reliable "no writer is streaming into this" signal,
-   because the OS suspends rather than kills a backgrounded app*.
+1. `JobHandlerRegistry` is the composition boundary. It receives handler dependencies from the
+   lifecycle container and exposes the **complete immutable handler registry**. There is no
+   `registerHandler` call at runtime, and `JobRuntime` has no feature imports. Adding a handler
+   changes the assembly service, not the scheduler's constructor.
+2. `JobRuntime` receives `DbService`, `JobHandlerRegistry`, and `KeepAliveCoordinator`. Its stop
+   hook aborts controllers, drops `finished` resolvers without rejecting, and performs a bounded
+   drain before the database stops.
+3. `JobRuntime` is a `PostReady` service. Its initialization calls the cold-start pump off the
+   first-paint gate; application-host disposal serializes against that initialization with a
+   five-second ceiling.
 4. A single `AppState` listener (inside the runtime, not in React) pumps on `active`. Frontend
    never imports the runtime; routes and hooks never own dispatch. *(The listener is deferred to
    Phase 2 — see [Phase 1 As-Built](#phase-1-as-built).)*
@@ -330,19 +331,22 @@ Single coalescing dispatcher instead of desktop's per-queue mutex fleet:
 1. `schedulePump()` — if a pump is running, mark dirty and return; else start one.
 2. Pump loop: promote due `delayed → pending`; then repeatedly claim inside one
    `withWriteTx` (global running count < 2 → per-queue running count < handler concurrency →
-   claim next by `priority ASC, scheduledAt ASC`, filtered to types whose execution class is
-   allowed in this window) until no candidate or caps reached.
+   claim next by `priority ASC, scheduledAt ASC`, filtered in SQL to registered types whose
+   execution class is allowed in this window). Candidate reads are paged so a full page of
+   queue-capped or already in-flight rows cannot starve a runnable row behind it.
 3. Spawn `handler.execute` outside the transaction with a `JobContext` whose `signal` is the
    combined abort of: user cancel, handler timeout sentinel (`JobHandlerTimeoutError`, matched by
    abort reason, never by message text), runtime dispose, and — Phase 2+ — lease expiration and
    pump deadline.
-4. On settle: finalize fenced on the expected status; retry via `computeBackoff`
+4. On settle: finalize fenced on the expected status and return the terminal snapshot from the
+   same transaction; retry via `computeBackoff`
    (`none`/`fixed`/`exponential` with clamp, desktop defaults `{3, exponential, 1s, 60s}`) into
    `delayed` with a future `scheduledAt`; fire `onSettled` projection (errors swallowed and
    logged); re-run pump.
 5. Arm exactly one foreground `setTimeout` for the earliest future `scheduledAt` among
-   `delayed` rows; re-arm after every pump. Timers frozen by backgrounding are harmless: the next
-   `AppState.active` or cold-start pump promotes overdue rows anyway. Timers are a latency
+   `delayed` rows; re-arm after every pump. A failed delayed-row read logs and retries after one
+   second instead of being mistaken for an empty queue. Timers frozen by backgrounding are
+   harmless: the next explicit or cold-start pump promotes overdue rows. Timers are a latency
    optimization, never a correctness mechanism — this is the design's version of desktop's
    "5-minute fallback tick", except the fallback is the pump itself.
 6. Run the two GC prunes (bounded) on cold-start pumps only.
@@ -361,17 +365,27 @@ one runtime per process, every active row outside this instance's in-flight set 
 prior-process leftover. Rows this instance enqueued *before* recovery ran are excluded too —
 otherwise lazy recovery would cancel work the current session just created.
 
-There is no 60 s quiet window. Recovery rides `runPostReadyTasks` (already after the startup
-gate, off the critical path), and because the registry is frozen at construction, the desktop
-failure mode "recovery saw a partial registry" cannot occur.
+There is no 60 s quiet window. Recovery rides `JobRuntime`'s `PostReady` initialization (already
+after the startup gate, off the critical path), and because the registry is frozen before the
+runtime starts, the desktop failure mode "recovery saw a partial registry" cannot occur.
 
 ### Cancellation
 
 Desktop flow verbatim: persist `cancelRequested`, abort the live controller if the job is
 running, wait up to `cancelTimeoutMs` (default 30 s) for the handler to settle, then
 force-finalize `cancelled` and report `timed-out` (the handler may still be running in memory —
-fencing makes its late writes no-ops). Pending/delayed rows finalize immediately. Platform
-Stop/Cancel surfaces (Phase 3 notifications, Live Activity) call this same path.
+fencing makes its late writes no-ops). Forced cancellation releases the job's keep-alive lease
+immediately while retaining its execution and scope binding until the real handler promise exits.
+Pending/delayed rows finalize immediately. Platform Stop/Cancel surfaces (Phase 3 notifications,
+Live Activity) call this same path.
+
+Handler timeout uses the same cooperative-first shape but a distinct sentinel: abort with
+`JobHandlerTimeoutError`, wait `cancelTimeoutMs`, then force `failed/HANDLER_TIMEOUT` and release
+the lease if the handler is still alive. That terminal row frees scheduling capacity but never
+starts a retry of the same attempt while its promise remains live. Resource-scope cancellation is
+a synchronous abort and deliberately does not call public `cancel()`; before a scoped
+`recovery: 'retry'` handler is registered, scope-cancellation intent must gain a durable form so
+cold-start recovery cannot revive work cancelled by a resource mutation.
 
 ### Progress and observation
 
@@ -404,8 +418,10 @@ type JobHandler<K extends JobType> = {
 ```
 
 `JobExecutionClass` is `'foreground-only' | 'bounded-background' | 'user-continued' |
-'system-transfer'`. Phase 1 dispatches only `foreground-only`. `server-required` from the
-assessment is deliberately not a class — such work must never be enqueued locally.
+'system-transfer'`. The pump dispatches `foreground-only` and (as-built, since the
+KeepAliveCoordinator landed) `user-continued`, wrapping the latter's `execute` in a keep-alive
+lease. `server-required` from the assessment is deliberately not a class — such work must never
+be enqueued locally.
 
 Every first-wave handler must declare, in its PR description: destination, idempotency rule,
 checkpoint format (or "none"), cancellation behavior, and recovery policy — the assessment's
@@ -422,11 +438,15 @@ go/no-go checklist enforced at review time.
   paramValues, prompt }` — draft picker images are materialized into durable internal file
   entries before enqueue, so the URIs are internal-storage paths, never ephemeral picker URIs;
   the handler reads data URLs from them.
-- `executionClass: 'foreground-only'`, `recovery: 'abandon'`, `maxAttempts: 1`, queue
-  `'painting'`, concurrency 1. Mobile `generateImage` is a single un-resumable provider call with
-  no task ID; process death mid-call is an ambiguous external outcome, so recovery must not
-  resubmit. Idempotency key: reuse the session's existing `generationSignature` so double-taps
-  join the active job instead of double-charging.
+- `executionClass: 'user-continued'` (as-built; shipped as `'foreground-only'` until the
+  KeepAliveCoordinator landed — the dispatch loop now holds a keep-alive lease around `execute`,
+  so generation keeps running when the app is backgrounded), `recovery: 'abandon'`,
+  `maxAttempts: 1`, queue `'painting'`, concurrency 1. Mobile `generateImage` is a single
+  un-resumable provider call with no task ID; process death mid-call is an ambiguous external
+  outcome, so recovery must not resubmit. Idempotency key: reuse the session's existing
+  `generationSignature` so double-taps join the active job instead of double-charging. The
+  handler also drives a `PaintingActivity` Live Activity session (Dynamic Island progress)
+  through the `BackgroundActivityManager` while executing.
 - `PaintingsModule` gains `startGeneration(input) → { jobId }` (receipt + `enqueueTx` atomically
   in one `withWriteTx`, with an idempotency pre-check so a duplicate signature joins the active
   job instead of orphaning a fresh receipt) and `cancelGeneration(jobId)`;
@@ -597,12 +617,15 @@ type + active statuses).
 
 ## Appendix: KeepAliveCoordinator (design draft)
 
-> Status: design only — implementation is blocked on PR #473 merging. Do not build before then.
+> Status: **as-built** — PR #473 grew to carry the extraction itself, so the "merge first,
+> extract later" sequencing this draft mandated is obsolete. The coordinator lives in
+> `src/backend/services/keepAlive/KeepAliveCoordinator.ts`; both consumers below are wired.
+> As-built deviations from the draft are flagged inline.
 
 Phase 1 ships `painting.generate` as `foreground-only`: backgrounding the app mid-generation
 suspends the JS runtime, and the job settles only on resume (or is abandoned by the next
-cold-start recovery). PR #473's `BackgroundReplyService`
-(`src/backend/services/backgroundReply/BackgroundReplyService.ts` on that branch) proves the
+cold-start recovery). PR #473's `BackgroundReplyRuntime`
+(`src/backend/services/backgroundReply/BackgroundReplyRuntime.ts` on that branch) proves the
 missing capability for chat: a silent audio session keeps Hermes scheduled while a reply streams
 in the background — the OpenMinis approach, already shipped on the App Store. The mechanism is
 not chat-specific; only its packaging is. The first draft of this document ruled silent audio
@@ -617,8 +640,9 @@ out; that ruling is revised on this evidence.
 - `reconcileAudio()` is reference counting in disguise: audio plays iff at least one turn is in
   a generating phase and stops when none is. Every async start/stop rides a serial operation
   queue (`operationTail`), so transitions cannot interleave.
-- The Live Activity half (expo-widgets, 1 s-throttled updates, ended on foregrounding, orphan
-  cleanup at construction) is a separate concern that merely shares the service today.
+- The Live Activity half (expo-widgets, foreground creation, 1 s-throttled updates across AppState
+  transitions, orphan cleanup during initialization) is a separate concern that merely shares the
+  service today.
 
 **Extraction shape** — split #473's service along that seam:
 
@@ -630,16 +654,28 @@ type KeepAliveCoordinator = {
 type KeepAliveLease = { release(): void }; // 1→0 stops the session; idempotent
 ```
 
-- Owned by composition alongside `JobRuntime`; disposed with it; keeps #473's serial operation
-  queue and preference gate inside the coordinator.
-- Consumer 1 — chat: `BackgroundReplyService` keeps its turns and the Live Activity, and its
-  `reconcileAudio` collapses into acquire-on-generating / release-on-settle.
-- Consumer 2 — jobs: a handler opts in declaratively (a keep-alive flag derived from its
-  execution class); the dispatch loop wraps `execute` in acquire/release, so the coordinator
-  never observes job state and the runtime never owns audio.
-- `painting.generate` then moves `executionClass` to `'user-continued'`: the class states the
-  product promise ("keeps running while you do something else"), and keep-alive is the mechanism
-  honoring it on iOS today — Phase 3's honest leases (iOS 26 Continued Processing, Android FGS)
-  can replace the mechanism later without touching the class.
+Consumers type against the narrower `KeepAliveSource` port (`acquire` only), so job and activity
+runtimes do not depend nominally on the concrete coordinator.
+
+- Owned by the lifecycle service host alongside `JobRuntime`; keeps #473's serial operation queue
+  inside the coordinator and retries failed starts through one exponential timer (1, 2, 4, 8,
+  16, then 30 seconds). **As-built deviation: no preference gate.** The coordinator is a
+  pure counting primitive — gating moved to each consumer, because a coordinator-level
+  `chat.background_reply.enabled` gate would let the chat toggle silently kill painting's
+  background continuation, a cross-feature coupling no user could predict. Chat's gate now just
+  means "chat does not acquire when disabled".
+- Consumer 1 — chat: `BackgroundReplyRuntime` keeps its turns; `reconcileAudio` collapsed into a
+  per-session `keepAlive` bit (generating phases → held, approval/terminal → released).
+  **As-built deviation:** the Live Activity half did not stay in the service — it was extracted
+  into the feature-agnostic `BackgroundActivityManager`
+  (`src/backend/services/backgroundActivity/`), which owns throttling, AppState handling,
+  orphan sweeps, and mirrors each session's keep-alive bit into a coordinator lease.
+- Consumer 2 — jobs (wired as designed): the dispatch loop wraps a `user-continued` handler's
+  `execute` in acquire/release, so the coordinator never observes job state and the runtime
+  never owns audio.
+- `painting.generate` moved `executionClass` to `'user-continued'` (landed): the class states
+  the product promise ("keeps running while you do something else"), and keep-alive is the
+  mechanism honoring it on iOS today — Phase 3's honest leases (iOS 26 Continued Processing,
+  Android FGS) can replace the mechanism later without touching the class.
 
 Android is out of scope for the extraction (it would be FGS + WakeLock, a Phase 3 concern).

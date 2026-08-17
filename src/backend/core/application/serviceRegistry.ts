@@ -4,7 +4,12 @@ import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
 import { CacheService } from '@/backend/data/CacheService';
 import { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
+import { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
+import { BackgroundActivityManager } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
+import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
+import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
+import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
 import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
 import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -32,12 +37,17 @@ export const services = {
   CacheService,
   DbService,
   PreferenceService,
+  BackgroundActivityEnvironment,
+  KeepAliveCoordinator,
+  BackgroundActivityManager,
+  BackgroundReplyRuntime,
   WebSearchService,
   McpRuntimeService,
   OAuthRuntimeService,
   ProviderOAuthService,
   AiService,
   ChatRuntime,
+  JobHandlerRegistry,
   JobRuntime,
 } as const;
 

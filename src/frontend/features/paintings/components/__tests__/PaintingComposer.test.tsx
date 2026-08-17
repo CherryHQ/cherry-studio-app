@@ -74,6 +74,7 @@ const input: PaintingGenerationInput = {
   attachments: [],
   mode: 'generate',
   modelId: 'provider::image-model',
+  modelName: 'Image Model',
   paramValues: { size: '1664x928' },
   prompt: 'Draw a mountain lake',
 };
@@ -249,7 +250,6 @@ describe('PaintingComposer', () => {
       type: 'text',
     });
     expect(mockMessageListProps?.messages[1].status).toBe('pending');
-    expect(mockMessageListProps?.animateFirstEnteringMessage).toBe(true);
     expect(mockMessageListProps?.enteringMessageId).toBe('uuid-2');
 
     await act(async () => {

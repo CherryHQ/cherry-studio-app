@@ -18,7 +18,6 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import { useResolveClassNames } from 'uniwind';
 
 import { Portal } from '../../../portal';
 import { Surface } from '../../../surface';
@@ -78,7 +77,6 @@ export function useComposerMenu() {
 function MorphMenuRoot({
   accessibilityLabel,
   children,
-  onOpenChange,
   style,
   testID,
   triggerSize = defaultTriggerSize,
@@ -95,11 +93,6 @@ function MorphMenuRoot({
   const panelWidth = useSharedValue(width);
   const footprintRef = useRef<View>(null);
   const portalName = useId();
-  // The same colour on both branches: `GlassView` ignores className, and an
-  // untinted one is invisible when it sits on another glass surface — the
-  // material has nothing behind it to refract. A menu that opens out of a
-  // composer's toolbar does exactly that.
-  const material = useResolveClassNames('bg-secondary');
   const triggerFootprint = useMemo(
     () => ({ height: triggerSize, width: triggerSize }),
     [triggerSize],
@@ -113,7 +106,6 @@ function MorphMenuRoot({
 
     if (isReducedMotion) {
       progress.set(0);
-      setAnchor(null);
       return;
     }
 
@@ -130,8 +122,12 @@ function MorphMenuRoot({
 
   const close = useCallback(() => {
     setIsOpen(false);
-    onOpenChange?.(false);
-  }, [onOpenChange]);
+
+    if (isReducedMotion) {
+      progress.set(0);
+      setAnchor(null);
+    }
+  }, [isReducedMotion, progress]);
   const toggle = () => {
     if (isOpen) {
       close();
@@ -140,10 +136,14 @@ function MorphMenuRoot({
 
     // Measured before the state flip so the floating copy mounts exactly where
     // the inline trigger was — otherwise the morph starts from a jump.
+    //
+    // Nothing may move the composer between this measurement and the open: the
+    // anchor is a snapshot and never re-measures, so a layout change here leaves
+    // the panel floating away from its trigger. The ＋ menu used to take the
+    // keyboard down right after this callback and did exactly that.
     footprintRef.current?.measureInWindow((x, y) => {
       setAnchor({ left: x, top: y });
       setIsOpen(true);
-      onOpenChange?.(true);
     });
   };
   // Every item subscribes to this, so a fresh object each render would re-render
@@ -206,14 +206,7 @@ function MorphMenuRoot({
         {/* The panel stays inside the surface: an empty `GlassView` draws no
             material at all, so the two cannot be split into siblings to fade
             them separately. */}
-        <Surface
-          className="bg-secondary"
-          cornerRadius={openRadius}
-          style={fillStyle}
-          tintColor={
-            typeof material.backgroundColor === 'string' ? material.backgroundColor : undefined
-          }
-        >
+        <Surface className="bg-secondary" cornerRadius={openRadius} style={fillStyle}>
           <Animated.View
             onLayout={handlePanelLayout}
             pointerEvents={isOpen ? 'auto' : 'none'}

@@ -1,7 +1,6 @@
 import { Settings2Icon } from '@cherrystudio/app-icons';
 import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
-import { resolveIcon } from '@cherrystudio/ui/icons';
 import { isUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { useCallback, useMemo, useState } from 'react';
@@ -19,6 +18,7 @@ import {
 } from '@/frontend/components/composer';
 import {
   ModelPickerBottomSheet,
+  ModelPickerIcon,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
@@ -87,12 +87,6 @@ export function PaintingInput({
   );
   const selectedProvider = selectedModel
     ? enabledProviders.find((provider) => provider.id === selectedModel.providerId)
-    : undefined;
-  const selectedModelIcon = selectedModel
-    ? resolveIcon(
-        selectedModel.modelId,
-        selectedProvider?.presetProviderId ?? selectedModel.providerId,
-      )
     : undefined;
   const selectedModelLabel = selectedModel?.name ?? historicalModelLabel(painting);
   const imageAttachmentCount =
@@ -163,7 +157,7 @@ export function PaintingInput({
   );
   const handleSend = useCallback(
     async ({ attachments, text }: ComposerSendPayload) => {
-      if (!selectedModelId || !isSelectedModelAvailable) {
+      if (!selectedModelId || !selectedModel || !isSelectedModelAvailable) {
         throw new Error('Select an available image generation model');
       }
       const submittedImageCount = attachments.filter(
@@ -205,6 +199,7 @@ export function PaintingInput({
         attachments,
         mode,
         modelId: selectedModelId,
+        modelName: selectedModel.name,
         paramValues: submittedValues,
         prompt: text,
       });
@@ -218,6 +213,7 @@ export function PaintingInput({
       onGenerated,
       paramValues,
       selectedModel?.imageGeneration,
+      selectedModel?.name,
       selectedModelId,
     ],
   );
@@ -260,7 +256,16 @@ export function PaintingInput({
             </Composer.Action>
           ) : null}
           <ComposerModelPill
-            icon={selectedModelIcon}
+            icon={
+              selectedModel ? (
+                <ModelPickerIcon
+                  model={selectedModel}
+                  provider={selectedProvider}
+                  providerIconSize={18}
+                  size={20}
+                />
+              ) : undefined
+            }
             label={selectedModelLabel}
             onPress={() => setIsModelPickerOpen(true)}
           />

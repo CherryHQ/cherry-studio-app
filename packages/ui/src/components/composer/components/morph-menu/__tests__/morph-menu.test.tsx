@@ -11,10 +11,6 @@ jest.mock('heroui-native/utils', () => {
   };
 });
 
-jest.mock('uniwind', () => ({
-  useResolveClassNames: jest.fn(() => ({ backgroundColor: '#2c2c2e' })),
-}));
-
 jest.mock('heroui-native/portal', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
@@ -40,6 +36,7 @@ jest.mock('expo-glass-effect', () => {
 });
 
 type SharedValueStub = { set: (next: number) => void; value: number };
+let mockReducedMotion = false;
 
 jest.mock('react-native-reanimated', () => {
   const React = jest.requireActual('react');
@@ -53,7 +50,7 @@ jest.mock('react-native-reanimated', () => {
       output[0] + (output[1] - output[0]) * value,
     runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
     useAnimatedStyle: (factory: () => object) => factory(),
-    useReducedMotion: () => false,
+    useReducedMotion: () => mockReducedMotion,
     // Backed by a ref, like the real one: a shared value that reset itself on
     // every render would make anything driven by one untestable.
     useSharedValue: (initial: number) => {
@@ -94,13 +91,14 @@ describe('MorphMenu', () => {
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    mockReducedMotion = false;
     jest.clearAllMocks();
   });
 
-  function render(onPress = jest.fn(), onOpenChange?: (isOpen: boolean) => void) {
+  function render(onPress = jest.fn()) {
     act(() => {
       renderer = create(
-        <MorphMenu accessibilityLabel="Add" onOpenChange={onOpenChange} testID="menu">
+        <MorphMenu accessibilityLabel="Add" testID="menu">
           <MorphMenu.Item label="Camera" onPress={onPress} testID="menu-camera" />
         </MorphMenu>,
       );
@@ -149,13 +147,11 @@ describe('MorphMenu', () => {
   });
 
   it('floats the open menu in a portal anchored to the measured trigger', () => {
-    const onOpenChange = jest.fn();
-    const tree = render(jest.fn(), onOpenChange);
+    const tree = render();
 
     press(tree, 'menu-trigger');
 
     expect(portal(tree).findAllByProps({ testID: 'menu-panel' }).length).toBeGreaterThan(0);
-    expect(onOpenChange).toHaveBeenCalledWith(true);
     // The floating copy sits where the inline footprint was measured.
     const positioned = portal(tree).findAll((node) => {
       const style = StyleSheet.flatten(node.props.style as StyleProp<ViewStyle>);
@@ -183,27 +179,33 @@ describe('MorphMenu', () => {
 
   it('closes on the backdrop without choosing anything', () => {
     const onPress = jest.fn();
-    const onOpenChange = jest.fn();
-    const tree = render(onPress, onOpenChange);
+    const tree = render(onPress);
 
     press(tree, 'menu-trigger');
     press(tree, 'menu-backdrop');
 
     expect(onPress).not.toHaveBeenCalled();
-    expect(onOpenChange).toHaveBeenLastCalledWith(false);
+    expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
+  });
+
+  it('closes immediately when reduced motion is enabled', () => {
+    mockReducedMotion = true;
+    const tree = render();
+
+    press(tree, 'menu-trigger');
+    press(tree, 'menu-backdrop');
+
     expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
   });
 
   it('closes itself before running an item, so callers do not have to', () => {
     const onPress = jest.fn();
-    const onOpenChange = jest.fn();
-    const tree = render(onPress, onOpenChange);
+    const tree = render(onPress);
 
     press(tree, 'menu-trigger');
     press(tree, 'menu-camera');
 
     expect(onPress).toHaveBeenCalledTimes(1);
-    expect(onOpenChange).toHaveBeenLastCalledWith(false);
     expect(tree.root.findAllByProps({ mockComponent: 'hero-portal' })).toHaveLength(0);
   });
 

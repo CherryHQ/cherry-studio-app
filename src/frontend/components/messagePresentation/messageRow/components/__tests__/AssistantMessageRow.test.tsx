@@ -4,14 +4,24 @@ import type { MessagePresentationItem } from '../../../types';
 import { AssistantMessageRow } from '../AssistantMessageRow';
 
 const mockMessageParts = jest.fn((_props: { message: MessagePresentationItem }) => null);
-const mockPrismSweep = jest.fn((_props: { active: boolean }) => null);
+const mockDotMatrixSquare20 = jest.fn((_props: { active: boolean; size: number }) => null);
 
 jest.mock('../../../messageContent', () => ({
   MessageParts: (props: { message: MessagePresentationItem }) => mockMessageParts(props),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
-  PrismSweep: (props: { active: boolean }) => mockPrismSweep(props),
+  DotMatrixSquare20: (props: { active: boolean; size: number }) => mockDotMatrixSquare20(props),
+}));
+
+// 真模块在 jest 下会去装 worklets 的原生 unpacker 并崩掉，本套件只关心渲染出什么。
+jest.mock('react-native-reanimated', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return { __esModule: true, default: { View: MockView } };
+});
+
+jest.mock('../../slideIn/hooks/useAssistantSlideInStyle', () => ({
+  useAssistantSlideInStyle: () => undefined,
 }));
 
 function createAssistantMessage(
@@ -42,7 +52,7 @@ describe('AssistantMessageRow', () => {
       renderer = create(<AssistantMessageRow message={createAssistantMessage('pending')} />);
     });
 
-    expect(mockPrismSweep).toHaveBeenCalledWith({ active: true });
+    expect(mockDotMatrixSquare20).toHaveBeenCalledWith({ active: true, size: 20 });
     expect(mockMessageParts).not.toHaveBeenCalled();
   });
 
@@ -54,6 +64,6 @@ describe('AssistantMessageRow', () => {
     });
 
     expect(mockMessageParts).toHaveBeenCalledWith({ message });
-    expect(mockPrismSweep).not.toHaveBeenCalled();
+    expect(mockDotMatrixSquare20).not.toHaveBeenCalled();
   });
 });

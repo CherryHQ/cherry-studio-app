@@ -1,6 +1,5 @@
-import { XIcon } from '@cherrystudio/app-icons';
+import { Chip } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text, View } from 'react-native';
 
 import type { ChatInputAction } from '../utils/chatInputActions';
 
@@ -15,20 +14,9 @@ export function ChatInputToolTag({ onClear, tool }: ChatInputToolTagProps) {
   const Icon = tool.icon;
 
   return (
-    <View className="flex-row items-center gap-1 self-start rounded-full bg-secondary px-2 py-1">
-      <Icon className="size-5 text-foreground" />
-      <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
-        {t(tool.tagTitleKey)}
-      </Text>
-      <Pressable
-        accessibilityLabel={t('common.clear')}
-        accessibilityRole="button"
-        className="size-6 items-center justify-center rounded-full active:opacity-60"
-        hitSlop={6}
-        onPress={onClear}
-      >
-        <XIcon className="size-5 text-foreground-secondary" />
-      </Pressable>
-    </View>
+    <Chip.Removable onRemove={onClear} removeAccessibilityLabel={t('common.clear')}>
+      <Icon className="size-4 text-foreground" />
+      <Chip.Label numberOfLines={1}>{t(tool.tagTitleKey)}</Chip.Label>
+    </Chip.Removable>
   );
 }

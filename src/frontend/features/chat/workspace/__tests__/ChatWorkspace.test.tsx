@@ -1,4 +1,5 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/messagePresentation';
@@ -9,19 +10,12 @@ const mockInputHeightShared = {
   get: jest.fn(() => 80),
   set: jest.fn(),
   value: 80,
-};
+} as unknown as SharedValue<number>;
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
-let mockChatComposerProps:
-  | {
-      dismissKeyboardOnSend: boolean;
-      onHeightChange: (height: number) => void;
-      topicId: string;
-    }
-  | undefined;
 let mockChatTopic: {
   hasHistoryBeforePendingTurn?: boolean;
   overlayMessage?: Message;
@@ -39,15 +33,6 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
   useAlert: () => ({ alert: { show: jest.fn() } }),
-}));
-
-jest.mock('@/frontend/components/composer', () => ({
-  useComposerDockLayout: () => ({
-    contentBottomInset: 96,
-    handleInputHeightChange: jest.fn(),
-    inputHeightShared: mockInputHeightShared,
-    keyboardOffset: 26,
-  }),
 }));
 
 jest.mock('@/frontend/components/messagePresentation', () => ({
@@ -74,17 +59,6 @@ jest.mock('../../approval/ToolApprovalSheet', () => ({
 jest.mock('../../runtime/ChatProvider', () => ({
   useChat: () => ({ respondToolApproval: mockRespondToolApproval }),
   useChatTopic: () => mockChatTopic,
-}));
-
-jest.mock('../components/ChatComposer', () => ({
-  ChatComposer: (props: {
-    dismissKeyboardOnSend: boolean;
-    onHeightChange: (height: number) => void;
-    topicId: string;
-  }) => {
-    mockChatComposerProps = props;
-    return null;
-  },
 }));
 
 jest.mock('../components/ChatInitialRenderCover', () => ({
@@ -118,13 +92,16 @@ function createMessage(id: string, role: Message['role']): Message {
   };
 }
 
+/** 预览态的取值由 ChatScreen 解析后传进来，这里照它传的两组值渲染。 */
 function renderWorkspace(isPreview: boolean, messages: readonly Message[]) {
   let renderer: ReactTestRenderer | undefined;
 
   act(() => {
     renderer = create(
       <ChatWorkspace
-        isPreview={isPreview}
+        bottomAccessoryHeight={isPreview ? undefined : mockInputHeightShared}
+        contentBottomInset={isPreview ? 12 : 96}
+        keyboardOffset={isPreview ? 0 : 26}
         messageWindow={{
           isLoadingInitial: false,
           isLoadingOlder: true,
@@ -147,7 +124,6 @@ describe('ChatWorkspace message presentation integration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockChatComposerProps = undefined;
     mockChatTopic = { hasHistoryBeforePendingTurn: true, status: 'idle' };
     mockCoverVisible = undefined;
     mockIsLoadingOlder = undefined;
@@ -166,7 +142,7 @@ describe('ChatWorkspace message presentation integration', () => {
     requestAnimationFrameSpy.mockRestore();
   });
 
-  test('passes displayable messages, history loading, and composer layout on a normal page', () => {
+  test('passes displayable messages, history loading, and dock layout on a normal page', () => {
     const pendingUserMessage = createMessage('user-pending', 'user');
     mockChatTopic.pendingUserMessage = pendingUserMessage;
 
@@ -187,18 +163,14 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
     expect(mockIsLoadingOlder).toBe(true);
-    expect(mockChatComposerProps).toEqual(
-      expect.objectContaining({ dismissKeyboardOnSend: false, topicId: 'topic-1' }),
-    );
   });
 
-  test('omits the composer and internal scroll button accessory in preview', () => {
+  test('omits the internal scroll button accessory in preview', () => {
     renderer = renderWorkspace(true, [createMessage('user-1', 'user')]);
 
     expect(mockMessageListProps?.bottomAccessoryHeight).toBeUndefined();
     expect(mockMessageListProps?.contentBottomInset).toBe(12);
     expect(mockMessageListProps?.keyboardOffset).toBe(0);
-    expect(mockChatComposerProps).toBeUndefined();
   });
 
   test('passes the initial-ready callback through to the history render gate', () => {

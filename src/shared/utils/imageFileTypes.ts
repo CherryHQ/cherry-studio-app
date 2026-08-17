@@ -8,6 +8,13 @@ const imageFileTypes = [
   { extensions: ['webp'], mediaType: 'image/webp', outputExtension: 'webp' },
 ] as const;
 
+export const AI_SUPPORTED_IMAGE_MEDIA_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+] as const;
+
 type ImageFileType = (typeof imageFileTypes)[number];
 
 const imageFileTypeByExtension = new Map<string, ImageFileType>(
@@ -18,6 +25,7 @@ const imageFileTypeByExtension = new Map<string, ImageFileType>(
 const imageFileTypeByMediaType = new Map<string, ImageFileType>(
   imageFileTypes.map((fileType) => [fileType.mediaType, fileType] as const),
 );
+const aiSupportedImageMediaTypes = new Set<string>(AI_SUPPORTED_IMAGE_MEDIA_TYPES);
 
 export function isImageFileExtension(extension: string | null | undefined): boolean {
   return extension ? imageFileTypeByExtension.has(extension.toLowerCase()) : false;
@@ -27,6 +35,10 @@ export function imageMediaTypeFromExtension(extension: string | null | undefined
   return extension
     ? (imageFileTypeByExtension.get(extension.toLowerCase())?.mediaType ?? 'image/*')
     : 'image/*';
+}
+
+export function isAiSupportedImageMediaType(mediaType: string | null | undefined): boolean {
+  return mediaType ? aiSupportedImageMediaTypes.has(mediaType.toLowerCase()) : false;
 }
 
 export function generatedImageExtension(mediaType: string): string {

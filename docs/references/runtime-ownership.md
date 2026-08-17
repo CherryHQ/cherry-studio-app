@@ -33,9 +33,8 @@ registry; otherwise prefer a precise domain noun or a plain function. Do not use
 ## Principles
 
 - Mobile adopts the desktop lifecycle framework, service registry, and a mobile-specific phase pair;
-  see [Lifecycle](./lifecycle/README.md). This document describes the current explicit-composition
-  wiring, which that design replaces stage by stage — where the two disagree, Lifecycle is the
-  target state and this document is the present one.
+  see [Lifecycle](./lifecycle/README.md). `ApplicationHost` owns each service generation while
+  bootstrap remains the composition and installation boundary.
 - A runtime owner exists only for state or resources that outlive one call.
 - Every owner defines creation, disposal, and abort behavior.
 - Backgrounding is not a reliable execution window for chat or painting generation.
@@ -51,12 +50,13 @@ side-effect imports in the root layout, ordinary app code uses only `src/bootstr
 
 `AppBootstrapProvider` owns one `AppBootstrapRuntime`. The production runtime:
 
-- creates `CacheService`, `DbService`, and the private backend service graph;
+- creates an `ApplicationHost` and configures its platform-facing activity environment;
 - creates one stable workflow `Backend`, `ApiClient`, and `PreferenceClient`;
-- initializes the backend cache before SQLite seeding, then preferences, boot theme, and i18n;
+- installs the host, whose dependency graph initializes cache before SQLite seeding and preferences,
+  then waits for the native splash handoff before applying boot theme and i18n;
 - starts best-effort post-ready tasks after the gate opens;
-- disposes the Chat Runtime first, then MCP and web-search state, the backend cache, and SQLite on
-  unmount.
+- uninstalls the host on unmount; reverse dependency order drains consumers before their
+  infrastructure.
 
 The provider's own React context exposes only `loading`, `ready`, or `error`. Concrete backend
 services never enter React state or frontend code. Its children receive three stable, narrow
@@ -64,8 +64,11 @@ providers: `DataApiProvider` for typed resource endpoints, `PreferenceProvider` 
 `BackendProvider` for workflow modules, including any caller-owned session factories.
 
 `AppBootstrapGate` is the only initial-render gate. It renders `null` while loading and throws the
-initialization error. The root layout retains the native splash, and `AppBootstrapProvider` hides it
-when initialization settles, including the error path.
+initialization error. The root layout retains the native splash, while the app-shell
+`StartupCoordinator` hides it only after its matching React Native cover has laid out and crossed
+two composited frames. The provider owns initialization state and post-ready work; it does not own
+splash visibility. `startupCoverHandoff` prevents Uniwind's native appearance synchronization from
+running until the native surface is gone.
 
 ## Query Runtime
 
@@ -76,10 +79,11 @@ for workflows that are not ordinary resource queries or mutations.
 
 ## Chat Runtime
 
-Bootstrap creates one `ChatRuntime` and exposes its narrow `ChatModule` interface through
-`Backend.chat`. The runtime is app-owned, not route-owned: `ChatProvider` subscribes on mount and
-unsubscribes on unmount, but it never creates or disposes a backend object. Route unmount therefore
-does not terminate an active turn, and a later subscription reads the current snapshot.
+The service registry creates one `ChatRuntime` per `ApplicationHost` generation and composition
+exposes its narrow `ChatModule` interface through `Backend.chat`. The runtime is app-owned, not
+route-owned: `ChatProvider` subscribes on mount and unsubscribes on unmount, but it never creates or
+disposes a backend object. Route unmount therefore does not terminate an active turn, and a later
+subscription reads the current snapshot.
 
 The runtime owns active turn state, AbortControllers, assistant placeholder identity, stream
 reading, terminal persistence, and `ChatEvent` fan-out. It tracks turns by Topic: different Topics
@@ -95,35 +99,38 @@ shutdown marks the runtime disposed, rejects new tasks, aborts all active turns,
 tracked task to settle before MCP, web search, cache, or SQLite is closed. An active stream is still
 not guaranteed to continue, checkpoint, or resume after OS suspension or termination.
 
-## Painting Session
+## Painting Generation
 
-`usePaintingGeneration` owns one backend `PaintingGenerationSession` and UI-only
-generating/revealing/error state. The session owns its AbortController, file preparation, AI
-generation, persistence, incomplete receipt retry state, and failed-output cleanup. The frontend
-hook owns toast and query synchronization and disposes the session on unmount.
+`PaintingsModule.startGeneration()` atomically creates the receipt and enqueues a
+`painting.generate` row. The host-owned `JobRuntime` claims and executes it, owns cancellation and
+terminal persistence, and can continue after the initiating route unmounts. The handler owns file
+preparation, AI generation, output persistence, failed-output cleanup, and its feature-specific
+background Activity session.
 
-`cancel()` aborts only the active generation and retains an incomplete receipt so the same input can
-retry without creating another gallery item. `dispose()` aborts active work, clears the receipt,
-permanently closes that session, and prevents late async receipt creation from reviving it. Separate
-sessions never share receipt state.
+`usePaintingGeneration` owns only screen state, polling, toast/query synchronization, and the
+receipt currently shown by that route. Returning to a receipt adopts its active job from the durable
+ledger. Explicit cancel reaches `JobRuntime.cancel()` and then deletes the receipt; deleting a
+painting through any Data API caller first fences its scope and drains the job.
 
 ## Other Long-Lived Resources
 
-- `McpRuntimeService` owns MCP clients and tool caches; app bootstrap disposes it.
-- `WebSearchService` owns API-key rotation state; app bootstrap disposes it.
+- `McpRuntimeService` owns MCP clients and tool caches; the host stops it.
+- `WebSearchService` owns API-key rotation state; the host stops it.
 - Backend `CacheService` owns Provider API-key rotation state and backend-only MMKV persistence;
-  app bootstrap initializes and disposes it.
+  the host initializes and stops it.
 - Frontend cache owns subscriptions and MMKV-backed UI persistence.
 - Screen and component listeners, timers, and native sessions remain with their React owner.
 
 ## Startup Work
 
-`initializeAppRuntime()` reads cached boot preferences, applies the frontend theme, and initializes
-i18n. It must not refresh catalogs, prefetch history, repair data, or run diagnostics.
+`initializeAppRuntime()` reads cached boot preferences, waits for the native-to-React cover handoff,
+then applies the frontend theme and initializes i18n. It must not refresh catalogs, prefetch history,
+repair data, or run diagnostics.
 
-`runPostReadyTasks()` starts after status becomes `ready`. It currently repairs crash-orphaned
-pending assistant messages and prewarms active MCP servers. It is fire-and-forget, best-effort, and
-must not block first paint.
+`runPostReadyTasks()` starts after status becomes `ready`. It repairs crash-orphaned pending
+assistant messages while the host's PostReady phase prewarms MCP and starts the job cold-start pump.
+Both are off the first-paint path. Host-owned PostReady initialization is retained and awaited if
+that generation is disposed before it finishes.
 
 Current topic, message history windows, provider queries, and feature state load at route level after
 the bootstrap gate.
@@ -133,6 +140,7 @@ the bootstrap gate.
 - App bootstrap unmount closes SQLite and disposes long-lived backend resources.
 - Route unmount only unsubscribes from Chat; app disposal aborts and awaits all Chat turns before
   closing infrastructure.
-- Painting owners cancel or dispose their own isolated generation session.
+- Painting route unmount does not stop generation; explicit cancel or resource deletion reaches the
+  host-owned job runtime.
 - Cold start does not wait for non-current history, provider/model refresh, or diagnostics.
 - Every new long-lived resource can identify its owner, release point, and background behavior.

@@ -178,10 +178,13 @@ Declared on the handler, registered by the runtime:
 scopes: (input) => [{ id: input.paintingId, kind: 'painting' }]
 ```
 
-`JobRuntime.spawnExecute` then registers each execution, using its in-flight promise as `settled` —
-that promise resolves only after the terminal row is written, so a handler ignoring its signal fails
-the drain rather than letting the delete proceed over it. A job that spawns into an already-sealed
-scope is finalized `cancelled` without executing.
+`JobRuntime` prepares the execution and registers it before the guarded `pending → running` claim,
+using its in-flight promise as `settled`. That closes the registration/claim race: deletion can fence
+the scope before the first write, or synchronously abort a registered claim already in progress. The
+promise resolves only after the terminal row is written, so a handler ignoring its signal fails the
+drain rather than letting deletion proceed over it; if it later returns normally, the runtime's
+post-execute abort fence still finalizes it `cancelled`. A job targeting an already-sealed scope is
+finalized `cancelled` without being claimed or executed.
 
 The registration is also the `paintingId → jobId` index. No such column exists, and none is needed:
 the mapping only has to exist while the execution does.
@@ -253,7 +256,7 @@ leg 4 makes it safe after the app has died and restarted.
 ## Boundaries
 
 - **App shutdown does not use the coordinator.** Host teardown stops services in reverse dependency
-  order and each owner drains its own operations — `ChatRuntime.dispose()` already aborts and awaits
+  order and each owner drains its own operations — `ChatRuntime.onStop()` already aborts and awaits
   every turn. Two drain paths for one event would double-wait and double-report.
 - **Registrations are per-process.** Anything needing cross-process recovery uses the durable job
   ledger. The registry is never persisted.

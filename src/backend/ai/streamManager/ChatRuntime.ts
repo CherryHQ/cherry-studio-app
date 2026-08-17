@@ -20,6 +20,7 @@ import type {
   CherryMessagePart,
   CherryUIMessage,
   Message,
+  MessageData,
   MessageRuntimeStatsInput,
   MessageSnapshot,
   ModelSnapshot,
@@ -35,7 +36,14 @@ import { isToolUIPart, readUIMessageStream, type UIMessageChunk } from 'ai';
 
 import type { AiService } from '@/backend/ai/AiService';
 import { application } from '@/backend/core/application/Application';
-import { BaseService, DependsOn, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
+import {
+  AppStatePolicy,
+  BaseService,
+  DependsOn,
+  Injectable,
+  Phase,
+  ServicePhase,
+} from '@/backend/core/lifecycle';
 import type { OperationHandle } from '@/backend/core/resources/types';
 import { assistantService } from '@/backend/data/services/AssistantService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
@@ -43,6 +51,10 @@ import { messageService } from '@/backend/data/services/MessageService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { topicService } from '@/backend/data/services/TopicService';
+import type {
+  BackgroundReplyLifecycle,
+  BackgroundReplyTurn,
+} from '@/backend/services/backgroundReply';
 import { createMessageParts, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type {
   ChatCancelExecutionInput,
@@ -75,6 +87,8 @@ type ActiveExecution = {
 
 type ActiveTurn = {
   abortController: AbortController;
+  backgroundReply?: BackgroundReplyTurn;
+  backgroundReplyModelId?: UniqueModelId;
   executions: Map<UniqueModelId, ActiveExecution>;
   hasHistoryBeforePendingTurn?: boolean;
   overlays: Map<UniqueModelId, Message>;
@@ -122,12 +136,16 @@ const defaultChatRuntimeConfig: ChatRuntimeConfig = {
  * reach the current host themselves, and `AiService` arrives through
  * `@DependsOn`, so capturing it cannot outlive the generation that injected it.
  */
-function createHostDependencies(aiService: AiService): ChatRuntimeDependencies {
+function createHostDependencies(
+  aiService: AiService,
+  backgroundReply: BackgroundReplyLifecycle,
+): ChatRuntimeDependencies {
   const preference: ChatRuntimeServices['preference'] = {
     get: <K extends PreferenceKeyType>(key: K) => application.get('PreferenceService').get(key),
   };
 
   return {
+    backgroundReply,
     files: {
       createParts: (parts) => createMessageParts(fileEntryService, parts),
       discard: (entries) => discardInternalEntries(fileEntryService, entries),
@@ -168,7 +186,8 @@ function createHostDependencies(aiService: AiService): ChatRuntimeDependencies {
  */
 @Injectable('ChatRuntime')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['AiService'])
+@DependsOn(['AiService', 'BackgroundReplyRuntime'])
+@AppStatePolicy('continue')
 export class ChatRuntime extends BaseService implements ChatModule {
   private activeTasks = new Set<Promise<unknown>>();
   private activeTurns = new Map<string, ActiveTurn>();
@@ -203,16 +222,17 @@ export class ChatRuntime extends BaseService implements ChatModule {
   }
 
   /**
-   * The container passes only `aiService`; a test passes the whole dependency
-   * set instead, which is why `aiService` is then never read.
+   * The container passes the two declared dependencies. Tests replace the
+   * complete port set, so neither production dependency is read there.
    */
   constructor(
     aiService: AiService,
+    backgroundReply: BackgroundReplyLifecycle,
     dependencies?: ChatRuntimeDependencies,
     config: Partial<ChatRuntimeConfig> = {},
   ) {
     super();
-    this.dependencies = dependencies ?? createHostDependencies(aiService);
+    this.dependencies = dependencies ?? createHostDependencies(aiService, backgroundReply);
     this.config = { ...defaultChatRuntimeConfig, ...config };
   }
 
@@ -328,7 +348,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
         execution.abortController.abort(reason);
       }
     }
-
     await Promise.allSettled([...this.activeTasks]);
     this.activeTasks.clear();
     this.activeTurns.clear();
@@ -726,15 +745,20 @@ export class ChatRuntime extends BaseService implements ChatModule {
       this.bindCreatedTopicScope(topic.id);
       this.activateTurn(topic.id, activeTurn);
       this.setTurnSnapshot(topic.id, { status: 'reserving' });
-      await this.emitAndWait({ type: 'invalidate-topics' });
-      throwIfAborted(abortController.signal);
-      await this.emitAndWait({ topicId: topic.id, type: 'open-topic' });
-      throwIfAborted(abortController.signal);
 
       await this.runTopicTurn({
         activeTurn,
         fastMode: input.fastMode,
         models,
+        // 导航挂在「这一轮已经进快照」之后：目的地一挂载就有用户消息和助手占位可画。
+        //
+        // 两个通知都用 `emit` 而不是 `emitAndWait`：后者不吞订阅者的异常，一个导航失败会让
+        // 整轮走 catch；而话题列表的失效是**一次 refetch**，等它等的是一份此刻没人在看的
+        // 数据——放在导航之前 await，用户就得多盯几百毫秒的空界面。
+        onTurnPublished: () => {
+          this.emit({ topicId: topic.id, type: 'open-topic' });
+          this.emit({ type: 'invalidate-topics' });
+        },
         parts,
         reasoningEffort: input.reasoningEffort,
         ...(models.length > 1 ? { siblingsGroupId: nextSiblingsGroupId() } : {}),
@@ -796,16 +820,19 @@ export class ChatRuntime extends BaseService implements ChatModule {
       await this.invalidateTopicMessagesSafely(topicId);
 
       if (!applied) {
+        shouldRemainAwaitingApproval = false;
         throw new Error('The tool approval message no longer exists.');
       }
 
       if (applied.appliedApprovalIds.length === 0) {
         this.activeTurns.delete(topicId);
         const hasPendingApproval = hasPendingToolApproval(applied.parts);
+        shouldRemainAwaitingApproval = hasPendingApproval;
         this.setTopicSnapshot(topicId, {
           status: hasPendingApproval ? 'awaiting-approval' : 'idle',
         });
         if (applied.alreadySettledApprovalIds.includes(input.approvalId)) {
+          if (!hasPendingApproval) this.dependencies.backgroundReply.clearTopic(topicId);
           return;
         }
 
@@ -835,6 +862,9 @@ export class ChatRuntime extends BaseService implements ChatModule {
           error,
           wasAborted: abortController.signal.aborted,
         });
+      }
+      if (!shouldRemainAwaitingApproval && !activeTurn.backgroundReply) {
+        this.dependencies.backgroundReply.clearTopic(topicId);
       }
 
       this.activeTurns.delete(topicId);
@@ -882,6 +912,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
     this.publishTurnSnapshot(topic.id, activeTurn, 'streaming');
 
     try {
+      await this.startBackgroundReply(activeTurn, topic, model);
       await this.streamAssistantTurn({
         activeTurn,
         assistantMessage: message,
@@ -945,6 +976,12 @@ export class ChatRuntime extends BaseService implements ChatModule {
     fastMode?: boolean;
     hasHistoryBeforePendingTurn?: boolean;
     models: readonly Model[];
+    /**
+     * Run once the turn is in the snapshot and before it is persisted — the
+     * only safe moment to move the user to this topic, because the destination
+     * already has something to show.
+     */
+    onTurnPublished?: () => Promise<void> | void;
     parentId?: string | null;
     parts: readonly CherryMessagePart[];
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
@@ -973,6 +1010,33 @@ export class ChatRuntime extends BaseService implements ChatModule {
         models.map((model) => this.buildAssistantMessageSnapshot(model, topic)),
       );
       throwIfAborted(abortController.signal);
+      const pendingTurn = buildPendingTurnMessages({
+        messageSnapshots,
+        models,
+        newMessageId: () => this.dependencies.services.message.newMessageId(),
+        parentId: input.parentId === undefined ? (topic.activeNodeId ?? null) : input.parentId,
+        parts: turnParts,
+        siblingsGroupId: input.siblingsGroupId ?? 0,
+        topicId,
+        turnOptions: {
+          fastMode: input.fastMode === true,
+          reasoningEffort: input.reasoningEffort,
+        },
+        userSiblingsGroupId: input.userSiblingsGroupId ?? 0,
+      });
+
+      // 先把这一轮发布出去，再让调用方导航。这样目的地挂载时它要展示的东西已经在快照里，
+      // 中间不存在「界面已经切过去、内容还没有」的空窗——那段空窗过去要靠遮罩、转圈和空状态
+      // 一起糊住。落库后回来的行与这份乐观行是同一个 id，投影就地替换而不是追加。
+      activeTurn.hasHistoryBeforePendingTurn = hasHistoryBeforePendingTurn;
+      activeTurn.pendingUserMessage = pendingTurn.userMessage;
+      for (const [index, model] of models.entries()) {
+        activeTurn.overlays.set(model.id, pendingTurn.placeholders[index]);
+      }
+      this.publishTurnSnapshot(topicId, activeTurn, 'reserving');
+      await input.onTurnPublished?.();
+      throwIfAborted(abortController.signal);
+
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
           ...(input.siblingsGroupId !== undefined
@@ -981,11 +1045,11 @@ export class ChatRuntime extends BaseService implements ChatModule {
           topicId,
           userMessage: {
             mode: 'create',
+            id: pendingTurn.userMessage.id,
             dto: {
-              data: { parts: turnParts },
+              data: pendingTurn.userMessage.data,
               modelId: models[0]?.id,
-              parentId:
-                input.parentId === undefined ? (topic.activeNodeId ?? null) : input.parentId,
+              parentId: pendingTurn.userMessage.parentId,
               role: 'user',
               ...(input.userSiblingsGroupId !== undefined
                 ? { siblingsGroupId: input.userSiblingsGroupId }
@@ -993,17 +1057,12 @@ export class ChatRuntime extends BaseService implements ChatModule {
               status: 'success',
             },
           },
-          placeholders: models.map((model, index) => {
+          placeholders: pendingTurn.placeholders.map((placeholder, index) => {
             const messageSnapshot = messageSnapshots[index];
             return {
-              data: {
-                parts: [],
-                turnOptions: {
-                  fastMode: input.fastMode === true,
-                  reasoningEffort: input.reasoningEffort,
-                },
-              },
-              modelId: model.id,
+              data: placeholder.data,
+              id: placeholder.id,
+              modelId: models[index].id,
               ...(messageSnapshot ? { messageSnapshot } : {}),
               role: 'assistant',
               status: 'pending',
@@ -1183,6 +1242,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
       const history = input.isSteer ? withSteerReminder(storedHistory) : storedHistory;
       const shouldAutoName = input.allowAutoName && history.length === 1;
       throwIfAborted(activeTurn.abortController.signal);
+      await this.startBackgroundReply(activeTurn, topic, models[0]);
 
       await Promise.allSettled(
         models.map((model, index) =>
@@ -1240,6 +1300,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
     topicId: string;
   }): Promise<void> {
     const outcome = resolveTurnOutcome(input.activeTurn, input.terminalMessages);
+    this.settleBackgroundReply(input.activeTurn);
     input.activeTurn.streamStatus = outcome === 'awaiting-approval' ? 'awaiting-approval' : outcome;
     if (outcome === 'done') {
       input.activeTurn.lastCompletedAt = Date.now();
@@ -1445,6 +1506,9 @@ export class ChatRuntime extends BaseService implements ChatModule {
         stream,
       })) {
         latestAssistantMessage = nextAssistantMessage;
+        if (activeTurn.backgroundReplyModelId === model.id) {
+          activeTurn.backgroundReply?.update(nextAssistantMessage);
+        }
         captureApprovalTiming(runtimeTiming, nextAssistantMessage.parts as CherryMessagePart[]);
         throwIfAborted(abortController.signal);
         activeTurn.overlays.set(
@@ -1888,6 +1952,80 @@ export class ChatRuntime extends BaseService implements ChatModule {
     return model;
   }
 
+  private async startBackgroundReply(
+    activeTurn: ActiveTurn,
+    topic: Topic,
+    model: Model | undefined,
+  ): Promise<void> {
+    if (activeTurn.backgroundReply || !model) return;
+
+    try {
+      const backgroundReply = this.dependencies.backgroundReply.startTurn({
+        assistantName: await this.resolveBackgroundAssistantName(topic, model),
+        topicId: topic.id,
+        topicTitle: topic.name,
+      });
+      activeTurn.backgroundReply = backgroundReply;
+      activeTurn.backgroundReplyModelId = model.id;
+    } catch (error) {
+      this.dependencies.backgroundReply.clearTopic(topic.id);
+      logger.warn('Failed to start background reply lifecycle', toError(error), {
+        topicId: topic.id,
+      });
+    }
+  }
+
+  private async resolveBackgroundAssistantName(topic: Topic, model: Model): Promise<string> {
+    const fallbackName = model.name.trim();
+    if (!topic.assistantId) return fallbackName;
+
+    try {
+      return (
+        (await this.dependencies.services.assistant.getById(topic.assistantId)).name.trim() ||
+        fallbackName
+      );
+    } catch (error) {
+      logger.warn('Failed to resolve assistant name for background reply', toError(error), {
+        assistantId: topic.assistantId,
+        topicId: topic.id,
+      });
+      return fallbackName;
+    }
+  }
+
+  private settleBackgroundReply(activeTurn: ActiveTurn): void {
+    const turn = activeTurn.backgroundReply;
+    const modelId = activeTurn.backgroundReplyModelId;
+    if (!turn || !modelId) return;
+
+    const execution = activeTurn.executions.get(modelId);
+    const message = activeTurn.overlays.get(modelId);
+    if (!execution) return;
+
+    if (
+      execution.status === 'done' &&
+      message &&
+      hasPendingToolApproval(message.data.parts ?? [])
+    ) {
+      turn.awaitApproval(toCherryUIMessage(message));
+      return;
+    }
+
+    switch (execution.status) {
+      case 'aborted':
+        turn.finish('cancelled');
+        break;
+      case 'done':
+        turn.finish('completed');
+        break;
+      case 'error':
+        turn.finish('failed');
+        break;
+      case 'streaming':
+        break;
+    }
+  }
+
   private async resolveModelId(
     selectedModelId?: UniqueModelId | null,
     topic?: Pick<Topic, 'assistantId'>,
@@ -2021,6 +2159,10 @@ export class ChatRuntime extends BaseService implements ChatModule {
     const runtimeTopicId = this.resolveRuntimeTopicId(topicId);
     this.pendingSteers.delete(runtimeTopicId);
     this.followUpQueues.delete(runtimeTopicId);
+    // Scope cancellation invalidates the whole conversation context. Cancel
+    // its presentation synchronously so the Activity session releases its
+    // keep-alive lease before the coordinator's drain can open the mutation.
+    this.dependencies.backgroundReply.clearTopic(runtimeTopicId);
     this.abort(topicId);
   }
 
@@ -2091,6 +2233,61 @@ function resolveTurnOutcome(
     return 'error';
   }
   return 'done';
+}
+
+/**
+ * The rows a turn is about to write, in the shape the chat screen reads them.
+ *
+ * Ids come from the caller instead of the column default so the turn can be
+ * published before it is persisted: the optimistic row and the row that lands
+ * carry one identity, and `mergeMessagesWithOverlay` replaces in place instead
+ * of appending a duplicate. Only DB-owned fields are guessed — the timestamps
+ * (the real ones land milliseconds later, and nothing orders a turn by them)
+ * and `searchableText`, which is a trigger's output no chat surface reads.
+ */
+function buildPendingTurnMessages(input: {
+  messageSnapshots: readonly (MessageSnapshot | undefined)[];
+  models: readonly Model[];
+  newMessageId: () => string;
+  parentId: string | null;
+  parts: readonly CherryMessagePart[];
+  siblingsGroupId: number;
+  topicId: string;
+  turnOptions: MessageData['turnOptions'];
+  userSiblingsGroupId: number;
+}): { placeholders: Message[]; userMessage: Message } {
+  const now = new Date().toISOString();
+  const dbOwnedFields = {
+    createdAt: now,
+    searchableText: '',
+    topicId: input.topicId,
+    updatedAt: now,
+  };
+  const userMessage: Message = {
+    ...dbOwnedFields,
+    data: { parts: [...input.parts] },
+    id: input.newMessageId(),
+    modelId: input.models[0]?.id ?? null,
+    parentId: input.parentId,
+    role: 'user',
+    siblingsGroupId: input.userSiblingsGroupId,
+    status: 'success',
+  };
+  const placeholders = input.models.map(
+    (model, index): Message => ({
+      ...dbOwnedFields,
+      data: { parts: [], turnOptions: input.turnOptions },
+      id: input.newMessageId(),
+      messageSnapshot: input.messageSnapshots[index] ?? null,
+      modelId: model.id,
+      parentId: userMessage.id,
+      role: 'assistant',
+      siblingsGroupId: input.siblingsGroupId,
+      status: 'pending',
+    }),
+  );
+
+  return { placeholders, userMessage };
 }
 
 function buildStreamStatusSnapshot(turn: ActiveTurn): TopicStatusSnapshotEntry {

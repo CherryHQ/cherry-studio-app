@@ -9,13 +9,14 @@ import {
 describe('preference defaults', () => {
   test('keeps the desktop preference surface and mobile permission policies', () => {
     expect(getPreferenceKeys()).toEqual(Object.keys(PreferenceDefaults.default));
-    expect(getPreferenceKeys()).toHaveLength(243);
+    expect(getPreferenceKeys()).toHaveLength(244);
 
     expect(getPreferenceKeys()).toEqual(
       expect.arrayContaining([
         'app.developer_mode.enabled',
         'app.language',
         'app.user.avatar',
+        'chat.background_reply.enabled',
         'chat.default_model_id',
         'chat.input.send_message_shortcut',
         'feature.quick_assistant.model_id',
@@ -39,6 +40,7 @@ describe('preference defaults', () => {
     expect(getDefaultValue('app.dist.auto_update.enabled')).toBe(true);
     expect(getDefaultValue('app.proxy.mode')).toBe('system');
     expect(getDefaultValue('assistant.icon_type')).toBe('emoji');
+    expect(getDefaultValue('chat.background_reply.enabled')).toBe(true);
     expect(getDefaultValue('chat.default_model_id')).toBeNull();
     expect(getDefaultValue('chat.input.send_message_shortcut')).toBe('Enter');
     expect(getDefaultValue('chat.message.math.single_dollar')).toBe(true);
@@ -69,7 +71,7 @@ describe('preference defaults', () => {
     expect(isPreferenceKey('feature.translate.model_prompt')).toBe(true);
     expect(isPreferenceKey('permissions.location_read')).toBe(true);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
-    expect(Object.keys(PreferenceDefaults.default)).toHaveLength(243);
+    expect(Object.keys(PreferenceDefaults.default)).toHaveLength(244);
   });
 
   test('keeps permission preferences safe by default', () => {
