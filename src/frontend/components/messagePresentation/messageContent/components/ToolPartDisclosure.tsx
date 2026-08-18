@@ -1,9 +1,8 @@
 import type { AppIconProps } from '@cherrystudio/app-icons';
+import { MessagePart } from '@cherrystudio/ui/components';
 import type { ImageSource } from 'expo-image';
-import { type ComponentType, type ReactNode, useState } from 'react';
-import { View } from 'react-native';
-
-import { ToolPartSheet, ToolPartTrigger } from './ToolPartSheet';
+import type { ComponentType, ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 
 type ToolPartDisclosureProps = {
   children: ReactNode;
@@ -26,29 +25,20 @@ export function ToolPartDisclosure({
   testIDPrefix,
   title,
 }: ToolPartDisclosureProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const { t } = useTranslation();
 
   return (
-    <View className="gap-1.5">
-      <ToolPartTrigger
-        icon={icon}
-        imageSource={imageSource}
-        isRunning={isRunning}
-        onPress={() => setIsOpen(true)}
-        statusText={statusText}
-        statusTone={statusTone}
-        testID={`${testIDPrefix}-trigger`}
-        title={title}
-      />
-      {isOpen ? (
-        <ToolPartSheet
-          onClose={() => setIsOpen(false)}
-          testID={`${testIDPrefix}-detail`}
-          title={title}
-        >
-          {children}
-        </ToolPartSheet>
-      ) : null}
-    </View>
+    <MessagePart.Tool
+      closeAccessibilityLabel={t('common.close')}
+      icon={icon}
+      imageSource={imageSource}
+      state={isRunning ? 'running' : 'complete'}
+      statusText={statusText}
+      statusTone={statusTone}
+      testID={testIDPrefix}
+      title={title}
+    >
+      {children}
+    </MessagePart.Tool>
   );
 }

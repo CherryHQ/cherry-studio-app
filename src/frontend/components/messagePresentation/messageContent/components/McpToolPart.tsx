@@ -1,3 +1,4 @@
+import { MessagePart } from '@cherrystudio/ui/components';
 import {
   type NormalizedMcpContent,
   normalizeMcpResult,
@@ -13,7 +14,6 @@ import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { ToolPartSectionTitle, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
@@ -44,21 +44,21 @@ export function McpToolPart({ part }: McpToolPartProps) {
       testIDPrefix="mcp-tool-part"
       title={title}
     >
-      <ToolPartValueSection
+      <MessagePart.ValueSection
         maxLength={MAX_ARG_VALUE_LENGTH}
         title={t('chat.mcpTool.arguments')}
         value={part.input}
       />
       {part.state === 'output-available' ? <McpOutputSection output={part.output} /> : null}
       {readCherryMeta(part)?.settledByApp ? (
-        <ToolPartTextSection
-          tone="error"
+        <MessagePart.TextSection
+          tone="danger"
           title={t('chat.mcpTool.response')}
           value={t('chat.mcpTool.unfinishedDetail')}
         />
       ) : part.state === 'output-error' ? (
-        <ToolPartTextSection
-          tone="error"
+        <MessagePart.TextSection
+          tone="danger"
           title={t('chat.mcpTool.response')}
           value={part.errorText}
         />
@@ -95,9 +95,9 @@ function McpOutputSection({ output }: { output: unknown }) {
   return (
     <View className="gap-1">
       {text ? (
-        <ToolPartTextSection title={t('chat.mcpTool.response')} value={text} />
+        <MessagePart.TextSection title={t('chat.mcpTool.response')} value={text} />
       ) : (
-        <ToolPartSectionTitle title={t('chat.mcpTool.response')} />
+        <MessagePart.SectionTitle title={t('chat.mcpTool.response')} />
       )}
       {images.map((image) => (
         <Image

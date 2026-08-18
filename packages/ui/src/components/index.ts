@@ -11,6 +11,7 @@ export * from './input';
 export * from './loading';
 export * from './markdown-text';
 export * from './menu';
+export * from './message-part';
 export * from './portal';
 export * from './surface';
 export * from './search-field';

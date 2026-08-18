@@ -14,9 +14,18 @@ jest.mock('../../../messageContent', () => ({
   MessageParts: (props: { message: MessagePresentationItem }) => mockMessageParts(props),
 }));
 
-jest.mock('@cherrystudio/ui/components', () => ({
-  DotMatrixSquare20: (props: { active: boolean; size: number }) => mockDotMatrixSquare20(props),
-}));
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+
+  return {
+    DotMatrixSquare20: (props: { active: boolean; size: number }) => mockDotMatrixSquare20(props),
+    MessagePart: {
+      Status: ({ children }: { children: React.ReactNode }) =>
+        React.createElement('MessagePartStatus', null, children),
+      StatusTextFloor: () => null,
+    },
+  };
+});
 
 // 真模块在 jest 下会去装 worklets 的原生 unpacker 并崩掉，本套件只关心渲染出什么。
 jest.mock('react-native-reanimated', () => {

@@ -63,6 +63,25 @@ Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontS
 `resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
 variables, MessageList geometry, and settings previews on the same three-step scale.
 
+`MessagePart` is the business-neutral visual family for structured chat content. It owns status
+rows, reasoning and tool detail sheets, feedback blocks, source links, placeholders, translation
+separators, and structured detail sections. Product code supplies resolved labels, states, content,
+and actions; CherryUI does not read message schemas, tool metadata, translations, file identifiers,
+or application navigation:
+
+```tsx
+<MessagePart.Tool
+  closeAccessibilityLabel="Close"
+  state="complete"
+  statusText="3 results"
+  title="Web search"
+>
+  <MessagePart.Source label="Cherry Studio" onPress={openSource} url="https://cherry-ai.com" />
+</MessagePart.Tool>
+```
+
+The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
+
 `ScrollToBottomButton` is a localized floating control for scrollable surfaces with a measured
 bottom accessory. It owns the CherryUI surface, position, and visibility motion; the caller owns
 the at-bottom state and the one-shot scroll action:

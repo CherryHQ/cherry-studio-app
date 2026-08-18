@@ -1,9 +1,9 @@
+import { hasMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
 import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation/builtInToolPresentation';
-import { hasToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
@@ -32,10 +32,14 @@ export function ToolPart({ part }: ToolPartProps) {
       testIDPrefix="tool-part"
       title={title}
     >
-      <ToolPartValueSection title={t('chat.tool.arguments')} value={part.input} />
+      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={part.input} />
       {part.state === 'output-available' ? <ToolOutputSection output={part.output} /> : null}
       {part.state === 'output-error' ? (
-        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <MessagePart.TextSection
+          tone="danger"
+          title={t('chat.tool.error')}
+          value={part.errorText}
+        />
       ) : null}
       {shouldShowNoDetails(part) ? (
         <Text className="text-foreground text-base italic" selectable>
@@ -49,7 +53,7 @@ export function ToolPart({ part }: ToolPartProps) {
 function ToolOutputSection({ output }: { output: unknown }) {
   const { t } = useTranslation();
 
-  if (!hasToolPartValue(output)) {
+  if (!hasMessagePartValue(output)) {
     return (
       <Text className="text-foreground text-base italic" selectable>
         {t('chat.tool.noOutput')}
@@ -57,7 +61,7 @@ function ToolOutputSection({ output }: { output: unknown }) {
     );
   }
 
-  return <ToolPartValueSection title={t('chat.tool.output')} value={output} />;
+  return <MessagePart.ValueSection title={t('chat.tool.output')} value={output} />;
 }
 
 function getToolLabel(
@@ -118,7 +122,7 @@ function shouldShowNoDetails(part: ToolMessagePart) {
   return (
     part.state !== 'output-error' &&
     part.state !== 'output-available' &&
-    !hasToolPartValue(part.input)
+    !hasMessagePartValue(part.input)
   );
 }
 

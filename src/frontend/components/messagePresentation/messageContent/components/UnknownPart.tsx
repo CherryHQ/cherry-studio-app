@@ -1,9 +1,9 @@
-import { PartPlaceholder } from './PartPlaceholder';
+import { MessagePart } from '@cherrystudio/ui/components';
 
 type UnknownPartProps = {
   type: string;
 };
 
 export function UnknownPart({ type }: UnknownPartProps) {
-  return <PartPlaceholder label={type} />;
+  return <MessagePart.Placeholder label={type} />;
 }

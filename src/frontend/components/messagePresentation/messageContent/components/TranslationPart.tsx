@@ -1,6 +1,5 @@
-import { LanguagesIcon } from '@cherrystudio/app-icons';
+import { MessagePart } from '@cherrystudio/ui/components';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { View } from 'react-native';
 
 import { PartMarkdown } from './PartMarkdown';
 
@@ -11,13 +10,8 @@ type TranslationPartProps = {
 
 export function TranslationPart({ isStreaming, part }: TranslationPartProps) {
   return (
-    <View className="gap-2">
-      <View className="flex-row items-center gap-3">
-        <View className="h-px flex-1 bg-border" />
-        <LanguagesIcon className="size-4 text-foreground-tertiary" />
-        <View className="h-px flex-1 bg-border" />
-      </View>
+    <MessagePart.Translation>
       <PartMarkdown isStreaming={isStreaming} markdown={part.data.content} />
-    </View>
+    </MessagePart.Translation>
   );
 }

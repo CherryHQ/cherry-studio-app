@@ -1,14 +1,9 @@
-import { ChevronRightIcon } from '@cherrystudio/app-icons';
-import { BottomSheet, PrismSweep } from '@cherrystudio/ui/components';
+import { MessagePart } from '@cherrystudio/ui/components';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
-import type { Detent } from '@swmansion/react-native-bottom-sheet';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { MessageStatusRow } from '../../components/MessageStatusRow';
 import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';
 import { PartMarkdown } from './PartMarkdown';
 
@@ -17,15 +12,8 @@ type ReasoningPartProps = {
   part: Extract<CherryMessagePart, { type: 'reasoning' }>;
 };
 
-// 推理详情 sheet 两档（占「安全区内高度」的比例）：默认开在 60%，可上拖到接近满高（100% 档
-// 用 'content' 对齐固定卡片高度）。长推理在卡片内部滚动。
-const reasoningSheetMediumFraction = 0.6;
-const reasoningSheetFullFraction = 0.94;
-
 export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   const { t } = useTranslation();
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
-
   const isThinking = part.state === 'streaming';
   const cherryMeta = readCherryMeta(part);
   const displayMs = useThinkingTimerMs(isThinking, cherryMeta?.startedAt, cherryMeta?.thinkingMs);
@@ -45,67 +33,13 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
   }
 
   return (
-    <View className="gap-1.5">
-      {/* 点状态行打开推理详情 sheet（思考中也可打开、内部实时流式）；不再内联展开，避免改变
-          消息高度、干扰锚定列表的滚动位置。 */}
-      <MessageStatusRow accessibilityLabel={statusText} onPress={() => setIsSheetOpen(true)}>
-        {isThinking ? <PrismSweep active /> : null}
-        <Text className="flex-1 text-foreground text-base" numberOfLines={1}>
-          {statusText}
-        </Text>
-        <ChevronRightIcon className="size-4 text-foreground" />
-      </MessageStatusRow>
-      {isSheetOpen ? (
-        <ReasoningDetailSheet
-          isStreaming={isStreaming}
-          markdown={part.text}
-          onClose={() => setIsSheetOpen(false)}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function ReasoningDetailSheet({
-  isStreaming,
-  markdown,
-  onClose,
-}: {
-  isStreaming: boolean;
-  markdown: string;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const available = windowHeight - insets.top - insets.bottom;
-  const fullHeight = available * reasoningSheetFullFraction;
-  const detents = useMemo<Detent[]>(
-    () => [0, available * reasoningSheetMediumFraction, 'content'],
-    [available],
-  );
-
-  return (
-    <BottomSheet defaultOpen>
-      <BottomSheet.Content
-        detents={detents}
-        height={fullHeight}
-        onClose={onClose}
-        testID="reasoning-detail"
-      >
-        <BottomSheet.Header>
-          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
-          <BottomSheet.Title>{t('chat.reasoningStatus.title')}</BottomSheet.Title>
-          <BottomSheet.HeaderSpacer />
-        </BottomSheet.Header>
-        <BottomSheet.ScrollView
-          className="flex-1"
-          contentContainerClassName="px-4 pb-4"
-          showsVerticalScrollIndicator={false}
-        >
-          <PartMarkdown isStreaming={isStreaming} markdown={markdown} />
-        </BottomSheet.ScrollView>
-      </BottomSheet.Content>
-    </BottomSheet>
+    <MessagePart.Reasoning
+      closeAccessibilityLabel={t('common.close')}
+      detailTitle={t('chat.reasoningStatus.title')}
+      state={isThinking ? 'running' : 'complete'}
+      statusText={statusText}
+    >
+      <PartMarkdown isStreaming={isStreaming} markdown={part.text} />
+    </MessagePart.Reasoning>
   );
 }

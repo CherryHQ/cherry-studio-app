@@ -1,18 +1,17 @@
-import { DotMatrixSquare20 } from '@cherrystudio/ui/components';
 import { Pressable, Text, View } from 'react-native';
 
-type PartPlaceholderProps = {
-  description?: string;
-  label: string;
-  onPress?: () => void;
-};
+import { DotMatrixSquare20 } from '../../loading';
+import type { MessagePartPlaceholderProps } from '../message-part.types';
 
-export function PartPlaceholder({ description, label, onPress }: PartPlaceholderProps) {
+export function MessagePartPlaceholder({
+  description,
+  label,
+  onPress,
+}: MessagePartPlaceholderProps) {
   const hasDescription = Boolean(description);
   const containerClassName = `flex-row gap-2 rounded-lg border border-border bg-secondary p-3 ${
     hasDescription ? '' : 'items-center'
   }`;
-
   const content = (
     <>
       <View className={hasDescription ? 'mt-0.5' : undefined}>

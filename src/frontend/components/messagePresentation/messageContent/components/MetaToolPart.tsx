@@ -1,8 +1,8 @@
+import { formatMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { formatToolPartValue, ToolPartTextSection, ToolPartValueSection } from './ToolPartDetails';
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
@@ -92,7 +92,7 @@ function ToolSearchBody({
 
   return (
     <>
-      <ToolPartValueSection title={t('chat.tool.arguments')} value={input} />
+      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
       {part.state === 'output-available' && namespaces.length === 0 ? (
         <Text className="text-foreground text-base italic" selectable>
           {t('chat.metaToolSearch.noResults')}
@@ -115,7 +115,11 @@ function ToolSearchBody({
         </View>
       ))}
       {part.state === 'output-error' ? (
-        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <MessagePart.TextSection
+          tone="danger"
+          title={t('chat.tool.error')}
+          value={part.errorText}
+        />
       ) : null}
     </>
   );
@@ -132,15 +136,19 @@ function ToolInspectBody({
 
   return (
     <>
-      <ToolPartValueSection title={t('chat.tool.arguments')} value={input} />
+      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
       {part.state === 'output-available' ? (
-        <ToolPartTextSection
+        <MessagePart.TextSection
           title={t('chat.tool.jsdoc')}
-          value={formatToolPartValue(part.output)}
+          value={formatMessagePartValue(part.output)}
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <MessagePart.TextSection
+          tone="danger"
+          title={t('chat.tool.error')}
+          value={part.errorText}
+        />
       ) : null}
     </>
   );
@@ -158,15 +166,19 @@ function ToolInvokeBody({
 
   return (
     <>
-      <ToolPartValueSection title={t('chat.tool.arguments')} value={params ?? input} />
+      <MessagePart.ValueSection title={t('chat.tool.arguments')} value={params ?? input} />
       {part.state === 'output-available' ? (
-        <ToolPartTextSection
+        <MessagePart.TextSection
           title={t('chat.tool.response')}
-          value={formatToolPartValue(part.output)}
+          value={formatMessagePartValue(part.output)}
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <MessagePart.TextSection
+          tone="danger"
+          title={t('chat.tool.error')}
+          value={part.errorText}
+        />
       ) : null}
     </>
   );
@@ -184,30 +196,34 @@ function ToolExecBody({ input, part }: { input?: Record<string, unknown>; part: 
   return (
     <>
       {code ? (
-        <ToolPartTextSection title={t('chat.tool.code')} value={code} />
+        <MessagePart.TextSection title={t('chat.tool.code')} value={code} />
       ) : (
-        <ToolPartValueSection title={t('chat.tool.arguments')} value={input} />
+        <MessagePart.ValueSection title={t('chat.tool.arguments')} value={input} />
       )}
       {logs.length > 0 ? (
-        <ToolPartTextSection title={t('chat.tool.logs')} value={logs.join('\n')} />
+        <MessagePart.TextSection title={t('chat.tool.logs')} value={logs.join('\n')} />
       ) : null}
       {typeof output?.error === 'string' ? (
-        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={output.error} />
+        <MessagePart.TextSection tone="danger" title={t('chat.tool.error')} value={output.error} />
       ) : null}
       {output?.result !== undefined ? (
-        <ToolPartTextSection
+        <MessagePart.TextSection
           title={t('chat.tool.result')}
-          value={formatToolPartValue(output.result)}
+          value={formatMessagePartValue(output.result)}
         />
       ) : null}
       {part.state === 'output-available' && !output ? (
-        <ToolPartTextSection
+        <MessagePart.TextSection
           title={t('chat.tool.response')}
-          value={formatToolPartValue(part.output)}
+          value={formatMessagePartValue(part.output)}
         />
       ) : null}
       {part.state === 'output-error' ? (
-        <ToolPartTextSection tone="error" title={t('chat.tool.error')} value={part.errorText} />
+        <MessagePart.TextSection
+          tone="danger"
+          title={t('chat.tool.error')}
+          value={part.errorText}
+        />
       ) : null}
     </>
   );

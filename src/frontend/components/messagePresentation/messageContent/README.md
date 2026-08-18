@@ -12,5 +12,10 @@ This module renders the structured parts inside a chat message.
 - `components/` maps Cherry message part types to React Native UI.
 - `hooks/` owns rendering configuration shared by the part renderers.
 
+Part renderers are application adapters: they resolve Cherry message schemas, translations,
+metadata, files, and navigation into the business-neutral `MessagePart` visual family exported by
+CherryUI. New reusable layout or interaction belongs in CherryUI; Cherry-specific parsing remains
+in this module.
+
 When adding support for a new message part type, add a focused renderer in `components/` and route it
 from `MessagePart`.

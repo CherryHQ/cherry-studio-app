@@ -1,9 +1,11 @@
 import { SearchIcon } from '@cherrystudio/app-icons';
+import { MessagePart } from '@cherrystudio/ui/components';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { SourceUrlItem } from './SourceUrlItem';
+import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
+
 import { ToolPartDisclosure } from './ToolPartDisclosure';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
@@ -48,9 +50,10 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
         </Text>
       ) : (
         results.map((result) => (
-          <SourceUrlItem
+          <MessagePart.Source
             key={`${result.id}-${result.url}`}
             label={result.title || result.url}
+            onPress={(url) => void openExternalUrl(url)}
             url={result.url}
           />
         ))

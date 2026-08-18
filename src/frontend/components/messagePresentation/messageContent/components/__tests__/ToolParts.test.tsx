@@ -20,14 +20,71 @@ jest.mock('expo-image', () => {
   return { Image: (props: Record<string, unknown>) => <MockView {...props} /> };
 });
 
-jest.mock('../ToolPartSheet', () => {
+jest.mock('@cherrystudio/ui/components', () => {
+  const { Text: MockText, View: MockView } = jest.requireActual('react-native');
+  const isValueRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value);
+  const hasValue = (value: unknown) =>
+    value !== undefined &&
+    value !== null &&
+    (!isValueRecord(value) || Object.keys(value).length > 0);
+  const formatValue = (value: unknown) =>
+    typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+
+  return {
+    formatMessagePartValue: formatValue,
+    hasMessagePartValue: hasValue,
+    MessagePart: {
+      SectionTitle: ({ title }: { title: string }) => <MockText>{title}</MockText>,
+      Source: ({ label }: { label: string }) => <MockText>{label}</MockText>,
+      TextSection: ({ title, value }: { title: string; value: string }) => (
+        <MockView>
+          <MockText>{title}</MockText>
+          <MockText>{value}</MockText>
+        </MockView>
+      ),
+      ValueSection: ({ title, value }: { title: string; value: unknown }) =>
+        hasValue(value) ? (
+          <MockView>
+            <MockText>{title}</MockText>
+            <MockText>{formatValue(value)}</MockText>
+          </MockView>
+        ) : null,
+    },
+  };
+});
+
+jest.mock('../ToolPartDisclosure', () => {
+  const React = jest.requireActual('react');
   const { View: MockView } = jest.requireActual('react-native');
 
   return {
-    ToolPartSheet: ({ children, ...props }: { children: ReactNode }) => (
-      <MockView {...props}>{children}</MockView>
-    ),
-    ToolPartTrigger: (props: Record<string, unknown>) => <MockView {...props} />,
+    ToolPartDisclosure: ({
+      children,
+      testIDPrefix,
+      ...props
+    }: {
+      children: ReactNode;
+      testIDPrefix: string;
+      title: string;
+    }) => {
+      const [isOpen, setIsOpen] = React.useState(false);
+
+      return (
+        <>
+          <MockView {...props} onPress={() => setIsOpen(true)} testID={`${testIDPrefix}-trigger`} />
+          {isOpen ? (
+            <MockView
+              onClose={() => setIsOpen(false)}
+              testID={`${testIDPrefix}-detail`}
+              title={props.title}
+            >
+              {children}
+            </MockView>
+          ) : null}
+        </>
+      );
+    },
   };
 });
 
