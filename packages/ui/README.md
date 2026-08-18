@@ -109,11 +109,29 @@ Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallba
 
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
 `destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
-behavior. The `sm`, `default`, and `lg` sizes use content-driven typography and padding without
+behavior. The `xs`, `sm`, `default`, and `lg` sizes use content-driven typography and padding without
 fixed dimensions. The `icon` prop renders an icon before the label and automatically switches to
 the matching icon-only padding when no label is provided. Icon-only buttons must provide an
 `accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
-need an Expo UI `Host`.
+need an Expo UI `Host`. The visually compact `xs` size supplies an 8-point hit slop by default so
+its effective touch target remains usable.
+
+`Section.RadioItem` is the controlled single-choice variant for grouped rows. It owns the radio
+accessibility state, selected checkmark, disclosure behavior, separators, and leading-content inset;
+the caller owns the selected value and persistence:
+
+```tsx
+<Section>
+  {options.map((option) => (
+    <Section.RadioItem
+      key={option.value}
+      label={option.label}
+      onPress={() => setValue(option.value)}
+      selected={option.value === value}
+    />
+  ))}
+</Section>
+```
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest

@@ -1,4 +1,3 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
@@ -33,9 +32,7 @@ export default function WebSearchDefaultProviderScreen() {
             const imageSource = resolveWebSearchProviderIcon(option.value)?.[iconTheme];
 
             return (
-              <Section.Item
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
+              <Section.RadioItem
                 key={option.value}
                 label={option.label}
                 leading={
@@ -55,8 +52,7 @@ export default function WebSearchDefaultProviderScreen() {
                     router.back();
                   }
                 }}
-                showChevron={false}
-                trailing={selected ? <CheckIcon className="size-5 text-foreground" /> : null}
+                selected={selected}
               />
             );
           })}

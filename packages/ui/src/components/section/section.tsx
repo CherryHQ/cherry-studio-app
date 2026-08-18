@@ -1,11 +1,28 @@
-import { ChevronRightIcon } from '@cherrystudio/app-icons';
-import { Children, cloneElement, Fragment, isValidElement, type ReactNode, useState } from 'react';
+import { CheckIcon, ChevronRightIcon } from '@cherrystudio/app-icons';
+import {
+  Children,
+  cloneElement,
+  Fragment,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+  useState,
+} from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { cn } from '../../utils';
-import type { SectionHeaderProps, SectionItemProps, SectionProps } from './section.types';
+import type {
+  SectionHeaderProps,
+  SectionItemProps,
+  SectionProps,
+  SectionRadioItemProps,
+} from './section.types';
 
 type InternalSectionItemProps = SectionItemProps & {
+  onPressedChange?: (isPressed: boolean) => void;
+};
+
+type InternalSectionRadioItemProps = SectionRadioItemProps & {
   onPressedChange?: (isPressed: boolean) => void;
 };
 
@@ -141,6 +158,28 @@ function SectionItem({
   );
 }
 
+function SectionRadioItem({ onPressedChange, selected, ...props }: InternalSectionRadioItemProps) {
+  return (
+    <SectionItem
+      {...props}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      onPressedChange={onPressedChange}
+      showChevron={false}
+      trailing={selected ? <CheckIcon className="size-5 text-foreground" /> : undefined}
+    />
+  );
+}
+
+function isSectionItemElement(
+  child: ReactNode,
+): child is ReactElement<InternalSectionItemProps | InternalSectionRadioItemProps> {
+  return (
+    isValidElement<InternalSectionItemProps | InternalSectionRadioItemProps>(child) &&
+    (child.type === SectionItem || child.type === SectionRadioItem)
+  );
+}
+
 function SectionRoot({
   children,
   className,
@@ -157,12 +196,7 @@ function SectionRoot({
     (child) => !(isValidElement<SectionHeaderProps>(child) && child.type === SectionHeader),
   );
   const [pressedIndex, setPressedIndex] = useState<number | null>(null);
-  const hasLeading = rows.some(
-    (row) =>
-      isValidElement<SectionItemProps>(row) &&
-      row.type === SectionItem &&
-      Boolean(row.props.leading),
-  );
+  const hasLeading = rows.some((row) => isSectionItemElement(row) && Boolean(row.props.leading));
 
   return (
     <View className={cn('gap-1', className)} {...viewProps}>
@@ -186,7 +220,7 @@ function SectionRoot({
                   testID="section-separator"
                 />
               ) : null}
-              {isValidElement<InternalSectionItemProps>(row) && row.type === SectionItem
+              {isSectionItemElement(row)
                 ? cloneElement(row, {
                     onPressedChange: (isPressed: boolean) =>
                       setPressedIndex((currentIndex) =>
@@ -206,8 +240,10 @@ function SectionRoot({
 SectionRoot.displayName = 'Section';
 SectionHeader.displayName = 'Section.Header';
 SectionItem.displayName = 'Section.Item';
+SectionRadioItem.displayName = 'Section.RadioItem';
 
 export const Section = Object.assign(SectionRoot, {
   Header: SectionHeader,
   Item: SectionItem,
+  RadioItem: SectionRadioItem,
 });

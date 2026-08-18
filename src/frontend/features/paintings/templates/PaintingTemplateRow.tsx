@@ -1,7 +1,7 @@
-import { Image } from '@cherrystudio/ui/components';
+import { Image, Section } from '@cherrystudio/ui/components';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { PaintingTemplateBottomSheet } from './PaintingTemplateBottomSheet';
 import { type PaintingTemplate, paintingTemplates } from './paintingTemplates';
@@ -29,9 +29,7 @@ export function PaintingTemplateRow({ onUseTemplate }: PaintingTemplateRowProps)
   return (
     <>
       <View className="gap-3 pb-5" testID="painting-template-row">
-        <Text className="px-4 font-semibold text-foreground text-base">
-          {t('painting.templates.title')}
-        </Text>
+        <Section.Header className="px-4" title={t('painting.templates.title')} />
         <ScrollView
           contentContainerClassName="gap-2 px-4"
           horizontal

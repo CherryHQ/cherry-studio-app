@@ -1,4 +1,3 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
@@ -26,9 +25,7 @@ export default function LanguageSettingsScreen() {
             const selected = option.value === language.value;
 
             return (
-              <Section.Item
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
+              <Section.RadioItem
                 key={option.value}
                 label={option.label}
                 onPress={() => {
@@ -36,8 +33,7 @@ export default function LanguageSettingsScreen() {
                     language.onValueChange(option.value);
                   }
                 }}
-                showChevron={false}
-                trailing={selected ? <CheckIcon className="size-5 text-foreground" /> : null}
+                selected={selected}
               />
             );
           })}

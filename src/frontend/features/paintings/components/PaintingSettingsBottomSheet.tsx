@@ -1,4 +1,4 @@
-import { CheckIcon, ChevronRightIcon } from '@cherrystudio/app-icons';
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import {
   BottomSheet,
@@ -507,15 +507,12 @@ function EnumSelectionPage({
           const isSelected = selectedValue === option;
 
           return (
-            <Section.Item
-              accessibilityRole="radio"
-              accessibilityState={{ checked: isSelected }}
+            <Section.RadioItem
               key={option}
               label={imageParamOptionLabel(t, field.key, option)}
               onPress={() => onValueChange(field.key, option)}
-              showChevron={false}
+              selected={isSelected}
               testID={`painting-setting-option-${field.key}-${option}`}
-              trailing={isSelected ? <CheckIcon className="size-5 text-foreground" /> : undefined}
             />
           );
         })}
