@@ -16,6 +16,8 @@ jest.mock('@cherrystudio/app-icons', () => {
   const { View } = require('react-native');
 
   return {
+    CheckIcon: (props: object) =>
+      React.createElement(View, { ...props, testID: 'section-radio-check' }),
     ChevronRightIcon: (props: object) =>
       React.createElement(View, { ...props, testID: 'section-chevron' }),
   };
@@ -251,6 +253,41 @@ describe('Section', () => {
     );
 
     expect(row.props.accessibilityState).toEqual({ checked: true, disabled: undefined });
+  });
+
+  test('composes radio semantics, selection indicator, and grouped-row behavior', () => {
+    const onPress = jest.fn();
+    const tree = render(
+      <Section>
+        <Section.RadioItem label="Automatic" onPress={jest.fn()} selected={false} />
+        <Section.RadioItem
+          disabled
+          label="Always"
+          leading={<View testID="radio-leading" />}
+          onPress={onPress}
+          selected
+          testID="selected-radio"
+        />
+      </Section>,
+    );
+    const row = tree.root.find(
+      (node) =>
+        node.props.testID === 'selected-radio' &&
+        node.props.accessibilityRole === 'radio' &&
+        typeof node.props.className === 'string',
+    );
+
+    expect(row.props.accessibilityState).toEqual({ checked: true, disabled: true });
+    expect(row.props.disabled).toBe(true);
+    expect(
+      tree.root.findAll(
+        (node) => node.type === View && node.props.testID === 'section-radio-check',
+      ),
+    ).toHaveLength(1);
+    expect(tree.root.findAllByProps({ testID: 'section-chevron' })).toHaveLength(0);
+    expect(tree.root.findByProps({ testID: 'section-separator' }).props.className).toContain(
+      'ml-11',
+    );
   });
 
   test('supports custom row content while preserving item layout', () => {

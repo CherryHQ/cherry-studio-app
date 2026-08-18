@@ -1,4 +1,4 @@
-import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { Button, Input, Label, TextField, useAlert } from '@cherrystudio/ui/components';
 import {
   withMcpToolRuleAdded,
   withMcpToolRuleCleared,
@@ -12,7 +12,6 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';

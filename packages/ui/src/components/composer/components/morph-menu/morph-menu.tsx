@@ -29,8 +29,8 @@ import Animated, {
 import { Portal } from '../../../portal';
 import { Surface } from '../../../surface';
 import { Switch } from '../../../switch';
-import { composerActionSize } from '../../composer.layout';
-import { menuFadeMotion, menuOpenMotion, settleMotion } from '../../composer.motion';
+import { composerActionSize } from '../../utils/composer-layout';
+import { menuFadeMotion, menuOpenMotion, settleMotion } from '../../utils/composer-motion';
 import type { MorphMenuItemProps, MorphMenuProps, MorphMenuToggleProps } from './morph-menu.types';
 
 // It sits in the composer's toolbar, so it defaults to the same circle as the

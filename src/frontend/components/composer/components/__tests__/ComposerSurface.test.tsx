@@ -44,7 +44,7 @@ jest.mock('@cherrystudio/ui/components', () => {
   return { Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }) };
 });
 
-jest.mock('@/frontend/components/FilePreview', () => ({ FilePreview: () => null }));
+jest.mock('@/frontend/components/FileEntryPreview', () => ({ FileEntryPreview: () => null }));
 
 jest.mock('heroui-native/toast', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),

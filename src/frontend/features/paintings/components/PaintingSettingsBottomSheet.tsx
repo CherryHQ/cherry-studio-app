@@ -1,4 +1,4 @@
-import { CheckIcon, ChevronRightIcon } from '@cherrystudio/app-icons';
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
 import type { CanonicalParamKey } from '@cherrystudio/provider-registry';
 import {
   BottomSheet,
@@ -65,39 +65,51 @@ export function PaintingSettingsBottomSheet({
   const pageKey = activeEnumField ? `enum-${activeEnumField.key}` : 'settings';
 
   return (
-    <BottomSheet
-      backAccessibilityLabel={t('common.back')}
-      closeAccessibilityLabel={t('painting.settings.close')}
-      height={sheetHeight}
-      onBack={activeEnumField ? () => setActiveEnumKey(null) : undefined}
-      onClose={onDismiss}
-      testID="painting-settings"
-      title={
-        activeEnumField ? imageParamLabel(t, activeEnumField.key) : t('painting.settings.title')
-      }
-    >
-      <BottomSheet.PageTransition
-        depth={activeEnumField ? 1 : 0}
-        pageKey={pageKey}
-        testID="painting-settings-pages"
-      >
-        {activeEnumField ? (
-          <EnumSelectionPage
-            field={activeEnumField}
-            fields={fields}
-            onValueChange={onValueChange}
-            values={values}
-          />
-        ) : (
-          <PaintingSettingsRootPage
-            fields={fields}
-            onValueChange={onValueChange}
-            onEnumPress={setActiveEnumKey}
-            values={values}
-            safeAreaBottom={insets.bottom}
-          />
-        )}
-      </BottomSheet.PageTransition>
+    <BottomSheet defaultOpen>
+      <BottomSheet.Content height={sheetHeight} onClose={onDismiss} testID="painting-settings">
+        <BottomSheet.Header>
+          {activeEnumField ? (
+            <BottomSheet.BackButton
+              accessibilityLabel={t('common.back')}
+              onPress={() => setActiveEnumKey(null)}
+            />
+          ) : (
+            <BottomSheet.CloseButton accessibilityLabel={t('painting.settings.close')} />
+          )}
+          <BottomSheet.Title>
+            {activeEnumField
+              ? imageParamLabel(t, activeEnumField.key)
+              : t('painting.settings.title')}
+          </BottomSheet.Title>
+          {activeEnumField ? (
+            <BottomSheet.CloseButton accessibilityLabel={t('painting.settings.close')} />
+          ) : (
+            <BottomSheet.HeaderSpacer />
+          )}
+        </BottomSheet.Header>
+        <BottomSheet.PageTransition
+          depth={activeEnumField ? 1 : 0}
+          pageKey={pageKey}
+          testID="painting-settings-pages"
+        >
+          {activeEnumField ? (
+            <EnumSelectionPage
+              field={activeEnumField}
+              fields={fields}
+              onValueChange={onValueChange}
+              values={values}
+            />
+          ) : (
+            <PaintingSettingsRootPage
+              fields={fields}
+              onValueChange={onValueChange}
+              onEnumPress={setActiveEnumKey}
+              values={values}
+              safeAreaBottom={insets.bottom}
+            />
+          )}
+        </BottomSheet.PageTransition>
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }
@@ -119,7 +131,7 @@ function PaintingSettingsRootPage({
   const fieldWidth = Math.max(0, geometry.sheetWidth - 48);
 
   return (
-    <ScrollView
+    <BottomSheet.ScrollView
       contentContainerStyle={[styles.content, { paddingBottom: Math.max(24, safeAreaBottom + 12) }]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -136,7 +148,7 @@ function PaintingSettingsRootPage({
           values={values}
         />
       ))}
-    </ScrollView>
+    </BottomSheet.ScrollView>
   );
 }
 
@@ -495,15 +507,12 @@ function EnumSelectionPage({
           const isSelected = selectedValue === option;
 
           return (
-            <Section.Item
-              accessibilityRole="radio"
-              accessibilityState={{ checked: isSelected }}
+            <Section.RadioItem
               key={option}
               label={imageParamOptionLabel(t, field.key, option)}
               onPress={() => onValueChange(field.key, option)}
-              showChevron={false}
+              selected={isSelected}
               testID={`painting-setting-option-${field.key}-${option}`}
-              trailing={isSelected ? <CheckIcon className="size-5 text-foreground" /> : undefined}
             />
           );
         })}

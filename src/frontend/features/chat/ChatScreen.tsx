@@ -1,8 +1,8 @@
+import { useComposerDockLayout } from '@cherrystudio/ui/components';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 
-import { useComposerDockLayout } from '@/frontend/components/composer';
 import { MainHeader } from '@/frontend/components/headers';
 import { useMessages, useTopic } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';

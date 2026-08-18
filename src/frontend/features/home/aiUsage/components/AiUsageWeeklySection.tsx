@@ -1,4 +1,4 @@
-import { Section } from '@cherrystudio/ui/components';
+import { Button, Section } from '@cherrystudio/ui/components';
 import {
   LegendList,
   type LegendListRef,
@@ -15,7 +15,6 @@ import {
 import { useMeasuredWidth } from '../hooks/useMeasuredWidth';
 import type { AiUsageDetailPage } from '../types';
 import { AI_USAGE_CURRENT_WEEK_PAGE_INDEX } from '../utils/aiUsageDetail';
-import { AiUsageSectionAction } from './AiUsageSectionState';
 import { AiUsageWeekChartPage } from './AiUsageWeekChartPage';
 
 const ADJACENT_PAGE_DISTANCE = 1;
@@ -146,12 +145,16 @@ export function AiUsageWeeklySection({
     <Section testID="ai-usage-week-section">
       <Section.Header title={t('aiUsage.tokenUsage')}>
         {activePageIndex === AI_USAGE_CURRENT_WEEK_PAGE_INDEX ? undefined : (
-          <AiUsageSectionAction
-            label={t('aiUsage.showThisWeek')}
+          <Button
+            className="py-0"
+            hitSlop={10}
+            size="xs"
             testID="ai-usage-show-current-week"
-            variant="compact"
+            variant="ghost"
             onPress={handleShowCurrentWeek}
-          />
+          >
+            <Button.Label numberOfLines={1}>{t('aiUsage.showThisWeek')}</Button.Label>
+          </Button>
         )}
       </Section.Header>
       <View className="p-4">

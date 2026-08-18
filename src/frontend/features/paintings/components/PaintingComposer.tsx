@@ -1,3 +1,4 @@
+import { Composer, useComposerDockLayout } from '@cherrystudio/ui/components';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import * as Crypto from 'expo-crypto';
 import { useHeaderHeight } from 'expo-router/react-navigation';
@@ -5,16 +6,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import {
-  ComposerDock,
-  ManagedComposerProvider,
-  useComposerDockLayout,
-} from '@/frontend/components/composer';
+import { ManagedComposerProvider } from '@/frontend/components/composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
-import {
-  MessageList,
-  type MessagePresentationItem,
-} from '@/frontend/components/messagePresentation';
+import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 
 import {
@@ -25,8 +19,8 @@ import { paintingJobParamValues, usePaintingJobs } from '../hooks/usePaintingJob
 import type { ResolvedPaintingFiles } from '../hooks/usePaintings';
 import { imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import { createPaintingMessages } from '../utils/paintingMessages';
-import { PaintingAssistantMessage } from './PaintingAssistantMessage';
 import { PaintingInput } from './PaintingInput';
+import { PaintingMessage, type PaintingMessageState } from './PaintingMessage';
 
 type ActivePaintingTurn = {
   assistantMessageId: string;
@@ -126,22 +120,19 @@ export function PaintingComposer({
     },
     [generation.generate],
   );
-  const renderAssistantMessage = useCallback(
-    (_message: MessagePresentationItem) => (
-      <PaintingAssistantMessage
-        animateOutput={
-          firstOutput?.fileEntryId !== undefined &&
-          firstOutput.fileEntryId !== initialFiles.outputs[0]?.fileEntryId
-        }
-        aspectRatio={generation.aspectRatio}
-        error={generation.error}
-        interruption={generation.interruption}
-        outputs={outputs}
-        paintingId={activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined)}
-        resolution={generationResolution}
-        status={generation.status}
-      />
-    ),
+  const messageRenderState = useMemo<PaintingMessageState>(
+    () => ({
+      animateOutput:
+        firstOutput?.fileEntryId !== undefined &&
+        firstOutput.fileEntryId !== initialFiles.outputs[0]?.fileEntryId,
+      aspectRatio: generation.aspectRatio,
+      error: generation.error,
+      interruption: generation.interruption,
+      outputs,
+      paintingId: activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined),
+      resolution: generationResolution,
+      status: generation.status,
+    }),
     [
       activeTurn?.paintingId,
       generation.aspectRatio,
@@ -156,6 +147,10 @@ export function PaintingComposer({
       showPersistedTurn,
     ],
   );
+  const renderMessage = useCallback(
+    (message: MessageListItem) => <PaintingMessage message={message} state={messageRenderState} />,
+    [messageRenderState],
+  );
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useComposerDockLayout();
   const composerKey = firstOutput?.fileEntryId ?? 'painting-composer';
@@ -169,16 +164,17 @@ export function PaintingComposer({
         contentBottomInset={contentBottomInset}
         contentTopInset={resolveHeaderContentInset(headerHeight)}
         enteringMessageId={activeTurn?.userMessageId}
+        extraData={messageRenderState}
         keyboardOffset={keyboardOffset}
         messages={messages}
-        renderAssistantMessage={renderAssistantMessage}
+        renderMessage={renderMessage}
       />
       <ManagedComposerProvider
         initialAttachments={composerInitialAttachments}
         initialDraft={composerInitialDraft}
         key={composerKey}
       >
-        <ComposerDock onHeightChange={handleInputHeightChange}>
+        <Composer.Dock onHeightChange={handleInputHeightChange}>
           <PaintingInput
             initialParamValues={initialParamValues}
             onCancel={generation.cancel}
@@ -186,7 +182,7 @@ export function PaintingComposer({
             painting={painting}
             status={generation.status}
           />
-        </ComposerDock>
+        </Composer.Dock>
       </ManagedComposerProvider>
     </View>
   );

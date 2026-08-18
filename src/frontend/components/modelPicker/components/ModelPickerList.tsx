@@ -8,7 +8,7 @@ import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { ModelAvatar } from '@/frontend/components/ModelAvatar';
+import { ModelAvatar } from '@/frontend/components/avatar';
 
 import {
   getModelPickerRowTags,

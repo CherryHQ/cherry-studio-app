@@ -1,7 +1,7 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   useMessageScope,
   useMessageSelectionActions,

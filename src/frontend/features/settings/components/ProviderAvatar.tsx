@@ -2,7 +2,7 @@ import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useMemo } from 'react';
 import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '@/frontend/components/BrandAvatar';
+import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '@/frontend/components/avatar';
 import { useBackendModule } from '@/frontend/data';
 
 /**

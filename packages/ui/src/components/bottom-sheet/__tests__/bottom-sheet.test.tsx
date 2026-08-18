@@ -18,6 +18,14 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
   };
 });
 
+jest.mock('../../search-field', () => ({
+  SearchField: () => null,
+}));
+
+jest.mock('heroui-native/utils', () => ({
+  cn: (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' '),
+}));
+
 jest.mock('expo-glass-effect', () => {
   const { View } = jest.requireActual('react-native');
 
@@ -114,8 +122,15 @@ describe('BottomSheet', () => {
 
     act(() => {
       renderer = create(
-        <BottomSheet onClose={onClose} testID="test-sheet">
-          <Text>Body</Text>
+        <BottomSheet defaultOpen>
+          <BottomSheet.Content onClose={onClose} testID="test-sheet">
+            <BottomSheet.Header>
+              <BottomSheet.CloseButton accessibilityLabel="Close" />
+              <BottomSheet.Title>Title</BottomSheet.Title>
+              <BottomSheet.HeaderSpacer />
+            </BottomSheet.Header>
+            <Text>Body</Text>
+          </BottomSheet.Content>
         </BottomSheet>,
       );
     });
@@ -141,15 +156,19 @@ describe('BottomSheet', () => {
 
     act(() => {
       renderer = create(
-        <BottomSheet isOpen onClose={onClose}>
-          <Text>Body</Text>
+        <BottomSheet open>
+          <BottomSheet.Content onClose={onClose}>
+            <Text>Body</Text>
+          </BottomSheet.Content>
         </BottomSheet>,
       );
     });
     act(() => {
       renderer?.update(
-        <BottomSheet isOpen={false} onClose={onClose}>
-          <Text>Body</Text>
+        <BottomSheet open={false}>
+          <BottomSheet.Content onClose={onClose}>
+            <Text>Body</Text>
+          </BottomSheet.Content>
         </BottomSheet>,
       );
     });
@@ -158,13 +177,45 @@ describe('BottomSheet', () => {
     expect(onClose).toHaveBeenCalledWith('controlled');
   });
 
+  test('opens an uncontrolled sheet from its trigger', () => {
+    const onOpenChange = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <BottomSheet onOpenChange={onOpenChange}>
+          <BottomSheet.Trigger testID="sheet-trigger">
+            <Text>Open</Text>
+          </BottomSheet.Trigger>
+          <BottomSheet.Content>
+            <Text>Body</Text>
+          </BottomSheet.Content>
+        </BottomSheet>,
+      );
+    });
+    expect(mockBottomSheetProps.index).toBe(0);
+
+    const triggers = renderer?.root.findAllByProps({ testID: 'sheet-trigger' }) ?? [];
+    const trigger = triggers.find((node) => typeof node.props.onPress === 'function');
+    act(() => trigger?.props.onPress({}));
+
+    expect(mockBottomSheetProps.index).toBe(1);
+    expect(onOpenChange).toHaveBeenCalledWith(true);
+  });
+
   test('blocks close controls and gestures while close is disabled', () => {
     const onClose = jest.fn();
 
     act(() => {
       renderer = create(
-        <BottomSheet isCloseDisabled onClose={onClose} testID="test-sheet">
-          <Text>Body</Text>
+        <BottomSheet defaultOpen>
+          <BottomSheet.Content isCloseDisabled onClose={onClose} testID="test-sheet">
+            <BottomSheet.Header>
+              <BottomSheet.CloseButton accessibilityLabel="Close" />
+              <BottomSheet.Title>Title</BottomSheet.Title>
+              <BottomSheet.HeaderSpacer />
+            </BottomSheet.Header>
+            <Text>Body</Text>
+          </BottomSheet.Content>
         </BottomSheet>,
       );
     });
@@ -180,8 +231,10 @@ describe('BottomSheet', () => {
 
     act(() => {
       renderer = create(
-        <BottomSheet onClose={onClose}>
-          <BodyCloseButton reason="confirm" />
+        <BottomSheet defaultOpen>
+          <BottomSheet.Content onClose={onClose}>
+            <BodyCloseButton reason="confirm" />
+          </BottomSheet.Content>
         </BottomSheet>,
       );
     });
@@ -196,8 +249,15 @@ describe('BottomSheet', () => {
 
     act(() => {
       renderer = create(
-        <BottomSheet onBack={onBack} onClose={jest.fn()} testID="test-sheet">
-          <Text>Body</Text>
+        <BottomSheet defaultOpen>
+          <BottomSheet.Content onClose={jest.fn()} testID="test-sheet">
+            <BottomSheet.Header>
+              <BottomSheet.BackButton accessibilityLabel="Back" onPress={onBack} />
+              <BottomSheet.Title>Nested</BottomSheet.Title>
+              <BottomSheet.CloseButton accessibilityLabel="Close" />
+            </BottomSheet.Header>
+            <Text>Body</Text>
+          </BottomSheet.Content>
         </BottomSheet>,
       );
     });
@@ -219,8 +279,10 @@ describe('BottomSheet', () => {
 
       act(() => {
         renderer = create(
-          <BottomSheet onClose={jest.fn()} testID="test-sheet">
-            <GeometryProbe />
+          <BottomSheet defaultOpen>
+            <BottomSheet.Content onClose={jest.fn()} testID="test-sheet">
+              <GeometryProbe />
+            </BottomSheet.Content>
           </BottomSheet>,
         );
       });

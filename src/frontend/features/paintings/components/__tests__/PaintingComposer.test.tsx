@@ -1,7 +1,7 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageListProps } from '@/frontend/components/messagePresentation';
+import type { MessageListProps } from '@/frontend/components/messages';
 
 import type {
   PaintingGenerationInput,
@@ -115,11 +115,9 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('@/frontend/utils/constants', () => ({ isIOS: false }));
 
-jest.mock('@/frontend/components/composer', () => ({
-  ComposerDock: ({ children }: { children: React.ReactNode }) => children,
-  ManagedComposerProvider: ({ children, ...props }: { children: React.ReactNode }) => {
-    mockProviderProps = props;
-    return children;
+jest.mock('@cherrystudio/ui/components', () => ({
+  Composer: {
+    Dock: ({ children }: { children: React.ReactNode }) => children,
   },
   useComposerDockLayout: () => ({
     contentBottomInset: 88,
@@ -129,7 +127,14 @@ jest.mock('@/frontend/components/composer', () => ({
   }),
 }));
 
-jest.mock('@/frontend/components/messagePresentation', () => ({
+jest.mock('@/frontend/components/composer', () => ({
+  ManagedComposerProvider: ({ children, ...props }: { children: React.ReactNode }) => {
+    mockProviderProps = props;
+    return children;
+  },
+}));
+
+jest.mock('@/frontend/components/messages', () => ({
   MessageList: (props: MessageListProps) => {
     const { useEffect } = jest.requireActual('react');
     useEffect(() => {
@@ -140,7 +145,7 @@ jest.mock('@/frontend/components/messagePresentation', () => ({
     }, []);
     mockMessageListProps = props;
     const assistant = props.messages.find((message) => message.role === 'assistant');
-    return assistant ? props.renderAssistantMessage?.(assistant) : null;
+    return assistant ? props.renderMessage(assistant) : null;
   },
 }));
 
@@ -221,6 +226,11 @@ describe('PaintingComposer', () => {
     });
     expect(mockAssistantProps).toMatchObject({
       animateOutput: false,
+      outputs: files.outputs,
+      paintingId: painting.id,
+      status: 'idle',
+    });
+    expect(mockMessageListProps?.extraData).toMatchObject({
       outputs: files.outputs,
       paintingId: painting.id,
       status: 'idle',

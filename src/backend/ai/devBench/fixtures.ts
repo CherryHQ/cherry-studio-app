@@ -123,7 +123,7 @@ https://example.com/api/v1/streaming/chat/completions?model=layout-bench-mock&te
 
 行内代码：\`const veryLongIdentifierThatCannotBeBrokenAcrossLines = createLayoutBenchmarkHarnessConfiguration(options)\`
 
-文件路径：/Users/runner/work/cherry-studio-app/src/frontend/components/messagePresentation/components/ScrollToBottomButton/ScrollToBottomButton.tsx
+文件路径：/Users/runner/work/cherry-studio-app/packages/ui/src/components/scroll-to-bottom-button/components/scroll-to-bottom-button.tsx
 
 这些串如果没有被正确约束，会把消息气泡撑到视口之外，表现为整行内容右侧被截断或整个列表出现横向滚动。`;
 

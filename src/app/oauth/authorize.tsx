@@ -1,4 +1,4 @@
-import { Spinner } from '@cherrystudio/ui/components';
+import { Spinner, useAlert } from '@cherrystudio/ui/components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef } from 'react';
@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { WebView, type WebViewMessageEvent, type WebViewNavigation } from 'react-native-webview';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { CloseHeader } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { invalidateProviderOauthQueries } from '@/frontend/features/settings/ProviderScreen/hooks/useProviderOauth';

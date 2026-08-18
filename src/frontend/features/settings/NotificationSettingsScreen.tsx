@@ -1,9 +1,8 @@
 import { RadioIcon } from '@cherrystudio/app-icons';
-import { Section, Switch } from '@cherrystudio/ui/components';
+import { Section, Switch, useAlert } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 

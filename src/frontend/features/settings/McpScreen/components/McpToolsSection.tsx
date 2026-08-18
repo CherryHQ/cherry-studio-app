@@ -1,4 +1,4 @@
-import { Button, Spinner, Switch } from '@cherrystudio/ui/components';
+import { Button, Spinner, Switch, useAlert } from '@cherrystudio/ui/components';
 import {
   hasMcpServerWildcardRule,
   matchesMcpSourceToolRule,
@@ -9,7 +9,6 @@ import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 
 type McpToolsSectionProps = {

@@ -2,7 +2,7 @@ import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageListProps } from '@/frontend/components/messagePresentation';
+import type { MessageListProps } from '@/frontend/components/messages';
 
 import { ChatWorkspace } from '../ChatWorkspace';
 
@@ -31,11 +31,11 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/AlertProvider', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 
-jest.mock('@/frontend/components/messagePresentation', () => ({
+jest.mock('@/frontend/components/messages', () => ({
   MessageList: (props: MessageListProps) => {
     mockMessageListProps = props;
     return null;
@@ -117,7 +117,7 @@ function renderWorkspace(isPreview: boolean, messages: readonly Message[]) {
   return renderer;
 }
 
-describe('ChatWorkspace message presentation integration', () => {
+describe('ChatWorkspace message rendering integration', () => {
   let renderer: ReactTestRenderer | undefined;
   let requestAnimationFrameSpy: jest.SpyInstance;
   let readyFrame: FrameRequestCallback | undefined;
@@ -162,6 +162,7 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.contentBottomInset).toBe(96);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
+    expect(mockMessageListProps?.renderMessage).toEqual(expect.any(Function));
     expect(mockIsLoadingOlder).toBe(true);
   });
 

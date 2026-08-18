@@ -31,6 +31,13 @@
       "@logger": ["./src/shared/core/logger/LoggerService.ts"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"],
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    ".rnstorybook/**/*.ts",
+    ".rnstorybook/**/*.tsx",
+    "expo-env.d.ts"
+  ],
   "exclude": ["packages/ai-core", "packages/ai-runtime", "packages/ai-sdk-provider"]
 }

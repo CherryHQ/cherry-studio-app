@@ -1,4 +1,5 @@
 import { ChevronRightIcon, RefreshCwIcon } from '@cherrystudio/app-icons';
+import { Button, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import type {
   AiUsageRecordCostTotal,
@@ -9,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/BrandAvatar';
+import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/avatar';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
@@ -33,52 +34,54 @@ export function AiUsageSummaryCard() {
 
   return (
     <View className="w-full rounded-2xl bg-grouped-surface p-4" style={styles.continuousCorners}>
-      <View className="flex-row items-center justify-between gap-3">
-        <View className="min-w-0 shrink flex-row items-center gap-2">
-          <Text
-            adjustsFontSizeToFit
-            className="min-w-0 shrink font-semibold text-foreground text-lg"
-            maxFontSizeMultiplier={1.2}
-            minimumFontScale={0.85}
-            numberOfLines={1}
-          >
-            {t('aiUsage.title')}
-          </Text>
-          {isRefreshing ? (
-            <ActivityIndicator
-              accessibilityLabel={t('aiUsage.loading')}
-              size="small"
-              testID="ai-usage-summary-refreshing"
-            />
-          ) : isError && hasData ? (
-            <Pressable
-              accessibilityLabel={t('aiUsage.retry')}
-              accessibilityRole="button"
-              className="size-8 items-center justify-center rounded-full active:bg-secondary active:opacity-70"
-              hitSlop={6}
-              style={styles.continuousCorners}
-              testID="ai-usage-summary-refresh-retry"
-              onPress={() => void refetch()}
+      <Section.Header
+        className="px-0"
+        title={
+          <View className="min-w-0 flex-row items-center gap-2">
+            <Text
+              adjustsFontSizeToFit
+              className="min-w-0 shrink font-semibold text-foreground text-lg"
+              maxFontSizeMultiplier={1.2}
+              minimumFontScale={0.85}
+              numberOfLines={1}
             >
-              <RefreshCwIcon className="size-4 text-destructive" />
-            </Pressable>
-          ) : null}
-        </View>
-
-        <Link href="/home/ai-usage" asChild>
-          <Pressable
-            accessibilityRole="link"
-            className="shrink-0 flex-row items-center gap-0.5 py-1 active:opacity-60"
-            hitSlop={6}
-            testID="ai-usage-view-details"
-          >
-            <Text className="font-medium text-foreground text-sm" numberOfLines={1}>
-              {t('aiUsage.viewDetails')}
+              {t('aiUsage.title')}
             </Text>
+            {isRefreshing ? (
+              <ActivityIndicator
+                accessibilityLabel={t('aiUsage.loading')}
+                size="small"
+                testID="ai-usage-summary-refreshing"
+              />
+            ) : isError && hasData ? (
+              <Pressable
+                accessibilityLabel={t('aiUsage.retry')}
+                accessibilityRole="button"
+                className="size-8 items-center justify-center rounded-full active:bg-secondary active:opacity-70"
+                hitSlop={6}
+                style={styles.continuousCorners}
+                testID="ai-usage-summary-refresh-retry"
+                onPress={() => void refetch()}
+              >
+                <RefreshCwIcon className="size-4 text-destructive" />
+              </Pressable>
+            ) : null}
+          </View>
+        }
+      >
+        <Link href="/home/ai-usage" asChild>
+          <Button
+            accessibilityRole="link"
+            className="gap-0.5 px-0 py-1"
+            size="xs"
+            testID="ai-usage-view-details"
+            variant="ghost"
+          >
+            <Button.Label numberOfLines={1}>{t('aiUsage.viewDetails')}</Button.Label>
             <ChevronRightIcon className="size-4 text-foreground" />
-          </Pressable>
+          </Button>
         </Link>
-      </View>
+      </Section.Header>
 
       {showInitialError ? (
         <View className="items-center justify-center gap-3" style={styles.stateContent}>
