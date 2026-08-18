@@ -3,8 +3,8 @@ import type { ReactElement, ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessagePresentationItem } from '../../../types';
-import { UserMessageRow } from '../UserMessageRow';
+import type { MessagePresentationItem } from '../../types';
+import { UserMessage } from '../UserMessage';
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
@@ -28,7 +28,7 @@ jest.mock('react-native-reanimated', () => {
   return { __esModule: true, default: { View: MockView } };
 });
 
-jest.mock('../../../messageContent', () => {
+jest.mock('../../messageContent', () => {
   const { createElement } = jest.requireActual('react');
 
   return {
@@ -37,14 +37,14 @@ jest.mock('../../../messageContent', () => {
   };
 });
 
-jest.mock('../../slideIn/hooks/useUserMessageSlideInStyle', () => ({
+jest.mock('../../motion/useUserMessageSlideInStyle', () => ({
   useUserMessageSlideInStyle: () => undefined,
 }));
 
-describe('UserMessageRow', () => {
+describe('UserMessage', () => {
   test('keeps a text-only message in the bubble', () => {
     const message = createMessage([textPart('Hello')]);
-    const renderer = render(<UserMessageRow message={message} />);
+    const renderer = render(<UserMessage message={message} />);
 
     expect(renderer.root.findAllByType(ScrollView)).toHaveLength(0);
     expect(renderer.root.findByType('MessageParts').props).toEqual(
@@ -56,7 +56,7 @@ describe('UserMessageRow', () => {
     const first = managedFilePart('first.png', '00000000-0000-7000-8000-000000000001');
     const second = managedFilePart('second.pdf', '00000000-0000-7000-8000-000000000002');
     const message = createMessage([textPart('Hello'), first, second]);
-    const renderer = render(<UserMessageRow message={message} />);
+    const renderer = render(<UserMessage message={message} />);
     const scrollView = renderer.root.findByType(ScrollView);
     const attachmentContainer = renderer.root.findByProps({ className: 'max-w-full self-end' });
     const renderedContent = renderer.root.findAll(
@@ -85,7 +85,7 @@ describe('UserMessageRow', () => {
     const message = createMessage([
       managedFilePart('photo.png', '00000000-0000-7000-8000-000000000003'),
     ]);
-    const renderer = render(<UserMessageRow message={message} />);
+    const renderer = render(<UserMessage message={message} />);
 
     expect(renderer.root.findByType('Menu').props.trigger).toBe('longPress');
     expect(

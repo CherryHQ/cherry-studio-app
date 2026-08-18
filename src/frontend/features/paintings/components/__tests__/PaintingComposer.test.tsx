@@ -145,7 +145,7 @@ jest.mock('@/frontend/components/messagePresentation', () => ({
     }, []);
     mockMessageListProps = props;
     const assistant = props.messages.find((message) => message.role === 'assistant');
-    return assistant ? props.renderAssistantMessage?.(assistant) : null;
+    return assistant ? props.renderMessage(assistant) : null;
   },
 }));
 
@@ -226,6 +226,11 @@ describe('PaintingComposer', () => {
     });
     expect(mockAssistantProps).toMatchObject({
       animateOutput: false,
+      outputs: files.outputs,
+      paintingId: painting.id,
+      status: 'idle',
+    });
+    expect(mockMessageListProps?.extraData).toMatchObject({
       outputs: files.outputs,
       paintingId: painting.id,
       status: 'idle',

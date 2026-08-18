@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, use } from 'react';
 
-import type { MessageSlideInFlight } from './hooks/useMessageSlideInFlight';
+import type { MessageSlideInFlight } from './useMessageSlideInFlight';
 
 // 没有 Provider 包裹时（例如行被单独渲染）降级为无动画：行读不到飞行就恒在落点。
 const MessageSlideInFlightContext = createContext<MessageSlideInFlight | undefined>(undefined);

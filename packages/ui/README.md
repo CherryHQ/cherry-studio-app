@@ -346,7 +346,7 @@ shared live height used by another floating control:
 ```tsx
 const dock = useComposerDockLayout();
 
-<MessageList contentBottomInset={dock.contentBottomInset} />;
+<MessageList contentBottomInset={dock.contentBottomInset} renderMessage={renderMessage} />;
 <Composer.Dock onHeightChange={dock.handleInputHeightChange}>
   <ComposerSurface />
 </Composer.Dock>;

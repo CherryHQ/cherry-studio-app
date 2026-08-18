@@ -90,7 +90,7 @@ export function emitProgrammaticScroll(
 // 回抛到 JS 侧的探针通道，并订阅键盘时间线。生产环境下 emit 未 arm 即早退、键盘订阅整个
 // 跳过，成本接近零。信息发生在业务回调体内的那几处（anchorReady/readyGate 的
 // emitProgrammaticScroll、onSizeChanged 里的 endSpace 上报）留在调用现场，搬不进来。
-export function useLayoutBenchInstrumentation({
+export function useMessageListInstrumentation({
   endSpaceRef,
   freeze,
   isAtBottom,

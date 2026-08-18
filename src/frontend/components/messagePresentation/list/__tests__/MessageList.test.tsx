@@ -5,9 +5,9 @@ import type { LayoutChangeEvent } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageSlideInFlight } from '../../messageRow/slideIn/hooks/useMessageSlideInFlight';
+import { MessageList } from '../../MessageList';
+import type { MessageSlideInFlight } from '../../motion/useMessageSlideInFlight';
 import type { MessageListProps, MessagePresentationItem } from '../../types';
-import { MessageList } from '../MessageList';
 
 jest.mock('heroui-native/utils', () => ({
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
@@ -26,6 +26,7 @@ type MockLegendListProps = {
   anchoredEndSpace?: AnchoredEndSpaceConfig;
   contentContainerStyle?: { paddingBottom?: number; paddingTop?: number };
   data?: readonly MessagePresentationItem[];
+  extraData?: unknown;
   freeze?: unknown;
   getItemType?: (item: MessagePresentationItem) => string;
   keyboardLiftBehavior?: string;
@@ -72,8 +73,7 @@ function mockCreateSharedValue<T>(initial: T): SharedValue<T> {
 
   return shared as unknown as SharedValue<T>;
 }
-const mockAssistantMessage = jest.fn((_props: { message: MessagePresentationItem }) => null);
-const mockUserMessageRow = jest.fn((_props: { message: MessagePresentationItem }) => null);
+const mockRenderMessage = jest.fn((_message: MessagePresentationItem) => null);
 let mockSlideInFlight: MessageSlideInFlight | undefined;
 let mockScrollButtonProps:
   | {
@@ -192,8 +192,7 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 
-jest.mock('../../messageRow', () => ({
-  AssistantMessage: (props: { message: MessagePresentationItem }) => mockAssistantMessage(props),
+jest.mock('../../motion/MessageSlideInProvider', () => ({
   MessageSlideInProvider: ({
     children,
     flight,
@@ -204,7 +203,6 @@ jest.mock('../../messageRow', () => ({
     mockSlideInFlight = flight;
     return children;
   },
-  UserMessageRow: (props: { message: MessagePresentationItem }) => mockUserMessageRow(props),
 }));
 
 function createMessage(
@@ -244,6 +242,7 @@ function listProps(
     keyboardOffset: 26,
     messages,
     onLoadOlder: jest.fn(async () => undefined),
+    renderMessage: mockRenderMessage,
   };
 }
 
@@ -286,23 +285,18 @@ describe('MessageList anchoring and manual scrolling', () => {
       });
   });
 
-  test('uses an assistant renderer override without changing user rows', () => {
+  test('delegates every role to the feature renderer and forwards its external state', () => {
     const user = createMessage('user-1', 'user', [textPart('hello')]);
     const assistant = createMessage('assistant-1', 'assistant');
-    const renderAssistantMessage = jest.fn(() => null);
+    const extraData = { generation: 'running' };
 
     act(() => {
-      renderer = create(
-        <MessageList
-          {...listProps([user, assistant])}
-          renderAssistantMessage={renderAssistantMessage}
-        />,
-      );
+      renderer = create(<MessageList {...listProps([user, assistant])} extraData={extraData} />);
     });
 
-    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: user });
-    expect(renderAssistantMessage).toHaveBeenCalledWith(assistant);
-    expect(mockAssistantMessage).not.toHaveBeenCalled();
+    expect(mockRenderMessage).toHaveBeenNthCalledWith(1, user);
+    expect(mockRenderMessage).toHaveBeenNthCalledWith(2, assistant);
+    expect(mockLatestListProps?.extraData).toBe(extraData);
   });
 
   test('does not show the scroll control for an empty message list', () => {
@@ -355,8 +349,8 @@ describe('MessageList anchoring and manual scrolling', () => {
       renderer = create(<MessageList {...listProps([userMessage, emptyAssistantMessage])} />);
     });
 
-    expect(mockUserMessageRow).toHaveBeenCalledWith({ message: userMessage });
-    expect(mockAssistantMessage).toHaveBeenCalledWith({ message: emptyAssistantMessage });
+    expect(mockRenderMessage).toHaveBeenCalledWith(userMessage);
+    expect(mockRenderMessage).toHaveBeenCalledWith(emptyAssistantMessage);
     expect(mockLatestListProps?.getItemType?.(userMessage)).toBe('user');
     // 空助手行是加载点占位，不能继承成稿长回复的尺寸均值，否则新建时会先占住上一条回复的
     // 高度再塌回去。第一个 chunk 落地后才归入 assistant，那时行还很小。

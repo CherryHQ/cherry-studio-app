@@ -22,8 +22,8 @@ import { paintingJobParamValues, usePaintingJobs } from '../hooks/usePaintingJob
 import type { ResolvedPaintingFiles } from '../hooks/usePaintings';
 import { imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import { createPaintingMessages } from '../utils/paintingMessages';
-import { PaintingAssistantMessage } from './PaintingAssistantMessage';
 import { PaintingInput } from './PaintingInput';
+import { PaintingMessage, type PaintingMessageState } from './PaintingMessage';
 
 type ActivePaintingTurn = {
   assistantMessageId: string;
@@ -123,22 +123,19 @@ export function PaintingComposer({
     },
     [generation.generate],
   );
-  const renderAssistantMessage = useCallback(
-    (_message: MessagePresentationItem) => (
-      <PaintingAssistantMessage
-        animateOutput={
-          firstOutput?.fileEntryId !== undefined &&
-          firstOutput.fileEntryId !== initialFiles.outputs[0]?.fileEntryId
-        }
-        aspectRatio={generation.aspectRatio}
-        error={generation.error}
-        interruption={generation.interruption}
-        outputs={outputs}
-        paintingId={activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined)}
-        resolution={generationResolution}
-        status={generation.status}
-      />
-    ),
+  const messageRenderState = useMemo<PaintingMessageState>(
+    () => ({
+      animateOutput:
+        firstOutput?.fileEntryId !== undefined &&
+        firstOutput.fileEntryId !== initialFiles.outputs[0]?.fileEntryId,
+      aspectRatio: generation.aspectRatio,
+      error: generation.error,
+      interruption: generation.interruption,
+      outputs,
+      paintingId: activeTurn?.paintingId ?? (showPersistedTurn ? painting?.id : undefined),
+      resolution: generationResolution,
+      status: generation.status,
+    }),
     [
       activeTurn?.paintingId,
       generation.aspectRatio,
@@ -153,6 +150,12 @@ export function PaintingComposer({
       showPersistedTurn,
     ],
   );
+  const renderMessage = useCallback(
+    (message: MessagePresentationItem) => (
+      <PaintingMessage message={message} state={messageRenderState} />
+    ),
+    [messageRenderState],
+  );
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =
     useComposerDockLayout();
   const composerKey = firstOutput?.fileEntryId ?? 'painting-composer';
@@ -166,9 +169,10 @@ export function PaintingComposer({
         contentBottomInset={contentBottomInset}
         contentTopInset={resolveHeaderContentInset(headerHeight)}
         enteringMessageId={activeTurn?.userMessageId}
+        extraData={messageRenderState}
         keyboardOffset={keyboardOffset}
         messages={messages}
-        renderAssistantMessage={renderAssistantMessage}
+        renderMessage={renderMessage}
       />
       <ManagedComposerProvider
         initialAttachments={composerInitialAttachments}

@@ -10,88 +10,38 @@ import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reani
 import { usePreference } from '@/frontend/data/hooks';
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
-import { AssistantMessage, MessageSlideInProvider, UserMessageRow } from '../messageRow';
-import { useMessageSlideInFlight } from '../messageRow/slideIn/hooks/useMessageSlideInFlight';
-import type { MessageListProps, MessagePresentationItem } from '../types';
-import { useAnchorPin } from './hooks/useAnchorPin';
+import {
+  ANCHOR_MAX_TEXT_LINES,
+  ANCHOR_TOP_GAP,
+  getAnchoredUserMessageIndex,
+  getMessageRowType,
+  MAINTAIN_VISIBLE_CONTENT_POSITION,
+  messageKeyExtractor,
+  USER_MESSAGE_VERTICAL_PADDING,
+} from './list/messageListLayout';
+import { useMessageListAnchorPin } from './list/useMessageListAnchorPin';
 import {
   emitProgrammaticScroll,
   scrollLog,
-  useLayoutBenchInstrumentation,
-} from './hooks/useLayoutBenchInstrumentation';
+  useMessageListInstrumentation,
+} from './list/useMessageListInstrumentation';
+import { MessageSlideInProvider } from './motion/MessageSlideInProvider';
+import { useMessageSlideInFlight } from './motion/useMessageSlideInFlight';
+import type { MessageListProps, MessagePresentationItem } from './types';
 
-// 被锚定的用户消息距内容区顶部（顶部安全区/导航栏之下）的视觉间距。
-const ANCHOR_TOP_GAP = 12;
-const ANCHOR_MAX_TEXT_LINES = 2;
 const SCROLL_BUTTON_GAP_ABOVE_ACCESSORY = 5;
-const USER_MESSAGE_VERTICAL_PADDING = 32;
-
-// 流式/待生成的助手消息高度会持续变化（loading 圆点 → 思考块 → 正文流入）。若它被
-// maintainVisibleContentPosition 选作锚点，列表会为「保持它的位置不变」而反向平移整块内容，
-// 把已钉顶的用户消息顶下去（实测：「思考中」首帧渲染时整块下移 ~72px 的突跳）。
-// 返回 false 把 pending 助手消息排除出 MVCP 的锚点候选，迫使它只锚定稳定项（上方的用户消息 /
-// 历史消息），钉顶的用户消息在整个流式过程中纹丝不动。历史消息为 success 态仍参与锚定，
-// 向上翻页加载旧消息的位置保持不受影响。
-function shouldRestoreMessagePosition(item: MessagePresentationItem): boolean {
-  return !(item.role === 'assistant' && item.status === 'pending');
-}
-
-const MAINTAIN_VISIBLE_CONTENT_POSITION = {
-  data: true,
-  shouldRestorePosition: shouldRestoreMessagePosition,
-};
-
-function messageKeyExtractor(item: MessagePresentationItem) {
-  return item.id;
-}
-
-// 让 LegendList 按消息类型分别维护尺寸均值（FlashList 式 getItemType）。用户气泡（~100-200px）与
-// 助手回复（含表格/代码块/数学，~700-2200px）高度量级差 2-7×，单一 estimatedItemSize=300 对二者都偏。
-// LegendList 内部（react-native.mjs getItemSize）优先用「已测量的同类型行的真实均值 averageSizes[type].avg」
-// 估算未测量行，无则才退回 estimatedItemSize。按 role 分类后，向上翻页 prepend / 滚回历史时，新行用
-// 各自类型的真实均值定位 → MVCP/初始 bootstrap 的「估算→真实」修正幅度大幅收窄，减少可见跳动。
-//
-// 「还没有内容的助手行」必须单独成一类，否则同一机制会反过来制造跳动：刚发出消息时新建的
-// 助手行只是个加载点（实测 52px），若按 assistant 的均值估算，它会先占住上一条长回复的高度
-// （实测 3012px）再塌回去——一帧内内容少了 2964px，预留空白与钉顶落点都要跟着重算。
-// 分类后修正量 2964px → 5px。
-//
-// 注意它**不是**「发送后跳一下」的成因：分类修好之后，续轮发送前那一帧 -310px 的突跳原样
-// 还在，另有其因（收键盘按记录量回退，见 useAnchorPin 里 handleAnchorReady 的说明与
-// patches/）。两件事都在同一瞬间发生，别再合并归因。
-//
-// 判据用「有没有 part」而不是 status：类型翻转因此发生在第一个 chunk 落地时，那一刻行还只有
-// 几十像素，翻转本身不产生可见修正；而 status 要到整条回复结束才变，翻转时行已有数千像素。
-// 翻转后这一行的后续增长计入 assistant 均值，空行阶段的尺寸留在 assistant-empty，两个均值
-// 各自都稳定。
-function getMessageRowType(item: MessagePresentationItem) {
-  if (item.role !== 'assistant') {
-    return item.role;
-  }
-
-  return item.data.parts?.length ? 'assistant' : 'assistant-empty';
-}
-
-function getAnchoredUserMessageIndex(messages: readonly MessagePresentationItem[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index].role === 'user') {
-      return index;
-    }
-  }
-
-  return -1;
-}
 
 export function MessageList({
   bottomAccessoryHeight,
   contentBottomInset,
   contentTopInset,
   enteringMessageId,
+  extraData,
   keyboardOffset,
   messages,
   onLoadOlder,
   onReady,
-  renderAssistantMessage,
+  renderMessage,
 }: MessageListProps) {
   const { t } = useTranslation();
   const listRef = useRef<LegendListRef | null>(null);
@@ -114,7 +64,7 @@ export function MessageList({
   // `onScroll` 回调实测一次都不触发。`sharedValues.scrollOffset` 才是这套组件栈支持的
   // 读法，且它在 UI 线程逐帧更新，比 JS 回调更贴近真实位移。
   const scrollOffset = useSharedValue(0);
-  // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useLayoutBenchInstrumentation）。
+  // 只服务于键盘探针：键盘事件里要报当时的预留空白（见 useMessageListInstrumentation）。
   const endSpaceRef = useRef(0);
   // 视口高度由列表自己测：ready-gate 与入场行的起飞距离都要用，谁也不该拥有另一个的测量。
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -127,15 +77,8 @@ export function MessageList({
   const anchorIndex = getAnchoredUserMessageIndex(messages);
   const listHeader = useMemo(() => <View style={{ height: contentTopInset }} />, [contentTopInset]);
   const renderMessageRow = useCallback(
-    ({ item }: LegendListRenderItemProps<MessagePresentationItem>) =>
-      item.role === 'user' ? (
-        <UserMessageRow message={item} />
-      ) : renderAssistantMessage ? (
-        renderAssistantMessage(item)
-      ) : (
-        <AssistantMessage message={item} />
-      ),
-    [renderAssistantMessage],
+    ({ item }: LegendListRenderItemProps<MessagePresentationItem>) => renderMessage(item),
+    [renderMessage],
   );
   const handleStartReached = useCallback(() => {
     if (!onLoadOlder) {
@@ -163,12 +106,12 @@ export function MessageList({
 
   // 入场行的起飞点：钉顶落点正下方、输入框上缘。三个量都是运行时布局值，所以它随机型、
   // 字号、输入框行数与键盘状态自适应，没有任何写死的距离。这是**总**行程，钉顶滚动与行的
-  // 弹簧各分走一段（见 useAnchorPin）。
+  // 弹簧各分走一段（见 useMessageListAnchorPin）。
   //
   // 新话题的第一条消息会让列表**带着数据**挂载，而 viewportHeight 是 onLayout 回填的 state、
   // 首帧还是 0：不兜底的话行程为 0，气泡会先在落点画一帧再跳回起飞点飞一遍。窗口高度偏大只
   // 意味着停得更靠下（本来就在视口外，看不见），实测值到达后装填 effect 会在开火前校正。
-  // ready-gate 不用这个兜底值——它必须等真实测量（见 useAnchorPin 的 viewportHeight 早退）。
+  // ready-gate 不用这个兜底值——它必须等真实测量（见 useMessageListAnchorPin 的早退）。
   const { height: windowHeight } = useWindowDimensions();
   const slideInTravel = Math.max(
     0,
@@ -201,7 +144,7 @@ export function MessageList({
     handleScrollEndDrag,
     handleTouchEnd,
     handleTouchStart,
-  } = useAnchorPin({
+  } = useMessageListAnchorPin({
     contentBottomInset,
     endSpaceRef,
     enteringMessageId,
@@ -213,7 +156,7 @@ export function MessageList({
     viewportHeight,
   });
 
-  useLayoutBenchInstrumentation({ endSpaceRef, freeze, isAtBottom, scrollOffset });
+  useMessageListInstrumentation({ endSpaceRef, freeze, isAtBottom, scrollOffset });
 
   const handleItemSizeChanged = useCallback(
     (info: { index: number; itemKey: string; previous: number; size: number }) => {
@@ -275,6 +218,7 @@ export function MessageList({
             drawDistance={80}
             estimatedItemSize={300}
             estimatedHeaderSize={contentTopInset}
+            extraData={extraData}
             freeze={freeze}
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}

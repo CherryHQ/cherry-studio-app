@@ -162,6 +162,7 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.contentBottomInset).toBe(96);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
+    expect(mockMessageListProps?.renderMessage).toEqual(expect.any(Function));
     expect(mockIsLoadingOlder).toBe(true);
   });
 

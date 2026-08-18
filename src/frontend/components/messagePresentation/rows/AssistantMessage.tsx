@@ -3,9 +3,9 @@ import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import Animated from 'react-native-reanimated';
 
-import { MessageParts } from '../../messageContent';
-import type { MessagePresentationItem } from '../../types';
-import { useAssistantSlideInStyle } from '../slideIn/hooks/useAssistantSlideInStyle';
+import { MessageParts } from '../messageContent';
+import { useAssistantMessageSlideInStyle } from '../motion/useAssistantMessageSlideInStyle';
+import type { MessagePresentationItem } from '../types';
 
 type AssistantMessageProps = {
   /**
@@ -38,7 +38,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   message,
 }: AssistantMessageProps) {
   // 行高从第一帧起就要占住（预留空白与钉顶落点都靠它），所以显形只走 opacity。
-  const slideInStyle = useAssistantSlideInStyle(message.id);
+  const slideInStyle = useAssistantMessageSlideInStyle(message.id);
 
   return (
     <Animated.View className="w-full gap-2 px-4 py-3" style={slideInStyle}>

@@ -1,7 +1,7 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 
-import type { MessagePresentationItem } from '../../types';
+import type { MessagePresentationItem } from '../types';
 
 type FilePart = Extract<CherryMessagePart, { type: 'file' }>;
 

@@ -3,7 +3,7 @@ import { type RefObject, useCallback, useEffect, useEffectEvent, useRef, useStat
 
 import { emitLayoutBenchProbe } from '@/shared/devBench/layoutBenchProbe';
 
-import { emitProgrammaticScroll, scrollLog } from './useLayoutBenchInstrumentation';
+import { emitProgrammaticScroll, scrollLog } from './useMessageListInstrumentation';
 
 // 撤遮罩（onReady）前要求内容高度保持「静默」的窗口：这段时间内没有任何 contentSize 变化才判定
 // settle 完成。用于覆盖**冷 markdown 解析**——首次进入 topic 时 streamdown/代码/数学的 tokenize
@@ -18,7 +18,7 @@ const READY_SETTLE_MS = 150;
 // 入场的可见位移由两段拼成：这里的钉顶滚动把**旧内容**送出视口，行自身的 transform
 // （useMessageSlideInFlight）走剩下的那段。落位那一帧经 onAnchorPinned 把「还差多少滚动」
 // 交给它，两段相加恒等于设计行程。
-export function useAnchorPin({
+export function useMessageListAnchorPin({
   contentBottomInset,
   endSpaceRef,
   enteringMessageId,

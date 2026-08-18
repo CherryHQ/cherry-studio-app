@@ -4,17 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { MessageParts } from '../../messageContent';
-import type { MessagePresentationItem } from '../../types';
-import { useUserMessageSlideInStyle } from '../slideIn/hooks/useUserMessageSlideInStyle';
-import { partitionUserMessageParts } from '../utils/partitionUserMessageParts';
-import { UserMessageAttachmentStrip } from './UserMessageAttachmentStrip';
+import { MessageParts } from '../messageContent';
+import { useUserMessageSlideInStyle } from '../motion/useUserMessageSlideInStyle';
+import type { MessagePresentationItem } from '../types';
+import { partitionUserMessageParts } from './partitionUserMessageParts';
+import { UserMessageAttachments } from './UserMessageAttachments';
 
-type UserMessageRowProps = {
+type UserMessageProps = {
   message: MessagePresentationItem;
 };
 
-export const UserMessageRow = memo(function UserMessageRow({ message }: UserMessageRowProps) {
+export const UserMessage = memo(function UserMessage({ message }: UserMessageProps) {
   const { t } = useTranslation();
   const slideInStyle = useUserMessageSlideInStyle(message.id);
   const { attachments, bodyMessage } = useMemo(() => partitionUserMessageParts(message), [message]);
@@ -42,7 +42,7 @@ export const UserMessageRow = memo(function UserMessageRow({ message }: UserMess
         <Menu items={menuItems} trigger="longPress">
           <View className="items-end gap-2">
             {attachments.length > 0 ? (
-              <UserMessageAttachmentStrip attachments={attachments} messageId={message.id} />
+              <UserMessageAttachments attachments={attachments} messageId={message.id} />
             ) : null}
             {bodyMessage ? (
               <View className="self-end rounded-xl bg-chat-user p-2">

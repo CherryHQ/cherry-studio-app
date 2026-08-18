@@ -13,9 +13,12 @@ export type MessageListProps = {
   contentBottomInset: number;
   contentTopInset: number;
   enteringMessageId?: string;
+  extraData?: unknown;
   keyboardOffset: number;
   messages: readonly MessagePresentationItem[];
   onLoadOlder?: () => Promise<void>;
   onReady?: () => void;
-  renderAssistantMessage?: (message: MessagePresentationItem) => ReactNode;
+  renderMessage: MessageRenderer;
 };
+
+export type MessageRenderer = (message: MessagePresentationItem) => ReactNode;

@@ -1,6 +1,6 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
-import type { MessagePresentationItem } from '../../../types';
+import type { MessagePresentationItem } from '../../types';
 import { partitionUserMessageParts } from '../partitionUserMessageParts';
 
 describe('partitionUserMessageParts', () => {

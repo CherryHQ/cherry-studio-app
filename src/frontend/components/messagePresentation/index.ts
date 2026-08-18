@@ -1,3 +1,4 @@
-export { MessageList } from './components/MessageList';
-export { AssistantMessage } from './messageRow/components/AssistantMessage';
-export type { MessageListProps, MessagePresentationItem } from './types';
+export { MessageList } from './MessageList';
+export { AssistantMessage } from './rows/AssistantMessage';
+export { UserMessage } from './rows/UserMessage';
+export type { MessageListProps, MessagePresentationItem, MessageRenderer } from './types';

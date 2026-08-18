@@ -1,7 +1,7 @@
 import { createElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessagePresentationItem } from '../../../types';
+import type { MessagePresentationItem } from '../../types';
 import { AssistantMessage } from '../AssistantMessage';
 
 // 正文渲染成宿主元素而不是 null，组合槽位的测试才能在树里定位它、断言正文与配件的先后。
@@ -10,7 +10,7 @@ const mockMessageParts = jest.fn((props: { message: MessagePresentationItem }) =
 );
 const mockMessagePartPending = jest.fn((_props: { accessibilityLabel: string }) => null);
 
-jest.mock('../../../messageContent', () => ({
+jest.mock('../../messageContent', () => ({
   MessageParts: (props: { message: MessagePresentationItem }) => mockMessageParts(props),
 }));
 
@@ -30,8 +30,8 @@ jest.mock('react-native-reanimated', () => {
   return { __esModule: true, default: { View: MockView } };
 });
 
-jest.mock('../../slideIn/hooks/useAssistantSlideInStyle', () => ({
-  useAssistantSlideInStyle: () => undefined,
+jest.mock('../../motion/useAssistantMessageSlideInStyle', () => ({
+  useAssistantMessageSlideInStyle: () => undefined,
 }));
 
 function createAssistantMessage(

@@ -21,6 +21,7 @@ import {
   mergeMessagesWithOverlay,
 } from '../runtime/chatRuntimeProjection';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
+import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import {
   shouldWaitForInitialHistoryLayout,
@@ -30,6 +31,10 @@ import {
 const logger = loggerService.withContext('ChatWorkspace');
 // 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
 const gateLog = loggerService.withContext('ChatGate');
+
+function renderChatMessage(message: MessagePresentationItem) {
+  return <ChatMessage message={message} />;
+}
 
 type ChatWorkspaceProps = {
   /** 输入框实测高度，用于定位悬浮按钮；预览态没有输入框，留空即可。 */
@@ -116,6 +121,7 @@ export function ChatWorkspace({
         messages={presentationMessages}
         onLoadOlder={loadOlder}
         onReady={markListLoaded}
+        renderMessage={renderChatMessage}
       />
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet

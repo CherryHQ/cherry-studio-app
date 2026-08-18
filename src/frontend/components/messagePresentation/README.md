@@ -6,27 +6,26 @@ history, message rows and parts, live-turn anchoring, and entry motion.
 
 ## Public Interface
 
-- `MessageList` renders a complete message history from `MessagePresentationItem` values.
+- `MessageList` renders a virtualized history from `MessagePresentationItem` values and delegates
+  every row to the feature-owned `renderMessage` function.
 - `MessagePresentationItem` contains only the persistence-neutral fields needed for presentation.
 - `MessageListProps` accepts layout measurements plus optional pagination, readiness, entry-motion,
-  bottom-accessory inputs, and a feature-owned assistant renderer. Chat uses the default assistant
-  row; painting supplies its proportional loader and image result without changing message data.
-  Single-turn workspaces can opt into animating their first entering anchor.
-- `AssistantMessage` is the default assistant row — pending placeholder, structured parts, and entry
-  motion. Its `children` render after the message body, so a feature composes its own accessory
+  bottom-accessory inputs, the feature renderer, and optional `extraData` for rendered state that is
+  not carried by message items. Single-turn workspaces can opt into animating their first anchor.
+- `AssistantMessage` owns the standard assistant row: pending placeholder, structured parts, and
+  entry motion. Its `children` render after the message body, so a feature composes its own accessory
   (a toolbar, for example) into an otherwise standard message instead of teaching this module about
   that feature's state. The slot is unconditional, including while the placeholder is up; an
   accessory holds the message and decides for itself when to appear.
+- `UserMessage` owns the standard user row, including managed attachments and the text bubble.
 
-A feature-owned assistant row wraps `AssistantMessage` and reaches `MessageList` through
-`renderAssistantMessage`, which must be a stable reference. LegendList refreshes mounted rows
-through `itemKey`, `data`, and `extraData` — a new `renderItem` identity is not a channel for
-pushing state into them. Dynamic state therefore has to arrive either as changed message items
-(painting's route) or through the feature's own context or external store read inside the accessory
-(the route for message actions).
+A feature composes an explicit role variant and gives `MessageList` a stable `renderMessage`.
+LegendList refreshes mounted rows through `itemKey`, `data`, and `extraData`; changing the renderer
+identity alone is not a data channel. Dynamic rendered state therefore arrives through changed
+message items, `extraData`, or a feature-owned context/store read inside the row.
 
-Other message rows, part renderers, animation providers, and platform controls are private
-implementation details. Callers import only from `@/frontend/components/messagePresentation`.
+Part renderers, animation providers, and platform controls remain private implementation details.
+Callers import only from `@/frontend/components/messagePresentation`.
 
 ## Ownership
 
@@ -61,12 +60,10 @@ and anchoring.
 
 ## Organization
 
-- `components/MessageList.tsx` is the wiring layer: virtualization config, layout derivations, and
-  list controls. The behavior engines live beside it in `components/hooks/` — `useAnchorPin`
-  (anchor pinning, first-anchor staging, readiness gate, and its interaction lock) and
-  `useLayoutBenchInstrumentation` (dev-only layout probes). Measurement-backed comments travel
-  with the code they explain.
-- `messageRow/` owns user and assistant row layouts plus the private slide-in provider.
+- `MessageList.tsx` is the wiring layer. `list/` owns its layout policy, anchor pinning, readiness
+  gate, interaction lock, and dev-only instrumentation.
+- `rows/` owns the standard user and assistant row layouts.
+- `motion/` carries the private slide-in provider shared by the list and rows.
 - `messageContent/` dispatches structured message parts and owns citation/file hooks.
 - `utils/` contains the private built-in tool presentation mapping.
 

@@ -1,6 +1,6 @@
 import { useAnimatedStyle } from 'react-native-reanimated';
 
-import { useMessageSlideInFlightContext } from '../MessageSlideInProvider';
+import { useMessageSlideInFlightContext } from './MessageSlideInProvider';
 
 /**
  * 刚发送的用户气泡的入场位移：从输入框上缘飞到钉顶落点。距离与开火时机都由列表持有的飞行

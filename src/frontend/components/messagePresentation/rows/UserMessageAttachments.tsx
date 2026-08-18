@@ -1,19 +1,16 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { FilePart } from '../../messageContent';
-import type { UserMessageAttachmentPart } from '../utils/partitionUserMessageParts';
+import { FilePart } from '../messageContent';
+import type { UserMessageAttachmentPart } from './partitionUserMessageParts';
 
 const USER_MESSAGE_ATTACHMENT_SIZE = 112;
 
-type UserMessageAttachmentStripProps = {
+type UserMessageAttachmentsProps = {
   attachments: readonly UserMessageAttachmentPart[];
   messageId: string;
 };
 
-export function UserMessageAttachmentStrip({
-  attachments,
-  messageId,
-}: UserMessageAttachmentStripProps) {
+export function UserMessageAttachments({ attachments, messageId }: UserMessageAttachmentsProps) {
   return (
     <View className="max-w-full self-end" style={styles.strip}>
       <ScrollView
