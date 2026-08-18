@@ -1,27 +1,20 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { MessagePart } from '../MessagePart';
+import { MessagePartRenderer } from '../MessagePartRenderer';
 
 jest.mock('../CodePart', () => ({ CodePart: () => null }));
 jest.mock('../CompactPart', () => ({ CompactPart: () => null }));
 jest.mock('../ErrorPart', () => ({ ErrorPart: () => null }));
 jest.mock('../FilePart', () => ({ FilePart: () => null }));
-jest.mock('../McpToolPart', () => ({ McpToolPart: () => null, isMcpToolPart: () => false }));
-jest.mock('../MetaToolPart', () => ({ MetaToolPart: () => null, isMetaToolPart: () => false }));
 jest.mock('../ReasoningPart', () => ({ ReasoningPart: () => null }));
 jest.mock('../SourceUrlPart', () => ({ SourceUrlPart: () => null }));
 jest.mock('../TextPart', () => ({ TextPart: () => null }));
-jest.mock('../ToolPart', () => ({ ToolPart: () => null }));
+jest.mock('../tools/ToolPartRenderer', () => ({ ToolPartRenderer: () => null }));
 jest.mock('../TranslationPart', () => ({ TranslationPart: () => null }));
 jest.mock('../UnknownPart', () => ({ UnknownPart: () => null }));
-jest.mock('../WebSearchToolPart', () => ({
-  WebSearchToolPart: () => null,
-  isProviderWebSearchToolPart: () => false,
-  isWebSearchToolPart: () => false,
-}));
 
-describe('MessagePart', () => {
+describe('MessagePartRenderer', () => {
   test.each([
     {
       filename: 'reference.pdf',
@@ -38,7 +31,7 @@ describe('MessagePart', () => {
     let renderer: ReactTestRenderer | undefined;
 
     act(() => {
-      renderer = create(<MessagePart isStreaming={false} part={part} />);
+      renderer = create(<MessagePartRenderer isStreaming={false} part={part} />);
     });
 
     expect(renderer?.toJSON()).toBeNull();

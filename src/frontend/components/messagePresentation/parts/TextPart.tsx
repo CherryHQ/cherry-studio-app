@@ -4,7 +4,7 @@ import { Text } from 'react-native';
 
 import { splitToolMentions } from '@/frontend/utils/toolMentions';
 
-import type { ResolvedCitationText } from '../citations';
+import type { ResolvedCitationText } from './citations';
 import type { MessagePartRenderMode } from './MessageParts';
 import { PartMarkdown } from './PartMarkdown';
 

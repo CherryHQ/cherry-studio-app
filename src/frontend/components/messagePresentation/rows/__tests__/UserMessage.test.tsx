@@ -28,11 +28,18 @@ jest.mock('react-native-reanimated', () => {
   return { __esModule: true, default: { View: MockView } };
 });
 
-jest.mock('../../messageContent', () => {
+jest.mock('../../parts/FilePart', () => {
   const { createElement } = jest.requireActual('react');
 
   return {
     FilePart: (props: object) => createElement('FilePart', props),
+  };
+});
+
+jest.mock('../../parts/MessageParts', () => {
+  const { createElement } = jest.requireActual('react');
+
+  return {
     MessageParts: (props: object) => createElement('MessageParts', props),
   };
 });

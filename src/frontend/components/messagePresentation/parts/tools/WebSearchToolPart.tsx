@@ -1,12 +1,10 @@
 import { SearchIcon } from '@cherrystudio/app-icons';
 import { MessagePart } from '@cherrystudio/ui/components';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
-
-type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
+import { SourceLink } from '../SourceLink';
+import { getToolName, getToolStatusTone, isRecord, type ToolMessagePart } from './toolPartState';
 
 type WebSearchToolPartProps = {
   part: ToolMessagePart;
@@ -39,7 +37,7 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
       icon={SearchIcon}
       state={isSearching ? 'running' : 'complete'}
       statusText={statusText}
-      statusTone={getWebSearchStatusTone(part)}
+      statusTone={getToolStatusTone(part)}
       testID="web-search-tool-part"
       title={title}
     >
@@ -49,10 +47,9 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
         </Text>
       ) : (
         results.map((result) => (
-          <MessagePart.Source
+          <SourceLink
             key={`${result.id}-${result.url}`}
             label={result.title || result.url}
-            onPress={(url) => void openExternalUrl(url)}
             url={result.url}
           />
         ))
@@ -99,17 +96,6 @@ function getWebSearchStatusText(
   return t('chat.webSearch.searching');
 }
 
-function getWebSearchStatusTone(part: ToolMessagePart): 'danger' | 'default' | 'warning' {
-  if (
-    part.state === 'output-denied' ||
-    (part.state === 'approval-responded' && !part.approval.approved)
-  ) {
-    return 'warning';
-  }
-
-  return part.state === 'output-error' ? 'danger' : 'default';
-}
-
 function parseWebSearchResults(output: unknown): WebSearchResult[] {
   const rawResults = Array.isArray(output)
     ? output
@@ -138,10 +124,6 @@ function getWebSearchQuery(input: unknown) {
   return input.query.trim();
 }
 
-function getToolName(part: ToolMessagePart) {
-  return part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
-}
-
 function isWebSearchToolName(toolName: string) {
   return WEB_SEARCH_TOOL_NAMES.has(toolName);
 }
@@ -151,8 +133,4 @@ function getCherryToolType(part: ToolMessagePart) {
   const cherry = isRecord(metadata?.cherry) ? metadata.cherry : undefined;
   const tool = isRecord(cherry?.tool) ? cherry.tool : undefined;
   return typeof tool?.type === 'string' ? tool.type : undefined;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

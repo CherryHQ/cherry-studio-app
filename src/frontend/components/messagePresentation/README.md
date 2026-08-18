@@ -18,6 +18,8 @@ history, message rows and parts, live-turn anchoring, and entry motion.
   that feature's state. The slot is unconditional, including while the placeholder is up; an
   accessory holds the message and decides for itself when to appear.
 - `UserMessage` owns the standard user row, including managed attachments and the text bubble.
+- `getBuiltInToolPresentation` exposes the platform-specific title and visual mapping used by
+  feature-owned tool approval UI.
 
 A feature composes an explicit role variant and gives `MessageList` a stable `renderMessage`.
 LegendList refreshes mounted rows through `itemKey`, `data`, and `extraData`; changing the renderer
@@ -64,8 +66,13 @@ and anchoring.
   gate, interaction lock, and dev-only instrumentation.
 - `rows/` owns the standard user and assistant row layouts.
 - `motion/` carries the private slide-in provider shared by the list and rows.
-- `messageContent/` dispatches structured message parts and owns citation/file hooks.
-- `utils/` contains the private built-in tool presentation mapping.
+- `parts/` adapts Cherry message schema parts into CherryUI primitives. `parts/tools/` owns tool
+  dispatch and tool-specific adapters; `parts/tools/metaTool/` composes explicit search, inspect,
+  invoke, and exec variants.
+- `toolPresentation/builtInToolPresentation/` owns the iOS and Android built-in tool visual family.
+
+There are no internal barrels. Rows and adapters import private leaf modules directly; feature
+callers use only this module's root entry.
 
 ## Motion
 

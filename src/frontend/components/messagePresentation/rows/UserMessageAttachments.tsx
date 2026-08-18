@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { FilePart } from '../messageContent';
+import { FilePart } from '../parts/FilePart';
 import type { UserMessageAttachmentPart } from './partitionUserMessageParts';
 
 const USER_MESSAGE_ATTACHMENT_SIZE = 112;

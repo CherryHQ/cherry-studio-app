@@ -4,8 +4,8 @@ import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useThinkingTimerMs } from '../hooks/useThinkingTimerMs';
 import { PartMarkdown } from './PartMarkdown';
+import { useThinkingTimerMs } from './useThinkingTimerMs';
 
 type ReasoningPartProps = {
   isStreaming: boolean;

@@ -10,7 +10,7 @@ const mockMessageParts = jest.fn((props: { message: MessagePresentationItem }) =
 );
 const mockMessagePartPending = jest.fn((_props: { accessibilityLabel: string }) => null);
 
-jest.mock('../../messageContent', () => ({
+jest.mock('../../parts/MessageParts', () => ({
   MessageParts: (props: { message: MessagePresentationItem }) => mockMessageParts(props),
 }));
 

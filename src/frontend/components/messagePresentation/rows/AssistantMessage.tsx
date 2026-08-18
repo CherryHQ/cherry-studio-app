@@ -3,8 +3,8 @@ import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import Animated from 'react-native-reanimated';
 
-import { MessageParts } from '../messageContent';
 import { useAssistantMessageSlideInStyle } from '../motion/useAssistantMessageSlideInStyle';
+import { MessageParts } from '../parts/MessageParts';
 import type { MessagePresentationItem } from '../types';
 
 type AssistantMessageProps = {

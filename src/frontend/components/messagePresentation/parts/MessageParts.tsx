@@ -1,6 +1,6 @@
-import type { MessagePresentationItem } from '../../types';
-import { resolveMessageCitationText } from '../citations';
-import { MessagePart } from './MessagePart';
+import type { MessagePresentationItem } from '../types';
+import { resolveMessageCitationText } from './citations';
+import { MessagePartRenderer } from './MessagePartRenderer';
 
 type MessagePartsProps = {
   message: MessagePresentationItem;
@@ -29,7 +29,7 @@ export function MessageParts({ message, renderMode = 'markdown' }: MessagePartsP
   return parts.map((part, index) => {
     const resolvedText = citationText.get(index);
     return (
-      <MessagePart
+      <MessagePartRenderer
         isStreaming={message.status === 'pending'}
         key={getMessagePartKey(message, part, index)}
         part={part}

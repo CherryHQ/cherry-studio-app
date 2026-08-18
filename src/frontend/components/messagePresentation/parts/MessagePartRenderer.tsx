@@ -1,56 +1,34 @@
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 
-import type { ResolvedCitationText } from '../citations';
+import type { ResolvedCitationText } from './citations';
 import { CodePart } from './CodePart';
 import { CompactPart } from './CompactPart';
 import { ErrorPart } from './ErrorPart';
 import { FilePart } from './FilePart';
-import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import type { MessagePartRenderMode } from './MessageParts';
-import { isMetaToolPart, MetaToolPart } from './MetaToolPart';
 import { ReasoningPart } from './ReasoningPart';
 import { SourceUrlPart } from './SourceUrlPart';
 import { TextPart } from './TextPart';
-import { ToolPart } from './ToolPart';
+import { ToolPartRenderer } from './tools/ToolPartRenderer';
+import { isToolMessagePart } from './tools/toolPartState';
 import { TranslationPart } from './TranslationPart';
 import { UnknownPart } from './UnknownPart';
-import {
-  isProviderWebSearchToolPart,
-  isWebSearchToolPart,
-  WebSearchToolPart,
-} from './WebSearchToolPart';
 
-type MessagePartProps = {
+type MessagePartRendererProps = {
   isStreaming: boolean;
   part: CherryMessagePart;
   renderMode?: MessagePartRenderMode;
   resolvedText?: ResolvedCitationText;
 };
 
-export function MessagePart({
+export function MessagePartRenderer({
   isStreaming,
   part,
   renderMode = 'markdown',
   resolvedText,
-}: MessagePartProps) {
+}: MessagePartRendererProps) {
   if (isToolMessagePart(part)) {
-    if (isProviderWebSearchToolPart(part)) {
-      return null;
-    }
-
-    if (isWebSearchToolPart(part)) {
-      return <WebSearchToolPart part={part} />;
-    }
-
-    if (isMetaToolPart(part)) {
-      return <MetaToolPart part={part} />;
-    }
-
-    if (isMcpToolPart(part)) {
-      return <McpToolPart part={part} />;
-    }
-
-    return <ToolPart part={part} />;
+    return <ToolPartRenderer part={part} />;
   }
 
   switch (part.type) {
@@ -86,10 +64,4 @@ export function MessagePart({
     default:
       return <UnknownPart />;
   }
-}
-
-function isToolMessagePart(
-  part: CherryMessagePart,
-): part is Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }> {
-  return part.type === 'dynamic-tool' || part.type.startsWith('tool-');
 }

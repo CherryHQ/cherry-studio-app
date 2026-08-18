@@ -2,14 +2,14 @@ import type { MessageStatus } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessagePresentationItem } from '../../../types';
+import type { MessagePresentationItem } from '../../types';
 import { MessageParts } from '../MessageParts';
 
-jest.mock('../MessagePart', () => {
+jest.mock('../MessagePartRenderer', () => {
   const { createElement } = jest.requireActual('react');
 
   return {
-    MessagePart: (props: object) => createElement('MessagePart', props),
+    MessagePartRenderer: (props: object) => createElement('MessagePartRenderer', props),
   };
 });
 
@@ -22,8 +22,8 @@ describe('MessageParts', () => {
   ] as const)('status=%s passes isStreaming=%p', (status, isStreaming) => {
     const renderer = render(<MessageParts message={makeMessage(status)} />);
 
-    expect(renderer.root.findByType('MessagePart').props.isStreaming).toBe(isStreaming);
-    expect(renderer.root.findByType('MessagePart').props.resolvedText).toBeUndefined();
+    expect(renderer.root.findByType('MessagePartRenderer').props.isStreaming).toBe(isStreaming);
+    expect(renderer.root.findByType('MessagePartRenderer').props.resolvedText).toBeUndefined();
   });
 });
 

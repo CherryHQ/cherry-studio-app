@@ -1,32 +1,31 @@
 import { hasMessagePartValue, MessagePart } from '@cherrystudio/ui/components';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
-import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation/builtInToolPresentation';
+import { getBuiltInToolPresentation } from '../../toolPresentation/builtInToolPresentation/builtInToolPresentation';
+import {
+  getToolDisplayState,
+  getToolName,
+  getToolStatusTone,
+  type ToolMessagePart,
+} from './toolPartState';
 
-type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
-
-type ToolPartProps = {
+type GenericToolPartProps = {
   part: ToolMessagePart;
 };
 
-export function ToolPart({ part }: ToolPartProps) {
+export function GenericToolPart({ part }: GenericToolPartProps) {
   const { t } = useTranslation();
   const toolPresentation = getBuiltInToolPresentation(getToolName(part));
   const title = getToolLabel(part, toolPresentation?.titleKey, t);
   const statusText = getToolStatusText(part, t);
-  const isRunning =
-    part.state === 'input-streaming' ||
-    part.state === 'input-available' ||
-    (part.state === 'approval-responded' && part.approval.approved);
 
   return (
     <MessagePart.Tool
       closeAccessibilityLabel={t('common.close')}
       icon={toolPresentation?.icon}
       imageSource={toolPresentation?.imageSource}
-      state={isRunning ? 'running' : 'complete'}
+      state={getToolDisplayState(part)}
       statusText={statusText}
       statusTone={getToolStatusTone(part)}
       testID="tool-part"
@@ -107,25 +106,10 @@ function getToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTransl
   return t('chat.tool.runDenied');
 }
 
-function getToolStatusTone(part: ToolMessagePart): 'danger' | 'default' | 'warning' {
-  if (
-    part.state === 'output-denied' ||
-    (part.state === 'approval-responded' && !part.approval.approved)
-  ) {
-    return 'warning';
-  }
-
-  return part.state === 'output-error' ? 'danger' : 'default';
-}
-
 function shouldShowNoDetails(part: ToolMessagePart) {
   return (
     part.state !== 'output-error' &&
     part.state !== 'output-available' &&
     !hasMessagePartValue(part.input)
   );
-}
-
-function getToolName(part: ToolMessagePart) {
-  return part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
 }

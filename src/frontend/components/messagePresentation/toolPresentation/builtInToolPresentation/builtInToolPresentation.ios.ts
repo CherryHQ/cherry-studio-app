@@ -1,4 +1,4 @@
-import { builtInToolDefinitions, type BuiltInToolVisual } from '../builtInToolDefinitions';
+import { builtInToolDefinitions, type BuiltInToolVisual } from './builtInToolDefinitions';
 import type { BuiltInToolPresentation } from './builtInToolPresentation.types';
 
 const visualImages: Record<BuiltInToolVisual, number> = {

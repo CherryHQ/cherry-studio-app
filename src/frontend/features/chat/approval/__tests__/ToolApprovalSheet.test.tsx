@@ -44,6 +44,12 @@ jest.mock('@cherrystudio/ui/components', () => {
   return { BottomSheet, Button: MockButton };
 });
 
+jest.mock('@/frontend/components/messagePresentation', () => ({
+  getBuiltInToolPresentation: jest.requireActual(
+    '@/frontend/components/messagePresentation/toolPresentation/builtInToolPresentation/builtInToolPresentation.android',
+  ).getBuiltInToolPresentation,
+}));
+
 const allowLabel = 'chat.tool.approval.allow';
 const denyLabel = 'chat.tool.approval.deny';
 

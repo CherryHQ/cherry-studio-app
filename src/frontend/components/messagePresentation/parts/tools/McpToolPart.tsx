@@ -4,7 +4,6 @@ import {
   normalizeMcpResult,
 } from '@cherrystudio/universal/ai/tools/mcpResult';
 import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import {
   type CherryToolMeta,
   readCherryMeta,
@@ -14,7 +13,12 @@ import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
+import {
+  getToolDisplayState,
+  getToolName,
+  getToolStatusTone,
+  type ToolMessagePart,
+} from './toolPartState';
 
 type McpToolPartProps = {
   part: ToolMessagePart;
@@ -29,17 +33,16 @@ export function McpToolPart({ part }: McpToolPartProps) {
   const toolMetadata = readCherryToolMetadata(part)?.tool;
   const title = getMcpToolTitle(part, toolName, toolMetadata);
   const statusText = getMcpToolStatusText(part, t);
-  const isRunning =
-    part.state === 'input-streaming' ||
-    part.state === 'input-available' ||
-    (part.state === 'approval-responded' && part.approval.approved);
 
   return (
     <MessagePart.Tool
       closeAccessibilityLabel={t('common.close')}
-      state={isRunning ? 'running' : 'complete'}
+      state={getToolDisplayState(part)}
       statusText={statusText}
-      statusTone={getMcpToolStatusTone(part)}
+      statusTone={getToolStatusTone(
+        part,
+        readCherryMeta(part)?.settledByApp || part.state === 'output-error',
+      )}
       testID="mcp-tool-part"
       title={title}
     >
@@ -168,17 +171,6 @@ function getMcpToolStatusText(part: ToolMessagePart, t: ReturnType<typeof useTra
   return '';
 }
 
-function getMcpToolStatusTone(part: ToolMessagePart): 'danger' | 'default' | 'warning' {
-  if (
-    part.state === 'output-denied' ||
-    (part.state === 'approval-responded' && !part.approval.approved)
-  ) {
-    return 'warning';
-  }
-
-  return readCherryMeta(part)?.settledByApp || part.state === 'output-error' ? 'danger' : 'default';
-}
-
 function assertHandled(_part: never): void {}
 
 function createImageKey(data: string) {
@@ -200,8 +192,4 @@ function formatOutputText(text: string) {
 function truncateText(text: string, maxLength: number, message: string) {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength)}\n... ${message}`;
-}
-
-function getToolName(part: ToolMessagePart) {
-  return part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
 }

@@ -3,9 +3,9 @@ import type { ReactElement, ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
+import { GenericToolPart } from '../GenericToolPart';
 import { McpToolPart } from '../McpToolPart';
-import { MetaToolPart } from '../MetaToolPart';
-import { ToolPart } from '../ToolPart';
+import { MetaToolPartRenderer } from '../metaTool/MetaToolPartRenderer';
 import { WebSearchToolPart } from '../WebSearchToolPart';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
@@ -91,7 +91,7 @@ describe('tool message detail sheets', () => {
 
   it('opens generic tool details from the message status row', async () => {
     await render(
-      <ToolPart
+      <GenericToolPart
         part={makeToolPart({
           input: { expression: '1 + 1' },
           output: { value: 2 },
@@ -119,14 +119,14 @@ describe('tool message detail sheets', () => {
   });
 
   it('shows a generic tool name without a tool prefix', async () => {
-    await render(<ToolPart part={makeToolPart({ toolName: 'calculator' })} />);
+    await render(<GenericToolPart part={makeToolPart({ toolName: 'calculator' })} />);
 
     expect(findByTestID('tool-part-trigger').props.title).toBe('calculator');
   });
 
   it('maps a processing generic tool to the shared running state', async () => {
     await render(
-      <ToolPart part={makeToolPart({ state: 'input-available', toolName: 'calculator' })} />,
+      <GenericToolPart part={makeToolPart({ state: 'input-available', toolName: 'calculator' })} />,
     );
 
     const trigger = findByTestID('tool-part-trigger');
@@ -207,7 +207,7 @@ describe('tool message detail sheets', () => {
     ['tool_exec', 'chat.metaToolExec.title', undefined],
   ])('shows concise information for %s', async (toolName, expectedTitle, expectedStatus) => {
     await render(
-      <MetaToolPart
+      <MetaToolPartRenderer
         part={makeToolPart({
           input: { name: 'browser.open_url', namespace: 'browser', query: 'open url' },
           title: 'Title with parameters',
@@ -304,7 +304,7 @@ describe('tool message detail sheets', () => {
 
   it('shows the original tool_search error in details', async () => {
     await render(
-      <MetaToolPart
+      <MetaToolPartRenderer
         part={makeToolPart({
           errorText: 'Registry request timed out',
           state: 'output-error',
@@ -322,7 +322,7 @@ describe('tool message detail sheets', () => {
 
   it('marks failures as dangerous and denials as warnings', async () => {
     await render(
-      <ToolPart
+      <GenericToolPart
         part={makeToolPart({
           errorText: 'Timed out',
           state: 'output-error',
@@ -352,7 +352,7 @@ describe('tool message detail sheets', () => {
 
     await act(async () => {
       renderer?.update(
-        <ToolPart
+        <GenericToolPart
           part={makeToolPart({
             approval: { approved: false, id: 'approval-1' },
             state: 'approval-responded',
@@ -382,7 +382,7 @@ describe('tool message detail sheets', () => {
 
     await act(async () => {
       renderer?.update(
-        <MetaToolPart
+        <MetaToolPartRenderer
           part={makeToolPart({
             errorText: 'Timed out',
             state: 'output-error',
@@ -397,7 +397,7 @@ describe('tool message detail sheets', () => {
 
     await act(async () => {
       renderer?.update(
-        <MetaToolPart
+        <MetaToolPartRenderer
           part={makeToolPart({
             state: 'output-denied',
             toolName: 'tool_invoke',

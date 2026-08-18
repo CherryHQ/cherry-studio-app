@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
-import { MessageParts } from '../messageContent';
 import { useUserMessageSlideInStyle } from '../motion/useUserMessageSlideInStyle';
+import { MessageParts } from '../parts/MessageParts';
 import type { MessagePresentationItem } from '../types';
 import { partitionUserMessageParts } from './partitionUserMessageParts';
 import { UserMessageAttachments } from './UserMessageAttachments';
