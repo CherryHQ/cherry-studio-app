@@ -44,10 +44,11 @@ jest.mock('@cherrystudio/ui/components', () => {
   return { BottomSheet, Button: MockButton };
 });
 
-jest.mock('@/frontend/components/messagePresentation', () => ({
-  getBuiltInToolPresentation: jest.requireActual(
-    '@/frontend/components/messagePresentation/toolPresentation/builtInToolPresentation/builtInToolPresentation.android',
-  ).getBuiltInToolPresentation,
+jest.mock('@/frontend/components/messages', () => ({
+  getBuiltInToolDisplay: (toolName: string) =>
+    toolName === 'location_get_current'
+      ? { titleKey: 'chat.builtinTool.location.current' }
+      : undefined,
 }));
 
 const allowLabel = 'chat.tool.approval.allow';

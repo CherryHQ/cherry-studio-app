@@ -1,16 +1,13 @@
 import { memo, type ComponentProps } from 'react';
 
-import {
-  type MessagePresentationItem,
-  UserMessage,
-} from '@/frontend/components/messagePresentation';
+import { type MessageListItem, UserMessage } from '@/frontend/components/messages';
 
 import { PaintingAssistantMessage } from './PaintingAssistantMessage';
 
 export type PaintingMessageState = ComponentProps<typeof PaintingAssistantMessage>;
 
 type PaintingMessageProps = {
-  message: MessagePresentationItem;
+  message: MessageListItem;
   state: PaintingMessageState;
 };
 

@@ -1,7 +1,7 @@
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageListProps } from '@/frontend/components/messagePresentation';
+import type { MessageListProps } from '@/frontend/components/messages';
 
 import type {
   PaintingGenerationInput,
@@ -134,7 +134,7 @@ jest.mock('@/frontend/components/composer', () => ({
   },
 }));
 
-jest.mock('@/frontend/components/messagePresentation', () => ({
+jest.mock('@/frontend/components/messages', () => ({
   MessageList: (props: MessageListProps) => {
     const { useEffect } = jest.requireActual('react');
     useEffect(() => {

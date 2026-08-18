@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { getBuiltInToolPresentation } from '@/frontend/components/messagePresentation';
+import { getBuiltInToolDisplay } from '@/frontend/components/messages';
 
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 
@@ -129,10 +129,10 @@ function formatApprovalTitle(
   approval: PendingToolApproval,
   t: ReturnType<typeof useTranslation>['t'],
 ): string {
-  const presentation = getBuiltInToolPresentation(approval.toolName);
-  if (presentation || approval.toolType === 'builtin') {
-    if (presentation) {
-      return t(presentation.titleKey);
+  const display = getBuiltInToolDisplay(approval.toolName);
+  if (display || approval.toolType === 'builtin') {
+    if (display) {
+      return t(display.titleKey);
     }
 
     const words = approval.toolName.replaceAll('_', ' ');

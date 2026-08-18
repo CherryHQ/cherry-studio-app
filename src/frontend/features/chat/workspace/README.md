@@ -2,7 +2,7 @@
 
 This module owns Chat-specific workspace orchestration: runtime message projection, older-message
 loading state, initial render gating, tool approval, and composer placement. The virtualized list
-and message rendering live in `@/frontend/components/messagePresentation`.
+and message rendering live in `@/frontend/components/messages`.
 
 ## Public Interface
 

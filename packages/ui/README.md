@@ -81,7 +81,7 @@ translations, file identifiers, or application navigation:
 ```
 
 The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
-`Message Parts/Playground` collects every public message presentation and state on one interactive
+`Message Parts/Playground` collects every public message-part primitive and state on one interactive
 page for visual debugging.
 `MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
 `MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under

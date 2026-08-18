@@ -8,10 +8,7 @@ import { View } from 'react-native';
 
 import { ManagedComposerProvider } from '@/frontend/components/composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
-import {
-  MessageList,
-  type MessagePresentationItem,
-} from '@/frontend/components/messagePresentation';
+import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 
 import {
@@ -151,9 +148,7 @@ export function PaintingComposer({
     ],
   );
   const renderMessage = useCallback(
-    (message: MessagePresentationItem) => (
-      <PaintingMessage message={message} state={messageRenderState} />
-    ),
+    (message: MessageListItem) => <PaintingMessage message={message} state={messageRenderState} />,
     [messageRenderState],
   );
   const { contentBottomInset, handleInputHeightChange, inputHeightShared, keyboardOffset } =

@@ -13,7 +13,7 @@ const input: ResolvedPaintingAttachment = {
   uri: 'file:///reference.jpg',
 };
 describe('painting messages', () => {
-  it('projects one generation into user and assistant presentation messages', () => {
+  it('projects one generation into user and assistant list messages', () => {
     const messages = createPaintingMessages({
       assistantMessageId: 'assistant-1',
       assistantStatus: 'success',

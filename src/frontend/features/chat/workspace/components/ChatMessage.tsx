@@ -2,12 +2,12 @@ import { memo } from 'react';
 
 import {
   AssistantMessage,
-  type MessagePresentationItem,
+  type MessageListItem,
   UserMessage,
-} from '@/frontend/components/messagePresentation';
+} from '@/frontend/components/messages';
 
 type ChatMessageProps = {
-  message: MessagePresentationItem;
+  message: MessageListItem;
 };
 
 export const ChatMessage = memo(function ChatMessage({ message }: ChatMessageProps) {

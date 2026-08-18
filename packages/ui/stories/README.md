@@ -34,12 +34,12 @@ message schemas and providers remain outside CherryUI.
 `Message Parts/Loading` exposes the two live states used before answer content settles: pending
 response and running reasoning. Both stories compose the same public components used by chat.
 
-`Message Parts/Playground` renders every public message presentation and state together for fast
+`Message Parts/Playground` renders every public message-part primitive and state together for fast
 visual comparison. Disclosure rows remain interactive, so their real detail sheets can be inspected
 without leaving the page.
 
-Application schema adapters are exercised separately under `Message Presentation/*`, sourced from
-`.rnstorybook/stories/message-presentation`. Those stories use the real application rows and
+Application schema adapters are exercised separately under `Messages/*`, sourced from
+`.rnstorybook/stories/messages`. Those stories use the real application rows and
 dispatchers with deterministic in-memory i18n, preference, file, and data providers; they do not
 start the production backend.
 

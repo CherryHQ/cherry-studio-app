@@ -6,10 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import {
-  MessageList,
-  type MessagePresentationItem,
-} from '@/frontend/components/messagePresentation';
+import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -32,7 +29,7 @@ const logger = loggerService.withContext('ChatWorkspace');
 // 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
 const gateLog = loggerService.withContext('ChatGate');
 
-function renderChatMessage(message: MessagePresentationItem) {
+function renderChatMessage(message: MessageListItem) {
   return <ChatMessage message={message} />;
 }
 
@@ -64,10 +61,10 @@ export function ChatWorkspace({
   const { alert } = useAlert();
   const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
-  const presentationMessages = useMemo(
+  const listMessages = useMemo(
     () =>
       visibleMessages.filter(
-        (message): message is Message & MessagePresentationItem =>
+        (message): message is Message & MessageListItem =>
           message.role === 'user' || message.role === 'assistant',
       ),
     [visibleMessages],
@@ -103,10 +100,10 @@ export function ChatWorkspace({
     gateLog.debug('[GATE] state', {
       isLoadingInitial,
       isCoverVisible,
-      len: presentationMessages.length,
+      len: listMessages.length,
       t: Date.now(),
     });
-  }, [isLoadingInitial, isCoverVisible, presentationMessages.length]);
+  }, [isLoadingInitial, isCoverVisible, listMessages.length]);
 
   return (
     <View className="flex-1 bg-background">
@@ -118,7 +115,7 @@ export function ChatWorkspace({
         contentTopInset={contentTopInset}
         enteringMessageId={chatTopic.pendingUserMessage?.id}
         keyboardOffset={keyboardOffset}
-        messages={presentationMessages}
+        messages={listMessages}
         onLoadOlder={loadOlder}
         onReady={markListLoaded}
         renderMessage={renderChatMessage}

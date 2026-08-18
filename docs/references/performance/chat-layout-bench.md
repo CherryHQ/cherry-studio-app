@@ -130,8 +130,8 @@ chunk 长度和同一场景，至少重复三轮并比较原始轨迹。不要�
 ```bash
 pnpm test:app -- scripts/__tests__/layoutBenchJudges.test.ts --runInBand
 pnpm test:app -- \
-  src/frontend/components/messagePresentation/components/__tests__/MessageList.test.tsx \
-  src/frontend/components/messagePresentation/components/__tests__/ScrollToBottomButton.test.tsx \
+  src/frontend/components/messages/list/__tests__/MessageList.test.tsx \
+  packages/ui/src/components/scroll-to-bottom-button/__tests__/scroll-to-bottom-button.test.tsx \
   --runInBand
 pnpm typecheck
 ```

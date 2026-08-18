@@ -1,8 +1,8 @@
 # Chat Screen
 
 This module owns the chat topic screen, chat input, runtime projection, and chat workspace
-behavior. Structured message presentation is shared with painting through
-`@/frontend/components/messagePresentation`.
+behavior. Structured message rendering is shared with painting through
+`@/frontend/components/messages`.
 
 ## Public Interface
 
