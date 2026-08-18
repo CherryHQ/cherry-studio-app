@@ -75,6 +75,15 @@ describe('MarkdownText', () => {
             fontSize: 18,
             lineHeight: 28,
           }),
+          math: {
+            backgroundColor: 'background',
+            color: 'foreground',
+            fontSize: 20,
+            marginBottom: 8,
+            marginTop: 4,
+            padding: 4,
+            textAlign: 'center',
+          },
         }),
       );
       expect(renderer.root.findAllByType(excluded)).toHaveLength(0);

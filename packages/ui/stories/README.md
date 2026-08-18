@@ -15,6 +15,8 @@ stories/
 │   └── showcase.tsx
 └── message-parts/
     ├── content.stories.tsx
+    ├── loading.stories.tsx
+    ├── playground.stories.tsx
     ├── reasoning.stories.tsx
     └── tools.stories.tsx
 ```
@@ -28,6 +30,13 @@ collected by Storybook.
 `message-parts/` is a dedicated top-level Storybook section for debugging structured chat content.
 It exercises the public `MessagePart` compound interface with resolved fixture data; application
 message schemas and providers remain outside CherryUI.
+
+`Message Parts/Loading` exposes the two live states used before answer content settles: pending
+response and running reasoning. Both stories compose the same public components used by chat.
+
+`Message Parts/Playground` renders every public message presentation and state together for fast
+visual comparison. Disclosure rows remain interactive, so their real detail sheets can be inspected
+without leaving the page.
 
 Use kebab-case filenames and import components through the public
 `@cherrystudio/ui/components` entry point. Run Storybook from the workspace root:

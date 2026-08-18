@@ -60,6 +60,16 @@ export const States: Story = {
           <MessagePart.Tool
             closeAccessibilityLabel="Close"
             icon={WrenchIcon}
+            state="running"
+            statusText="Running"
+            testID="story-tool-running"
+            title="Calculator"
+          >
+            <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
+          </MessagePart.Tool>
+          <MessagePart.Tool
+            closeAccessibilityLabel="Close"
+            icon={WrenchIcon}
             state="complete"
             statusText="Completed"
             testID="story-tool-complete"

@@ -3,8 +3,6 @@ import type { CherryMessagePart } from '@cherrystudio/universal/data/types/messa
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { ToolPartDisclosure } from './ToolPartDisclosure';
-
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
 type MetaToolPartProps = {
@@ -43,15 +41,16 @@ export function MetaToolPart({ part }: MetaToolPartProps) {
     (part.state === 'approval-responded' && part.approval.approved);
 
   return (
-    <ToolPartDisclosure
-      isRunning={isRunning}
+    <MessagePart.Tool
+      closeAccessibilityLabel={t('common.close')}
+      state={isRunning ? 'running' : 'complete'}
       statusText={statusText}
       statusTone={getMetaToolStatusTone(part)}
-      testIDPrefix="meta-tool-part"
+      testID="meta-tool-part"
       title={title}
     >
       <MetaToolBody input={input} part={part} toolName={toolName} />
-    </ToolPartDisclosure>
+    </MessagePart.Tool>
   );
 }
 

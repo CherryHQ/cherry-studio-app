@@ -14,8 +14,6 @@ import { Image } from 'expo-image';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
-import { ToolPartDisclosure } from './ToolPartDisclosure';
-
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
 type McpToolPartProps = {
@@ -37,11 +35,12 @@ export function McpToolPart({ part }: McpToolPartProps) {
     (part.state === 'approval-responded' && part.approval.approved);
 
   return (
-    <ToolPartDisclosure
-      isRunning={isRunning}
+    <MessagePart.Tool
+      closeAccessibilityLabel={t('common.close')}
+      state={isRunning ? 'running' : 'complete'}
       statusText={statusText}
       statusTone={getMcpToolStatusTone(part)}
-      testIDPrefix="mcp-tool-part"
+      testID="mcp-tool-part"
       title={title}
     >
       <MessagePart.ValueSection
@@ -63,7 +62,7 @@ export function McpToolPart({ part }: McpToolPartProps) {
           value={part.errorText}
         />
       ) : null}
-    </ToolPartDisclosure>
+    </MessagePart.Tool>
   );
 }
 

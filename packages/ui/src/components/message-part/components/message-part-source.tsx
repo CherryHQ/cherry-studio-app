@@ -10,11 +10,10 @@ export function MessagePartSource({
   variant = 'card',
   ...props
 }: MessagePartSourceProps) {
-  const domain = getSourceDomain(url);
   const containerClassName =
     variant === 'card'
-      ? 'flex-row items-center gap-2 rounded-lg border border-border bg-secondary p-3 active:opacity-70'
-      : '-mx-2 flex-row items-center gap-2 rounded-md px-2 py-1.5 active:bg-secondary-active active:opacity-80';
+      ? 'min-h-11 flex-row items-center gap-2 rounded-lg border border-border bg-secondary p-2 active:opacity-70'
+      : '-mx-2 min-h-10 flex-row items-center gap-2 rounded-md px-2 py-1.5 active:bg-secondary-active active:opacity-80';
 
   return (
     <Pressable
@@ -24,26 +23,13 @@ export function MessagePartSource({
       className={containerClassName}
       onPress={() => onPress(url)}
     >
-      <View className="size-7 items-center justify-center rounded-md bg-secondary">
-        <GlobeIcon className="size-3.5 text-foreground" />
-      </View>
+      <GlobeIcon className="size-4 shrink-0 text-foreground" />
       <View className="min-w-0 flex-1">
         <Text className="font-medium text-foreground text-base" numberOfLines={1} selectable>
           {label || url}
         </Text>
-        <Text className="text-foreground-tertiary text-xs" numberOfLines={1} selectable>
-          {domain || url}
-        </Text>
       </View>
-      <SquareArrowOutUpRightIcon className="size-3.5 text-foreground-tertiary" />
+      <SquareArrowOutUpRightIcon className="size-4 shrink-0 text-foreground" />
     </Pressable>
   );
-}
-
-function getSourceDomain(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, '');
-  } catch {
-    return url;
-  }
 }

@@ -9,13 +9,11 @@ import { isMcpToolPart, McpToolPart } from './McpToolPart';
 import type { MessagePartRenderMode } from './MessageParts';
 import { isMetaToolPart, MetaToolPart } from './MetaToolPart';
 import { ReasoningPart } from './ReasoningPart';
-import { SourceDocumentPart } from './SourceDocumentPart';
 import { SourceUrlPart } from './SourceUrlPart';
 import { TextPart } from './TextPart';
 import { ToolPart } from './ToolPart';
 import { TranslationPart } from './TranslationPart';
 import { UnknownPart } from './UnknownPart';
-import { VideoPart } from './VideoPart';
 import {
   isProviderWebSearchToolPart,
   isWebSearchToolPart,
@@ -35,8 +33,6 @@ export function MessagePart({
   renderMode = 'markdown',
   resolvedText,
 }: MessagePartProps) {
-  const partType = part.type;
-
   if (isToolMessagePart(part)) {
     if (isProviderWebSearchToolPart(part)) {
       return null;
@@ -78,17 +74,17 @@ export function MessagePart({
     case 'data-translation':
       return <TranslationPart isStreaming={isStreaming} part={part} />;
     case 'data-video':
-      return <VideoPart part={part} />;
+      return null;
     case 'file':
       return <FilePart part={part} />;
     case 'source-document':
-      return <SourceDocumentPart part={part} />;
+      return null;
     case 'source-url':
       return <SourceUrlPart part={part} />;
     case 'step-start':
       return null;
     default:
-      return <UnknownPart type={partType} />;
+      return <UnknownPart />;
   }
 }
 

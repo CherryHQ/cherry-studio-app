@@ -1,9 +1,8 @@
 import { MessagePart } from '@cherrystudio/ui/components';
+import { useTranslation } from 'react-i18next';
 
-type UnknownPartProps = {
-  type: string;
-};
+export function UnknownPart() {
+  const { t } = useTranslation();
 
-export function UnknownPart({ type }: UnknownPartProps) {
-  return <MessagePart.Placeholder label={type} />;
+  return <MessagePart.Unknown label={t('chat.message.unknownPart')} />;
 }

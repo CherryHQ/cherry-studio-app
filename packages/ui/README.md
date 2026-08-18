@@ -65,9 +65,9 @@ variables, MessageList geometry, and settings previews on the same three-step sc
 
 `MessagePart` is the business-neutral visual family for structured chat content. It owns status
 rows, reasoning and tool detail sheets, feedback blocks, source links, placeholders, translation
-separators, and structured detail sections. Product code supplies resolved labels, states, content,
-and actions; CherryUI does not read message schemas, tool metadata, translations, file identifiers,
-or application navigation:
+separators, unknown-part warnings, and structured detail sections. Product code supplies resolved
+labels, states, content, and actions; CherryUI does not read message schemas, tool metadata,
+translations, file identifiers, or application navigation:
 
 ```tsx
 <MessagePart.Tool
@@ -81,6 +81,11 @@ or application navigation:
 ```
 
 The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
+`Message Parts/Playground` collects every public message presentation and state on one interactive
+page for visual debugging.
+`MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
+`MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
+`Message Parts/Loading` for direct animation and theme inspection.
 
 `ScrollToBottomButton` is a localized floating control for scrollable surfaces with a measured
 bottom accessory. It owns the CherryUI surface, position, and visibility motion; the caller owns

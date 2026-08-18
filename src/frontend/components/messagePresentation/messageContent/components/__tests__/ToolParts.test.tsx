@@ -21,6 +21,7 @@ jest.mock('expo-image', () => {
 });
 
 jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
   const { Text: MockText, View: MockView } = jest.requireActual('react-native');
   const isValueRecord = (value: unknown): value is Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -30,6 +31,32 @@ jest.mock('@cherrystudio/ui/components', () => {
     (!isValueRecord(value) || Object.keys(value).length > 0);
   const formatValue = (value: unknown) =>
     typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  const Tool = ({
+    children,
+    testID,
+    ...props
+  }: {
+    children: ReactNode;
+    testID: string;
+    title: string;
+  }) => {
+    const [isOpen, setIsOpen] = React.useState(false);
+
+    return (
+      <>
+        <MockView {...props} onPress={() => setIsOpen(true)} testID={`${testID}-trigger`} />
+        {isOpen ? (
+          <MockView
+            onClose={() => setIsOpen(false)}
+            testID={`${testID}-detail`}
+            title={props.title}
+          >
+            {children}
+          </MockView>
+        ) : null}
+      </>
+    );
+  };
 
   return {
     formatMessagePartValue: formatValue,
@@ -43,6 +70,7 @@ jest.mock('@cherrystudio/ui/components', () => {
           <MockText>{value}</MockText>
         </MockView>
       ),
+      Tool,
       ValueSection: ({ title, value }: { title: string; value: unknown }) =>
         hasValue(value) ? (
           <MockView>
@@ -50,40 +78,6 @@ jest.mock('@cherrystudio/ui/components', () => {
             <MockText>{formatValue(value)}</MockText>
           </MockView>
         ) : null,
-    },
-  };
-});
-
-jest.mock('../ToolPartDisclosure', () => {
-  const React = jest.requireActual('react');
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return {
-    ToolPartDisclosure: ({
-      children,
-      testIDPrefix,
-      ...props
-    }: {
-      children: ReactNode;
-      testIDPrefix: string;
-      title: string;
-    }) => {
-      const [isOpen, setIsOpen] = React.useState(false);
-
-      return (
-        <>
-          <MockView {...props} onPress={() => setIsOpen(true)} testID={`${testIDPrefix}-trigger`} />
-          {isOpen ? (
-            <MockView
-              onClose={() => setIsOpen(false)}
-              testID={`${testIDPrefix}-detail`}
-              title={props.title}
-            >
-              {children}
-            </MockView>
-          ) : null}
-        </>
-      );
     },
   };
 });
@@ -128,6 +122,16 @@ describe('tool message detail sheets', () => {
     await render(<ToolPart part={makeToolPart({ toolName: 'calculator' })} />);
 
     expect(findByTestID('tool-part-trigger').props.title).toBe('calculator');
+  });
+
+  it('maps a processing generic tool to the shared running state', async () => {
+    await render(
+      <ToolPart part={makeToolPart({ state: 'input-available', toolName: 'calculator' })} />,
+    );
+
+    const trigger = findByTestID('tool-part-trigger');
+    expect(trigger.props.state).toBe('running');
+    expect(trigger.props.statusText).toBe('chat.tool.inputReady');
   });
 
   it('opens MCP tool details with the server and tool name', async () => {
@@ -178,6 +182,22 @@ describe('tool message detail sheets', () => {
 
     expect(findByTestID('web-search-tool-part-detail').props.title).toBe('Cherry Studio');
     expect(findText('Cherry Studio')).not.toHaveLength(0);
+  });
+
+  it('keeps the searching label while using the shared running state', async () => {
+    await render(
+      <WebSearchToolPart
+        part={makeToolPart({
+          input: { query: 'Cherry Studio' },
+          state: 'input-available',
+          toolName: 'builtin_web_search',
+        })}
+      />,
+    );
+
+    const trigger = findByTestID('web-search-tool-part-trigger');
+    expect(trigger.props.state).toBe('running');
+    expect(trigger.props.statusText).toBe('chat.webSearch.searching');
   });
 
   it.each([

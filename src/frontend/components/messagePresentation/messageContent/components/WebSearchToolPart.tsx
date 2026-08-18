@@ -6,8 +6,6 @@ import { Text } from 'react-native';
 
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
-import { ToolPartDisclosure } from './ToolPartDisclosure';
-
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
 type WebSearchToolPartProps = {
@@ -36,12 +34,13 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
   const isSearching = part.state === 'input-streaming' || part.state === 'input-available';
 
   return (
-    <ToolPartDisclosure
+    <MessagePart.Tool
+      closeAccessibilityLabel={t('common.close')}
       icon={SearchIcon}
-      isRunning={isSearching}
+      state={isSearching ? 'running' : 'complete'}
       statusText={statusText}
       statusTone={getWebSearchStatusTone(part)}
-      testIDPrefix="web-search-tool-part"
+      testID="web-search-tool-part"
       title={title}
     >
       {results.length === 0 ? (
@@ -58,7 +57,7 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
           />
         ))
       )}
-    </ToolPartDisclosure>
+    </MessagePart.Tool>
   );
 }
 

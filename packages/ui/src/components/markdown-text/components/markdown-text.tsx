@@ -49,7 +49,13 @@ function createMarkdownTypographyStyle(
     code: { fontFamily: monoFontFamily },
     codeBlock: { ...scale.sm, fontFamily: monoFontFamily },
     table: scale.sm,
-    math: { fontSize: scale.xl.fontSize },
+    math: {
+      fontSize: scale.base.fontSize,
+      marginBottom: 8,
+      marginTop: 4,
+      padding: 4,
+      textAlign: 'center',
+    },
   };
 }
 
@@ -142,7 +148,7 @@ export function MarkdownText({
         checkedTextColor: mutedForeground,
         checkmarkColor: foreground,
       },
-      math: { ...typography.math, backgroundColor: secondary, color: foreground },
+      math: { ...typography.math, backgroundColor: background, color: foreground },
       inlineMath: { color: foreground },
       spoiler: { color: foreground },
     };

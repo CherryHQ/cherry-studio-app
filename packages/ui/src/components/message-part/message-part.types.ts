@@ -23,6 +23,16 @@ export type MessagePartReasoningProps = {
   testID?: string;
 };
 
+export type MessagePartPendingProps = {
+  accessibilityLabel: string;
+  testID?: string;
+};
+
+export type MessagePartUnknownProps = {
+  label: string;
+  testID?: string;
+};
+
 export type MessagePartToolProps = {
   children: ReactNode;
   closeAccessibilityLabel: string;

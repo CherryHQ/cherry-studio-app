@@ -43,10 +43,6 @@ export const Gallery: Story = {
             message="The provider returned an invalid response."
             title="Request failed"
           />
-          <MessagePart.Placeholder
-            description="Preview is not available in this build."
-            label="Video attachment"
-          />
           <MessagePart.Source
             label="Cherry Studio documentation"
             onPress={onSourcePress}

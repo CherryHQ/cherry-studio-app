@@ -8,24 +8,21 @@ import { AssistantMessage } from '../AssistantMessage';
 const mockMessageParts = jest.fn((props: { message: MessagePresentationItem }) =>
   createElement('MessageParts', props),
 );
-const mockDotMatrixSquare20 = jest.fn((_props: { active: boolean; size: number }) => null);
+const mockMessagePartPending = jest.fn((_props: { accessibilityLabel: string }) => null);
 
 jest.mock('../../../messageContent', () => ({
   MessageParts: (props: { message: MessagePresentationItem }) => mockMessageParts(props),
 }));
 
-jest.mock('@cherrystudio/ui/components', () => {
-  const React = jest.requireActual('react');
+jest.mock('@cherrystudio/ui/components', () => ({
+  MessagePart: {
+    Pending: (props: { accessibilityLabel: string }) => mockMessagePartPending(props),
+  },
+}));
 
-  return {
-    DotMatrixSquare20: (props: { active: boolean; size: number }) => mockDotMatrixSquare20(props),
-    MessagePart: {
-      Status: ({ children }: { children: React.ReactNode }) =>
-        React.createElement('MessagePartStatus', null, children),
-      StatusTextFloor: () => null,
-    },
-  };
-});
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
 
 // 真模块在 jest 下会去装 worklets 的原生 unpacker 并崩掉，本套件只关心渲染出什么。
 jest.mock('react-native-reanimated', () => {
@@ -65,7 +62,9 @@ describe('AssistantMessage', () => {
       renderer = create(<AssistantMessage message={createAssistantMessage('pending')} />);
     });
 
-    expect(mockDotMatrixSquare20).toHaveBeenCalledWith({ active: true, size: 20 });
+    expect(mockMessagePartPending).toHaveBeenCalledWith({
+      accessibilityLabel: 'chat.message.waitingForResponse',
+    });
     expect(mockMessageParts).not.toHaveBeenCalled();
   });
 
@@ -77,7 +76,7 @@ describe('AssistantMessage', () => {
     });
 
     expect(mockMessageParts).toHaveBeenCalledWith({ message });
-    expect(mockDotMatrixSquare20).not.toHaveBeenCalled();
+    expect(mockMessagePartPending).not.toHaveBeenCalled();
   });
 
   test('renders composed children after the message body', () => {
@@ -107,7 +106,9 @@ describe('AssistantMessage', () => {
       );
     });
 
-    expect(mockDotMatrixSquare20).toHaveBeenCalledWith({ active: true, size: 20 });
+    expect(mockMessagePartPending).toHaveBeenCalledWith({
+      accessibilityLabel: 'chat.message.waitingForResponse',
+    });
     expect(renderer?.root.findAllByType(AccessoryProbe)).toHaveLength(1);
   });
 });

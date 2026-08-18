@@ -1,6 +1,7 @@
 export { MessagePart } from './components/message-part';
 export type {
   MessagePartErrorProps,
+  MessagePartPendingProps,
   MessagePartPlaceholderProps,
   MessagePartReasoningProps,
   MessagePartRootProps,
@@ -11,6 +12,7 @@ export type {
   MessagePartTone,
   MessagePartToolProps,
   MessagePartTranslationProps,
+  MessagePartUnknownProps,
   MessagePartValueSectionProps,
 } from './message-part.types';
 export { formatMessagePartValue, hasMessagePartValue } from './utils/message-part-value';

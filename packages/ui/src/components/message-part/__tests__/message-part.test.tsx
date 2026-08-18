@@ -11,9 +11,10 @@ jest.mock('@cherrystudio/app-icons', () => {
   return {
     ChevronRightIcon: View,
     CircleAlertIcon: View,
-    GlobeIcon: View,
+    GlobeIcon: (props: object) => <View {...props} testID="source-globe-icon" />,
     LanguagesIcon: View,
-    SquareArrowOutUpRightIcon: View,
+    SquareArrowOutUpRightIcon: (props: object) => <View {...props} testID="source-external-icon" />,
+    TriangleAlertIcon: (props: object) => <View {...props} testID="unknown-warning-icon" />,
     WrenchIcon: View,
   };
 });
@@ -53,6 +54,32 @@ jest.mock('../../loading', () => {
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
 }));
+
+jest.mock('react-native-reanimated', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  const useSharedValue = (initialValue: number) => {
+    const ref = React.useRef({
+      get: () => ref.current.value,
+      set: (value: number) => {
+        ref.current.value = value;
+      },
+      value: initialValue,
+    });
+    return ref.current;
+  };
+
+  return {
+    __esModule: true,
+    cancelAnimation: jest.fn(),
+    default: { View },
+    useAnimatedStyle: (factory: () => object) => factory(),
+    useReducedMotion: () => false,
+    useSharedValue,
+    withRepeat: (value: number) => value,
+    withTiming: (value: number) => value,
+  };
+});
 
 describe('MessagePart', () => {
   let renderer: ReactTestRenderer | undefined;
@@ -108,7 +135,62 @@ describe('MessagePart', () => {
     expect(renderer!.root.findByProps({ children: 'Live reasoning' })).toBeDefined();
   });
 
-  it('passes the complete source URL to the caller', () => {
+  it('pulses the complete running tool trigger without removing its status text', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Tool
+          closeAccessibilityLabel="Close"
+          state="running"
+          statusText="Searching"
+          testID="searching"
+          title="Cherry Studio"
+        >
+          <Text>Waiting for results</Text>
+        </MessagePart.Tool>,
+      );
+    });
+
+    expect(renderer!.root.findByProps({ testID: 'searching-running-trigger' })).toBeDefined();
+    expect(renderer!.root.findByProps({ children: 'Searching' })).toBeDefined();
+  });
+
+  it('renders the pending response as an active, accessible status row', () => {
+    act(() => {
+      renderer = create(
+        <MessagePart.Pending accessibilityLabel="Waiting for response" testID="pending" />,
+      );
+    });
+
+    expect(renderer!.root.findByProps({ testID: 'pending' })).toBeDefined();
+    expect(
+      renderer!.root.findByProps({
+        accessibilityLabel: 'Waiting for response',
+        active: true,
+        size: 20,
+      }),
+    ).toBeDefined();
+    expect(renderer!.root.findByProps({ children: '\u00A0' })).toBeDefined();
+  });
+
+  it('renders an unknown part as a compact warning without exposing its type', () => {
+    act(() => {
+      renderer = create(<MessagePart.Unknown label="Unknown Part" testID="unknown" />);
+    });
+
+    const warning = renderer!.root.findAllByProps({ testID: 'unknown' }).at(-1);
+    expect(warning?.props.accessibilityLabel).toBe('Unknown Part');
+    expect(warning?.props.className).toBe(
+      'flex-row items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3',
+    );
+    expect(renderer!.root.findByProps({ testID: 'unknown-warning-icon' }).props.className).toBe(
+      'size-4 shrink-0 text-warning',
+    );
+    expect(renderer!.root.findByProps({ children: 'Unknown Part' }).props.className).toBe(
+      'text-base text-warning',
+    );
+  });
+
+  it('keeps the source URL hidden while passing it to the caller', () => {
     const onPress = jest.fn();
 
     act(() => {
@@ -121,7 +203,14 @@ describe('MessagePart', () => {
       );
     });
 
-    expect(renderer!.root.findByProps({ children: 'cherry-ai.com' })).toBeDefined();
+    expect(renderer!.root.findAllByProps({ children: 'cherry-ai.com' })).toHaveLength(0);
+    expect(renderer!.root.findByProps({ children: 'Cherry Studio' })).toBeDefined();
+    expect(renderer!.root.findByProps({ testID: 'source-globe-icon' }).props.className).toBe(
+      'size-4 shrink-0 text-foreground',
+    );
+    expect(renderer!.root.findByProps({ testID: 'source-external-icon' }).props.className).toBe(
+      'size-4 shrink-0 text-foreground',
+    );
     act(() => renderer!.root.findByProps({ accessibilityRole: 'link' }).props.onPress());
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(onPress).toHaveBeenCalledWith('https://www.cherry-ai.com/docs');

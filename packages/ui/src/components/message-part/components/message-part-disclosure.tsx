@@ -1,7 +1,15 @@
 import { ChevronRightIcon, WrenchIcon } from '@cherrystudio/app-icons';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
-import { type ReactNode, useMemo, useState } from 'react';
-import { ActivityIndicator, Text, useWindowDimensions, View } from 'react-native';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
+import { Text, useWindowDimensions, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '../../bottom-sheet';
@@ -16,6 +24,8 @@ import { MessagePartStatus } from './message-part-status';
 
 const sheetMediumFraction = 0.6;
 const sheetFullFraction = 0.94;
+const runningTriggerOpacity = 0.55;
+const runningTriggerPulseDurationMs = 700;
 
 const toneClassName = {
   danger: 'text-destructive',
@@ -74,36 +84,44 @@ export function MessagePartTool({
 }: MessagePartToolProps) {
   const [isOpen, setIsOpen] = useState(false);
   const colorClassName = toneClassName[statusTone];
+  const isPulsing = state === 'running';
+  const trigger = (
+    <MessagePartStatus
+      accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
+      onPress={() => setIsOpen(true)}
+      testID={`${testID}-trigger`}
+    >
+      {imageSource ? (
+        <Image
+          cachePolicy="memory-disk"
+          className="size-5 shrink-0"
+          contentFit="contain"
+          source={imageSource}
+        />
+      ) : (
+        <Icon className={`size-5 ${colorClassName}`} />
+      )}
+      <Text className={`min-w-0 flex-1 text-base ${colorClassName}`} numberOfLines={1}>
+        {title}
+      </Text>
+      {statusText ? (
+        <Text className={`max-w-[38%] shrink-0 text-base ${colorClassName}`} numberOfLines={1}>
+          {statusText}
+        </Text>
+      ) : null}
+      <ChevronRightIcon className={`size-4 shrink-0 ${colorClassName}`} />
+    </MessagePartStatus>
+  );
 
   return (
     <View className="gap-1.5">
-      <MessagePartStatus
-        accessibilityLabel={statusText ? `${title}, ${statusText}` : title}
-        onPress={() => setIsOpen(true)}
-        testID={`${testID}-trigger`}
-      >
-        {state === 'running' ? (
-          <ActivityIndicator size="small" />
-        ) : imageSource ? (
-          <Image
-            cachePolicy="memory-disk"
-            className="size-5 shrink-0"
-            contentFit="contain"
-            source={imageSource}
-          />
-        ) : (
-          <Icon className={`size-5 ${colorClassName}`} />
-        )}
-        <Text className={`min-w-0 flex-1 text-base ${colorClassName}`} numberOfLines={1}>
-          {title}
-        </Text>
-        {statusText ? (
-          <Text className={`max-w-[38%] shrink-0 text-base ${colorClassName}`} numberOfLines={1}>
-            {statusText}
-          </Text>
-        ) : null}
-        <ChevronRightIcon className={`size-4 shrink-0 ${colorClassName}`} />
-      </MessagePartStatus>
+      {isPulsing ? (
+        <MessagePartRunningPulse testID={`${testID}-running-trigger`}>
+          {trigger}
+        </MessagePartRunningPulse>
+      ) : (
+        trigger
+      )}
       {isOpen ? (
         <MessagePartSheet
           closeAccessibilityLabel={closeAccessibilityLabel}
@@ -116,6 +134,36 @@ export function MessagePartTool({
         </MessagePartSheet>
       ) : null}
     </View>
+  );
+}
+
+function MessagePartRunningPulse({ children, testID }: { children: ReactNode; testID: string }) {
+  const reducedMotion = useReducedMotion();
+  const opacity = useSharedValue(1);
+
+  useEffect(() => {
+    cancelAnimation(opacity);
+    opacity.set(1);
+
+    if (!reducedMotion) {
+      opacity.set(
+        withRepeat(
+          withTiming(runningTriggerOpacity, { duration: runningTriggerPulseDurationMs }),
+          -1,
+          true,
+        ),
+      );
+    }
+
+    return () => cancelAnimation(opacity);
+  }, [opacity, reducedMotion]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.get() }), [opacity]);
+
+  return (
+    <Animated.View style={animatedStyle} testID={testID}>
+      {children}
+    </Animated.View>
   );
 }
 

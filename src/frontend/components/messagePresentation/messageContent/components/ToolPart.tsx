@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
 
 import { getBuiltInToolPresentation } from '../../utils/builtInToolPresentation/builtInToolPresentation';
-import { ToolPartDisclosure } from './ToolPartDisclosure';
 
 type ToolMessagePart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
 
@@ -23,13 +22,14 @@ export function ToolPart({ part }: ToolPartProps) {
     (part.state === 'approval-responded' && part.approval.approved);
 
   return (
-    <ToolPartDisclosure
+    <MessagePart.Tool
+      closeAccessibilityLabel={t('common.close')}
       icon={toolPresentation?.icon}
       imageSource={toolPresentation?.imageSource}
-      isRunning={isRunning}
+      state={isRunning ? 'running' : 'complete'}
       statusText={statusText}
       statusTone={getToolStatusTone(part)}
-      testIDPrefix="tool-part"
+      testID="tool-part"
       title={title}
     >
       <MessagePart.ValueSection title={t('chat.tool.arguments')} value={part.input} />
@@ -46,7 +46,7 @@ export function ToolPart({ part }: ToolPartProps) {
           {t('chat.tool.noOutput')}
         </Text>
       ) : null}
-    </ToolPartDisclosure>
+    </MessagePart.Tool>
   );
 }
 

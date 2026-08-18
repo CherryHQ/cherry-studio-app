@@ -1,5 +1,6 @@
-import { DotMatrixSquare20, MessagePart } from '@cherrystudio/ui/components';
+import { MessagePart } from '@cherrystudio/ui/components';
 import { memo, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import Animated from 'react-native-reanimated';
 
 import { MessageParts } from '../../messageContent';
@@ -22,15 +23,11 @@ const AssistantMessageBody = memo(function AssistantMessageBody({
 }: {
   message: MessagePresentationItem;
 }) {
+  const { t } = useTranslation();
   const isPendingEmptyMessage = message.status === 'pending' && !message.data.parts?.length;
 
   return isPendingEmptyMessage ? (
-    // 这一行不含文字，所以要自己撑到一行正文的高度——否则只有 20px 的圆点撑高，比接下来
-    // 顶替它的思考行/工具行/正文矮 4px，切换那一帧整条消息在锚点正下方跳一下（48→52）。
-    <MessagePart.Status>
-      <DotMatrixSquare20 active size={20} />
-      <MessagePart.StatusTextFloor />
-    </MessagePart.Status>
+    <MessagePart.Pending accessibilityLabel={t('chat.message.waitingForResponse')} />
   ) : (
     <MessageParts message={message} />
   );
