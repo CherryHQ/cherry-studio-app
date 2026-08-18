@@ -8,18 +8,17 @@ import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
-import { type HeaderToolbarAction, TabRootHeader } from '@/frontend/components/headers';
+import { DrawerRootHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {
   areAllSelected,
   toggleSelection,
-  useMessageListBottomInset,
-} from '@/frontend/components/messageTabs';
-import { SelectionToolbar } from '@/frontend/components/messageTabs/SelectionToolbar/SelectionToolbar';
-import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
+  useListBottomInset,
+} from '@/frontend/components/selection';
+import { SelectionToolbar } from '@/frontend/components/selection/SelectionToolbar/SelectionToolbar';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
 
 import { AssistantListSearchBar } from './AssistantListSearchBar/AssistantListSearchBar';
-import { useAssistantListEditing } from './useAssistantListEditing/useAssistantListEditing';
 
 export default function AssistantListScreen() {
   const { t } = useTranslation();
@@ -27,8 +26,7 @@ export default function AssistantListScreen() {
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant, deleteAssistants } = useAssistantMutations();
   const { alert } = useAlert();
-  const updatePlatformEditing = useAssistantListEditing();
-  const bottomInset = useMessageListBottomInset();
+  const bottomInset = useListBottomInset();
   const [isEditing, setIsEditing] = useState(false);
   const [pendingDeletionIds, setPendingDeletionIds] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -65,13 +63,11 @@ export default function AssistantListScreen() {
 
     setSearchText('');
     setIsEditing(true);
-    updatePlatformEditing(true);
-  }, [isBatchDeleting, updatePlatformEditing]);
+  }, [isBatchDeleting]);
   const exitEditing = useCallback(() => {
     setIsEditing(false);
     setSelectedIds(new Set());
-    updatePlatformEditing(false);
-  }, [updatePlatformEditing]);
+  }, []);
   const toggleAssistant = useCallback((assistantId: string) => {
     setSelectedIds((current) => toggleSelection(current, assistantId));
   }, []);
@@ -170,7 +166,7 @@ export default function AssistantListScreen() {
 
   return (
     <>
-      <TabRootHeader
+      <DrawerRootHeader
         leftActions={leftActions}
         rightActions={isEditing ? undefined : rightActions}
         title={t('assistant.list.title')}

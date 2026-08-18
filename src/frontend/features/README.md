@@ -81,21 +81,19 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
 - `assistants/`: assistant list and assistant editing flows.
 - `settings/`: settings home (with the animated profile hero at the top), about/data/model/
   provider/web-search/mcp/permissions settings screens, and settings-specific UI controls.
-- `paintings/`: painting composer (image generation), the drawings tab body (`DrawingList`) hosted
-  by the messages shell, the nested full-screen viewer (`PaintingViewerScreen/`) and conversation
-  (`PaintingConversationScreen/`) screens, bundled prompt templates (`templates/`), and the
-  painting data hooks (`hooks/usePaintings`).
-- `messages/`: the `(messages)` tab shell — scope tabs (`MessageScopeTabs/`), the two-page
-  `MessagePager`, and the multi-select chrome. It hosts the conversations and drawings tab bodies
-  through their feature `index.ts` and owns no tab-specific data.
-- `topics/`: the conversations tab body — the topic list, topic actions/dialogs, the
-  `TopicListProvider` topic data, and `useTopicSelectionSource`. It renders as a tab inside
-  `messages/` rather than being a route itself.
-- `search/`: app-level native search entry and screen shell.
-- `home/`: home-tab content (activity calendar) and the header-right avatar button.
+- `paintings/`: painting composer (image generation), the painting history screen
+  (`PaintingHistoryScreen` hosting `DrawingList`), the nested full-screen viewer
+  (`PaintingViewerScreen/`) and conversation (`PaintingConversationScreen/`) screens, bundled
+  prompt templates (`templates/`), and the painting data hooks (`hooks/usePaintings`).
+- `topics/`: the topic management screen (`TopicListScreen` at `/topics`) — the topic list, topic
+  actions/dialogs, the `TopicListProvider` topic data, and `useTopicSelectionSource`. The sidebar
+  reuses its data layer through the feature `index.ts`.
+- `sidebar/`: the drawer sidebar compound (`Sidebar.Header/Body/Footer`) — navigation rows, the
+  recent-topics list, and the bottom dock.
+- `home/`: the home drawer scene (activity calendar) and the header-right avatar button.
 - `onboarding/`: onboarding flow and the logo draw animation.
 
 Reusable modules that remain in `src/frontend/components` include app shell modules (`headers`,
-`navigation`), shared flows such as `modelPicker`, the neutral `messageTabs`
-scope/selection/source-registry shared by the messages shell and its tab bodies, shared UI
-behavior such as `AlertProvider`, and native dependency adapters such as `nativePrimitives`.
+`navigation`), shared flows such as `modelPicker`, the neutral `selection`
+multi-select/source-registry shared by list screens, shared UI behavior such as `AlertProvider`,
+and native dependency adapters such as `nativePrimitives`.

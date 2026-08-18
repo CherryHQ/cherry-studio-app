@@ -21,16 +21,15 @@ import {
   type ComposerInitialAttachment,
   createPhotoAttachmentDraft,
 } from '@/frontend/components/composer/utils/composerAttachments';
-import {
-  useMessageListBottomInset,
-  useMessagePendingDeletionIds,
-  useMessageScope,
-  useMessageSelectionActions,
-  useMessageSelectionState,
-  useRegisterSelectionSource,
-} from '@/frontend/components/messageTabs';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
+import {
+  useListBottomInset,
+  usePendingDeletionIds,
+  useRegisterSelectionSource,
+  useSelectionActions,
+  useSelectionState,
+} from '@/frontend/components/selection';
 
 import {
   type PaintingGalleryItem,
@@ -54,15 +53,16 @@ export function DrawingList() {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const router = useRouter();
-  const { scope } = useMessageScope();
-  const { isEditing, selectedIds } = useMessageSelectionState();
-  const pendingDeletionIds = useMessagePendingDeletionIds('drawings');
-  const { toggleId } = useMessageSelectionActions();
-  const selectionSource = usePaintingSelectionSource(isEditing && scope === 'drawings');
+  const { isEditing, selectedIds } = useSelectionState();
+  const pendingDeletionIds = usePendingDeletionIds('drawings');
+  const { toggleId } = useSelectionActions();
+  const selectionSource = usePaintingSelectionSource(isEditing);
   useRegisterSelectionSource('drawings', selectionSource);
-  const bottomInset = useMessageListBottomInset();
+  const bottomInset = useListBottomInset();
   const { width: windowWidth } = useWindowDimensions();
-  const recentPhotos = useRecentPaintingPhotos(scope === 'drawings');
+  // Mounted means visible now that the gallery owns a whole screen, so photo
+  // access is simply always armed here.
+  const recentPhotos = useRecentPaintingPhotos(true);
   const requestPhotoAccess = recentPhotos.requestAccess;
   const paintings = usePaintings();
   const gallery = usePaintingGalleryEntries(paintings.paintings);
@@ -152,9 +152,10 @@ export function DrawingList() {
   return (
     <ScrollView
       className="flex-1 bg-background"
-      // Stable across the edit⇄done flip (see useMessageListBottomInset) so the
+      // Stable across the edit⇄done flip (see useListBottomInset) so the
       // gallery never reflows on toggle.
       contentContainerStyle={{ flexGrow: 1, paddingBottom: bottomInset }}
+      contentInsetAdjustmentBehavior="automatic"
       onScroll={({ nativeEvent }) => {
         const distanceToEnd =
           nativeEvent.contentSize.height -

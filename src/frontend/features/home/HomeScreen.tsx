@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { TabRootHeader } from '@/frontend/components/headers';
+import { DrawerRootHeader } from '@/frontend/components/headers';
 import type { HeaderToolbarAction } from '@/frontend/components/headers/BackHeader/BackHeader.types';
 
 import { AiUsageSummaryCard } from './aiUsage';
@@ -17,7 +17,7 @@ export default function HomeScreen() {
 
   return (
     <>
-      <TabRootHeader rightActions={rightActions} title={t('navigation.home')} />
+      <DrawerRootHeader rightActions={rightActions} title={t('navigation.home')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

@@ -3,10 +3,9 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import sharp from 'sharp';
 import subsetFont from 'subset-font';
 
-import { iconRegistry, tabBarIcons } from '../src/registry';
+import { iconRegistry } from '../src/registry';
 
 /**
  * Regenerates everything derived from `src/registry.ts`:
@@ -15,8 +14,6 @@ import { iconRegistry, tabBarIcons } from '../src/registry';
  *   - `src/fonts/MaterialSymbols.ttf` — Material Symbols 400, subset to exactly the registry's
  *     glyphs (the full face is ~956KB; the subset is a few KB) — embedded on Android via the
  *     expo-font config plugin
- *   - `src/tab-icons/<tab>.png` — Android bottom-tab drawables (the native tab bar takes image
- *     sources, not components)
  *
  * Material names are validated against expo-symbols' own codepoint map, so the generator fails
  * loudly on a typo instead of shipping a tofu glyph. Run with `pnpm generate:icons`, which also
@@ -30,7 +27,6 @@ const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const srcDir = join(packageRoot, 'src');
 const generatedDir = join(srcDir, 'generated');
 const fontsDir = join(srcDir, 'fonts');
-const tabIconsDir = join(srcDir, 'tab-icons');
 
 // expo-symbols' exports map only exposes its entry points, so navigate from the resolved
 // entry (build/index.js) to the codepoint map instead of resolving package.json.
@@ -42,11 +38,6 @@ const fullFontPath = join(
   dirname(require.resolve('@expo-google-fonts/material-symbols/400Regular')),
   'MaterialSymbols_400Regular.ttf',
 );
-
-// The package exports plain files ("./*"), so the SVG path resolves directly.
-function materialSvgPath(name: string) {
-  return require.resolve(`@material-symbols/svg-400/outlined/${name}.svg`);
-}
 
 function toKebabCase(value: string) {
   return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
@@ -68,10 +59,8 @@ function glyphFor(material: string): { char: string; literal: string } {
 async function main() {
   rmSync(generatedDir, { recursive: true, force: true });
   rmSync(fontsDir, { recursive: true, force: true });
-  rmSync(tabIconsDir, { recursive: true, force: true });
   mkdirSync(generatedDir, { recursive: true });
   mkdirSync(fontsDir, { recursive: true });
-  mkdirSync(tabIconsDir, { recursive: true });
 
   const exportNames = Object.keys(iconRegistry).sort() as (keyof typeof iconRegistry)[];
   const exportLines: string[] = [
@@ -109,18 +98,8 @@ export default createIcon({ displayName: '${exportName}', sf: '${entry.sf}', gly
   });
   writeFileSync(join(fontsDir, 'MaterialSymbols.ttf'), subset);
 
-  for (const [tab, material] of Object.entries(tabBarIcons)) {
-    glyphFor(material); // validate the name even though the PNG is rendered from the SVG
-
-    await sharp(readFileSync(materialSvgPath(material)), { density: 384 })
-      .resize(128, 128, { background: { r: 0, g: 0, b: 0, alpha: 0 }, fit: 'contain' })
-      .png()
-      .toFile(join(tabIconsDir, `${tab}.png`));
-  }
-
   console.log(
-    `Generated ${exportNames.length} icons, ${Object.keys(tabBarIcons).length} tab PNGs, ` +
-      `and a ${subset.byteLength}-byte Material subset font`,
+    `Generated ${exportNames.length} icons and a ${subset.byteLength}-byte Material subset font`,
   );
 }
 

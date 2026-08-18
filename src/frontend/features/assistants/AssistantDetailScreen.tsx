@@ -28,7 +28,7 @@ export default function AssistantDetailScreen() {
 
     router.dismissTo({
       params: { topicId: returnTopicId },
-      pathname: '/topics',
+      pathname: '/',
     });
   }, [returnTopicId, router]);
   const openEditAssistant = useCallback(() => {
@@ -40,7 +40,7 @@ export default function AssistantDetailScreen() {
   // Lands on the new-topic screen with the assistant carried along, so the
   // first message creates a topic already bound to it.
   const startChat = useCallback(() => {
-    router.push({ params: { assistantId }, pathname: '/topics' });
+    router.push({ params: { assistantId }, pathname: '/' });
   }, [assistantId, router]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -77,8 +77,8 @@ export default function AssistantDetailScreen() {
         )}
       </ScrollView>
       {assistant ? (
-        // The screen sits above the tab bar, so the home indicator is this
-        // button's only neighbour and it has to keep clear of it itself.
+        // The home indicator is this button's only neighbour, so the button
+        // has to keep clear of it itself.
         <View
           className="px-4 pt-2"
           style={{ paddingBottom: Math.max(insets.bottom, screenBottomActionInset) }}
