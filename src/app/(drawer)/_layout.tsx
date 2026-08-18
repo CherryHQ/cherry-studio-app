@@ -57,7 +57,6 @@ export default function DrawerLayout() {
       <Drawer.Screen name="home" />
       <Drawer.Screen name="assistants" />
       <Drawer.Screen name="drawings" />
-      <Drawer.Screen name="settings" />
     </Drawer>
   );
 }

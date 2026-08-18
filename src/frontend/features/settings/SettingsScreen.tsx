@@ -5,25 +5,25 @@ import {
   DatabaseIcon,
   InfoIcon,
   LockIcon,
-  MenuIcon,
   NetworkIcon,
   PersonCropSquareOnSquareAngledIcon,
   SparklesIcon,
+  XIcon,
 } from '@cherrystudio/app-icons';
-import { Section } from '@cherrystudio/ui/components';
+import { Section, Surface } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { HeaderIconButton, useOpenDrawer } from '@/frontend/components/headers';
 import { Image } from '@/frontend/components/nativePrimitives';
 import { usePreference } from '@/frontend/data/hooks';
-import { profileHero } from '@/frontend/utils/constants';
+import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import { settingsSheet } from '@/frontend/utils/constants';
 
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
 
@@ -32,10 +32,15 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
-  const openDrawer = useOpenDrawer();
   const [userName] = usePreference('app.user.name');
+  const [groupedBackgroundColor, foregroundColor] = useThemeColor([
+    'grouped-background',
+    'foreground',
+  ]);
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
+  const closeRadius = settingsSheet.closeSize / 2;
+  const closeInset = settingsSheet.cornerRadius - closeRadius;
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
@@ -49,7 +54,7 @@ export default function SettingsScreen() {
   // Own the insets explicitly: `never` keeps the scroll-offset zero point stable
   // (so scrollY reads 0 at rest and negative on iOS overscroll), which the hero
   // animation depends on. No top padding: the hero box is pinned to content y=0
-  // and draws under the status bar, exactly like the reference header.
+  // and runs to the sheet's own top edge.
   const contentContainerStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
 
   return (
@@ -144,19 +149,40 @@ export default function SettingsScreen() {
           </Section>
         </View>
       </Animated.ScrollView>
-      <ProfileStickyBar scrollY={scrollY} topInset={insets.top} userName={userName} />
-      {/* The sticky bar is pointerEvents:none, so the drawer trigger lives in its
-          own tappable overlay on top. The translucent chip keeps the glyph legible
-          over the arbitrary hero photo in both themes. */}
-      <View
-        className="absolute left-4 justify-center"
-        style={{ height: profileHero.barHeight, top: insets.top }}
-      >
-        <View className="overflow-hidden rounded-full bg-grouped-background/70">
-          <HeaderIconButton accessibilityLabel={t('navigation.openMenu')} onPress={openDrawer}>
-            <MenuIcon className="size-6 text-foreground" />
-          </HeaderIconButton>
-        </View>
+      {/* No top inset above: the sheet starts below the status bar, but
+          `useSafeAreaInsets` still reports the window's, so honoring it here
+          would push everything down by a status bar that isn't there. */}
+      <ProfileStickyBar scrollY={scrollY} topInset={0} userName={userName} />
+      {/* The sticky bar is pointerEvents:none, so the close control lives in its
+          own tappable overlay on top. Its inset makes it concentric with the
+          sheet's corner: nested rounded rects only read as nested when they
+          share a center. Dragging the sheet down is not enough on its own here —
+          the hero owns the top of the screen and swallows that gesture. */}
+      <View className="absolute" style={{ right: closeInset, top: closeInset }}>
+        <Surface
+          className="bg-grouped-background"
+          cornerRadius={closeRadius}
+          interactive
+          style={{ height: settingsSheet.closeSize, width: settingsSheet.closeSize }}
+          // Glass refracts what is behind it, and the hero photo it sits on is
+          // arbitrary; the tint is what keeps the glyph legible over any of them.
+          tintColor={groupedBackgroundColor}
+        >
+          <Pressable
+            accessibilityLabel={t('common.close')}
+            accessibilityRole="button"
+            onPress={router.back}
+            style={({ pressed }) => ({
+              alignItems: 'center',
+              height: '100%',
+              justifyContent: 'center',
+              opacity: pressed ? 0.6 : 1,
+              width: '100%',
+            })}
+          >
+            <XIcon color={foregroundColor} size={18} />
+          </Pressable>
+        </Surface>
       </View>
     </View>
   );

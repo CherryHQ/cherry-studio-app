@@ -57,14 +57,17 @@ Before enabling it, verify:
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
 - The root Stack hosts the `(drawer)` group (header hidden) plus root-level `onboarding`, `topics`
-  (topic management), and `paintings` screens.
-- `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) with five
-  scenes: `(chat)` (the initial route), home, assistants, drawings, and settings. The sidebar is the
+  (topic management), `settings`, and `paintings` screens.
+- `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) with four
+  scenes: `(chat)` (the initial route), home, assistants, and drawings. The sidebar is the
   `features/sidebar` compound; every scene's header leads with a hamburger that opens it.
   `DrawerActions.openDrawer()` only reaches ancestors, so a screen that needs that hamburger has to
   be a drawer scene — which is why the drawings history lives at `/drawings` rather than under the
   root stack's `paintings` group.
-- Settings is a normal nested Stack inside its drawer scene (`src/app/(drawer)/settings/`).
+- Settings is a root-level modal (`src/app/settings/`) with its own nested Stack, opened from the
+  sidebar dock. iOS presents it as a page sheet: it covers the drawer instead of replacing it, so
+  dismissing it returns you to the sidebar, and its root screen draws a close button rather than a
+  hamburger. Use `modal` and not `formSheet` for this shape — see below.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
   nested native Stack (for `Stack.Toolbar`/`Stack.SearchBar` APIs) and wraps `ChatScreen` in
   `ChatProvider`. The provider subscribes to the app-owned Chat Runtime; route unmount does not
@@ -86,7 +89,9 @@ and Reduce Motion behavior.
 
 Model selection is a reusable component-level `ModelPickerBottomSheet`. It is used by chat input and settings/model selection, includes search, tags, grouped model rows, pinning, and an 85% snap point.
 
-Route-level `formSheet` remains appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. No current route uses it; settings is a drawer scene with its own nested stack.
+Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
+
+Reach for `presentation: 'modal'` rather than `'formSheet'` unless you actually need detents. On iOS both present as a page sheet, but with `formSheet` (`react-native-screens` 4.25) the sheet's content view comes up offset upward by the height of its own first child. A full-height first child — a `flex: 1` scroll view, say — is then entirely off screen, and the page looks empty apart from whatever is absolutely positioned. Fast Refresh re-lays-out the sheet and hides the bug, so verify this kind of screen from a cold start.
 
 Recommended shape:
 

@@ -39,7 +39,10 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
       closeDrawer: () => navigation.closeDrawer(),
       navigateAssistants: () => navigation.navigate('assistants'),
       openPaintings: () => navigation.navigate('drawings'),
-      openSettings: () => navigation.navigate('settings'),
+      // Settings is a root-stack sheet, so it covers the drawer rather than
+      // replacing it. The drawer deliberately stays open underneath: dismissing
+      // the sheet drops you back into the sidebar you opened it from.
+      openSettings: () => router.push('/settings'),
       openTopicList: () => router.push('/topics'),
       startNewChat: () => {
         // No topic row is created here: the chat surface with no `topicId` is

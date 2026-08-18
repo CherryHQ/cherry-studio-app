@@ -105,6 +105,15 @@ function RootStack() {
           headerBackButtonDisplayMode: 'minimal',
         }}
       />
+      {/* Settings is a sheet, not a drawer scene: it is a detour out of whatever
+          you were doing rather than a place you navigate to, and dismissing it
+          should put you back exactly where you were. Its own nested stack draws
+          the headers, so this level shows none.
+          `modal`, not `formSheet`, even though iOS presents both as a page
+          sheet: with `formSheet` the sheet's content view comes up offset by
+          the height of its own first child, which leaves a full-height child
+          (this screen's scroll view) entirely off screen. */}
+      <Stack.Screen name="settings" options={{ headerShown: false, presentation: 'modal' }} />
       <Stack.Screen
         name="paintings/index"
         options={{
