@@ -38,6 +38,11 @@ response and running reasoning. Both stories compose the same public components 
 visual comparison. Disclosure rows remain interactive, so their real detail sheets can be inspected
 without leaving the page.
 
+Application schema adapters are exercised separately under `Message Presentation/*`, sourced from
+`.rnstorybook/stories/message-presentation`. Those stories use the real application rows and
+dispatchers with deterministic in-memory i18n, preference, file, and data providers; they do not
+start the production backend.
+
 Use kebab-case filenames and import components through the public
 `@cherrystudio/ui/components` entry point. Run Storybook from the workspace root:
 
