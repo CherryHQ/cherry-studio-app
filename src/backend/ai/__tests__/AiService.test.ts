@@ -56,31 +56,6 @@ describe('AiService.listModels authentication adapters', () => {
     jest.restoreAllMocks();
   });
 
-  it('passes the Copilot serving-token adapter to model listing', async () => {
-    const provider = createProvider({
-      defaultChatEndpoint: ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS,
-      endpointConfigs: {
-        [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: {
-          adapterFamily: 'github-copilot-openai-compatible',
-          baseUrl: 'https://api.githubcopilot.com',
-        },
-      },
-      id: 'copilot',
-      presetProviderId: 'copilot',
-    });
-    const services = createServices({ provider });
-    jest
-      .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
-
-    await new AiService(services).listModels({ providerId: provider.id, throwOnError: true });
-
-    expect(services.oauth.getCopilotServingToken).toHaveBeenCalledWith(
-      expect.objectContaining({ 'Editor-Plugin-Version': expect.any(String) }),
-      undefined,
-    );
-  });
-
   it('passes the Vertex service-account adapter to model listing', async () => {
     const provider = createProvider({
       authType: 'iam-gcp',
@@ -1084,11 +1059,7 @@ describe('AiService MCP tool injection', () => {
   });
 });
 
-type TestAiServices = Omit<AiServiceDependencies, 'oauth' | 'tools' | 'vertexAuth'> & {
-  oauth: {
-    authenticatedFetch: jest.Mock;
-    getCopilotServingToken: jest.Mock;
-  };
+type TestAiServices = Omit<AiServiceDependencies, 'tools' | 'vertexAuth'> & {
   tools: {
     resolveForRequest: jest.Mock;
   };
@@ -1174,10 +1145,6 @@ function createServices({
     },
     model: {
       getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),
-    },
-    oauth: {
-      authenticatedFetch: jest.fn(),
-      getCopilotServingToken: jest.fn(async () => 'copilot-serving-token'),
     },
     preference: {
       get: jest.fn(async () => webSearchProviderId),
