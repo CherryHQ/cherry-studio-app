@@ -26,9 +26,8 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/frontend` | Features, components, React Query, hooks, i18n, styles, UI utils and types |
 | `src/backend/ai` | AI SDK, provider adapters, MCP runtime, tools, and message conversion |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
-| `src/backend/services` | Workflow module factories, device adapters, external clients, OAuth, avatars, and web search |
+| `src/backend/services` | Workflow module factories, device adapters, external clients, avatars, and web search |
 | `src/shared/contracts` | Workflow-only `Backend` modules, runtime projections, sessions, events, and results |
-| `src/shared/oauth` | OAuth provider registry, definitions, and errors, read by both layers |
 | `src/shared/core` / `src/shared/utils` | Cross-layer foundations and mobile-native pure utilities |
 | `src/types` | Truly global or generated declarations only |
 | `packages/universal/src/ai` | Cross-layer AI tool and transport rules (`@cherrystudio/universal/ai`) |

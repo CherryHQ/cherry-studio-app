@@ -8,7 +8,7 @@
     "files": ["**/png-icons/**", "**/icons-png/**", "babel-plugins/**"],
     "overrides": [
       {
-        "files": ["src/backend/ai/provider/cherryai.ts", "src/backend/services/oauth/**"],
+        "files": ["src/backend/ai/provider/cherryai.ts"],
         "rules": ["react-doctor/no-secrets-in-client-code", "react-doctor/public-env-secret-name"]
       },
       {

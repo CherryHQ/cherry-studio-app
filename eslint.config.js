@@ -296,7 +296,7 @@ module.exports = defineConfig([
   restrictedImports(['src/frontend/features/**/*.{ts,tsx}'], [frontendLayer, frontendFeatureLayer]),
   restrictedImports(['src/shared/**/*.{ts,tsx}'], [sharedLayer]),
   restrictedImports(
-    ['src/shared/contracts/**/*.{ts,tsx}', 'src/shared/oauth/**/*.{ts,tsx}'],
+    ['src/shared/contracts/**/*.{ts,tsx}'],
     [sharedLayer, sharedPlatformIndependence],
   ),
   restrictedImports(

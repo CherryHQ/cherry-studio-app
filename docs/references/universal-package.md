@@ -23,8 +23,7 @@ Desktop's `src/shared` means "shared between the Electron main and renderer proc
 
 The directory layout maps one-to-one onto desktop `src/shared/{data,ai,types,utils}`.
 Mobile-native shared code stays in `src/shared`: `contracts/` (in-process API boundary, the mobile
-counterpart of desktop IPC), `core/logger`, and `oauth/` (the OAuth provider registry, which is
-keyed by mobile provider ids and read by both layers).
+counterpart of desktop IPC) and `core/logger`.
 
 ## Admission Criteria
 
@@ -32,8 +31,8 @@ Apply these when deciding whether a desktop `src/shared` file belongs in the pac
 
 1. Reject files that name Electron surfaces (windows, IPC channels, settings routes, boot config,
    the v1→v2 migration wizard).
-2. Reject files that encode host-OS capabilities mobile cannot have (binary tool installation, CLI
-   OAuth launch, local ONNX runtimes, OCR file processing).
+2. Reject files that encode host-OS capabilities mobile cannot have (binary tool installation,
+   local ONNX runtimes, OCR file processing).
 3. Admit pure logic consumed by the mobile runtime, or shapes of data that mobile persists, backs
    up, or exchanges with desktop.
 4. Check the import graph: a file whose only consumers are desktop-process-only files is not

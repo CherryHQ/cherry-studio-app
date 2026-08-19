@@ -46,8 +46,8 @@ export function createEmptyProviderFormValues(): ProviderFormValues {
 /**
  * Endpoints an existing provider offers, in form order: its default chat
  * endpoint first, then everything else it has configured or could configure.
- * Empty when the provider's auth type has no editable URLs at all (AWS, GCP,
- * OAuth), which is what makes a screen drop the endpoint slots entirely.
+ * Empty when the provider's auth type has no editable URLs at all (AWS, GCP),
+ * which is what makes a screen drop the endpoint slots entirely.
  */
 export function resolveProviderFormEndpointTypes(provider: Provider): readonly EndpointType[] {
   return canEditProviderEndpoint(provider)

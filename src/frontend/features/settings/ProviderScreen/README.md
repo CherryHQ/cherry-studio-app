@@ -32,7 +32,7 @@ Screens differ by which slots they compose, not by flags:
   per-key state, managed from the detail page — and passes the provider's built-in logo as
   `ProviderForm.Avatar`'s fallback.
 
-A provider whose auth type has no editable URL (AWS, GCP, OAuth) yields no endpoint types, and both
+A provider whose auth type has no editable URL (AWS, GCP) yields no endpoint types, and both
 endpoint slots render nothing.
 
 ## Connectivity Check

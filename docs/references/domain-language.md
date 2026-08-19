@@ -132,15 +132,6 @@ _Avoid_: Web Search Provider
 An external search/fetch provider configured by web-search preferences and executed by WebSearchService.
 _Avoid_: Provider-Native Web Search
 
-**CherryIN OAuth Session**:
-The CherryIN authorization state that stores OAuth credentials and OAuth-derived API keys for the CherryIN Provider.
-_Avoid_: CherryAI signature, manual API key
-
-**CherryIN Client**:
-The mobile external-account client for CherryIN profile and balance requests. Authentication stays
-owned by the provider-aligned OAuth Runtime Service.
-_Avoid_: CherryIN Service, OAuth runtime
-
 **CherryAI Signature**:
 The request signing data added to CherryAI chat completion requests.
 _Avoid_: OAuth token, API key rotation

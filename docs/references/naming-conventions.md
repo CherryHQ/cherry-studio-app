@@ -76,7 +76,7 @@ singular nouns.
 
 For new mobile-owned acronyms in `PascalCase` or `camelCase`, capitalize only the first letter:
 `HttpClient`, `UserId`, `McpServer`, `httpClient`. Desktop-aligned names and public shared contracts
-retain their existing upstream spelling, such as `OAuthRuntimeService`.
+retain their existing upstream spelling, such as `McpRuntimeService`.
 
 Every Drizzle table in `src/backend/data/db/schemas` exports `XxxRow` and `InsertXxxRow` inferred
 types. The stem matches the table constant: `userModelTable` maps to `UserModelRow` and
