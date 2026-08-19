@@ -39,6 +39,7 @@ They are the source of truth for how the repository works today.
 
 | Document | Description |
 | --- | --- |
+| [Agent Architecture](./references/agent/README.md) | Mobile-owned Agent Protocol, per-session record authority, and independent Agent Runtime integration for v2 (design, not yet implemented) |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Provider/model resolution, AI SDK adapters, options, and transport behavior |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Chat Runtime streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
@@ -55,6 +56,13 @@ They are the source of truth for how the repository works today.
 
 - Put task-oriented procedures under `docs/guides`.
 - Put current technical facts, rules, and constraints under `docs/references`.
+- A reference may describe a design that is not yet built, but only when it carries a
+  `Status:` line naming its state (`design`, `as-built`, `Phase N landed`) and it does not
+  overwrite the current-state description of anything it will replace. Current-state references
+  change in the same PR as the code, never ahead of it — a reference that describes an intended
+  future as if it were present is the one failure mode this rule exists to prevent. Promote a
+  design document to current-state prose as each phase lands, and record superseded decisions as
+  explicit deviations rather than silent edits.
 - Keep module-specific `README.md` files beside the code they describe and link to these documents
   for repository-wide rules.
 - Do not add ADR or TODO directories. Git history preserves superseded decisions; unfinished work
