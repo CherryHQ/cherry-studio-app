@@ -14,8 +14,9 @@ protocol** and **which execution behavior belongs to the reusable runtime**.
 > Every Cherry conversation is an agent session. A plain assistant chat is bound to an in-app
 > Runtime; a coding session may be bound to a LAN or cloud Runtime. They share one application
 > protocol and renderer, but not one persistence policy: a local session keeps its complete record
-> locally, while a remote session keeps only a compact local projection and reads execution detail
-> from its authoritative Runtime endpoint on demand.
+> locally, while a remote session keeps a selective compact projection of Mobile-initiated
+> executions and reads execution detail from its authoritative Runtime endpoint on demand. That
+> projection may remain permanently stale relative to activity on the remote PC.
 
 Five rules follow, and everything else in these documents is a consequence of them:
 
@@ -36,8 +37,8 @@ Five rules follow, and everything else in these documents is a consequence of th
 5. **Authority is explicit per session.** A `local-canonical` session treats Mobile persistence as
    its complete record. A `remote-canonical` session treats the LAN or cloud execution store as the
    authority and never mirrors raw reasoning, MCP payloads, command logs, traces, or other detailed
-   execution content into Mobile persistence. The local projection contains only what list,
-   transcript, search, and offline shells need.
+   execution content into Mobile persistence. Its local projection records only Mobile-initiated
+   executions; remote-native activity is neither constrained nor automatically imported.
 
 Runtime implementation and deployment location are separate dimensions. For example, a coding
 Runtime may be hosted over LAN or in the cloud, while an AI SDK Runtime may run locally or behind a

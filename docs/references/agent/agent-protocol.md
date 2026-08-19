@@ -38,9 +38,10 @@ Runtime identity may be displayed for selection and diagnostics; it must not dri
 sequence gap produces an explicit protocol error. Nothing is silently ignored or approximated as
 success.
 
-**R6 — Persist a projection, not a remote mirror.** Session record mode decides which facts Mobile
-may persist. A remote session may carry stable summaries and opaque locators, but raw execution
-detail is neither pushed through the event stream nor written to Mobile storage.
+**R6 — Persist a selective projection, not a remote mirror.** Session record mode decides which
+facts Mobile may persist. A remote session carries compact records only for Mobile-initiated
+executions. Remote-native turns are not imported, and raw execution detail is neither pushed
+through the event stream nor written to Mobile storage.
 
 ### 1.1 Ownership and non-goals
 
@@ -124,7 +125,7 @@ type AgentSessionView = {
   }
   recordMode: 'local-canonical' | 'remote-canonical'
   workspaceId: string | null
-  activeMessageId: string | null   // branch tip
+  activeMessageId: string | null   // tip of Mobile's local projection, not the remote head
   status: 'idle' | 'running' | 'awaiting-approval' | 'cancelling'
   createdAt: string                // ISO 8601
   updatedAt: string
@@ -142,13 +143,16 @@ The two modes have different source-of-truth rules:
 | Fact | `local-canonical` | `remote-canonical` |
 | --- | --- | --- |
 | Cherry-only metadata such as local id, pin/order, manual title, and binding | Mobile record | Mobile record |
-| User input, final assistant output, and execution status | Mobile record | Remote record; compactly projected for offline display |
+| User input, final assistant output, and execution status | Mobile record | Remote record; selectively projected only for Mobile-initiated executions |
 | Raw reasoning, tool/MCP input and output, command logs, traces | Mobile record when the product retains it | Remote execution store only |
 | Detail shown after expansion | Read locally | Fetched through the backend adapter; held in memory only |
 
 There is no conflict between two complete stores because a remote session has only one complete
 execution record. Mobile remains authoritative for Cherry-only metadata and local UI state; the
-remote service owns execution-derived transcript and detail facts.
+remote service owns execution-derived transcript and detail facts. The Mobile projection may remain
+incomplete and permanently stale after the user continues the same session on the remote PC.
+For `remote-canonical`, `status`, `activeMessageId`, and `updatedAt` describe the last state Mobile
+observed through its own executions, not the remote Session's current state.
 
 Unifying assistant chat and agent session into one aggregate is the main deviation from the desktop
 proposal, which keeps them physically separate. That separation is argued on migration grounds —
@@ -410,6 +414,11 @@ remote authority. Moving to a different authority is a separate export, import, 
 and is out of scope in protocol v1. Treating a compact projection as a complete transcript would
 silently lose execution context, so the host rejects that transition.
 
+For `remote-canonical`, `parentMessageId`, `activeMessageId`, `expectedRevision`, and the local
+message tree describe Mobile's projection only. They are not concurrency guards for the remote
+Session head. A subsequent Mobile command continues against the Runtime's current native context,
+which may include PC-originated turns that Mobile has never observed.
+
 ### 4.1 Envelope
 
 ```ts
@@ -516,9 +525,10 @@ guaranteed by the envelope's gapless `sequence`; a client that detects a gap rel
 rather than attempting delta reconciliation. Mid-stream state is carried in the snapshot
 (§6), so a client joining a running turn never needs the deltas it missed.
 
-For `remote-canonical`, deltas contain compact projection fields only. Raw execution detail is not
-temporarily smuggled through `message.delta`; it remains behind the detail query even while the turn
-is live.
+For `remote-canonical`, deltas exist only for a Mobile-initiated execution and contain compact
+projection fields only. The host does not subscribe to the remote Session's global event stream.
+Raw execution detail is not temporarily smuggled through
+`message.delta`; it remains behind the detail query even while the turn is live.
 
 This is the concrete replacement for whole-message overlays. Today's runtime republishes the entire
 accumulated assistant message on every chunk, which is quadratic in serialized size and repeated
@@ -560,7 +570,8 @@ type AgentSessionSnapshot = {
 ```
 
 Every message in a snapshot obeys `session.recordMode`. A local snapshot may contain inline detail;
-a remote snapshot contains the compact projection only. `AgentPartDetailView` is deliberately not
+a remote snapshot contains only Mobile's selective compact projection. It is not a snapshot of the
+remote Session and need not include PC-originated turns. `AgentPartDetailView` is deliberately not
 part of this type.
 
 Recovery is one loop, identical over every transport:
@@ -571,9 +582,10 @@ Recovery is one loop, identical over every transport:
    to 1.
 
 No frontend client inspects Runtime-native state to recover the application projection. For a
-remote session, the Mobile Agent Host serves the cached compact snapshot first, then asks the
-adapter to advance it from the remote cursor or projection snapshot. Each committed advance arrives
-through normal application events. Detail is independent of recovery and remains on demand.
+remote session, the Mobile Agent Host serves the cached compact snapshot as-is. It may resume a
+Mobile-known unfinished execution by `executionId` and its per-execution cursor, but it never asks
+for messages added elsewhere to the remote Session. Each recovered event for that known execution
+arrives through normal application events. Detail is independent of recovery and remains on demand.
 
 `activeTurn.streamingMessages` is what makes step 1 sufficient mid-turn: the host serves the
 accumulated application projection, so a client joining at any moment gets the complete locally
@@ -718,9 +730,13 @@ suite of its own. See [Agent Runtime](./agent-runtime.md#13-conformance) for the
 13. Every envelope survives a JSON round trip and re-validates against its schema.
 14. A turn settles as `interrupted` when its bound Runtime cannot continue or recover after the
     application loses its execution window; a recoverable detached execution remains resumable.
-15. Autonomous, scheduled, and channel-triggered turns enter through the same command path as
-    client-issued ones.
+15. Cherry-owned autonomous, scheduled, and channel-triggered turns enter through the same command
+    path as client-issued ones; remote-native PC activity is outside this rule.
 16. Raw detail for a `remote-canonical` session is returned only by an explicit detail query and is
     never persisted, indexed, logged, snapshotted, or replayed by Mobile.
 17. A session never changes record authority through ordinary `session.rebind`; an explicit
     transfer or fork must prove it has a complete source record.
+18. A remote PC may continue or mutate its native Session without Mobile coordination. Mobile does
+    not import those turns, and its selective projection is allowed to remain stale indefinitely.
+19. Remote recovery is scoped to Mobile-known `executionId` values and per-execution cursors; it
+    never enumerates or synchronizes the remote Session transcript.
