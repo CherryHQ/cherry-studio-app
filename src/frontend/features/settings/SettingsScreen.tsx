@@ -8,22 +8,19 @@ import {
   NetworkIcon,
   PersonCropSquareOnSquareAngledIcon,
   SparklesIcon,
-  XIcon,
 } from '@cherrystudio/app-icons';
-import { Section, Surface } from '@cherrystudio/ui/components';
+import { Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { Image } from '@/frontend/components/nativePrimitives';
 import { usePreference } from '@/frontend/data/hooks';
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
-import { settingsSheet } from '@/frontend/utils/constants';
 
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
 
@@ -33,14 +30,8 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const [userName] = usePreference('app.user.name');
-  const [groupedBackgroundColor, foregroundColor] = useThemeColor([
-    'grouped-background',
-    'foreground',
-  ]);
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
-  const closeRadius = settingsSheet.closeSize / 2;
-  const closeInset = settingsSheet.cornerRadius - closeRadius;
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
@@ -153,37 +144,18 @@ export default function SettingsScreen() {
           `useSafeAreaInsets` still reports the window's, so honoring it here
           would push everything down by a status bar that isn't there. */}
       <ProfileStickyBar scrollY={scrollY} topInset={0} userName={userName} />
-      {/* The sticky bar is pointerEvents:none, so the close control lives in its
-          own tappable overlay on top. Its inset makes it concentric with the
-          sheet's corner: nested rounded rects only read as nested when they
-          share a center. Dragging the sheet down is not enough on its own here —
-          the hero owns the top of the screen and swallows that gesture. */}
-      <View className="absolute" style={{ right: closeInset, top: closeInset }}>
-        <Surface
-          className="bg-grouped-background"
-          cornerRadius={closeRadius}
-          interactive
-          style={{ height: settingsSheet.closeSize, width: settingsSheet.closeSize }}
-          // Glass refracts what is behind it, and the hero photo it sits on is
-          // arbitrary; the tint is what keeps the glyph legible over any of them.
-          tintColor={groupedBackgroundColor}
-        >
-          <Pressable
-            accessibilityLabel={t('common.close')}
-            accessibilityRole="button"
-            onPress={router.back}
-            style={({ pressed }) => ({
-              alignItems: 'center',
-              height: '100%',
-              justifyContent: 'center',
-              opacity: pressed ? 0.6 : 1,
-              width: '100%',
-            })}
-          >
-            <XIcon color={foregroundColor} size={18} />
-          </Pressable>
-        </Surface>
-      </View>
+      {/* Closing is a native toolbar button rather than a drawn overlay: it puts
+          the control in the same glass circle, at the same place, as the back
+          button on every screen this one pushes. Dragging the sheet down is not
+          enough on its own — the hero owns the top of the screen and swallows
+          that gesture. */}
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          accessibilityLabel={t('common.close')}
+          icon="xmark"
+          onPress={router.back}
+        />
+      </Stack.Toolbar>
     </View>
   );
 }

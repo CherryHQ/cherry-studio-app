@@ -110,15 +110,6 @@ export const profileHero = {
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
 } as const;
 
-// Settings runs as a route-level modal, which iOS presents as a page sheet. The
-// system owns that sheet's corner radius, so this records it rather than sets
-// it: the close button's inset is derived from it so the two circles stay
-// concentric, which is the only way nested rounded rects read as nested.
-export const settingsSheet = {
-  cornerRadius: 38, // measured from the presented sheet, the outer circle of the pair
-  closeSize: 42, // close button diameter, the inner circle
-} as const;
-
 // The drawer sidebar sits still underneath a surface that slides right, so the
 // reveal reads as the display itself moving. The sidebar's own content is what
 // carries the motion: it starts slightly down and scaled in, and catches up as

@@ -66,8 +66,10 @@ Before enabling it, verify:
   root stack's `paintings` group.
 - Settings is a root-level modal (`src/app/settings/`) with its own nested Stack, opened from the
   sidebar dock. iOS presents it as a page sheet: it covers the drawer instead of replacing it, so
-  dismissing it returns you to the sidebar, and its root screen draws a close button rather than a
-  hamburger. Use `modal` and not `formSheet` for this shape — see below.
+  dismissing it returns you to the sidebar. Its root screen keeps the native header — transparent
+  and untitled, with a `xmark` toolbar button where sub-screens put back — so the header does not
+  have to appear out of nothing when a sub-screen is pushed, which is what made the bar jump on
+  entry. Use `modal` and not `formSheet` for this shape — see below.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
   nested native Stack (for `Stack.Toolbar`/`Stack.SearchBar` APIs) and wraps `ChatScreen` in
   `ChatProvider`. The provider subscribes to the app-owned Chat Runtime; route unmount does not
