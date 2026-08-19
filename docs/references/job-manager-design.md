@@ -612,8 +612,8 @@ readers know they are decisions, not oversights:
    documents an interruption path for a session that "goes silent for too long" — which is why
    `KeepAliveCoordinator.handlePlayerStatusUpdate` has to restart playback. The mitigation is the
    exit already named in the appendix (iOS 26 Continued Processing, Android FGS); see
-   [Agent Runtime §9.2](./agent/agent-runtime.md#92-execution-lifetime), which keeps Mobile's bounded
-   execution window separate from detached LAN or cloud execution.
+   [Agent Runtime execution lifetime](./agent/agent-runtime.md#execution-lifetime), which treats
+   Mobile's local execution window as bounded and non-resumable in v1.
 
 ## Open Questions
 

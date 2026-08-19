@@ -39,7 +39,7 @@ They are the source of truth for how the repository works today.
 
 | Document | Description |
 | --- | --- |
-| [Agent Architecture](./references/agent/README.md) | Mobile-owned Agent Protocol, per-session record authority, and independent Agent Runtime integration for v2 (design, not yet implemented) |
+| [Agent Architecture](./references/agent/README.md) | Local-only Agent Protocol, Runtime Router, and independent Pi/AI SDK contract for v1 (design, not yet implemented) |
 | [AI Provider Integration](./references/ai/provider-integration.md) | Provider/model resolution, AI SDK adapters, options, and transport behavior |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Chat Runtime streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
