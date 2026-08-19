@@ -23,7 +23,6 @@ import {
   useProviderApiServiceQueries,
 } from './apiService';
 import { ProviderModelList } from './components/ProviderModelList';
-import { ProviderOauthCard } from './components/ProviderOauthCard';
 import { useProviderDetailSettings } from './detail';
 import { ProviderDetailBanner } from './detail/components/ProviderDetailBanner';
 import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
@@ -395,7 +394,6 @@ export default function ProviderDetailSettingsScreen() {
               // finger that already aimed at the toolbar.
               <>
                 <View className="gap-3">
-                  <ProviderOauthCard provider={provider} />
                   {canEditEndpoint ? (
                     <ProviderApiServiceEndpointField
                       baseUrl={getProviderPrimaryBaseUrl(provider)}

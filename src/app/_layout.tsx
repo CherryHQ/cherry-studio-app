@@ -92,14 +92,6 @@ function RootStack() {
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
       <Stack.Screen
-        name="oauth/authorize"
-        options={{
-          headerStyle: { backgroundColor },
-          headerTransparent: false,
-          presentation: 'modal',
-        }}
-      />
-      <Stack.Screen
         name="topics"
         options={{
           headerBackButtonDisplayMode: 'minimal',
