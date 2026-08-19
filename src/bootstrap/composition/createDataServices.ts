@@ -11,7 +11,6 @@ import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { messageService } from '@/backend/data/services/MessageService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { paintingService } from '@/backend/data/services/PaintingService';
-import { pinService } from '@/backend/data/services/PinService';
 import { providerService } from '@/backend/data/services/ProviderService';
 import { temporaryChatService } from '@/backend/data/services/TemporaryChatService';
 import { topicService } from '@/backend/data/services/TopicService';
@@ -46,7 +45,6 @@ export function createDataServices({
     message: messageService,
     model: modelService,
     painting: paintingService,
-    pin: pinService,
     preference,
     provider: providerService,
     temporaryChat: temporaryChatService,

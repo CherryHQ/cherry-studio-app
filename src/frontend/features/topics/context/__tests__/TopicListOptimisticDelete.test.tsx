@@ -34,13 +34,6 @@ jest.mock('@/frontend/data', () => ({
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
-  usePins: () => ({
-    isLoading: false,
-    isMutating: false,
-    isRefreshing: false,
-    pinnedIds: [],
-    togglePin: jest.fn(),
-  }),
   useTopics: () => ({ isLoadingInitial: false, loadMore: jest.fn(), topics: [] }),
 }));
 

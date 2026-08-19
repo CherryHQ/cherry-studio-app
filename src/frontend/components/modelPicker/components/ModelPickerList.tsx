@@ -5,16 +5,11 @@ import {
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/avatar';
 
-import {
-  getModelPickerRowTags,
-  type ModelPickerGroup,
-  type ModelPickerModelItem,
-} from '../utils/modelPickerData';
+import { getModelPickerRowTags, type ModelPickerModelItem } from '../utils/modelPickerData';
 import type { ModelPickerListItem } from '../utils/modelPickerListItems';
 import { ModelPickerTagChip } from './ModelPickerTagChip';
 
@@ -31,19 +26,17 @@ type ModelPickerListProps = {
   loadingText?: string;
   onEndReached?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
-  pinnedModelIds: readonly string[];
   selectedModelId: string | null;
 };
 
 type ModelPickerListExtraData = {
-  pinnedModelIdSet: ReadonlySet<string>;
   selectedModelId: string | null;
 };
 
 /**
- * Every model on the device, grouped by provider under a pinned group. Drawn
- * for both surfaces that pick one — the sheet the composer opens and the
- * pushed screen the model settings use — so the two cannot drift apart.
+ * Every model on the device, grouped by provider. Drawn for both surfaces that
+ * pick one — the sheet the composer opens and the pushed screen the model
+ * settings use — so the two cannot drift apart.
  */
 export function ModelPickerList({
   emptyText,
@@ -54,7 +47,6 @@ export function ModelPickerList({
   loadingText,
   onEndReached,
   onSelect,
-  pinnedModelIds,
   selectedModelId,
 }: ModelPickerListProps) {
   const listRef = useRef<LegendListRef>(null);
@@ -92,30 +84,18 @@ export function ModelPickerList({
 
     return () => cancelAnimationFrame(frame);
   }, [isOpen, selectedRowIndex]);
-  const pinnedModelIdSet = useMemo(() => new Set(pinnedModelIds), [pinnedModelIds]);
   const listExtraData = useMemo<ModelPickerListExtraData>(
-    () => ({
-      pinnedModelIdSet,
-      selectedModelId,
-    }),
-    [pinnedModelIdSet, selectedModelId],
+    () => ({ selectedModelId }),
+    [selectedModelId],
   );
   const renderItem = useCallback(
     ({ extraData, item }: LegendListRenderItemProps<ModelPickerListItem>) => {
       if (item.type === 'groupHeader') {
-        return (
-          <ModelPickerGroupHeader
-            count={item.count}
-            groupKind={item.groupKind}
-            isFirstGroup={item.isFirstGroup}
-            title={item.title}
-          />
-        );
+        return <ModelPickerGroupHeader isFirstGroup={item.isFirstGroup} title={item.title} />;
       }
 
       return (
         <ModelPickerRow
-          isPinned={extraData.pinnedModelIdSet.has(item.item.modelId)}
           isSelected={item.item.modelId === extraData.selectedModelId}
           item={item.item}
           onSelect={onSelect}
@@ -168,34 +148,19 @@ export function ModelPickerList({
   );
 }
 
-function ModelPickerGroupHeader({
-  count,
-  groupKind,
-  isFirstGroup,
-  title,
-}: {
-  count: number;
-  groupKind: ModelPickerGroup['groupKind'];
-  isFirstGroup: boolean;
-  title: string;
-}) {
-  const { t } = useTranslation();
-
+function ModelPickerGroupHeader({ isFirstGroup, title }: { isFirstGroup: boolean; title: string }) {
   return (
     <View className={cn('flex-row items-center gap-2 px-2 pb-1', !isFirstGroup && 'mt-3')}>
-      <Text className="text-foreground text-lg">{groupKind === 'pinned' ? t(title) : title}</Text>
-      {groupKind === 'pinned' ? <Text className="text-foreground text-lg">{count}</Text> : null}
+      <Text className="text-foreground text-lg">{title}</Text>
     </View>
   );
 }
 
 const ModelPickerRow = memo(function ModelPickerRow({
-  isPinned,
   isSelected,
   item,
   onSelect,
 }: {
-  isPinned: boolean;
   isSelected: boolean;
   item: ModelPickerModelItem;
   onSelect: (item: ModelPickerModelItem) => void;
@@ -227,12 +192,6 @@ const ModelPickerRow = memo(function ModelPickerRow({
         <Text className="min-w-0 shrink text-base text-foreground" numberOfLines={1}>
           {item.model.name}
         </Text>
-        {/* A pinned group mixes providers, so the row has to say which one. */}
-        {isPinned ? (
-          <Text className="shrink text-base text-foreground" numberOfLines={1}>
-            | {item.provider.name}
-          </Text>
-        ) : null}
       </View>
       {tags.length > 0 ? (
         <View className="flex-row items-center gap-1">

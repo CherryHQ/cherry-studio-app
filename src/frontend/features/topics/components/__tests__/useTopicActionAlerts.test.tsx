@@ -62,7 +62,6 @@ describe('useTopicActionAlerts', () => {
       deleteTopics: jest.fn(),
       loadMoreTopics: jest.fn(),
       renameTopic: mockRenameTopic,
-      toggleTopicPin: jest.fn(),
     });
 
     await act(async () => {

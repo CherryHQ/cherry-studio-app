@@ -11,7 +11,6 @@ import { useModelPickerData } from '../useModelPickerData';
 // may reference (they're hoisted above the imports).
 const mockEmptyList = Object.freeze([]);
 const mockModelQueries: unknown[] = [];
-const mockTogglePin = jest.fn();
 
 jest.mock('@/frontend/hooks/chat', () => ({
   useModels: (query: unknown) => {
@@ -19,13 +18,6 @@ jest.mock('@/frontend/hooks/chat', () => ({
     return { isLoading: false, models: mockEmptyList };
   },
   useProviders: () => ({ isLoading: false, providers: mockEmptyList }),
-  usePins: () => ({
-    isLoading: false,
-    isMutating: false,
-    isRefreshing: false,
-    pins: mockEmptyList,
-    togglePin: mockTogglePin,
-  }),
 }));
 
 describe('useModelPickerData', () => {
@@ -50,10 +42,8 @@ describe('useModelPickerData', () => {
   test('exposes only reference-stable fields', () => {
     const [result] = renderHookTwice(() => useModelPickerData());
 
-    // `pins` (a fresh object literal from usePins) and `queries` (react-query
-    // hands back a newly tracked proxy each render) can never be stable, so the
-    // hook must not surface them.
-    expect(result).not.toHaveProperty('pins');
+    // `queries` (react-query hands back a newly tracked proxy each render) can
+    // never be stable, so the hook must not surface it.
     expect(result).not.toHaveProperty('queries');
   });
 

@@ -14,19 +14,7 @@ import {
 } from '@cherrystudio/universal/data/api/types';
 import type { MessageStats } from '@cherrystudio/universal/data/types/message';
 import type { Topic } from '@cherrystudio/universal/data/types/topic';
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  notInArray,
-  or,
-  type SQL,
-  sql,
-} from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
@@ -36,13 +24,12 @@ import {
   chatMessageFileRefTable,
   type MessageRow,
   messageTable,
-  pinTable,
   type TopicRow,
   topicTable,
 } from '../db/schemas';
 import { registerDataService } from './dataServiceRegistry';
 import { createRootMessageTx } from './MessageService';
-import { pinService } from './PinService';
+import { asStringKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
@@ -52,13 +39,6 @@ const sqliteInArrayChunk = 500;
 const sqliteInsertChunk = 100;
 
 type DbOrTx = any;
-type TopicCursor =
-  | { id: string; orderKey: string; section: 'pin' }
-  | { id: string; orderKey: string; section: 'entity' }
-  | { id: null; orderKey: null; section: 'entity' };
-
-const firstPageCursor: TopicCursor = { id: '', orderKey: '', section: 'pin' };
-
 export class TopicService {
   /**
    * Resolved per call rather than injected once, so the instance holds no
@@ -354,72 +334,12 @@ export class TopicService {
     query: ListTopicsQuery = {},
   ): Promise<CursorPaginationResponse<TopicListItem>> {
     const limit = Math.min(query.limit ?? defaultLimit, maxLimit);
-    const cursor = decodeTopicCursor(query.cursor);
+    const cursor = decodeListCursor(query.cursor, asStringKey, 'topics');
     const search = buildSearchPredicate(query.q);
-    const items: Array<{ pinOrderKey?: string; topic: TopicListItem }> = [];
-
-    if (cursor.section === 'pin') {
-      const pinAfter = cursor.orderKey
-        ? or(
-            gt(pinTable.orderKey, cursor.orderKey),
-            and(eq(pinTable.orderKey, cursor.orderKey), gt(topicTable.id, cursor.id)),
-          )
-        : undefined;
-      const rows = await this.db
-        .select({
-          latestMessageText: messageTable.searchableText,
-          pinOrderKey: pinTable.orderKey,
-          topic: topicTable,
-        })
-        .from(topicTable)
-        .innerJoin(
-          pinTable,
-          and(eq(pinTable.entityType, 'topic'), eq(pinTable.entityId, topicTable.id)),
-        )
-        .leftJoin(
-          messageTable,
-          and(eq(messageTable.id, topicTable.activeNodeId), isNull(messageTable.deletedAt)),
-        )
-        .where(and(isNull(topicTable.deletedAt), pinAfter, search))
-        .orderBy(asc(pinTable.orderKey), asc(topicTable.id))
-        .limit(limit + 1);
-
-      if (rows.length === 0 && cursor.orderKey !== '') {
-        return { items: [], nextCursor: encodeEntitySectionStart() };
-      }
-      for (const row of rows.slice(0, limit)) {
-        items.push({
-          pinOrderKey: row.pinOrderKey,
-          topic: rowToTopicListItem(row.topic, row.latestMessageText),
-        });
-      }
-      if (rows.length > limit) {
-        const last = items.at(-1);
-        return {
-          items: items.map((item) => item.topic),
-          nextCursor: encodePinCursor(last?.pinOrderKey ?? '', last?.topic.id ?? ''),
-        };
-      }
-      if (items.length >= limit) {
-        return {
-          items: items.map((item) => item.topic),
-          nextCursor: encodeEntitySectionStart(),
-        };
-      }
-    }
-
-    const remaining = limit - items.length;
-    const pinnedSubquery = this.db
-      .select({ id: pinTable.entityId })
-      .from(pinTable)
-      .where(eq(pinTable.entityType, 'topic'));
-    const entityAfter =
-      cursor.section === 'entity' && cursor.orderKey !== null
-        ? or(
-            gt(topicTable.orderKey, cursor.orderKey),
-            and(eq(topicTable.orderKey, cursor.orderKey), gt(topicTable.id, cursor.id)),
-          )
-        : undefined;
+    const keyset = keysetOrdering(topicTable.orderKey, topicTable.id, {
+      major: 'asc',
+      tie: 'asc',
+    });
     const rows = await this.db
       .select({ latestMessageText: messageTable.searchableText, topic: topicTable })
       .from(topicTable)
@@ -427,25 +347,17 @@ export class TopicService {
         messageTable,
         and(eq(messageTable.id, topicTable.activeNodeId), isNull(messageTable.deletedAt)),
       )
-      .where(
-        and(
-          isNull(topicTable.deletedAt),
-          notInArray(topicTable.id, pinnedSubquery),
-          entityAfter,
-          search,
-        ),
-      )
-      .orderBy(asc(topicTable.orderKey), asc(topicTable.id))
-      .limit(remaining + 1);
-    for (const row of rows.slice(0, remaining)) {
-      items.push({ topic: rowToTopicListItem(row.topic, row.latestMessageText) });
-    }
-    const last = rows[remaining - 1];
+      .where(and(isNull(topicTable.deletedAt), cursor ? keyset.where(cursor) : undefined, search))
+      .orderBy(...keyset.orderBy)
+      .limit(limit + 1);
+
+    const items = rows
+      .slice(0, limit)
+      .map((row) => rowToTopicListItem(row.topic, row.latestMessageText));
+    const last = items.at(-1);
     return {
-      items: items.map((item) => item.topic),
-      ...(rows.length > remaining && last
-        ? { nextCursor: encodeEntityCursor(last.topic.orderKey, last.topic.id) }
-        : {}),
+      items,
+      ...(rows.length > limit && last ? { nextCursor: encodeCursor(last.orderKey, last.id) } : {}),
     };
   }
 
@@ -498,7 +410,6 @@ export class TopicService {
     }
 
     await tx.delete(messageTable).where(inArray(messageTable.topicId, deletedIds));
-    await pinService.purgeForEntitiesTx(tx, 'topic', deletedIds);
     await tx.delete(topicTable).where(inArray(topicTable.id, deletedIds));
     return deletedIds;
   }
@@ -660,44 +571,4 @@ function buildSearchPredicate(query: string | undefined): SQL | undefined {
     return undefined;
   }
   return sql`${topicTable.name} LIKE ${`%${trimmed.replace(/[\\%_]/g, '\\$&')}%`} ESCAPE '\\'`;
-}
-
-function decodeTopicCursor(raw: string | undefined): TopicCursor {
-  if (!raw) {
-    return firstPageCursor;
-  }
-  const separator = raw.indexOf(':');
-  if (separator < 0) {
-    return firstPageCursor;
-  }
-  const section = raw.slice(0, separator);
-  const rest = raw.slice(separator + 1);
-  if (section === 'entity' && rest === '') {
-    return { id: null, orderKey: null, section: 'entity' };
-  }
-  const idSeparator = rest.indexOf(':');
-  if (idSeparator < 0) {
-    return firstPageCursor;
-  }
-  const orderKey = rest.slice(0, idSeparator);
-  const id = rest.slice(idSeparator + 1);
-  if (!orderKey || !id) {
-    return firstPageCursor;
-  }
-  if (section === 'pin' || section === 'entity') {
-    return { id, orderKey, section };
-  }
-  return firstPageCursor;
-}
-
-function encodePinCursor(orderKey: string, id: string): string {
-  return `pin:${orderKey}:${id}`;
-}
-
-function encodeEntityCursor(orderKey: string, id: string): string {
-  return `entity:${orderKey}:${id}`;
-}
-
-function encodeEntitySectionStart(): string {
-  return 'entity:';
 }

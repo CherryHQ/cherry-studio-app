@@ -2,7 +2,7 @@ import * as Crypto from 'expo-crypto';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
-import { pinService } from '@/backend/data/services/PinService';
+import { messageTable, topicTable } from '@/backend/data/db/schemas';
 
 import { topicService } from '../TopicService';
 
@@ -10,7 +10,6 @@ jest.mock('@/backend/data/db/schemas', () => ({
   messageTable: {
     topicId: 'topicId',
   },
-  pinTable: {},
   topicTable: {
     deletedAt: 'deletedAt',
     id: 'id',
@@ -67,10 +66,10 @@ describe('TopicService', () => {
     expect(updates).toEqual([{ traceId: expectedTraceId }]);
   });
 
-  test('purges topic bindings when deleting topics in one transaction', async () => {
-    const operations: string[] = [];
+  test("deletes a topic's messages before the topic itself, in one transaction", async () => {
+    const deletedTables: unknown[] = [];
     type Tx = {
-      delete: () => {
+      delete: (table: unknown) => {
         where: () => Promise<void>;
       };
       select: () => {
@@ -80,9 +79,9 @@ describe('TopicService', () => {
       };
     };
     const tx: Tx = {
-      delete: () => ({
+      delete: (table) => ({
         where: async () => {
-          operations.push('delete');
+          deletedTables.push(table);
         },
       }),
       select: () => ({
@@ -97,18 +96,14 @@ describe('TopicService', () => {
     const dbService = {
       withWriteTx: async (callback: (tx: Tx) => Promise<void>) => callback(tx),
     } as unknown as DbService;
-    // The sibling purge is stubbed on the singleton the service imports: this
-    // suite mocks the schema module down to the two tables it drives.
-    const purgePins = jest.spyOn(pinService, 'purgeForEntitiesTx').mockImplementation(async () => {
-      operations.push('pin');
-    });
     await installTestHost({ DbService: dbService });
     const ids = ['550e8400-e29b-41d4-a716-446655440000', '650e8400-e29b-41d4-a716-446655440000'];
 
+    // The duplicate id must not produce a third delete: messages are removed by
+    // topic id, so a repeat would re-run the same statement.
     await topicService.deleteMany([...ids, ids[0]]);
 
-    expect(purgePins).toHaveBeenCalledWith(tx, 'topic', ids);
-    expect(operations).toEqual(['delete', 'pin', 'delete']);
+    expect(deletedTables).toEqual([messageTable, topicTable]);
   });
 
   test('does not open a transaction for an empty batch delete', async () => {

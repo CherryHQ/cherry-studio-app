@@ -6,7 +6,6 @@ import type { McpServerSchemas } from './mcpServers';
 import type { MessageSchemas } from './messages';
 import type { ModelSchemas } from './models';
 import type { PaintingSchemas } from './paintings';
-import type { PinSchemas } from './pins';
 import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
 import type { TemporaryChatSchemas } from './temporaryChats';
@@ -20,7 +19,6 @@ export type ApiSchemas = AiUsageRecordSchemas &
   MessageSchemas &
   ModelSchemas &
   PaintingSchemas &
-  PinSchemas &
   ProviderSchemas &
   SearchSchemas &
   TemporaryChatSchemas &

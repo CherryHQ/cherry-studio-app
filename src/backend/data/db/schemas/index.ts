@@ -8,7 +8,6 @@ import { jobTable } from './job';
 import { mcpServerTable } from './mcpServer';
 import { messageTable } from './message';
 import { paintingTable } from './painting';
-import { pinTable } from './pin';
 import { preferenceTable } from './preference';
 import { topicTable } from './topic';
 import { userModelTable } from './userModel';
@@ -22,7 +21,6 @@ export * from './job';
 export * from './mcpServer';
 export * from './message';
 export * from './painting';
-export * from './pin';
 export * from './userModel';
 export * from './userProvider';
 
@@ -52,7 +50,6 @@ export const schema = {
   messageTable,
   paintingFileRefTable,
   paintingTable,
-  pinTable,
   preferenceTable,
   topicTable,
   userModelTable,

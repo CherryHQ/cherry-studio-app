@@ -23,12 +23,10 @@ import {
   type AssistantRow,
   assistantMcpServerTable,
   assistantTable,
-  pinTable,
   userModelTable,
 } from '@/backend/data/db/schemas';
 
 import { modelService } from './ModelService';
-import { pinService } from './PinService';
 import { topicService } from './TopicService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
@@ -146,21 +144,12 @@ export class AssistantService {
     const orderByClauses =
       sortBy === 'updatedAt'
         ? [orderFn(sortColumn), asc(assistantTable.id)]
-        : [
-            sql`CASE WHEN ${pinTable.orderKey} IS NULL THEN 1 ELSE 0 END`,
-            asc(pinTable.orderKey),
-            orderFn(sortColumn),
-            asc(assistantTable.createdAt),
-          ];
+        : [orderFn(sortColumn), asc(assistantTable.createdAt)];
     const [rows, countRows] = await Promise.all([
       this.db
         .select({ assistant: assistantTable, modelName: userModelTable.name })
         .from(assistantTable)
         .leftJoin(userModelTable, eq(assistantTable.modelId, userModelTable.id))
-        .leftJoin(
-          pinTable,
-          and(eq(pinTable.entityType, 'assistant'), eq(pinTable.entityId, assistantTable.id)),
-        )
         .where(whereClause)
         .orderBy(...orderByClauses)
         .limit(query.limit)
@@ -292,7 +281,6 @@ export class AssistantService {
         return false;
       }
 
-      await pinService.purgeForEntityTx(tx, 'assistant', id);
       if (options.deleteTopics === true) {
         deletedTopicIds = await topicService.deleteByAssistantIdTx(tx, id, {
           validateAssistant: false,

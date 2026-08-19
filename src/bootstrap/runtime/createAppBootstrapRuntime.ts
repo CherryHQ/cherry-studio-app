@@ -87,7 +87,6 @@ export function createAppBootstrapRuntime(
       messages: services.message,
       models: services.model,
       paintings: services.painting,
-      pins: services.pin,
       providers: services.provider,
       temporaryChats: services.temporaryChat,
       topics: services.topic,

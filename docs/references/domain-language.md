@@ -101,18 +101,6 @@ A scoped local setting persisted in the mobile database and accessed through the
 `PreferenceClient` and preference hooks.
 _Avoid_: global variable, config constant
 
-**Pin**:
-A polymorphic marker that raises supported entities such as topics, providers, or models in product ordering.
-_Avoid_: favorite
-
-**Tag**:
-A polymorphic label attached to supported entities through entity tagging.
-_Avoid_: category, folder
-
-**Prompt**:
-A reusable prompt template persisted in the local data layer.
-_Avoid_: message, assistant
-
 ### AI And Search
 
 **AI Provider Adapter**:

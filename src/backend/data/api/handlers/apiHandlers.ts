@@ -10,7 +10,6 @@ import type { JobService } from '../../services/JobService';
 import type { McpServerService } from '../../services/McpServerService';
 import type { MessageService } from '../../services/MessageService';
 import type { PaintingService } from '../../services/PaintingService';
-import type { PinService } from '../../services/PinService';
 import type { ProviderService } from '../../services/ProviderService';
 import type { TemporaryChatService } from '../../services/TemporaryChatService';
 import type { TopicService } from '../../services/TopicService';
@@ -22,7 +21,6 @@ import { createMcpServerHandlers, type McpServerMutations } from './mcpServers';
 import { createMessageHandlers } from './messages';
 import { createModelHandlers } from './models';
 import { createPaintingHandlers } from './paintings';
-import { createPinHandlers } from './pins';
 import { createProviderHandlers } from './providers';
 import { createSearchHandlers } from './search';
 import { createTemporaryChatHandlers } from './temporaryChats';
@@ -41,7 +39,6 @@ export type DataApiDependencies = {
   messages: MessageService;
   models: import('../../services/ModelService').ModelService;
   paintings: PaintingService;
-  pins: PinService;
   providers: ProviderService;
   temporaryChats: TemporaryChatService;
   topics: TopicService;
@@ -57,7 +54,6 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createMessageHandlers(dependencies.messages),
     ...createModelHandlers(dependencies.models),
     ...createPaintingHandlers(dependencies.paintings),
-    ...createPinHandlers(dependencies.pins),
     ...createProviderHandlers(dependencies.providers),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
     ...createTemporaryChatHandlers(dependencies.temporaryChats),

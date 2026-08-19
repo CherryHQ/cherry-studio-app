@@ -10,7 +10,6 @@ import { schema } from '@/backend/data/db/schemas';
 import type { PreferenceService } from '../../PreferenceService';
 import { assistantService } from '../AssistantService';
 import { McpServerService } from '../McpServerService';
-import { pinService } from '../PinService';
 import { topicService } from '../TopicService';
 import { applyMigrations } from './_testDb';
 
@@ -102,14 +101,19 @@ describe('AssistantService persistence', () => {
     expect(associationIds(sqlite)).toEqual([existing.id]);
   });
 
-  it('bypasses pins for updatedAt sorting', async () => {
+  it('orders by order key by default and by updatedAt on request', async () => {
     insertAssistant(sqlite, 'assistant-old', { updatedAt: 100 });
     insertAssistant(sqlite, 'assistant-new', { updatedAt: 200 });
     insertAssistant(sqlite, 'assistant-other', { updatedAt: 300 });
-    insertPin(sqlite, 'assistant-old');
 
-    const pinnedFirst = await assistantService.list({ limit: 100, page: 1 });
-    expect(pinnedFirst.items[0]?.id).toBe('assistant-old');
+    // `insertAssistant` seeds `order_key` from the id, so the default sort is
+    // the ids in alphabetical order rather than the updatedAt order below.
+    const byOrderKey = await assistantService.list({ limit: 100, page: 1 });
+    expect(byOrderKey.items.map((assistant) => assistant.id)).toEqual([
+      'assistant-new',
+      'assistant-old',
+      'assistant-other',
+    ]);
 
     const scopedSearch = await assistantService.list({
       limit: 100,
@@ -148,9 +152,6 @@ describe('AssistantService persistence', () => {
   });
 
   it('soft-deletes an assistant while preserving topics by default', async () => {
-    // Spying rather than stubbing: the purge is a sibling the service imports
-    // as a singleton, and against the real schema it can run for real.
-    const purgeAssistantPin = jest.spyOn(pinService, 'purgeForEntityTx');
     insertAssistant(sqlite, 'assistant-delete');
     insertTopic(sqlite, 'topic-preserved', 'assistant-delete');
 
@@ -158,11 +159,6 @@ describe('AssistantService persistence', () => {
     expect(readAssistantDeleteState(sqlite, 'assistant-delete')).toEqual({
       deleted_at: expect.any(Number),
     });
-    expect(purgeAssistantPin).toHaveBeenCalledWith(
-      expect.anything(),
-      'assistant',
-      'assistant-delete',
-    );
     expect(readTopicCount(sqlite, 'topic-preserved')).toBe(1);
   });
 
@@ -223,15 +219,6 @@ function insertPresetModel(database: DatabaseSync, providerId: string, modelId: 
       ) VALUES (?, ?, ?, ?, ?, 1, 1)`,
     )
     .run(`${providerId}::${modelId}`, providerId, modelId, modelId, modelId);
-}
-
-function insertPin(database: DatabaseSync, assistantId: string) {
-  database
-    .prepare(
-      `INSERT INTO pin (id, entity_type, entity_id, order_key, created_at, updated_at)
-       VALUES (?, 'assistant', ?, 'a0', 1, 1)`,
-    )
-    .run(`pin-${assistantId}`, assistantId);
 }
 
 function insertTopic(database: DatabaseSync, id: string, assistantId: string) {

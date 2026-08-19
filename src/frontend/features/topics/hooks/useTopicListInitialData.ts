@@ -7,16 +7,11 @@ export type TopicListQuery = {
 
 type TopicListInitialDataOptions = {
   assistants: TopicListQuery;
-  pins: TopicListQuery;
   topics: TopicListQuery;
 };
 
-export function areTopicListQueriesSettled({
-  assistants,
-  pins,
-  topics,
-}: TopicListInitialDataOptions) {
-  return !assistants.isLoading && !pins.isLoading && !topics.isLoading;
+export function areTopicListQueriesSettled({ assistants, topics }: TopicListInitialDataOptions) {
+  return !assistants.isLoading && !topics.isLoading;
 }
 
 /**
