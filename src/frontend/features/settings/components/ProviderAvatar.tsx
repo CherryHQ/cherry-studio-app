@@ -1,7 +1,7 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '@/frontend/components/BrandAvatar';
+import { BrandAvatar, BrandAvatarIcon, BrandAvatarPhoto } from '@/frontend/components/avatar';
 
 import { useProviderAvatar } from './providerAvatarStore';
 

@@ -1,3 +1,4 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
@@ -6,7 +7,6 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';

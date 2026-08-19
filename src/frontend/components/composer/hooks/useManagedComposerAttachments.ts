@@ -1,7 +1,7 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { useBackendModule } from '@/frontend/data';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 

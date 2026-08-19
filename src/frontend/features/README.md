@@ -94,6 +94,6 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
 - `onboarding/`: onboarding flow and the logo draw animation.
 
 Reusable modules that remain in `src/frontend/components` include app shell modules (`headers`,
-`navigation`), shared flows such as `modelPicker`, the neutral `selection`
-multi-select/source-registry shared by list screens, shared UI behavior such as `AlertProvider`,
-and native dependency adapters such as `nativePrimitives`.
+`navigation`), shared flows such as `modelPicker`, and the neutral `selection`
+multi-select/source-registry shared by list screens. Reusable native UI adapters and shared UI
+behavior such as the alert controller belong in CherryUI.

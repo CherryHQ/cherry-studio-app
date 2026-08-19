@@ -1,6 +1,7 @@
+import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { ProfileAvatarImage } from '@/frontend/components/ProfileAvatar';
+import { ProfileAvatarImage } from '@/frontend/components/avatar';
 
 // Stack.Toolbar.View requires a single child with an explicit width/height.
 const avatarButtonSize = 36;
@@ -12,9 +13,14 @@ const avatarButtonSize = 36;
  * View so the native toolbar slot can measure it.
  */
 export function HomeHeaderAvatarButton() {
+  const { t } = useTranslation();
+
   return (
     <View style={{ height: avatarButtonSize, width: avatarButtonSize }}>
-      <ProfileAvatarImage size={avatarButtonSize} />
+      <ProfileAvatarImage
+        accessibilityLabel={t('settings.profile.avatar')}
+        size={avatarButtonSize}
+      />
     </View>
   );
 }

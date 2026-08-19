@@ -1,79 +1,112 @@
 import { ChevronLeftIcon, XIcon } from '@cherrystudio/app-icons';
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { cn } from '../../utils';
 import { Surface } from '../surface';
+import { useBottomSheet } from './bottom-sheet.context';
 import { bottomSheetLayout } from './bottom-sheet.layout';
-import type { BottomSheetCloseReason } from './bottom-sheet.types';
-
-type BottomSheetHeaderProps = {
-  backAccessibilityLabel?: string;
-  closeAccessibilityLabel?: string;
-  headerRight?: ReactNode;
-  isDisabled: boolean;
-  onBack?: () => void;
-  onRequestClose: (reason?: BottomSheetCloseReason) => void;
-  testID?: string;
-  title?: ReactNode;
-};
+import type {
+  BottomSheetBackButtonProps,
+  BottomSheetCloseButtonProps,
+  BottomSheetHeaderProps,
+  BottomSheetTitleProps,
+} from './bottom-sheet.types';
 
 export function BottomSheetHeader({
-  backAccessibilityLabel,
-  closeAccessibilityLabel,
-  headerRight,
-  isDisabled,
-  onBack,
-  onRequestClose,
+  children,
+  className,
+  style,
   testID,
-  title,
+  ...props
 }: BottomSheetHeaderProps) {
-  const closeControl = (
-    <BottomSheetHeaderControl
-      isInteractive={!isDisabled}
-      testID={testID ? `${testID}-close-surface` : undefined}
-    >
-      <BottomSheetCloseButton
-        disabled={isDisabled}
-        label={closeAccessibilityLabel}
-        onPress={() => onRequestClose('dismiss')}
-        testID={testID ? `${testID}-close` : undefined}
-      />
-    </BottomSheetHeaderControl>
-  );
-  const backControl = onBack ? (
-    <BottomSheetHeaderControl
-      isInteractive={!isDisabled}
-      testID={testID ? `${testID}-back-surface` : undefined}
-    >
-      <BottomSheetBackButton
-        disabled={isDisabled}
-        label={backAccessibilityLabel}
-        onPress={onBack}
-        testID={testID ? `${testID}-back` : undefined}
-      />
-    </BottomSheetHeaderControl>
-  ) : null;
+  const sheet = useBottomSheet();
 
   return (
     <View
-      className="flex-row"
-      style={styles.header}
-      testID={testID ? `${testID}-header` : undefined}
+      {...props}
+      className={cn('flex-row', className)}
+      style={[styles.header, style]}
+      testID={testID ?? (sheet.testID ? `${sheet.testID}-header` : undefined)}
     >
-      {backControl ?? closeControl}
-      {typeof title === 'string' ? (
-        <Text
-          className="flex-1 px-3 text-center font-semibold text-foreground text-base"
-          numberOfLines={1}
-        >
-          {title}
-        </Text>
-      ) : (
-        title
-      )}
-      {onBack ? closeControl : (headerRight ?? <View style={styles.headerSide} />)}
+      {children}
     </View>
   );
+}
+
+export function BottomSheetTitle({ children, className, ...props }: BottomSheetTitleProps) {
+  return (
+    <Text
+      {...props}
+      className={cn('flex-1 px-3 text-center font-semibold text-foreground text-base', className)}
+      numberOfLines={props.numberOfLines ?? 1}
+    >
+      {children}
+    </Text>
+  );
+}
+
+export function BottomSheetBackButton({
+  accessibilityLabel,
+  disabled,
+  onPress,
+  testID,
+  ...props
+}: BottomSheetBackButtonProps) {
+  const sheet = useBottomSheet();
+  const isDisabled = disabled || sheet.isCloseDisabled;
+
+  return (
+    <BottomSheetHeaderControl
+      isInteractive={!isDisabled}
+      testID={
+        testID ? `${testID}-surface` : sheet.testID ? `${sheet.testID}-back-surface` : undefined
+      }
+    >
+      <BottomSheetIconButton
+        {...props}
+        accessibilityLabel={accessibilityLabel}
+        disabled={isDisabled}
+        onPress={onPress}
+        testID={testID ?? (sheet.testID ? `${sheet.testID}-back` : undefined)}
+      >
+        <ChevronLeftIcon className="size-6 text-foreground" />
+      </BottomSheetIconButton>
+    </BottomSheetHeaderControl>
+  );
+}
+
+export function BottomSheetCloseButton({
+  accessibilityLabel,
+  disabled,
+  testID,
+  ...props
+}: BottomSheetCloseButtonProps) {
+  const sheet = useBottomSheet();
+  const isDisabled = disabled || sheet.isCloseDisabled;
+
+  return (
+    <BottomSheetHeaderControl
+      isInteractive={!isDisabled}
+      testID={
+        testID ? `${testID}-surface` : sheet.testID ? `${sheet.testID}-close-surface` : undefined
+      }
+    >
+      <BottomSheetIconButton
+        {...props}
+        accessibilityLabel={accessibilityLabel}
+        disabled={isDisabled}
+        onPress={() => sheet.requestClose('dismiss')}
+        testID={testID ?? (sheet.testID ? `${sheet.testID}-close` : undefined)}
+      >
+        <XIcon className="size-6 text-foreground" />
+      </BottomSheetIconButton>
+    </BottomSheetHeaderControl>
+  );
+}
+
+export function BottomSheetHeaderSpacer() {
+  return <View style={styles.headerSide} />;
 }
 
 function BottomSheetHeaderControl({
@@ -98,54 +131,15 @@ function BottomSheetHeaderControl({
   );
 }
 
-function BottomSheetBackButton({
-  disabled,
-  label,
-  onPress,
-  testID,
-}: {
-  disabled: boolean;
-  label?: string;
-  onPress: () => void;
-  testID?: string;
-}) {
+function BottomSheetIconButton({ children, ...props }: ComponentProps<typeof Pressable>) {
   return (
     <Pressable
-      accessibilityLabel={label}
+      {...props}
       accessibilityRole="button"
       className="h-full w-full items-center justify-center rounded-full active:opacity-60 disabled:opacity-40"
-      disabled={disabled}
-      hitSlop={8}
-      onPress={onPress}
-      testID={testID}
+      hitSlop={props.hitSlop ?? 8}
     >
-      <ChevronLeftIcon className="size-6 text-foreground" />
-    </Pressable>
-  );
-}
-
-function BottomSheetCloseButton({
-  disabled,
-  label,
-  onPress,
-  testID,
-}: {
-  disabled: boolean;
-  label?: string;
-  onPress: () => void;
-  testID?: string;
-}) {
-  return (
-    <Pressable
-      accessibilityLabel={label}
-      accessibilityRole="button"
-      className="h-full w-full items-center justify-center rounded-full active:opacity-60 disabled:opacity-40"
-      disabled={disabled}
-      hitSlop={8}
-      onPress={onPress}
-      testID={testID}
-    >
-      <XIcon className="size-6 text-foreground" />
+      {children}
     </Pressable>
   );
 }

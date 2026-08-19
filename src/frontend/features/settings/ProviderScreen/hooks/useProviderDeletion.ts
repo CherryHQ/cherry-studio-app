@@ -1,3 +1,4 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
@@ -5,7 +6,6 @@ import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { useBackendModule, useMutation } from '@/frontend/data';
 import {
   dataApiCollectionFilters,

@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { Alert } from '../alert.ios';
+import { Alert } from '../components/alert/alert.ios';
 
 jest.mock('@expo/ui/swift-ui', () => {
   const React = require('react');

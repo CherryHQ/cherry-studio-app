@@ -5,7 +5,7 @@ import { type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { BrandAvatar, BrandAvatarPhoto } from '@/frontend/components/BrandAvatar';
+import { BrandAvatar, BrandAvatarPhoto } from '@/frontend/components/avatar';
 
 import { useProviderForm } from '../context';
 

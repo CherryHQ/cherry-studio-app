@@ -1,5 +1,5 @@
 import { CircleAlertIcon } from '@cherrystudio/app-icons';
-import { ImageGenerationLoader } from '@cherrystudio/ui/components';
+import { Image, ImageGenerationLoader } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
 
 import type {

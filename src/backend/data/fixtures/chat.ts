@@ -134,17 +134,17 @@ function createLatexMessageContent(seed: BenchmarkTopicSeed, messageNumber: numb
   return [
     `# ${seed.name} message ${messageNumber}`,
     '',
-    `Inline math sample: $loss_${n} = \\frac{1}{m}\\sum_{i=1}^{m}(y_i - \\hat{y}_i)^2$.`,
+    `Inline math sample: $loss_{${n}} = \\frac{1}{m}\\sum_{i=1}^{m}(y_i - \\hat{y}_i)^2$.`,
     '',
     '$$',
     `\\begin{aligned}`,
-    `A_${n} &= \\sum_{k=1}^{${n + 3}} \\frac{k^2 + ${n}}{k + 1} \\\\`,
-    `B_${n} &= \\int_0^1 x^{${(n % 5) + 2}}(1-x)^${(n % 4) + 1}\\,dx \\\\`,
-    `C_${n} &= \\sqrt{A_${n}^2 + B_${n}^2}`,
+    `A_{${n}} &= \\sum_{k=1}^{${n + 3}} \\frac{k^2 + ${n}}{k + 1} \\\\`,
+    `B_{${n}} &= \\int_0^1 x^{${(n % 5) + 2}}(1-x)^{${(n % 4) + 1}}\\,dx \\\\`,
+    `C_{${n}} &= \\sqrt{A_{${n}}^2 + B_{${n}}^2}`,
     `\\end{aligned}`,
     '$$',
     '',
-    `Display equation: $$p(x \\mid \\theta_${n}) = \\prod_{i=1}^{m} \\theta_${n}^{x_i}(1-\\theta_${n})^{1-x_i}$$`,
+    `Display equation: $$p(x \\mid \\theta_{${n}}) = \\prod_{i=1}^{m} \\theta_{${n}}^{x_i}(1-\\theta_{${n}})^{1-x_i}$$`,
   ].join('\n');
 }
 
@@ -174,7 +174,7 @@ function createComplexMessageContent(seed: BenchmarkTopicSeed, messageNumber: nu
     '```',
     '',
     '$$',
-    `renderCost_${messageNumber} = markdownBlocks \\times parserCost + layoutPasses`,
+    `renderCost_{${messageNumber}} = markdownBlocks \\times parserCost + layoutPasses`,
     '$$',
     '',
     `Trace: ${seed.id}:${messageNumber}`,
@@ -335,7 +335,7 @@ function createShowcaseDataParts(): CherryMessagePart[] {
     {
       providerMetadata: { cherry: { thinkingMs: 8300 } },
       state: 'done',
-      text: '这是「已深度思考」状态：让我先梳理一下要演示的内容：\n\n1. 推理块（reasoning）\n2. 代码块、压缩块、错误块\n3. 翻译块与视频块',
+      text: '这是「已深度思考」状态：让我先梳理一下要演示的内容：\n\n1. 推理块（reasoning）\n2. 代码块、压缩块、错误块\n3. 翻译块',
       type: 'reasoning',
     },
     {
@@ -372,12 +372,6 @@ function createShowcaseDataParts(): CherryMessagePart[] {
         targetLanguage: 'en',
       },
       type: 'data-translation',
-    },
-    {
-      data: {
-        url: 'https://example.com/sample-video.mp4',
-      },
-      type: 'data-video',
     },
   ];
 }
@@ -554,13 +548,6 @@ function createShowcaseToolParts(): CherryMessagePart[] {
       url: 'https://example.com/markdown-best-practices',
     },
     {
-      filename: 'machine-learning-paper.pdf',
-      mediaType: 'application/pdf',
-      sourceId: 'showcase-source-2',
-      title: '引用文档：机器学习综述',
-      type: 'source-document',
-    },
-    {
       filename: 'dataset.csv',
       mediaType: 'text/csv',
       type: 'file',
@@ -605,7 +592,7 @@ function createShowcaseMessages(seed: BenchmarkTopicSeed, topicIndex: number): M
         role: 'user',
       },
       {
-        content: '推理块、代码/压缩/错误/翻译/视频数据块，以及工具调用与来源引用的综合演示。',
+        content: '推理块、代码/压缩/错误/翻译数据块，以及工具调用与来源引用的综合演示。',
         parts: [...createShowcaseDataParts(), ...createShowcaseToolParts()],
         role: 'assistant',
       },

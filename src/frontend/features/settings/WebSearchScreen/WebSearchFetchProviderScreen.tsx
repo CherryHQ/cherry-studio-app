@@ -1,12 +1,10 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
-import { Section } from '@cherrystudio/ui/components';
+import { Image, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { resolveWebSearchProviderIcon } from './utils/providerIcons';
@@ -34,9 +32,7 @@ export default function WebSearchFetchProviderScreen() {
             const imageSource = resolveWebSearchProviderIcon(option.value)?.[iconTheme];
 
             return (
-              <Section.Item
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
+              <Section.RadioItem
                 key={option.value}
                 label={option.label}
                 leading={
@@ -56,8 +52,7 @@ export default function WebSearchFetchProviderScreen() {
                     router.back();
                   }
                 }}
-                showChevron={false}
-                trailing={selected ? <CheckIcon className="size-5 text-foreground" /> : null}
+                selected={selected}
               />
             );
           })}

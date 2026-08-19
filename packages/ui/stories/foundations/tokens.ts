@@ -158,7 +158,7 @@ const GLYPHS = 'Ag';
 export const WEIGHT_SAMPLE = SHORT;
 
 /**
- * The ladder itself lives in `src/frontend/utils/typographyScale.ts` — these
+ * The ladder itself lives in `packages/ui/src/utils/typography-scale.ts` — these
  * rows only name the Tailwind utility each step backs. Sizes are read from
  * `--ui-text-*` at runtime, so an accessibility step shift shows up here too
  * rather than being documented as a fixed number.

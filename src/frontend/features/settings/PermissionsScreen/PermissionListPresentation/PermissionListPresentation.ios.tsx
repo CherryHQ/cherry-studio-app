@@ -1,4 +1,4 @@
-import { Image } from '@/frontend/components/nativePrimitives';
+import { Image } from '@cherrystudio/ui/components';
 
 import type { PermissionKind } from '../permissionConfig';
 

@@ -45,9 +45,9 @@ workflow interface and observable results.
 - Keep resource-specific composition in the owning frontend hook or feature, not in shared or
   backend code.
 
-New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts`; render dispatch belongs in
-`src/frontend/components/messagePresentation/messageContent`. A new JSON part does not require a table migration, but
-FTS indexes only text parts.
+New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts`; render
+dispatch belongs in `src/frontend/components/messages/parts/MessagePartRenderer.tsx`. A new JSON
+part does not require a table migration, but FTS indexes only text parts.
 
 ## Add AI Or Backend Service Behavior
 

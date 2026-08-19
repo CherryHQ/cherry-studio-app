@@ -1,4 +1,5 @@
 import { BotIcon, CheckIcon, PlusIcon } from '@cherrystudio/app-icons';
+import { useAlert } from '@cherrystudio/ui/components';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -7,7 +8,6 @@ import { type AccessibilityActionEvent, Pressable, ScrollView, Text, View } from
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { DrawerRootHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {

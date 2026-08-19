@@ -1,11 +1,10 @@
 import { PlusIcon, SettingsIcon } from '@cherrystudio/app-icons';
-import { Spinner } from '@cherrystudio/ui/components';
+import { Spinner, useAlert } from '@cherrystudio/ui/components';
 import { Color, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 
 import {
