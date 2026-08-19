@@ -1,6 +1,6 @@
-import { SearchField } from '@cherrystudio/ui/components';
-import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable } from 'react-native';
+
+import { ModelSearchField } from '@/frontend/components/modelPicker';
 
 import type { ProviderListSearchProps } from './ProviderListSearch.types';
 
@@ -11,18 +11,9 @@ export function ProviderListSearch({
   searchText,
   setSearchText,
 }: ProviderListSearchProps) {
-  const { t } = useTranslation();
-
   return (
     <Pressable accessible={false} className="flex-1 gap-3 px-4 pb-5" onPress={Keyboard.dismiss}>
-      <SearchField
-        accessibilityLabel={t('navigation.search')}
-        clearAccessibilityLabel={t('common.clear')}
-        onChangeText={setSearchText}
-        onClear={() => setSearchText('')}
-        placeholder={t('navigation.search')}
-        value={searchText}
-      />
+      <ModelSearchField searchText={searchText} setSearchText={setSearchText} />
       {children}
     </Pressable>
   );
