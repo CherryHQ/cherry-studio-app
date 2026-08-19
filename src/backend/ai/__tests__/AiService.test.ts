@@ -650,7 +650,6 @@ describe('AiService web search plugin wiring', () => {
       model,
       webSearchPreferences: {
         'chat.web_search.max_results': 42,
-        'chat.web_search.exclude_domains': ['blocked.com'],
       },
     });
     const service = new AiService(services);
@@ -1082,7 +1081,6 @@ function createServices({
   webSearchProviderId = null,
   webSearchPreferences = {
     'chat.web_search.max_results': 5,
-    'chat.web_search.exclude_domains': [],
   },
 }: {
   authConfig?: AuthConfig | null;
@@ -1095,7 +1093,6 @@ function createServices({
   webSearchProviderId?: string | null;
   webSearchPreferences?: {
     'chat.web_search.max_results': number;
-    'chat.web_search.exclude_domains': string[];
   };
 }): TestAiServices {
   const modelList = models ?? (model ? [model] : []);

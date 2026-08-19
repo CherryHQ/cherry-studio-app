@@ -3,7 +3,7 @@ import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import {
   getDefaultValue,
   type PreferenceClient,
-  type PreferenceDefaultScopeType,
+  type PreferenceSchema,
   type PreferenceKeyType,
   type PreferenceMappedValues,
   type PreferenceMapping,
@@ -76,10 +76,8 @@ const storyPreference: PreferenceClient = {
     }
     return values;
   },
-  set: async <TKey extends PreferenceKeyType>(
-    _key: TKey,
-    _value: PreferenceDefaultScopeType[TKey],
-  ) => undefined,
+  set: async <TKey extends PreferenceKeyType>(_key: TKey, _value: PreferenceSchema[TKey]) =>
+    undefined,
   setMultiple: async () => undefined,
   subscribeChange: () => () => () => undefined,
 };

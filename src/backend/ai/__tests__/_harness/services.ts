@@ -69,7 +69,6 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
       return null;
     }),
     getMultipleRawCached: jest.fn(() => ({
-      'chat.web_search.exclude_domains': [],
       'chat.web_search.max_results': 5,
     })),
   };

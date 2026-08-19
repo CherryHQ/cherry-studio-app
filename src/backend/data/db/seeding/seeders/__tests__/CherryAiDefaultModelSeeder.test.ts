@@ -11,7 +11,7 @@ import {
   CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
   CHERRYAI_PROVIDER_ID,
 } from '@cherrystudio/universal/data/presets/cherryai';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import type { Database, DbService } from '@/backend/data/db/DbService';
@@ -154,7 +154,7 @@ describe('CherryAiDefaultModelSeeder', () => {
     const [preference] = await database
       .select({ value: preferenceTable.value })
       .from(preferenceTable)
-      .where(and(eq(preferenceTable.scope, 'default'), eq(preferenceTable.key, key)))
+      .where(eq(preferenceTable.key, key))
       .limit(1);
     return preference?.value;
   }

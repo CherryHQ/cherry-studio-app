@@ -4,31 +4,29 @@ import {
   isPreferenceKey,
   PreferenceDefaults,
   type PreferenceClient,
-  type PreferenceDefaultScopeType,
+  type PreferenceSchema,
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
 } from '@cherrystudio/universal/data/preference';
-import { eq } from 'drizzle-orm';
 
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { DbService } from '@/backend/data/db/DbService';
 import { preferenceTable } from '@/backend/data/db/schemas';
 
 type PreferenceListener = () => void;
-type PreferenceValue = PreferenceDefaultScopeType[PreferenceKeyType];
+type PreferenceValue = PreferenceSchema[PreferenceKeyType];
 type PreferenceUpdates<K extends PreferenceKeyType = PreferenceKeyType> = Partial<
-  Pick<PreferenceDefaultScopeType, K>
+  Pick<PreferenceSchema, K>
 >;
 type PreferenceRawResult<K extends PreferenceKeyType> = {
-  [P in K]: PreferenceDefaultScopeType[P];
+  [P in K]: PreferenceSchema[P];
 };
 type PreferenceMapping = Record<string, PreferenceKeyType>;
 type PreferenceMappedResult<T extends PreferenceMapping> = {
-  [P in keyof T]: PreferenceDefaultScopeType[T[P]];
+  [P in keyof T]: PreferenceSchema[T[P]];
 };
 type PreferenceUpdateMap = Partial<Record<PreferenceKeyType, PreferenceValue>>;
 
-const defaultScope = 'default';
 const defaultUpdateOptions: PreferenceUpdateOptions = {
   optimistic: true,
 };
@@ -45,7 +43,7 @@ const defaultUpdateOptions: PreferenceUpdateOptions = {
 @Injectable('PreferenceService')
 @DependsOn(['DbService'])
 export class PreferenceService extends BaseService implements PreferenceClient {
-  private cache: PreferenceUpdateMap = { ...PreferenceDefaults.default };
+  private cache: PreferenceUpdateMap = { ...PreferenceDefaults };
   private listeners = new Map<PreferenceKeyType, Set<PreferenceListener>>();
   private updateTail: Promise<void> = Promise.resolve();
 
@@ -63,15 +61,14 @@ export class PreferenceService extends BaseService implements PreferenceClient {
    * that cache — see `initializeAppRuntime`.
    */
   protected async onInit() {
-    this.cache = { ...PreferenceDefaults.default };
+    this.cache = { ...PreferenceDefaults };
 
     const rows = await this.db
       .select({
         key: preferenceTable.key,
         value: preferenceTable.value,
       })
-      .from(preferenceTable)
-      .where(eq(preferenceTable.scope, defaultScope));
+      .from(preferenceTable);
 
     for (const row of rows) {
       if (isPreferenceKey(row.key)) {
@@ -80,15 +77,15 @@ export class PreferenceService extends BaseService implements PreferenceClient {
     }
   }
 
-  async get<K extends PreferenceKeyType>(key: K): Promise<PreferenceDefaultScopeType[K]> {
+  async get<K extends PreferenceKeyType>(key: K): Promise<PreferenceSchema[K]> {
     return this.getCachedValue(key) ?? getDefaultValue(key);
   }
 
-  getCachedValue<K extends PreferenceKeyType>(key: K): PreferenceDefaultScopeType[K] | undefined {
-    return this.cache[key] as PreferenceDefaultScopeType[K] | undefined;
+  getCachedValue<K extends PreferenceKeyType>(key: K): PreferenceSchema[K] | undefined {
+    return this.cache[key] as PreferenceSchema[K] | undefined;
   }
 
-  readCached<K extends PreferenceKeyType>(key: K): PreferenceDefaultScopeType[K] {
+  readCached<K extends PreferenceKeyType>(key: K): PreferenceSchema[K] {
     return this.getCachedValue(key) ?? getDefaultValue(key);
   }
 
@@ -123,16 +120,16 @@ export class PreferenceService extends BaseService implements PreferenceClient {
     return result;
   }
 
-  getAll(): PreferenceDefaultScopeType {
+  getAll(): PreferenceSchema {
     return {
-      ...PreferenceDefaults.default,
+      ...PreferenceDefaults,
       ...this.cache,
-    } as PreferenceDefaultScopeType;
+    } as PreferenceSchema;
   }
 
   async set<K extends PreferenceKeyType>(
     key: K,
-    value: PreferenceDefaultScopeType[K],
+    value: PreferenceSchema[K],
     options: PreferenceUpdateOptions = defaultUpdateOptions,
   ) {
     await this.setMultiple({ [key]: value } as PreferenceUpdates<K>, options);
@@ -243,17 +240,8 @@ export class PreferenceService extends BaseService implements PreferenceClient {
         // react-doctor-disable-next-line async-await-in-loop -- expo-sqlite 写事务内本质串行，并行化无收益
         await tx
           .insert(preferenceTable)
-          .values({
-            key,
-            scope: defaultScope,
-            value,
-          })
-          .onConflictDoUpdate({
-            target: [preferenceTable.scope, preferenceTable.key],
-            set: {
-              value,
-            },
-          });
+          .values({ key, value })
+          .onConflictDoUpdate({ target: preferenceTable.key, set: { value } });
       }
     });
   }

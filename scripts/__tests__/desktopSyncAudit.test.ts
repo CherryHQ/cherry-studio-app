@@ -11,7 +11,6 @@ import {
   compareSchemaState,
   extractObjectKeys,
   extractSqliteTableNames,
-  evaluatePreferenceAlignment,
   hashTrackedFiles,
   parseArguments,
   pathMatchesGlob,
@@ -250,39 +249,6 @@ describe('structured source extraction', () => {
     expect(
       extractObjectKeys(source, 'PROVIDER_ICON_META_CATALOG', undefined, 'meta-catalog.ts'),
     ).toEqual(['openai', 'opencode', 'radeon-cloud']);
-  });
-});
-
-describe('preference alignment', () => {
-  test('accepts only declared mobile extensions after desktop parity is complete', () => {
-    expect(
-      evaluatePreferenceAlignment(
-        ['app.language', 'ui.theme_mode'],
-        ['app.language', 'permissions.location_read', 'ui.theme_mode'],
-        ['permissions.location_read'],
-      ),
-    ).toMatchObject({
-      mobileExtensions: ['permissions.location_read'],
-      ok: true,
-      sourceOnly: [],
-      staleExtensionDeclarations: [],
-      unexpectedMobileKeys: [],
-    });
-  });
-
-  test('rejects missing desktop keys, undeclared mobile keys, and stale declarations', () => {
-    expect(
-      evaluatePreferenceAlignment(
-        ['app.language', 'ui.theme_mode'],
-        ['app.language', 'mobile.unknown'],
-        ['permissions.location_read'],
-      ),
-    ).toMatchObject({
-      ok: false,
-      sourceOnly: ['ui.theme_mode'],
-      staleExtensionDeclarations: ['permissions.location_read'],
-      unexpectedMobileKeys: ['mobile.unknown'],
-    });
   });
 });
 
@@ -625,7 +591,7 @@ describe('auditRepositories', () => {
 });
 
 describe('schema audit', () => {
-  test('reports every desktop table missing from mobile, including Agent and Knowledge data', async () => {
+  test('reports which tables each side persists alone', async () => {
     const table = { columns: { id: { name: 'id', type: 'text' } } };
     const desktopRoot = createRepository('schema-desktop-fixture', {
       'migrations/sqlite-drizzle/meta/0001_snapshot.json': JSON.stringify({
@@ -639,9 +605,10 @@ describe('schema audit', () => {
     });
     const mobileRoot = createRepository('schema-mobile-fixture', {
       'migrations/sqlite-drizzle/meta/0001_snapshot.json': JSON.stringify({
-        tables: { topic: table },
+        tables: { job: table, topic: table },
       }),
       'src/backend/data/db/schemas/schema.ts': `
+        export const job = sqliteTable('job', {});
         export const topic = sqliteTable('topic', {});
       `,
     });
@@ -649,9 +616,10 @@ describe('schema audit', () => {
     await expect(compareSchemaState(desktopRoot, mobileRoot)).resolves.toMatchObject({
       ast: { desktopMatchesSnapshot: true, mobileMatchesSnapshot: true },
       changed: [],
+      desktopOnly: ['agent', 'knowledge'],
       desktopTables: ['agent', 'knowledge', 'topic'],
-      missing: ['agent', 'knowledge'],
-      mobileTables: ['topic'],
+      mobileOnly: ['job'],
+      mobileTables: ['job', 'topic'],
     });
   });
 });

@@ -5,57 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1783738412383,
+      "when": 1787143523191,
       "tag": "0000_release_baseline",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1783754760843,
-      "tag": "0001_message-status-index",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1784546033106,
-      "tag": "0002_melted_odin",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "6",
-      "when": 1784610646258,
-      "tag": "0003_eager_freak",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "6",
-      "when": 1785047062931,
-      "tag": "0004_tidy_killraven",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "6",
-      "when": 1785393655365,
-      "tag": "0005_complete_silver_centurion",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "6",
-      "when": 1785517264682,
-      "tag": "0006_chubby_abomination",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "6",
-      "when": 1785826793267,
-      "tag": "0007_uneven_human_torch",
       "breakpoints": true
     }
   ]

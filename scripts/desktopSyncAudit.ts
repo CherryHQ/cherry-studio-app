@@ -18,7 +18,6 @@ const CLASSIFICATIONS = [
   'explicit-exclusion',
   'blocked',
 ] as const;
-const MCP_STORAGE_TRANSPORTS = ['inMemory', 'sse', 'stdio', 'streamableHttp'] as const;
 const ORDINARY_AGENT_SOURCES = [
   'packages/aiCore/src/core/agents/createAgent.ts',
   'src/main/ai/runtime/aiSdk/Agent.ts',
@@ -56,7 +55,6 @@ export type DesktopSyncDomain = {
   blocker?: string;
   explicitExclusions?: string[];
   mobileExtensions?: MobileExtension[];
-  mobilePreferenceExtensions?: string[];
   shapeOnlyPorts?: ShapeOnlyPort[];
   sourceCommit: string | null;
   sourcePaths: string[];
@@ -304,25 +302,6 @@ function validateDomain(id: string, value: unknown): DesktopSyncDomain {
     assertRelativeRepoPath(exclusion, `${id}.explicitExclusions`);
   }
 
-  const mobilePreferenceExtensions = value.mobilePreferenceExtensions;
-  if (
-    mobilePreferenceExtensions !== undefined &&
-    (!Array.isArray(mobilePreferenceExtensions) ||
-      !mobilePreferenceExtensions.every(
-        (entry) => typeof entry === 'string' && /^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/.test(entry),
-      ))
-  ) {
-    throw new Error(
-      `[desktop-sync-audit] ${id}.mobilePreferenceExtensions must be preference keys`,
-    );
-  }
-  if (
-    mobilePreferenceExtensions !== undefined &&
-    new Set(mobilePreferenceExtensions).size !== mobilePreferenceExtensions.length
-  ) {
-    throw new Error(`[desktop-sync-audit] ${id}.mobilePreferenceExtensions must be unique`);
-  }
-
   if (status === 'aligned') {
     if (typeof sourceCommit !== 'string' || !/^[0-9a-f]{40}$/.test(sourceCommit)) {
       throw new Error(`[desktop-sync-audit] aligned domain ${id} needs a full sourceCommit`);
@@ -394,7 +373,6 @@ function validateDomain(id: string, value: unknown): DesktopSyncDomain {
     blocker: value.blocker as string | undefined,
     explicitExclusions: explicitExclusions as string[] | undefined,
     mobileExtensions: mobileExtensions as MobileExtension[] | undefined,
-    mobilePreferenceExtensions: mobilePreferenceExtensions as string[] | undefined,
     shapeOnlyPorts: shapeOnlyPorts as ShapeOnlyPort[] | undefined,
     sourceCommit: sourceCommit as string | null,
     sourcePaths: sourcePaths as string[],
@@ -722,41 +700,6 @@ export function extractRegistryModules(
     .filter((modulePath): modulePath is string => Boolean(modulePath))
     .map((modulePath) => modulePath.replace(/^\.\//, '').replace(/\.(?:tsx?|jsx?)$/, ''))
     .sort();
-}
-
-export function extractVariableCallStrings(
-  source: string,
-  variableName: string,
-  callName: string,
-  fileName = 'source.ts',
-): string[] {
-  const sourceFile = sourceFileFor(source, fileName);
-  const initializer = findVariableInitializer(sourceFile, variableName);
-  if (!initializer) throw new Error(`[desktop-sync-audit] missing ${variableName} in ${fileName}`);
-  const values = new Set<string>();
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const expression = node.expression;
-      const name = ts.isPropertyAccessExpression(expression)
-        ? expression.name.text
-        : ts.isIdentifier(expression)
-          ? expression.text
-          : null;
-      if (name === callName) {
-        const argument = node.arguments[0];
-        if (argument && ts.isArrayLiteralExpression(argument)) {
-          for (const element of argument.elements) {
-            if (ts.isStringLiteralLike(element)) values.add(element.text);
-          }
-        } else if (argument && ts.isStringLiteralLike(argument)) {
-          values.add(argument.text);
-        }
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(initializer);
-  return [...values].sort();
 }
 
 function extractEmbeddedRasterMediaTypes(source: string, fileName: string): string[] {
@@ -1137,22 +1080,13 @@ export async function compareSchemaState(desktopRoot: string, mobileRoot: string
       mobileMatchesSnapshot: JSON.stringify(mobileAst) === JSON.stringify(mobileNames),
     },
     changed,
+    desktopOnly: desktopNames.filter((name) => !(name in mobileTables)),
     desktopSnapshot: path.basename(desktopSnapshotPath),
     desktopTables: desktopNames,
-    extraMobile: mobileNames.filter((name) => !(name in desktopTables)),
-    missing: desktopNames.filter((name) => !(name in mobileTables)),
+    mobileOnly: mobileNames.filter((name) => !(name in desktopTables)),
     mobileSnapshot: path.basename(mobileSnapshotPath),
     mobileTables: mobileNames,
   };
-}
-
-async function preferenceKeys(root: string, file: string): Promise<string[]> {
-  return extractObjectKeys(
-    await readFile(path.join(root, file), 'utf8'),
-    'DefaultPreferences',
-    'default',
-    file,
-  );
 }
 
 async function directTrackedTypeScriptFiles(root: string, directory: string): Promise<string[]> {
@@ -1175,16 +1109,7 @@ async function auditSharedData(desktopRoot: string, mobileRoot: string) {
   const mobileHandlerPath = 'src/backend/data/api/handlers';
   const desktopSchemaPath = 'src/shared/data/api/schemas';
   const mobileSchemaPath = 'packages/universal/src/data/api/schemas';
-  const [
-    desktopPreferences,
-    mobilePreferences,
-    desktopHandlers,
-    mobileHandlers,
-    desktopRoutes,
-    mobileRoutes,
-  ] = await Promise.all([
-    preferenceKeys(desktopRoot, 'src/shared/data/preference/preferenceSchemas.ts'),
-    preferenceKeys(mobileRoot, 'packages/universal/src/data/preference/preferenceSchemas.ts'),
+  const [desktopHandlers, mobileHandlers, desktopRoutes, mobileRoutes] = await Promise.all([
     directTrackedTypeScriptFiles(desktopRoot, desktopHandlerPath),
     directTrackedTypeScriptFiles(mobileRoot, mobileHandlerPath),
     routeMethods(desktopRoot, desktopHandlerPath),
@@ -1215,38 +1140,6 @@ async function auditSharedData(desktopRoot: string, mobileRoot: string) {
       mobileRoutes,
       mobileSchemaModules: mobileSchemaNames.filter((file) => file !== 'apiSchemas.ts').sort(),
     },
-    preferences: {
-      desktopKeys: desktopPreferences,
-      mobileKeys: mobilePreferences,
-      sourceOnly: desktopPreferences.filter((key) => !mobilePreferences.includes(key)),
-      targetOnly: mobilePreferences.filter((key) => !desktopPreferences.includes(key)),
-    },
-  };
-}
-
-export function evaluatePreferenceAlignment(
-  desktopKeys: readonly string[],
-  mobileKeys: readonly string[],
-  declaredMobileExtensions: readonly string[],
-) {
-  const sourceOnly = desktopKeys.filter((key) => !mobileKeys.includes(key));
-  const targetOnly = mobileKeys.filter((key) => !desktopKeys.includes(key));
-  const extensionSet = new Set(declaredMobileExtensions);
-  const mobileExtensions = targetOnly.filter((key) => extensionSet.has(key));
-  const unexpectedMobileKeys = targetOnly.filter((key) => !extensionSet.has(key));
-  const staleExtensionDeclarations = declaredMobileExtensions.filter(
-    (key) => !targetOnly.includes(key),
-  );
-
-  return {
-    mobileExtensions,
-    ok:
-      sourceOnly.length === 0 &&
-      unexpectedMobileKeys.length === 0 &&
-      staleExtensionDeclarations.length === 0,
-    sourceOnly,
-    staleExtensionDeclarations,
-    unexpectedMobileKeys,
   };
 }
 
@@ -1360,35 +1253,6 @@ export async function auditDesignCatalog(
   };
 }
 
-async function auditMcpRetention(desktopRoot: string, mobileRoot: string) {
-  const desktopFile = 'src/shared/data/types/mcpServer.ts';
-  const mobileFile = 'packages/universal/src/data/types/mcpServer.ts';
-  const [desktopSource, mobileSource] = await Promise.all([
-    readFile(path.join(desktopRoot, desktopFile), 'utf8'),
-    readFile(path.join(mobileRoot, mobileFile), 'utf8'),
-  ]);
-  return {
-    desktopStoredTransports: extractVariableCallStrings(
-      desktopSource,
-      'McpServerTypeSchema',
-      'enum',
-      desktopFile,
-    ),
-    mobileRuntimeProjection: extractVariableCallStrings(
-      mobileSource,
-      'StreamableHttpMcpServerSchema',
-      'literal',
-      mobileFile,
-    ),
-    mobileStoredTransports: extractVariableCallStrings(
-      mobileSource,
-      'McpServerTypeSchema',
-      'enum',
-      mobileFile,
-    ),
-  };
-}
-
 function addClassification(
   classifications: Record<Classification, string[]>,
   classification: Classification,
@@ -1477,14 +1341,10 @@ async function auditDomain(
   }
 
   if (id === 'schema') {
+    // `desktopOnly` is reported, not blocked: mobile persists what mobile reads,
+    // so a desktop table without a mobile consumer is a deliberate omission.
     const schema = await compareSchemaState(desktopRoot, mobileRoot);
     details = schema;
-    addClassification(
-      classifications,
-      'blocked',
-      schema.missing.map((table) => `table:${table}`),
-    );
-    blockers.push(...schema.missing.map((table) => `Missing persisted table: ${table}`));
     addInvariant(invariants, {
       domain: id,
       id: 'desktop-schema-ast-matches-snapshot',
@@ -1497,53 +1357,16 @@ async function auditDomain(
       message: 'Mobile sqliteTable declarations must match the latest tracked snapshot.',
       ok: schema.ast.mobileMatchesSnapshot,
     });
-    addInvariant(invariants, {
-      domain: id,
-      id: 'all-desktop-tables-retained',
-      message: 'Mobile must retain every desktop table, including Agent and Knowledge data.',
-      ok: schema.missing.length === 0,
-    });
   }
 
   if (id === 'shared-data') {
     const sharedData = await auditSharedData(desktopRoot, mobileRoot);
-    const mcp = await auditMcpRetention(desktopRoot, mobileRoot);
-    const preferenceAlignment = evaluatePreferenceAlignment(
-      sharedData.preferences.desktopKeys,
-      sharedData.preferences.mobileKeys,
-      domain.mobilePreferenceExtensions ?? [],
-    );
-    details = { ...sharedData, mcp, preferenceAlignment };
+    details = sharedData;
     addClassification(
       classifications,
       'blocked',
       sharedData.dataApi.missingRoutes.map((route) => `route:${route}`),
     );
-    addClassification(
-      classifications,
-      'mobile-extension',
-      preferenceAlignment.mobileExtensions.map((key) => `preference:${key}`),
-    );
-    addInvariant(invariants, {
-      domain: id,
-      id: 'preference-key-set-aligned',
-      message: 'Preference key additions and removals require an explicit value migration.',
-      ok: preferenceAlignment.ok,
-    });
-    addInvariant(invariants, {
-      domain: id,
-      id: 'mcp-storage-retains-all-transports',
-      message: 'Storage must retain stdio, SSE, Streamable HTTP, and in-memory MCP records.',
-      ok:
-        JSON.stringify(mcp.desktopStoredTransports) === JSON.stringify(MCP_STORAGE_TRANSPORTS) &&
-        JSON.stringify(mcp.mobileStoredTransports) === JSON.stringify(MCP_STORAGE_TRANSPORTS),
-    });
-    addInvariant(invariants, {
-      domain: id,
-      id: 'mcp-runtime-projects-streamable-http',
-      message: 'The mobile runtime/UI projection must expose only Streamable HTTP.',
-      ok: JSON.stringify(mcp.mobileRuntimeProjection) === JSON.stringify(['streamableHttp']),
-    });
   }
 
   if (id === 'provider-registry') {

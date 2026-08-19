@@ -1,23 +1,20 @@
-import type {
-  PreferenceDefaultScopeType,
-  PreferenceKeyType,
-  PreferenceUpdateOptions,
-} from './preferenceTypes';
+import type { PreferenceKeyType, PreferenceSchema } from './preferenceSchema';
+import type { PreferenceUpdateOptions } from './preferenceTypes';
 
 export type PreferenceMapping = Record<string, PreferenceKeyType>;
 export type PreferenceMappedValues<T extends PreferenceMapping> = {
-  [P in keyof T]: PreferenceDefaultScopeType[T[P]];
+  [P in keyof T]: PreferenceSchema[T[P]];
 };
 export type PreferenceUpdates<K extends PreferenceKeyType = PreferenceKeyType> = Partial<
-  Pick<PreferenceDefaultScopeType, K>
+  Pick<PreferenceSchema, K>
 >;
 
 export interface PreferenceClient {
-  getCachedValue<K extends PreferenceKeyType>(key: K): PreferenceDefaultScopeType[K] | undefined;
+  getCachedValue<K extends PreferenceKeyType>(key: K): PreferenceSchema[K] | undefined;
   getMultipleCached<T extends PreferenceMapping>(mapping: T): PreferenceMappedValues<T>;
   set<K extends PreferenceKeyType>(
     key: K,
-    value: PreferenceDefaultScopeType[K],
+    value: PreferenceSchema[K],
     options?: PreferenceUpdateOptions,
   ): Promise<void>;
   setMultiple<K extends PreferenceKeyType>(

@@ -1,6 +1,6 @@
 import type {
   PreferenceClient,
-  PreferenceDefaultScopeType,
+  PreferenceSchema,
   PreferenceKeyType,
   PreferenceMappedValues,
   PreferenceMapping,
@@ -13,7 +13,7 @@ import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 
 import { useMultiplePreferences, usePreference } from '../usePreference';
 
-type PreferenceValue = PreferenceDefaultScopeType[PreferenceKeyType];
+type PreferenceValue = PreferenceSchema[PreferenceKeyType];
 
 describe('preference hooks', () => {
   test('reads, subscribes, and writes one preference through PreferenceClient', async () => {
@@ -95,7 +95,7 @@ describe('preference hooks', () => {
   });
 });
 
-function createPreferenceClient(initial: Partial<PreferenceDefaultScopeType> = {}) {
+function createPreferenceClient(initial: Partial<PreferenceSchema> = {}) {
   const values = new Map<PreferenceKeyType, PreferenceValue>(
     Object.entries(initial) as [PreferenceKeyType, PreferenceValue][],
   );
@@ -103,9 +103,9 @@ function createPreferenceClient(initial: Partial<PreferenceDefaultScopeType> = {
   const unsubscribe = jest.fn();
 
   const getCachedValue = <K extends PreferenceKeyType>(key: K) =>
-    values.get(key) as PreferenceDefaultScopeType[K] | undefined;
+    values.get(key) as PreferenceSchema[K] | undefined;
   const getMultipleCached = <T extends PreferenceMapping>(mapping: T) => {
-    const result = {} as { [P in keyof T]: PreferenceDefaultScopeType[T[P]] };
+    const result = {} as { [P in keyof T]: PreferenceSchema[T[P]] };
     for (const name of Object.keys(mapping) as (keyof T)[]) {
       const key = mapping[name];
       result[name] = (values.get(key) ??
@@ -113,15 +113,13 @@ function createPreferenceClient(initial: Partial<PreferenceDefaultScopeType> = {
     }
     return result;
   };
-  const set = jest.fn(
-    async <K extends PreferenceKeyType>(key: K, value: PreferenceDefaultScopeType[K]) => {
-      values.set(key, value);
-      for (const listener of listeners.get(key) ?? []) {
-        listener();
-      }
-    },
-  ) as PreferenceClient['set'];
-  const setMultiple = jest.fn(async (updates: Partial<PreferenceDefaultScopeType>) => {
+  const set = jest.fn(async <K extends PreferenceKeyType>(key: K, value: PreferenceSchema[K]) => {
+    values.set(key, value);
+    for (const listener of listeners.get(key) ?? []) {
+      listener();
+    }
+  }) as PreferenceClient['set'];
+  const setMultiple = jest.fn(async (updates: Partial<PreferenceSchema>) => {
     for (const [key, value] of Object.entries(updates) as [PreferenceKeyType, PreferenceValue][]) {
       values.set(key, value);
       for (const listener of listeners.get(key) ?? []) {

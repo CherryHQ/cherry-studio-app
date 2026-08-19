@@ -1,5 +1,5 @@
 import type {
-  PreferenceDefaultScopeType,
+  PreferenceSchema,
   PreferenceKeyType,
   PreferenceUpdateOptions,
 } from '@cherrystudio/universal/data/preference';
@@ -9,13 +9,13 @@ import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
 import { usePreferenceClient } from '@/frontend/data/PreferenceProvider';
 
 type PreferenceSetter<K extends PreferenceKeyType> = (
-  value: PreferenceDefaultScopeType[K],
+  value: PreferenceSchema[K],
   options?: PreferenceUpdateOptions,
 ) => Promise<void>;
 
 type MultiplePreferenceMapping = Record<string, PreferenceKeyType>;
 type MultiplePreferenceValues<T extends MultiplePreferenceMapping> = {
-  [P in keyof T]: PreferenceDefaultScopeType[T[P]];
+  [P in keyof T]: PreferenceSchema[T[P]];
 };
 type MultiplePreferenceUpdates<T extends MultiplePreferenceMapping> = Partial<
   MultiplePreferenceValues<T>
@@ -31,7 +31,7 @@ type SnapshotState<T extends MultiplePreferenceMapping> = {
 
 export function usePreference<K extends PreferenceKeyType>(
   key: K,
-): [PreferenceDefaultScopeType[K], PreferenceSetter<K>] {
+): [PreferenceSchema[K], PreferenceSetter<K>] {
   const preferences = usePreferenceClient();
 
   const value = useSyncExternalStore(
@@ -108,7 +108,7 @@ export function useMultiplePreferences<T extends MultiplePreferenceMapping>(
 
   const setValues = useCallback<MultiplePreferenceSetter<T>>(
     (nextValues, options) => {
-      const updates: Partial<PreferenceDefaultScopeType> = {};
+      const updates: Partial<PreferenceSchema> = {};
 
       for (const [name, key] of entries) {
         if (name in nextValues) {

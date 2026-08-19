@@ -18,7 +18,6 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 import { postProcessWebSearchResponse } from './postProcessing';
 import type { WebSearchProviderDriver } from './providers/factory';
 import { createWebSearchProvider } from './providers/factory';
-import { filterWebSearchResponseWithBlacklist } from './utils/blacklist';
 import { getProviderForCapability, getRuntimeConfig } from './utils/config';
 import { isAbortError } from './utils/errors';
 import { normalizeWebSearchKeywords, normalizeWebSearchUrls } from './utils/input';
@@ -133,14 +132,7 @@ export class WebSearchService extends BaseService {
       results: successfulSearches.flatMap((item) => item.value.results),
     };
 
-    const filteredResponse = filterWebSearchResponseWithBlacklist(
-      mergedResponse,
-      context.runtimeConfig.excludeDomains,
-    );
-    const postProcessed = await postProcessWebSearchResponse(
-      filteredResponse,
-      context.runtimeConfig,
-    );
+    const postProcessed = await postProcessWebSearchResponse(mergedResponse, context.runtimeConfig);
 
     return postProcessed.response;
   }
