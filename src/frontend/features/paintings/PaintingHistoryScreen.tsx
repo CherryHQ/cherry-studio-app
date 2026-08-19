@@ -1,8 +1,11 @@
-import { Stack } from 'expo-router';
+import { EllipsisIcon } from '@cherrystudio/app-icons';
+import { type MenuItem } from '@cherrystudio/ui/components';
+import { useRouter } from 'expo-router';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { useOpenDrawer } from '@/frontend/components/headers';
+import { DrawerRootHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   SelectionControls,
   SelectionProvider,
@@ -23,39 +26,65 @@ const paintingSelectionScope = 'drawings';
  */
 function PaintingHistoryScreenBody() {
   const { t } = useTranslation();
-  const openDrawer = useOpenDrawer();
+  const router = useRouter();
   const { enterEditing, exitEditing } = useSelectionActions();
   const { isDeletionPending, isEditing } = useSelectionState();
+  const openNewPainting = useCallback(() => {
+    router.push('/paintings');
+  }, [router]);
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'create-painting',
+        label: t('painting.history.createNew'),
+        onPress: openNewPainting,
+        systemImage: 'plus',
+      },
+      {
+        disabled: isDeletionPending,
+        id: 'select-paintings',
+        label: t('painting.selection.start'),
+        onPress: enterEditing,
+        systemImage: 'checklist',
+      },
+    ],
+    [enterEditing, isDeletionPending, openNewPainting, t],
+  );
+  const menuActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.more'),
+        androidIcon: EllipsisIcon,
+        icon: 'ellipsis',
+        key: 'painting-actions',
+        menuItems,
+      },
+    ],
+    [menuItems, t],
+  );
+  const doneActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.done'),
+        disabled: isDeletionPending,
+        key: 'finish-selecting-paintings',
+        label: t('common.done'),
+        onPress: exitEditing,
+      },
+    ],
+    [exitEditing, isDeletionPending, t],
+  );
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerBackVisible: false,
-          headerLargeTitle: false,
-          title: t('painting.history.title'),
-        }}
+      <DrawerRootHeader
+        rightActions={isEditing ? doneActions : menuActions}
+        title={t('painting.history.title')}
       />
       <View className="flex-1 bg-background">
         <DrawingList />
         <SelectionControls scope={paintingSelectionScope} />
       </View>
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('navigation.openMenu')}
-          icon="line.3.horizontal"
-          onPress={openDrawer}
-        />
-      </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t(isEditing ? 'common.done' : 'common.edit')}
-          disabled={isDeletionPending}
-          onPress={isEditing ? exitEditing : enterEditing}
-        >
-          {t(isEditing ? 'common.done' : 'common.edit')}
-        </Stack.Toolbar.Button>
-      </Stack.Toolbar>
     </>
   );
 }

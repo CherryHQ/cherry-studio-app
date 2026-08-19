@@ -1,9 +1,11 @@
-import { SearchField } from '@cherrystudio/ui/components';
-import { Stack } from 'expo-router';
-import { useCallback, useState } from 'react';
+import { EllipsisIcon } from '@cherrystudio/app-icons';
+import { type MenuItem, SearchField } from '@cherrystudio/ui/components';
+import { Stack, useRouter } from 'expo-router';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, View } from 'react-native';
 
+import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   SelectionControls,
   SelectionProvider,
@@ -23,6 +25,7 @@ const topicSelectionScope = 'conversations';
  */
 function TopicListScreenBody() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { enterEditing, exitEditing } = useSelectionActions();
   const { isDeletionPending, isEditing } = useSelectionState();
   const [searchText, setSearchText] = useState('');
@@ -34,11 +37,59 @@ function TopicListScreenBody() {
     setSearchText('');
     enterEditing();
   }, [enterEditing, isDeletionPending]);
+  const openNewChat = useCallback(() => {
+    router.navigate({ params: {}, pathname: '/' });
+  }, [router]);
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'create-chat',
+        label: t('navigation.newChat'),
+        onPress: openNewChat,
+        systemImage: 'square.and.pencil',
+      },
+      {
+        disabled: isDeletionPending,
+        id: 'select-messages',
+        label: t('topic.selection.start'),
+        onPress: handleEnterEditing,
+        systemImage: 'checklist',
+      },
+    ],
+    [handleEnterEditing, isDeletionPending, openNewChat, t],
+  );
+  const menuActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.more'),
+        androidIcon: EllipsisIcon,
+        icon: 'ellipsis',
+        key: 'topic-actions',
+        menuItems,
+      },
+    ],
+    [menuItems, t],
+  );
+  const doneActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.done'),
+        disabled: isDeletionPending,
+        key: 'finish-selecting-messages',
+        label: t('common.done'),
+        onPress: exitEditing,
+      },
+    ],
+    [exitEditing, isDeletionPending, t],
+  );
   const showsInlineSearch = Platform.OS !== 'ios' && !isEditing;
 
   return (
     <>
-      <Stack.Screen options={{ headerLargeTitle: false, title: t('topic.list.title') }} />
+      <BackHeader
+        rightActions={isEditing ? doneActions : menuActions}
+        title={t('topic.list.title')}
+      />
       <View className="flex-1 bg-background">
         {showsInlineSearch ? (
           <View className="px-3 pt-2 pb-2">
@@ -67,15 +118,6 @@ function TopicListScreenBody() {
           onChangeText={(event) => setSearchText(event.nativeEvent.text)}
         />
       ) : null}
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t(isEditing ? 'common.done' : 'common.edit')}
-          disabled={isDeletionPending}
-          onPress={isEditing ? exitEditing : handleEnterEditing}
-        >
-          {t(isEditing ? 'common.done' : 'common.edit')}
-        </Stack.Toolbar.Button>
-      </Stack.Toolbar>
     </>
   );
 }
