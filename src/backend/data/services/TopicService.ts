@@ -43,7 +43,6 @@ import {
 import { registerDataService } from './dataServiceRegistry';
 import { createRootMessageTx } from './MessageService';
 import { pinService } from './PinService';
-import { tagService } from './TagService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
@@ -499,7 +498,6 @@ export class TopicService {
     }
 
     await tx.delete(messageTable).where(inArray(messageTable.topicId, deletedIds));
-    await tagService.purgeForEntitiesTx(tx, 'topic', deletedIds);
     await pinService.purgeForEntitiesTx(tx, 'topic', deletedIds);
     await tx.delete(topicTable).where(inArray(topicTable.id, deletedIds));
     return deletedIds;

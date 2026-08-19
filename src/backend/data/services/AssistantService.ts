@@ -16,50 +16,40 @@ import {
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Tag } from '@cherrystudio/universal/data/types/tag';
 import { and, asc, desc, eq, gte, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import {
   type AssistantRow,
-  assistantKnowledgeBaseTable,
   assistantMcpServerTable,
   assistantTable,
   pinTable,
   userModelTable,
 } from '@/backend/data/db/schemas';
 
-import { groupService } from './GroupService';
 import { modelService } from './ModelService';
 import { pinService } from './PinService';
-import { tagService } from './TagService';
 import { topicService } from './TopicService';
 import { applyMoves, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
-type AssistantRelationIds = Pick<Assistant, 'knowledgeBaseIds' | 'mcpServerIds'>;
+type AssistantRelationIds = Pick<Assistant, 'mcpServerIds'>;
 type TxLike = any;
 
 function createEmptyRelations(): AssistantRelationIds {
-  return {
-    knowledgeBaseIds: [],
-    mcpServerIds: [],
-  };
+  return { mcpServerIds: [] };
 }
 
 function rowToAssistant(
   row: AssistantRow,
   relations: AssistantRelationIds = createEmptyRelations(),
-  tags: Tag[] = [],
   modelName: null | string = null,
 ): Assistant {
   return {
     createdAt: timestampToISO(row.createdAt),
     description: row.description,
     emoji: row.emoji,
-    groupId: row.groupId,
     id: row.id,
-    knowledgeBaseIds: relations.knowledgeBaseIds,
     mcpServerIds: relations.mcpServerIds,
     modelId: row.modelId as UniqueModelId | null,
     modelName,
@@ -67,7 +57,6 @@ function rowToAssistant(
     orderKey: row.orderKey,
     prompt: row.prompt,
     settings: row.settings,
-    tags,
     updatedAt: timestampToISO(row.updatedAt),
   };
 }
@@ -107,13 +96,12 @@ export class AssistantService {
       throw DataApiErrorFactory.notFound('Assistant', id);
     }
 
-    const [relations, tags, modelName] = await Promise.all([
+    const [relations, modelName] = await Promise.all([
       this.getRelationIdsByAssistantIds(this.db, [id]),
-      tagService.getTagsByEntitiesTx(this.db, 'assistant', [id]),
       this.getModelName(row.assistant.modelId),
     ]);
 
-    return rowToAssistant(row.assistant, relations.get(id), tags.get(id), modelName);
+    return rowToAssistant(row.assistant, relations.get(id), modelName);
   }
 
   get(id: string): Promise<Assistant> {
@@ -140,23 +128,8 @@ export class AssistantService {
       }
     }
 
-    if (query.groupId !== undefined) {
-      conditions.push(eq(assistantTable.groupId, query.groupId));
-    }
-
     if (query.updatedAtFrom !== undefined) {
       conditions.push(gte(assistantTable.updatedAt, Date.parse(query.updatedAtFrom)));
-    }
-
-    if (query.tagIds && query.tagIds.length > 0) {
-      const assistantIds = await tagService.getEntityIdsByTagsTx(
-        this.db,
-        'assistant',
-        query.tagIds,
-      );
-      conditions.push(
-        assistantIds.length > 0 ? inArray(assistantTable.id, assistantIds) : sql`0 = 1`,
-      );
     }
 
     const whereClause = and(...conditions);
@@ -199,9 +172,8 @@ export class AssistantService {
     ]);
 
     const assistantIds = rows.map((row) => row.assistant.id);
-    const [relations, tags, modelNames] = await Promise.all([
+    const [relations, modelNames] = await Promise.all([
       this.getRelationIdsByAssistantIds(this.db, assistantIds),
-      tagService.getTagsByEntitiesTx(this.db, 'assistant', assistantIds),
       modelService.getNamesByUniqueIds(rows.map((row) => row.assistant.modelId)),
     ]);
 
@@ -210,7 +182,6 @@ export class AssistantService {
         rowToAssistant(
           row.assistant,
           relations.get(row.assistant.id),
-          tags.get(row.assistant.id),
           row.assistant.modelId ? (modelNames.get(row.assistant.modelId) ?? null) : null,
         ),
       ),
@@ -222,33 +193,19 @@ export class AssistantService {
   async create(dto: CreateAssistantDto): Promise<Assistant> {
     this.validateName(dto.name);
 
-    const { row, tags } = await this.dbService.withWriteTx((tx) => this.createTx(tx, dto));
+    const row = await this.dbService.withWriteTx((tx) => this.createTx(tx, dto));
 
     const modelName = await this.getModelName(row.modelId);
 
-    return rowToAssistant(
-      row,
-      { knowledgeBaseIds: [], mcpServerIds: [...new Set(dto.mcpServerIds ?? [])] },
-      tags,
-      modelName,
-    );
+    return rowToAssistant(row, { mcpServerIds: [...new Set(dto.mcpServerIds ?? [])] }, modelName);
   }
 
   async createFromImport(dto: ImportAssistantDto): Promise<Assistant> {
     this.validateName(dto.name);
-    const { groupName, ...assistantDto } = dto;
 
-    const { row, tags } = await this.dbService.withWriteTx(async (tx) => {
-      const group = groupName
-        ? await groupService.findOrCreateByNameTx(tx, 'assistant', groupName)
-        : null;
-      return this.createTx(tx, {
-        ...assistantDto,
-        ...(group ? { groupId: group.id } : {}),
-      });
-    });
+    const row = await this.dbService.withWriteTx((tx) => this.createTx(tx, dto));
 
-    return rowToAssistant(row, createEmptyRelations(), tags, await this.getModelName(row.modelId));
+    return rowToAssistant(row, createEmptyRelations(), await this.getModelName(row.modelId));
   }
 
   async update(id: string, dto: UpdateAssistantDto): Promise<Assistant> {
@@ -258,7 +215,7 @@ export class AssistantService {
       this.validateName(dto.name);
     }
 
-    const { mcpServerIds, settings: settingsPatch, tagIds, ...columnFields } = dto;
+    const { mcpServerIds, settings: settingsPatch, ...columnFields } = dto;
     const updates = Object.fromEntries(
       Object.entries(columnFields).filter(([, value]) => value !== undefined),
     ) as Partial<typeof assistantTable.$inferInsert>;
@@ -268,24 +225,20 @@ export class AssistantService {
     }
 
     const hasColumnUpdates = Object.keys(updates).length > 0;
-    const hasTagUpdates = tagIds !== undefined;
     const hasMcpUpdates = mcpServerIds !== undefined;
 
-    if (!hasColumnUpdates && !hasTagUpdates && !hasMcpUpdates) {
+    if (!hasColumnUpdates && !hasMcpUpdates) {
       return current;
     }
 
     const aliveFilter = and(eq(assistantTable.id, id), isNull(assistantTable.deletedAt));
 
-    const { modelName, row, tags } = await this.dbService.withWriteTx(async (tx) => {
+    const { modelName, row } = await this.dbService.withWriteTx(async (tx) => {
       if (dto.modelId && !(await this.modelExistsTx(tx, dto.modelId))) {
         throw DataApiErrorFactory.validation(
           { modelId: [`Model '${dto.modelId}' is not registered in user_model`] },
           `Assistant modelId '${dto.modelId}' is not registered - add the model first or pass null`,
         );
-      }
-      if (dto.groupId !== undefined) {
-        await this.validateAssistantGroupTx(tx, dto.groupId);
       }
 
       let next: AssistantRow;
@@ -307,30 +260,19 @@ export class AssistantService {
         next = existing;
       }
 
-      if (hasTagUpdates) {
-        await tagService.syncEntityTagsTx(tx, 'assistant', id, tagIds);
-      }
-
       await this.syncRelationsTx(tx, id, { mcpServerIds });
 
-      const nextTags = hasTagUpdates
-        ? ((await tagService.getTagsByEntitiesTx(tx, 'assistant', [id])).get(id) ?? [])
-        : current.tags;
       const nextModelName =
         dto.modelId !== undefined && dto.modelId !== current.modelId
           ? await this.getModelName(dto.modelId)
           : current.modelName;
 
-      return { modelName: nextModelName, row: next, tags: nextTags };
+      return { modelName: nextModelName, row: next };
     });
 
     return rowToAssistant(
       row,
-      {
-        knowledgeBaseIds: current.knowledgeBaseIds,
-        mcpServerIds: hasMcpUpdates ? [...new Set(mcpServerIds)] : current.mcpServerIds,
-      },
-      tags,
+      { mcpServerIds: hasMcpUpdates ? [...new Set(mcpServerIds)] : current.mcpServerIds },
       modelName,
     );
   }
@@ -343,14 +285,13 @@ export class AssistantService {
     const deleted = await this.dbService.withWriteTx(async (tx) => {
       const [row] = await tx
         .update(assistantTable)
-        .set({ deletedAt: Date.now(), groupId: null })
+        .set({ deletedAt: Date.now() })
         .where(and(eq(assistantTable.id, id), isNull(assistantTable.deletedAt)))
         .returning({ id: assistantTable.id });
       if (!row) {
         return false;
       }
 
-      await tagService.purgeForEntityTx(tx, 'assistant', id);
       await pinService.purgeForEntityTx(tx, 'assistant', id);
       if (options.deleteTopics === true) {
         deletedTopicIds = await topicService.deleteByAssistantIdTx(tx, id, {
@@ -411,13 +352,9 @@ export class AssistantService {
     });
   }
 
-  private async createTx(
-    tx: TxLike,
-    dto: CreateAssistantDto,
-  ): Promise<{ row: AssistantRow; tags: Tag[] }> {
+  private async createTx(tx: TxLike, dto: CreateAssistantDto): Promise<AssistantRow> {
     const modelId = await this.resolveCreateModelId(tx, dto.modelId);
-    await this.validateAssistantGroupTx(tx, dto.groupId);
-    const { mcpServerIds, tagIds, ...columnDto } = dto;
+    const { mcpServerIds, ...columnDto } = dto;
     const row = (await insertWithOrderKey(
       tx,
       assistantTable,
@@ -430,13 +367,9 @@ export class AssistantService {
       { pkColumn: assistantTable.id, scope: isNull(assistantTable.deletedAt) },
     )) as AssistantRow;
 
-    if (tagIds !== undefined) {
-      await tagService.syncEntityTagsTx(tx, 'assistant', row.id, tagIds);
-    }
     await this.syncRelationsTx(tx, row.id, { mcpServerIds });
 
-    const tagMap = await tagService.getTagsByEntitiesTx(tx, 'assistant', [row.id]);
-    return { row, tags: tagMap.get(row.id) ?? [] };
+    return row;
   }
 
   private async resolveCreateModelId(
@@ -474,27 +407,6 @@ export class AssistantService {
 
     const model = await modelService.getById(modelId);
     return model?.name ?? null;
-  }
-
-  private async validateAssistantGroupTx(
-    tx: TxLike,
-    groupId: null | string | undefined,
-  ): Promise<void> {
-    if (groupId == null) {
-      return;
-    }
-
-    const group = await groupService.findByIdTx(tx, groupId);
-    if (!group) {
-      throw DataApiErrorFactory.validation({
-        groupId: [`Assistant group not found: ${groupId}`],
-      });
-    }
-    if (group.entityType !== 'assistant') {
-      throw DataApiErrorFactory.validation({
-        groupId: [`Assistant group must have entityType 'assistant': ${groupId}`],
-      });
-    }
   }
 
   private async modelExistsTx(tx: TxLike, modelId: string): Promise<boolean> {
@@ -560,33 +472,20 @@ export class AssistantService {
       return result;
     }
 
-    const [mcpRows, knowledgeRows] = await Promise.all([
-      tx
-        .select({
-          assistantId: assistantMcpServerTable.assistantId,
-          mcpServerId: assistantMcpServerTable.mcpServerId,
-        })
-        .from(assistantMcpServerTable)
-        .where(inArray(assistantMcpServerTable.assistantId, uniqueAssistantIds))
-        .orderBy(asc(assistantMcpServerTable.assistantId), asc(assistantMcpServerTable.createdAt)),
-      tx
-        .select({
-          assistantId: assistantKnowledgeBaseTable.assistantId,
-          knowledgeBaseId: assistantKnowledgeBaseTable.knowledgeBaseId,
-        })
-        .from(assistantKnowledgeBaseTable)
-        .where(inArray(assistantKnowledgeBaseTable.assistantId, uniqueAssistantIds))
-        .orderBy(
-          asc(assistantKnowledgeBaseTable.assistantId),
-          asc(assistantKnowledgeBaseTable.createdAt),
-        ),
-    ]);
+    const mcpRows = (await tx
+      .select({
+        assistantId: assistantMcpServerTable.assistantId,
+        mcpServerId: assistantMcpServerTable.mcpServerId,
+      })
+      .from(assistantMcpServerTable)
+      .where(inArray(assistantMcpServerTable.assistantId, uniqueAssistantIds))
+      .orderBy(
+        asc(assistantMcpServerTable.assistantId),
+        asc(assistantMcpServerTable.createdAt),
+      )) as { assistantId: string; mcpServerId: string }[];
 
     for (const row of mcpRows) {
       result.get(row.assistantId)?.mcpServerIds.push(row.mcpServerId);
-    }
-    for (const row of knowledgeRows) {
-      result.get(row.assistantId)?.knowledgeBaseIds.push(row.knowledgeBaseId);
     }
 
     return result;

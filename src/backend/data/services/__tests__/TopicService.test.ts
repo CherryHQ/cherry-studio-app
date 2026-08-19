@@ -3,7 +3,6 @@ import * as Crypto from 'expo-crypto';
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 import { pinService } from '@/backend/data/services/PinService';
-import { tagService } from '@/backend/data/services/TagService';
 
 import { topicService } from '../TopicService';
 
@@ -98,12 +97,8 @@ describe('TopicService', () => {
     const dbService = {
       withWriteTx: async (callback: (tx: Tx) => Promise<void>) => callback(tx),
     } as unknown as DbService;
-    // The sibling purges are stubbed on the singletons the service imports: this
-    // suite mocks the schema module down to the three tables it drives, so the
-    // real purges have no `entityTagTable` to build a statement from.
-    const purgeTags = jest.spyOn(tagService, 'purgeForEntitiesTx').mockImplementation(async () => {
-      operations.push('tag');
-    });
+    // The sibling purge is stubbed on the singleton the service imports: this
+    // suite mocks the schema module down to the two tables it drives.
     const purgePins = jest.spyOn(pinService, 'purgeForEntitiesTx').mockImplementation(async () => {
       operations.push('pin');
     });
@@ -112,9 +107,8 @@ describe('TopicService', () => {
 
     await topicService.deleteMany([...ids, ids[0]]);
 
-    expect(purgeTags).toHaveBeenCalledWith(tx, 'topic', ids);
     expect(purgePins).toHaveBeenCalledWith(tx, 'topic', ids);
-    expect(operations).toEqual(['delete', 'tag', 'pin', 'delete']);
+    expect(operations).toEqual(['delete', 'pin', 'delete']);
   });
 
   test('does not open a transaction for an empty batch delete', async () => {

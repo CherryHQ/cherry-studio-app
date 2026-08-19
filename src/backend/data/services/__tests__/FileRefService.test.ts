@@ -12,10 +12,7 @@ jest.mock('uuid', () => ({
 const fileId = '00000000-0000-7000-8000-000000000001';
 const sourceIds = {
   chat: '00000000-0000-7000-8000-000000000002',
-  job: '00000000-0000-7000-8000-000000000003',
-  miniApp: 'mini-app',
   painting: '00000000-0000-4000-8000-000000000004',
-  provider: 'provider',
 };
 
 describe('FileRefService', () => {
@@ -26,7 +23,7 @@ describe('FileRefService', () => {
     testDatabase = createServiceTestDatabase();
     await installTestHost({ DbService: testDatabase.dbService });
     service = new FileRefService();
-    seedFiveSources(testDatabase.sqlite);
+    seedBothSources(testDatabase.sqlite);
   });
 
   afterEach(async () => {
@@ -34,33 +31,27 @@ describe('FileRefService', () => {
     testDatabase.sqlite.close();
   });
 
-  it('projects and orders all five persistent reference variants', async () => {
+  it('projects and orders both persistent reference variants', async () => {
     const refs = await service.findByEntryId(fileId);
-    expect(refs.map((ref) => ref.sourceType)).toEqual([
-      'chat_message',
-      'painting',
-      'job',
-      'provider_logo',
-      'mini_app_logo',
-    ]);
+    expect(refs.map((ref) => ref.sourceType)).toEqual(['chat_message', 'painting']);
     await expect(
-      service.findBySource({ sourceId: sourceIds.job, sourceType: 'job' }),
-    ).resolves.toEqual([expect.objectContaining({ role: 'mask', sourceType: 'job' })]);
+      service.findBySource({ sourceId: sourceIds.painting, sourceType: 'painting' }),
+    ).resolves.toEqual([expect.objectContaining({ role: 'input', sourceType: 'painting' })]);
     await expect(
-      service.findBySource({ sourceId: sourceIds.provider, sourceType: 'provider_logo' }),
-    ).resolves.toEqual([expect.objectContaining({ sourceType: 'provider_logo' })]);
+      service.findBySource({ sourceId: sourceIds.chat, sourceType: 'chat_message' }),
+    ).resolves.toEqual([expect.objectContaining({ sourceType: 'chat_message' })]);
   });
 
   it('aggregates batch counts and rechecks the same registry inside a transaction', async () => {
     const missing = '00000000-0000-7000-8000-000000000099';
     const counts = await service.countByEntryIds([fileId, missing]);
-    expect(counts.get(fileId)).toBe(5);
+    expect(counts.get(fileId)).toBe(2);
     expect(counts.has(missing)).toBe(false);
     await expect(
       testDatabase.dbService.withWriteTx((tx) =>
         service.countPersistentRefsByEntryIdTx(tx, fileId),
       ),
-    ).resolves.toBe(5);
+    ).resolves.toBe(2);
   });
 
   it('protects a cleanup candidate until every registered source releases it', async () => {
@@ -72,9 +63,6 @@ describe('FileRefService', () => {
     testDatabase.sqlite.exec(`
       DELETE FROM chat_message_file_ref;
       DELETE FROM painting_file_ref;
-      DELETE FROM job_file_ref;
-      DELETE FROM provider_logo_file_ref;
-      DELETE FROM mini_app_logo_file_ref;
     `);
     await expect(
       entries.findCleanupCandidates({ graceMs: 60 * 60 * 1000, limit: 100 }),
@@ -82,7 +70,7 @@ describe('FileRefService', () => {
   });
 });
 
-function seedFiveSources(database: ReturnType<typeof createServiceTestDatabase>['sqlite']): void {
+function seedBothSources(database: ReturnType<typeof createServiceTestDatabase>['sqlite']): void {
   database.exec(`
     INSERT INTO file_entry
       (id, origin, name, ext, size, content_hash, external_path, cleanup_policy,
@@ -97,12 +85,6 @@ function seedFiveSources(database: ReturnType<typeof createServiceTestDatabase>[
     VALUES ('${sourceIds.chat}', NULL, 'topic', 'root', '{"parts":[]}', 'success', 0, 1, 1);
     INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
     VALUES ('${sourceIds.painting}', 'provider', NULL, 'prompt', 'a0', 1, 1);
-    INSERT INTO job (id, type, status, queue, scheduled_at, input, created_at, updated_at)
-    VALUES ('${sourceIds.job}', 'image', 'pending', 'default', 1, '{}', 1, 1);
-    INSERT INTO user_provider (provider_id, name, order_key, created_at, updated_at)
-    VALUES ('${sourceIds.provider}', 'Provider', 'a0', 1, 1);
-    INSERT INTO mini_app (app_id, name, url, order_key, created_at, updated_at)
-    VALUES ('${sourceIds.miniApp}', 'Mini App', 'https://example.com', 'a0', 1, 1);
 
     INSERT INTO chat_message_file_ref
       (id, file_entry_id, source_id, role, created_at, updated_at)
@@ -112,15 +94,5 @@ function seedFiveSources(database: ReturnType<typeof createServiceTestDatabase>[
       (id, file_entry_id, source_id, role, created_at, updated_at)
     VALUES ('00000000-0000-4000-8000-000000000011', '${fileId}', '${sourceIds.painting}',
       'input', 2, 2);
-    INSERT INTO job_file_ref
-      (id, file_entry_id, source_id, role, created_at, updated_at)
-    VALUES ('00000000-0000-4000-8000-000000000012', '${fileId}', '${sourceIds.job}',
-      'mask', 3, 3);
-    INSERT INTO provider_logo_file_ref
-      (id, file_entry_id, source_id, created_at, updated_at)
-    VALUES ('00000000-0000-4000-8000-000000000013', '${fileId}', '${sourceIds.provider}', 4, 4);
-    INSERT INTO mini_app_logo_file_ref
-      (id, file_entry_id, source_id, created_at, updated_at)
-    VALUES ('00000000-0000-4000-8000-000000000014', '${fileId}', '${sourceIds.miniApp}', 5, 5);
   `);
 }

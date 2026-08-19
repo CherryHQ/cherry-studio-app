@@ -10,10 +10,8 @@ import { schema } from '@/backend/data/db/schemas';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { assistantService } from '../AssistantService';
-import { groupService } from '../GroupService';
 import { McpServerService } from '../McpServerService';
 import { pinService } from '../PinService';
-import { tagService } from '../TagService';
 import { topicService } from '../TopicService';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
@@ -118,49 +116,16 @@ describe('AssistantService persistence', () => {
     expect(associationIds(sqlite)).toEqual([existing.id]);
   });
 
-  it('creates, replaces, and clears an assistant group', async () => {
-    const first = await groupService.create({ entityType: 'assistant', name: 'Work' });
-    const second = await groupService.create({ entityType: 'assistant', name: 'Personal' });
-
-    const created = await assistantService.create({ groupId: first.id, name: 'Grouped' });
-    expect(created.groupId).toBe(first.id);
-
-    const replaced = await assistantService.update(created.id, { groupId: second.id });
-    expect(replaced.groupId).toBe(second.id);
-
-    const cleared = await assistantService.update(created.id, { groupId: null });
-    expect(cleared.groupId).toBeNull();
-  });
-
-  it('rejects missing groups and groups owned by another entity type', async () => {
-    const topicGroup = await groupService.create({ entityType: 'topic', name: 'Topics' });
-
-    await expect(
-      assistantService.create({
-        groupId: '99999999-9999-4999-8999-999999999999',
-        name: 'Missing group',
-      }),
-    ).rejects.toMatchObject({ details: { fieldErrors: { groupId: expect.any(Array) } } });
-    await expect(
-      assistantService.create({ groupId: topicGroup.id, name: 'Wrong group' }),
-    ).rejects.toMatchObject({ details: { fieldErrors: { groupId: expect.any(Array) } } });
-  });
-
-  it('filters by group and bypasses pins for updatedAt sorting', async () => {
-    const group = await groupService.create({ entityType: 'assistant', name: 'Work' });
-    insertAssistant(sqlite, 'assistant-old', { groupId: group.id, updatedAt: 100 });
-    insertAssistant(sqlite, 'assistant-new', { groupId: group.id, updatedAt: 200 });
+  it('bypasses pins for updatedAt sorting', async () => {
+    insertAssistant(sqlite, 'assistant-old', { updatedAt: 100 });
+    insertAssistant(sqlite, 'assistant-new', { updatedAt: 200 });
     insertAssistant(sqlite, 'assistant-other', { updatedAt: 300 });
     insertPin(sqlite, 'assistant-old');
 
-    const grouped = await assistantService.list({ groupId: group.id, limit: 100, page: 1 });
-    expect(grouped.items.map((assistant) => assistant.id)).toEqual([
-      'assistant-old',
-      'assistant-new',
-    ]);
+    const pinnedFirst = await assistantService.list({ limit: 100, page: 1 });
+    expect(pinnedFirst.items[0]?.id).toBe('assistant-old');
 
     const scopedSearch = await assistantService.list({
-      groupId: group.id,
       limit: 100,
       page: 1,
       search: 'new',
@@ -196,54 +161,17 @@ describe('AssistantService persistence', () => {
     expect(fetched.modelName).toBe('GPT-5.6 Sol');
   });
 
-  it('reuses an exact-name group across atomic legacy imports', async () => {
-    const groupName = 'x'.repeat(65);
-    const first = await assistantService.createFromImport({ groupName, name: 'First' });
-    const second = await assistantService.createFromImport({ groupName, name: 'Second' });
-
-    expect(first.groupId).toBeTruthy();
-    expect(second.groupId).toBe(first.groupId);
-    expect(
-      sqlite.prepare(`SELECT count(*) AS count FROM "group" WHERE entity_type = 'assistant'`).get(),
-    ).toEqual({ count: 1 });
-  });
-
-  it('rolls back a newly created import group when the assistant insert fails', async () => {
-    sqlite.exec(`
-      CREATE TRIGGER fail_assistant_import
-      BEFORE INSERT ON assistant
-      BEGIN
-        SELECT RAISE(ABORT, 'assistant insert failed');
-      END
-    `);
-
-    await expect(
-      assistantService.createFromImport({ groupName: 'Rolled back', name: 'Imported' }),
-    ).rejects.toThrow();
-    expect(
-      sqlite.prepare(`SELECT count(*) AS count FROM "group" WHERE name = 'Rolled back'`).get(),
-    ).toEqual({ count: 0 });
-  });
-
   it('soft-deletes an assistant while preserving topics by default', async () => {
-    // Spying rather than stubbing: the purges are siblings the service imports
-    // as singletons, and against the real schema they can run for real.
-    const purgeAssistantTags = jest.spyOn(tagService, 'purgeForEntityTx');
+    // Spying rather than stubbing: the purge is a sibling the service imports
+    // as a singleton, and against the real schema it can run for real.
     const purgeAssistantPin = jest.spyOn(pinService, 'purgeForEntityTx');
-    const group = await groupService.create({ entityType: 'assistant', name: 'Work' });
-    insertAssistant(sqlite, 'assistant-delete', { groupId: group.id });
+    insertAssistant(sqlite, 'assistant-delete');
     insertTopic(sqlite, 'topic-preserved', 'assistant-delete');
 
     await expect(assistantService.delete('assistant-delete')).resolves.toEqual({ deleted: true });
     expect(readAssistantDeleteState(sqlite, 'assistant-delete')).toEqual({
       deleted_at: expect.any(Number),
-      group_id: null,
     });
-    expect(purgeAssistantTags).toHaveBeenCalledWith(
-      expect.anything(),
-      'assistant',
-      'assistant-delete',
-    );
     expect(purgeAssistantPin).toHaveBeenCalledWith(
       expect.anything(),
       'assistant',
@@ -267,8 +195,7 @@ describe('AssistantService persistence', () => {
   });
 
   it('rolls back the assistant delete when topic cleanup fails', async () => {
-    const group = await groupService.create({ entityType: 'assistant', name: 'Work' });
-    insertAssistant(sqlite, 'assistant-rollback', { groupId: group.id });
+    insertAssistant(sqlite, 'assistant-rollback');
     jest
       .spyOn(topicService, 'deleteByAssistantIdTx')
       .mockRejectedValueOnce(new Error('topic delete failed'));
@@ -278,7 +205,6 @@ describe('AssistantService persistence', () => {
     ).rejects.toThrow('topic delete failed');
     expect(readAssistantDeleteState(sqlite, 'assistant-rollback')).toEqual({
       deleted_at: null,
-      group_id: group.id,
     });
   });
 });
@@ -301,15 +227,15 @@ function applyMigrations(database: DatabaseSync) {
 function insertAssistant(
   database: DatabaseSync,
   id: string,
-  options: { groupId?: string; modelId?: string; updatedAt?: number } = {},
+  options: { modelId?: string; updatedAt?: number } = {},
 ) {
   database
     .prepare(
       `INSERT INTO assistant (
-        id, name, emoji, group_id, model_id, settings, order_key, created_at, updated_at
-      ) VALUES (?, ?, 'x', ?, ?, '{}', ?, 1, ?)`,
+        id, name, emoji, model_id, settings, order_key, created_at, updated_at
+      ) VALUES (?, ?, 'x', ?, '{}', ?, 1, ?)`,
     )
-    .run(id, id, options.groupId ?? null, options.modelId ?? null, id, options.updatedAt ?? 1);
+    .run(id, id, options.modelId ?? null, id, options.updatedAt ?? 1);
 }
 
 function insertPresetModel(database: DatabaseSync, providerId: string, modelId: string) {
@@ -347,9 +273,8 @@ function insertTopic(database: DatabaseSync, id: string, assistantId: string) {
 }
 
 function readAssistantDeleteState(database: DatabaseSync, id: string) {
-  return database.prepare('SELECT deleted_at, group_id FROM assistant WHERE id = ?').get(id) as {
+  return database.prepare('SELECT deleted_at FROM assistant WHERE id = ?').get(id) as {
     deleted_at: number | null;
-    group_id: string | null;
   };
 }
 

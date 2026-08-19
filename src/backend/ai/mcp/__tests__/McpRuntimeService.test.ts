@@ -59,9 +59,7 @@ function makeAssistant(): Assistant {
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
-    groupId: null,
     id: 'assistant-1',
-    knowledgeBaseIds: [],
     mcpServerIds: [],
     modelId: null,
     modelName: null,
@@ -69,7 +67,6 @@ function makeAssistant(): Assistant {
     orderKey: 'a0',
     prompt: '',
     settings: { ...DEFAULT_ASSISTANT_SETTINGS, mcpMode: 'auto' },
-    tags: [],
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }

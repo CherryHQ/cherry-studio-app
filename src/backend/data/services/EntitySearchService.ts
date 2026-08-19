@@ -16,19 +16,11 @@ import { loggerService } from '@logger';
 import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
-import {
-  agentSessionTable,
-  agentTable,
-  assistantTable,
-  knowledgeBaseTable,
-  topicTable,
-} from '@/backend/data/db/schemas';
+import { assistantTable, topicTable } from '@/backend/data/db/schemas';
 
 import { timestampToISO } from './utils/rowMappers';
 
 const defaultLimitPerType = 50;
-const builtinAgentDescription =
-  'Built-in Cherry Studio advisor. Diagnose issues, guide operations, collect FAQs, submit bugs/feature requests, and search/create Skills';
 const logger = loggerService.withContext('EntitySearchService');
 
 function getUpdatedAtFromMs(updatedAtFrom: string | undefined): number | undefined {
@@ -51,18 +43,6 @@ function withTypeContext(type: EntitySearchType, error: unknown) {
     apiError.details,
     apiError.requestContext,
   );
-}
-
-function agentAvatar(configuration: Record<string, unknown>): string | undefined {
-  return typeof configuration.avatar === 'string' ? configuration.avatar : undefined;
-}
-
-function agentDescription(
-  description: string,
-  configuration: Record<string, unknown>,
-): string | undefined {
-  if (description) return description;
-  return configuration.builtin_role === 'assistant' ? builtinAgentDescription : undefined;
 }
 
 export class EntitySearchService {
@@ -110,14 +90,8 @@ export class EntitySearchService {
     switch (type) {
       case 'assistant':
         return { items: await this.searchAssistants(q, limit, updatedAtFrom), type };
-      case 'agent':
-        return { items: await this.searchAgents(q, limit, updatedAtFrom), type };
       case 'topic':
         return { items: await this.searchTopics(q, limit, updatedAtFrom), type };
-      case 'session':
-        return { items: await this.searchSessions(q, limit, updatedAtFrom), type };
-      case 'knowledge-base':
-        return { items: await this.searchKnowledgeBases(q, limit, updatedAtFrom), type };
       default: {
         const exhaustive: never = type;
         throw new Error(`Unknown entity search type: ${exhaustive}`);
@@ -159,41 +133,6 @@ export class EntitySearchService {
     );
   }
 
-  private async searchAgents(q: string, limit: number, updatedAtFrom?: number) {
-    const pattern = likePattern(q);
-    const conditions: SQL[] = [isNull(agentTable.deletedAt)];
-    const search = or(
-      sql`${agentTable.name} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${agentTable.description} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${agentTable.description} = '' AND json_extract(${agentTable.configuration}, '$.builtin_role') = 'assistant' AND ${builtinAgentDescription} LIKE ${pattern} ESCAPE '\\'`,
-    );
-    if (search) conditions.push(search);
-    if (updatedAtFrom !== undefined) conditions.push(gte(agentTable.updatedAt, updatedAtFrom));
-    const rows = await this.db
-      .select({
-        configuration: agentTable.configuration,
-        description: agentTable.description,
-        id: agentTable.id,
-        name: agentTable.name,
-        updatedAt: agentTable.updatedAt,
-      })
-      .from(agentTable)
-      .where(and(...conditions))
-      .orderBy(desc(agentTable.updatedAt), asc(agentTable.id))
-      .limit(limit);
-    return rows.map(
-      (row): Extract<EntitySearchItem, { type: 'agent' }> => ({
-        emoji: agentAvatar(row.configuration),
-        id: row.id,
-        subtitle: agentDescription(row.description, row.configuration),
-        target: { agentId: row.id },
-        title: row.name,
-        type: 'agent',
-        updatedAt: timestampToISO(row.updatedAt),
-      }),
-    );
-  }
-
   private async searchTopics(q: string, limit: number, updatedAtFrom?: number) {
     const pattern = likePattern(q);
     const conditions: SQL[] = [
@@ -226,72 +165,6 @@ export class EntitySearchService {
         target: { assistantId: row.assistantId ?? undefined, topicId: row.id },
         title: row.name,
         type: 'topic',
-        updatedAt: timestampToISO(row.updatedAt),
-      }),
-    );
-  }
-
-  private async searchSessions(q: string, limit: number, updatedAtFrom?: number) {
-    const pattern = likePattern(q);
-    const conditions: SQL[] = [];
-    const search = or(
-      sql`${agentSessionTable.name} LIKE ${pattern} ESCAPE '\\'`,
-      sql`${agentSessionTable.description} LIKE ${pattern} ESCAPE '\\'`,
-    );
-    if (search) conditions.push(search);
-    if (updatedAtFrom !== undefined) {
-      conditions.push(gte(agentSessionTable.updatedAt, updatedAtFrom));
-    }
-    const rows = await this.db
-      .select({
-        agentId: agentSessionTable.agentId,
-        agentName: sql<null | string>`${agentTable.name}`.as('agent_name'),
-        id: agentSessionTable.id,
-        name: agentSessionTable.name,
-        updatedAt: agentSessionTable.updatedAt,
-      })
-      .from(agentSessionTable)
-      .leftJoin(
-        agentTable,
-        and(eq(agentSessionTable.agentId, agentTable.id), isNull(agentTable.deletedAt)),
-      )
-      .where(and(...conditions))
-      .orderBy(desc(agentSessionTable.updatedAt), asc(agentSessionTable.id))
-      .limit(limit);
-    return rows.map(
-      (row): Extract<EntitySearchItem, { type: 'session' }> => ({
-        id: row.id,
-        subtitle: row.agentName ?? undefined,
-        target: { agentId: row.agentId, sessionId: row.id },
-        title: row.name,
-        type: 'session',
-        updatedAt: timestampToISO(row.updatedAt),
-      }),
-    );
-  }
-
-  private async searchKnowledgeBases(q: string, limit: number, updatedAtFrom?: number) {
-    const pattern = likePattern(q);
-    const conditions: SQL[] = [sql`${knowledgeBaseTable.name} LIKE ${pattern} ESCAPE '\\'`];
-    if (updatedAtFrom !== undefined) {
-      conditions.push(gte(knowledgeBaseTable.updatedAt, updatedAtFrom));
-    }
-    const rows = await this.db
-      .select({
-        id: knowledgeBaseTable.id,
-        name: knowledgeBaseTable.name,
-        updatedAt: knowledgeBaseTable.updatedAt,
-      })
-      .from(knowledgeBaseTable)
-      .where(and(...conditions))
-      .orderBy(desc(knowledgeBaseTable.updatedAt), asc(knowledgeBaseTable.id))
-      .limit(limit);
-    return rows.map(
-      (row): Extract<EntitySearchItem, { type: 'knowledge-base' }> => ({
-        id: row.id,
-        target: { knowledgeBaseId: row.id },
-        title: row.name,
-        type: 'knowledge-base',
         updatedAt: timestampToISO(row.updatedAt),
       }),
     );

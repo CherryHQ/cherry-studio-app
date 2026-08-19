@@ -148,31 +148,6 @@ export const paintingRefFields = {
 };
 export const paintingFileRefSchema = createRefSchema(paintingRefFields);
 
-export const jobSourceType = 'job' as const;
-export const jobRoles = ['input', 'mask'] as const;
-export const jobRoleSchema = z.enum(jobRoles);
-export const jobRefFields = {
-  role: jobRoleSchema,
-  sourceId: z.uuid(),
-  sourceType: z.literal(jobSourceType),
-};
-export const jobFileRefSchema = createRefSchema(jobRefFields);
-
-function defineSingleFileRef<const TSourceType extends string>(sourceType: TSourceType) {
-  const refFields = {
-    sourceId: z.string().min(1),
-    sourceType: z.literal(sourceType),
-  };
-  return {
-    refFields,
-    schema: z.object({ ...refCommonFields, ...refFields }),
-    sourceType,
-  } as const;
-}
-
-export const providerLogoRef = defineSingleFileRef('provider_logo');
-export const miniAppLogoRef = defineSingleFileRef('mini_app_logo');
-
 export const STORED_FILE_REF_PREFIX = 'file:';
 
 export function tagStoredFileRef(id: string): string {
@@ -182,9 +157,6 @@ export function tagStoredFileRef(id: string): string {
 export const allSourceTypes = [
   chatMessageSourceType,
   paintingSourceType,
-  jobSourceType,
-  providerLogoRef.sourceType,
-  miniAppLogoRef.sourceType,
 ] as const satisfies readonly string[];
 export type FileRefSourceType = (typeof allSourceTypes)[number];
 export const FileRefSourceTypeSchema = z.enum(allSourceTypes);
@@ -192,8 +164,5 @@ export const FileRefSourceTypeSchema = z.enum(allSourceTypes);
 export const FileRefSchema = z.discriminatedUnion('sourceType', [
   chatMessageFileRefSchema,
   paintingFileRefSchema,
-  jobFileRefSchema,
-  providerLogoRef.schema,
-  miniAppLogoRef.schema,
 ]);
 export type FileRef = z.infer<typeof FileRefSchema>;
