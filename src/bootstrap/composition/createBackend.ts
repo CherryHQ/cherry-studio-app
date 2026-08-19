@@ -4,7 +4,6 @@ import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers'
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
-import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -36,13 +35,6 @@ export function createBackend(
   infrastructure: { dbService: DbService },
 ): BackendComposition {
   const { dbService } = infrastructure;
-  const cherryin = new CherryInClient({
-    oauth: {
-      authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
-        services.oauthSession.authenticatedFetch(providerId, buildRequest, doFetch, options),
-      hasToken: (providerId) => services.oauthSession.hasToken(providerId),
-    },
-  });
   const models = createModelsModule({
     ai: services.ai,
     materializeRemoteModels,
@@ -127,7 +119,6 @@ export function createBackend(
   return {
     backend: {
       chat: services.chat,
-      cherryin,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         deleteIfUnreferenced: services.fileContent.deleteIfUnreferenced,
@@ -135,7 +126,6 @@ export function createBackend(
       },
       mcp,
       models,
-      oauth: services.oauth,
       paintings,
       permissions,
       profile,
