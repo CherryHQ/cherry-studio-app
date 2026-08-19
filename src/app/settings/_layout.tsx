@@ -24,7 +24,7 @@ export default function SettingsStackLayout() {
         headerTintColor: foregroundColor,
       }}
     >
-      {/* The root keeps the native header so its close button is the same glass
+      {/* The root keeps the native header so its back button is the same glass
           circle as every sub-screen's back button, and so pushing a sub-screen
           doesn't have to materialize a header that wasn't there — which is what
           made the bar jump on entry. It is transparent and untitled because the

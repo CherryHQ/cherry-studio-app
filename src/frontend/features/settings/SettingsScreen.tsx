@@ -11,7 +11,7 @@ import {
 } from '@cherrystudio/app-icons';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import { Stack, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, View } from 'react-native';
@@ -19,6 +19,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
+import { BackHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
@@ -44,7 +45,7 @@ export default function SettingsScreen() {
   // Own the insets explicitly: `never` keeps the scroll-offset zero point stable
   // (so scrollY reads 0 at rest and negative on iOS overscroll), which the hero
   // animation depends on. No top padding: the hero box is pinned to content y=0
-  // and runs to the sheet's own top edge.
+  // and runs to the page's own top edge.
   const contentContainerStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
 
   return (
@@ -139,22 +140,10 @@ export default function SettingsScreen() {
           </Section>
         </View>
       </Animated.ScrollView>
-      {/* No top inset above: the sheet starts below the status bar, but
-          `useSafeAreaInsets` still reports the window's, so honoring it here
-          would push everything down by a status bar that isn't there. */}
+      {/* The transparent native header owns the top inset, so adding the safe
+          area again here would push the sticky bar down twice. */}
       <ProfileStickyBar scrollY={scrollY} topInset={0} userName={userName} />
-      {/* Closing is a native toolbar button rather than a drawn overlay: it puts
-          the control in the same glass circle, at the same place, as the back
-          button on every screen this one pushes. Dragging the sheet down is not
-          enough on its own — the hero owns the top of the screen and swallows
-          that gesture. */}
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('common.close')}
-          icon="xmark"
-          onPress={router.back}
-        />
-      </Stack.Toolbar>
+      <BackHeader />
     </View>
   );
 }

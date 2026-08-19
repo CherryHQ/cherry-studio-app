@@ -39,9 +39,8 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
       closeDrawer: () => navigation.closeDrawer(),
       navigateAssistants: () => navigation.navigate('assistants'),
       openPaintings: () => navigation.navigate('drawings'),
-      // Settings is a root-stack sheet, so it covers the drawer rather than
-      // replacing it. The drawer deliberately stays open underneath: dismissing
-      // the sheet drops you back into the sidebar you opened it from.
+      // Settings lives in the root stack so it can push over the drawer and
+      // return to the exact drawer-backed route that opened it.
       openSettings: () => router.push('/settings'),
       openTopicList: () => router.push('/topics'),
       startNewChat: () => {
