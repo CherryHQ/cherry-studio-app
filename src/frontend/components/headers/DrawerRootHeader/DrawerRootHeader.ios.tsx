@@ -20,6 +20,29 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
     return null;
   }
 
+  if (action.menuItems) {
+    return (
+      <Stack.Toolbar.Menu
+        accessibilityLabel={action.accessibilityLabel}
+        disabled={action.disabled}
+        icon={action.icon}
+        key={action.key}
+      >
+        {action.menuItems.map((item) => (
+          <Stack.Toolbar.MenuAction
+            destructive={item.destructive}
+            disabled={item.disabled}
+            icon={item.systemImage}
+            key={item.id}
+            onPress={item.onPress}
+          >
+            {item.label}
+          </Stack.Toolbar.MenuAction>
+        ))}
+      </Stack.Toolbar.Menu>
+    );
+  }
+
   if (action.label) {
     return (
       <Stack.Toolbar.Button

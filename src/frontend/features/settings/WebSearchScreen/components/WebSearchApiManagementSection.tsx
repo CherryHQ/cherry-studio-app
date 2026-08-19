@@ -61,22 +61,11 @@ export function WebSearchApiManagementSection({
     });
   }, [router]);
 
-  const openApiKeySettings = useCallback(() => {
-    router.push({
-      pathname: '/settings/websearch/[providerId]/api-key-settings',
-      params: {
-        providerId: provider.id,
-        providerName: provider.name,
-      },
-    });
-  }, [provider.id, provider.name, router]);
-
   const contextValue = useMemo<WebSearchApiManagementContextValue>(
     () => ({
       actions: {
         onCapabilityApiHostChange,
         onProviderOverrideChange,
-        openApiKeySettings,
         openZhipuApiKeySettings,
       },
       meta: {
@@ -91,7 +80,6 @@ export function WebSearchApiManagementSection({
     [
       onCapabilityApiHostChange,
       onProviderOverrideChange,
-      openApiKeySettings,
       openZhipuApiKeySettings,
       capability,
       provider,

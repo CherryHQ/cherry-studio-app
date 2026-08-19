@@ -8,24 +8,17 @@ import { useTranslation } from 'react-i18next';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
 
-import {
-  type ProviderModelCheckApiKeyOption,
-  resolveProviderModelCheckApiKey,
-  resolveProviderModelCheckModel,
-} from '../utils/providerModelCheckSelection';
+import { resolveProviderModelCheckModel } from '../utils/providerModelCheckSelection';
 import {
   createProviderModelHealthPendingStatuses,
   type ProviderModelHealthCheckStatus,
   providerModelCheckTimeoutMs,
 } from '../utils/providerModelHealthCheck';
-import { useProviderModelCheckApiKeyOptions } from './useProviderModelCheckApiKeyOptions';
 
 type UseProviderModelCheckOptions = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   models: readonly Model[];
   providerId: string;
-  /** From the route: both choices are picked on pushed screens. */
-  selectedApiKeyId?: string;
   selectedModelId?: string;
 };
 
@@ -41,7 +34,6 @@ export function useProviderModelCheck({
   apiKeys,
   models,
   providerId,
-  selectedApiKeyId,
   selectedModelId,
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
@@ -54,20 +46,15 @@ export function useProviderModelCheck({
   );
   const runIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const apiKeyOptions = useProviderModelCheckApiKeyOptions(apiKeys);
   const selectedModel = useMemo(
     () => resolveProviderModelCheckModel(models, selectedModelId),
     [models, selectedModelId],
   );
-  const selectedApiKey = useMemo(
-    () => resolveProviderModelCheckApiKey(apiKeyOptions, selectedApiKeyId),
-    [apiKeyOptions, selectedApiKeyId],
-  );
+  const selectedApiKey = useMemo(() => apiKeys?.find((apiKey) => apiKey.isEnabled), [apiKeys]);
   const selectionKey = createProviderModelCheckSelectionKey({ selectedApiKey, selectedModel });
   const isChecking = checkState.providerId === providerId && checkState.isChecking;
-  // A result belongs to the model and key it ran with. Picking another one is
-  // how you say the answer on screen is no longer the question — and since both
-  // are picked on a screen of their own, there is no setter here to clear it in.
+  // A result belongs to the model and key it ran with. Changing either means
+  // the answer on screen is no longer the current question.
   const modelStatus =
     checkState.providerId === providerId &&
     checkState.selectionKey === selectionKey &&
@@ -176,7 +163,6 @@ export function useProviderModelCheck({
   ]);
 
   return {
-    apiKeyOptions,
     isChecking,
     modelStatus,
     selectedApiKey,
@@ -198,8 +184,8 @@ function createProviderModelCheckSelectionKey({
   selectedApiKey,
   selectedModel,
 }: {
-  selectedApiKey: ProviderModelCheckApiKeyOption | undefined;
+  selectedApiKey: ApiKeyEntry | undefined;
   selectedModel: Model | null;
 }): string {
-  return `${selectedModel?.id ?? ''}|${selectedApiKey?.value ?? ''}`;
+  return `${selectedModel?.id ?? ''}|${selectedApiKey?.id ?? ''}`;
 }

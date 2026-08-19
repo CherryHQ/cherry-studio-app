@@ -34,7 +34,7 @@ function ZhipuApiKeyShortcutSection() {
 
 function ApiKeysSection({ includesApiHost }: { includesApiHost: boolean }) {
   const {
-    actions: { onProviderOverrideChange, openApiKeySettings },
+    actions: { onProviderOverrideChange },
     state: { capability, provider, providerOverride },
   } = useWebSearchApiManagementContext();
   const { isChecking, startCheck } = useWebSearchProviderCheck(
@@ -64,7 +64,6 @@ function ApiKeysSection({ includesApiHost }: { includesApiHost: boolean }) {
           isChecking={isChecking}
           onCheck={(apiKey) => void startCheck(apiKey)}
           onApiKeysInputChange={handleApiKeysCommit}
-          onManagePress={openApiKeySettings}
         />
         {includesApiHost ? <CapabilityApiHostFields capability={capability} /> : null}
       </View>

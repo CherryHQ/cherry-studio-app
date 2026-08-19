@@ -1,5 +1,5 @@
-import { PlusIcon, SettingsIcon } from '@cherrystudio/app-icons';
-import { Spinner, useAlert } from '@cherrystudio/ui/components';
+import { EllipsisIcon, SettingsIcon } from '@cherrystudio/app-icons';
+import { type MenuItem, Spinner, useAlert } from '@cherrystudio/ui/components';
 import { Color, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,11 +34,7 @@ import { useProviderModelSelection } from './models/hooks/useProviderModelSelect
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 export default function ProviderDetailSettingsScreen() {
-  // The two check choices are picked on pushed screens and come back here as
-  // params: they configure a check you run, not anything the provider stores.
-  const { checkApiKeyId, checkModelId, providerId, providerName } = useLocalSearchParams<{
-    checkApiKeyId?: string;
-    checkModelId?: string;
+  const { providerId, providerName } = useLocalSearchParams<{
     providerId?: string;
     providerName?: string;
   }>();
@@ -92,49 +88,6 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/edit',
     });
   }, [providerId, router]);
-  const openApiKeySettings = useCallback(() => {
-    if (!providerId) {
-      return;
-    }
-
-    router.push({
-      params: {
-        ...(provider?.name ? { providerName: provider.name } : {}),
-        providerId,
-      },
-      pathname: '/settings/provider/[providerId]/api-key-settings',
-    });
-  }, [provider, providerId, router]);
-  const openCheckModelSelect = useCallback(() => {
-    if (!providerId) {
-      return;
-    }
-
-    router.push({
-      params: {
-        ...(checkApiKeyId ? { checkApiKeyId } : {}),
-        ...(checkModelId ? { checkModelId } : {}),
-        providerId,
-        ...(providerName ? { providerName } : {}),
-      },
-      pathname: '/settings/provider/[providerId]/check-model',
-    });
-  }, [checkApiKeyId, checkModelId, providerId, providerName, router]);
-  const openCheckApiKeySelect = useCallback(() => {
-    if (!providerId) {
-      return;
-    }
-
-    router.push({
-      params: {
-        ...(checkApiKeyId ? { checkApiKeyId } : {}),
-        ...(checkModelId ? { checkModelId } : {}),
-        providerId,
-        ...(providerName ? { providerName } : {}),
-      },
-      pathname: '/settings/provider/[providerId]/check-api-key',
-    });
-  }, [checkApiKeyId, checkModelId, providerId, providerName, router]);
   const commitApiKeys = useCallback(
     (input: string) => {
       const nextApiKeys = buildApiKeyEntriesFromInput(input, apiKeys ?? []);
@@ -223,19 +176,6 @@ export default function ProviderDetailSettingsScreen() {
     ],
     [openProviderSettings, provider, t],
   );
-  const modelActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('settings.provider.models.add'),
-        androidIcon: PlusIcon,
-        disabled: !provider,
-        icon: 'plus',
-        key: 'add-model',
-        onPress: openModelAddSettings,
-      },
-    ],
-    [openModelAddSettings, provider, t],
-  );
   const addAction = useMemo(
     () => ({ isDisabled: !provider, onPress: openModelAddSettings }),
     [openModelAddSettings, provider],
@@ -253,6 +193,53 @@ export default function ProviderDetailSettingsScreen() {
   const selectableIds = useMemo(
     () => models.filter((model) => !isDefaultModel(model)).map((model) => model.id),
     [isDefaultModel, models],
+  );
+  const modelMenuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        disabled: !provider,
+        id: 'add-model',
+        label: t('settings.provider.models.addTitle'),
+        onPress: openModelAddSettings,
+        systemImage: 'plus',
+      },
+      {
+        disabled: !provider || isModelPullLoading,
+        id: 'pull-models',
+        label: t('settings.provider.models.pullPreviewTitle'),
+        onPress: () => void openModelPullSettings(),
+        systemImage: 'arrow.trianglehead.2.clockwise.rotate.90',
+      },
+      {
+        disabled: selectableIds.length === 0,
+        id: 'select-models',
+        label: t('settings.provider.models.selection.start'),
+        onPress: modelSelection.enterEditing,
+        systemImage: 'checklist',
+      },
+    ],
+    [
+      isModelPullLoading,
+      modelSelection.enterEditing,
+      openModelAddSettings,
+      openModelPullSettings,
+      provider,
+      selectableIds.length,
+      t,
+    ],
+  );
+  const modelActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('common.more'),
+        androidIcon: EllipsisIcon,
+        disabled: !provider,
+        icon: 'ellipsis',
+        key: 'model-actions',
+        menuItems: modelMenuItems,
+      },
+    ],
+    [modelMenuItems, provider, t],
   );
   const { exitEditing: exitModelSelection, selectedIds: selectedModelIds } = modelSelection;
   const selectedModels = useMemo(
@@ -403,7 +390,6 @@ export default function ProviderDetailSettingsScreen() {
                     <ProviderApiServiceApiKeysField
                       apiKeysInput={apiKeysInput}
                       onCommit={commitApiKeys}
-                      onManagePress={openApiKeySettings}
                     />
                   ) : null}
                 </View>
@@ -411,11 +397,8 @@ export default function ProviderDetailSettingsScreen() {
                   apiKeys={apiKeys}
                   isLoading={modelsQuery.isPending}
                   models={models}
-                  onOpenApiKeySelect={openCheckApiKeySelect}
-                  onOpenModelSelect={openCheckModelSelect}
+                  provider={provider}
                   providerId={providerId}
-                  selectedApiKeyId={checkApiKeyId}
-                  selectedModelId={checkModelId}
                 />
               </>
             )}
@@ -435,12 +418,6 @@ export default function ProviderDetailSettingsScreen() {
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
-        editAction={
-          activeTab === 'models' && selectableIds.length > 0
-            ? { isDisabled: false, onPress: modelSelection.enterEditing }
-            : undefined
-        }
-        pullAction={activeTab === 'models' ? modelPullAction : undefined}
         selection={
           modelSelection.isEditing
             ? {

@@ -1,3 +1,4 @@
+import type { MenuItem } from '@cherrystudio/ui/components';
 import type { StackToolbarButtonProps } from 'expo-router';
 import type { ComponentType, ReactElement } from 'react';
 
@@ -18,6 +19,8 @@ export type HeaderToolbarAction = Pick<
    */
   element?: ReactElement;
   key: string;
+  /** Native overflow menu shown from this toolbar position. */
+  menuItems?: readonly MenuItem[];
   /**
    * Text rendered in place of the icon, for system-style word buttons such as
    * "Edit". Takes precedence over `icon`/`androidIcon` when set.

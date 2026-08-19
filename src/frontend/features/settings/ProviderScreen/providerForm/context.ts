@@ -6,7 +6,6 @@ import type { ProviderFormValues } from './utils/providerFormValues';
 export type ProviderFormActions = {
   setApiKey: (value: string) => void;
   setAvatarUri: (uri: string | null) => void;
-  setDefaultChatEndpoint: (endpoint: EndpointType) => void;
   setEndpointUrl: (endpoint: EndpointType, value: string) => void;
   setName: (value: string) => void;
 };
@@ -20,11 +19,8 @@ export type ProviderFormMeta = {
    * flag per screen.
    */
   canSubmit: boolean;
-  endpointTypes: readonly EndpointType[];
   isDirty: boolean;
   isSubmitting: boolean;
-  /** Everything under "more endpoints" — `endpointTypes` minus the Base URL one. */
-  secondaryEndpointTypes: readonly EndpointType[];
 };
 
 export type ProviderForm = {

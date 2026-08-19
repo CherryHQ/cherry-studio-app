@@ -18,7 +18,6 @@ export type WebSearchApiManagementContextValue = {
       providerId: WebSearchProviderId,
       patch: WebSearchProviderOverride,
     ) => void;
-    openApiKeySettings: () => void;
     openZhipuApiKeySettings: () => void;
   };
   meta: {

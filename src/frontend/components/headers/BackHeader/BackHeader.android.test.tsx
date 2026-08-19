@@ -1,3 +1,4 @@
+import type { ReactElement, ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -16,6 +17,15 @@ jest.mock('expo-router', () => {
 });
 
 jest.mock('@cherrystudio/app-icons', () => ({ ChevronLeftIcon: () => null }));
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const React = jest.requireActual('react');
+
+  return {
+    Menu: ({ children, items }: { children: ReactNode; items: readonly unknown[] }) =>
+      React.createElement('Menu', { items }, children),
+  };
+});
 
 jest.mock('heroui-native/utils', () => ({ cn: (...values: string[]) => values.join(' ') }));
 
@@ -72,6 +82,33 @@ describe('BackHeader.android', () => {
     expect(getOptions().headerRight).toBeUndefined();
     expect(getOptions().headerTitle).toBeUndefined();
     expect(getOptions().title).toBe('Config');
+  });
+
+  it('renders a toolbar menu action with its declared items', async () => {
+    const menuItems = [{ id: 'add', label: 'Add model', onPress: jest.fn() }];
+    const MoreIcon = () => null;
+
+    await act(async () => {
+      renderer = create(
+        <BackHeader
+          rightActions={[
+            {
+              accessibilityLabel: 'More',
+              androidIcon: MoreIcon,
+              icon: 'ellipsis',
+              key: 'more',
+              menuItems,
+            },
+          ]}
+          title="Models"
+        />,
+      );
+    });
+
+    const headerRight = getOptions().headerRight as () => ReactElement<{
+      items: readonly unknown[];
+    }>[];
+    expect(headerRight()[0]?.props.items).toBe(menuItems);
   });
 
   function getOptions(): Record<string, unknown> {

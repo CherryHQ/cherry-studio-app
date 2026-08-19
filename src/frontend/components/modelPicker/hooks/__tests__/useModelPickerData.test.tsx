@@ -10,10 +10,14 @@ import { useModelPickerData } from '../useModelPickerData';
 // `mock`-prefixed names are the only out-of-scope variables jest.mock factories
 // may reference (they're hoisted above the imports).
 const mockEmptyList = Object.freeze([]);
+const mockModelQueries: unknown[] = [];
 const mockTogglePin = jest.fn();
 
 jest.mock('@/frontend/hooks/chat', () => ({
-  useModels: () => ({ isLoading: false, models: mockEmptyList }),
+  useModels: (query: unknown) => {
+    mockModelQueries.push(query);
+    return { isLoading: false, models: mockEmptyList };
+  },
   useProviders: () => ({ isLoading: false, providers: mockEmptyList }),
   usePins: () => ({
     isLoading: false,
@@ -25,6 +29,10 @@ jest.mock('@/frontend/hooks/chat', () => ({
 }));
 
 describe('useModelPickerData', () => {
+  beforeEach(() => {
+    mockModelQueries.length = 0;
+  });
+
   test('returns the same reference across re-renders', () => {
     const results = renderHookTwice(() => useModelPickerData());
 
@@ -47,6 +55,12 @@ describe('useModelPickerData', () => {
     // hook must not surface them.
     expect(result).not.toHaveProperty('pins');
     expect(result).not.toHaveProperty('queries');
+  });
+
+  test('limits the model query to one provider when requested', () => {
+    renderHookTwice(() => useModelPickerData({ providerId: 'provider-1' }));
+
+    expect(mockModelQueries).toContainEqual({ enabled: true, providerId: 'provider-1' });
   });
 });
 

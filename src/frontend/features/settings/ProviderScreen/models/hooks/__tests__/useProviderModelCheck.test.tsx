@@ -1,4 +1,5 @@
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useProviderModelCheck } from '../useProviderModelCheck';
@@ -8,6 +9,7 @@ type ModelCheck = ReturnType<typeof useProviderModelCheck>;
 const mockCheckHealth = jest.fn();
 const mockAlertShow = jest.fn();
 const mockToastShow = jest.fn();
+const EMPTY_API_KEYS: readonly ApiKeyEntry[] = [];
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
@@ -57,9 +59,15 @@ describe('useProviderModelCheck', () => {
   let renderer: ReactTestRenderer | undefined;
   let modelCheck: ModelCheck | undefined;
 
-  function Probe({ selectedModelId }: { selectedModelId?: string }) {
+  function Probe({
+    apiKeys = EMPTY_API_KEYS,
+    selectedModelId,
+  }: {
+    apiKeys?: readonly ApiKeyEntry[];
+    selectedModelId?: string;
+  }) {
     modelCheck = useProviderModelCheck({
-      apiKeys: [],
+      apiKeys,
       models: [model, otherModel],
       providerId: 'provider-1',
       selectedModelId,
@@ -90,6 +98,21 @@ describe('useProviderModelCheck', () => {
       title: 'settings.provider.models.checkFailed',
     });
     expect(mockToastShow).not.toHaveBeenCalled();
+  });
+
+  test('checks with the first enabled API key', async () => {
+    mockCheckHealth.mockResolvedValue([{ latency: 120, model, status: 'success' }]);
+    const apiKeys = [
+      { id: 'disabled', isEnabled: false, key: 'sk-disabled' },
+      { id: 'enabled', isEnabled: true, key: 'sk-enabled' },
+    ];
+
+    act(() => {
+      renderer?.update(<Probe apiKeys={apiKeys} />);
+    });
+    await act(async () => modelCheck?.startCheck());
+
+    expect(mockCheckHealth).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk-enabled' }));
   });
 
   test('stops reporting a result once another model is selected', async () => {
