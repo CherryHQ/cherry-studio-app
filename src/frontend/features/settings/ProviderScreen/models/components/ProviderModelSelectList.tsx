@@ -1,8 +1,3 @@
-import {
-  BottomSheet,
-  type BottomSheetCloseReason,
-  useBottomSheet,
-} from '@cherrystudio/ui/components';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
@@ -10,21 +5,12 @@ import {
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { SelectionSheetSearchField } from '@/frontend/components/selectionSheet';
-
-import { filterModelsByKeywords } from '../utils/providerModelSearch';
 import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
 
-const providerModelSelectSheetHeightFraction = 0.85;
-// Distinguishes a close that carries a choice from a dismissal, so the value
-// lands after the sheet is gone rather than re-laying out the list on its way.
-const selectionCloseReason = 'selection';
-
-type ProviderModelSelectSheetExtraData = {
+type ProviderModelSelectListExtraData = {
   onSelect: (modelId: UniqueModelId) => void;
   provider: Provider | undefined;
   selectedModelId: UniqueModelId | null;
@@ -35,91 +21,14 @@ type ProviderModelSelectSheetExtraData = {
  * them. A generic label-and-tick option list stood here before, which made the
  * same models look like two different things two taps apart.
  */
-export function ProviderModelSelectSheet({
+export function ProviderModelSelectList({
   emptyText,
-  isOpen,
-  models,
-  onClose,
-  onSelect,
-  provider,
-  selectedModelId,
-  title,
-}: {
-  emptyText: string;
-  isOpen: boolean;
-  models: readonly Model[];
-  onClose: () => void;
-  onSelect: (modelId: UniqueModelId) => void;
-  provider: Provider | undefined;
-  selectedModelId: UniqueModelId | null;
-  title: string;
-}) {
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const [searchText, setSearchText] = useState('');
-  const pendingModelIdRef = useRef<UniqueModelId | null>(null);
-  const sheetHeight =
-    (windowHeight - insets.top - insets.bottom) * providerModelSelectSheetHeightFraction;
-  const displayedModels = useMemo(
-    () => filterModelsByKeywords(searchText, [...models]),
-    [models, searchText],
-  );
-
-  const handleSheetClose = useCallback(
-    (reason: BottomSheetCloseReason) => {
-      const pendingModelId = pendingModelIdRef.current;
-      pendingModelIdRef.current = null;
-      setSearchText('');
-      onClose();
-
-      if (reason === selectionCloseReason && pendingModelId !== null) {
-        onSelect(pendingModelId);
-      }
-    },
-    [onClose, onSelect],
-  );
-  const handleSelect = useCallback((modelId: UniqueModelId) => {
-    pendingModelIdRef.current = modelId;
-  }, []);
-
-  return (
-    <BottomSheet
-      closeAccessibilityLabel={title}
-      height={sheetHeight}
-      isOpen={isOpen}
-      onClose={handleSheetClose}
-      testID="provider-model-selection"
-      title={title}
-    >
-      {/* The sheet's fixed height plus this column bound the list, so it
-          virtualizes without any height math of its own. */}
-      <View style={styles.body}>
-        <View className="px-4 pt-2">
-          <SelectionSheetSearchField onChange={setSearchText} value={searchText} />
-        </View>
-        <ProviderModelSelectList
-          emptyText={emptyText}
-          isOpen={isOpen}
-          models={displayedModels}
-          onSelect={handleSelect}
-          provider={provider}
-          selectedModelId={selectedModelId}
-        />
-      </View>
-    </BottomSheet>
-  );
-}
-
-function ProviderModelSelectList({
-  emptyText,
-  isOpen,
   models,
   onSelect,
   provider,
   selectedModelId,
 }: {
   emptyText: string;
-  isOpen: boolean;
   models: readonly Model[];
   onSelect: (modelId: UniqueModelId) => void;
   provider: Provider | undefined;
@@ -133,11 +42,6 @@ function ProviderModelSelectList({
   // "which is set". Guarded on a ref so typing in the search box, which reorders
   // the list under it, doesn't yank the list back.
   useEffect(() => {
-    if (!isOpen) {
-      hasScrolledToSelectedRef.current = false;
-      return;
-    }
-
     if (hasScrolledToSelectedRef.current || selectedRowIndex < 0) {
       return;
     }
@@ -152,8 +56,8 @@ function ProviderModelSelectList({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [isOpen, selectedRowIndex]);
-  const listExtraData = useMemo<ProviderModelSelectSheetExtraData>(
+  }, [selectedRowIndex]);
+  const listExtraData = useMemo<ProviderModelSelectListExtraData>(
     () => ({ onSelect, provider, selectedModelId }),
     [onSelect, provider, selectedModelId],
   );
@@ -182,6 +86,7 @@ function ProviderModelSelectList({
     <LegendList
       ref={listRef}
       contentContainerStyle={styles.listContent}
+      contentInsetAdjustmentBehavior="automatic"
       data={models}
       estimatedItemSize={providerModelRowEstimatedHeight}
       extraData={listExtraData}
@@ -208,11 +113,9 @@ const ProviderModelSelectRow = memo(function ProviderModelSelectRow({
   onSelect: (modelId: UniqueModelId) => void;
   provider: Provider | undefined;
 }) {
-  const { requestClose } = useBottomSheet();
   const handlePress = useCallback(() => {
     onSelect(model.id);
-    requestClose(selectionCloseReason);
-  }, [model.id, onSelect, requestClose]);
+  }, [model.id, onSelect]);
 
   return (
     <Pressable
@@ -233,9 +136,9 @@ const ProviderModelSelectRow = memo(function ProviderModelSelectRow({
 });
 
 const styles = StyleSheet.create({
-  body: { flex: 1 },
   list: { flex: 1 },
-  // 8 rather than the 16 the sheet's other chrome sits on: the rows carry their
-  // own, which is what leaves the selected row's fill room outside its text.
+  // 8 rather than the 16 the screen's other content sits on: the rows carry
+  // their own, which is what leaves the selected row's fill room outside its
+  // text.
   listContent: { paddingBottom: 20, paddingHorizontal: 8, paddingTop: 8 },
 });

@@ -42,13 +42,17 @@ export function BrandAvatar({
 }: BrandAvatarProps) {
   const fallback = children === undefined ? getBrandAvatarFallback(label) : undefined;
   const fallbackSize = size * DEFAULT_BRAND_ICON_SCALE;
+  // Corner radius and the initial's type size are ratios of the default size,
+  // not constants: the same avatar is rendered at 26 in lists and at form-hero
+  // sizes in the provider form, and a fixed 6pt radius reads as a square there.
+  const frameRadius = (size * BRAND_AVATAR_FRAME_RADIUS) / BRAND_AVATAR_SIZE;
 
   return (
     <BrandAvatarSizeContext value={size}>
       <View
         className={BRAND_AVATAR_FRAME_CLASS_NAME}
         style={{
-          borderRadius: BRAND_AVATAR_FRAME_RADIUS,
+          borderRadius: frameRadius,
           height: size,
           width: size,
         }}
@@ -59,14 +63,17 @@ export function BrandAvatar({
             className="items-center justify-center"
             style={{
               backgroundColor: fallback.backgroundColor,
-              borderRadius: BRAND_AVATAR_FRAME_RADIUS - 1,
+              borderRadius: frameRadius - 1,
               height: fallbackSize,
               width: fallbackSize,
             }}
           >
             <Text
               className="font-medium"
-              style={{ color: fallback.color, fontSize: BRAND_AVATAR_INITIAL_FONT_SIZE }}
+              style={{
+                color: fallback.color,
+                fontSize: (size * BRAND_AVATAR_INITIAL_FONT_SIZE) / BRAND_AVATAR_SIZE,
+              }}
             >
               {fallback.initial}
             </Text>

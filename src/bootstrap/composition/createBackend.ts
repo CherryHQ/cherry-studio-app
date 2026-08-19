@@ -17,6 +17,7 @@ import {
 } from '@/backend/services/profile/userAvatarStorage';
 import { createProvidersModule } from '@/backend/services/providers/createProvidersModule';
 import {
+  deleteProviderAvatar,
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
@@ -96,6 +97,7 @@ export function createBackend(
   const providers = createProvidersModule({
     avatars: {
       persist: saveProviderAvatar,
+      remove: deleteProviderAvatar,
       resolve: getProviderAvatarUri,
     },
     canRemove: canDeleteProvider,

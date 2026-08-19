@@ -4,9 +4,10 @@ This module owns provider detail settings, API service settings, and provider mo
 
 ## Public Interface
 
-- `ProviderApiManagementSection`, `ProviderModelList`, and `useProviderDetailSettings` are exported
-  from `index.ts`.
-- API service form hooks, forms, and pure helpers are exported from `apiService/index.ts`.
+- `ProviderModelList` and `useProviderDetailSettings` are exported from `index.ts`, alongside the
+  screens themselves.
+- API service form hooks, fields, and pure helpers are exported from `apiService/index.ts`.
+- The shared provider form is exported from `providerForm/index.ts`.
 
 ## Organization
 
@@ -14,3 +15,31 @@ This module owns provider detail settings, API service settings, and provider mo
 - `apiService/` owns API key, auth, endpoint draft, dirty-state, and save behavior.
 - `detail/` owns provider detail data loading.
 - `models/` owns provider model grouping and list UI.
+- `providerForm/` owns the compound form both `NewProviderScreen` and `ProviderEditScreen` compose.
+
+## Provider Form
+
+`ProviderForm` is a compound component over one draft: `ProviderForm.Avatar`, `.Name`, `.BaseUrl`,
+`.ApiKey`, and `.Endpoints`. The draft lives in `useProviderFormDraft`, which the screen calls and
+passes down (`<ProviderForm value={form}>`) so the screen can drive its own header from the same
+state.
+
+Screens differ by which slots they compose, not by flags:
+
+- `NewProviderScreen` composes every slot, including `ProviderForm.ApiKey` for a first key, and adds
+  its own "Base URL is required" rule on top of `meta.canSubmit`.
+- `ProviderEditScreen` leaves `ProviderForm.ApiKey` out — an existing provider's keys are a list with
+  per-key state, managed from the detail page — and passes the provider's built-in logo as
+  `ProviderForm.Avatar`'s fallback.
+
+A provider whose auth type has no editable URL (AWS, GCP, OAuth) yields no endpoint types, and both
+endpoint slots render nothing.
+
+## Connectivity Check
+
+The check section names a model and a key; both are picked on pushed screens
+(`ProviderModelCheckModelScreen`, `ProviderModelCheckApiKeyScreen`) rather than in sheets. Neither
+choice is stored — a check is something you run — so each screen carries its choice back to the
+detail screen as a route param with `dismissTo`, and `useProviderModelCheck` reads the params rather
+than owning selection state. A result is tagged with the model and key it ran with, so picking
+another one stops showing it.

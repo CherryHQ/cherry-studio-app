@@ -46,13 +46,24 @@ const model: Model = {
   providerId: 'provider-1',
   supportsStreaming: true,
 };
+const otherModel: Model = {
+  ...model,
+  id: createUniqueModelId('provider-1', 'model-2'),
+  modelId: 'model-2',
+  name: 'Model Two',
+};
 
 describe('useProviderModelCheck', () => {
   let renderer: ReactTestRenderer | undefined;
   let modelCheck: ModelCheck | undefined;
 
-  function Probe() {
-    modelCheck = useProviderModelCheck({ apiKeys: [], models: [model], providerId: 'provider-1' });
+  function Probe({ selectedModelId }: { selectedModelId?: string }) {
+    modelCheck = useProviderModelCheck({
+      apiKeys: [],
+      models: [model, otherModel],
+      providerId: 'provider-1',
+      selectedModelId,
+    });
     return null;
   }
 
@@ -79,5 +90,21 @@ describe('useProviderModelCheck', () => {
       title: 'settings.provider.models.checkFailed',
     });
     expect(mockToastShow).not.toHaveBeenCalled();
+  });
+
+  test('stops reporting a result once another model is selected', async () => {
+    mockCheckHealth.mockResolvedValue([{ latency: 120, model, status: 'success' }]);
+
+    await act(async () => modelCheck?.startCheck());
+    expect(modelCheck?.modelStatus).toMatchObject({ status: 'success' });
+
+    // The selection arrives as a route param from the pushed picker, so this is
+    // the only way the section learns the answer on screen is stale.
+    act(() => {
+      renderer?.update(<Probe selectedModelId={otherModel.id} />);
+    });
+
+    expect(modelCheck?.selectedModel?.id).toBe(otherModel.id);
+    expect(modelCheck?.modelStatus).toMatchObject({ status: 'pending' });
   });
 });

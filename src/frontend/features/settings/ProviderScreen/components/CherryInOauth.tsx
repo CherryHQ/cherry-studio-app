@@ -21,20 +21,20 @@ export function CherryInOauth({ provider }: { provider: Provider }) {
   const oauth = useCherryInOauth(provider.id);
   const handleTopup = useCallback(() => void openExternalUrl(CHERRYIN_TOPUP_URL), []);
 
-  const authenticatedContent = (
+  const accountAction = (
     <Button onPress={handleTopup} size="sm">
       {t('settings.provider.oauth.cherryIn.topup')}
     </Button>
   );
-  const identityDetail = (
-    <Text className="text-sm text-secondary-foreground">
+  const accountDetail = (
+    <Text className="text-secondary-foreground text-sm">
       {`${t('settings.provider.oauth.cherryIn.balance')}: ${formatCurrency(oauth.balance)}`}
     </Text>
   );
   return (
     <ProviderOauthSectionView
-      authenticatedContent={authenticatedContent}
-      identityDetail={identityDetail}
+      accountAction={accountAction}
+      accountDetail={accountDetail}
       oauth={oauth}
       provider={provider}
     />

@@ -51,7 +51,10 @@ describe('BrandAvatar', () => {
       </BrandAvatar>,
     );
 
-    expect(frame().props.style).toEqual({ borderRadius: 6, height: 32, width: 32 });
+    // The frame's own radius is a ratio of the default size, not a constant:
+    // the same avatar is rendered at 26 in lists and near 100 in the provider
+    // form, where a fixed 6 would read as a square.
+    expect(frame().props.style).toEqual({ borderRadius: 32 * (6 / 26), height: 32, width: 32 });
     expect(mockImage).toHaveBeenCalledWith(
       expect.objectContaining({
         contentFit: 'contain',

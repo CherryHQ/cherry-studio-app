@@ -5,10 +5,7 @@ import {
   normalizeApiKeySingleLine,
 } from '../apiService/utils/providerApiServiceApiKeys';
 import { shouldShowApiKeys } from '../apiService/utils/providerApiServiceAuth';
-import {
-  getProviderApiServiceApiKeysDirtyState,
-  getProviderApiServiceEndpointDirtyState,
-} from '../apiService/utils/providerApiServiceDirtyState';
+import { getProviderApiServiceApiKeysDirtyState } from '../apiService/utils/providerApiServiceDirtyState';
 import type { EndpointDraft } from '../apiService/utils/providerApiServiceEndpointDraft';
 import {
   buildCustomProviderCreationPayload,
@@ -338,26 +335,6 @@ describe('provider API service form helpers', () => {
         entries: [{ id: 'key-a', isEnabled: true, key: 'sk-edited' }],
       }),
     ).toBe(true);
-  });
-
-  it('ignores empty new endpoint rows in dirty state', () => {
-    expect(
-      getProviderApiServiceEndpointDirtyState({
-        draft: createTestEndpointDraft({
-          baseUrlByEndpoint: {
-            'openai-chat-completions': 'https://chat.example.com',
-            'openai-responses': '',
-          },
-          visibleEndpointTypes: ['openai-chat-completions', 'openai-responses'],
-        }),
-        provider: {
-          authType: 'api-key',
-          endpointConfigs: {
-            'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
-          },
-        } as never,
-      }),
-    ).toBe(false);
   });
 
   it('rejects invalid endpoint base URLs', () => {

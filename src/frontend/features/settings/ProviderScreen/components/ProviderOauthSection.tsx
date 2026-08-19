@@ -6,18 +6,15 @@ import {
   ReceiptTextIcon,
   XIcon,
 } from '@cherrystudio/app-icons';
-import { Button, Section } from '@cherrystudio/ui/components';
-import { resolveProviderIcon } from '@cherrystudio/ui/icons/providers';
+import { Button } from '@cherrystudio/ui/components';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import * as Clipboard from 'expo-clipboard';
 import type { ReactNode } from 'react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
 import { useAlert } from '@/frontend/components/AlertProvider';
-import { Image } from '@/frontend/components/nativePrimitives';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import {
@@ -61,22 +58,26 @@ export function ProviderOauthSection({ provider }: ProviderOauthSectionProps) {
 }
 
 type ProviderOauthSectionViewProps = ProviderOauthSectionProps & {
-  authenticatedContent?: ReactNode;
-  identityDetail?: ReactNode;
+  /** Extra action beside "sign out", such as CherryIN's top-up. */
+  accountAction?: ReactNode;
+  /** Extra line under the account label, such as CherryIN's balance. */
+  accountDetail?: ReactNode;
   oauth: ProviderOauthController;
 };
 
+/**
+ * The provider's account, as one more labelled field alongside Base URL and API
+ * Keys. It draws no logo or provider name of its own: the detail page's banner
+ * already says which provider this is, for OAuth and API-key providers alike.
+ */
 export function ProviderOauthSectionView({
-  authenticatedContent,
-  identityDetail,
+  accountAction,
+  accountDetail,
   oauth,
   provider,
 }: ProviderOauthSectionViewProps) {
   const { alert } = useAlert();
   const { i18n, t } = useTranslation();
-  const { theme } = useUniwind();
-  const providerIcon = resolveProviderIcon(provider.id);
-  const iconSource = providerIcon?.[theme === 'dark' ? 'dark' : 'light'];
   const accountLinks = resolveProviderAccountLinks(provider.id, i18n.language);
 
   const handleLogin = useCallback(async () => {
@@ -109,14 +110,9 @@ export function ProviderOauthSectionView({
 
   if (oauth.statusQuery.isPending) {
     return (
-      <Section contentClassName="bg-field">
-        <Section.Item>
-          <View className="gap-2 py-1">
-            <View className="h-5 w-40 rounded bg-secondary" />
-            <View className="h-4 w-full rounded bg-secondary" />
-          </View>
-        </Section.Item>
-      </Section>
+      <AccountField>
+        <View className="h-5 w-24 rounded bg-secondary" />
+      </AccountField>
     );
   }
 
@@ -130,119 +126,107 @@ export function ProviderOauthSectionView({
         ? t('settings.provider.oauth.blockedMobile')
         : t(`settings.provider.oauth.configuration.${oauth.status.configurationIssue}`);
     return (
-      <Section contentClassName="bg-field">
-        <Section.Item>
-          <View className="flex-row items-start gap-3 py-1">
-            <CircleAlertIcon />
-            <View className="min-w-0 flex-1 gap-1">
-              <Text className="font-medium text-secondary-foreground">{provider.name}</Text>
-              <Text selectable className="text-secondary-foreground text-sm">
-                {message}
-              </Text>
-            </View>
-          </View>
-        </Section.Item>
-      </Section>
+      <AccountField>
+        <View className="flex-row items-start gap-2">
+          <CircleAlertIcon className="size-4 text-secondary-foreground" />
+          <Text selectable className="min-w-0 flex-1 text-secondary-foreground text-sm">
+            {message}
+          </Text>
+        </View>
+      </AccountField>
     );
   }
 
   if (oauth.deviceAuthorization) {
     return (
-      <Section contentClassName="bg-field">
-        <Section.Item>
-          <View className="gap-3">
-            <ProviderIdentity iconSource={iconSource} provider={provider} />
-            <Text className="text-secondary-foreground text-sm">
-              {t('settings.provider.oauth.deviceCodeDescription')}
+      <AccountField>
+        <View className="gap-3">
+          <Text className="text-secondary-foreground text-sm">
+            {t('settings.provider.oauth.deviceCodeDescription')}
+          </Text>
+          <View className="flex-row items-center gap-2 rounded-lg bg-secondary px-3 py-2">
+            <Text
+              selectable
+              className="min-w-0 flex-1 font-semibold text-secondary-foreground text-lg"
+              style={{ fontVariant: ['tabular-nums'] }}
+            >
+              {oauth.deviceAuthorization.userCode}
             </Text>
-            <View className="flex-row items-center gap-2 rounded-lg bg-secondary px-3 py-2">
-              <Text
-                selectable
-                className="min-w-0 flex-1 font-semibold text-secondary-foreground text-lg"
-                style={{ fontVariant: ['tabular-nums'] }}
-              >
-                {oauth.deviceAuthorization.userCode}
-              </Text>
-              <Button
-                accessibilityLabel={t('common.copy')}
-                className="h-9 w-9 min-w-0 p-0"
-                icon={<CopyIcon />}
-                onPress={() =>
-                  void Clipboard.setStringAsync(oauth.deviceAuthorization?.userCode ?? '')
-                }
-                variant="ghost"
-              />
-            </View>
-            <View className="flex-row gap-2">
-              <Button
-                className="flex-1"
-                icon={<ExternalLinkIcon />}
-                onPress={() =>
-                  void openExternalUrl(oauth.deviceAuthorization?.verificationUri ?? '')
-                }
-                variant="secondary"
-              >
-                {t('settings.provider.oauth.openAuthorization')}
-              </Button>
-              <Button
-                accessibilityLabel={t('common.cancel')}
-                className="h-10 w-10 min-w-0 p-0"
-                icon={<XIcon />}
-                onPress={() => void oauth.cancelAuthorization()}
-                variant="ghost"
-              />
-            </View>
+            <Button
+              accessibilityLabel={t('common.copy')}
+              className="h-9 w-9 min-w-0 p-0"
+              icon={<CopyIcon />}
+              onPress={() =>
+                void Clipboard.setStringAsync(oauth.deviceAuthorization?.userCode ?? '')
+              }
+              variant="ghost"
+            />
           </View>
-        </Section.Item>
-      </Section>
+          <View className="flex-row gap-2">
+            <Button
+              className="flex-1"
+              icon={<ExternalLinkIcon />}
+              onPress={() => void openExternalUrl(oauth.deviceAuthorization?.verificationUri ?? '')}
+              variant="secondary"
+            >
+              {t('settings.provider.oauth.openAuthorization')}
+            </Button>
+            <Button
+              accessibilityLabel={t('common.cancel')}
+              className="h-10 w-10 min-w-0 p-0"
+              icon={<XIcon />}
+              onPress={() => void oauth.cancelAuthorization()}
+              variant="ghost"
+            />
+          </View>
+        </View>
+      </AccountField>
     );
   }
 
   if (!oauth.status.isAuthenticated) {
     return (
-      <Section contentClassName="bg-field">
-        <Section.Item>
-          <View className="flex-row items-center gap-3">
-            <ProviderIdentity iconSource={iconSource} provider={provider} />
-            <View className="flex-1" />
-            <Button
-              disabled={oauth.isLoggingIn}
-              loading={oauth.isLoggingIn}
-              onPress={() => void handleLogin()}
-              size="sm"
-            >
-              {t('settings.provider.oauth.login')}
-            </Button>
-          </View>
-        </Section.Item>
-      </Section>
+      <AccountField
+        action={
+          <Button
+            disabled={oauth.isLoggingIn}
+            loading={oauth.isLoggingIn}
+            onPress={() => void handleLogin()}
+            size="sm"
+          >
+            {t('settings.provider.oauth.login')}
+          </Button>
+        }
+      />
     );
   }
 
   return (
-    <Section contentClassName="bg-field">
-      <Section.Item>
+    <AccountField
+      action={
+        <>
+          {accountAction}
+          <Button
+            accessibilityLabel={t('settings.provider.oauth.logout')}
+            disabled={oauth.isLoggingOut}
+            loading={oauth.isLoggingOut}
+            onPress={requestLogout}
+            size="sm"
+            variant="secondary"
+          >
+            {t('settings.provider.oauth.logout')}
+          </Button>
+        </>
+      }
+    >
+      {oauth.status.accountId || accountDetail || accountLinks ? (
         <View className="gap-3">
-          <View className="flex-row items-center gap-3">
-            <ProviderIdentity detail={identityDetail} iconSource={iconSource} provider={provider} />
-            <View className="flex-1" />
-            {authenticatedContent}
-            <Button
-              accessibilityLabel={t('settings.provider.oauth.logout')}
-              disabled={oauth.isLoggingOut}
-              loading={oauth.isLoggingOut}
-              onPress={requestLogout}
-              size="sm"
-              variant="secondary"
-            >
-              {t('settings.provider.oauth.logout')}
-            </Button>
-          </View>
           {oauth.status.accountId ? (
-            <Text selectable className="text-secondary-foreground text-sm">
+            <Text selectable className="text-secondary-foreground text-sm" numberOfLines={1}>
               {oauth.status.accountId}
             </Text>
           ) : null}
+          {accountDetail}
           {accountLinks ? (
             <View className="flex-row gap-2">
               <Button
@@ -265,8 +249,28 @@ export function ProviderOauthSectionView({
             </View>
           ) : null}
         </View>
-      </Section.Item>
-    </Section>
+      ) : null}
+    </AccountField>
+  );
+}
+
+/**
+ * "Account", laid out like the Base URL and API Keys fields above it: a bold
+ * label with its control on the same line, and anything else stacked below.
+ */
+function AccountField({ action, children }: { action?: ReactNode; children?: ReactNode }) {
+  const { t } = useTranslation();
+
+  return (
+    <View className="gap-2">
+      <View className="min-h-9 flex-row items-center gap-3">
+        <Text className="min-w-0 flex-1 font-semibold text-foreground text-sm">
+          {t('settings.provider.apiService.oauthAccount')}
+        </Text>
+        {action}
+      </View>
+      {children}
+    </View>
   );
 }
 
@@ -284,36 +288,4 @@ function resolveProviderAccountLinks(
     return url.toString();
   };
   return { bills: withLanguage(links.bills), charge: withLanguage(links.charge) };
-}
-
-function ProviderIdentity({
-  detail,
-  iconSource,
-  provider,
-}: {
-  detail?: ReactNode;
-  iconSource: ReturnType<typeof resolveProviderIcon> extends infer T
-    ? T extends Record<string, infer TSource>
-      ? TSource | undefined
-      : never
-    : never;
-  provider: Provider;
-}) {
-  return (
-    <View className="min-w-0 shrink flex-row items-center gap-3">
-      {iconSource ? (
-        <Image className="h-10 w-10 rounded-lg" source={iconSource} />
-      ) : (
-        <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary">
-          <Text className="font-semibold text-secondary-foreground">{provider.name[0]}</Text>
-        </View>
-      )}
-      <View className="min-w-0 shrink">
-        <Text className="text-base font-medium text-secondary-foreground" numberOfLines={1}>
-          {provider.name}
-        </Text>
-        {detail}
-      </View>
-    </View>
-  );
 }
