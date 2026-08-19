@@ -42,7 +42,6 @@ export default function WebSearchSettingsScreen() {
           capability="searchKeywords"
           provider={searchProvider}
           providerOverrides={webSearchProviders.providerOverrides.value}
-          onCapabilityApiHostChange={webSearchProviders.providerOverrides.onCapabilityApiHostChange}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
         >
           <Section.Item
@@ -56,7 +55,6 @@ export default function WebSearchSettingsScreen() {
           capability="fetchUrls"
           provider={fetchProvider}
           providerOverrides={webSearchProviders.providerOverrides.value}
-          onCapabilityApiHostChange={webSearchProviders.providerOverrides.onCapabilityApiHostChange}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
         >
           <Section.Item

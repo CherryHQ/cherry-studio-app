@@ -1,5 +1,4 @@
 import type {
-  WebSearchCapability,
   WebSearchCompressionMethod,
   WebSearchProviderId,
   WebSearchProviderOverride,
@@ -109,17 +108,6 @@ export function useWebSearchProviderPreferences() {
     [preferences.providerOverrides, setPreferences],
   );
 
-  const handleCapabilityApiHostChange = useCallback(
-    (providerId: WebSearchProviderId, capability: WebSearchCapability, apiHost: string) => {
-      handleProviderOverrideChange(providerId, {
-        capabilities: {
-          [capability]: { apiHost },
-        },
-      });
-    },
-    [handleProviderOverrideChange],
-  );
-
   return {
     compressionCutoffLimit: {
       value: preferences.compressionCutoffLimit,
@@ -145,7 +133,6 @@ export function useWebSearchProviderPreferences() {
     },
     providerOverrides: {
       value: preferences.providerOverrides,
-      onCapabilityApiHostChange: handleCapabilityApiHostChange,
       onProviderOverrideChange: handleProviderOverrideChange,
     },
     searchKeywords: {

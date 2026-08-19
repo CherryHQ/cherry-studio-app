@@ -9,11 +9,6 @@ import type { useTranslation } from 'react-i18next';
 
 export type WebSearchApiManagementContextValue = {
   actions: {
-    onCapabilityApiHostChange: (
-      providerId: WebSearchProviderId,
-      capability: WebSearchCapability,
-      apiHost: string,
-    ) => void;
     onProviderOverrideChange: (
       providerId: WebSearchProviderId,
       patch: WebSearchProviderOverride,
