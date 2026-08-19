@@ -86,18 +86,18 @@ export function createMcpModule(
 
     let toolsChanged = false;
     if (previous) {
-      const transportChanged = previous.endpointUrl !== server.endpointUrl;
-      toolsChanged = transportChanged;
+      const endpointChanged = previous.endpointUrl !== server.endpointUrl;
+      toolsChanged = endpointChanged;
       const becameEnabled = !previous.isEnabled && server.isEnabled;
       const becameDisabled = previous.isEnabled && !server.isEnabled;
 
-      if (transportChanged) {
+      if (endpointChanged) {
         dependencies.runtime.invalidate(id);
       } else if (becameDisabled) {
         dependencies.runtime.invalidate(id, { preserveSnapshot: true });
       }
 
-      if (server.isEnabled && (transportChanged || becameEnabled)) {
+      if (server.isEnabled && (endpointChanged || becameEnabled)) {
         void dependencies.runtime.warm(server);
       }
     }

@@ -24,6 +24,11 @@ describe('bundled SQLite migrations', () => {
 
     try {
       database.exec('PRAGMA foreign_keys = ON');
+      // The baseline was re-squashed once, deliberately, while the table set was
+      // still shrinking. From here it is frozen: every schema change is a new
+      // appended migration, because re-squashing replays CREATE TABLE against a
+      // database that already has those tables (drizzle applies any entry whose
+      // folderMillis exceeds the last one an install recorded).
       for (const migrationSql of readMigrationSqlFiles()) {
         applyMigrationSql(database, migrationSql);
       }

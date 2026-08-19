@@ -97,7 +97,7 @@ A provider/model routing description that selects the endpoint type and AI SDK a
 _Avoid_: URL string
 
 **Preference**:
-A scoped local setting persisted in the mobile database and accessed through the separate
+A local setting persisted in the mobile database under its own key and accessed through the separate
 `PreferenceClient` and preference hooks.
 _Avoid_: global variable, config constant
 

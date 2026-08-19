@@ -1,4 +1,4 @@
-import type { PreferenceKeyType, PreferenceSchema } from './preferenceSchema';
+import type { PreferenceKeyType, PreferenceSchema } from './preference-schema';
 import type { PreferenceUpdateOptions } from './preferenceTypes';
 
 export type PreferenceMapping = Record<string, PreferenceKeyType>;

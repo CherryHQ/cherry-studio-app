@@ -9,8 +9,8 @@ export type {
   PermissionPreferenceKey,
   PreferenceKeyType,
   PreferenceSchema,
-} from './preferenceSchema';
-export { FONT_SIZE_STEPS, PreferenceDefaults } from './preferenceSchema';
+} from './preference-schema';
+export { FONT_SIZE_STEPS, PreferenceDefaults } from './preference-schema';
 export type {
   LanguageVarious,
   PermissionMode,

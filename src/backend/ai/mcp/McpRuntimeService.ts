@@ -24,7 +24,7 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 const logger = loggerService.withContext('McpRuntimeService');
 
 const TOOLS_CACHE_TTL_MS = 5 * 60 * 1000;
-const ACTIVE_PREWARM_CONCURRENCY = 3;
+const ENABLED_PREWARM_CONCURRENCY = 3;
 const ASSISTANT_WARM_TIMEOUT_MS = 3 * 1000;
 /** Ceiling for connect + tools/list. `@ai-sdk/mcp` implements no request timeout
  * of its own: `RequestOptions.timeout` is declared but never read, and neither
@@ -332,8 +332,8 @@ export class McpRuntimeService extends BaseService {
     try {
       const { items } = await mcpServerService.list({ isEnabled: true });
       const servers = items.filter(hasRunnableUrl);
-      for (let index = 0; index < servers.length; index += ACTIVE_PREWARM_CONCURRENCY) {
-        const batch = servers.slice(index, index + ACTIVE_PREWARM_CONCURRENCY);
+      for (let index = 0; index < servers.length; index += ENABLED_PREWARM_CONCURRENCY) {
+        const batch = servers.slice(index, index + ENABLED_PREWARM_CONCURRENCY);
         await Promise.allSettled(batch.map((server) => this.warmToolsCache(server)));
       }
     } catch (error) {
