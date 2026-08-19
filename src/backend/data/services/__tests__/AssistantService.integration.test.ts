@@ -1,5 +1,4 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
@@ -13,10 +12,9 @@ import { assistantService } from '../AssistantService';
 import { McpServerService } from '../McpServerService';
 import { pinService } from '../PinService';
 import { topicService } from '../TopicService';
+import { applyMigrations } from './_testDb';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
-
-type MigrationJournal = { entries: { tag: string }[] };
 
 describe('AssistantService persistence', () => {
   let sqlite: DatabaseSync;
@@ -73,27 +71,15 @@ describe('AssistantService persistence', () => {
     sqlite.close();
   });
 
-  it('replaces all MCP associations regardless of transport', async () => {
-    const a = await mcpServerService.create(
-      { baseUrl: 'https://a.example/mcp', name: 'A' },
-      'streamableHttp',
-    );
-    const b = await mcpServerService.create(
-      { baseUrl: 'https://b.example/mcp', name: 'B' },
-      'streamableHttp',
-    );
-    const c = await mcpServerService.create(
-      { baseUrl: 'https://c.example/mcp', name: 'C' },
-      'streamableHttp',
-    );
-    insertRawServer(sqlite, 'hidden-stdio', 'Hidden', 'stdio');
+  it('replaces the whole MCP association set on every update', async () => {
+    const a = await mcpServerService.create({ endpointUrl: 'https://a.example/mcp', name: 'A' });
+    const b = await mcpServerService.create({ endpointUrl: 'https://b.example/mcp', name: 'B' });
+    const c = await mcpServerService.create({ endpointUrl: 'https://c.example/mcp', name: 'C' });
     insertAssistant(sqlite, 'assistant-1');
-    insertAssociation(sqlite, 'assistant-1', 'hidden-stdio');
+    insertAssociation(sqlite, 'assistant-1', c.id);
 
-    await assistantService.update('assistant-1', {
-      mcpServerIds: [a.id, b.id, 'hidden-stdio'],
-    });
-    expect(associationIds(sqlite)).toEqual([a.id, b.id, 'hidden-stdio'].sort());
+    await assistantService.update('assistant-1', { mcpServerIds: [a.id, b.id] });
+    expect(associationIds(sqlite)).toEqual([a.id, b.id].sort());
 
     await assistantService.update('assistant-1', { mcpServerIds: [b.id, c.id] });
     expect(associationIds(sqlite)).toEqual([b.id, c.id].sort());
@@ -103,10 +89,10 @@ describe('AssistantService persistence', () => {
   });
 
   it('rolls back relation changes when an MCP server id does not exist', async () => {
-    const existing = await mcpServerService.create(
-      { baseUrl: 'https://existing.example/mcp', name: 'Existing' },
-      'streamableHttp',
-    );
+    const existing = await mcpServerService.create({
+      endpointUrl: 'https://existing.example/mcp',
+      name: 'Existing',
+    });
     insertAssistant(sqlite, 'assistant-1');
     insertAssociation(sqlite, 'assistant-1', existing.id);
 
@@ -209,21 +195,6 @@ describe('AssistantService persistence', () => {
   });
 });
 
-function applyMigrations(database: DatabaseSync) {
-  const directory = `${process.cwd()}/migrations/sqlite-drizzle`;
-  const journal = JSON.parse(
-    readFileSync(`${directory}/meta/_journal.json`, 'utf8'),
-  ) as MigrationJournal;
-  for (const { tag } of journal.entries) {
-    const migration = readFileSync(`${directory}/${tag}.sql`, 'utf8');
-    for (const statement of migration.split('--> statement-breakpoint')) {
-      if (statement.trim()) {
-        database.exec(statement);
-      }
-    }
-  }
-}
-
 function insertAssistant(
   database: DatabaseSync,
   id: string,
@@ -283,21 +254,6 @@ function readTopicCount(database: DatabaseSync, id: string): number {
     count: number;
   };
   return row.count;
-}
-
-function insertRawServer(
-  database: DatabaseSync,
-  id: string,
-  name: string,
-  type: 'stdio' | 'streamableHttp',
-) {
-  database
-    .prepare(
-      `INSERT INTO mcp_server (
-        id, name, type, is_active, created_at, updated_at
-      ) VALUES (?, ?, ?, 1, 1, 1)`,
-    )
-    .run(id, name, type);
 }
 
 function insertAssociation(database: DatabaseSync, assistantId: string, mcpServerId: string) {

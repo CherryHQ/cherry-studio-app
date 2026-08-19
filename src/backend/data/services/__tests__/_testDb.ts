@@ -31,6 +31,36 @@ export function applyMigrations(database: DatabaseSync): void {
       }
     }
   }
+  applyPendingSchemaSlimming(database);
+}
+
+/**
+ * Brings tables the schema slimming has already rewritten in line with
+ * `db/schemas`, which the migrations have not caught up with yet.
+ *
+ * The table set is still shrinking, so the release baseline is rewritten once
+ * at the end rather than accumulating one throwaway migration per table. Until
+ * then services are typed against the new schema while the journal still
+ * creates the old one, and every service test would query columns that the
+ * replayed migrations never made. Delete this the moment the baseline is
+ * regenerated — it exists to keep that regeneration a single deliberate step,
+ * not to become a second source of schema truth.
+ */
+function applyPendingSchemaSlimming(database: DatabaseSync): void {
+  // `assistant_mcp_server` cascades off `mcp_server`, so the drop empties it;
+  // it is empty at setup time, and its FK re-resolves by name to the new table.
+  database.exec(`
+    DROP TABLE mcp_server;
+    CREATE TABLE mcp_server (
+      id text PRIMARY KEY NOT NULL,
+      name text NOT NULL,
+      endpoint_url text NOT NULL,
+      is_enabled integer DEFAULT false NOT NULL,
+      created_at integer NOT NULL,
+      updated_at integer NOT NULL
+    );
+    CREATE INDEX mcp_server_is_enabled_idx ON mcp_server (is_enabled);
+  `);
 }
 
 export type TestDb = {

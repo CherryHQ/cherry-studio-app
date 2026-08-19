@@ -1,8 +1,7 @@
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 export type McpConnectionConfig = {
-  baseUrl: string;
-  headers?: Record<string, string>;
+  endpointUrl: string;
 };
 
 export type McpToolSummary = {
@@ -10,8 +9,8 @@ export type McpToolSummary = {
   name: string;
 };
 
+/** Initialization metadata, used to name a server before its first save. */
 export type McpServerInfo = {
-  instructions?: string;
   name: string;
   title?: string;
   version: string;
@@ -29,7 +28,7 @@ export type McpServerRuntimeSummary = {
 
 export interface McpModule {
   getRuntimeSummaries(
-    servers: readonly StreamableHttpMcpServer[],
+    servers: readonly McpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>>;
   getServerInfo(config: McpConnectionConfig): Promise<McpServerInfo>;
   invalidate(serverId: string): void;

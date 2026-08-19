@@ -1,20 +1,14 @@
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 import { createMcpModule, type McpModuleDependencies } from '../createMcpModule';
 
-function server(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {
+function server(overrides: Partial<McpServer> = {}): McpServer {
   return {
-    baseUrl: 'https://example.com/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
-    description: '',
-    disabledAutoApproveTools: [],
-    disabledTools: [],
-    headers: {},
+    endpointUrl: 'https://example.com/mcp',
     id: 'server-1',
-    isActive: true,
+    isEnabled: true,
     name: 'Server',
-    timeout: 30,
-    type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -35,9 +29,7 @@ function createSubject() {
       create: jest.fn(async () => current),
       get: jest.fn(async () => current),
       remove: jest.fn(async () => undefined),
-      update: jest.fn(async (_id, input) =>
-        server({ ...input, timeout: input.timeout ?? undefined }),
-      ),
+      update: jest.fn(async (_id, input) => server(input)),
     },
   };
   const backend = createMcpModule(dependencies);
@@ -45,12 +37,12 @@ function createSubject() {
 }
 
 describe('createMcpModule', () => {
-  it('warms an active server after creation', async () => {
+  it('warms an enabled server after creation', async () => {
     const { backend, dependencies } = createSubject();
 
     const created = await backend.createServer({
-      baseUrl: 'https://example.com/mcp',
-      isActive: true,
+      endpointUrl: 'https://example.com/mcp',
+      isEnabled: true,
       name: 'Server',
     });
 
@@ -61,7 +53,7 @@ describe('createMcpModule', () => {
     const { backend, dependencies } = createSubject();
 
     const result = await backend.updateServer('server-1', {
-      baseUrl: 'https://example.com/new-mcp',
+      endpointUrl: 'https://example.com/new-mcp',
     });
 
     expect(result.toolsChanged).toBe(true);
@@ -72,7 +64,7 @@ describe('createMcpModule', () => {
   it('preserves the last runtime snapshot when a server is disabled', async () => {
     const { backend, dependencies } = createSubject();
 
-    await backend.updateServer('server-1', { isActive: false });
+    await backend.updateServer('server-1', { isEnabled: false });
 
     expect(dependencies.runtime.invalidate).toHaveBeenCalledWith('server-1', {
       preserveSnapshot: true,
@@ -80,12 +72,12 @@ describe('createMcpModule', () => {
     expect(dependencies.runtime.warm).not.toHaveBeenCalled();
   });
 
-  it('reports unchanged tools when a policy-only update skips the runtime', async () => {
+  it('reports unchanged tools when a rename skips the runtime', async () => {
     const { backend, dependencies } = createSubject();
 
-    await expect(
-      backend.updateServer('server-1', { disabledTools: ['search'] }),
-    ).resolves.toMatchObject({ toolsChanged: false });
+    await expect(backend.updateServer('server-1', { name: 'Renamed' })).resolves.toMatchObject({
+      toolsChanged: false,
+    });
     expect(dependencies.servers.get).not.toHaveBeenCalled();
     expect(dependencies.runtime.invalidate).not.toHaveBeenCalled();
     expect(dependencies.runtime.warm).not.toHaveBeenCalled();
