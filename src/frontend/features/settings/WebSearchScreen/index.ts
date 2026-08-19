@@ -8,7 +8,6 @@ export {
   mergeWebSearchProviderOverride,
   type WebSearchProviderMenuEntry,
 } from './utils/providerSettings';
-export { default as WebSearchApiKeySettingsScreen } from './WebSearchApiKeySettingsScreen';
 export { default as WebSearchAdvancedScreen } from './WebSearchAdvancedScreen';
 export { default as WebSearchCompressionMethodScreen } from './WebSearchCompressionMethodScreen';
 export { default as WebSearchDefaultProviderScreen } from './WebSearchDefaultProviderScreen';

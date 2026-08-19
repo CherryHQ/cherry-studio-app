@@ -1,9 +1,10 @@
 import { MenuIcon } from '@cherrystudio/app-icons';
+import { Menu } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { Stack } from 'expo-router';
 import { Fragment, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { HeaderToolbarAction } from '../BackHeader/BackHeader.types';
 import { HeaderIconButton } from '../components/HeaderIconButton';
@@ -17,6 +18,24 @@ function renderHeaderAction(action: HeaderToolbarAction): ReactNode {
 
   if (action.element) {
     return <Fragment key={action.key}>{action.element}</Fragment>;
+  }
+
+  if (action.menuItems && action.androidIcon) {
+    const AndroidIcon = action.androidIcon;
+
+    return (
+      <Menu items={action.menuItems} key={action.key} trigger="tap">
+        <View
+          accessibilityLabel={action.accessibilityLabel}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: action.disabled }}
+          className={cn('size-9 items-center justify-center', action.disabled && 'opacity-50')}
+          pointerEvents={action.disabled ? 'none' : 'auto'}
+        >
+          <AndroidIcon className="size-6 text-foreground" />
+        </View>
+      </Menu>
+    );
   }
 
   if (action.label) {

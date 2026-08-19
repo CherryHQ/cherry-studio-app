@@ -106,14 +106,10 @@ export const WEB_SEARCH_PROVIDER_PRESET_MAP = {
   },
 } as const satisfies Record<WebSearchProviderId, WebSearchProviderPresetConfig>;
 
-/**
- * Every preset except `fetch`, whose desktop implementation needs Readability
- * extraction and DNS pinning. Keep in sync with the mobile provider registry.
- */
+/** Providers exposed by the mobile UI. `fetch` and SearXNG remain data-compatible only. */
 export const MOBILE_SUPPORTED_WEB_SEARCH_PROVIDER_IDS = [
   'zhipu',
   'tavily',
-  'searxng',
   'exa',
   'exa-mcp',
   'bocha',

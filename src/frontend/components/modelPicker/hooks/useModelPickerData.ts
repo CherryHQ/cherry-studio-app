@@ -12,6 +12,7 @@ import {
 } from '../utils/modelPickerData';
 
 type UseModelPickerDataOptions = {
+  providerId?: string;
   searchText?: string;
   selectedTags?: readonly ModelPickerTag[];
   showPinnedModels?: boolean;
@@ -24,12 +25,22 @@ type UseModelPickerDataOptions = {
 const EMPTY_TAGS: readonly ModelPickerTag[] = Object.freeze([]);
 
 export function useModelPickerData({
+  providerId,
   searchText = '',
   selectedTags = EMPTY_TAGS,
   showPinnedModels = true,
 }: UseModelPickerDataOptions = {}) {
-  const { isLoading: isModelsLoading, models } = useModels({ enabled: true });
-  const { isLoading: isProvidersLoading, providers } = useProviders({ enabled: true });
+  const { isLoading: isModelsLoading, models } = useModels({ enabled: true, providerId });
+  const { isLoading: isProvidersLoading, providers: enabledProviders } = useProviders({
+    enabled: true,
+  });
+  const providers = useMemo(
+    () =>
+      providerId
+        ? enabledProviders.filter((provider) => provider.id === providerId)
+        : enabledProviders,
+    [enabledProviders, providerId],
+  );
   const pins = usePins('model');
   const pinnedModelIds = useMemo(() => getPinnedModelIds(pins.pins), [pins.pins]);
   const groups = useMemo(

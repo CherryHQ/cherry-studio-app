@@ -6,21 +6,21 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { BackHeader } from '@/frontend/components/headers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 
 import { ProviderBrandAvatar } from '../components/ProviderAvatar';
 import { useProviderAvatar, useProviderAvatarActions } from '../components/providerAvatarStore';
 import {
-  buildProviderApiServiceEndpointUpdates,
+  buildProviderPrimaryBaseUrlUpdates,
   ProviderApiServiceSaveError,
   useProviderApiServiceQueries,
   useProviderApiServiceSheetClose,
 } from './apiService';
 import {
-  ProviderDeleteButton,
-  providerDeleteButtonClearance,
-} from './components/ProviderDeleteButton';
+  ProviderEditActions,
+  providerEditActionsClearance,
+} from './components/ProviderEditActions';
 import { useProviderDeletion } from './hooks/useProviderDeletion';
 import {
   createEmptyProviderFormValues,
@@ -28,7 +28,6 @@ import {
   ProviderForm,
   providerFormAvatarSize,
   resolveProviderFormEndpointTypes,
-  toProviderFormEndpointDraft,
   useProviderFormDraft,
 } from './providerForm';
 
@@ -88,12 +87,13 @@ export default function ProviderEditScreen() {
 
     let updates: UpdateProviderInput = { name: state.name.trim() };
 
-    if (endpointTypes.length > 0) {
+    const baseUrlEndpoint = endpointTypes[0];
+    if (baseUrlEndpoint) {
       try {
         updates = {
           ...updates,
-          ...buildProviderApiServiceEndpointUpdates({
-            draft: toProviderFormEndpointDraft({ endpointTypes, values: state }),
+          ...buildProviderPrimaryBaseUrlUpdates({
+            baseUrl: state.endpointUrls[baseUrlEndpoint] ?? '',
             provider,
           }),
         };
@@ -147,38 +147,21 @@ export default function ProviderEditScreen() {
     t,
   ]);
 
-  const rightActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('common.save'),
-        disabled: !meta.canSubmit,
-        key: 'save-provider',
-        label: t('common.save'),
-        onPress: handleSave,
-      },
-    ],
-    [handleSave, meta.canSubmit, t],
-  );
-
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
   }
 
   return (
     <>
-      <BackHeader
-        onBack={requestClose}
-        rightActions={rightActions}
-        title={t('settings.provider.edit.title')}
-      />
+      <BackHeader onBack={requestClose} title={t('settings.provider.edit.title')} />
       {/* One tree from the first frame, loaded or not: mounting the scroll view
           after the push settles leaves it with a zero top content inset. */}
       <KeyboardAwareScrollView
         alwaysBounceVertical={false}
         bottomOffset={keyboardBottomOffset}
         className="flex-1"
-        // Room for the delete button the form scrolls under.
-        contentContainerStyle={{ paddingBottom: providerDeleteButtonClearance }}
+        // Room for the action buttons the form scrolls under.
+        contentContainerStyle={{ paddingBottom: providerEditActionsClearance }}
         contentInsetAdjustmentBehavior="automatic"
         disableScrollOnKeyboardHide
         keyboardDismissMode="on-drag"
@@ -199,11 +182,17 @@ export default function ProviderEditScreen() {
           </ProviderForm.Avatar>
           <ProviderForm.Name />
           <ProviderForm.BaseUrl />
-          <ProviderForm.Endpoints />
         </ProviderForm>
       </KeyboardAwareScrollView>
-      {canDelete(provider) ? (
-        <ProviderDeleteButton isDisabled={isDeleting || isSaving} onPress={handleDelete} />
+      {provider ? (
+        <ProviderEditActions
+          isDeleteDisabled={isDeleting || isSaving}
+          isSaveDisabled={!meta.canSubmit || isDeleting}
+          isSaving={isSaving}
+          onDelete={handleDelete}
+          onSave={handleSave}
+          showDelete={canDelete(provider)}
+        />
       ) : null}
     </>
   );

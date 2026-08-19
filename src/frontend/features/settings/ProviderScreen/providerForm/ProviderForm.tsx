@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { View } from 'react-native';
 
 import { ProviderFormAvatar } from './components/ProviderFormAvatar';
-import { ProviderFormBaseUrl, ProviderFormEndpoints } from './components/ProviderFormEndpoints';
+import { ProviderFormBaseUrl } from './components/ProviderFormEndpoints';
 import { ProviderFormApiKey, ProviderFormName } from './components/ProviderFormFields';
 import { type ProviderForm as ProviderFormValue, ProviderFormContext } from './context';
 
@@ -13,7 +13,7 @@ type ProviderFormProps = {
 
 /**
  * Provider editing as a compound component: `ProviderForm.Avatar` / `.Name` /
- * `.BaseUrl` / `.ApiKey` / `.Endpoints` under a root that carries the draft.
+ * `.BaseUrl` / `.ApiKey` under a root that carries the draft.
  * Screens compose the fields they want instead of switching them on and off —
  * creating a provider offers a first API key, editing one does not.
  *
@@ -35,6 +35,5 @@ export const ProviderForm = Object.assign(ProviderFormRoot, {
   ApiKey: ProviderFormApiKey,
   Avatar: ProviderFormAvatar,
   BaseUrl: ProviderFormBaseUrl,
-  Endpoints: ProviderFormEndpoints,
   Name: ProviderFormName,
 });

@@ -156,7 +156,6 @@ export default function NewProviderScreen() {
           <ProviderForm.Name />
           <ProviderForm.BaseUrl />
           <ProviderForm.ApiKey />
-          <ProviderForm.Endpoints />
         </ProviderForm>
       </KeyboardAwareScrollView>
     </>

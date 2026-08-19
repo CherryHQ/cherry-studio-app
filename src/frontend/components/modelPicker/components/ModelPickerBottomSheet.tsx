@@ -25,6 +25,7 @@ type ModelPickerBottomSheetProps = {
   isOpen?: boolean;
   onClose?: () => void;
   onSelect: (item: ModelPickerModelItem) => void;
+  providerId?: string;
   selectedTags?: readonly ModelPickerTag[];
   selectedModelId: string | null;
   showPinnedModels?: boolean;
@@ -38,6 +39,7 @@ export function ModelPickerBottomSheet({
   isOpen,
   onClose,
   onSelect,
+  providerId,
   selectedTags = defaultSelectedTags,
   selectedModelId,
   showPinnedModels = true,
@@ -50,6 +52,7 @@ export function ModelPickerBottomSheet({
   const [searchText, setSearchText] = useState('');
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
   const { groups, isLoading, pinnedModelIds } = useModelPickerData({
+    providerId,
     searchText,
     selectedTags,
     showPinnedModels,

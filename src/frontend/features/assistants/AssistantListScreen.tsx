@@ -1,5 +1,5 @@
-import { BotIcon, CheckIcon, PlusIcon } from '@cherrystudio/app-icons';
-import { useAlert } from '@cherrystudio/ui/components';
+import { BotIcon, CheckIcon, EllipsisIcon } from '@cherrystudio/app-icons';
+import { type MenuItem, useAlert } from '@cherrystudio/ui/components';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -81,29 +81,46 @@ export default function AssistantListScreen() {
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/new');
   }, [router]);
+  const menuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'create-assistant',
+        label: t('assistant.actions.add'),
+        onPress: openCreateAssistant,
+        systemImage: 'plus',
+      },
+      {
+        disabled: visibleAssistants.length === 0 || isBatchDeleting,
+        id: 'select-assistants',
+        label: t('assistant.selection.start'),
+        onPress: enterEditing,
+        systemImage: 'checklist',
+      },
+    ],
+    [enterEditing, isBatchDeleting, openCreateAssistant, t, visibleAssistants.length],
+  );
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        accessibilityLabel: t('assistant.actions.create'),
-        androidIcon: PlusIcon,
-        icon: 'plus',
-        key: 'create-assistant',
-        onPress: openCreateAssistant,
+        accessibilityLabel: t('common.more'),
+        androidIcon: EllipsisIcon,
+        icon: 'ellipsis',
+        key: 'assistant-actions',
+        menuItems,
       },
     ],
-    [openCreateAssistant, t],
+    [menuItems, t],
   );
-  const leftActions = useMemo<HeaderToolbarAction[]>(
+  const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
-        accessibilityLabel: t(isEditing ? 'common.done' : 'common.edit'),
-        disabled: visibleAssistants.length === 0 || isBatchDeleting,
-        key: 'edit-assistants',
-        label: t(isEditing ? 'common.done' : 'common.edit'),
-        onPress: isEditing ? exitEditing : enterEditing,
+        accessibilityLabel: t('common.done'),
+        key: 'finish-selecting-assistants',
+        label: t('common.done'),
+        onPress: exitEditing,
       },
     ],
-    [enterEditing, exitEditing, isBatchDeleting, isEditing, t, visibleAssistants.length],
+    [exitEditing, t],
   );
   const openAssistantEditor = useCallback(
     (assistantId: string) => {
@@ -167,8 +184,7 @@ export default function AssistantListScreen() {
   return (
     <>
       <DrawerRootHeader
-        leftActions={leftActions}
-        rightActions={isEditing ? undefined : rightActions}
+        rightActions={isEditing ? doneActions : rightActions}
         title={t('assistant.list.title')}
       />
       <AssistantListSearchBar isEditing={isEditing} setSearchText={setSearchText} />

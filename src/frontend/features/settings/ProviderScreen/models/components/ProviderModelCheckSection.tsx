@@ -1,9 +1,16 @@
-import { ChevronRightIcon } from '@cherrystudio/app-icons';
+import { ChevronDownIcon } from '@cherrystudio/app-icons';
 import { Button, Section } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
+import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+
+import {
+  ModelPickerBottomSheet,
+  ModelPickerIcon,
+  type ModelPickerModelItem,
+} from '@/frontend/components/modelPicker';
 
 import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
 
@@ -11,79 +18,86 @@ type ProviderModelCheckSectionProps = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   isLoading?: boolean;
   models: readonly Model[];
-  /** Both picked on pushed screens, so both arrive as route params. */
-  onOpenApiKeySelect: () => void;
-  onOpenModelSelect: () => void;
+  provider: Provider | undefined;
   providerId: string;
-  selectedApiKeyId?: string;
-  selectedModelId?: string;
 };
 
 export function ProviderModelCheckSection({
   apiKeys,
   isLoading = false,
   models,
-  onOpenApiKeySelect,
-  onOpenModelSelect,
+  provider,
   providerId,
-  selectedApiKeyId,
-  selectedModelId,
 }: ProviderModelCheckSectionProps) {
   const { t } = useTranslation();
-  const { isChecking, modelStatus, selectedApiKey, selectedModel, startCheck } =
-    useProviderModelCheck({ apiKeys, models, providerId, selectedApiKeyId, selectedModelId });
+  const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [selectedModelId, setSelectedModelId] = useState<string>();
+  const { isChecking, modelStatus, selectedModel, startCheck } = useProviderModelCheck({
+    apiKeys,
+    models,
+    providerId,
+    selectedModelId,
+  });
+  const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
+  const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
+  const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
+    setSelectedModelId(item.modelId);
+    setIsModelPickerOpen(false);
+  }, []);
 
   return (
     <View className="gap-5">
-      <Section>
+      <View className="gap-1">
         {/* Section's own `title` slot indents the header by 12px, which would
             sit it out of line with the API keys field label right above. */}
         <Section.Header className="px-0" title={t('settings.provider.models.checkTitle')} />
-        <Section.Item
-          disabled={isChecking || isLoading || models.length === 0}
-          label={t('settings.provider.models.checkModelSection')}
-          onPress={onOpenModelSelect}
-          trailing={
-            <SelectionRowValue
-              label={selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
-            />
-          }
-        />
-        <Section.Item
-          disabled={isChecking || isLoading}
-          label={t('settings.provider.models.checkApiKeySection')}
-          onPress={onOpenApiKeySelect}
-          trailing={
-            <SelectionRowValue
-              label={selectedApiKey?.label ?? t('settings.provider.models.checkDefaultApiKey')}
-            />
-          }
-        />
-      </Section>
+        <View className="flex-row items-stretch gap-2">
+          <Section
+            className="min-w-0 flex-1"
+            contentClassName="rounded-lg border border-border bg-field"
+          >
+            <Section.Item
+              accessibilityLabel={
+                selectedModel?.name ?? t('settings.provider.models.checkNoModels')
+              }
+              disabled={isChecking || isLoading || models.length === 0}
+              onPress={openModelPicker}
+            >
+              <View className="flex-row items-center gap-2">
+                {selectedModel ? (
+                  <ModelPickerIcon model={selectedModel} provider={provider} size={24} />
+                ) : null}
+                <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
+                  {selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
+                </Text>
+                <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
+              </View>
+            </Section.Item>
+          </Section>
+          <Button
+            className="self-stretch"
+            disabled={isLoading || !selectedModel}
+            loading={isChecking}
+            onPress={() => void startCheck()}
+          >
+            {isChecking
+              ? t('settings.provider.models.checkChecking')
+              : t('settings.provider.models.checkStart')}
+          </Button>
+        </View>
+      </View>
 
       {modelStatus?.status === 'success' ? <ModelCheckResult status={modelStatus} /> : null}
-
-      <Button
-        disabled={isLoading || !selectedModel}
-        loading={isChecking}
-        onPress={() => void startCheck()}
-      >
-        {isChecking
-          ? t('settings.provider.models.checkChecking')
-          : t('settings.provider.models.checkStart')}
-      </Button>
-    </View>
-  );
-}
-
-/** The value, then the disclosure of the screen it is picked on. */
-function SelectionRowValue({ label }: { label: string }) {
-  return (
-    <View className="min-w-0 flex-row items-center justify-end gap-1">
-      <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
-        {label}
-      </Text>
-      <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" />
+      {isModelPickerOpen ? (
+        <ModelPickerBottomSheet
+          isOpen
+          onClose={closeModelPicker}
+          onSelect={handleModelSelect}
+          providerId={providerId}
+          selectedModelId={selectedModel?.id ?? null}
+          showPinnedModels={false}
+        />
+      ) : null}
     </View>
   );
 }

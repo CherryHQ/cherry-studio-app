@@ -44,11 +44,6 @@ export function useProviderFormDraft({
     (avatarUri: string | null) => setValues((current) => ({ ...current, avatarUri })),
     [],
   );
-  const setDefaultChatEndpoint = useCallback(
-    (defaultChatEndpoint: EndpointType) =>
-      setValues((current) => ({ ...current, defaultChatEndpoint })),
-    [],
-  );
   const setEndpointUrl = useCallback((endpoint: EndpointType, value: string) => {
     setValues((current) =>
       current.endpointUrls[endpoint] === value
@@ -58,8 +53,8 @@ export function useProviderFormDraft({
   }, []);
 
   const actions = useMemo<ProviderFormActions>(
-    () => ({ setApiKey, setAvatarUri, setDefaultChatEndpoint, setEndpointUrl, setName }),
-    [setApiKey, setAvatarUri, setDefaultChatEndpoint, setEndpointUrl, setName],
+    () => ({ setApiKey, setAvatarUri, setEndpointUrl, setName }),
+    [setApiKey, setAvatarUri, setEndpointUrl, setName],
   );
 
   return useMemo(
@@ -68,10 +63,8 @@ export function useProviderFormDraft({
       meta: {
         baseUrlEndpoint: endpointTypes[0] ?? null,
         canSubmit: values.name.trim().length > 0 && !isSubmitting,
-        endpointTypes,
         isDirty: isProviderFormDirty({ endpointTypes, initialValues: seed.values, values }),
         isSubmitting,
-        secondaryEndpointTypes: endpointTypes.slice(1),
       },
       state: values,
     }),
