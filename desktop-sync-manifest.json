@@ -3,8 +3,7 @@
   "repository": "https://github.com/CherryHQ/cherry-studio.git",
   "delegatedManifests": {
     "ai-runtime": "packages/ai-runtime/desktop-sync-map.json",
-    "design": "packages/design-tokens/src/sync-manifest.json",
-    "services:oauth": "src/backend/services/oauth/desktop-sync-map.json"
+    "design": "packages/design-tokens/src/sync-manifest.json"
   },
   "domains": {
     "design-catalog": {
@@ -270,7 +269,7 @@
       "targetPaths": ["src/backend/services", "src/backend/data/services", "src/backend/ai"],
       "sourceCommit": null,
       "sourceSha256": null,
-      "explicitExclusions": []
+      "explicitExclusions": ["src/main/services/oauth", "src/main/services/CopilotService.ts"]
     },
     "dependencies": {
       "strategy": "semantic-port",

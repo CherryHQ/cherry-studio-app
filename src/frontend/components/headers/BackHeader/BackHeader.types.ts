@@ -12,7 +12,7 @@ export type HeaderToolbarAction = Pick<
   androidIcon?: ComponentType<HeaderAndroidIconProps>;
   /**
    * Custom toolbar content (e.g. a circular avatar), as a single element. When
-   * set, the icon fields are ignored: TabRootHeader renders it via
+   * set, the icon fields are ignored: DrawerRootHeader renders it via
    * `Stack.Toolbar.View` on iOS and a `Fragment` inside `headerRight` on
    * Android. Must have an explicit size.
    */

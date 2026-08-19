@@ -28,7 +28,7 @@ const DELEGATED_AI_RUNTIME_CLASSIFICATIONS = [
   'explicit-exclusion',
   'blocked',
 ] as const;
-const DELEGATED_OAUTH_CLASSIFICATIONS = [
+const DELEGATED_SERVICE_CLASSIFICATIONS = [
   'semantic-port',
   'mobile-extension',
   'explicit-exclusion',
@@ -964,7 +964,7 @@ async function loadDelegatedAiRuntimeClassifications(
   return classifications;
 }
 
-async function loadDelegatedOAuthClassifications(
+async function loadDelegatedServiceClassifications(
   desktopRoot: string,
   mobileRoot: string,
   delegatedManifest: string,
@@ -973,16 +973,18 @@ async function loadDelegatedOAuthClassifications(
 ): Promise<Record<Classification, string[]>> {
   const value = await readJson(path.join(mobileRoot, delegatedManifest));
   if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.desktop)) {
-    throw new Error('[desktop-sync-audit] invalid delegated OAuth manifest');
+    throw new Error('[desktop-sync-audit] invalid delegated service manifest');
   }
   if (!Array.isArray(value.desktop.sourcePaths) || !Array.isArray(value.desktop.files)) {
-    throw new Error('[desktop-sync-audit] invalid delegated OAuth desktop records');
+    throw new Error('[desktop-sync-audit] invalid delegated service desktop records');
   }
   const sourcePaths = value.desktop.sourcePaths.map((sourcePath, index) => {
     if (typeof sourcePath !== 'string') {
-      throw new Error(`[desktop-sync-audit] invalid delegated OAuth source path at index ${index}`);
+      throw new Error(
+        `[desktop-sync-audit] invalid delegated service source path at index ${index}`,
+      );
     }
-    assertRelativeRepoPath(sourcePath, `delegated OAuth desktop.sourcePaths[${index}]`);
+    assertRelativeRepoPath(sourcePath, `delegated service desktop.sourcePaths[${index}]`);
     return sourcePath;
   });
   const records = value.desktop.files.map((record, index) => {
@@ -990,20 +992,22 @@ async function loadDelegatedOAuthClassifications(
       !isRecord(record) ||
       typeof record.source !== 'string' ||
       typeof record.sourceSha256 !== 'string' ||
-      !DELEGATED_OAUTH_CLASSIFICATIONS.includes(
-        record.classification as (typeof DELEGATED_OAUTH_CLASSIFICATIONS)[number],
+      !DELEGATED_SERVICE_CLASSIFICATIONS.includes(
+        record.classification as (typeof DELEGATED_SERVICE_CLASSIFICATIONS)[number],
       )
     ) {
       throw new Error(
-        `[desktop-sync-audit] invalid delegated OAuth desktop record at index ${index}`,
+        `[desktop-sync-audit] invalid delegated service desktop record at index ${index}`,
       );
     }
-    assertRelativeRepoPath(record.source, `delegated OAuth desktop.files[${index}].source`);
+    assertRelativeRepoPath(record.source, `delegated service desktop.files[${index}].source`);
     if (!/^[a-f0-9]{64}$/.test(record.sourceSha256)) {
-      throw new Error(`[desktop-sync-audit] invalid delegated OAuth source hash: ${record.source}`);
+      throw new Error(
+        `[desktop-sync-audit] invalid delegated service source hash: ${record.source}`,
+      );
     }
     return {
-      classification: record.classification as (typeof DELEGATED_OAUTH_CLASSIFICATIONS)[number],
+      classification: record.classification as (typeof DELEGATED_SERVICE_CLASSIFICATIONS)[number],
       source: record.source,
       sourceSha256: record.sourceSha256,
     };
@@ -1011,16 +1015,16 @@ async function loadDelegatedOAuthClassifications(
 
   const delegatedSources = records.map(({ source }) => source);
   if (new Set(delegatedSources).size !== delegatedSources.length) {
-    throw new Error('[desktop-sync-audit] delegated OAuth sources must be unique');
+    throw new Error('[desktop-sync-audit] delegated service sources must be unique');
   }
-  const currentOAuthSources = trackedFiles(desktopRoot, sourcePaths);
+  const currentDelegatedSources = trackedFiles(desktopRoot, sourcePaths);
   const delegatedSourceSet = new Set(delegatedSources);
-  const currentOAuthSourceSet = new Set(currentOAuthSources);
-  const unclassified = currentOAuthSources.filter((source) => !delegatedSourceSet.has(source));
-  const stale = delegatedSources.filter((source) => !currentOAuthSourceSet.has(source));
+  const currentDelegatedSourceSet = new Set(currentDelegatedSources);
+  const unclassified = currentDelegatedSources.filter((source) => !delegatedSourceSet.has(source));
+  const stale = delegatedSources.filter((source) => !currentDelegatedSourceSet.has(source));
   if (unclassified.length > 0 || stale.length > 0) {
     throw new Error(
-      `[desktop-sync-audit] delegated OAuth manifest does not cover its desktop source set: ${[
+      `[desktop-sync-audit] delegated service manifest does not cover its desktop source set: ${[
         ...unclassified.map((source) => `unclassified:${source}`),
         ...stale.map((source) => `stale:${source}`),
       ]
@@ -1034,7 +1038,7 @@ async function loadDelegatedOAuthClassifications(
     const excluded = explicitExclusions.some((glob) => pathMatchesGlob(source, glob));
     if ((classification === 'explicit-exclusion') !== excluded) {
       throw new Error(
-        `[desktop-sync-audit] delegated OAuth exclusion disagrees with the root manifest: ${source}`,
+        `[desktop-sync-audit] delegated service exclusion disagrees with the root manifest: ${source}`,
       );
     }
   }
@@ -1055,7 +1059,7 @@ async function loadDelegatedOAuthClassifications(
     .sort();
   if (sourceDrift.length > 0) {
     throw new Error(
-      `[desktop-sync-audit] delegated OAuth source hash drift: ${sourceDrift.join(', ')}`,
+      `[desktop-sync-audit] delegated service source hash drift: ${sourceDrift.join(', ')}`,
     );
   }
 
@@ -1433,7 +1437,7 @@ async function auditDomain(
     classifications['mobile-extension'] = mobileExtensions;
   }
   if (id === 'services' && delegatedManifest) {
-    const delegated = await loadDelegatedOAuthClassifications(
+    const delegated = await loadDelegatedServiceClassifications(
       desktopRoot,
       mobileRoot,
       delegatedManifest,
@@ -1694,8 +1698,7 @@ export async function auditRepositories(
         desktopRoot,
         mobileRoot,
         invariants,
-        manifest.delegatedManifests?.[id] ??
-          (id === 'services' ? manifest.delegatedManifests?.['services:oauth'] : undefined),
+        manifest.delegatedManifests?.[id],
       ),
     );
   }

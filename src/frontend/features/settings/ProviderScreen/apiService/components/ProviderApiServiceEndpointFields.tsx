@@ -1,31 +1,21 @@
-import { CheckIcon, SettingsIcon } from '@cherrystudio/app-icons';
-import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { Button, FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
+import { CheckIcon } from '@cherrystudio/app-icons';
+import { Button, Input, Label, TextField } from '@cherrystudio/ui/components';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { TextInputEndEditingEvent } from 'react-native';
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { isCustomProviderTextEndpointType } from '../utils/providerApiServiceEndpointRules';
-
-const ENDPOINT_LABEL_KEYS: Partial<Record<EndpointType, string>> = {
-  [ENDPOINT_TYPE.OPENAI_CHAT_COMPLETIONS]: 'settings.provider.add.endpoint.openaiChatCompletions',
-  [ENDPOINT_TYPE.OPENAI_RESPONSES]: 'settings.provider.add.endpoint.openaiResponses',
-  [ENDPOINT_TYPE.ANTHROPIC_MESSAGES]: 'settings.provider.add.endpoint.anthropic',
-  [ENDPOINT_TYPE.GOOGLE_GENERATE_CONTENT]: 'settings.provider.add.endpoint.gemini',
-  [ENDPOINT_TYPE.OPENAI_IMAGE_GENERATION]: 'settings.provider.add.endpoint.imageGeneration',
-  [ENDPOINT_TYPE.OPENAI_IMAGE_EDIT]: 'settings.provider.add.endpoint.imageEdit',
-};
-
+/**
+ * The provider's primary Base URL, edited in place and committed on blur. Every
+ * other endpoint lives in the provider's own settings screen, behind the gear in
+ * the detail header, so this row stays a single field.
+ */
 export function ProviderApiServiceEndpointField({
   baseUrl,
   onCommit,
-  onManagePress,
 }: {
   baseUrl: string;
   onCommit: (value: string) => Promise<boolean>;
-  onManagePress: () => void;
 }) {
   const { t } = useTranslation();
 
@@ -36,21 +26,12 @@ export function ProviderApiServiceEndpointField({
           {t('settings.provider.apiService.baseUrl')}
         </Label.Text>
       </Label>
-      <View className="flex-row items-center gap-2">
-        <PrimaryEndpointBaseUrlInput
-          accessibilityLabel={t('settings.provider.apiService.baseUrl')}
-          onCommit={onCommit}
-          placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-          value={baseUrl}
-        />
-        <Button
-          accessibilityLabel={t('settings.provider.apiService.manageEndpoints')}
-          hitSlop={6}
-          icon={<SettingsIcon />}
-          onPress={onManagePress}
-          variant="secondary"
-        />
-      </View>
+      <PrimaryEndpointBaseUrlInput
+        accessibilityLabel={t('settings.provider.apiService.baseUrl')}
+        onCommit={onCommit}
+        placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
+        value={baseUrl}
+      />
     </TextField>
   );
 }
@@ -97,79 +78,12 @@ function PrimaryEndpointBaseUrlInput({
       placeholder={placeholder}
       returnKeyType="done"
       submitBehavior="blurAndSubmit"
-      style={styles.endpointInput}
       value={draftValue}
     />
   );
 }
 
-export function ProviderApiServiceEndpointForm({
-  baseUrlByEndpoint,
-  configuredEndpointTypes,
-  defaultChatEndpoint,
-  endpointErrors,
-  endpointTypes,
-  isSaving,
-  onBaseUrlChange,
-  onBaseUrlCommit,
-  onDefaultChatEndpointChange,
-}: {
-  baseUrlByEndpoint: Partial<Record<EndpointType, string>>;
-  configuredEndpointTypes: readonly EndpointType[];
-  defaultChatEndpoint: EndpointType;
-  endpointErrors?: Partial<Record<EndpointType, string>>;
-  endpointTypes: EndpointType[];
-  isSaving?: boolean;
-  onBaseUrlChange: (endpoint: EndpointType, value: string) => void;
-  onBaseUrlCommit: (endpoint: EndpointType, value: string) => void;
-  onDefaultChatEndpointChange: (endpoint: EndpointType) => void;
-}) {
-  const { t } = useTranslation();
-  const configuredEndpointTypeSet = new Set(configuredEndpointTypes);
-
-  return (
-    <View className="gap-3">
-      {endpointTypes.map((endpoint) => {
-        const labelKey = ENDPOINT_LABEL_KEYS[endpoint];
-        const label = labelKey ? t(labelKey) : endpoint;
-        const value = baseUrlByEndpoint[endpoint] ?? '';
-        const isDefaultChatEndpoint =
-          endpoint === defaultChatEndpoint && isCustomProviderTextEndpointType(endpoint);
-        const canSetAsDefault =
-          isCustomProviderTextEndpointType(endpoint) &&
-          (configuredEndpointTypeSet.has(endpoint) || Boolean(value.trim()));
-
-        return (
-          <TextField key={endpoint} isInvalid={Boolean(endpointErrors?.[endpoint])}>
-            <View
-              className="h-9 flex-row items-center gap-2"
-              testID={`endpoint-label-row-${endpoint}`}
-            >
-              <Label className="min-w-0 flex-1">{label}</Label>
-              <ProviderDefaultEndpointControl
-                endpoint={endpoint}
-                endpointLabel={label}
-                isDefault={isDefaultChatEndpoint}
-                isDisabled={isSaving}
-                isSelectable={canSetAsDefault}
-                onChange={onDefaultChatEndpointChange}
-              />
-            </View>
-            <EndpointBaseUrlInput
-              accessibilityLabel={label}
-              placeholder={t('settings.provider.apiService.baseUrlPlaceholder')}
-              value={value}
-              onChangeText={(value) => onBaseUrlChange(endpoint, value)}
-              onCommit={(value) => onBaseUrlCommit(endpoint, value)}
-            />
-            <FieldError>{endpointErrors?.[endpoint]}</FieldError>
-          </TextField>
-        );
-      })}
-    </View>
-  );
-}
-
+/** Marks an endpoint as the one chat goes through, or offers to make it that. */
 export function ProviderDefaultEndpointControl({
   endpoint,
   endpointLabel,
@@ -217,45 +131,3 @@ export function ProviderDefaultEndpointControl({
     </Button>
   );
 }
-
-function EndpointBaseUrlInput({
-  accessibilityLabel,
-  onCommit,
-  onChangeText,
-  placeholder,
-  value,
-}: {
-  accessibilityLabel: string;
-  onCommit: (value: string) => void;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  value: string;
-}) {
-  const handleEndEditing = useCallback(
-    (event: TextInputEndEditingEvent) => {
-      onCommit(event.nativeEvent.text);
-    },
-    [onCommit],
-  );
-
-  return (
-    <Input
-      accessibilityLabel={accessibilityLabel}
-      autoCapitalize="none"
-      autoCorrect={false}
-      onChangeText={onChangeText}
-      onEndEditing={handleEndEditing}
-      placeholder={placeholder}
-      returnKeyType="done"
-      submitBehavior="blurAndSubmit"
-      style={styles.endpointInput}
-      value={value}
-    />
-  );
-}
-
-const styles = StyleSheet.create({
-  endpointInput: {
-    flex: 1,
-  },
-});

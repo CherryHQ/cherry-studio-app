@@ -1,0 +1,87 @@
+import { usePathname, useRouter } from 'expo-router';
+import type { DrawerContentComponentProps } from 'expo-router/drawer';
+import { type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { View } from 'react-native';
+import Animated from 'react-native-reanimated';
+
+import { SidebarBody } from './components/SidebarBody';
+import { SidebarFooter } from './components/SidebarFooter';
+import { SidebarHeader } from './components/SidebarHeader';
+import { type SidebarActions, SidebarActionsContext } from './context';
+import { useSidebarPlaneStyle } from './sidebarMotion';
+
+type SidebarProps = {
+  children?: ReactNode;
+  navigation: DrawerContentComponentProps['navigation'];
+};
+
+/**
+ * Drawer sidebar as a compound component: `Sidebar.Header` / `Sidebar.Body` /
+ * `Sidebar.Footer` under a root that owns the drawer-scoped actions. Header and
+ * footer float transparently over the body, which scrolls underneath them.
+ * Without children it renders the standard composition, so the drawer layout
+ * can stay a thin adapter.
+ */
+function SidebarRoot({ children, navigation }: SidebarProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  // Actions read the pathname through a ref so their identity — and with it
+  // every slot consuming the actions context — survives route changes.
+  const pathnameRef = useRef(pathname);
+  const planeStyle = useSidebarPlaneStyle();
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+
+  const actions = useMemo<SidebarActions>(
+    () => ({
+      closeDrawer: () => navigation.closeDrawer(),
+      navigateAssistants: () => navigation.navigate('assistants'),
+      openPaintings: () => navigation.navigate('drawings'),
+      // Settings is a root-stack sheet, so it covers the drawer rather than
+      // replacing it. The drawer deliberately stays open underneath: dismissing
+      // the sheet drops you back into the sidebar you opened it from.
+      openSettings: () => router.push('/settings'),
+      openTopicList: () => router.push('/topics'),
+      startNewChat: () => {
+        // No topic row is created here: the chat surface with no `topicId` is
+        // the new-chat state, and the backend creates the topic on first send.
+        if (pathnameRef.current === '/') {
+          router.setParams({ assistantId: undefined, topicId: undefined });
+        } else {
+          router.navigate({ params: {}, pathname: '/' });
+        }
+        navigation.closeDrawer();
+      },
+    }),
+    [navigation, router],
+  );
+
+  return (
+    <SidebarActionsContext value={actions}>
+      <View className="flex-1 bg-sidebar">
+        {/* One transform plane for every slot: the reveal scales the sidebar
+            as a single sheet around a single center. Fading is per-slot (the
+            footer deliberately opts out). */}
+        <Animated.View className="flex-1" style={planeStyle}>
+          {children ?? (
+            <>
+              <SidebarBody />
+              <SidebarHeader />
+              <SidebarFooter />
+            </>
+          )}
+        </Animated.View>
+      </View>
+    </SidebarActionsContext>
+  );
+}
+
+SidebarRoot.displayName = 'Sidebar';
+
+export const Sidebar = Object.assign(SidebarRoot, {
+  Body: SidebarBody,
+  Footer: SidebarFooter,
+  Header: SidebarHeader,
+});

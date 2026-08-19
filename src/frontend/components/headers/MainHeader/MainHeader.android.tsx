@@ -1,6 +1,5 @@
-import { ChevronLeftIcon, SquarePenIcon } from '@cherrystudio/app-icons';
-import { Stack, useRouter } from 'expo-router';
-import { useCallback } from 'react';
+import { MenuIcon, SquarePenIcon } from '@cherrystudio/app-icons';
+import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,17 +7,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { HeaderIconButton } from '../components/HeaderIconButton';
+import { useOpenDrawer } from '../useOpenDrawer';
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
 
 export function MainHeader() {
   const { t } = useTranslation();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const separatorColor = useThemeColor('border-strong');
+  const openDrawer = useOpenDrawer();
   const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
-  const goBack = useCallback(() => {
-    router.back();
-  }, [router]);
 
   return (
     <>
@@ -29,8 +26,10 @@ export function MainHeader() {
       >
         <View style={{ height: insets.top }} />
         <View className="h-11 flex-row items-center justify-between px-4">
-          <HeaderIconButton accessibilityLabel={t('navigation.back')} onPress={goBack}>
-            <ChevronLeftIcon className="size-6 text-foreground" />
+          {/* The chat surface is the drawer's root scene now: leading action
+              opens the sidebar, there is nothing to go back to. */}
+          <HeaderIconButton accessibilityLabel={t('navigation.openMenu')} onPress={openDrawer}>
+            <MenuIcon className="size-6 text-foreground" />
           </HeaderIconButton>
           <View className="flex-row items-center">
             <HeaderIconButton accessibilityLabel={t('navigation.newChat')} onPress={openNewTopic}>

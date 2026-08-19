@@ -1,5 +1,5 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from 'heroui-native/toast';
@@ -9,36 +9,40 @@ import { useTranslation } from 'react-i18next';
 import { queryKeys, useBackendModule } from '@/frontend/data';
 
 import {
+  type ProviderModelCheckApiKeyOption,
+  resolveProviderModelCheckApiKey,
+  resolveProviderModelCheckModel,
+} from '../utils/providerModelCheckSelection';
+import {
   createProviderModelHealthPendingStatuses,
   type ProviderModelHealthCheckStatus,
   providerModelCheckTimeoutMs,
 } from '../utils/providerModelHealthCheck';
-
-const defaultApiKeySelectValue = '__default__';
+import { useProviderModelCheckApiKeyOptions } from './useProviderModelCheckApiKeyOptions';
 
 type UseProviderModelCheckOptions = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   models: readonly Model[];
   providerId: string;
-};
-
-export type ProviderModelCheckApiKeyOption = {
-  id: string;
-  key?: string;
-  label: string;
-  value: string;
+  /** From the route: both choices are picked on pushed screens. */
+  selectedApiKeyId?: string;
+  selectedModelId?: string;
 };
 
 type ProviderModelCheckState = {
   isChecking: boolean;
   modelStatus: ProviderModelHealthCheckStatus | null;
   providerId: string;
+  /** What the result is about, so it stops being shown once it isn't. */
+  selectionKey: string;
 };
 
 export function useProviderModelCheck({
   apiKeys,
   models,
   providerId,
+  selectedApiKeyId,
+  selectedModelId,
 }: UseProviderModelCheckOptions) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -48,49 +52,26 @@ export function useProviderModelCheck({
   const [checkState, setCheckState] = useState<ProviderModelCheckState>(() =>
     createProviderModelCheckState(providerId),
   );
-  const [selectedModelId, setSelectedModelId] = useState<UniqueModelId | null>(null);
-  const [selectedApiKeyId, setSelectedApiKeyId] = useState<string>(defaultApiKeySelectValue);
   const runIdRef = useRef(0);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const enabledApiKeys = useMemo(
-    () => apiKeys?.filter((apiKey) => apiKey.isEnabled) ?? [],
-    [apiKeys],
-  );
-  const apiKeyOptions = useMemo<ProviderModelCheckApiKeyOption[]>(() => {
-    const options = enabledApiKeys.map((apiKey, index) => ({
-      id: apiKey.id,
-      key: apiKey.key,
-      label:
-        apiKey.label?.trim() ||
-        t('settings.provider.models.checkApiKeyFallback', {
-          index: index + 1,
-          key: maskProviderModelCheckApiKey(apiKey.key),
-        }),
-      value: apiKey.id,
-    }));
-
-    return options.length > 0
-      ? options
-      : [
-          {
-            id: defaultApiKeySelectValue,
-            label: t('settings.provider.models.checkDefaultApiKey'),
-            value: defaultApiKeySelectValue,
-          },
-        ];
-  }, [enabledApiKeys, t]);
+  const apiKeyOptions = useProviderModelCheckApiKeyOptions(apiKeys);
   const selectedModel = useMemo(
-    () => models.find((model) => model.id === selectedModelId) ?? models[0] ?? null,
+    () => resolveProviderModelCheckModel(models, selectedModelId),
     [models, selectedModelId],
   );
   const selectedApiKey = useMemo(
-    () => apiKeyOptions.find((option) => option.value === selectedApiKeyId) ?? apiKeyOptions[0],
+    () => resolveProviderModelCheckApiKey(apiKeyOptions, selectedApiKeyId),
     [apiKeyOptions, selectedApiKeyId],
   );
-  const isCheckStateCurrent = checkState.providerId === providerId;
-  const isChecking = isCheckStateCurrent && checkState.isChecking;
+  const selectionKey = createProviderModelCheckSelectionKey({ selectedApiKey, selectedModel });
+  const isChecking = checkState.providerId === providerId && checkState.isChecking;
+  // A result belongs to the model and key it ran with. Picking another one is
+  // how you say the answer on screen is no longer the question — and since both
+  // are picked on a screen of their own, there is no setter here to clear it in.
   const modelStatus =
-    isCheckStateCurrent && checkState.modelStatus
+    checkState.providerId === providerId &&
+    checkState.selectionKey === selectionKey &&
+    checkState.modelStatus
       ? checkState.modelStatus
       : (createProviderModelHealthPendingStatuses(selectedModel ? [selectedModel] : [])[0] ?? null);
 
@@ -116,6 +97,7 @@ export function useProviderModelCheck({
       isChecking: true,
       modelStatus: { model: selectedModel, status: 'checking' },
       providerId,
+      selectionKey,
     });
 
     try {
@@ -124,7 +106,7 @@ export function useProviderModelCheck({
         modelIds: [selectedModel.id],
         onResult: (result) => {
           if (runIdRef.current === runId) {
-            setCheckState({ isChecking: true, modelStatus: result, providerId });
+            setCheckState({ isChecking: true, modelStatus: result, providerId, selectionKey });
           }
         },
         providerId,
@@ -137,7 +119,7 @@ export function useProviderModelCheck({
       }
 
       const result = results[0] ?? { model: selectedModel, status: 'failed' as const };
-      setCheckState({ isChecking: false, modelStatus: result, providerId });
+      setCheckState({ isChecking: false, modelStatus: result, providerId, selectionKey });
 
       if (result?.status === 'success') {
         await Promise.all([
@@ -164,6 +146,7 @@ export function useProviderModelCheck({
             status: 'failed',
           },
           providerId,
+          selectionKey,
         });
         alert.show({
           description:
@@ -186,20 +169,11 @@ export function useProviderModelCheck({
     queryClient,
     selectedApiKey,
     selectedModel,
+    selectionKey,
     alert,
     t,
     toast,
   ]);
-
-  const updateSelectedModelId = useCallback((modelId: UniqueModelId) => {
-    setSelectedModelId(modelId);
-    setCheckState((current) => ({ ...current, modelStatus: null }));
-  }, []);
-
-  const updateSelectedApiKeyId = useCallback((apiKeyId: string) => {
-    setSelectedApiKeyId(apiKeyId);
-    setCheckState((current) => ({ ...current, modelStatus: null }));
-  }, []);
 
   return {
     apiKeyOptions,
@@ -207,8 +181,6 @@ export function useProviderModelCheck({
     modelStatus,
     selectedApiKey,
     selectedModel,
-    setSelectedApiKeyId: updateSelectedApiKeyId,
-    setSelectedModelId: updateSelectedModelId,
     startCheck,
   };
 }
@@ -218,14 +190,16 @@ function createProviderModelCheckState(providerId: string): ProviderModelCheckSt
     isChecking: false,
     modelStatus: null,
     providerId,
+    selectionKey: '',
   };
 }
 
-function maskProviderModelCheckApiKey(apiKey: string): string {
-  const trimmed = apiKey.trim();
-  if (trimmed.length <= 8) {
-    return trimmed;
-  }
-
-  return `${trimmed.slice(0, 4)}...${trimmed.slice(-4)}`;
+function createProviderModelCheckSelectionKey({
+  selectedApiKey,
+  selectedModel,
+}: {
+  selectedApiKey: ProviderModelCheckApiKeyOption | undefined;
+  selectedModel: Model | null;
+}): string {
+  return `${selectedModel?.id ?? ''}|${selectedApiKey?.value ?? ''}`;
 }

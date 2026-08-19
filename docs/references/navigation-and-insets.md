@@ -46,7 +46,7 @@ For v1, keep `false` as the conservative default. Enable it after navigation str
 Before enabling it, verify:
 
 - Normal stack back shows the correct preview.
-- Nested stack back inside tabs targets the correct screen.
+- Nested stack back inside drawer scenes targets the correct screen.
 - Modal / sheet dismissal matches platform expectations.
 - Local `BackHandler` usage does not break system preview.
 - Active generation, unsaved edits, and dangerous confirmations can block or confirm back correctly.
@@ -56,11 +56,24 @@ Before enabling it, verify:
 - `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
-- The root Stack hosts the `(tabs)` group (header hidden) plus root-level `onboarding`, `topics` (chat), and `paintings` screens.
-- `src/app/(tabs)/_layout.tsx` owns the native bottom tab bar through `react-native-bottom-tabs` (`createNativeBottomTabNavigator`) with five tabs: home, assistants, `(messages)`, settings, and `(search)`.
-- Settings is a normal nested Stack inside its tab (`src/app/(tabs)/settings/`).
-- The chat surface is the root-level `topics` route, which wraps `ChatScreen` in `ChatProvider`.
-  The provider subscribes to the app-owned Chat Runtime; route unmount does not dispose it.
+- The root Stack hosts the `(drawer)` group (header hidden) plus root-level `onboarding`, `topics`
+  (topic management), `settings`, and `paintings` screens.
+- `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) with four
+  scenes: `(chat)` (the initial route), home, assistants, and drawings. The sidebar is the
+  `features/sidebar` compound; every scene's header leads with a hamburger that opens it.
+  `DrawerActions.openDrawer()` only reaches ancestors, so a screen that needs that hamburger has to
+  be a drawer scene — which is why the drawings history lives at `/drawings` rather than under the
+  root stack's `paintings` group.
+- Settings is a root-level modal (`src/app/settings/`) with its own nested Stack, opened from the
+  sidebar dock. iOS presents it as a page sheet: it covers the drawer instead of replacing it, so
+  dismissing it returns you to the sidebar. Its root screen keeps the native header — transparent
+  and untitled, with a `xmark` toolbar button where sub-screens put back — so the header does not
+  have to appear out of nothing when a sub-screen is pushed, which is what made the bar jump on
+  entry. Use `modal` and not `formSheet` for this shape — see below.
+- The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
+  nested native Stack (for `Stack.Toolbar`/`Stack.SearchBar` APIs) and wraps `ChatScreen` in
+  `ChatProvider`. The provider subscribes to the app-owned Chat Runtime; route unmount does not
+  dispose it.
 - Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
 ## Picker Sheets
@@ -78,7 +91,9 @@ and Reduce Motion behavior.
 
 Model selection is a reusable component-level `ModelPickerBottomSheet`. It is used by chat input and settings/model selection, includes search, tags, grouped model rows, pinning, and an 85% snap point.
 
-Route-level `formSheet` remains appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. No current route uses it; settings is now a bottom tab with its own nested stack.
+Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
+
+Reach for `presentation: 'modal'` rather than `'formSheet'` unless you actually need detents. On iOS both present as a page sheet, but with `formSheet` (`react-native-screens` 4.25) the sheet's content view comes up offset upward by the height of its own first child. A full-height first child — a `flex: 1` scroll view, say — is then entirely off screen, and the page looks empty apart from whatever is absolutely positioned. Fast Refresh re-lays-out the sheet and hides the bug, so verify this kind of screen from a cold start.
 
 Recommended shape:
 
@@ -119,7 +134,7 @@ Android edge-to-edge should not be avoided by pinning a system navigation bar ba
 - If a page must use an edge horizontal gesture, validate on Android that system back remains intact.
 - iOS interactive pop and Android system back are not the same product contract; do not flatten them into one JavaScript gesture.
 
-Current horizontal gestures, such as topic-row swipe actions, start inside content areas. The app no longer has a navigation drawer, so there is no full-width drawer swipe competing with Android system edge back.
+Current horizontal gestures, such as topic-row swipe actions, start inside content areas. The global drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); on Android this coexists with system edge back and must be re-validated whenever predictive back is enabled.
 
 ## Acceptance
 

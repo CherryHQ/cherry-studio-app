@@ -44,33 +44,26 @@ describe('MobileRegistryLoader', () => {
     });
   });
 
-  it('retains OAuth providers whose desktop-only login flow is blocked by the app', () => {
+  it('excludes preset providers whose only auth path is OAuth, without dropping their catalog rows', () => {
     const loader = new MobileRegistryLoader();
     const overrides = loader.loadProviderModels();
 
-    for (const providerId of ['grok-cli', 'openai-codex']) {
+    for (const providerId of ['copilot', 'grok-cli', 'openai-codex']) {
+      expect(loader.isProviderExcluded(providerId)).toBe(true);
       expect(loader.findProvider(providerId)).toMatchObject({ authMethods: ['oauth'] });
-      expect(loader.isProviderExcluded(providerId)).toBe(false);
       expect(overrides.some((override) => override.providerId === providerId)).toBe(true);
       expect(loader.getOverridesForProvider(providerId).length).toBeGreaterThan(0);
     }
   });
 
-  it('publishes OAuth capability metadata for every registered flow adapter', () => {
+  it('keeps mixed api-key/OAuth providers selectable with their catalog metadata untouched', () => {
     const loader = new MobileRegistryLoader();
 
-    for (const providerId of [
-      '302ai',
-      'aihubmix',
-      'aionly',
-      'cherryin',
-      'copilot',
-      'grok-cli',
-      'openai-codex',
-      'ppio',
-      'silicon',
-    ]) {
-      expect(loader.findProvider(providerId)?.authMethods).toContain('oauth');
+    for (const providerId of ['302ai', 'aihubmix', 'aionly', 'cherryin', 'ppio', 'silicon']) {
+      expect(loader.isProviderExcluded(providerId)).toBe(false);
+      expect(loader.findProvider(providerId)?.authMethods).toEqual(
+        expect.arrayContaining(['api-key', 'oauth']),
+      );
     }
   });
 });

@@ -26,13 +26,14 @@ function AvatarRoot({
   accessibilityLabel,
   children,
   className,
+  radius,
   ref,
   shape = 'circle',
   size = DEFAULT_AVATAR_SIZE,
   style,
   ...props
 }: AvatarProps) {
-  const borderRadius = shape === 'circle' ? size / 2 : DEFAULT_ROUNDED_RADIUS;
+  const borderRadius = radius ?? (shape === 'circle' ? size / 2 : DEFAULT_ROUNDED_RADIUS);
   const content: ReactNode[] = [];
   const badges: ReactNode[] = [];
 

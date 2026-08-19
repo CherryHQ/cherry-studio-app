@@ -9,7 +9,7 @@ Terms follow [Domain Language](./domain-language.md).
 Name an owner by who calls it and who controls its lifetime. A class that directly corresponds to a
 Cherry Desktop service keeps the upstream `XxxService` name and public methods. This includes
 `DbService`, `CacheService`, `PreferenceService`, persistence services, `DataApiService`,
-`AiService`, `McpRuntimeService`, `OAuthRuntimeService`, and `WebSearchService`.
+`AiService`, `McpRuntimeService`, and `WebSearchService`.
 
 Use these roles for mobile-owned code:
 
@@ -18,7 +18,7 @@ Use these roles for mobile-owned code:
 | `Module` | A frontend-visible workflow capability exposed through `Backend` | `ChatModule` |
 | `Runtime` | One app- or bootstrap-owned executor whose state spans calls or routes | `ChatRuntime` |
 | `Session` | One caller-owned isolated unit with explicit cancellation or disposal | `PaintingGenerationSession` |
-| `Client` | A boundary to one external account, protocol, or remote API | `PkceOAuthClient` |
+| `Client` | A boundary to one external account, protocol, or remote API | `VertexAuthClient` |
 | `Adapter` | A translation boundary for a platform or SDK; a precise capability noun may stand alone | `DevicePermissions` |
 | `Manager` | A coordinator whose defining job is owning a homogeneous pool or registry | `ConnectionManager` |
 

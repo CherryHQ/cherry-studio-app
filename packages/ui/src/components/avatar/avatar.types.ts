@@ -9,6 +9,12 @@ export type AvatarProps = Omit<ComponentPropsWithRef<typeof View>, 'children'> &
   accessibilityLabel: string;
   children: ReactNode;
   className?: string;
+  /**
+   * Corner radius of the frame, overriding the one `shape` derives. A caller
+   * whose avatar renders at more than one size needs this: `rounded`'s radius is
+   * a constant, so it reads as a square once the frame grows.
+   */
+  radius?: number;
   shape?: AvatarShape;
   size?: number;
 };

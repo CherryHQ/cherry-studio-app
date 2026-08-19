@@ -96,7 +96,7 @@ its owning backend domain, including:
 
 - the app-owned Chat Runtime under `src/backend/ai`;
 - painting generation sessions and incomplete receipts;
-- provider/model pull, reconcile, health, OAuth, and avatar workflows;
+- provider/model pull, reconcile, health, and avatar workflows;
 - MCP runtime coordination;
 - permission policy and profile avatar workflows.
 

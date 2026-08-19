@@ -10,14 +10,14 @@ import { ActivityIndicator, type AccessibilityActionEvent, Text, View } from 're
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
-import {
-  useMessageListBottomInset,
-  useMessagePendingDeletionIds,
-  useMessageSelectionActions,
-  useMessageSelectionState,
-  useRegisterSelectionSource,
-} from '@/frontend/components/messageTabs';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
+import {
+  useListBottomInset,
+  usePendingDeletionIds,
+  useRegisterSelectionSource,
+  useSelectionActions,
+  useSelectionState,
+} from '@/frontend/components/selection';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
@@ -27,7 +27,7 @@ import {
   useTopicListActions,
   useTopicListTopics,
 } from './context/TopicListProvider';
-import { useTopicListStartupReadiness } from './hooks/useTopicListStartupReadiness';
+import { useTopicListInitialData } from './hooks/useTopicListInitialData';
 import { useTopicSelectionSource } from './hooks/useTopicSelectionSource';
 
 type TopicRowProps = {
@@ -86,7 +86,7 @@ function formatTopicUpdatedAt(updatedAt: string, locale: string | undefined, yes
 const TopicListView = memo(function TopicListView() {
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const bottomInset = useMessageListBottomInset();
+  const bottomInset = useListBottomInset();
   const {
     isPinActionDisabled,
     isPinsLoading,
@@ -103,19 +103,19 @@ const TopicListView = memo(function TopicListView() {
     isLoading: isAssistantsLoading,
   } = useAssistantsApi();
   const primaryColor = useThemeColor('primary');
-  const { handleListLoad, isInitialDataSettled } = useTopicListStartupReadiness({
+  const isInitialDataSettled = useTopicListInitialData({
     assistants: { error: assistantsQueryError, isLoading: isAssistantsLoading },
     pins: { error: pinQueryError, isLoading: isPinsLoading },
     topics: { error: topicQueryError, isLoading: isTopicListLoading },
   });
   const initialLoadError = topicQueryError ?? pinQueryError ?? assistantsQueryError;
-  const { toggleId } = useMessageSelectionActions();
-  const { isEditing, selectedIds } = useMessageSelectionState();
-  const pendingDeletionIds = useMessagePendingDeletionIds('conversations');
+  const { toggleId } = useSelectionActions();
+  const { isEditing, selectedIds } = useSelectionState();
+  const pendingDeletionIds = usePendingDeletionIds('conversations');
   const selectionSource = useTopicSelectionSource();
   useRegisterSelectionSource('conversations', selectionSource);
   const { requestDelete, requestRename } = useTopicActionAlerts();
-  // Bottom inset is stable across the edit⇄done flip (see useMessageListBottomInset),
+  // Bottom inset is stable across the edit⇄done flip (see useListBottomInset),
   // so this style reference stays put and the list never reflows on toggle.
   const contentContainerStyle = useMemo(
     () => ({ paddingBottom: bottomInset, paddingHorizontal: 8 }),
@@ -174,32 +174,33 @@ const TopicListView = memo(function TopicListView() {
     ],
   );
 
+  // Loading stays inside ListEmptyComponent so the list mounts on the first
+  // frame: a loading-gate sibling tree would mount the scroll view only after
+  // the push settles, and `automatic` would resolve a zero top inset under the
+  // transparent header.
   const listEmptyComponent = useCallback(
-    () => (
-      <View className="items-center justify-center px-6 py-8">
-        <Text className="text-center text-foreground text-sm">
-          {t(initialLoadError ? 'navigation.chatsLoadFailed' : 'navigation.noMatchingChats')}
-        </Text>
-      </View>
-    ),
-    [initialLoadError, t],
+    () =>
+      isInitialDataSettled ? (
+        <View className="items-center justify-center px-6 py-8">
+          <Text className="text-center text-foreground text-sm">
+            {t(initialLoadError ? 'navigation.chatsLoadFailed' : 'navigation.noMatchingChats')}
+          </Text>
+        </View>
+      ) : (
+        <View className="items-center justify-center px-6 py-8">
+          <ActivityIndicator color={primaryColor} />
+        </View>
+      ),
+    [initialLoadError, isInitialDataSettled, primaryColor, t],
   );
-
-  if (!isInitialDataSettled) {
-    return (
-      <View className="flex-1 items-center justify-center bg-background">
-        <ActivityIndicator color={primaryColor} />
-      </View>
-    );
-  }
 
   return (
     <View className="flex-1">
       <LegendList
         className="flex-1 bg-background"
-        contentInsetAdjustmentBehavior="never"
+        contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={contentContainerStyle}
-        data={visibleTopics}
+        data={isInitialDataSettled ? visibleTopics : []}
         estimatedItemSize={TOPIC_ITEM_ESTIMATED_HEIGHT}
         extraData={listExtraData}
         keyExtractor={topicKeyExtractor}
@@ -208,7 +209,6 @@ const TopicListView = memo(function TopicListView() {
         ListEmptyComponent={listEmptyComponent}
         onEndReached={loadMoreTopics}
         onEndReachedThreshold={0.7}
-        onLoad={handleListLoad}
         recycleItems
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
@@ -217,8 +217,8 @@ const TopicListView = memo(function TopicListView() {
   );
 });
 
-// The topics tab owns its data provider so the messages shell can host it as a
-// pluggable tab without knowing anything about topic state.
+// The list owns its data provider so hosts (the topic management screen, or
+// anything else embedding the list) never touch topic state directly.
 type TopicListProps = {
   searchText?: string;
 };
@@ -303,7 +303,7 @@ const TopicRow = memo(function TopicRow({
     [handleDeletePress, handlePinPress, handleRenamePress, isEditing, onToggle, topic.id],
   );
   const href = useMemo(
-    () => ({ pathname: '/topics' as const, params: { topicId: topic.id } }),
+    () => ({ pathname: '/' as const, params: { topicId: topic.id } }),
     [topic.id],
   );
   const menuItems = useMemo<readonly ContextMenuLinkItem[]>(

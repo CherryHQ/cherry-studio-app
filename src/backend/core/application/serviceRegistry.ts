@@ -10,8 +10,6 @@ import { BackgroundReplyRuntime } from '@/backend/services/backgroundReply';
 import { JobHandlerRegistry } from '@/backend/services/jobs/JobHandlerRegistry';
 import { JobRuntime } from '@/backend/services/jobs/JobRuntime';
 import { KeepAliveCoordinator } from '@/backend/services/keepAlive/KeepAliveCoordinator';
-import { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
-import { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
 import type { ServiceConstructor } from '../lifecycle/types';
@@ -43,8 +41,6 @@ export const services = {
   BackgroundReplyRuntime,
   WebSearchService,
   McpRuntimeService,
-  OAuthRuntimeService,
-  ProviderOAuthService,
   AiService,
   ChatRuntime,
   JobHandlerRegistry,

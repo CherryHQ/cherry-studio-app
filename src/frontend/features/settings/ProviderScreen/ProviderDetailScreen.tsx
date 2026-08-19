@@ -1,21 +1,11 @@
-import { PlusIcon, SquareArrowOutUpRightIcon } from '@cherrystudio/app-icons';
+import { PlusIcon, SettingsIcon } from '@cherrystudio/app-icons';
 import { Spinner, useAlert } from '@cherrystudio/ui/components';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import { useQueryClient } from '@tanstack/react-query';
 import { Color, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { useBackendModule, useMutation } from '@/frontend/data';
-import {
-  dataApiCollectionFilters,
-  restoreQuerySnapshot,
-  updateQueriesOptimistically,
-} from '@/frontend/data/utils/optimisticQueryUpdate';
-import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 import {
   buildApiKeyEntriesFromInput,
@@ -25,13 +15,15 @@ import {
   getEffectiveAuthConfig,
   getProviderPrimaryBaseUrl,
   normalizeApiKeyEntries,
+  ProviderApiServiceApiKeysField,
+  ProviderApiServiceEndpointField,
   ProviderApiServiceSaveError,
   shouldShowApiKeys,
   useProviderApiServiceQueries,
 } from './apiService';
-import { ProviderApiManagementSection } from './components/ProviderApiManagementSection';
 import { ProviderModelList } from './components/ProviderModelList';
 import { useProviderDetailSettings } from './detail';
+import { ProviderDetailBanner } from './detail/components/ProviderDetailBanner';
 import { ProviderDetailChrome } from './detail/components/ProviderDetailChrome/ProviderDetailChrome';
 import { ProviderDetailTabs } from './detail/components/ProviderDetailTabs/ProviderDetailTabs';
 import type { ProviderDetailTab } from './detail/components/ProviderDetailTabs/types';
@@ -42,42 +34,22 @@ import { useProviderModelSelection } from './models/hooks/useProviderModelSelect
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 export default function ProviderDetailSettingsScreen() {
-  const { providerId, providerName } = useLocalSearchParams<{
+  // The two check choices are picked on pushed screens and come back here as
+  // params: they configure a check you run, not anything the provider stores.
+  const { checkApiKeyId, checkModelId, providerId, providerName } = useLocalSearchParams<{
+    checkApiKeyId?: string;
+    checkModelId?: string;
     providerId?: string;
     providerName?: string;
   }>();
   const { t } = useTranslation();
   const router = useRouter();
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
   const { alert } = useAlert();
-  const providers = useBackendModule('providers');
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
   const { isDefaultModel, removeModels } = useProviderModelRemove();
   const modelSelection = useProviderModelSelection();
-  const deleteProviderMutation = useMutation('DELETE', '/providers/:id', {
-    onMutate: async (variables) => {
-      const providerIdToDelete = variables?.params.id;
-      const providers = await updateQueriesOptimistically<Provider[]>(
-        queryClient,
-        dataApiCollectionFilters('/providers'),
-        (current) => current?.filter((item) => item.id !== providerIdToDelete),
-      );
-
-      return { providers };
-    },
-    onError: (_error, _variables, context) => {
-      restoreQuerySnapshot(queryClient, context?.providers);
-    },
-    onSuccess: (_result, variables) => {
-      if (variables) {
-        queryClient.removeQueries({ queryKey: [`/providers/${variables.params.id}`] });
-      }
-    },
-    refresh: ['/providers'],
-  });
   const {
     apiKeys,
     apiKeysQuery,
@@ -110,27 +82,16 @@ export default function ProviderDetailSettingsScreen() {
   // under a finger that already aimed at it.
   const isProviderDetailLoading =
     providerQuery.isPending || apiKeysQuery.isPending || authConfigQuery.isPending;
-  const officialWebsite = provider?.websites?.official;
-  const openOfficialWebsite = useCallback(() => {
-    if (!officialWebsite) {
-      return;
-    }
-
-    void openExternalUrl(officialWebsite);
-  }, [officialWebsite]);
-  const openEndpointSettings = useCallback(() => {
+  const openProviderSettings = useCallback(() => {
     if (!providerId) {
       return;
     }
 
     router.push({
-      params: {
-        ...(provider?.name ? { providerName: provider.name } : {}),
-        providerId,
-      },
-      pathname: '/settings/provider/[providerId]/endpoint-settings',
+      params: { providerId },
+      pathname: '/settings/provider/[providerId]/edit',
     });
-  }, [provider, providerId, router]);
+  }, [providerId, router]);
   const openApiKeySettings = useCallback(() => {
     if (!providerId) {
       return;
@@ -144,6 +105,36 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/api-key-settings',
     });
   }, [provider, providerId, router]);
+  const openCheckModelSelect = useCallback(() => {
+    if (!providerId) {
+      return;
+    }
+
+    router.push({
+      params: {
+        ...(checkApiKeyId ? { checkApiKeyId } : {}),
+        ...(checkModelId ? { checkModelId } : {}),
+        providerId,
+        ...(providerName ? { providerName } : {}),
+      },
+      pathname: '/settings/provider/[providerId]/check-model',
+    });
+  }, [checkApiKeyId, checkModelId, providerId, providerName, router]);
+  const openCheckApiKeySelect = useCallback(() => {
+    if (!providerId) {
+      return;
+    }
+
+    router.push({
+      params: {
+        ...(checkApiKeyId ? { checkApiKeyId } : {}),
+        ...(checkModelId ? { checkModelId } : {}),
+        providerId,
+        ...(providerName ? { providerName } : {}),
+      },
+      pathname: '/settings/provider/[providerId]/check-api-key',
+    });
+  }, [checkApiKeyId, checkModelId, providerId, providerName, router]);
   const commitApiKeys = useCallback(
     (input: string) => {
       const nextApiKeys = buildApiKeyEntriesFromInput(input, apiKeys ?? []);
@@ -217,20 +208,20 @@ export default function ProviderDetailSettingsScreen() {
       pathname: '/settings/provider/[providerId]/model-pull',
     });
   }, [loadPullPreview, provider, providerId, router]);
+  // The provider's own settings — logo, name, endpoints — rather than the keys
+  // and models this page already shows inline.
   const configurationActions = useMemo<HeaderToolbarAction[]>(
-    () =>
-      officialWebsite
-        ? [
-            {
-              accessibilityLabel: t('common.officialWebsite'),
-              androidIcon: SquareArrowOutUpRightIcon,
-              icon: 'arrow.up.right.square',
-              key: 'official-website',
-              onPress: openOfficialWebsite,
-            },
-          ]
-        : [],
-    [officialWebsite, openOfficialWebsite, t],
+    () => [
+      {
+        accessibilityLabel: t('settings.provider.edit.title'),
+        androidIcon: SettingsIcon,
+        disabled: !provider,
+        icon: 'gearshape',
+        key: 'provider-settings',
+        onPress: openProviderSettings,
+      },
+    ],
+    [openProviderSettings, provider, t],
   );
   const modelActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -333,34 +324,6 @@ export default function ProviderDetailSettingsScreen() {
 
     updateProviderEnabledMutation.mutate(!provider.isEnabled);
   }, [provider, updateProviderEnabledMutation]);
-  const handleDeleteProvider = useCallback(() => {
-    if (!providerId) {
-      return;
-    }
-
-    const deletion = deleteProviderMutation.trigger({ params: { id: providerId } });
-    router.back();
-    void deletion
-      .then(() => {
-        toast.show({ label: t('settings.provider.toast.deleted'), variant: 'success' });
-      })
-      .catch(() => {
-        alert.show({ title: t('settings.provider.toast.deleteFailed') });
-      });
-  }, [alert, deleteProviderMutation, providerId, router, t, toast]);
-  const requestDeleteProvider = useCallback(() => {
-    if (!provider || !providers.canRemove(provider)) {
-      return;
-    }
-
-    alert.confirm({
-      confirmLabel: t('common.delete'),
-      description: t('settings.provider.delete.message', { name: provider.name }),
-      onConfirm: handleDeleteProvider,
-      role: 'destructive',
-      title: t('settings.provider.delete.title'),
-    });
-  }, [alert, handleDeleteProvider, provider, providers, t]);
 
   if (!providerId || providerQuery.isError) {
     return <Redirect href="/settings/provider" />;
@@ -390,7 +353,9 @@ export default function ProviderDetailSettingsScreen() {
         title={
           modelSelection.isEditing
             ? t('settings.provider.models.selection.count', { count: selectedModels.length })
-            : (providerName ?? t('settings.provider.tabs.configuration'))
+            : // The route param is only there to name the page before the record
+              // lands; once it has, it is what a rename shows up in.
+              (provider?.name ?? providerName ?? t('settings.provider.tabs.configuration'))
         }
         titleElement={
           modelSelection.isEditing ? undefined : (
@@ -399,43 +364,63 @@ export default function ProviderDetailSettingsScreen() {
         }
       />
       {activeTab === 'configuration' ? (
-        <ScrollView
-          alwaysBounceVertical={false}
-          contentContainerStyle={styles.configurationContent}
-          contentInsetAdjustmentBehavior="automatic"
-          showsVerticalScrollIndicator={false}
-          style={styles.screen}
-        >
-          {isProviderDetailLoading ? (
-            <View className="items-center py-10">
-              <Spinner accessibilityLabel={t('settings.provider.loading')} />
-            </View>
-          ) : (
-            // Still gated as one commit: #467 kept the Base URL / API keys blocks
-            // out until all three queries land so the content never grows under a
-            // finger that already aimed at the toolbar.
-            <>
-              <ProviderApiManagementSection
-                apiKeysInput={apiKeysInput}
-                baseUrl={getProviderPrimaryBaseUrl(provider)}
-                provider={provider}
-                showApiKeys={showApiKeys}
-                showBaseUrl={canEditEndpoint}
-                onApiKeysCommit={commitApiKeys}
-                onApiKeysManagePress={openApiKeySettings}
-                onBaseUrlCommit={commitBaseUrl}
-                onBaseUrlManagePress={openEndpointSettings}
-              />
-              <ProviderModelCheckSection
-                apiKeys={apiKeys}
-                isLoading={modelsQuery.isPending}
-                models={models}
-                provider={provider}
-                providerId={providerId}
-              />
-            </>
-          )}
-        </ScrollView>
+        <>
+          {/* Heads the configuration rather than the page: the header carries
+              the tabs, and the models tab is a list of rows shaped like this
+              one, where a provider row would read as a model. */}
+          <ProviderDetailBanner
+            isActive={provider?.isEnabled ?? false}
+            isDisabled={!provider || updateProviderEnabledMutation.isPending}
+            onToggleActive={handleToggleProvider}
+            provider={provider}
+            providerId={providerId}
+            providerName={providerName}
+          />
+          <ScrollView
+            alwaysBounceVertical={false}
+            contentContainerStyle={styles.configurationContent}
+            contentInsetAdjustmentBehavior="automatic"
+            showsVerticalScrollIndicator={false}
+            style={styles.screen}
+          >
+            {isProviderDetailLoading ? (
+              <View className="items-center py-10">
+                <Spinner accessibilityLabel={t('settings.provider.loading')} />
+              </View>
+            ) : (
+              // Still gated as one commit: #467 kept the Base URL / API keys blocks
+              // out until all three queries land so the content never grows under a
+              // finger that already aimed at the toolbar.
+              <>
+                <View className="gap-3">
+                  {canEditEndpoint ? (
+                    <ProviderApiServiceEndpointField
+                      baseUrl={getProviderPrimaryBaseUrl(provider)}
+                      onCommit={commitBaseUrl}
+                    />
+                  ) : null}
+                  {showApiKeys ? (
+                    <ProviderApiServiceApiKeysField
+                      apiKeysInput={apiKeysInput}
+                      onCommit={commitApiKeys}
+                      onManagePress={openApiKeySettings}
+                    />
+                  ) : null}
+                </View>
+                <ProviderModelCheckSection
+                  apiKeys={apiKeys}
+                  isLoading={modelsQuery.isPending}
+                  models={models}
+                  onOpenApiKeySelect={openCheckApiKeySelect}
+                  onOpenModelSelect={openCheckModelSelect}
+                  providerId={providerId}
+                  selectedApiKeyId={checkApiKeyId}
+                  selectedModelId={checkModelId}
+                />
+              </>
+            )}
+          </ScrollView>
+        </>
       ) : (
         <ProviderModelList
           addAction={addAction}
@@ -450,18 +435,11 @@ export default function ProviderDetailSettingsScreen() {
       {/* Mounted from the first frame — installing a bottom toolbar later is a
           native nav-item change, which is what the loading branch used to do. */}
       <ProviderDetailChrome
-        canDelete={provider ? providers.canRemove(provider) : false}
         editAction={
           activeTab === 'models' && selectableIds.length > 0
             ? { isDisabled: false, onPress: modelSelection.enterEditing }
             : undefined
         }
-        isActive={provider?.isEnabled ?? false}
-        isDisabled={
-          !provider || updateProviderEnabledMutation.isPending || deleteProviderMutation.isLoading
-        }
-        onDelete={requestDeleteProvider}
-        onToggleActive={handleToggleProvider}
         pullAction={activeTab === 'models' ? modelPullAction : undefined}
         selection={
           modelSelection.isEditing
@@ -482,7 +460,10 @@ const styles = StyleSheet.create({
     gap: 20,
     paddingBottom: 96,
     paddingHorizontal: 16,
-    paddingTop: 20,
+    // No top padding: the banner above already carries the gap, and doubling it
+    // would set the first field further from the banner than the fields are
+    // from each other.
+    paddingTop: 0,
   },
   screen: {
     flex: 1,

@@ -104,7 +104,7 @@ function delegatedAiRuntimeMap(
   )}\n`;
 }
 
-function delegatedOAuthMap(
+function delegatedServiceMap(
   files: Array<{
     classification: 'blocked' | 'explicit-exclusion' | 'mobile-extension' | 'semantic-port';
     contents: string;
@@ -551,7 +551,7 @@ describe('auditRepositories', () => {
     ).rejects.toThrow(/does not cover.*unclassified:src\/main\/ai\/unmapped\.ts/);
   });
 
-  test('overlays delegated OAuth classifications without hiding unrelated service blockers', async () => {
+  test('overlays delegated service classifications without hiding unrelated service blockers', async () => {
     const runtime = 'export const runtime = true;\n';
     const copilot = 'export const copilot = true;\n';
     const codex = 'export const codex = true;\n';
@@ -567,7 +567,7 @@ describe('auditRepositories', () => {
     });
     const mobileRoot = createRepository('cherry-studio-app', {
       ...sharedPackageFiles('mobile'),
-      'src/backend/services/oauth/desktop-sync-map.json': delegatedOAuthMap([
+      'src/backend/services/oauth/desktop-sync-map.json': delegatedServiceMap([
         {
           classification: 'semantic-port',
           contents: copilot,
@@ -602,7 +602,7 @@ describe('auditRepositories', () => {
       },
     });
     manifest.delegatedManifests = {
-      'services:oauth': 'src/backend/services/oauth/desktop-sync-map.json',
+      services: 'src/backend/services/oauth/desktop-sync-map.json',
     };
 
     const report = await auditRepositories({

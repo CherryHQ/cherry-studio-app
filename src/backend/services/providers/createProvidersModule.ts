@@ -4,6 +4,7 @@ import type { ProvidersModule } from '@/shared/contracts';
 
 type ProviderAvatarStorage = {
   persist(providerId: string, sourceUri: string): Promise<string>;
+  remove(providerId: string): void;
   resolve(providerId: string): string | undefined;
 };
 
@@ -19,6 +20,7 @@ export function createProvidersModule({
   return {
     canRemove,
     persistAvatar: avatars.persist,
+    removeAvatar: avatars.remove,
     resolveAvatar: avatars.resolve,
   };
 }

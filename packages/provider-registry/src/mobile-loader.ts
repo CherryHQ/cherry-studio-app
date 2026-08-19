@@ -15,6 +15,19 @@ type RegistryBundle = {
   providers: { version: string; providers: ProviderConfig[] };
 };
 
+/**
+ * Preset providers whose only authentication path is a provider OAuth login.
+ * The app has no OAuth sign-in, so these rows can never be configured and are
+ * projected out of every provider read. The bundled catalog stays intact — this
+ * is the app-side answer to "can a mobile user actually use this", not a claim
+ * about what the desktop catalog contains.
+ */
+const MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set([
+  'copilot',
+  'grok-cli',
+  'openai-codex',
+]);
+
 let parsedBundle: RegistryBundle | null = null;
 
 function loadBundle(): RegistryBundle {
@@ -56,8 +69,8 @@ export class MobileRegistryLoader {
     return overrides;
   }
 
-  isProviderExcluded(_providerId: string): boolean {
-    return false;
+  isProviderExcluded(providerId: string): boolean {
+    return MOBILE_UNSUPPORTED_PRESET_PROVIDER_IDS.has(providerId);
   }
 
   getModelsVersion(): string {

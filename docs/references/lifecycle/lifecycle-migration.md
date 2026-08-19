@@ -97,7 +97,7 @@ is unreachable only because `globalThis` is checked first.
 
 Migrate in dependency order so each commit leaves a working app: `CacheService` → `DbService` →
 `PreferenceService` → `KeepAliveCoordinator` → `BackgroundActivityManager` → `WebSearchService` →
-`McpRuntimeService` → OAuth services → `ChatRuntime` → `JobRuntime` → feature modules.
+`McpRuntimeService` → `ChatRuntime` → `JobRuntime` → feature modules.
 
 Per module: extend `BaseService`, add decorators, move `initialize`-style work into `onInit`, move
 `dispose()` into `onStop`/`onDestroy`, replace hand-rolled `AppState` subscriptions with

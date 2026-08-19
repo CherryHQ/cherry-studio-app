@@ -52,7 +52,7 @@ part does not require a table migration, but FTS indexes only text parts.
 ## Add AI Or Backend Service Behavior
 
 AI SDK adapters live under `src/backend/ai`. Device and third-party capabilities live in their
-owning domain under `src/backend/services`, such as `permissions`, `oauth`, and `webSearch`.
+owning domain under `src/backend/services`, such as `permissions`, `models`, and `webSearch`.
 Cross-layer AI tool and transport rules belong in `packages/universal/src/ai`
 (`@cherrystudio/universal/ai`). General pure helpers used by both sides belong in `src/shared/utils`
 when they are mobile-native, or in `packages/universal/src/utils` when they mirror a desktop helper,

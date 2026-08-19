@@ -61,7 +61,7 @@ Contracts must not contain:
 - endpoint paths, query keys, pagination infrastructure, or React Query options;
 - preference keys, defaults, schemas, clients, or subscription implementations;
 - Drizzle schemas, database rows, migrations, SQL, repositories, or persistence classes;
-- concrete AI SDK, MCP SDK, OAuth client, filesystem, cache, or native-module implementations;
+- concrete AI SDK, MCP SDK, filesystem, cache, or native-module implementations;
 - React contexts, providers, hooks, components, Expo Router navigation, toast, or translation logic;
 - bootstrap composition, dependency graphs, service construction, or lifecycle startup code;
 - backend-private dependency interfaces used only to construct or test an implementation;
@@ -122,11 +122,9 @@ directly. Do not reintroduce `createSession()` or a public Chat session object.
 | Module | Why it qualifies |
 | --- | --- |
 | `chat` | Projects the app-owned, multi-Topic Chat Runtime through branching, multi-model sends, queued turns, cancellation, stream recovery, and subscriptions |
-| `cherryin` | Encapsulates authenticated CherryIN account and balance requests through the external account client |
 | `file` | Encapsulates managed-file import, Expo URI resolution, and safe unreferenced cleanup |
 | `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
 | `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
-| `oauth` | Exposes provider OAuth authorization completion and logout workflows |
 | `paintings` | Owns cancellable generation sessions, file preparation, persistence, cleanup, and file resolution |
 | `permissions` | Coordinates stored permission policy with device status, recovery, and system settings |
 | `profile` | Encapsulates profile avatar storage and preference coordination |

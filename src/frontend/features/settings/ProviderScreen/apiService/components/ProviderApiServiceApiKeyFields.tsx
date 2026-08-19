@@ -53,7 +53,10 @@ export function ProviderApiServiceApiKeysField({
         </View>
         <Button
           accessibilityLabel={t('settings.provider.apiService.manageApiKeys')}
-          hitSlop={2}
+          // Square, and exactly as tall as the field beside it — a button's own
+          // padding lands two points short of an input's height.
+          className="size-10 min-w-0 p-0"
+          hitSlop={6}
           icon={<KeyRoundIcon />}
           onPress={onManagePress}
           variant="secondary"

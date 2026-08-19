@@ -10,6 +10,7 @@ import {
 type ImageSource = ComponentProps<typeof Image>['source'];
 
 const BRAND_AVATAR_SIZE = 26;
+const BRAND_AVATAR_FRAME_RADIUS = 6;
 const BRAND_AVATAR_INITIAL_FONT_SIZE = 14;
 
 type BrandAvatarProps = {
@@ -35,15 +36,29 @@ export function BrandAvatar({
   testID,
 }: BrandAvatarProps) {
   const fallback = children === undefined ? getBrandAvatarFallback(label) : undefined;
+  // Corner radius and the initial's type size are ratios of the default size,
+  // not constants: the same avatar is rendered at 26 in lists and at form-hero
+  // sizes in the provider form, and a fixed 6pt radius reads as a square there.
+  // At the default size these resolve to the plain 6/5/14 they replaced.
+  const frameRadius = (size * BRAND_AVATAR_FRAME_RADIUS) / BRAND_AVATAR_SIZE;
 
   return (
-    <Avatar accessibilityLabel={label} shape="rounded" size={size} testID={testID}>
+    <Avatar
+      accessibilityLabel={label}
+      radius={frameRadius}
+      shape="rounded"
+      size={size}
+      testID={testID}
+    >
       {fallback ? (
         <Avatar.Fallback
           scale={DEFAULT_BRAND_ICON_SCALE}
-          style={{ backgroundColor: fallback.backgroundColor, borderRadius: 5 }}
+          style={{ backgroundColor: fallback.backgroundColor, borderRadius: frameRadius - 1 }}
           textProps={{
-            style: { color: fallback.color, fontSize: BRAND_AVATAR_INITIAL_FONT_SIZE },
+            style: {
+              color: fallback.color,
+              fontSize: (size * BRAND_AVATAR_INITIAL_FONT_SIZE) / BRAND_AVATAR_SIZE,
+            },
           }}
         >
           {fallback.initial}

@@ -5,8 +5,6 @@ import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
-import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
-import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import { devicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 
@@ -39,9 +37,6 @@ describe('createBackendServices', () => {
     const chat = { kind: 'chat' } as unknown as ChatRuntime;
     const jobRuntime = { kind: 'job-runtime' } as unknown as JobRuntime;
     const mcpRuntime = { kind: 'mcp-runtime' } as unknown as McpRuntimeService;
-    // Both OAuth services arrive from the host now, like the four above them.
-    const oauth = { kind: 'oauth' } as unknown as ProviderOAuthService;
-    const oauthSession = { kind: 'oauth-session' } as unknown as OAuthRuntimeService;
     const preference = { kind: 'preference' } as unknown as PreferenceService;
     const webSearch = { kind: 'web-search' } as unknown as WebSearchService;
 
@@ -51,8 +46,6 @@ describe('createBackendServices', () => {
       chat,
       jobRuntime,
       mcpRuntime,
-      oauth,
-      oauthSession,
       preference,
       webSearch,
     });
@@ -68,8 +61,6 @@ describe('createBackendServices', () => {
       fileContent,
       jobRuntime,
       mcpRuntime,
-      oauth,
-      oauthSession,
       webSearch,
     });
     expect(services.devicePermissions).toBe(devicePermissions);

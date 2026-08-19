@@ -1,130 +1,89 @@
-import { ChevronDownIcon } from '@cherrystudio/app-icons';
-import {
-  BottomSheet,
-  type BottomSheetSelectionOption,
-  Button,
-  Section,
-} from '@cherrystudio/ui/components';
+import { ChevronRightIcon } from '@cherrystudio/app-icons';
+import { Button, Section } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
-import { useState } from 'react';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
-import { ProviderModelSelectSheet } from './ProviderModelSelectSheet';
-
-type SelectionKind = 'api-key' | 'model' | null;
 
 type ProviderModelCheckSectionProps = {
   apiKeys: readonly ApiKeyEntry[] | undefined;
   isLoading?: boolean;
   models: readonly Model[];
-  /** Only for the model rows' logos; absent while the provider is still loading. */
-  provider: Provider | undefined;
+  /** Both picked on pushed screens, so both arrive as route params. */
+  onOpenApiKeySelect: () => void;
+  onOpenModelSelect: () => void;
   providerId: string;
+  selectedApiKeyId?: string;
+  selectedModelId?: string;
 };
 
 export function ProviderModelCheckSection({
   apiKeys,
   isLoading = false,
   models,
-  provider,
+  onOpenApiKeySelect,
+  onOpenModelSelect,
   providerId,
+  selectedApiKeyId,
+  selectedModelId,
 }: ProviderModelCheckSectionProps) {
   const { t } = useTranslation();
-  const [selectionKind, setSelectionKind] = useState<SelectionKind>(null);
-  const {
-    apiKeyOptions,
-    isChecking,
-    modelStatus,
-    selectedApiKey,
-    selectedModel,
-    setSelectedApiKeyId,
-    setSelectedModelId,
-    startCheck,
-  } = useProviderModelCheck({ apiKeys, models, providerId });
-  const apiKeySelectionOptions: BottomSheetSelectionOption<string>[] = apiKeyOptions.map(
-    (option) => ({ label: option.label, value: option.value }),
-  );
+  const { isChecking, modelStatus, selectedApiKey, selectedModel, startCheck } =
+    useProviderModelCheck({ apiKeys, models, providerId, selectedApiKeyId, selectedModelId });
 
-  // The sheets sit outside the spaced stack: they open as native overlays, so a
-  // gap between them would only pad the configuration tab with dead space.
   return (
-    <View>
-      <View className="gap-5">
-        <Section>
-          {/* Section's own `title` slot indents the header by 12px, which would
-              sit it out of line with the API keys field label right above. */}
-          <Section.Header className="px-0" title={t('settings.provider.models.checkTitle')} />
-          <Section.Item
-            disabled={isChecking || isLoading || models.length === 0}
-            label={t('settings.provider.models.checkModelSection')}
-            onPress={() => setSelectionKind('model')}
-            trailing={
-              <SelectionRowValue
-                label={selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
-              />
-            }
-          />
-          <Section.Item
-            disabled={isChecking || isLoading}
-            label={t('settings.provider.models.checkApiKeySection')}
-            onPress={() => setSelectionKind('api-key')}
-            trailing={
-              <SelectionRowValue
-                label={selectedApiKey?.label ?? t('settings.provider.models.checkDefaultApiKey')}
-              />
-            }
-          />
-        </Section>
+    <View className="gap-5">
+      <Section>
+        {/* Section's own `title` slot indents the header by 12px, which would
+            sit it out of line with the API keys field label right above. */}
+        <Section.Header className="px-0" title={t('settings.provider.models.checkTitle')} />
+        <Section.Item
+          disabled={isChecking || isLoading || models.length === 0}
+          label={t('settings.provider.models.checkModelSection')}
+          onPress={onOpenModelSelect}
+          trailing={
+            <SelectionRowValue
+              label={selectedModel?.name ?? t('settings.provider.models.checkNoModels')}
+            />
+          }
+        />
+        <Section.Item
+          disabled={isChecking || isLoading}
+          label={t('settings.provider.models.checkApiKeySection')}
+          onPress={onOpenApiKeySelect}
+          trailing={
+            <SelectionRowValue
+              label={selectedApiKey?.label ?? t('settings.provider.models.checkDefaultApiKey')}
+            />
+          }
+        />
+      </Section>
 
-        {modelStatus?.status === 'success' ? <ModelCheckResult status={modelStatus} /> : null}
+      {modelStatus?.status === 'success' ? <ModelCheckResult status={modelStatus} /> : null}
 
-        <Button
-          disabled={isLoading || !selectedModel}
-          loading={isChecking}
-          onPress={() => void startCheck()}
-        >
-          {isChecking
-            ? t('settings.provider.models.checkChecking')
-            : t('settings.provider.models.checkStart')}
-        </Button>
-      </View>
-
-      <ProviderModelSelectSheet
-        emptyText={t('settings.provider.models.checkNoModels')}
-        isOpen={selectionKind === 'model'}
-        models={models}
-        onClose={() => setSelectionKind(null)}
-        onSelect={setSelectedModelId}
-        provider={provider}
-        selectedModelId={selectedModel?.id ?? null}
-        title={t('settings.provider.models.checkModelSection')}
-      />
-      <BottomSheet.Selection
-        closeAccessibilityLabel={t('common.close')}
-        emptyText={t('settings.select.placeholder')}
-        heightFraction={0.6}
-        onClose={() => setSelectionKind(null)}
-        onSelect={setSelectedApiKeyId}
-        open={selectionKind === 'api-key'}
-        options={apiKeySelectionOptions}
-        selectedValue={selectedApiKey?.value ?? null}
-        testID="provider-api-key-selection"
-        title={t('settings.provider.models.checkApiKeySection')}
-      />
+      <Button
+        disabled={isLoading || !selectedModel}
+        loading={isChecking}
+        onPress={() => void startCheck()}
+      >
+        {isChecking
+          ? t('settings.provider.models.checkChecking')
+          : t('settings.provider.models.checkStart')}
+      </Button>
     </View>
   );
 }
 
+/** The value, then the disclosure of the screen it is picked on. */
 function SelectionRowValue({ label }: { label: string }) {
   return (
     <View className="min-w-0 flex-row items-center justify-end gap-1">
       <Text className="min-w-0 shrink text-right text-base text-foreground" numberOfLines={1}>
         {label}
       </Text>
-      <ChevronDownIcon className="size-5 shrink-0 text-foreground" />
+      <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" />
     </View>
   );
 }

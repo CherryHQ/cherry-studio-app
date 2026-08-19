@@ -16,8 +16,6 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { BackgroundActivityEnvironment } from '@/backend/services/backgroundActivity/BackgroundActivityEnvironment';
 import { createLiveActivityPresenter } from '@/backend/services/backgroundActivity/liveActivityPresenter';
 import type { JobRuntime } from '@/backend/services/jobs/JobRuntime';
-import type { ProviderOAuthService } from '@/backend/services/oauth/authorization/ProviderOAuthService';
-import type { OAuthRuntimeService } from '@/backend/services/oauth/runtime/OAuthRuntimeService';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
@@ -62,8 +60,6 @@ export function createAppBootstrapRuntime(
   const dbService = host.container.get<DbService>('DbService');
   const jobRuntime = host.container.get<JobRuntime>('JobRuntime');
   const mcpRuntime = host.container.get<McpRuntimeService>('McpRuntimeService');
-  const oauth = host.container.get<ProviderOAuthService>('ProviderOAuthService');
-  const oauthSession = host.container.get<OAuthRuntimeService>('OAuthRuntimeService');
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const services = createBackendServices({
@@ -72,8 +68,6 @@ export function createAppBootstrapRuntime(
     chat,
     jobRuntime,
     mcpRuntime,
-    oauth,
-    oauthSession,
     preference,
     webSearch,
   });

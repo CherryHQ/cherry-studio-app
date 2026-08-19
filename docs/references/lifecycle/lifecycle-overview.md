@@ -143,8 +143,8 @@ export class JobRuntime extends BaseService {
 export const services = {
   ResourceScopeCoordinator, CacheService, DbService, PreferenceService,
   BackgroundActivityEnvironment, KeepAliveCoordinator, BackgroundActivityManager,
-  BackgroundReplyRuntime, WebSearchService, McpRuntimeService, OAuthRuntimeService,
-  ProviderOAuthService, AiService, ChatRuntime, JobRuntime,
+  BackgroundReplyRuntime, WebSearchService, McpRuntimeService,
+  AiService, ChatRuntime, JobRuntime,
 } as const
 
 export type ServiceRegistry = { [K in keyof typeof services]: InstanceType<(typeof services)[K]> }

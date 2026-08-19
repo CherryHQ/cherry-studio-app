@@ -35,8 +35,14 @@ describe('BrandAvatar', () => {
   it('falls back to the generated initial when given no content', () => {
     render(<BrandAvatar label="codex" />);
 
+    // At the default size the ratios resolve to the plain constants they replaced.
     expect(mockAvatar).toHaveBeenCalledWith(
-      expect.objectContaining({ accessibilityLabel: 'codex', shape: 'rounded', size: 26 }),
+      expect.objectContaining({
+        accessibilityLabel: 'codex',
+        radius: 6,
+        shape: 'rounded',
+        size: 26,
+      }),
     );
     expect(mockAvatarFallback).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -69,7 +75,12 @@ describe('BrandAvatar', () => {
       </BrandAvatar>,
     );
 
-    expect(mockAvatar).toHaveBeenCalledWith(expect.objectContaining({ size: 32 }));
+    // The frame's own radius is a ratio of the default size, not a constant:
+    // the same avatar is rendered at 26 in lists and near 100 in the provider
+    // form, where a fixed 6 would read as a square.
+    expect(mockAvatar).toHaveBeenCalledWith(
+      expect.objectContaining({ radius: 32 * (6 / 26), size: 32 }),
+    );
     expect(mockAvatarImage).toHaveBeenCalledWith(
       expect.objectContaining({
         contentFit: 'contain',
