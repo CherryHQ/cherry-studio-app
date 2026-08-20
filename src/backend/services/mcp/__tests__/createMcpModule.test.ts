@@ -5,6 +5,7 @@ import { createMcpModule, type McpModuleDependencies } from '../createMcpModule'
 function server(overrides: Partial<McpServer> = {}): McpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
+    disabledTools: [],
     endpointUrl: 'https://example.com/mcp',
     id: 'server-1',
     isEnabled: true,

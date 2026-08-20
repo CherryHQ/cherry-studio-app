@@ -40,6 +40,7 @@ function deferred<T>() {
 function makeServer(overrides: Partial<McpServer> = {}): McpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
+    disabledTools: [],
     endpointUrl: 'https://a.example/mcp',
     id: 'server-1',
     isEnabled: true,
@@ -217,6 +218,28 @@ describe('assistant tool preparation', () => {
     const tools = await getProjectedToolSet(service, makeAssistant(), ['mcp__serverone__search']);
 
     expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
+  });
+
+  it('withholds a disabled tool from the request', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search', 'read'])));
+    const { service } = makeService([makeServer({ disabledTools: ['read'] })]);
+
+    const tools = await getProjectedToolSet(service, makeAssistant());
+
+    expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search']);
+  });
+
+  it('offers a re-enabled tool from the warm cache, without reconnecting', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search', 'read'])));
+    const servers = [makeServer({ disabledTools: ['read'] })];
+    const { service } = makeService(servers);
+    await warmedToolSet(service);
+
+    servers[0] = makeServer({ disabledTools: [] });
+    const tools = await getProjectedToolSet(service, makeAssistant());
+
+    expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__search', 'mcp__serverone__read']);
+    expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
   });
 
   it('uses one three-second budget for all servers and keeps late refreshes for the next request', async () => {

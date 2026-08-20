@@ -69,6 +69,7 @@ describe('bundled SQLite migrations', () => {
         'is_enabled',
         'created_at',
         'updated_at',
+        'disabled_tools',
       ]);
       expect(columnNames(database, 'preference')).toEqual([
         'key',
@@ -313,6 +314,32 @@ describe('bundled SQLite migrations', () => {
       expect(database.prepare('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 });
 
       database.exec('COMMIT');
+    } finally {
+      database.close();
+    }
+  });
+
+  test('backfills the tool rules of servers stored before the column existed', () => {
+    const database = new DatabaseSync(':memory:');
+
+    try {
+      database.exec('PRAGMA foreign_keys = ON');
+      const entries = readMigrationEntries();
+      for (const { sql } of entries.slice(0, 1)) {
+        applyMigrationSql(database, sql);
+      }
+      database.exec(`
+        INSERT INTO mcp_server (id, name, endpoint_url, is_enabled, created_at, updated_at)
+        VALUES ('legacy', 'Legacy', 'https://example.com/mcp', 1, 1, 1);
+      `);
+
+      applyMigrationsAsDrizzleWould(database, entries.slice(1));
+
+      // McpServerService hands this column to the JSON codec unguarded, so a
+      // NULL left behind here would throw on the first read of an upgraded row.
+      expect(
+        database.prepare("SELECT disabled_tools FROM mcp_server WHERE id = 'legacy'").get(),
+      ).toEqual({ disabled_tools: '[]' });
     } finally {
       database.close();
     }

@@ -332,6 +332,7 @@
   "settings.mcp.toast.deleted": "Server deleted",
   "settings.mcp.toast.saveFailed": "Failed to save server",
   "settings.mcp.tools.empty": "This server exposes no tools.",
+  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}, enabled",
   "settings.mcp.tools.loadFailed": "Failed to load tools.",
   "settings.mcp.tools.loading": "Loading tools...",
   "settings.mcp.tools.retry": "Retry",

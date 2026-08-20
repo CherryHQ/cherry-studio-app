@@ -331,6 +331,7 @@
   "settings.mcp.toast.deleted": "服务器已删除",
   "settings.mcp.toast.saveFailed": "保存服务器失败",
   "settings.mcp.tools.empty": "该服务器未提供任何工具。",
+  "settings.mcp.tools.enabledAccessibilityLabel": "{{tool}}，已启用",
   "settings.mcp.tools.loadFailed": "加载工具失败。",
   "settings.mcp.tools.loading": "正在加载工具……",
   "settings.mcp.tools.retry": "重试",

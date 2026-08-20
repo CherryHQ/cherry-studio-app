@@ -174,6 +174,29 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
     }
   }, [alert, server, serverId, t, updateServer]);
 
+  /**
+   * A rule is the tool's raw name, so enabling drops that one entry and
+   * disabling adds it. The row is the source of truth; the switch reads back
+   * from it once the write lands.
+   */
+  const handleToggleTool = useCallback(
+    (toolName: string, enabled: boolean) => {
+      if (!serverId || !server) {
+        return;
+      }
+
+      const disabledTools = enabled
+        ? server.disabledTools.filter((name) => name !== toolName)
+        : [...server.disabledTools, toolName];
+
+      void updateServer(serverId, { disabledTools }).catch((error) => {
+        logger.error('Failed to toggle MCP tool', error as Error);
+        alert.show({ title: t('settings.mcp.toast.saveFailed') });
+      });
+    },
+    [alert, server, serverId, t, updateServer],
+  );
+
   const handleDelete = useCallback(() => {
     if (!serverId) {
       return;
@@ -310,7 +333,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           style={styles.scroll}
         >
           <View className="rounded-2xl bg-grouped-surface p-4">
-            <McpToolsSection server={server} />
+            <McpToolsSection isDisabled={isBusy} onToggleTool={handleToggleTool} server={server} />
           </View>
         </ScrollView>
       ) : null}

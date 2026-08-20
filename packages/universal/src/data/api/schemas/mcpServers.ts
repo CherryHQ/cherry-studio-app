@@ -3,6 +3,7 @@ import { McpServerSchema } from '@shared/data/types/mcpServer';
 import * as z from 'zod';
 
 const MCP_SERVER_MUTABLE_FIELDS = {
+  disabledTools: true,
   endpointUrl: true,
   isEnabled: true,
   name: true,
