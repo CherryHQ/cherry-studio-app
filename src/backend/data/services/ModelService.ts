@@ -16,12 +16,12 @@ import type {
   ListModelsQuery,
   UpdateModelDto,
 } from '@/shared/data/api/schemas/models';
-import { deepEqual } from '@/shared/data/cache/cacheUtils';
 import {
   CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
   CHERRYAI_PROVIDER_ID,
   isManagedCherryAiDefaultModel,
 } from '@/shared/data/presets/cherryai';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import {
   createCustomModel,

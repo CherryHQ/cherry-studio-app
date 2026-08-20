@@ -55,7 +55,7 @@ import type {
   CacheSubscriber,
   CacheTierSummary,
 } from '@/shared/data/cache/cacheTypes';
-import { deepEqual } from '@/shared/data/cache/cacheUtils';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 const logger = loggerService.withContext('CacheService');
 

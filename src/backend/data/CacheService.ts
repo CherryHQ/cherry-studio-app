@@ -18,7 +18,7 @@ import {
   type InferBackendCacheValue,
 } from '@/shared/data/cache/cacheSchemas';
 import type { CacheEntry } from '@/shared/data/cache/cacheTypes';
-import { deepEqual } from '@/shared/data/cache/cacheUtils';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 const logger = loggerService.withContext('BackendCacheService');
 
