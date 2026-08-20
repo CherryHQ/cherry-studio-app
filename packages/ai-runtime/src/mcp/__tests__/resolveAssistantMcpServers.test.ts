@@ -27,6 +27,7 @@ function makeAssistant(overrides: { mcpMode?: McpMode; mcpServerIds?: string[] }
 function makeServer(id: string): McpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
+    disabledTools: [],
     endpointUrl: `https://${id}.example/mcp`,
     id,
     isEnabled: true,

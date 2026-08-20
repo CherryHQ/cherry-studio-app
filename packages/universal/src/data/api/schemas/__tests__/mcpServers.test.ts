@@ -19,10 +19,17 @@ describe('MCP server DTO schemas', () => {
     expect(() => CreateMcpServerSchema.parse({ name: 'No endpoint' })).toThrow();
   });
 
-  it.each(['type', 'headers', 'timeout', 'disabledTools', 'disabledAutoApproveTools', 'isActive'])(
+  it.each(['type', 'headers', 'timeout', 'disabledAutoApproveTools', 'isActive'])(
     'rejects the removed field %s',
     (field) => {
       expect(() => UpdateMcpServerSchema.parse({ [field]: 'value' })).toThrow();
     },
   );
+
+  it('patches the tool rules as a whole list', () => {
+    expect(UpdateMcpServerSchema.parse({ disabledTools: ['search'] })).toEqual({
+      disabledTools: ['search'],
+    });
+    expect(UpdateMcpServerSchema.parse({ disabledTools: [] })).toEqual({ disabledTools: [] });
+  });
 });

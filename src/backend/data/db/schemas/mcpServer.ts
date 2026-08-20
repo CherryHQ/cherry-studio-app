@@ -13,9 +13,10 @@ import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
  *
  * Runtime facts (protocol version, server info, tool list, connection state)
  * are re-derived on every connection and belong to `McpRuntimeService`, not
- * here. Tool availability and execution approval are fixed application policy,
- * not per-server configuration. Future OAuth credentials get their own
- * storage keyed by server id; they must never land in this table.
+ * here. Execution approval is fixed application policy — every MCP tool asks
+ * before it runs — so there is no per-server approval column. Future OAuth
+ * credentials get their own storage keyed by server id; they must never land
+ * in this table.
  */
 export const mcpServerTable = sqliteTable(
   'mcp_server',
@@ -24,6 +25,13 @@ export const mcpServerTable = sqliteTable(
     name: text().notNull(),
     endpointUrl: text().notNull(),
     isEnabled: integer({ mode: 'boolean' }).notNull().default(false),
+    /**
+     * Tool names this server may not offer, as the server reports them. The
+     * server decides what exists; this is the user's say over what reaches the
+     * model. Names that no longer exist stay put — a tool can come back after
+     * an upgrade, and dropping its rule would silently re-enable it.
+     */
+    disabledTools: text({ mode: 'json' }).$type<string[]>().notNull().default([]),
 
     ...createUpdateTimestamps,
   },

@@ -256,7 +256,14 @@ export class McpRuntimeService extends BaseService {
         continue;
       }
 
+      const disabledTools = new Set(server.disabledTools);
       for (const [rawName, rawTool] of Object.entries(cached.rawTools)) {
+        // Filtered here rather than at the cache: the cache mirrors what the
+        // server offers, and a re-enabled tool must not need a refetch.
+        if (disabledTools.has(rawName)) {
+          continue;
+        }
+
         const key = buildFunctionCallToolName(server.name, rawName);
         if (selectedToolIdSet && !selectedToolIdSet.has(key)) {
           continue;
