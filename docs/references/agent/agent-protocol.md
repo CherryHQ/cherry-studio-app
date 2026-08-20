@@ -176,11 +176,10 @@ type AgentCapabilities = {
 `assistant` remains the standard message role; the configurable product entity is always `Agent`.
 
 Cancellation is required by the Runtime contract and is therefore not a capability flag.
-The Host evaluates capabilities on demand from the Session's current Agent configuration: it asks
-the Router which Runtime that configuration selects and projects that descriptor's capability
-flags. No turn needs to have run, so a fresh Session's snapshot already carries correct values.
-Configuration changes do not push a capabilities event; a new observation is the only refresh
-point, and an already-admitted turn still finishes on its original route.
+A Session is pinned at creation to one Runtime for its whole lifetime, so capabilities are a
+stable projection of that pinned Runtime's descriptor: a fresh Session's snapshot already carries
+correct values, they never change afterward, and configuration changes never re-route or push a
+capabilities event. A different Runtime requires a new Session (or a fork).
 The Agent Client may branch on these protocol capabilities, never on Runtime identity.
 
 ## Operations

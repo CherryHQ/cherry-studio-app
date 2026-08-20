@@ -42,6 +42,8 @@ app and move to a package when a real independent consumer exists.
 - The Router selects Pi when the resolved Agent configuration contains Agent tools; otherwise it
   selects the AI SDK Runtime.
 - A Session has at most one active turn.
+- A Session is pinned at creation to one Runtime for its whole lifetime; it never re-routes. A
+  different Runtime requires a new Session (or a fork).
 - Mobile persistence is the complete conversation record.
 - The Host supplies complete normalized context for every turn; a Runtime may keep private
   in-memory state, but it is not authoritative.
@@ -65,6 +67,13 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
   Runtime lands**. Until then the Runtime registry registers only the AI SDK Runtime and the
   Router resolves every `local` route to it; the route input already carries `agentToolIds` so
   the Pi policy can be added without reshaping the Router.
+- **Context compaction** is undesigned. The ownership split is decided: the durable conversation
+  record belongs to the Host (it must survive process death and back transcript reads), while
+  turning that record into the actual model prompt — selection, formatting, and eventually
+  compaction — is Runtime-owned engine strategy. Compaction needs a contract collaboration point
+  because its artifacts must persist and a Runtime cannot write application storage (for example,
+  a context-artifact event the Host stores and replays into later turns). Design it together with
+  the Pi Runtime.
 
 ## Documents
 

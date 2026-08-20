@@ -54,9 +54,11 @@ The Router is the only component that branches on `pi` or `ai-sdk`. It resolves 
 implementation through the Runtime registry and fails closed when no registered Runtime satisfies
 the route. Route selection is a pure function of the execution target and resolved configuration,
 so the Host may also evaluate it without starting execution; protocol capabilities are projected
-this way. The selected route is fixed for an active turn; configuration changes are evaluated on
-the next turn. If that changes the selected Runtime, the Host closes the old Runtime session before
-opening the new one.
+this way. The selected route is **fixed for the Session's lifetime** (decision 2026-08-20): the
+Host resolves it when the Session is created and records it as Host-private state. Configuration
+changes after creation never re-route an existing Session — a different Runtime requires a new
+Session (or a fork). A Session therefore keeps one Runtime, one capability set, and one execution
+behavior from creation to deletion.
 
 LAN and cloud may add execution-target variants and corresponding adapters later. They use this
 same routing point, but a remote adapter is selected by target alone: Pi and the AI SDK are local
@@ -299,8 +301,10 @@ outside the corresponding implementation.
 ## Runtime registry
 
 Application composition registers implementations by descriptor id. The Router resolves its
-decision through this registry. Agent and Session configuration do not store a selected
-`runtimeId`; neither Runtime ids nor the registry are exposed through the Agent Protocol.
+decision through this registry. Application-owned Agent configuration does not carry a
+`runtimeId` and the client never supplies one; the Host persists the route resolved at Session
+creation as Host-private state so the pin survives restarts. Neither Runtime ids nor the registry
+are exposed through the Agent Protocol.
 
 ```text
 pi      -> Pi AgentRuntime
