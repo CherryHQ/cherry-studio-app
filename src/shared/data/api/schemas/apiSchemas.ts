@@ -8,7 +8,6 @@ import type { ModelSchemas } from './models';
 import type { PaintingSchemas } from './paintings';
 import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
-import type { TemporaryChatSchemas } from './temporaryChats';
 import type { TopicSchemas } from './topics';
 
 export type ApiSchemas = AiUsageRecordSchemas &
@@ -21,5 +20,4 @@ export type ApiSchemas = AiUsageRecordSchemas &
   PaintingSchemas &
   ProviderSchemas &
   SearchSchemas &
-  TemporaryChatSchemas &
   TopicSchemas;

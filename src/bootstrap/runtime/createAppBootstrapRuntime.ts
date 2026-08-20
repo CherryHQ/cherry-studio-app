@@ -90,7 +90,6 @@ export function createAppBootstrapRuntime(
       models: services.model,
       paintings: services.painting,
       providers: services.provider,
-      temporaryChats: services.temporaryChat,
       topics: services.topic,
     }),
   );

@@ -11,7 +11,8 @@ import { schema } from '@/backend/data/db/schemas';
 
 import { contentSearchService } from '../ContentSearchService';
 import { entitySearchService } from '../EntitySearchService';
-import { temporaryChatService } from '../TemporaryChatService';
+import { messageService } from '../MessageService';
+import { topicService } from '../TopicService';
 
 jest.mock('uuid', () => ({ v4: mockRandomUUID, v7: mockRandomUUID }));
 jest.mock('@logger', () => ({
@@ -85,22 +86,16 @@ describe('auxiliary Data API integration', () => {
     sqlite.close();
   });
 
-  test('persists a temporary chat and reads it through entity and content search', async () => {
-    const topic = temporaryChatService.createTopic({ name: 'Needle topic' });
-    const first = temporaryChatService.appendMessage(topic.id, {
+  test('persists a chat and reads it through entity and content search', async () => {
+    const topic = await topicService.create({ name: 'Needle topic' });
+    const first = await messageService.create(topic.id, {
       data: { parts: [{ text: 'first question', type: 'text' }] },
       role: 'user',
     });
-    const last = temporaryChatService.appendMessage(topic.id, {
+    const last = await messageService.create(topic.id, {
       data: { parts: [{ text: '**needle** answer', type: 'text' }] },
       role: 'assistant',
     });
-
-    await expect(temporaryChatService.persist(topic.id)).resolves.toEqual({
-      messageCount: 2,
-      topicId: topic.id,
-    });
-    expect(temporaryChatService.hasTopic(topic.id)).toBe(false);
 
     const entityResult = await entitySearchService.search({
       q: 'Needle',
