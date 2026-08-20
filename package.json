@@ -105,6 +105,7 @@
     "expo-glass-effect": "~57.0.1",
     "expo-haptics": "~57.0.1",
     "expo-image": "~57.0.1",
+    "expo-image-manipulator": "~57.0.11",
     "expo-image-picker": "~57.0.4",
     "expo-intent-launcher": "~57.0.1",
     "expo-linear-gradient": "~57.0.1",

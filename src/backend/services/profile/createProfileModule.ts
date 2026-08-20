@@ -11,7 +11,7 @@ type UserAvatarStorage = {
     previousAvatar: string,
     persist: (avatar: string) => Promise<void>,
   ): Promise<void>;
-  resolve(avatar: string): string | undefined;
+  resolve(avatar: string): Promise<string | undefined>;
 };
 
 export type ProfileModuleDependencies = {

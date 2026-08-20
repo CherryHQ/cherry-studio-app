@@ -4,6 +4,7 @@ import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers'
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
+import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -105,10 +106,12 @@ export function createBackend(
       set: (key, value) => services.preference.set(key, value),
     },
   });
+  const userContentImages = createUserContentImageStorage(services.fileEntry);
   const profile = createProfileModule({
     avatars: {
-      replace: replaceUserAvatar,
-      resolve: resolveUserAvatarUri,
+      replace: (sourceUri, previousAvatar, persist) =>
+        replaceUserAvatar(userContentImages, sourceUri, previousAvatar, persist),
+      resolve: (avatar) => resolveUserAvatarUri(userContentImages, avatar),
     },
     preferences: {
       readAvatar: () => services.preference.readCached('app.user.avatar'),

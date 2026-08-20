@@ -1,43 +1,38 @@
+import {
+  type FileEntryId,
+  FileEntryIdSchema,
+  STORED_FILE_REF_PREFIX,
+  tagStoredFileRef,
+} from '@cherrystudio/universal/data/types/file';
 import { loggerService } from '@logger';
-import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
+import type { UserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
+
 const logger = loggerService.withContext('UserAvatarStorage');
-const AVATAR_DIRECTORY_NAME = 'user-avatars';
-const STORED_FILE_REF_PREFIX = 'file:';
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LEGACY_AVATAR_DIRECTORY_NAME = 'user-avatars';
 const LEGACY_IMAGE_URI_PATTERN = /^(?:blob:|content:\/\/|data:image\/|file:\/\/|https?:\/\/)/i;
 
 type PersistAvatar = (avatar: string) => Promise<void>;
 
-function avatarDirectory(): Directory {
-  return new Directory(Paths.document, AVATAR_DIRECTORY_NAME);
+function legacyAvatarDirectory(): Directory {
+  return new Directory(Paths.document, LEGACY_AVATAR_DIRECTORY_NAME);
 }
 
-function ensureAvatarDirectory(): Directory {
-  const directory = avatarDirectory();
-
-  if (!directory.exists) {
-    directory.create({ intermediates: true });
-  }
-
-  return directory;
+function legacyAvatarFile(fileId: FileEntryId): File {
+  return new File(legacyAvatarDirectory(), fileId);
 }
 
-function avatarFile(fileId: string): File {
-  return new File(avatarDirectory(), fileId);
-}
-
-function storedFileId(avatar: string): string | undefined {
+function storedFileId(avatar: string): FileEntryId | undefined {
   if (!avatar.startsWith(STORED_FILE_REF_PREFIX) || avatar.startsWith('file://')) {
     return undefined;
   }
 
-  const fileId = avatar.slice(STORED_FILE_REF_PREFIX.length);
-  return UUID_PATTERN.test(fileId) ? fileId : undefined;
+  const parsed = FileEntryIdSchema.safeParse(avatar.slice(STORED_FILE_REF_PREFIX.length));
+  return parsed.success ? parsed.data : undefined;
 }
 
-function deleteStoredAvatar(avatar: string): void {
+async function deleteStoredAvatar(images: UserContentImageStorage, avatar: string): Promise<void> {
   const fileId = storedFileId(avatar);
 
   if (!fileId) {
@@ -45,10 +40,13 @@ function deleteStoredAvatar(avatar: string): void {
   }
 
   try {
-    const file = avatarFile(fileId);
+    if (await images.remove(fileId)) {
+      return;
+    }
 
-    if (file.exists) {
-      file.delete();
+    const legacyFile = legacyAvatarFile(fileId);
+    if (legacyFile.exists) {
+      legacyFile.delete();
     }
   } catch (error) {
     logger.warn('Failed to delete stored user avatar', error as Error, { avatar });
@@ -56,54 +54,58 @@ function deleteStoredAvatar(avatar: string): void {
 }
 
 /**
- * Resolve the preference value into an image URI for this device. New avatars
- * use a path-resilient `file:<uuid>` reference; legacy image URIs still render.
+ * Resolve the preference value into an image URI for this device. Managed
+ * FileEntry references are canonical; the former user-avatars directory and
+ * direct image URIs remain read-compatible until their separate cleanup PR.
  */
-export function resolveUserAvatarUri(avatar: string): string | undefined {
+export async function resolveUserAvatarUri(
+  images: UserContentImageStorage,
+  avatar: string,
+): Promise<string | undefined> {
   const fileId = storedFileId(avatar);
 
   if (fileId) {
-    const file = avatarFile(fileId);
-    return file.exists ? file.uri : undefined;
+    const managedUri = await images.resolve(fileId);
+    if (managedUri) {
+      return managedUri;
+    }
+
+    const legacyFile = legacyAvatarFile(fileId);
+    return legacyFile.exists ? legacyFile.uri : undefined;
   }
 
   return LEGACY_IMAGE_URI_PATTERN.test(avatar) ? avatar : undefined;
 }
 
-async function storeUserAvatar(sourceUri: string): Promise<string> {
-  ensureAvatarDirectory();
-
-  const fileId = randomUUID();
-  const destination = avatarFile(fileId);
-
-  try {
-    await new File(sourceUri).copy(destination);
-  } catch (error) {
-    deleteStoredAvatar(`${STORED_FILE_REF_PREFIX}${fileId}`);
-    throw error;
-  }
-
-  return `${STORED_FILE_REF_PREFIX}${fileId}`;
-}
-
 /**
- * Replace the stored avatar without exposing a temporary picker URI. The new
- * file is compensated if the preference write fails; the old file is removed
- * only after the new preference value is durable.
+ * Create the new managed image before switching the preference. Preference
+ * failure compensates the new file; the previous file is removed only after
+ * the new reference is durable.
  */
 export async function replaceUserAvatar(
+  images: UserContentImageStorage,
   sourceUri: string,
   previousAvatar: string,
   persistAvatar: PersistAvatar,
 ): Promise<void> {
-  const nextAvatar = await storeUserAvatar(sourceUri);
+  const nextFileId = await images.create(sourceUri);
 
   try {
-    await persistAvatar(nextAvatar);
+    await persistAvatar(tagStoredFileRef(nextFileId));
   } catch (error) {
-    deleteStoredAvatar(nextAvatar);
+    try {
+      await images.remove(nextFileId);
+    } catch (cleanupError) {
+      logger.error(
+        'Failed to delete a new user avatar after preference write failed',
+        cleanupError as Error,
+        {
+          fileId: nextFileId,
+        },
+      );
+    }
     throw error;
   }
 
-  deleteStoredAvatar(previousAvatar);
+  await deleteStoredAvatar(images, previousAvatar);
 }
