@@ -16,10 +16,7 @@ type Opener = {
   active: boolean;
   order: number;
   token: DelimiterToken;
-  version: number;
 };
-
-type OpenerHandle = { opener: Opener; version: number };
 
 const DECIMAL_DIGIT_CHARACTER = /\p{Decimal_Number}/u;
 const DELIMITER_CHARACTER = /[*_~]/u;
@@ -28,8 +25,8 @@ const DELIMITER_CHARACTER_INDEX: Record<DelimiterCharacter, number> = {
   _: 1,
   '~': 2,
 };
-const OPENER_BUCKETS_PER_CHARACTER = 6;
-const OPENER_BUCKET_COUNT = 18;
+const OPENER_BUCKETS_PER_CHARACTER = 3;
+const OPENER_BUCKET_COUNT = 9;
 const PUNCTUATION_CHARACTER = /[\p{P}\p{S}]/u;
 const WHITESPACE_CHARACTER = /\s/u;
 
@@ -136,7 +133,7 @@ function tokenizeInlineDelimiters(markdown: string): InlineToken[] {
 
 function pairInlineDelimiters(tokens: InlineToken[]) {
   const activeOpeners: Opener[] = [];
-  const openerBuckets = Array.from({ length: OPENER_BUCKET_COUNT }, (): OpenerHandle[] => []);
+  const openerBuckets = Array.from({ length: OPENER_BUCKET_COUNT }, (): Opener[] => []);
   let delimiterOrder = 0;
 
   for (const token of tokens) {
@@ -161,7 +158,6 @@ function pairInlineDelimiters(tokens: InlineToken[]) {
           opener.active = false;
           activeOpeners.pop();
         } else {
-          opener.version += 1;
           indexOpener(opener, openerBuckets);
         }
       }
@@ -172,7 +168,6 @@ function pairInlineDelimiters(tokens: InlineToken[]) {
         active: true,
         order: delimiterOrder,
         token,
-        version: 0,
       };
       activeOpeners.push(opener);
       indexOpener(opener, openerBuckets);
@@ -181,10 +176,7 @@ function pairInlineDelimiters(tokens: InlineToken[]) {
   }
 }
 
-function findMatchingOpener(
-  closer: DelimiterToken,
-  openerBuckets: OpenerHandle[][],
-): Opener | undefined {
+function findMatchingOpener(closer: DelimiterToken, openerBuckets: Opener[][]): Opener | undefined {
   const firstBucket = DELIMITER_CHARACTER_INDEX[closer.character] * OPENER_BUCKETS_PER_CHARACTER;
   let nearest: Opener | undefined;
 
@@ -206,13 +198,13 @@ function findMatchingOpener(
   return nearest;
 }
 
-function peekCurrentOpener(bucket: OpenerHandle[]): Opener | undefined {
-  let handle = bucket.at(-1);
-  while (handle && (!handle.opener.active || handle.version !== handle.opener.version)) {
+function peekCurrentOpener(bucket: Opener[]): Opener | undefined {
+  let opener = bucket.at(-1);
+  while (opener && !opener.active) {
     bucket.pop();
-    handle = bucket.at(-1);
+    opener = bucket.at(-1);
   }
-  return handle?.opener;
+  return opener;
 }
 
 function invalidateOpenersAfter(opener: Opener, activeOpeners: Opener[]) {
@@ -224,12 +216,11 @@ function invalidateOpenersAfter(opener: Opener, activeOpeners: Opener[]) {
   }
 }
 
-function indexOpener(opener: Opener, openerBuckets: OpenerHandle[][]) {
+function indexOpener(opener: Opener, openerBuckets: Opener[][]) {
   const bucketIndex =
     DELIMITER_CHARACTER_INDEX[opener.token.character] * OPENER_BUCKETS_PER_CHARACTER +
-    Number(opener.token.canClose) * 3 +
     (opener.token.remaining % 3);
-  openerBuckets[bucketIndex].push({ opener, version: opener.version });
+  openerBuckets[bucketIndex].push(opener);
 }
 
 function violatesMultipleOfThreeRule(opener: DelimiterToken, closer: DelimiterToken): boolean {
