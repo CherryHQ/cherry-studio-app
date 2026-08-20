@@ -1,5 +1,4 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import type { UpdateProviderInput } from '@cherrystudio/universal/data/api/schemas/providers';
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +7,7 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 
 import { ProviderBrandAvatar } from '../components/ProviderAvatar';
 import { useProviderAvatar, useProviderAvatarActions } from '../components/providerAvatarStore';

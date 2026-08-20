@@ -1,4 +1,3 @@
-import type { JobError } from '@cherrystudio/universal/data/api/schemas/jobs';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -9,6 +8,8 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
+
+import type { JobError } from '@/shared/data/api/schemas/jobs';
 
 import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 

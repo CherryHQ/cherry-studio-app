@@ -1,8 +1,8 @@
-import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useTopics } from '@/frontend/hooks/chat';
+import type { TopicListItem } from '@/shared/data/api/schemas/topics';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 

@@ -1,11 +1,3 @@
-import {
-  isTerminalStatus,
-  JOB_ERROR_CODES,
-  type JobError,
-  type JobProgress,
-  type JobSnapshot,
-  type JobStatus,
-} from '@cherrystudio/universal/data/api/schemas/jobs';
 /**
  * App-owned job orchestrator: durable enqueue, atomic claim, bounded dispatch,
  * retry backoff, cooperative cancellation, startup recovery, and GC over the
@@ -57,6 +49,14 @@ import type {
   KeepAliveLease,
   KeepAliveSource,
 } from '@/backend/services/keepAlive/KeepAliveCoordinator';
+import {
+  isTerminalStatus,
+  JOB_ERROR_CODES,
+  type JobError,
+  type JobProgress,
+  type JobSnapshot,
+  type JobStatus,
+} from '@/shared/data/api/schemas/jobs';
 
 import type { JobHandlerRegistry } from './JobHandlerRegistry';
 import type { JobPayloadOf, JobType } from './jobRegistry';

@@ -1,5 +1,4 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
-import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import type {
   ApiKeyEntry,
@@ -24,6 +23,7 @@ import type {
   UserProviderRow,
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
 
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';

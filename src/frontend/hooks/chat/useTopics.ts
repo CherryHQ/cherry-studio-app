@@ -1,10 +1,7 @@
-import type {
-  TopicListItem,
-  UpdateTopicDto,
-} from '@cherrystudio/universal/data/api/schemas/topics';
 import { useCallback, useMemo } from 'react';
 
 import { useInfiniteQuery, useMutation, useQuery } from '@/frontend/data';
+import type { TopicListItem, UpdateTopicDto } from '@/shared/data/api/schemas/topics';
 
 import { useHydrateTopicDetails } from './useHydrateTopicDetails';
 

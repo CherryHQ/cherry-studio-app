@@ -1,10 +1,10 @@
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { paintingViewer } from '@/frontend/utils/constants';
+import type { Painting } from '@/shared/data/types/painting';
 
 import {
   type ResolvedPaintingAttachment,

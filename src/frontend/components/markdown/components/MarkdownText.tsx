@@ -1,9 +1,9 @@
 import { MarkdownText as CherryMarkdownText } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
-import type { FontSizeStep } from '@cherrystudio/universal/data/preference';
 
 import { usePreference } from '@/frontend/data/hooks';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
+import type { FontSizeStep } from '@/shared/data/preference';
 
 type MarkdownTextProps = {
   fontSizeStep?: FontSizeStep;

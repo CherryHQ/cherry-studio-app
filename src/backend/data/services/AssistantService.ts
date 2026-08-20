@@ -1,16 +1,3 @@
-import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
-import {
-  type CreateAssistantDto,
-  type DeleteAssistantResult,
-  type ImportAssistantDto,
-  type ListAssistantsQueryParams,
-  ListAssistantsQuerySchema,
-  type UpdateAssistantDto,
-} from '@cherrystudio/universal/data/api/schemas/assistants';
-import {
-  DataApiErrorFactory,
-  type OffsetPaginationResponse,
-} from '@cherrystudio/universal/data/api/types';
 import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
@@ -25,6 +12,16 @@ import {
   assistantTable,
   userModelTable,
 } from '@/backend/data/db/schemas';
+import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
+import {
+  type CreateAssistantDto,
+  type DeleteAssistantResult,
+  type ImportAssistantDto,
+  type ListAssistantsQueryParams,
+  ListAssistantsQuerySchema,
+  type UpdateAssistantDto,
+} from '@/shared/data/api/schemas/assistants';
+import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/data/api/types';
 
 import { modelService } from './ModelService';
 import { topicService } from './TopicService';

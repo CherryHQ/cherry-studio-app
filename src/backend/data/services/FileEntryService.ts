@@ -1,17 +1,17 @@
-import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
-import type { FileEntry, FileEntryId } from '@cherrystudio/universal/data/types/file';
-import {
-  FileEntryIdSchema,
-  FileEntrySchema,
-  MediaTypeSchema,
-  SafeNameSchema,
-} from '@cherrystudio/universal/data/types/file';
 import { eq } from 'drizzle-orm';
 import * as z from 'zod';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
 import { type FileEntryRow, fileEntryTable } from '@/backend/data/db/schemas';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import {
+  FileEntryIdSchema,
+  FileEntrySchema,
+  MediaTypeSchema,
+  SafeNameSchema,
+} from '@/shared/data/types/file';
 
 const CreateFileEntrySchema = z.strictObject({
   filename: SafeNameSchema,

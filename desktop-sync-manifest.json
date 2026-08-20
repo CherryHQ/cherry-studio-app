@@ -148,20 +148,20 @@
       "explicitExclusions": [
         "src/shared/ai/agentSessionApiRetry.ts",
         "src/shared/ai/agentSessionBackgroundTasks.ts",
+        "src/shared/ai/agentSessionCompaction.ts",
         "src/shared/ai/agentSessionContextUsage.ts",
         "src/shared/ai/agentSessionFlowParts.ts",
         "src/shared/ai/agentSessionSlashCommands.ts",
         "src/shared/ai/agentSlashCommands.ts",
         "src/shared/ai/claudecode/**",
+        "src/shared/ai/prompts.ts",
         "src/shared/ai/slashCommands.ts",
-        "src/shared/ai/tool.ts"
+        "src/shared/ai/tool.ts",
+        "src/shared/ai/transport/applyApprovalDecisions.ts",
+        "src/shared/ai/transport/deferredToolResult.ts",
+        "src/shared/ai/transport/turnState.ts"
       ],
       "shapeOnlyPorts": [
-        {
-          "path": "src/shared/ai/prompts.ts",
-          "keeps": "TRANSLATE_PROMPT — seeded default of feature.translate.model_prompt",
-          "drops": "AGENT_PROMPT/SUMMARIZE_PROMPT/LANG_DETECT_PROMPT desktop templates with no mobile consumer"
-        },
         {
           "path": "src/shared/ai/tools/__tests__/mcpToolName.test.ts",
           "keeps": "the identity-critical regressions: the 63-character cap, the server hash suffix that stops two long server names from colliding after truncation, single-server attribution for truncated ids, collision suffixes staying inside maxLength, and the mcp__server__tool round-trip",
@@ -172,7 +172,7 @@
         {
           "path": "packages/universal/src/ai/transport/toolApprovals.ts",
           "keeps": "nothing, there is no desktop counterpart",
-          "adds": "mobile's own approval settlement helpers. Note this overlaps the ported transport/applyApprovalDecisions.ts, which is barrel-only dead code here, and the two declare their own ApprovalDecision types — collapsing them is open work, not an intended fork"
+          "adds": "mobile's own approval settlement helpers. Desktop's transport/applyApprovalDecisions.ts was ported here once, stayed barrel-only dead code, and has been deleted with the rest of the unconsumed transport mirrors; the desktop file is an explicit exclusion now"
         },
         {
           "path": "packages/universal/src/ai/tools/mcpResult.ts",

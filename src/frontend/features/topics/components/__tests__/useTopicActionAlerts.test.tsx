@@ -1,7 +1,8 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { Topic } from '@/shared/data/types/topic';
 
 import { useTopicListActions } from '../../context/TopicListProvider';
 import { useTopicActionAlerts } from '../useTopicActionAlerts';

@@ -1,26 +1,4 @@
 import type {
-  AiUsageRecordGroupBy,
-  AiUsageRecordListQuery,
-  AiUsageRecordListQueryParams,
-  AiUsageRecordListResponse,
-  AiUsageRecordMetric,
-  AiUsageRecordStatsBucket,
-  AiUsageRecordStatsGroupIdentity,
-  AiUsageRecordStatsMetrics,
-  AiUsageRecordStatsQuery,
-  AiUsageRecordStatsQueryParams,
-  AiUsageRecordStatsResponse,
-  AiUsageRecordTimelineBucket,
-  AiUsageRecordTimelineQuery,
-  AiUsageRecordTimelineQueryParams,
-  AiUsageRecordTimelineResponse,
-} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
-import {
-  AiUsageRecordListQuerySchema,
-  AiUsageRecordStatsQuerySchema,
-  AiUsageRecordTimelineQuerySchema,
-} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
-import type {
   AiUsageCostBreakdown,
   AiUsagePricingSnapshot,
   AiUsageRecordAttribution,
@@ -60,6 +38,28 @@ import {
   type InsertAiUsageRecordRow,
 } from '@/backend/data/db/schemas/aiUsageRecord';
 import { messageTable } from '@/backend/data/db/schemas/message';
+import type {
+  AiUsageRecordGroupBy,
+  AiUsageRecordListQuery,
+  AiUsageRecordListQueryParams,
+  AiUsageRecordListResponse,
+  AiUsageRecordMetric,
+  AiUsageRecordStatsBucket,
+  AiUsageRecordStatsGroupIdentity,
+  AiUsageRecordStatsMetrics,
+  AiUsageRecordStatsQuery,
+  AiUsageRecordStatsQueryParams,
+  AiUsageRecordStatsResponse,
+  AiUsageRecordTimelineBucket,
+  AiUsageRecordTimelineQuery,
+  AiUsageRecordTimelineQueryParams,
+  AiUsageRecordTimelineResponse,
+} from '@/shared/data/api/schemas/aiUsageRecords';
+import {
+  AiUsageRecordListQuerySchema,
+  AiUsageRecordStatsQuerySchema,
+  AiUsageRecordTimelineQuerySchema,
+} from '@/shared/data/api/schemas/aiUsageRecords';
 
 import { timestampToISO } from './utils/rowMappers';
 

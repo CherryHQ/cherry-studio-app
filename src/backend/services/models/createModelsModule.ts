@@ -1,7 +1,3 @@
-import type {
-  AddModelInput,
-  ModelListQuery,
-} from '@cherrystudio/universal/data/api/schemas/models';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
@@ -15,6 +11,7 @@ import type {
 } from '@/shared/contracts';
 import { ModelPullTimeoutError } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { AddModelInput, ModelListQuery } from '@/shared/data/api/schemas/models';
 
 const defaultPullTimeoutMs = 10_000;
 const defaultHealthTimeoutMs = 15_000;

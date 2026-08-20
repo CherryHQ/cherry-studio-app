@@ -1,7 +1,4 @@
-import type {
-  PermissionMode,
-  PermissionPreferenceKey,
-} from '@cherrystudio/universal/data/preference';
+import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 export type DevicePermission = 'calendar' | 'health' | 'location' | 'reminders';
 export type DevicePermissionAccess = 'read' | 'write';

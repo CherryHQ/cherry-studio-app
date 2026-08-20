@@ -1,13 +1,13 @@
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
+
+import type { McpServerService } from '@/backend/data/services/McpServerService';
 import type {
   CreateMcpServerDto,
   McpServerSchemas,
   McpUpdateServerResult,
   UpdateMcpServerDto,
-} from '@cherrystudio/universal/data/api/schemas/mcpServers';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
-
-import type { McpServerService } from '@/backend/data/services/McpServerService';
+} from '@/shared/data/api/schemas/mcpServers';
+import type { HandlersFor } from '@/shared/data/api/types';
 
 export type McpServerMutations = {
   createServer(input: CreateMcpServerDto): Promise<McpServer>;

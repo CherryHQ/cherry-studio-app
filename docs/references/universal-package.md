@@ -11,10 +11,10 @@ in `src/shared`. The package name keeps every import site unambiguous.
 ## Dissolution
 
 The package is dissolving. The mobile data layer is independent of desktop, so nothing under
-`src/data` is a mirror anymore, and mobile-owned code is moving back into app space:
+`src/data` is a mirror anymore, and mobile-owned code has moved back into app space:
 
-- `src/data/{api,cache,preference,presets}` and the entity types with no package-side consumer move
-  to `src/shared/data`.
+- `src/data/{api,cache,preference,presets}` and the entity types with no package-side consumer now
+  live in `src/shared/data` (`@/shared/data`).
 - `src/data/types/{model,provider,assistant,message,uiParts,aiUsageRecord,mcpServer}.ts` and
   `src/types/aiSdk.ts` stay temporarily: `packages/ai-runtime` imports them, and workspace packages
   must not import app code. They move in a later round together with a decision on the AI-runtime
@@ -52,8 +52,8 @@ Apply these when deciding whether a desktop `src/shared` file belongs in the rem
 4. Check the import graph: a file whose only consumers are desktop-process-only files is not
    admitted, whatever its own contents look like.
 5. Split welded hybrids surgically: keep the portable logic, drop the desktop capability logic,
-   and register the trim as a `shapeOnlyPorts` entry in `desktop-sync-manifest.json` (see
-   `ai/prompts.ts`).
+   and register the trim as a `shapeOnlyPorts` entry in `desktop-sync-manifest.json` (see the
+   `mcpToolName.test.ts` entry in the `shared-ai` domain).
 
 Rejected files become `explicitExclusions` in the Manifest.
 

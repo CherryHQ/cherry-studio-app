@@ -1,4 +1,9 @@
-import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
+import type { MessageStats } from '@cherrystudio/universal/data/types/message';
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
+import * as Crypto from 'expo-crypto';
+
+import { application } from '@/backend/core/application/Application';
+import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import type {
   ActiveNodeResponse,
   CreateTopicDto,
@@ -7,17 +12,9 @@ import type {
   ListTopicsQuery,
   TopicListItem,
   UpdateTopicDto,
-} from '@cherrystudio/universal/data/api/schemas/topics';
-import {
-  type CursorPaginationResponse,
-  DataApiErrorFactory,
-} from '@cherrystudio/universal/data/api/types';
-import type { MessageStats } from '@cherrystudio/universal/data/types/message';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
-import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
-import * as Crypto from 'expo-crypto';
-
-import { application } from '@/backend/core/application/Application';
+} from '@/shared/data/api/schemas/topics';
+import { type CursorPaginationResponse, DataApiErrorFactory } from '@/shared/data/api/types';
+import type { Topic } from '@/shared/data/types/topic';
 
 import {
   assistantTable,

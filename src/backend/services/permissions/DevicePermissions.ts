@@ -1,4 +1,3 @@
-import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
 import * as Calendar from 'expo-calendar';
 import * as Location from 'expo-location';
 import { AppState, Linking, Platform } from 'react-native';
@@ -9,6 +8,7 @@ import type {
   DevicePermissionAccess,
   SystemPermissionState,
 } from '@/shared/contracts';
+import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 const HEALTH_AUTHORIZATION_TYPES = [
   'HKQuantityTypeIdentifierStepCount',

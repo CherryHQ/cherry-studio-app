@@ -47,7 +47,24 @@ const tombstonePatterns = [
   {
     group: ['@/shared/domain', '@/shared/domain/*', '@/shared/domain/*/**'],
     message:
-      'The generic shared domain root was retired. Use @cherrystudio/universal/ai for AI rules, @cherrystudio/universal/data for data vocabulary, or @cherrystudio/universal/utils and @/shared/utils for pure helpers.',
+      'The generic shared domain root was retired. Use @cherrystudio/universal/ai for AI rules, @/shared/data for data vocabulary, or @cherrystudio/universal/utils and @/shared/utils for pure helpers.',
+  },
+  {
+    group: [
+      '@cherrystudio/universal/data/api/*',
+      '@cherrystudio/universal/data/api/*/**',
+      '@cherrystudio/universal/data/cache/*',
+      '@cherrystudio/universal/data/preference',
+      '@cherrystudio/universal/data/preference/*',
+      '@cherrystudio/universal/data/presets/*',
+      '@cherrystudio/universal/data/types/file',
+      '@cherrystudio/universal/data/types/webSearch',
+      '@cherrystudio/universal/data/types/topic',
+      '@cherrystudio/universal/data/types/painting',
+      '@cherrystudio/universal/data/types/trace',
+    ],
+    message:
+      'The mobile data layer moved out of packages/universal. Import @/shared/data/* instead; only the transitional entity types (model, provider, assistant, message, uiParts, aiUsageRecord, mcpServer) remain under @cherrystudio/universal/data/types.',
   },
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],

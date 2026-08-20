@@ -8,7 +8,6 @@ import {
   TextField,
   useAlert,
 } from '@cherrystudio/ui/components';
-import type { CreateAssistantDto } from '@cherrystudio/universal/data/api/schemas/assistants';
 import {
   type Assistant,
   type AssistantSettings,
@@ -29,6 +28,7 @@ import { usePreference } from '@/frontend/data/hooks';
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
+import type { CreateAssistantDto } from '@/shared/data/api/schemas/assistants';
 
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 

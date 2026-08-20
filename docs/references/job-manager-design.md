@@ -45,7 +45,7 @@ The v0.2 merge (desktop-sync `fd1552c6`) brought in, all desktop-verbatim:
 
 | Piece | Location | State |
 | --- | --- | --- |
-| Jobs DTO contracts (status atoms, `Trigger`, `CatchUpPolicy`, `RetryPolicy`, `JobSnapshot`, `JobScheduleSnapshot`, `JobProgress`, `JOB_ERROR_CODES`, `JobSchemas` endpoints) | `packages/universal/src/data/api/schemas/jobs.ts` | Desktop mirror, formatting-only diff; already in the `ApiSchemas` intersection |
+| Jobs DTO contracts (status atoms, `Trigger`, `CatchUpPolicy`, `RetryPolicy`, `JobSnapshot`, `JobScheduleSnapshot`, `JobProgress`, `JOB_ERROR_CODES`, `JobSchemas` endpoints) | `src/shared/data/api/schemas/jobs.ts` | Desktop mirror, formatting-only diff; already in the `ApiSchemas` intersection |
 | `job` + `job_schedule` drizzle tables | `src/backend/data/db/schemas/job.ts` | Desktop-verbatim columns, indexes, CHECK constraint, and the partial unique idempotency index |
 | Migration | `migrations/sqlite-drizzle/0006_*.sql` | Verified: the partial unique index and `job_status_check` emitted correctly |
 | Read repository | `src/backend/data/services/JobService.ts` | `list` / `getById` / bare `create`; `rowToSnapshot` maps timestamps to ISO strings (matches desktop's string-typed snapshot) |
@@ -170,7 +170,7 @@ helpers, repositories, and shared zod contracts) splits cleanly along one line:
 Follows the standard "new backend module" drop points; read-path files already exist:
 
 ```text
-packages/universal/src/data/api/schemas/jobs.ts   # landed — desktop mirror, do not fork
+src/shared/data/api/schemas/jobs.ts               # landed — desktop mirror, do not fork
 src/backend/data/db/schemas/job.ts                # landed — desktop mirror, do not fork
 src/backend/data/services/JobService.ts           # landed — reads + claim/terminal/retry writers
 src/backend/data/api/handlers/jobs.ts             # landed — GET-only, stays read-only

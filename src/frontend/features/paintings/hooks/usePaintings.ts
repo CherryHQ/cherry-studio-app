@@ -1,6 +1,3 @@
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
   type InfiniteData,
   keepPreviousData,
@@ -24,6 +21,9 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { Painting } from '@/shared/data/types/painting';
 
 import { imageParamsAspectRatio, imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import {

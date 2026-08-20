@@ -3,14 +3,14 @@ import type {
   ConcreteApiPaths,
   QueryParamsForPath,
   ResponseForPath,
-} from '@cherrystudio/universal/data/api/paths';
+} from '@/shared/data/api/paths';
 import {
   type ApiClient,
   type ApiImplementation,
   DataApiError,
   ErrorCode,
   type HttpMethod,
-} from '@cherrystudio/universal/data/api/types';
+} from '@/shared/data/api/types';
 
 type RouteHandler = (input: {
   body?: unknown;

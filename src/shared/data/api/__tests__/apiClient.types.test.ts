@@ -1,4 +1,4 @@
-import type { Painting } from '@shared/data/types/painting';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type { TopicListItem } from '../schemas/topics';
 import type { ApiClient, CursorPaginationResponse } from '../types';

@@ -1,4 +1,4 @@
-import type { AiUsageRecordTimelineBucket } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+import type { AiUsageRecordTimelineBucket } from '@/shared/data/api/schemas/aiUsageRecords';
 
 import type { AiUsageData, AiUsageLevel, AiUsageTimeRange } from '../types';
 import { addCalendarDays, normalizeLocalDate, toLocalDateKey } from './aiUsageCalendar';

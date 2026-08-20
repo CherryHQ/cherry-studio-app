@@ -1,17 +1,3 @@
-export { applyApprovalDecisions } from './applyApprovalDecisions';
-export {
-  DEFER_TOOL_OUTPUT_BYTES,
-  type DeferredToolOutput,
-  type DeferredToolResultRef,
-  deferToolOutput,
-  isDeferredToolOutput,
-  shouldDeferToolOutput,
-} from './deferredToolResult';
-export {
-  projectMessagePartForRenderer,
-  projectMessagePartsForRenderer,
-  projectStreamChunkForRenderer,
-} from './outboundProjection';
 export type {
   ActiveExecution,
   AiAgentSessionWarmCloseRequest,
@@ -35,5 +21,3 @@ export type {
   TopicStatusSnapshotEntry,
   TopicStreamStatus,
 } from './stream';
-export type { TurnStateFlags } from './turnState';
-export { classifyTurn, TURN_STATE } from './turnState';

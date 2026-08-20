@@ -5,7 +5,7 @@
  * platform file capability. Deliberately minimal: the future file-library
  * iteration adds its own list/stat routes when it has a consumer for them.
  */
-import type { FileEntry, FileEntryId } from '@shared/data/types/file';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
 export type FileSchemas = {
   '/files/entries/:id': {

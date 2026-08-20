@@ -1,4 +1,4 @@
-import type { FontSizeStep } from '@cherrystudio/universal/data/preference';
+import type { FontSizeStep } from '@/shared/data/preference';
 
 export const FONT_SIZE_STEP_LABEL_KEYS = {
   0: 'settings.fontSize.level.standard',

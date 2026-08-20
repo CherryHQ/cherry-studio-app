@@ -1,5 +1,6 @@
-import type { PaintingFiles } from '@cherrystudio/universal/data/types/painting';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
+import type { PaintingFiles } from '@/shared/data/types/painting';
 
 import {
   createUpdateTimestamps,

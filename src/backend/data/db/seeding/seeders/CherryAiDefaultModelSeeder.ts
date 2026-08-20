@@ -1,13 +1,4 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import {
-  CHERRYAI_API_BASE_URL,
-  CHERRYAI_DEFAULT_MODEL_GROUP,
-  CHERRYAI_DEFAULT_MODEL_ID,
-  CHERRYAI_DEFAULT_MODEL_NAME,
-  CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
-  CHERRYAI_PROVIDER_ID,
-  CHERRYAI_PROVIDER_NAME,
-} from '@cherrystudio/universal/data/presets/cherryai';
 import type { ModelCapability } from '@cherrystudio/universal/data/types/model';
 import { loggerService } from '@logger';
 import { eq } from 'drizzle-orm';
@@ -20,6 +11,15 @@ import {
   userProviderTable,
 } from '@/backend/data/db/schemas';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
+import {
+  CHERRYAI_API_BASE_URL,
+  CHERRYAI_DEFAULT_MODEL_GROUP,
+  CHERRYAI_DEFAULT_MODEL_ID,
+  CHERRYAI_DEFAULT_MODEL_NAME,
+  CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
+  CHERRYAI_PROVIDER_ID,
+  CHERRYAI_PROVIDER_NAME,
+} from '@/shared/data/presets/cherryai';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';

@@ -1,10 +1,10 @@
-import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import type { ToolSet } from 'ai';
 
 import { mcpServerService } from '@/backend/data/services/McpServerService';
+import { DataApiErrorFactory } from '@/shared/data/api/types';
 
 import { McpRuntimeService } from '../McpRuntimeService';
 

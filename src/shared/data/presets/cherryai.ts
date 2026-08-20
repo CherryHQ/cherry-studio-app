@@ -1,4 +1,4 @@
-import { createUniqueModelId } from '@shared/data/types/model';
+import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 export const CHERRYAI_PROVIDER_ID = 'cherryai' as const;
 export const CHERRYAI_PROVIDER_NAME = 'CherryAI' as const;

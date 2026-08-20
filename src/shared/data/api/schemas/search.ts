@@ -5,7 +5,7 @@
  * Content search is full-text-oriented and keeps per-source cursor semantics.
  */
 
-import type { TopicMessageSearchRole } from '@shared/data/types/message';
+import type { TopicMessageSearchRole } from '@cherrystudio/universal/data/types/message';
 import * as z from 'zod';
 
 export type EntitySearchTarget =

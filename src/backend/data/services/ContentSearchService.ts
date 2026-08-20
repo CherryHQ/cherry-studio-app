@@ -1,9 +1,17 @@
 import {
+  coerceSearchRole,
+  TOPIC_MESSAGE_SEARCH_ROLES,
+} from '@cherrystudio/universal/data/types/message';
+import { loggerService } from '@logger';
+import { sql } from 'drizzle-orm';
+
+import { application } from '@/backend/core/application/Application';
+import {
   DataApiErrorFactory,
   ErrorCode,
   isDataApiError,
   toDataApiError,
-} from '@cherrystudio/universal/data/api/errors';
+} from '@/shared/data/api/errors';
 import {
   CONTENT_SEARCH_DEFAULT_LIMIT_PER_SOURCE,
   CONTENT_SEARCH_MAX_LIMIT_PER_SOURCE,
@@ -13,15 +21,7 @@ import {
   type ContentSearchSourceType,
   contentSearchSourceTypes,
   type TopicMessageContentSearchItem,
-} from '@cherrystudio/universal/data/api/schemas/search';
-import {
-  coerceSearchRole,
-  TOPIC_MESSAGE_SEARCH_ROLES,
-} from '@cherrystudio/universal/data/types/message';
-import { loggerService } from '@logger';
-import { sql } from 'drizzle-orm';
-
-import { application } from '@/backend/core/application/Application';
+} from '@/shared/data/api/schemas/search';
 
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch';
 import { timestampToISO } from './utils/rowMappers';
