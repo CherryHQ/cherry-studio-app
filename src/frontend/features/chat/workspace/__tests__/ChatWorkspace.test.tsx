@@ -15,7 +15,7 @@ const mockInputHeightShared = {
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
 const mockRegenerate = jest.fn(async () => undefined);
-const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
+const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockAlertShow = jest.fn();
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
@@ -131,7 +131,7 @@ function createDeferred<T>() {
 
 /** 预览态的取值由 ChatScreen 解析后传进来，这里照它传的两组值渲染。 */
 function renderWorkspace(isPreview: boolean, messages: readonly Message[], topicId = 'topic-1') {
-  let renderer: ReactTestRenderer | undefined;
+  let renderer!: ReactTestRenderer;
 
   act(() => {
     renderer = create(createWorkspaceElement(isPreview, messages, topicId));
