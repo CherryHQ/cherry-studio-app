@@ -1,3 +1,4 @@
+import type { ReasoningEffortOption } from '@shared/types/aiSdk';
 import type { UIMessageChunk } from 'ai';
 
 import type {
@@ -6,7 +7,6 @@ import type {
   CherryUIMessage,
 } from '../../data/types/message';
 import type { UniqueModelId } from '../../data/types/model';
-import type { ReasoningEffortOption } from '../../types/aiSdk';
 import type { SerializedError } from '../../types/error';
 
 export interface AiChatRequestBody extends AssistantTurnOptions {
