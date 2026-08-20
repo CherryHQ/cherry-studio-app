@@ -245,7 +245,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
       const agent = await this.requireAgent(session.agentId);
-      const runtime = this.routeAgent(agent);
+      const runtime = this.routeExecutionTarget(session.executionTarget);
       if (
         !runtime.descriptor.capabilities.attachments &&
         parsed.parts.some((part) => part.type === 'file')
@@ -350,7 +350,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
     }
     const agent = await this.requireAgent(session.agentId);
-    const capabilities = this.projectCapabilities(agent);
+    const capabilities = this.projectCapabilities(session.executionTarget);
 
     // Snapshot capture and listener registration are one synchronous section:
     // no event can fall into a snapshot/subscription gap (invariant 8).
@@ -566,20 +566,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return agent;
   }
 
-  private routeAgent(agent: AgentDefinition): AgentRuntime {
+  private routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime {
     try {
-      return this.services.router.resolve({
-        target: { kind: 'local' },
-        agentToolIds: agent.agentToolIds,
-      });
+      return this.services.router.resolve({ target });
     } catch (error) {
       logger.warn('Runtime route failed closed', error as Error);
       fail('EXECUTION_UNAVAILABLE', 'No runtime can execute this Agent configuration.');
     }
   }
 
-  private projectCapabilities(agent: AgentDefinition): AgentCapabilities {
-    const runtime = this.routeAgent(agent);
+  private projectCapabilities(target: AgentExecutionTarget): AgentCapabilities {
+    const runtime = this.routeExecutionTarget(target);
     return { ...runtime.descriptor.capabilities };
   }
 

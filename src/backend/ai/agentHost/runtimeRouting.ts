@@ -7,10 +7,10 @@
  * Runtime satisfies the route. Neither runtime ids nor the registry are exposed
  * through the Agent Protocol.
  *
- * Version 1 policy (user-approved): the registry registers only `ai-sdk`, and
- * the `local` execution target always routes there. The "Agent tool" routing
- * criterion is deferred until the Pi Runtime lands; `agentToolIds` is accepted
- * so the route input shape is already spec-complete.
+ * Version 1 registers only `ai-sdk`, and the `local` execution target always
+ * routes there. Future routing inputs and policy ownership are deliberately
+ * unspecified; they may belong to Agent, Session, connection, or application
+ * policy and are added only after that design is decided.
  */
 
 import type { AgentRuntime } from '@/backend/ai/agent';
@@ -19,7 +19,6 @@ export const AI_SDK_RUNTIME_ID = 'ai-sdk';
 
 export type RuntimeRouteInput = {
   target: { kind: 'local' };
-  agentToolIds: string[];
 };
 
 export interface AgentRuntimeRouter {
@@ -45,8 +44,7 @@ export function createAgentRuntimeRouter(registry: AgentRuntimeRegistry): AgentR
       if (input.target.kind !== 'local') {
         throw new Error(`No runtime is registered for execution target: ${input.target.kind}`);
       }
-      // V1: Pi is not registered yet, so every local route resolves ai-sdk.
-      // When Pi lands, a non-empty agentToolIds selects it here.
+      // V1: every supported local route resolves to the sole registered Runtime.
       const runtime = registry.get(AI_SDK_RUNTIME_ID);
       if (!runtime) {
         throw new Error(`No runtime is registered for route: ${AI_SDK_RUNTIME_ID}`);

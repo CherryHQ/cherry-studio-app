@@ -5,8 +5,7 @@
  * (docs/references/agent/README.md open questions). Basic chat needs only
  * id/name/model/instructions, so the Host consumes this narrow source and the
  * production default maps it onto the existing assistants table. Tools are
- * deliberately absent: V1 executes tool-less turns, and the Agent-tool
- * definition is deferred until the Pi Runtime lands.
+ * deliberately absent because V1 executes tool-less turns.
  */
 
 import { parseUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
@@ -19,8 +18,6 @@ export type AgentDefinition = {
   name: string;
   instructions: string;
   model: RuntimeModel;
-  /** Reserved: routing input for the deferred Agent-tool definition. */
-  agentToolIds: string[];
 };
 
 export interface AgentDefinitionSource {
@@ -46,7 +43,6 @@ export function createAssistantAgentDefinitionSource(): AgentDefinitionSource {
         name: assistant.name,
         instructions: assistant.prompt ?? '',
         model: { providerId, modelId },
-        agentToolIds: [],
       };
     },
   };

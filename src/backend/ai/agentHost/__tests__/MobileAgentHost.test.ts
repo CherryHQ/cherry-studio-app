@@ -27,7 +27,6 @@ const agents: AgentDefinitionSource = {
       name: 'Test Agent',
       instructions: 'Be brief.',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
-      agentToolIds: [],
     };
   },
 };

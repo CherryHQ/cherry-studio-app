@@ -39,8 +39,7 @@ app and move to a package when a real independent consumer exists.
 
 - All execution is local to the Mobile process.
 - The application selects the `local` execution target, never a Runtime id.
-- The Router selects Pi when the resolved Agent configuration contains Agent tools; otherwise it
-  selects the AI SDK Runtime.
+- Version 1 registers only the AI SDK Runtime, so every supported `local` route resolves to it.
 - A Session has at most one active turn.
 - A Session is pinned at creation to one Runtime for its whole lifetime; it never re-routes. A
   different Runtime requires a new Session (or a fork).
@@ -61,12 +60,13 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 ## Open Questions
 
-- **Agent tool** is the sole routing criterion, but it does not yet have a precise definition:
-  which tool kinds qualify (built-in, MCP, or both) and how they relate to the Runtime contract's
-  `RuntimeTool` are TODO. Decision (2026-08-20): the definition is **deferred until the Pi
-  Runtime lands**. Until then the Runtime registry registers only the AI SDK Runtime and the
-  Router resolves every `local` route to it; the route input already carries `agentToolIds` so
-  the Pi policy can be added without reshaping the Router.
+- **Runtime routing policy** is undecided. Its configuration and inputs may belong to an Agent, a
+  Session, an execution target, connection state, or broader application policy. Version 1 does
+  not reserve fields for any of those possibilities; it only implements `local → ai-sdk`. Once a
+  Runtime is resolved for a Session, that binding remains fixed for the Session lifetime.
+- **Agent tools** are also undefined: which tool kinds qualify (built-in, MCP, or both), how they
+  relate to the Runtime contract's `RuntimeTool`, and how Pi consumes them are deferred until the
+  Pi Runtime is designed. They are not assumed to be a routing criterion.
 - **Context compaction** is undesigned. The ownership split is decided: the durable conversation
   record belongs to the Host (it must survive process death and back transcript reads), while
   turning that record into the actual model prompt — selection, formatting, and eventually

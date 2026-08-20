@@ -57,7 +57,7 @@ each turn, the Host resolves its current state and builds the Runtime execution 
 so an application-level edit applies from the next turn. What a configuration change can never do
 is re-route: the Runtime Router is consulted once at Session creation, and the Session stays
 pinned to that Runtime for its lifetime. The client does not duplicate configuration or select a
-Runtime.
+Runtime. Whether any Agent field participates in future routing is deliberately undecided.
 
 ### Turn
 
