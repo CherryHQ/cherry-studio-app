@@ -1,5 +1,3 @@
-import { PersistedLangCodeSchema } from '@cherrystudio/universal/data/preference/preferenceTypes';
-
 import { projectAssistantMessageReadAloud } from '../projectAssistantMessageReadAloud';
 import { resolveAssistantReadAloudLanguage } from '../resolveAssistantReadAloudLanguage';
 
@@ -52,7 +50,7 @@ describe('resolveAssistantReadAloudLanguage', () => {
   );
 
   test('keeps a persisted lowercase translation language through projection and detection', () => {
-    const targetLanguage = PersistedLangCodeSchema.parse('ja');
+    const targetLanguage = 'ja';
     const projection = projectAssistantMessageReadAloud({
       data: {
         parts: [

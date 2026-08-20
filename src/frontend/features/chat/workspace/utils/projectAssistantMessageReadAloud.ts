@@ -1,4 +1,4 @@
-import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
+import type { MessageListItem } from '@/frontend/components/messages';
 
 import { projectMarkdownInlineForSpeech } from './projectMarkdownInlineForSpeech';
 
@@ -8,7 +8,7 @@ const COMPLEX_LATEX_COMMAND = /\\[a-z]+/iu;
 const SPEAKABLE_CHARACTER = /[\p{L}\p{N}]/u;
 
 export function projectAssistantMessageReadAloud(
-  message: MessagePresentationItem,
+  message: MessageListItem,
 ): AssistantReadAloudContent | null {
   if (message.role !== 'assistant' || message.status !== 'success') {
     return null;
@@ -25,7 +25,7 @@ export function projectAssistantMessageReadAloud(
 }
 
 function projectSpeakableSource(
-  parts: NonNullable<MessagePresentationItem['data']['parts']>,
+  parts: NonNullable<MessageListItem['data']['parts']>,
 ): AssistantReadAloudContent {
   let messageTranslation: AssistantReadAloudContent | undefined;
   for (const part of parts) {

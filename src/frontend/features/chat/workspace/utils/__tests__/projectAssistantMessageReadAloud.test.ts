@@ -1,6 +1,6 @@
 import type { CherryMessagePart, MessageStatus } from '@cherrystudio/universal/data/types/message';
 
-import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
+import type { MessageListItem } from '@/frontend/components/messages';
 
 import { projectAssistantMessageReadAloud } from '../projectAssistantMessageReadAloud';
 
@@ -369,8 +369,8 @@ describe('projectAssistantMessageReadAloud', () => {
 
 function createMessage(
   parts: CherryMessagePart[],
-  overrides: Partial<Pick<MessagePresentationItem, 'role' | 'status'>> = {},
-): MessagePresentationItem {
+  overrides: Partial<Pick<MessageListItem, 'role' | 'status'>> = {},
+): MessageListItem {
   return {
     data: { parts },
     id: '00000000-0000-7000-8000-000000000010',
