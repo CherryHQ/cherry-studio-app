@@ -141,7 +141,6 @@ export const JobSnapshotSchema = z.strictObject({
   priority: z.number().int(),
   queue: z.string(),
   idempotencyKey: z.string().nullable(),
-  scheduleId: z.string().nullable(),
   scheduledAt: z.string(),
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
@@ -287,7 +286,6 @@ export const ListJobsQuerySchema = z.strictObject({
   status: StatusListQuerySchema,
   queue: z.string().optional(),
   type: z.string().optional(),
-  scheduleId: z.string().optional(),
   parentId: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
@@ -297,7 +295,7 @@ export type ListJobsQueryParams = z.input<typeof ListJobsQuerySchema>;
 
 export type JobSchemas = {
   '/jobs': {
-    /** List jobs, ordered by createdAt DESC. Supports status/queue/type/scheduleId/parentId filters and pagination. */
+    /** List jobs, ordered by createdAt DESC. Supports status/queue/type/parentId filters and pagination. */
     GET: {
       query?: ListJobsQueryParams;
       response: JobSnapshot[];

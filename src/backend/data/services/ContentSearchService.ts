@@ -12,11 +12,9 @@ import {
   type ContentSearchResponse,
   type ContentSearchSourceType,
   contentSearchSourceTypes,
-  type SessionMessageContentSearchItem,
   type TopicMessageContentSearchItem,
 } from '@cherrystudio/universal/data/api/schemas/search';
 import {
-  AGENT_SESSION_MESSAGE_SEARCH_ROLES,
   coerceSearchRole,
   TOPIC_MESSAGE_SEARCH_ROLES,
 } from '@cherrystudio/universal/data/types/message';
@@ -34,10 +32,6 @@ const topicMessageCursorConfig = {
   errorMessage: 'Invalid message search cursor',
   fieldMessage: 'must be a valid search cursor',
 };
-const sessionMessageCursorConfig = {
-  errorMessage: 'Invalid message cursor',
-  fieldMessage: 'must be a valid message cursor',
-};
 
 type TopicMessageSearchRow = {
   createdAt: number;
@@ -49,16 +43,6 @@ type TopicMessageSearchRow = {
   topicId: string;
   topicName: string;
   topicUpdatedAt: number;
-};
-type SessionMessageSearchRow = {
-  agentId: null | string;
-  agentName: null | string;
-  createdAt: number;
-  role: string;
-  rowId: string;
-  searchableText: string;
-  sessionId: string;
-  sessionName: string;
 };
 
 function toSourceCursorError(sourceType: ContentSearchSourceType, error: unknown): unknown {
@@ -141,16 +125,6 @@ export class ContentSearchService {
         });
         return { ...result, sourceType };
       }
-      case 'session-message': {
-        const result = await this.searchSessionMessages({
-          createdAtFrom: query.createdAtFrom,
-          cursor: query.cursors?.[sourceType],
-          limit,
-          q: query.q,
-          sessionId: query.filters?.[sourceType]?.sessionId,
-        });
-        return { ...result, sourceType };
-      }
       default: {
         const exhaustive: never = sourceType;
         throw new Error(`Unknown content search source: ${exhaustive}`);
@@ -227,75 +201,6 @@ export class ContentSearchService {
           topicUpdatedAt: timestampToISO(Number(row.topicUpdatedAt)),
         },
         sort: { createdAt: Number(row.createdAt), id: row.id },
-      }),
-      q: query.q,
-    });
-  }
-
-  private searchSessionMessages(query: {
-    createdAtFrom?: string;
-    cursor?: string;
-    limit: number;
-    q: string;
-    sessionId?: string;
-  }) {
-    const sessionCondition = query.sessionId ? sql`sm.session_id = ${query.sessionId}` : sql`1 = 1`;
-    return searchWithCursor<SessionMessageSearchRow, SessionMessageContentSearchItem>({
-      buildSnippet: buildSearchSnippet,
-      createdAtFrom: query.createdAtFrom,
-      cursor: query.cursor,
-      cursorConfig: sessionMessageCursorConfig,
-      fetchRows: async ({
-        chunkSize,
-        createdAtFromMs,
-        cursor,
-        ftsConditions,
-        offset,
-      }: SearchFetchContext) => {
-        const createdAtCondition =
-          createdAtFromMs !== undefined ? sql`sm.created_at >= ${createdAtFromMs}` : sql`1 = 1`;
-        return await this.db.all<SessionMessageSearchRow>(sql`
-          SELECT
-            sm.id AS "rowId",
-            sm.searchable_text AS "searchableText",
-            sm.session_id AS "sessionId",
-            s.name AS "sessionName",
-            s.agent_id AS "agentId",
-            a.name AS "agentName",
-            sm.role,
-            sm.created_at AS "createdAt"
-          FROM agent_session_message sm
-          JOIN agent_session_message_fts fts ON sm.fts_rowid = fts.rowid
-          JOIN agent_session s ON s.id = sm.session_id
-          LEFT JOIN agent a ON a.id = s.agent_id
-          WHERE sm.searchable_text != ''
-            AND ${sessionCondition}
-            AND ${createdAtCondition}
-            AND ${sql.join(ftsConditions, sql` AND `)}
-            AND ${
-              cursor
-                ? sql`(sm.created_at < ${cursor.createdAt} OR (sm.created_at = ${cursor.createdAt} AND sm.id < ${cursor.id}))`
-                : sql`1 = 1`
-            }
-          ORDER BY sm.created_at DESC, sm.id DESC
-          LIMIT ${chunkSize}
-          OFFSET ${offset}
-        `);
-      },
-      getSearchableText: (row) => row.searchableText,
-      limit: query.limit,
-      mapRow: (row, { snippet }) => ({
-        item: {
-          agentId: row.agentId ?? undefined,
-          agentName: row.agentName ?? undefined,
-          createdAt: timestampToISO(Number(row.createdAt)),
-          messageId: row.rowId,
-          role: coerceSearchRole(row.role, AGENT_SESSION_MESSAGE_SEARCH_ROLES),
-          sessionId: row.sessionId,
-          sessionName: row.sessionName,
-          snippet,
-        },
-        sort: { createdAt: Number(row.createdAt), id: row.rowId },
       }),
       q: query.q,
     });

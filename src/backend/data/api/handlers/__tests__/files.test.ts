@@ -56,11 +56,11 @@ describe('file Data API handlers', () => {
     const { handlers, refs } = createHandlers();
 
     await handlers['/files/refs'].GET({
-      query: { sourceId: 'provider', sourceType: 'provider_logo' },
+      query: { sourceId: 'painting', sourceType: 'painting' },
     });
     expect(refs.findBySource).toHaveBeenCalledWith({
-      sourceId: 'provider',
-      sourceType: 'provider_logo',
+      sourceId: 'painting',
+      sourceType: 'painting',
     });
     expect(() =>
       handlers['/files/refs'].GET({

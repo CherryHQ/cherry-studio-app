@@ -10,9 +10,8 @@
  * home for them.
  *
  * Scope boundary: this covers single-tuple keyset pagination only. Multi-band
- * / sentinel cursors (e.g. `TopicService`'s pin/topic union with a
- * first-page sentinel) cannot be expressed as one `(key, id)` tuple and must
- * keep their own codec — do NOT route them through here.
+ * / sentinel cursors cannot be expressed as one `(key, id)` tuple and must keep
+ * their own codec — do NOT route them through here.
  *
  * Two decode policies, deliberately separated:
  * - List browsing (`decodeListCursor`): a malformed cursor warns and falls

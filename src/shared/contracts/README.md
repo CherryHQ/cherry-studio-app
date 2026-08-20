@@ -57,7 +57,7 @@ Contracts may contain:
 
 Contracts must not contain:
 
-- assistant, topic, message, file, pin, model, provider, painting, or MCP persistence CRUD;
+- assistant, topic, message, file, model, provider, painting, or MCP persistence CRUD;
 - endpoint paths, query keys, pagination infrastructure, or React Query options;
 - preference keys, defaults, schemas, clients, or subscription implementations;
 - Drizzle schemas, database rows, migrations, SQL, repositories, or persistence classes;

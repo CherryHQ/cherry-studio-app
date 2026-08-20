@@ -56,7 +56,6 @@ export type WebSearchCompressionConfig = {
 
 export type WebSearchExecutionConfig = {
   maxResults: number;
-  excludeDomains: string[];
   compression: WebSearchCompressionConfig;
 };
 

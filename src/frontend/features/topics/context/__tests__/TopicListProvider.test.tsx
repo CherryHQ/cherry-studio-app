@@ -2,7 +2,7 @@ import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/top
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { usePins, useTopics } from '@/frontend/hooks/chat';
+import { useTopics } from '@/frontend/hooks/chat';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 
@@ -30,7 +30,6 @@ jest.mock('@/frontend/data', () => ({
 }));
 
 jest.mock('@/frontend/hooks/chat', () => ({
-  usePins: jest.fn(),
   useTopics: jest.fn(),
 }));
 
@@ -40,12 +39,10 @@ jest.mock('@/frontend/hooks/chat/utils/messageQueryOptions', () => ({
 }));
 
 const useMutationMock = jest.requireMock<{ useMutation: jest.Mock }>('@/frontend/data').useMutation;
-const usePinsMock = usePins as jest.MockedFunction<typeof usePins>;
 const useTopicsMock = useTopics as jest.MockedFunction<typeof useTopics>;
 const mockRenameTopic = jest.fn(async () => undefined);
 const mockDeleteTopics = jest.fn(async () => undefined);
 const mockLoadMoreTopics = jest.fn(async () => undefined);
-const mockTogglePin = jest.fn(async () => undefined);
 
 let mutationHookIndex = 0;
 let renameMutationOptions:
@@ -80,18 +77,6 @@ beforeEach(() => {
   mutationHookIndex = 0;
   renameMutationOptions = undefined;
   renderer = undefined;
-
-  usePinsMock.mockReturnValue({
-    error: undefined,
-    isLoading: false,
-    isMutating: false,
-    isRefreshing: false,
-    pinnedIds: ['topic-1'],
-    pins: [],
-    pinsQuery: {} as ReturnType<typeof usePins>['pinsQuery'],
-    refetch: jest.fn(),
-    togglePin: mockTogglePin,
-  });
 
   useMutationMock.mockImplementation((_method, _path, options) => {
     const isRenameMutation = mutationHookIndex % 2 === 0;
@@ -168,17 +153,6 @@ describe('TopicListProvider', () => {
     expect(mockDeleteTopics).toHaveBeenNthCalledWith(2, {
       query: { ids: ['topic-3', 'topic-4'] },
     });
-  });
-
-  test('toggles a topic pin and refreshes the ordered topic list', async () => {
-    await renderProvider([makeTopic(1)]);
-
-    await act(async () => {
-      await currentActions?.toggleTopicPin('topic-1');
-    });
-
-    expect(mockTogglePin).toHaveBeenCalledWith('topic-1');
-    expect(mockInvalidateQueries).toHaveBeenCalledWith({ queryKey: ['/topics'] });
   });
 
   test('optimistically renames list and detail caches and restores both on failure', async () => {

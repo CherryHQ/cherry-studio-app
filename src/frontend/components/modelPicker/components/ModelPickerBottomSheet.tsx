@@ -28,7 +28,6 @@ type ModelPickerBottomSheetProps = {
   providerId?: string;
   selectedTags?: readonly ModelPickerTag[];
   selectedModelId: string | null;
-  showPinnedModels?: boolean;
   // Header title; defaults to the generic "Select model". Pass a context-specific
   // title (e.g. the model-setting kind) when the picker isn't the chat default.
   title?: string;
@@ -42,7 +41,6 @@ export function ModelPickerBottomSheet({
   providerId,
   selectedTags = defaultSelectedTags,
   selectedModelId,
-  showPinnedModels = true,
   title,
 }: ModelPickerBottomSheetProps) {
   const { t } = useTranslation();
@@ -51,12 +49,7 @@ export function ModelPickerBottomSheet({
   const sheetHeight = (windowHeight - insets.top - insets.bottom) * modelPickerSnapPointFraction;
   const [searchText, setSearchText] = useState('');
   const [visibleListItemCount, setVisibleListItemCount] = useState(initialModelPickerListItemCount);
-  const { groups, isLoading, pinnedModelIds } = useModelPickerData({
-    providerId,
-    searchText,
-    selectedTags,
-    showPinnedModels,
-  });
+  const { groups, isLoading } = useModelPickerData({ providerId, searchText, selectedTags });
   const totalListItemCount = useMemo(
     () => groups.reduce((total, group) => total + 1 + group.items.length, 0),
     [groups],
@@ -142,7 +135,6 @@ export function ModelPickerBottomSheet({
               loadingText={t('settings.provider.models.loading')}
               onEndReached={handleListEndReached}
               onSelect={onSelect}
-              pinnedModelIds={pinnedModelIds}
               selectedModelId={selectedModelId}
             />
           </View>

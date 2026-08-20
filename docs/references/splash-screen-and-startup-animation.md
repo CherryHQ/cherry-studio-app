@@ -61,9 +61,9 @@ still apply, so this fallback cannot hide the cover before React has replaced th
 The default Messages route has a stronger signal than other routes because its navigation chrome
 can render before its virtualized conversation list:
 
-- topics, topic pins, and assistants start concurrently;
+- topics and assistants start concurrently;
 - loading, successful empty results, and errors are distinct settled outcomes;
-- `LegendList` is not mounted until all three initial queries settle;
+- `LegendList` is not mounted until both initial queries settle;
 - `LegendList.onLoad` schedules two animation frames before reporting content ready; and
 - an empty or failed initial query renders a stable empty or error state instead of holding startup
   indefinitely.

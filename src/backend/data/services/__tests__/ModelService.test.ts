@@ -6,7 +6,6 @@ import { userModelTable } from '@/backend/data/db/schemas/userModel';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { ModelService } from '../ModelService';
-import { pinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';
 import { insertManyWithOrderKey } from '../utils/orderKey';
 
@@ -27,13 +26,6 @@ jest.mock('../utils/orderKey', () => ({
   ),
   insertWithOrderKey: jest.fn(),
 }));
-
-// Deletes reach `pinService` as a module singleton, so the purge is stubbed on
-// the real instance: letting it run would issue a second `tx.delete` against the
-// fake transactions below.
-const purgeForEntitiesTx = jest
-  .spyOn(pinService, 'purgeForEntitiesTx')
-  .mockResolvedValue(undefined);
 
 afterEach(uninstallTestHost);
 
@@ -175,10 +167,6 @@ describe('ModelService', () => {
     });
 
     expect(result.removedIds).toEqual(['openai::replace', 'openai::stale']);
-    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', [
-      'openai::replace',
-      'openai::stale',
-    ]);
     expect(tx.delete.mock.invocationCallOrder[0]).toBeLessThan(
       jest.mocked(insertManyWithOrderKey).mock.invocationCallOrder.at(-1) ??
         Number.POSITIVE_INFINITY,
@@ -228,7 +216,6 @@ describe('ModelService', () => {
     }
     expect(result.added).toHaveLength(1001);
     expect(result.removedIds).toHaveLength(1001);
-    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', result.removedIds);
   });
 
   test('derives remote ownedBy without persisting it during reconcile', async () => {
@@ -302,7 +289,7 @@ describe('ModelService', () => {
 
   // Unlike reconcile, an explicit delete reaches a hand-added model: the user is
   // pointing at the row rather than the remote list failing to mention it.
-  test('deletes a model without a preset and purges its pins', async () => {
+  test('deletes a model without a preset', async () => {
     const tx = {
       delete: jest.fn(() => ({
         where: jest.fn(() => ({ returning: jest.fn(async () => [{ id: 'openai::custom' }]) })),
@@ -313,7 +300,6 @@ describe('ModelService', () => {
     } as unknown as DbService);
 
     await expect(service.delete('openai::custom')).resolves.toBe(true);
-    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', ['openai::custom']);
   });
 
   test('refuses to delete the chat default and never opens a transaction for it', async () => {
@@ -326,7 +312,7 @@ describe('ModelService', () => {
     expect(dbService.withWriteTx).not.toHaveBeenCalled();
   });
 
-  test('leaves pins alone when the model was already gone', async () => {
+  test('reports no deletion when the model was already gone', async () => {
     const tx = {
       delete: jest.fn(() => ({
         where: jest.fn(() => ({ returning: jest.fn(async () => []) })),
@@ -337,7 +323,6 @@ describe('ModelService', () => {
     } as unknown as DbService);
 
     await expect(service.delete('openai::missing')).resolves.toBe(false);
-    expect(purgeForEntitiesTx).not.toHaveBeenCalled();
   });
 });
 

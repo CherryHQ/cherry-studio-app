@@ -39,11 +39,13 @@ Apply these when deciding whether a desktop `src/shared` file belongs in the pac
    admitted, whatever its own contents look like.
 5. Split welded hybrids surgically: keep the serialized shape, drop the desktop capability logic,
    and register the trim as a `shapeOnlyPorts` entry in `desktop-sync-manifest.json` (see
-   `types/codeCli.ts`, `utils/shortcut.ts`, `ai/prompts.ts`).
+   `ai/prompts.ts`).
 
-Rejected files become `explicitExclusions` in the Manifest. Seeded ghost preference keys backing
-excluded features (`feature.binary.*`, `feature.code_cli.configs`) stay: they are serialized data
-under the preference-parity invariant, not code.
+Rejected files become `explicitExclusions` in the Manifest.
+
+Preferences are the exception to all of the above: mobile's preference schema is hand-maintained in
+`data/preference/preference-schema.ts` and holds only the keys mobile reads, so a desktop key is not
+admitted by being serialized data. There is no preference-parity invariant to satisfy.
 
 ## Imports And Aliasing
 

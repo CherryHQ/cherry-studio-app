@@ -287,7 +287,6 @@ export function PaintingInput({
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
           selectedTags={[MODEL_CAPABILITY.IMAGE_GENERATION]}
-          showPinnedModels={false}
         />
       ) : null}
     </>

@@ -6,14 +6,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { McpServerChromeProps } from './McpServerChrome.types';
 
 export function McpServerChrome({
-  isActive,
   isDisabled,
+  isEnabled,
   onDelete,
-  onToggleActive,
+  onToggleEnabled,
 }: McpServerChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const toggleLabel = t(isActive ? 'settings.mcp.disableServer' : 'settings.mcp.enableServer');
+  const toggleLabel = t(isEnabled ? 'settings.mcp.disableServer' : 'settings.mcp.enableServer');
 
   return (
     <View
@@ -25,12 +25,12 @@ export function McpServerChrome({
         <Pressable
           accessibilityLabel={toggleLabel}
           accessibilityRole="button"
-          accessibilityState={{ disabled: isDisabled, selected: isActive }}
+          accessibilityState={{ disabled: isDisabled, selected: isEnabled }}
           className="size-12 items-center justify-center active:opacity-60 disabled:opacity-35"
           disabled={isDisabled}
-          onPress={onToggleActive}
+          onPress={onToggleEnabled}
         >
-          {isActive ? (
+          {isEnabled ? (
             <PauseIcon className="size-5 text-foreground" />
           ) : (
             <PlayIcon className="size-5 text-foreground" />

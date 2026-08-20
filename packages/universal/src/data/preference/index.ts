@@ -4,55 +4,17 @@ export type {
   PreferenceMapping,
   PreferenceUpdates,
 } from './preferenceClient';
-export type { FontSizeStep, MobilePreferenceSchema } from './mobilePreferenceSchemas';
-export { FONT_SIZE_STEPS, MobileDefaultPreferences } from './mobilePreferenceSchemas';
-export { PreferenceDefaults } from './preferenceDefaults';
-export type { PreferenceSchemas } from './preferenceSchemas';
-export { DefaultPreferences } from './preferenceSchemas';
 export type {
-  AssistantIconType,
-  AssistantTabSortType,
-  AutoDetectionMethod,
-  ChatMessageNavigationMode,
-  ChatMessageStyle,
-  CliProviderConfig,
-  CodeCliConfigs,
-  CodeCliId,
-  CodeCliToolState,
-  CustomToolDefinition,
-  BinaryInstallSettings,
-  FileProcessorCapabilityOverride,
-  FileProcessorCapabilityOverrides,
-  FileProcessorFeature,
-  FileProcessorId,
-  FileProcessorOptions,
-  FileProcessorOverride,
-  FileProcessorOverrides,
-  FileProcessorType,
-  LanguageVarious,
-  MenuPresentationMode,
-  MiniAppRegion,
-  MiniAppRegionFilter,
-  MultiModelFoldDisplayMode,
-  MultiModelGridPopoverTrigger,
-  MultiModelMessageStyle,
-  PermissionMode,
+  FontSizeStep,
   PermissionPreferenceKey,
-  PersistedLangCode,
-  PreferenceDefaultScopeType,
   PreferenceKeyType,
-  PreferenceShortcutType,
+  PreferenceSchema,
+} from './preference-schema';
+export { FONT_SIZE_STEPS, PreferenceDefaults } from './preference-schema';
+export type {
+  LanguageVarious,
+  PermissionMode,
   PreferenceUpdateOptions,
-  ProxyMode,
-  SelectionActionItem,
-  SendMessageShortcut,
-  SidebarFavorite,
-  SidebarFavoriteItem,
-  TopicDisplayMode,
-  TopicTabPosition,
-  TranslateBidirectionalPair,
-  TranslateLangCode,
-  TranslateSourceLanguage,
   WebSearchCapability,
   WebSearchCompressionMethod,
   WebSearchProvider,
@@ -62,13 +24,6 @@ export type {
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
   WebSearchProviderType,
-  WindowStyle,
 } from './preferenceTypes';
-export {
-  SelectionFilterMode,
-  SelectionTriggerMode,
-  ThemeMode,
-  UpgradeChannel,
-  WEB_SEARCH_PROVIDER_IDS,
-} from './preferenceTypes';
+export { ThemeMode, WEB_SEARCH_PROVIDER_IDS } from './preferenceTypes';
 export { getDefaultValue, getPreferenceKeys, isPreferenceKey } from './preferenceUtils';

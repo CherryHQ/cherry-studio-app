@@ -7,7 +7,6 @@ import { BochaProvider } from '../BochaProvider';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
-  excludeDomains: ['example.com'],
   compression: { method: 'none', cutoffLimit: 2000 },
 };
 
@@ -36,7 +35,6 @@ describe('BochaProvider', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body as string)).toEqual({
       query: 'hello',
       count: 4,
-      exclude: 'example.com',
       summary: true,
     });
     const headers = fetchMock.mock.calls[0][1].headers as Headers;

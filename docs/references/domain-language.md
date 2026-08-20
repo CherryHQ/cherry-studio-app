@@ -97,21 +97,9 @@ A provider/model routing description that selects the endpoint type and AI SDK a
 _Avoid_: URL string
 
 **Preference**:
-A scoped local setting persisted in the mobile database and accessed through the separate
+A local setting persisted in the mobile database under its own key and accessed through the separate
 `PreferenceClient` and preference hooks.
 _Avoid_: global variable, config constant
-
-**Pin**:
-A polymorphic marker that raises supported entities such as topics, providers, or models in product ordering.
-_Avoid_: favorite
-
-**Tag**:
-A polymorphic label attached to supported entities through entity tagging.
-_Avoid_: category, folder
-
-**Prompt**:
-A reusable prompt template persisted in the local data layer.
-_Avoid_: message, assistant
 
 ### AI And Search
 

@@ -1,12 +1,11 @@
 import { useCallback, useMemo } from 'react';
 
-import { useModels, usePins, useProviders } from '@/frontend/hooks/chat';
+import { useModels, useProviders } from '@/frontend/hooks/chat';
 
 import {
   buildModelPickerGroups,
   getAvailableModelPickerFilterTags,
   getModelPickerModelItem,
-  getPinnedModelIds,
   type ModelPickerModelItem,
   type ModelPickerTag,
 } from '../utils/modelPickerData';
@@ -15,7 +14,6 @@ type UseModelPickerDataOptions = {
   providerId?: string;
   searchText?: string;
   selectedTags?: readonly ModelPickerTag[];
-  showPinnedModels?: boolean;
 };
 
 // Module-level so the default is one shared reference. An inline `= []` default
@@ -28,7 +26,6 @@ export function useModelPickerData({
   providerId,
   searchText = '',
   selectedTags = EMPTY_TAGS,
-  showPinnedModels = true,
 }: UseModelPickerDataOptions = {}) {
   const { isLoading: isModelsLoading, models } = useModels({ enabled: true, providerId });
   const { isLoading: isProvidersLoading, providers: enabledProviders } = useProviders({
@@ -41,19 +38,9 @@ export function useModelPickerData({
         : enabledProviders,
     [enabledProviders, providerId],
   );
-  const pins = usePins('model');
-  const pinnedModelIds = useMemo(() => getPinnedModelIds(pins.pins), [pins.pins]);
   const groups = useMemo(
-    () =>
-      buildModelPickerGroups({
-        models,
-        pinnedModelIds,
-        providers,
-        searchText,
-        selectedTags,
-        showPinnedModels,
-      }),
-    [models, pinnedModelIds, providers, searchText, selectedTags, showPinnedModels],
+    () => buildModelPickerGroups({ models, providers, searchText, selectedTags }),
+    [models, providers, searchText, selectedTags],
   );
   const availableTags = useMemo(
     () => getAvailableModelPickerFilterTags({ models, providers }),
@@ -64,55 +51,35 @@ export function useModelPickerData({
     [groups],
   );
   const getModelItem = useCallback(
-    (modelId: string | null) =>
-      getModelPickerModelItem(modelId, {
-        models,
-        pinnedModelIds,
-        providers,
-      }),
-    [models, pinnedModelIds, providers],
+    (modelId: string | null) => getModelPickerModelItem(modelId, { models, providers }),
+    [models, providers],
   );
 
   // Memoized so consumers can key their own memos/effects on the returned object.
   // Every field here is itself reference-stable (memo, useCallback, react-query
-  // `data`, or a primitive). The raw `usePins` object and a `queries` bag used to
-  // be exposed too, but nothing consumed them and neither can be stabilized —
-  // react-query hands back a freshly tracked proxy for query results on every
-  // render — so keeping them would have defeated this memo.
-  const {
-    isLoading: isPinsLoading,
-    isMutating: isPinsMutating,
-    isRefreshing: isPinsRefreshing,
-    togglePin,
-  } = pins;
-
+  // `data`, or a primitive). A `queries` bag used to be exposed too, but nothing
+  // consumed it and it cannot be stabilized — react-query hands back a freshly
+  // tracked proxy for query results on every render — so keeping it would have
+  // defeated this memo.
   return useMemo(
     () => ({
       availableTags,
       groups,
-      isLoading: isModelsLoading || isProvidersLoading || isPinsLoading,
-      isPinActionDisabled: isPinsLoading || isPinsRefreshing || isPinsMutating,
+      isLoading: isModelsLoading || isProvidersLoading,
       modelItems,
       models,
-      pinnedModelIds,
       providers,
       getModelItem,
-      togglePin,
     }),
     [
       availableTags,
       getModelItem,
       groups,
       isModelsLoading,
-      isPinsLoading,
-      isPinsMutating,
-      isPinsRefreshing,
       isProvidersLoading,
       modelItems,
       models,
-      pinnedModelIds,
       providers,
-      togglePin,
     ],
   );
 }

@@ -80,10 +80,10 @@ export function createBackend(
       warm: (server) => services.mcpRuntime.warmToolsCache(server),
     },
     servers: {
-      create: (input) => services.mcpServer.create(input, 'streamableHttp'),
-      get: (id) => services.mcpServer.getById(id, 'streamableHttp'),
-      remove: (id) => services.mcpServer.delete(id, 'streamableHttp'),
-      update: (id, input) => services.mcpServer.update(id, input, 'streamableHttp'),
+      create: (input) => services.mcpServer.create(input),
+      get: (id) => services.mcpServer.getById(id),
+      remove: (id) => services.mcpServer.delete(id),
+      update: (id, input) => services.mcpServer.update(id, input),
     },
   });
   const providers = createProvidersModule({

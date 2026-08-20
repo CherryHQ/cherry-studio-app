@@ -1,7 +1,7 @@
 import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import type { ToolSet } from 'ai';
 
 import { mcpServerService } from '@/backend/data/services/McpServerService';
@@ -37,18 +37,13 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function makeServer(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {
+function makeServer(overrides: Partial<McpServer> = {}): McpServer {
   return {
-    baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
-    description: '',
-    disabledAutoApproveTools: [],
-    disabledTools: [],
-    headers: {},
+    endpointUrl: 'https://a.example/mcp',
     id: 'server-1',
-    isActive: true,
+    isEnabled: true,
     name: 'ServerOne',
-    type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -59,9 +54,7 @@ function makeAssistant(): Assistant {
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
-    groupId: null,
     id: 'assistant-1',
-    knowledgeBaseIds: [],
     mcpServerIds: [],
     modelId: null,
     modelName: null,
@@ -69,7 +62,6 @@ function makeAssistant(): Assistant {
     orderKey: 'a0',
     prompt: '',
     settings: { ...DEFAULT_ASSISTANT_SETTINGS, mcpMode: 'auto' },
-    tags: [],
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
@@ -81,9 +73,8 @@ function makeRawTools(names: string[]): ToolSet {
       {
         description: `desc ${name}`,
         execute: jest.fn(async () => {
-          // A macrotask, not just a microtask: a wrongly-computed 0ms timeout
-          // loses the race against a promise that resolves on the microtask
-          // queue, which would make the `timeout: 0` test pass either way.
+          // A macrotask, not just a microtask, so a call that outlives a tick
+          // still has to beat the timeout race rather than winning it for free.
           await new Promise((resolve) => setTimeout(resolve, 5));
           return { content: [{ text: `ok ${name}`, type: 'text' }] };
         }),
@@ -129,7 +120,7 @@ function makeClient(tools: ToolSet): FakeClient {
   return client;
 }
 
-function makeService(servers: StreamableHttpMcpServer[]) {
+function makeService(servers: McpServer[]) {
   // The rows come from the `mcpServerService` module singleton now, so they are
   // spied rather than injected. Hand out a copy: sharing the row object with the
   // caller would let a test mutate what production code already captured, and
@@ -174,8 +165,8 @@ afterEach(() => {
 });
 
 describe('assistant tool preparation', () => {
-  it('ignores a synchronized server without a URL', async () => {
-    const { service } = makeService([makeServer({ baseUrl: '' })]);
+  it('ignores a server whose endpoint is not http(s)', async () => {
+    const { service } = makeService([makeServer({ endpointUrl: 'ftp://a.example/mcp' })]);
 
     await expect(getProjectedToolSet(service, makeAssistant())).resolves.toBeUndefined();
 
@@ -237,7 +228,7 @@ describe('assistant tool preparation', () => {
         .mockResolvedValueOnce(makeClient(makeRawTools(['fast'])));
       const { service } = makeService([
         makeServer({ id: 'slow', name: 'Slow' }),
-        makeServer({ baseUrl: 'https://fast.example/mcp', id: 'fast', name: 'Fast' }),
+        makeServer({ endpointUrl: 'https://fast.example/mcp', id: 'fast', name: 'Fast' }),
       ]);
 
       const request = getProjectedToolSet(service, makeAssistant());
@@ -270,17 +261,15 @@ describe('assistant tool preparation', () => {
     expect(client.tools).toHaveBeenCalledTimes(1);
   });
 
-  it('uses policy and display updates without reconnecting or relisting tools', async () => {
+  it('renames without reconnecting or relisting tools', async () => {
     const client = makeClient(makeRawTools(['search']));
     mockCreateMCPClient.mockResolvedValue(client);
     const servers = [makeServer()];
     const { service } = makeService(servers);
     await warmedToolSet(service);
 
-    servers[0] = makeServer({ disabledTools: ['search'], name: 'Renamed', timeout: 5 });
-    expect(await getProjectedToolSet(service, makeAssistant())).toBeUndefined();
+    servers[0] = makeServer({ name: 'Renamed' });
 
-    servers[0] = makeServer({ name: 'Renamed', timeout: 5 });
     expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__renamed__search',
     ]);
@@ -297,7 +286,7 @@ describe('assistant tool preparation', () => {
     const { service } = makeService(servers);
     await warmedToolSet(service);
 
-    servers[0] = makeServer({ baseUrl: 'https://new.example/mcp' });
+    servers[0] = makeServer({ endpointUrl: 'https://new.example/mcp' });
     expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
       'mcp__serverone__new',
     ]);
@@ -411,8 +400,8 @@ describe('assistant tool preparation', () => {
       .mockRejectedValueOnce(new Error('server down'))
       .mockResolvedValue(makeClient(makeRawTools(['ping'])));
     const { service } = makeService([
-      makeServer({ baseUrl: 'https://down.example/mcp', id: 'down', name: 'Down' }),
-      makeServer({ baseUrl: 'https://up.example/mcp', id: 'up', name: 'Up' }),
+      makeServer({ endpointUrl: 'https://down.example/mcp', id: 'down', name: 'Down' }),
+      makeServer({ endpointUrl: 'https://up.example/mcp', id: 'up', name: 'Up' }),
     ]);
 
     const tools = await warmedToolSet(service);
@@ -420,7 +409,7 @@ describe('assistant tool preparation', () => {
     expect(Object.keys(tools ?? {})).toEqual(['mcp__up__ping']);
   });
 
-  it('returns undefined when no active servers apply', async () => {
+  it('returns undefined when no enabled servers apply', async () => {
     const { service } = makeService([]);
 
     expect(await getProjectedToolSet(service, makeAssistant())).toBeUndefined();
@@ -444,129 +433,29 @@ describe('assistant tool preparation', () => {
   });
 });
 
-describe('disabledTools filtering', () => {
-  it('drops tools matched by raw name', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['keep', 'drop'])));
-    const { service } = makeService([makeServer({ disabledTools: ['drop'] })]);
-
-    const tools = await warmedToolSet(service);
-
-    expect(Object.keys(tools ?? {})).toEqual(['mcp__serverone__keep']);
-  });
-
-  it('gates tools listed in disabledAutoApproveTools behind needsApproval', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['guarded', 'free'])));
-    const { service } = makeService([makeServer({ disabledAutoApproveTools: ['guarded'] })]);
-    const tools = await warmedToolSet(service);
-
-    const needsApproval = async (tool: unknown) =>
-      (tool as { needsApproval: () => Promise<boolean> }).needsApproval();
-
-    await expect(needsApproval(tools?.mcp__serverone__guarded)).resolves.toBe(true);
-    await expect(needsApproval(tools?.mcp__serverone__free)).resolves.toBe(false);
+describe('tool approval policy', () => {
+  it('gates every tool behind approval and never defers one', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['read', 'write'])));
+    const { service } = makeService([makeServer()]);
+    await warmedToolSet(service);
 
     const entries = await service.getToolEntriesForAssistant(makeAssistant());
-    expect(entries).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          defer: 'never',
-          name: 'mcp__serverone__guarded',
-          namespace: 'mcp:ServerOne',
-        }),
-        expect.objectContaining({
-          defer: 'auto',
-          name: 'mcp__serverone__free',
-          namespace: 'mcp:ServerOne',
-        }),
-      ]),
-    );
-  });
 
-  it('re-reads the server so an approval toggle mid-turn is honoured', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const { mcpServer, service } = makeService([makeServer()]);
-    const tools = await warmedToolSet(service);
-    const tool = tools?.mcp__serverone__search as unknown as {
-      needsApproval: () => Promise<boolean>;
-    };
-    await expect(tool.needsApproval()).resolves.toBe(false);
-
-    // The user requires approval after this ToolSet was built. A fresh object,
-    // not a mutation of the wrap-time one — otherwise reading the stale
-    // snapshot would pass this test too.
-    mcpServer.getById.mockResolvedValue(
-      makeServer({ disabledAutoApproveTools: ['mcp__serverone__*'] }),
-    );
-
-    await expect(tool.needsApproval()).resolves.toBe(true);
-    expect(mcpServer.getById).toHaveBeenCalledWith('server-1', 'streamableHttp');
-  });
-
-  it('requires approval when the lookup fails rather than trusting a stale snapshot', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const { mcpServer, service } = makeService([makeServer()]);
-    const tools = await warmedToolSet(service);
-
-    mcpServer.getById.mockRejectedValue(new Error('database is locked'));
-
-    // The snapshot says "auto-approve", but it may simply predate the rule the
-    // user just added — a security gate that cannot read its rules must ask.
-    const tool = tools?.mcp__serverone__search as unknown as {
-      needsApproval: () => Promise<boolean>;
-    };
-    await expect(tool.needsApproval()).resolves.toBe(true);
-  });
-
-  it('does not ask to approve a deleted server, leaving execute to report it', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const { mcpServer, service } = makeService([makeServer()]);
-    const tools = await warmedToolSet(service);
-
-    mcpServer.getById.mockRejectedValue(DataApiErrorFactory.notFound('McpServer', 'server-1'));
-
-    const tool = tools?.mcp__serverone__search as unknown as {
-      execute: (args: unknown, opts: unknown) => Promise<unknown>;
-      needsApproval: () => Promise<boolean>;
-    };
-
-    // The mirror image of the test above, and swapping the two is a security
-    // regression: NOT_FOUND must pass the gate so the user sees why the call
-    // really failed instead of approving something that cannot run, while any
-    // other read failure must still fail closed.
-    await expect(tool.needsApproval()).resolves.toBe(false);
-    await expect(tool.execute({}, {})).rejects.toThrow(
-      'MCP server ServerOne is no longer registered',
-    );
-  });
-
-  it('honors wire-id and wildcard entries (desktop rule parity)', async () => {
-    // Anchor first: without any rule this server contributes two tools, so the
-    // wildcard assertion below can't pass just because the cache stayed cold.
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['alpha', 'beta'])));
-    expect(Object.keys((await warmedToolSet(makeService([makeServer()]).service)) ?? {})).toEqual([
-      'mcp__serverone__alpha',
-      'mcp__serverone__beta',
-    ]);
-
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['alpha', 'beta'])));
-    const wildcard = makeService([makeServer({ disabledTools: ['mcp__serverone__*'] })]);
-
-    expect(await warmedToolSet(wildcard.service)).toBeUndefined();
-
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['alpha', 'beta'])));
-    const wireId = makeService([makeServer({ disabledTools: ['mcp__serverone__alpha'] })]);
-
-    expect(Object.keys((await warmedToolSet(wireId.service)) ?? {})).toEqual([
-      'mcp__serverone__beta',
+    // Approval is fixed application policy, so there is no per-tool exception —
+    // and `tool_invoke` refuses approval-gated tools, so deferring one would
+    // make it unreachable. Both halves have to stay true together.
+    expect(entries.map((entry) => [entry.name, entry.defer, entry.tool.needsApproval])).toEqual([
+      ['mcp__serverone__read', 'never', true],
+      ['mcp__serverone__write', 'never', true],
     ]);
   });
 });
 
-describe('prewarmActiveServers', () => {
-  it('does not connect to a synchronized server without a URL', async () => {
-    const { service } = makeService([makeServer({ baseUrl: '' })]);
+describe('prewarmEnabledServers', () => {
+  it('does not connect to a server whose endpoint is not http(s)', async () => {
+    const { service } = makeService([makeServer({ endpointUrl: 'ftp://a.example/mcp' })]);
 
-    await service.prewarmActiveServers();
+    await service.prewarmEnabledServers();
 
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
   });
@@ -575,7 +464,7 @@ describe('prewarmActiveServers', () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
     const { service } = makeService([makeServer()]);
 
-    await service.prewarmActiveServers();
+    await service.prewarmEnabledServers();
     await flush();
 
     expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
@@ -583,7 +472,7 @@ describe('prewarmActiveServers', () => {
     ]);
   });
 
-  it('warms active servers in batches of three', async () => {
+  it('warms enabled servers in batches of three', async () => {
     const releases: (() => void)[] = [];
     let active = 0;
     let maxActive = 0;
@@ -604,14 +493,14 @@ describe('prewarmActiveServers', () => {
     });
     const servers = Array.from({ length: 6 }, (_, index) =>
       makeServer({
-        baseUrl: `https://${index}.example/mcp`,
+        endpointUrl: `https://${index}.example/mcp`,
         id: `server-${index}`,
         name: `Server${index}`,
       }),
     );
     const { service } = makeService(servers);
 
-    const prewarm = service.prewarmActiveServers();
+    const prewarm = service.prewarmEnabledServers();
     await flush();
     expect(releases).toHaveLength(3);
 
@@ -628,15 +517,15 @@ describe('prewarmActiveServers', () => {
     await prewarm;
   });
 
-  it('shares one active prewarm run across concurrent callers', async () => {
+  it('shares one prewarm run across concurrent callers', async () => {
     const tools = deferred<ToolSet>();
     const client = makeClient(makeRawTools(['search']));
     client.tools.mockReturnValue(tools.promise);
     mockCreateMCPClient.mockResolvedValue(client);
     const { service } = makeService([makeServer()]);
 
-    const first = service.prewarmActiveServers();
-    const second = service.prewarmActiveServers();
+    const first = service.prewarmEnabledServers();
+    const second = service.prewarmEnabledServers();
     expect(second).toBe(first);
     await flush();
 
@@ -650,7 +539,7 @@ describe('prewarmActiveServers', () => {
     jest.spyOn(mcpServerService, 'list').mockRejectedValue(new Error('db down'));
     const service = new McpRuntimeService();
 
-    await expect(service.prewarmActiveServers()).resolves.toBeUndefined();
+    await expect(service.prewarmEnabledServers()).resolves.toBeUndefined();
   });
 });
 
@@ -660,23 +549,6 @@ describe('tool execution', () => {
     const tool = tools?.[key];
     return (tool?.execute as (args: unknown, opts: unknown) => Promise<unknown>)({}, {});
   }
-
-  it('re-checks the server before running, so a mid-turn disable is honored', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const { mcpServer, service } = makeService([makeServer()]);
-    const tools = await warmedToolSet(service);
-
-    // The user disables the tool after this ToolSet was built. A fresh object,
-    // not a mutation of the wrap-time one — otherwise reading the stale
-    // snapshot would pass this test too.
-    mcpServer.getById.mockResolvedValue(makeServer({ disabledTools: ['search'] }));
-    const tool = tools?.mcp__serverone__search;
-
-    await expect(
-      (tool?.execute as (args: unknown, opts: unknown) => Promise<unknown>)({}, {}),
-    ).rejects.toThrow('MCP tool ServerOne/search is disabled');
-    expect(mcpServer.getById).toHaveBeenCalledWith('server-1', 'streamableHttp');
-  });
 
   it('does not blame a deleted server when the lookup itself fails', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
@@ -693,22 +565,37 @@ describe('tool execution', () => {
     ).rejects.toThrow('MCP tool ServerOne/search could not verify its server: database is locked');
   });
 
-  it('refuses to run against a deactivated server', async () => {
+  it('re-checks the server before running, so a mid-turn disable is honored', async () => {
     mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
     const { mcpServer, service } = makeService([makeServer()]);
     const tools = await warmedToolSet(service);
 
-    // Deactivated through the mock rather than by mutating the wrap-time row,
-    // so only a genuine re-read can observe it.
-    mcpServer.getById.mockResolvedValue(makeServer({ isActive: false }));
+    // Disabled through the mock rather than by mutating the wrap-time row, so
+    // only a genuine re-read can observe it.
+    mcpServer.getById.mockResolvedValue(makeServer({ isEnabled: false }));
 
     await expect(
       (tools?.mcp__serverone__search.execute as (a: unknown, o: unknown) => Promise<unknown>)(
         {},
         {},
       ),
-    ).rejects.toThrow('is not active');
-    expect(mcpServer.getById).toHaveBeenCalledWith('server-1', 'streamableHttp');
+    ).rejects.toThrow('is not enabled');
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
+  });
+
+  it('reports a deleted server from execute rather than from the approval gate', async () => {
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
+    const { mcpServer, service } = makeService([makeServer()]);
+    const tools = await warmedToolSet(service);
+
+    mcpServer.getById.mockRejectedValue(DataApiErrorFactory.notFound('McpServer', 'server-1'));
+
+    await expect(
+      (tools?.mcp__serverone__search.execute as (a: unknown, o: unknown) => Promise<unknown>)(
+        {},
+        {},
+      ),
+    ).rejects.toThrow('MCP server ServerOne is no longer registered');
   });
 
   it('throws a server/tool-labelled error when the result isError', async () => {
@@ -749,16 +636,6 @@ describe('tool execution', () => {
     await getProjectedToolSet(service, makeAssistant());
     await flush();
     expect(mockCreateMCPClient).toHaveBeenCalledTimes(2);
-  });
-
-  it('treats a stored timeout of 0 as unset instead of failing instantly', async () => {
-    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
-    const { service } = makeService([makeServer({ timeout: 0 })]);
-
-    await expect(executeTool(service, 'mcp__serverone__search')).resolves.toEqual({
-      content: [{ text: 'ok search', type: 'text' }],
-      metadata: { serverId: 'server-1', serverName: 'ServerOne', type: 'mcp' },
-    });
   });
 
   it('stamps the result with its source the way desktop does', async () => {
@@ -829,17 +706,17 @@ describe('tool execution', () => {
     try {
       const client = makeClient(makeRawTool('slow', () => new Promise(() => undefined)));
       mockCreateMCPClient.mockResolvedValue(client);
-      const { service } = makeService([makeServer({ timeout: 30 })]);
+      const { service } = makeService([makeServer()]);
       const tools = await warmedToolSet(service);
 
       const call = (
         tools?.mcp__serverone__slow.execute as (a: unknown, o: unknown) => Promise<unknown>
       )({}, {});
       const assertion = expect(call).rejects.toThrow(
-        /timed out after 30000ms\. The server may still be processing it/,
+        /timed out after 60000ms\. The server may still be processing it/,
       );
       await flush();
-      jest.advanceTimersByTime(30 * 1000);
+      jest.advanceTimersByTime(60 * 1000);
       await assertion;
 
       // Nothing cancels the remote work, so the connection is treated as wedged.
@@ -850,23 +727,23 @@ describe('tool execution', () => {
     }
   });
 
-  it('uses the latest stored timeout without rebuilding the tool cache', async () => {
+  it('labels the failure with the current name without rebuilding the tool cache', async () => {
     jest.useFakeTimers({ doNotFake: ['setImmediate'] });
     try {
       const client = makeClient(makeRawTool('slow', () => new Promise(() => undefined)));
       mockCreateMCPClient.mockResolvedValue(client);
-      const { mcpServer, service } = makeService([makeServer({ timeout: 60 })]);
+      const { mcpServer, service } = makeService([makeServer()]);
       const tools = await warmedToolSet(service);
-      mcpServer.getById.mockResolvedValue(makeServer({ name: 'Renamed', timeout: 1 }));
+      mcpServer.getById.mockResolvedValue(makeServer({ name: 'Renamed' }));
 
       const call = (
         tools?.mcp__serverone__slow.execute as (a: unknown, o: unknown) => Promise<unknown>
       )({}, {});
       const assertion = expect(call).rejects.toThrow(
-        /MCP tool Renamed\/slow timed out after 1000ms/,
+        /MCP tool Renamed\/slow timed out after 60000ms/,
       );
       await flush();
-      jest.advanceTimersByTime(1000);
+      jest.advanceTimersByTime(60 * 1000);
 
       await assertion;
       expect(mockCreateMCPClient).toHaveBeenCalledTimes(1);
@@ -884,8 +761,7 @@ describe('getServerInfo', () => {
     mockCreateMCPClient.mockResolvedValue(client);
     const { service } = makeService([]);
 
-    await expect(service.getServerInfo({ baseUrl: 'https://x.example/mcp' })).resolves.toEqual({
-      instructions: 'Use this server to search documentation.',
+    await expect(service.getServerInfo({ endpointUrl: 'https://x.example/mcp' })).resolves.toEqual({
       name: 'test-server',
       title: 'Test MCP',
       version: '1.2.3',
@@ -906,7 +782,7 @@ describe('getServerInfo', () => {
       );
       const { service } = makeService([]);
 
-      const request = service.getServerInfo({ baseUrl: 'https://x.example/mcp' });
+      const request = service.getServerInfo({ endpointUrl: 'https://x.example/mcp' });
       const assertion = expect(request).rejects.toThrow('MCP server info timed out after 15000ms');
       jest.advanceTimersByTime(15 * 1000);
       await assertion;
@@ -927,7 +803,7 @@ describe('testConnection', () => {
     mockCreateMCPClient.mockResolvedValue(client);
     const { service } = makeService([]);
 
-    const result = await service.testConnection({ baseUrl: 'https://x.example/mcp' });
+    const result = await service.testConnection({ endpointUrl: 'https://x.example/mcp' });
 
     expect(result.map((t) => t.name)).toEqual(['a', 'b']);
     expect(client.close).toHaveBeenCalled();
@@ -941,7 +817,7 @@ describe('testConnection', () => {
     mockCreateMCPClient.mockResolvedValue(client);
     const { service } = makeService([]);
 
-    await expect(service.testConnection({ baseUrl: 'https://x.example/mcp' })).rejects.toThrow(
+    await expect(service.testConnection({ endpointUrl: 'https://x.example/mcp' })).rejects.toThrow(
       '403 forbidden',
     );
     expect(client.close).toHaveBeenCalled();
@@ -959,7 +835,7 @@ describe('testConnection', () => {
       );
       const { service } = makeService([]);
 
-      const request = service.testConnection({ baseUrl: 'https://x.example/mcp' });
+      const request = service.testConnection({ endpointUrl: 'https://x.example/mcp' });
       const assertion = expect(request).rejects.toThrow(
         'MCP connection test timed out after 15000ms',
       );
@@ -978,8 +854,8 @@ describe('testConnection', () => {
 });
 
 describe('listToolsForServer', () => {
-  it('rejects a server without a URL before opening a connection', async () => {
-    const server = makeServer({ baseUrl: '' });
+  it('rejects a non-http endpoint before opening a connection', async () => {
+    const server = makeServer({ endpointUrl: 'ftp://a.example/mcp' });
     const { service } = makeService([server]);
 
     await expect(service.listToolsForServer(server)).rejects.toThrow('has no valid HTTP URL');
@@ -1121,7 +997,7 @@ describe('runtime summaries', () => {
     service.invalidateServer(server.id, { preserveSnapshot: true });
 
     await expect(
-      service.getRuntimeSummaries([{ ...server, isActive: false }]),
+      service.getRuntimeSummaries([{ ...server, isEnabled: false }]),
     ).resolves.toMatchObject({
       [server.id]: {
         serverName: 'test-server',
@@ -1175,7 +1051,7 @@ describe('invalidateServer', () => {
       }),
     );
     const { service } = makeService([
-      makeServer({ baseUrl: 'https://b.example/mcp', id: 'other', name: 'Other' }),
+      makeServer({ endpointUrl: 'https://b.example/mcp', id: 'other', name: 'Other' }),
     ]);
 
     const request = getProjectedToolSet(service, makeAssistant());
@@ -1244,41 +1120,6 @@ describe('invalidateServer', () => {
   });
 });
 
-describe('transport fingerprint', () => {
-  it('reconnects when only a header changes', async () => {
-    const original = makeClient(makeRawTools(['old']));
-    const replacement = makeClient(makeRawTools(['new']));
-    mockCreateMCPClient.mockResolvedValueOnce(original).mockResolvedValue(replacement);
-    const servers = [makeServer({ headers: { Authorization: 'Bearer old-token' } })];
-    const { service } = makeService(servers);
-    await warmedToolSet(service);
-
-    servers[0] = makeServer({ headers: { Authorization: 'Bearer new-token' } });
-
-    expect(Object.keys((await getProjectedToolSet(service, makeAssistant())) ?? {})).toEqual([
-      'mcp__serverone__new',
-    ]);
-    expect(original.close).toHaveBeenCalled();
-  });
-
-  it('does not retain the header values it fingerprints', async () => {
-    const client = makeClient(makeRawTools(['search']));
-    mockCreateMCPClient.mockResolvedValue(client);
-    const server = makeServer({ headers: { Authorization: 'Bearer super-secret-token' } });
-    const { service } = makeService([server]);
-    await warmedToolSet(service);
-
-    // A deactivated server keeps its snapshot, so the fingerprint outlives the
-    // connection that needed the token.
-    service.invalidateServer(server.id, { preserveSnapshot: true });
-
-    const retained = retainedFingerprints(service);
-    expect(retained).not.toEqual([]);
-    expect(retained.join('|')).not.toContain('super-secret-token');
-    expect(retained.join('|')).toContain(server.baseUrl);
-  });
-});
-
 describe('dispose', () => {
   it('closes the pooled client', async () => {
     const client = makeClient(makeRawTools(['search']));
@@ -1327,25 +1168,20 @@ describe('dispose', () => {
     const { service } = makeService([server]);
     await warmedToolSet(service);
     service.invalidateServer(server.id, { preserveSnapshot: true });
-    expect(retainedFingerprints(service)).not.toEqual([]);
+    expect(retainedSnapshotCount(service)).toBe(1);
 
     await service._doStop();
 
-    expect(retainedFingerprints(service)).toEqual([]);
+    expect(retainedSnapshotCount(service)).toBe(0);
   });
 });
 
 /**
- * The fingerprint is private and deliberately absent from every public summary, but
- * "it does not hold the bearer token" is the property worth pinning, so read it back.
+ * Snapshots deliberately outlive their connection so a disabled server can still
+ * show its last known metadata; stopping the service has to clear them, and no
+ * public summary exposes whether it did.
  */
-function retainedFingerprints(service: McpRuntimeService): string[] {
-  const internals = service as unknown as {
-    runtimeSnapshots: Map<string, { transportFingerprint: string }>;
-    runtimeStates: Map<string, { transportFingerprint: string }>;
-  };
-
-  return [...internals.runtimeStates.values(), ...internals.runtimeSnapshots.values()].map(
-    (entry) => entry.transportFingerprint,
-  );
+function retainedSnapshotCount(service: McpRuntimeService): number {
+  const internals = service as unknown as { runtimeSnapshots: Map<string, unknown> };
+  return internals.runtimeSnapshots.size;
 }

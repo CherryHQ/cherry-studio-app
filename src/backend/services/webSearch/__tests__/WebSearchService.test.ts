@@ -1,7 +1,4 @@
-import type {
-  PreferenceDefaultScopeType,
-  PreferenceKeyType,
-} from '@cherrystudio/universal/data/preference';
+import type { PreferenceSchema, PreferenceKeyType } from '@cherrystudio/universal/data/preference';
 
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
@@ -48,7 +45,7 @@ describe('WebSearchService', () => {
     expect(headers.get('Authorization')).toBe('Bearer selected-key');
   });
 
-  test('returns partial results and filters blacklisted URLs', async () => {
+  test('returns the results it did get when one keyword request fails', async () => {
     const fetchMock = jest
       .fn()
       .mockResolvedValueOnce(
@@ -57,10 +54,7 @@ describe('WebSearchService', () => {
             query: 'first',
             request_id: 'request-1',
             response_time: 0.1,
-            results: [
-              { title: 'Allowed', content: 'allowed content', url: 'https://allowed.example/a' },
-              { title: 'Blocked', content: 'blocked content', url: 'https://blocked.example/a' },
-            ],
+            results: [{ title: 'First', content: 'first content', url: 'https://example.com/a' }],
           }),
           { status: 200 },
         ),
@@ -71,7 +65,6 @@ describe('WebSearchService', () => {
     const service = new WebSearchService(
       createPreferenceService({
         'chat.web_search.default_search_keywords_provider': 'tavily',
-        'chat.web_search.exclude_domains': ['https://blocked.example/*'],
         'chat.web_search.provider_overrides': {
           tavily: {
             apiKeys: ['key'],
@@ -87,9 +80,9 @@ describe('WebSearchService', () => {
       providerId: 'tavily',
       results: [
         {
-          title: 'Allowed',
-          content: 'allowed content',
-          url: 'https://allowed.example/a',
+          title: 'First',
+          content: 'first content',
+          url: 'https://example.com/a',
           sourceInput: 'first',
         },
       ],
@@ -120,11 +113,10 @@ describe('WebSearchService', () => {
   });
 });
 
-function createPreferenceService(values: Partial<PreferenceDefaultScopeType> = {}) {
+function createPreferenceService(values: Partial<PreferenceSchema> = {}) {
   // The two default-provider keys are deliberately absent: tests that exercise
   // the unconfigured path rely on `get` resolving them to undefined.
-  const defaults: Partial<PreferenceDefaultScopeType> = {
-    'chat.web_search.exclude_domains': [],
+  const defaults: Partial<PreferenceSchema> = {
     'chat.web_search.max_results': 5,
     'chat.web_search.compression.method': 'none',
     'chat.web_search.compression.cutoff_limit': 2000,
@@ -133,6 +125,6 @@ function createPreferenceService(values: Partial<PreferenceDefaultScopeType> = {
 
   return {
     get: <K extends PreferenceKeyType>(key: K) =>
-      (values[key] ?? defaults[key]) as PreferenceDefaultScopeType[K],
+      (values[key] ?? defaults[key]) as PreferenceSchema[K],
   } as PreferenceService;
 }

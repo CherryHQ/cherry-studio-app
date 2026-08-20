@@ -19,14 +19,12 @@ import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
-import { userModelTable } from '@/backend/data/db/schemas/userModel';
 import type {
   InsertUserProviderRow,
   UserProviderRow,
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 
-import { pinService } from './PinService';
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';
 
@@ -539,17 +537,6 @@ export class ProviderService {
       ) {
         throw DataApiErrorFactory.invalidOperation(`Cannot delete preset provider '${providerId}'`);
       }
-
-      const models = await tx
-        .select({ id: userModelTable.id })
-        .from(userModelTable)
-        .where(eq(userModelTable.providerId, providerId));
-
-      await pinService.purgeForEntitiesTx(
-        tx,
-        'model',
-        models.map((model) => model.id),
-      );
 
       const deletedProviders = await tx
         .delete(userProviderTable)

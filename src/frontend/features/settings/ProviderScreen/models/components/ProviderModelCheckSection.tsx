@@ -95,7 +95,6 @@ export function ProviderModelCheckSection({
           onSelect={handleModelSelect}
           providerId={providerId}
           selectedModelId={selectedModel?.id ?? null}
-          showPinnedModels={false}
         />
       ) : null}
     </View>

@@ -23,7 +23,6 @@ import { application } from '@/backend/core/application/Application';
 import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
 import { userModelTable } from '@/backend/data/db/schemas/userModel';
 
-import { pinService } from './PinService';
 import {
   createCustomModel,
   type ModelRegistryLookup,
@@ -478,7 +477,6 @@ export class ModelService {
       if (rows.length === 0) {
         throw DataApiErrorFactory.notFound('Model', `${providerId}/${modelId}`);
       }
-      await pinService.purgeForEntitiesTx(tx, 'model', [rows[0].id]);
     });
   }
 
@@ -513,16 +511,10 @@ export class ModelService {
         throw DataApiErrorFactory.notFound('Model', missingId);
       }
 
-      const deletedIds: string[] = [];
       for (const idChunk of chunks(ids, sqliteBatchSize)) {
         // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
-        const rows = await tx
-          .delete(userModelTable)
-          .where(inArray(userModelTable.id, idChunk))
-          .returning({ id: userModelTable.id });
-        deletedIds.push(...rows.map((row: { id: string }) => row.id));
+        await tx.delete(userModelTable).where(inArray(userModelTable.id, idChunk));
       }
-      await pinService.purgeForEntitiesTx(tx, 'model', deletedIds);
     });
   }
 
@@ -689,10 +681,6 @@ export class ModelService {
           .returning({ id: userModelTable.id });
         removedIds.push(...rows.map((row: { id: string }) => row.id));
       }
-      if (removedIds.length > 0) {
-        await pinService.purgeForEntitiesTx(tx, 'model', removedIds);
-      }
-
       const inserted: UserModelRow[] = [];
       const insertableValues = values.filter((value) => !protectedIds.has(value.id));
       for (const valueChunk of chunks(insertableValues, getInsertBatchSize(insertableValues))) {

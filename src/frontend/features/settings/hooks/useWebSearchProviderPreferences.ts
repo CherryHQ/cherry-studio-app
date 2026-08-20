@@ -20,7 +20,6 @@ const preferenceMapping = {
   compressionMethod: 'chat.web_search.compression.method',
   defaultFetchUrlsProvider: 'chat.web_search.default_fetch_urls_provider',
   defaultSearchKeywordsProvider: 'chat.web_search.default_search_keywords_provider',
-  excludeDomains: 'chat.web_search.exclude_domains',
   maxResults: 'chat.web_search.max_results',
   providerOverrides: 'chat.web_search.provider_overrides',
 } as const;
@@ -74,13 +73,6 @@ export function useWebSearchProviderPreferences() {
     [setPreferences],
   );
 
-  const handleExcludeDomainsChange = useCallback(
-    (excludeDomains: string[]) => {
-      void setPreferences({ excludeDomains });
-    },
-    [setPreferences],
-  );
-
   const handleCompressionMethodChange = useCallback(
     (compressionMethod: WebSearchCompressionMethod) => {
       void setPreferences({ compressionMethod });
@@ -117,10 +109,6 @@ export function useWebSearchProviderPreferences() {
       options: compressionMethodOptions,
       value: preferences.compressionMethod,
       onValueChange: handleCompressionMethodChange,
-    },
-    excludeDomains: {
-      value: preferences.excludeDomains,
-      onValueChange: handleExcludeDomainsChange,
     },
     fetchUrls: {
       options: fetchUrlsProviderOptions,

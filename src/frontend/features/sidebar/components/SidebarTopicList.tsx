@@ -9,7 +9,6 @@ import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components
 import {
   TopicListProvider,
   useTopicActionAlerts,
-  useTopicListActions,
   useTopicListTopics,
 } from '@/frontend/features/topics';
 import { appSidebar } from '@/frontend/utils/constants';
@@ -31,24 +30,19 @@ export function SidebarTopicList() {
 
 function SidebarTopicListView() {
   const { t } = useTranslation();
-  const { isPinActionDisabled, pinnedTopicIds, topics } = useTopicListTopics();
-  const { toggleTopicPin } = useTopicListActions();
+  const { topics } = useTopicListTopics();
   const { requestDelete, requestRename } = useTopicActionAlerts();
   const { closeDrawer, openTopicList } = useSidebarActions('Sidebar topic list');
   const visibleTopics = useMemo(() => topics.slice(0, appSidebar.recentTopicLimit), [topics]);
-  const pinnedIds = useMemo(() => new Set(pinnedTopicIds), [pinnedTopicIds]);
 
   return (
     <>
       {visibleTopics.map((topic) => (
         <SidebarTopicRow
-          isPinActionDisabled={isPinActionDisabled}
-          isPinned={pinnedIds.has(topic.id)}
           key={topic.id}
           onCloseDrawer={closeDrawer}
           onDelete={requestDelete}
           onRename={requestRename}
-          onTogglePin={toggleTopicPin}
           topic={topic}
         />
       ))}
@@ -67,22 +61,16 @@ function SidebarTopicListView() {
 }
 
 type SidebarTopicRowProps = {
-  isPinActionDisabled: boolean;
-  isPinned: boolean;
   onCloseDrawer: () => void;
   onDelete: (topic: Topic) => void;
   onRename: (topic: Topic) => void;
-  onTogglePin: (topicId: string) => void;
   topic: TopicListItem;
 };
 
 const SidebarTopicRow = memo(function SidebarTopicRow({
-  isPinActionDisabled,
-  isPinned,
   onCloseDrawer,
   onDelete,
   onRename,
-  onTogglePin,
   topic,
 }: SidebarTopicRowProps) {
   const { t } = useTranslation();
@@ -93,9 +81,7 @@ const SidebarTopicRow = memo(function SidebarTopicRow({
     [topic.id],
   );
   const handleRenamePress = useCallback(() => onRename(topic), [onRename, topic]);
-  const handlePinPress = useCallback(() => onTogglePin(topic.id), [onTogglePin, topic.id]);
   const handleDeletePress = useCallback(() => onDelete(topic), [onDelete, topic]);
-  const pinActionLabel = t(isPinned ? 'topic.actions.unpin' : 'topic.actions.pin');
   const menuItems = useMemo<readonly ContextMenuLinkItem[]>(
     () => [
       {
@@ -105,14 +91,6 @@ const SidebarTopicRow = memo(function SidebarTopicRow({
         systemImage: 'pencil',
       },
       {
-        checked: isPinned,
-        disabled: isPinActionDisabled,
-        id: 'toggle-pin',
-        label: pinActionLabel,
-        onPress: handlePinPress,
-        systemImage: isPinned ? 'pin.slash' : 'pin',
-      },
-      {
         destructive: true,
         id: 'delete',
         label: t('common.delete'),
@@ -120,15 +98,7 @@ const SidebarTopicRow = memo(function SidebarTopicRow({
         systemImage: 'trash',
       },
     ],
-    [
-      handleDeletePress,
-      handlePinPress,
-      handleRenamePress,
-      isPinActionDisabled,
-      isPinned,
-      pinActionLabel,
-      t,
-    ],
+    [handleDeletePress, handleRenamePress, t],
   );
 
   return (

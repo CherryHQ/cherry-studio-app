@@ -41,59 +41,39 @@ function renderInitialData(options: Options) {
 }
 
 describe('topic-list query settlement', () => {
-  test('waits while any of topics, pins, or assistants is incomplete', () => {
-    expect(
-      areTopicListQueriesSettled({
-        assistants: settledQuery,
-        pins: loadingQuery,
-        topics: settledQuery,
-      }),
-    ).toBe(false);
+  test('waits while either topics or assistants is incomplete', () => {
+    expect(areTopicListQueriesSettled({ assistants: settledQuery, topics: loadingQuery })).toBe(
+      false,
+    );
+    expect(areTopicListQueriesSettled({ assistants: loadingQuery, topics: settledQuery })).toBe(
+      false,
+    );
   });
 
   test('treats a successful empty result as settled', () => {
-    expect(
-      areTopicListQueriesSettled({
-        assistants: settledQuery,
-        pins: settledQuery,
-        topics: settledQuery,
-      }),
-    ).toBe(true);
+    expect(areTopicListQueriesSettled({ assistants: settledQuery, topics: settledQuery })).toBe(
+      true,
+    );
   });
 
   test('treats query errors as settled instead of hiding the list forever', () => {
     const failedQuery = { error: new Error('query failed'), isLoading: false };
-    expect(
-      areTopicListQueriesSettled({
-        assistants: failedQuery,
-        pins: failedQuery,
-        topics: failedQuery,
-      }),
-    ).toBe(true);
+    expect(areTopicListQueriesSettled({ assistants: failedQuery, topics: failedQuery })).toBe(true);
   });
 });
 
 describe('useTopicListInitialData', () => {
   test('mounts list content only after all initial queries settle and never closes it again', () => {
     const initialData = renderInitialData({
-      assistants: settledQuery,
-      pins: loadingQuery,
+      assistants: loadingQuery,
       topics: settledQuery,
     });
     expect(initialData.current).toBe(false);
 
-    initialData.rerender({
-      assistants: settledQuery,
-      pins: settledQuery,
-      topics: settledQuery,
-    });
+    initialData.rerender({ assistants: settledQuery, topics: settledQuery });
     expect(initialData.current).toBe(true);
 
-    initialData.rerender({
-      assistants: settledQuery,
-      pins: loadingQuery,
-      topics: settledQuery,
-    });
+    initialData.rerender({ assistants: loadingQuery, topics: settledQuery });
     expect(initialData.current).toBe(true);
     initialData.unmount();
   });

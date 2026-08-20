@@ -7,7 +7,6 @@ import { JinaProvider } from '../JinaProvider';
 
 const config: WebSearchExecutionConfig = {
   compression: { cutoffLimit: 2000, method: 'none' },
-  excludeDomains: [],
   maxResults: 5,
 };
 
