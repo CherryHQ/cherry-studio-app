@@ -53,11 +53,18 @@ LAN/cloud execution targets, their Runtime adapters, and remote-authoritative Se
 direction. They enter through the same Router, but their transport, security, storage, and recovery
 rules require a separate design. Version 1 defines none of those details.
 
+Branching is also a future direction with its model already decided: Sessions never branch in
+place via a message tree; a branch is a fork into a new Session that copies the transcript up to a
+clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
+
 ## Open Questions
 
 - **Agent tool** is the sole routing criterion, but it does not yet have a precise definition:
   which tool kinds qualify (built-in, MCP, or both) and how they relate to the Runtime contract's
-  `RuntimeTool` are TODO, pending confirmation before implementation.
+  `RuntimeTool` are TODO. Decision (2026-08-20): the definition is **deferred until the Pi
+  Runtime lands**. Until then the Runtime registry registers only the AI SDK Runtime and the
+  Router resolves every `local` route to it; the route input already carries `agentToolIds` so
+  the Pi policy can be added without reshaping the Router.
 
 ## Documents
 

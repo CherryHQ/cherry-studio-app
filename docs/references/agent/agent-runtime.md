@@ -145,6 +145,12 @@ type RuntimeInputPart =
 Runtime implementations receive model/provider dependencies from application composition. They do
 not query Cherry provider or model tables.
 
+File input is resolved by the Host before it reaches a Runtime: attachments enter the application's
+file storage first, and the Host converts stored `file://` references into a directly consumable
+`uri` (such as a data URL). A Runtime never reads the device filesystem; until the Host-side
+resolution step lands (owned separately), local Runtimes declare `attachments: false` and reject
+file parts before partial execution.
+
 ### History
 
 ```ts
@@ -192,6 +198,11 @@ type RuntimeTool = {
 
 The Host supplies tool implementations after applying Agent policy. A Runtime validates tool input,
 enforces the approval mode, and invokes `execute` only after approval when the mode is `ask`.
+
+When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
+Runtime never invokes `execute`. It reports the tool part as `denied` and returns
+`{ "status": "denied", "reason": "..." }` to the model as that call's result, so the loop
+continues without the tool running. This feedback shape is a cross-implementation rule.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.

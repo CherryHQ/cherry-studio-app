@@ -302,3 +302,40 @@ Native errors and stack traces stay behind the Host boundary.
 8. A new observation is sufficient to reconstruct all live UI state.
 9. Every protocol value survives a JSON round trip and re-validates against its schema.
 10. The client supplies an execution target and Agent identity, never a Runtime identity.
+
+## Branching
+
+Version 1 has no branching. The direction is decided (2026-08-20) so later work does not
+reintroduce a message tree:
+
+Agent Sessions do not branch in place. Chat-style sibling trees assume switching between
+alternatives is harmless, but Agent turns have side effects — a tool call in one branch changes
+the one real world that every branch would claim to share. In-place switching therefore
+misrepresents history, and an active-path concept would touch nearly every invariant above.
+
+Branching is instead a **fork**: a Host operation (for example
+`forkSession({ sessionId, fromMessageId })`) creates a new Session and copies the transcript up
+to the fork point inside one transaction. Turns and approvals are not copied; the new Session
+starts idle. Because the Host already supplies complete normalized history for every turn, a
+forked Session executes through the unchanged flow — the Runtime never knows a fork happened.
+Regenerate and "try a different question" are forks from the relevant message boundary.
+
+Rules for the eventual implementation:
+
+1. A fork point must be a clean cut: a message boundary whose turn is terminal. Forking from a
+   streaming message or an active turn is rejected.
+2. Sessions record lineage (`forkedFromSessionId`, `forkedFromMessageId`, nullable; source
+   deletion clears them) so clients can present provenance.
+3. Copied history keeps past tool calls and results verbatim. A fork opens a new future; it does
+   not claim to undo executed side effects, and results in the copied transcript reflect the
+   world at fork time.
+
+This is an additive protocol extension: no existing operation, event, snapshot, or invariant
+changes.
+
+For the record, feeding a model from a tree is not the obstacle: model context is always a
+linear message array, and linearizing an active path is a trivial parent walk (current Chat does
+exactly this). The fork decision rests on the two costs that remain: an in-place branch switcher
+presents divergent timelines as interchangeable views of one conversation, which is dishonest
+once tool side effects exist, and an active-path selection is a new piece of mutable state that
+every operation, snapshot, event, and invariant would have to carry.
