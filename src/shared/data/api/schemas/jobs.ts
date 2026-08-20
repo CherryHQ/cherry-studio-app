@@ -1,14 +1,19 @@
 /**
- * Jobs / Schedules domain API Schema definitions.
+ * Jobs domain API Schema definitions.
  *
- * Entity schemas live here (Rule C/D in api/README.md). Field atoms,
- * discriminated unions for Trigger / CatchUpPolicy / RetryPolicy, and the
- * Job + JobSchedule snapshots that both the DataApi response and the renderer
- * useJob hook consume.
+ * Entity schemas live here (Rule C/D in api/README.md): field atoms,
+ * `RetryPolicy`, and the `JobSnapshot` that both the DataApi response and the
+ * frontend `useJob` hook consume.
  *
- * NOTE: Handler runtime types (JobHandler / JobContext / JobMissEvent /
- * JobSettledEvent) are NOT in shared — they belong to main-process internals
- * at src/main/core/job/types.ts. Renderer never instantiates them.
+ * NOTE: Handler runtime types (JobHandler / JobContext / JobSettledEvent) are
+ * NOT here — they belong to the backend runtime at
+ * `src/backend/services/jobs/types.ts`. The frontend never instantiates them.
+ *
+ * Schedule vocabulary (`Trigger`, `CatchUpPolicy`, `JobScheduleSnapshot`, the
+ * schedule DTOs and error codes) was removed together with the `job_schedule`
+ * table: nothing on mobile reads or writes schedules. Phase 4 of
+ * `docs/references/job-manager-design.md` re-authors them if a product feature
+ * needs one.
  */
 
 import * as z from 'zod';
@@ -45,8 +50,8 @@ export const isTerminalStatus = (status: JobStatus): boolean =>
   (TERMINAL_JOB_STATUSES as readonly JobStatus[]).includes(status);
 
 /**
- * Stable error structure crossing the IPC boundary. `code` is an English
- * constant; renderer maps it to a localized message via
+ * Stable error structure persisted on the job row. `code` is an English
+ * constant; the frontend maps it to a localized message via
  * `t(\`errors.jobs.${code.toLowerCase()}\`, params)`.
  */
 export const JobErrorSchema = z.strictObject({
@@ -56,67 +61,6 @@ export const JobErrorSchema = z.strictObject({
   retryable: z.boolean(),
 });
 export type JobError = z.infer<typeof JobErrorSchema>;
-
-// ============================================================================
-// Trigger (discriminated union: cron / interval / once)
-// ============================================================================
-
-export const CronTriggerSchema = z.strictObject({
-  kind: z.literal('cron'),
-  expr: z.string().min(1),
-  timezone: z.string().optional(),
-  /** Stop after N firings (croner maxRuns). For trial/test windows. */
-  limit: z.number().int().min(1).optional(),
-});
-
-export const IntervalTriggerSchema = z.strictObject({
-  kind: z.literal('interval'),
-  ms: z.number().int().min(1),
-  anchor: z.enum(['createdAt', 'lastRun']).optional(),
-});
-
-export const OnceTriggerSchema = z.strictObject({
-  kind: z.literal('once'),
-  /** Unix ms timestamp at which to fire exactly once. */
-  at: z.number().int().min(0),
-});
-
-export const TriggerSchema = z.discriminatedUnion('kind', [
-  CronTriggerSchema,
-  IntervalTriggerSchema,
-  OnceTriggerSchema,
-]);
-export type Trigger = z.infer<typeof TriggerSchema>;
-
-/**
- * Semantic trigger equality: same kind + same per-kind fields. Lives next to
- * the schema so a new trigger field is added to both in one place. Callers use
- * it to drop a value-identical trigger from an update patch — the JobManager
- * re-arm decision is field-presence-based by design, and a spurious re-arm
- * resets an interval's phase.
- */
-export const triggersEqual = (a: Trigger, b: Trigger): boolean => {
-  if (a.kind === 'cron' && b.kind === 'cron') {
-    return a.expr === b.expr && a.timezone === b.timezone && a.limit === b.limit;
-  }
-  if (a.kind === 'interval' && b.kind === 'interval') {
-    return a.ms === b.ms && a.anchor === b.anchor;
-  }
-  if (a.kind === 'once' && b.kind === 'once') {
-    return a.at === b.at;
-  }
-  return false;
-};
-
-// ============================================================================
-// CatchUpPolicy (Phase 1: skip-missed / after-startup; after-idle descoped)
-// ============================================================================
-
-export const CatchUpPolicySchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('skip-missed') }),
-  z.strictObject({ kind: z.literal('after-startup'), minutes: z.number().int().min(0) }),
-]);
-export type CatchUpPolicy = z.infer<typeof CatchUpPolicySchema>;
 
 // ============================================================================
 // RetryPolicy
@@ -131,7 +75,7 @@ export const RetryPolicySchema = z.strictObject({
 export type RetryPolicy = z.infer<typeof RetryPolicySchema>;
 
 // ============================================================================
-// Job entity (renderer-visible snapshot)
+// Job entity (frontend-visible snapshot)
 // ============================================================================
 
 export const JobSnapshotSchema = z.strictObject({
@@ -159,26 +103,6 @@ export const JobSnapshotSchema = z.strictObject({
 export type JobSnapshot = z.infer<typeof JobSnapshotSchema>;
 
 // ============================================================================
-// JobSchedule entity
-// ============================================================================
-
-export const JobScheduleSnapshotSchema = z.strictObject({
-  id: z.string(),
-  type: z.string(),
-  name: z.string().nullable(),
-  trigger: TriggerSchema,
-  jobInputTemplate: z.unknown(),
-  enabled: z.boolean(),
-  nextRun: z.string().nullable(),
-  lastRun: z.string().nullable(),
-  catchUpPolicy: CatchUpPolicySchema,
-  metadata: z.record(z.string(), z.unknown()),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
-export type JobScheduleSnapshot = z.infer<typeof JobScheduleSnapshotSchema>;
-
-// ============================================================================
 // JobProgress (cache value at jobs.progress.${id}, never DB-persisted)
 // ============================================================================
 
@@ -188,63 +112,14 @@ export const JobProgressSchema = z.strictObject({
 });
 export type JobProgress = z.infer<typeof JobProgressSchema>;
 
-/**
- * Name soft-constraint validator. Length 1-200, no control chars, trim
- * surrounding whitespace, no `__` prefix (reserved for system schedules).
- * Allows Unicode (中文/emoji ok) — name is a user-facing label.
- */
-export const JobScheduleNameAtomSchema = z
-  .string()
-  .min(1)
-  .max(200)
-  .refine((s) => s === s.trim(), { message: 'name must be trimmed' })
-  .refine(
-    (s) => {
-      for (let i = 0; i < s.length; i++) {
-        const code = s.charCodeAt(i);
-        if (code === 0 || code === 9 || code === 10 || code === 13) return false;
-      }
-      return true;
-    },
-    { message: 'name cannot contain control characters (NUL/TAB/LF/CR)' },
-  )
-  .refine((s) => !s.startsWith('__'), { message: 'name cannot start with "__" (reserved)' });
-
-export const CreateJobScheduleInputSchema = z.strictObject({
-  type: z.string().min(1),
-  name: JobScheduleNameAtomSchema.nullable().optional(),
-  trigger: TriggerSchema,
-  jobInputTemplate: z.unknown(),
-  catchUpPolicy: CatchUpPolicySchema,
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  enabled: z.boolean().optional(),
-});
-export type CreateJobScheduleDto = z.infer<typeof CreateJobScheduleInputSchema>;
-
-export const UpdateJobScheduleInputSchema = z.strictObject({
-  name: JobScheduleNameAtomSchema.nullable().optional(),
-  trigger: TriggerSchema.optional(),
-  jobInputTemplate: z.unknown().optional(),
-  catchUpPolicy: CatchUpPolicySchema.optional(),
-  enabled: z.boolean().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-});
-export type UpdateJobScheduleDto = z.infer<typeof UpdateJobScheduleInputSchema>;
-
 // ============================================================================
-// Error codes (constants for JobManager + DataApi handler + renderer i18n)
+// Error codes (constants for JobRuntime + DataApi handler + frontend i18n)
 // ============================================================================
 
 export const JOB_ERROR_CODES = {
   UNKNOWN_TYPE: 'JOB_UNKNOWN_TYPE',
   PAYLOAD_TOO_LARGE: 'JOB_PAYLOAD_TOO_LARGE',
   CANCEL_REASON_TOO_LONG: 'JOB_CANCEL_REASON_TOO_LONG',
-  SCHEDULE_NOT_FOUND_BY_NAME: 'JOB_SCHEDULE_NOT_FOUND_BY_NAME',
-  SCHEDULE_NAME_REQUIRED: 'JOB_SCHEDULE_NAME_REQUIRED',
-  SCHEDULE_NAME_INVALID: 'JOB_SCHEDULE_NAME_INVALID',
-  SCHEDULE_NAME_CONFLICT: 'JOB_SCHEDULE_NAME_CONFLICT',
-  SCHEDULE_TRIGGER_INVALID: 'JOB_SCHEDULE_TRIGGER_INVALID',
-  SCHEDULE_SINGLETON_EXISTS: 'JOB_SCHEDULE_SINGLETON_EXISTS',
   HANDLER_TIMEOUT: 'JOB_HANDLER_TIMEOUT',
   HANDLER_THREW: 'JOB_HANDLER_THREW',
   CANCELLED: 'JOB_CANCELLED',
