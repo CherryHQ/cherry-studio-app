@@ -8,9 +8,7 @@ import type { DesktopSyncDomain, DesktopSyncManifest } from '../desktopSyncAudit
 import {
   auditDesignCatalog,
   auditRepositories,
-  compareSchemaState,
   extractObjectKeys,
-  extractSqliteTableNames,
   hashTrackedFiles,
   parseArguments,
   pathMatchesGlob,
@@ -144,7 +142,7 @@ describe('parseArguments', () => {
         '--desktop-root',
         './from-cli',
         '--domain',
-        'schema',
+        'services',
         '--domain=ai-core',
         '--json',
         '--check',
@@ -155,7 +153,7 @@ describe('parseArguments', () => {
     expect(parsed).toMatchObject({
       check: true,
       desktopRoot: resolve('./from-cli'),
-      domains: ['schema', 'ai-core'],
+      domains: ['services', 'ai-core'],
       json: true,
     });
   });
@@ -224,18 +222,6 @@ describe('validateManifest', () => {
 });
 
 describe('structured source extraction', () => {
-  test('extracts sqliteTable calls without treating comments or unrelated calls as tables', () => {
-    const source = `
-      import { sqliteTable } from 'drizzle-orm/sqlite-core';
-      // sqliteTable('comment_only', {});
-      export const topic = sqliteTable('topic', {});
-      export const agent = sqliteTable("agent", {});
-      export const ignored = anotherFactory('not_a_table', {});
-    `;
-
-    expect(extractSqliteTableNames(source, 'schema.ts')).toEqual(['agent', 'topic']);
-  });
-
   test('extracts quoted and identifier catalog keys from the requested object only', () => {
     const source = `
       const unrelated = { ignored: true };
@@ -587,40 +573,6 @@ describe('auditRepositories', () => {
       'UnrelatedService.ts',
       'src/main/services/oauth/runtime/providers/codex.ts',
     ]);
-  });
-});
-
-describe('schema audit', () => {
-  test('reports which tables each side persists alone', async () => {
-    const table = { columns: { id: { name: 'id', type: 'text' } } };
-    const desktopRoot = createRepository('schema-desktop-fixture', {
-      'migrations/sqlite-drizzle/meta/0001_snapshot.json': JSON.stringify({
-        tables: { agent: table, knowledge: table, topic: table },
-      }),
-      'src/main/data/db/schemas/schema.ts': `
-        export const agent = sqliteTable('agent', {});
-        export const knowledge = sqliteTable('knowledge', {});
-        export const topic = sqliteTable('topic', {});
-      `,
-    });
-    const mobileRoot = createRepository('schema-mobile-fixture', {
-      'migrations/sqlite-drizzle/meta/0001_snapshot.json': JSON.stringify({
-        tables: { job: table, topic: table },
-      }),
-      'src/backend/data/db/schemas/schema.ts': `
-        export const job = sqliteTable('job', {});
-        export const topic = sqliteTable('topic', {});
-      `,
-    });
-
-    await expect(compareSchemaState(desktopRoot, mobileRoot)).resolves.toMatchObject({
-      ast: { desktopMatchesSnapshot: true, mobileMatchesSnapshot: true },
-      changed: [],
-      desktopOnly: ['agent', 'knowledge'],
-      desktopTables: ['agent', 'knowledge', 'topic'],
-      mobileOnly: ['job'],
-      mobileTables: ['job', 'topic'],
-    });
   });
 });
 

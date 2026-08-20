@@ -23,42 +23,6 @@
         "opencode": "general/open-code"
       }
     },
-    "schema": {
-      "strategy": "opaque-retention",
-      "status": "unbaselined",
-      "sourcePaths": ["src/main/data/db/schemas", "migrations/sqlite-drizzle/meta"],
-      "targetPaths": ["src/backend/data/db/schemas", "migrations/sqlite-drizzle/meta"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": []
-    },
-    "shared-data": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["src/shared/data"],
-      "targetPaths": ["packages/universal/src/data"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": [
-        "src/shared/data/bootConfig/**",
-        "src/shared/data/migration/**",
-        "src/shared/data/presets/binaryTools.ts",
-        "src/shared/data/presets/claudeCode.ts",
-        "src/shared/data/presets/codex.ts",
-        "src/shared/data/presets/grokCli.ts",
-        "src/shared/data/presets/localEmbedding.ts",
-        "src/shared/data/presets/localModel.ts",
-        "src/shared/data/types/fileProcessing.ts",
-        "src/shared/data/types/settingsPath.ts"
-      ],
-      "shapeOnlyPorts": [
-        {
-          "path": "src/shared/data/preference/preferenceTypes.ts",
-          "keeps": "Value types for the preference keys mobile reads",
-          "drops": "The generated preferenceSchemas.ts key set and every type that only described it; mobile's preference schema is hand-maintained and deliberately diverged, so there is no key-level alignment left to audit"
-        }
-      ]
-    },
     "shared-portable": {
       "strategy": "semantic-port",
       "status": "unbaselined",
@@ -92,24 +56,6 @@
           "drops": "OpenAIVerbosity/ValidOpenAIVerbosity/OpenAIReasoningSummary/OpenAICompletionsStreamOptions, which alias into the @cherrystudio/openai SDK that mobile does not depend on; backend/ai/utils/options.ts re-declares the verbosity union it needs as a literal type"
         }
       ]
-    },
-    "data-main": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["src/main/data"],
-      "targetPaths": ["src/backend/data"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": ["src/main/data/migration/v2/**"]
-    },
-    "data-renderer": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["src/renderer/data"],
-      "targetPaths": ["src/frontend/data"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": []
     },
     "ai-core": {
       "strategy": "mirror",
@@ -252,20 +198,6 @@
       "sourceCommit": null,
       "sourceSha256": null,
       "explicitExclusions": []
-    },
-    "backup": {
-      "strategy": "opaque-retention",
-      "status": "blocked",
-      "sourcePaths": [
-        "src/main/services/LegacyBackupManager.ts",
-        "src/main/data/db/restore",
-        "src/main/data/CacheService.ts"
-      ],
-      "targetPaths": ["src/backend/data", "src/backend/services"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": [],
-      "blocker": "Desktop v7 direct backups archive Data/cherrystudio.sqlite, resources, cache.json, and the desktop migration chain; mobile currently uses cherry.db, a different migration chain, and MMKV cache, so it cannot produce or restore that archive losslessly."
     }
   }
 }

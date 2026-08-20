@@ -45,9 +45,9 @@ concrete service graph. Frontend tests inject an `ApiClient`, `PreferenceClient`
 
 ## Shared Data
 
-`packages/universal/src/data` (`@cherrystudio/universal/data`) contains values both sides may know. The
-package mirrors the cross-platform subset of Cherry Desktop's `src/shared`, so its contents stay
-desktop-compatible:
+`packages/universal/src/data` (`@cherrystudio/universal/data`) contains values both sides may know.
+It is mobile-owned and independent of Cherry Desktop — schemas, fields, and routes exist only while
+mobile code reads them (see the package's `src/data/README.md` for the transitional-home ledger):
 
 - `api`: endpoint DTO schemas, pagination shapes, data errors, and `ApiClient`.
 - `preference`: preference keys, value schemas, defaults, pure helpers, and `PreferenceClient`.
