@@ -5,7 +5,6 @@ import type { AssistantService } from '../../services/AssistantService';
 import type { ContentSearchService } from '../../services/ContentSearchService';
 import type { EntitySearchService } from '../../services/EntitySearchService';
 import type { FileEntryService } from '../../services/FileEntryService';
-import type { FileRefService } from '../../services/FileRefService';
 import type { JobService } from '../../services/JobService';
 import type { McpServerService } from '../../services/McpServerService';
 import type { MessageService } from '../../services/MessageService';
@@ -32,7 +31,6 @@ export type DataApiDependencies = {
   contentSearch: ContentSearchService;
   entitySearch: EntitySearchService;
   files: FileEntryService;
-  fileRefs: FileRefService;
   jobs: JobService;
   mcpServerMutations: McpServerMutations;
   mcpServers: McpServerService;
@@ -48,7 +46,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
   return {
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
     ...createAssistantHandlers(dependencies.assistants),
-    ...createFileHandlers(dependencies.files, dependencies.fileRefs),
+    ...createFileHandlers(dependencies.files),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
     ...createMessageHandlers(dependencies.messages),

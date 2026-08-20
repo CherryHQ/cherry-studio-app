@@ -122,7 +122,7 @@ directly. Do not reintroduce `createSession()` or a public Chat session object.
 | Module | Why it qualifies |
 | --- | --- |
 | `chat` | Projects the app-owned, multi-Topic Chat Runtime through branching, multi-model sends, queued turns, cancellation, stream recovery, and subscriptions |
-| `file` | Encapsulates managed-file import, Expo URI resolution, and safe unreferenced cleanup |
+| `file` | Encapsulates managed-file import, Expo URI resolution, and user-triggered deletion |
 | `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
 | `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |
 | `paintings` | Owns cancellable generation sessions, file preparation, persistence, cleanup, and file resolution |

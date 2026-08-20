@@ -3,7 +3,6 @@ import { appStateTable } from './appState';
 import { assistantTable } from './assistant';
 import { assistantMcpServerTable } from './assistantRelations';
 import { fileEntryTable } from './file';
-import { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
 import { jobTable } from './job';
 import { mcpServerTable } from './mcpServer';
 import { messageTable } from './message';
@@ -16,7 +15,6 @@ import { userProviderTable } from './userProvider';
 export * from './aiUsageRecord';
 export * from './assistant';
 export * from './assistantRelations';
-export * from './fileRelations';
 export * from './job';
 export * from './mcpServer';
 export * from './message';
@@ -43,12 +41,10 @@ export const schema = {
   appStateTable,
   assistantMcpServerTable,
   assistantTable,
-  chatMessageFileRefTable,
   fileEntryTable,
   jobTable,
   mcpServerTable,
   messageTable,
-  paintingFileRefTable,
   paintingTable,
   preferenceTable,
   topicTable,

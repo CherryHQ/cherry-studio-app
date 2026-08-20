@@ -1,22 +1,23 @@
 import {
   type FileEntryId,
   FileEntryIdSchema,
+  MediaTypeSchema,
   SafeNameSchema,
 } from '@cherrystudio/universal/data/types/file';
 import * as z from 'zod';
 
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
-import { fileRefService } from '@/backend/data/services/FileRefService';
 
 import {
   createInternalEntry as createStoredInternalEntry,
-  deleteInternalEntryIfUnreferenced,
+  deleteInternalEntry,
   discardInternalEntries,
   getFileUri,
   resolveFileEntry,
 } from './fileStorage';
 
 const createInternalEntryInputSchema = z.strictObject({
+  mediaType: MediaTypeSchema.optional(),
   name: SafeNameSchema.optional(),
   uri: z.string().min(1),
 });
@@ -24,15 +25,15 @@ const createInternalEntryInputSchema = z.strictObject({
 /**
  * Managed-file port over `fileStorage`, validated at the boundary.
  *
- * A module singleton rather than a constructed adapter: the entry and reference
- * services it closes over are module singletons themselves, so there is nothing
- * left for a factory to inject.
+ * A module singleton rather than a constructed adapter: the entry service it
+ * closes over is a module singleton itself, so there is nothing left for a
+ * factory to inject.
  */
 export const fileContent = {
-  createInternalEntry: async (input: { name?: string; uri: string }) => {
+  createInternalEntry: async (input: { mediaType?: string; name?: string; uri: string }) => {
     const validated = createInternalEntryInputSchema.parse(input);
     const entry = await createStoredInternalEntry(fileEntryService, {
-      cleanupPolicy: 'delete_when_unreferenced',
+      mediaType: validated.mediaType,
       name: validated.name,
       source: 'uri',
       uri: validated.uri,
@@ -44,12 +45,7 @@ export const fileContent = {
     }
     return resolved;
   },
-  deleteIfUnreferenced: (id: FileEntryId) =>
-    deleteInternalEntryIfUnreferenced(
-      fileEntryService,
-      fileRefService,
-      FileEntryIdSchema.parse(id),
-    ),
+  delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   getUri: (id: FileEntryId) => getFileUri(fileEntryService, FileEntryIdSchema.parse(id)),
   resolve: (id: FileEntryId) => resolveFileEntry(fileEntryService, FileEntryIdSchema.parse(id)),
 };

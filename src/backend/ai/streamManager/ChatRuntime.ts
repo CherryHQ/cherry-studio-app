@@ -15,7 +15,7 @@ import type {
   TopicStreamStatus,
 } from '@cherrystudio/universal/ai/transport';
 import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
-import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
+import type { FileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -411,8 +411,8 @@ export class ChatRuntime extends BaseService implements ChatModule {
       return;
     }
 
-    let fileRefsCommitted = false;
-    let createdEntries: InternalFileEntry[] = [];
+    let entriesCommitted = false;
+    let createdEntries: FileEntry[] = [];
     try {
       const topic = await this.dependencies.services.topic.getById(input.topicId);
       const modelId =
@@ -433,7 +433,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
           },
         },
       });
-      fileRefsCommitted = true;
+      entriesCommitted = true;
       this.appendPendingSteer(input.topicId, {
         fastMode: input.payload.fastMode === true,
         reasoningEffort: input.payload.reasoningEffort,
@@ -445,7 +445,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
         await this.startNextPendingTurn(input.topicId);
       }
     } finally {
-      if (!fileRefsCommitted) {
+      if (!entriesCommitted) {
         await this.dependencies.files.discard(createdEntries);
       }
     }
@@ -997,8 +997,8 @@ export class ChatRuntime extends BaseService implements ChatModule {
     let userMessage: Message | undefined;
     let assistantPlaceholders: Message[] = [];
     let terminalAssistantMessages: Message[] = [];
-    let fileRefsCommitted = false;
-    let createdEntries: InternalFileEntry[] = [];
+    let entriesCommitted = false;
+    let createdEntries: FileEntry[] = [];
     let turnParts = [...parts];
     let handedOffToStream = false;
 
@@ -1069,7 +1069,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
             };
           }),
         });
-      fileRefsCommitted = true;
+      entriesCommitted = true;
       if (abortController.signal.aborted) {
         await this.cancelReservedTurn({
           topicId,
@@ -1121,7 +1121,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
         throw toError(error);
       }
     } finally {
-      if (!fileRefsCommitted) {
+      if (!entriesCommitted) {
         await this.dependencies.files.discard(createdEntries);
       }
 

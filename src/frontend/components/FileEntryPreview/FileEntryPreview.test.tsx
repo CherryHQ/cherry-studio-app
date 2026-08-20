@@ -23,13 +23,10 @@ jest.mock('./hooks/useResolvedFile', () => ({
 }));
 
 const entry = FileEntrySchema.parse({
-  cleanupPolicy: 'manual',
-  contentHash: null,
   createdAt: 1,
-  ext: 'png',
+  filename: 'image.png',
   id: '00000000-0000-7000-8000-000000000001',
-  name: 'image',
-  origin: 'internal',
+  mediaType: 'image/png',
   size: 1,
   updatedAt: 42,
 });

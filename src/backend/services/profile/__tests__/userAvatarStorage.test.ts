@@ -1,67 +1,14 @@
-import { type FileEntryId, FileEntryIdSchema } from '@cherrystudio/universal/data/types/file';
-
 import type { UserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 
 import { replaceUserAvatar, resolveUserAvatarUri } from '../userAvatarStorage';
 
-jest.mock('expo-file-system', () => {
-  const files = new Set<string>();
-  const joinUri = (parts: (string | { uri: string })[], isDirectory: boolean) => {
-    const [first, ...rest] = parts.map((part) => (typeof part === 'string' ? part : part.uri));
-    let uri = first?.replace(/\/+$/, '') ?? '';
-
-    for (const part of rest) {
-      uri += `/${part.replace(/^\/+|\/+$/g, '')}`;
-    }
-
-    return isDirectory ? `${uri}/` : uri;
-  };
-
-  class MockDirectory {
-    readonly uri: string;
-
-    constructor(...parts: (string | { uri: string })[]) {
-      this.uri = joinUri(parts, true);
-    }
-  }
-
-  class MockFile {
-    readonly uri: string;
-
-    constructor(...parts: (string | { uri: string })[]) {
-      this.uri = joinUri(parts, false);
-    }
-
-    get exists() {
-      return files.has(this.uri);
-    }
-
-    delete() {
-      files.delete(this.uri);
-    }
-  }
-
-  return {
-    Directory: MockDirectory,
-    File: MockFile,
-    Paths: { document: { uri: 'file:///documents/' } },
-    testState: { files },
-  };
-});
-
-const fileIds = [
-  FileEntryIdSchema.parse('00000000-0000-4000-8000-000000000001'),
-  FileEntryIdSchema.parse('00000000-0000-4000-8000-000000000002'),
+const storedNames = [
+  '00000000-0000-4000-8000-000000000001.webp',
+  '00000000-0000-4000-8000-000000000002.webp',
 ];
 
-const { testState } = jest.requireMock<{ testState: { files: Set<string> } }>('expo-file-system');
-
 describe('userAvatarStorage', () => {
-  beforeEach(() => {
-    testState.files.clear();
-  });
-
-  it('stores a picked image behind a managed file reference', async () => {
+  it('stores a picked image behind a managed avatar-file reference', async () => {
     const images = createImageStorage();
     let avatar = '';
 
@@ -69,10 +16,10 @@ describe('userAvatarStorage', () => {
       avatar = nextAvatar;
     });
 
-    expect(avatar).toBe(`file:${fileIds[0]}`);
+    expect(avatar).toBe(`avatar-file:${storedNames[0]}`);
     expect(images.create).toHaveBeenCalledWith('file:///picker/avatar.jpg');
     await expect(resolveUserAvatarUri(images, avatar)).resolves.toBe(
-      `file:///managed/${fileIds[0]}.webp`,
+      `file:///managed/${storedNames[0]}`,
     );
   });
 
@@ -112,14 +59,9 @@ describe('userAvatarStorage', () => {
     await expect(resolveUserAvatarUri(images, rejectedAvatar)).resolves.toBeUndefined();
   });
 
-  it('keeps legacy references readable until their separate cleanup', async () => {
+  it('passes direct image URIs through and rejects everything else', async () => {
     const images = createImageStorage();
-    const legacyRef = `file:${fileIds[0]}`;
-    testState.files.add(`file:///documents/user-avatars/${fileIds[0]}`);
 
-    await expect(resolveUserAvatarUri(images, legacyRef)).resolves.toBe(
-      `file:///documents/user-avatars/${fileIds[0]}`,
-    );
     await expect(resolveUserAvatarUri(images, 'https://example.com/avatar.png')).resolves.toBe(
       'https://example.com/avatar.png',
     );
@@ -130,23 +72,24 @@ describe('userAvatarStorage', () => {
       'file:///legacy/avatar.png',
     );
     await expect(resolveUserAvatarUri(images, '😀')).resolves.toBeUndefined();
+    expect(images.resolve).not.toHaveBeenCalled();
   });
 });
 
 function createImageStorage(): UserContentImageStorage {
-  const uris = new Map<FileEntryId, string>();
-  let nextId = 0;
+  const uris = new Map<string, string>();
+  let nextIndex = 0;
 
   return {
     create: jest.fn(async () => {
-      const id = fileIds[nextId++];
-      if (!id) {
-        throw new Error('No test FileEntry id available');
+      const storedName = storedNames[nextIndex++];
+      if (!storedName) {
+        throw new Error('No test stored name available');
       }
-      uris.set(id, `file:///managed/${id}.webp`);
-      return id;
+      uris.set(storedName, `file:///managed/${storedName}`);
+      return storedName;
     }),
-    remove: jest.fn(async (id) => uris.delete(id)),
-    resolve: jest.fn(async (id) => uris.get(id)),
+    remove: jest.fn(async (storedName) => uris.delete(storedName)),
+    resolve: jest.fn(async (storedName) => uris.get(storedName)),
   };
 }

@@ -6,15 +6,17 @@ export type ResolvedFile = {
 };
 
 export type CreateInternalEntryInput = {
+  /** Authoritative media type from the picker; extension inference is the fallback. */
+  mediaType?: string;
   name?: string;
   uri: string;
 };
 
 export interface FileModule {
-  /** URI-source createInternalEntry; new entries use delete_when_unreferenced cleanup. */
+  /** Copies the transient source URI into managed storage and creates the entry. */
   createInternalEntry(input: CreateInternalEntryInput): Promise<ResolvedFile>;
-  /** Safe transient cleanup; unlike permanentDelete, referenced entries are preserved. */
-  deleteIfUnreferenced(id: FileEntryId): Promise<boolean>;
+  /** Hard-delete: removes the entry row and its bytes (composer cancel-upload). */
+  delete(id: FileEntryId): Promise<boolean>;
   /** Mobile URI equivalent of Cherry Desktop's getUrl. */
   getUri(id: FileEntryId): Promise<string | undefined>;
 }

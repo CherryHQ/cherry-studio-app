@@ -1,15 +1,40 @@
-import { FileEntryIdSchema } from '@cherrystudio/universal/data/types/file';
-
 import { createUserContentImageStorage } from '../userContentImageStorage';
 
 jest.mock('expo-file-system', () => {
+  const directories = new Set<string>();
   const files = new Map<string, number>();
+  const joinUri = (parts: (string | { uri: string })[], isDirectory: boolean) => {
+    const [first, ...rest] = parts.map((part) => (typeof part === 'string' ? part : part.uri));
+    let uri = first?.replace(/\/+$/, '') ?? '';
+
+    for (const part of rest) {
+      uri += `/${part.replace(/^\/+|\/+$/g, '')}`;
+    }
+
+    return isDirectory ? `${uri}/` : uri;
+  };
+
+  class MockDirectory {
+    readonly uri: string;
+
+    constructor(...parts: (string | { uri: string })[]) {
+      this.uri = joinUri(parts, true);
+    }
+
+    get exists() {
+      return directories.has(this.uri);
+    }
+
+    create() {
+      directories.add(this.uri);
+    }
+  }
 
   class MockFile {
     readonly uri: string;
 
-    constructor(uri: string) {
-      this.uri = uri;
+    constructor(...parts: (string | { uri: string })[]) {
+      this.uri = joinUri(parts, false);
     }
 
     get exists() {
@@ -20,12 +45,21 @@ jest.mock('expo-file-system', () => {
       return files.get(this.uri) ?? null;
     }
 
+    copy(destination: MockFile) {
+      files.set(destination.uri, files.get(this.uri) ?? 0);
+    }
+
     delete() {
       files.delete(this.uri);
     }
   }
 
-  return { File: MockFile, testState: { files } };
+  return {
+    Directory: MockDirectory,
+    File: MockFile,
+    Paths: { document: { uri: 'file:///documents/' } },
+    testState: { directories, files },
+  };
 });
 
 jest.mock('expo-image-manipulator', () => ({
@@ -33,34 +67,24 @@ jest.mock('expo-image-manipulator', () => ({
   SaveFormat: { WEBP: 'webp' },
 }));
 
-jest.mock('../fileStorage', () => ({
-  createInternalEntry: jest.fn(),
-  discardInternalEntries: jest.fn(),
-  getFileUri: jest.fn(),
-}));
-
-const storedId = FileEntryIdSchema.parse('00000000-0000-4000-8000-000000000001');
+const STORED_NAME_PATTERN = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.webp$/i;
 const sourceUri = 'file:///picker/avatar.jpg';
 const normalizedUri = 'file:///cache/avatar.webp';
 const { testState: fileSystemState } = jest.requireMock<{
-  testState: { files: Map<string, number> };
+  testState: { directories: Set<string>; files: Map<string, number> };
 }>('expo-file-system');
 const { ImageManipulator } = jest.requireMock<{
   ImageManipulator: { manipulate: jest.Mock };
 }>('expo-image-manipulator');
-const fileStorage = jest.requireMock<{
-  createInternalEntry: jest.Mock;
-  discardInternalEntries: jest.Mock;
-  getFileUri: jest.Mock;
-}>('../fileStorage');
 
 describe('userContentImageStorage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    fileSystemState.directories.clear();
     fileSystemState.files.clear();
   });
 
-  it('center-crops, normalizes, and stores an avatar as a managed WebP', async () => {
+  it('center-crops, normalizes, and stores an avatar WebP under user-avatar', async () => {
     fileSystemState.files.set(sourceUri, 4 * 1024 * 1024);
     fileSystemState.files.set(normalizedUri, 320 * 1024);
     const sourceImage = { height: 1200, release: jest.fn(), width: 1600 };
@@ -80,11 +104,11 @@ describe('userContentImageStorage', () => {
     ImageManipulator.manipulate
       .mockReturnValueOnce(sourceContext)
       .mockReturnValueOnce(outputContext);
-    fileStorage.createInternalEntry.mockResolvedValue({ id: storedId, origin: 'internal' });
-    const storage = createUserContentImageStorage(createEntries());
+    const storage = createUserContentImageStorage();
 
-    await expect(storage.create(sourceUri)).resolves.toBe(storedId);
+    const storedName = await storage.create(sourceUri);
 
+    expect(storedName).toMatch(STORED_NAME_PATTERN);
     expect(outputContext.crop).toHaveBeenCalledWith({
       height: 1200,
       originX: 200,
@@ -93,30 +117,31 @@ describe('userContentImageStorage', () => {
     });
     expect(outputContext.resize).toHaveBeenCalledWith({ height: 1024, width: 1024 });
     expect(outputImage.saveAsync).toHaveBeenCalledWith({ compress: 0.82, format: 'webp' });
-    expect(fileStorage.createInternalEntry).toHaveBeenCalledWith(expect.any(Object), {
-      cleanupPolicy: 'manual',
-      name: 'avatar.webp',
-      source: 'uri',
-      uri: normalizedUri,
-    });
+    expect(fileSystemState.files.has(`file:///documents/user-avatar/${storedName}`)).toBe(true);
     expect(fileSystemState.files.has(normalizedUri)).toBe(false);
+
+    await expect(storage.resolve(storedName)).resolves.toBe(
+      `file:///documents/user-avatar/${storedName}`,
+    );
+    await expect(storage.remove(storedName)).resolves.toBe(true);
+    await expect(storage.resolve(storedName)).resolves.toBeUndefined();
+    await expect(storage.remove(storedName)).resolves.toBe(false);
   });
 
   it('rejects oversized picker files before decoding them', async () => {
     fileSystemState.files.set(sourceUri, 10 * 1024 * 1024 + 1);
-    const storage = createUserContentImageStorage(createEntries());
+    const storage = createUserContentImageStorage();
 
     await expect(storage.create(sourceUri)).rejects.toThrow('exceeds the 10 MB limit');
 
     expect(ImageManipulator.manipulate).not.toHaveBeenCalled();
-    expect(fileStorage.createInternalEntry).not.toHaveBeenCalled();
+  });
+
+  it('refuses names outside the stored avatar pattern', async () => {
+    fileSystemState.files.set('file:///documents/user-avatar/escape.webp', 1);
+    const storage = createUserContentImageStorage();
+
+    await expect(storage.resolve('../Data/Files/escape.webp')).resolves.toBeUndefined();
+    await expect(storage.remove('escape.webp')).resolves.toBe(false);
   });
 });
-
-function createEntries(): Parameters<typeof createUserContentImageStorage>[0] {
-  return {
-    create: jest.fn(),
-    delete: jest.fn(),
-    findById: jest.fn(),
-  } as unknown as Parameters<typeof createUserContentImageStorage>[0];
-}

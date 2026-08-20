@@ -106,7 +106,7 @@ export function createBackend(
       set: (key, value) => services.preference.set(key, value),
     },
   });
-  const userContentImages = createUserContentImageStorage(services.fileEntry);
+  const userContentImages = createUserContentImageStorage();
   const profile = createProfileModule({
     avatars: {
       replace: (sourceUri, previousAvatar, persist) =>
@@ -124,7 +124,7 @@ export function createBackend(
       chat: services.chat,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
-        deleteIfUnreferenced: services.fileContent.deleteIfUnreferenced,
+        delete: services.fileContent.delete,
         getUri: services.fileContent.getUri,
       },
       mcp,

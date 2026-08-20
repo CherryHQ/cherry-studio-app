@@ -80,7 +80,6 @@ export function createAppBootstrapRuntime(
       contentSearch: services.contentSearch,
       entitySearch: services.entitySearch,
       files: services.fileEntry,
-      fileRefs: services.fileRef,
       jobs: services.job,
       mcpServerMutations: dataApiDependencies.mcpServerMutations,
       mcpServers: services.mcpServer,
