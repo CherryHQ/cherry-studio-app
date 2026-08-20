@@ -1,3 +1,4 @@
+import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
@@ -29,6 +30,7 @@ jest.mock('../createDataServices', () => ({
 
 describe('createBackendServices', () => {
   test('assembles ownership modules through their narrow dependencies', () => {
+    const agent = { kind: 'agent' } as unknown as MobileAgentHost;
     const ai = { kind: 'ai' } as unknown as AiService;
     const cache = { kind: 'cache' } as unknown as CacheService;
     // The chat and job runtimes arrive from the host too, as of stage B's last
@@ -40,6 +42,7 @@ describe('createBackendServices', () => {
     const webSearch = { kind: 'web-search' } as unknown as WebSearchService;
 
     const services = createBackendServices({
+      agent,
       ai,
       cache,
       chat,
@@ -54,6 +57,7 @@ describe('createBackendServices', () => {
     // dependencies now, so the bundle must carry those exact instances.
     expect(services).toEqual({
       ...mockDataServices,
+      agent,
       ai,
       chat,
       devicePermissions,

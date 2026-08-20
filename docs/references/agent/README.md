@@ -1,6 +1,6 @@
 # Agent Architecture
 
-Status: **design**. Version 1 is local-only.
+Status: **Phase 1–3 architecture slice implemented**. Version 1 is local-only.
 
 Cherry Mobile owns Agents and Sessions. An independent Agent Runtime executes one prepared turn.
 The first Runtime implementations may use Pi or the AI SDK; both implement the same contract and
@@ -39,9 +39,10 @@ app and move to a package when a real independent consumer exists.
 
 - All execution is local to the Mobile process.
 - The application selects the `local` execution target, never a Runtime id.
-- The Router selects Pi when the resolved Agent configuration contains Agent tools; otherwise it
-  selects the AI SDK Runtime.
+- Version 1 registers only the AI SDK Runtime, so every supported `local` route resolves to it.
 - A Session has at most one active turn.
+- A Session is pinned at creation to one Runtime for its whole lifetime; it never re-routes. A
+  different Runtime requires a new Session (or a fork).
 - Mobile persistence is the complete conversation record.
 - The Host supplies complete normalized context for every turn; a Runtime may keep private
   in-memory state, but it is not authoritative.
@@ -53,11 +54,26 @@ LAN/cloud execution targets, their Runtime adapters, and remote-authoritative Se
 direction. They enter through the same Router, but their transport, security, storage, and recovery
 rules require a separate design. Version 1 defines none of those details.
 
+Branching is also a future direction with its model already decided: Sessions never branch in
+place via a message tree; a branch is a fork into a new Session that copies the transcript up to a
+clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
+
 ## Open Questions
 
-- **Agent tool** is the sole routing criterion, but it does not yet have a precise definition:
-  which tool kinds qualify (built-in, MCP, or both) and how they relate to the Runtime contract's
-  `RuntimeTool` are TODO, pending confirmation before implementation.
+- **Runtime routing policy** is undecided. Its configuration and inputs may belong to an Agent, a
+  Session, an execution target, connection state, or broader application policy. Version 1 does
+  not reserve fields for any of those possibilities; it only implements `local → ai-sdk`. Once a
+  Runtime is resolved for a Session, that binding remains fixed for the Session lifetime.
+- **Agent tools** are also undefined: which tool kinds qualify (built-in, MCP, or both), how they
+  relate to the Runtime contract's `RuntimeTool`, and how Pi consumes them are deferred until the
+  Pi Runtime is designed. They are not assumed to be a routing criterion.
+- **Context compaction** is undesigned. The ownership split is decided: the durable conversation
+  record belongs to the Host (it must survive process death and back transcript reads), while
+  turning that record into the actual model prompt — selection, formatting, and eventually
+  compaction — is Runtime-owned engine strategy. Compaction needs a contract collaboration point
+  because its artifacts must persist and a Runtime cannot write application storage (for example,
+  a context-artifact event the Host stores and replays into later turns). Design it together with
+  the Pi Runtime.
 
 ## Documents
 
@@ -68,8 +84,16 @@ rules require a separate design. Version 1 defines none of those details.
 
 ## Current Implementation
 
-This design does not yet replace the current Topic, Chat Runtime, or desktop-aligned `agent_*`
-surfaces. Current-state references remain authoritative until implementation lands.
+The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Agent Host, and V1
+Router are implemented as an architecture slice. The Host consumes the stable `AgentSessionStore`
+port; lifecycle composition currently selects a process-local in-memory reference adapter. That
+adapter validates Host orchestration and remains useful in tests, but it deliberately provides no
+restart durability. Durable Mobile Agent persistence is pending the authority and schema work
+tracked by [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
+
+No frontend currently consumes `Backend.agent`. This slice does not replace the current Topic,
+Chat Runtime, or desktop-aligned `agent_*` surfaces. Pi, attachments, durable persistence, and UI
+integration remain follow-up work.
 
 ## Related
 

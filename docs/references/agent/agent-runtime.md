@@ -32,7 +32,6 @@ The Agent Runtime Router is the single implementation-selection point:
 ```ts
 type RuntimeRouteInput = {
   target: { kind: 'local' }
-  agentToolIds: string[]
 }
 
 interface AgentRuntimeRouter {
@@ -40,30 +39,29 @@ interface AgentRuntimeRouter {
 }
 ```
 
-The Host derives `agentToolIds` from the current Agent configuration; the client does not send this
-derived field or a Runtime id. What qualifies as an Agent tool is not yet defined; see the
-[open question](./README.md#open-questions) in the overview. Version 1 routing is deliberately
-small:
+Version 1 routing is deliberately small:
 
-| Execution target | Resolved Agent configuration | Runtime |
-| --- | --- | --- |
-| `local` | At least one Agent tool | Pi Runtime |
-| `local` | No Agent tools | AI SDK Runtime |
+| Execution target | Runtime |
+| --- | --- |
+| `local` | AI SDK Runtime |
 
 The Router is the only component that branches on `pi` or `ai-sdk`. It resolves the selected
 implementation through the Runtime registry and fails closed when no registered Runtime satisfies
-the route. Route selection is a pure function of the execution target and resolved configuration,
-so the Host may also evaluate it without starting execution; protocol capabilities are projected
-this way. The selected route is fixed for an active turn; configuration changes are evaluated on
-the next turn. If that changes the selected Runtime, the Host closes the old Runtime session before
-opening the new one.
+the route. The eventual routing basis and ownership are **undecided**: routing may depend on Agent
+configuration, Session configuration, execution target, connection state, or broader application
+policy. Version 1 does not reserve Router inputs for any of those possibilities.
+
+The selected result is **fixed for the Session's lifetime** (decision 2026-08-20): once the Router
+resolves a Runtime for a Session, the Host records that binding as Host-private state. A different
+Runtime requires a new Session (or a fork). The Agent's application-owned instructions, model, and
+tools may still be resolved afresh for every turn; no current Agent field is assumed to participate
+in routing.
 
 LAN and cloud may add execution-target variants and corresponding adapters later. They use this
-same routing point, but a remote adapter is selected by target alone: Pi and the AI SDK are local
-engine choices, and whatever engine executes behind a remote endpoint is that endpoint's concern.
-The application layer is unaware either way — the Router assigns the implementation, and the
-protocol carries only normalized results. Version 1 does not define remote markers, connections,
-authority, or fallback behavior.
+same routing boundary, but Version 1 does not decide how a remote adapter is selected or where its
+policy lives. The application layer remains unaware of implementation identity; the protocol
+carries only normalized results. Remote markers, connections, authority, and fallback behavior
+require a separate design.
 
 ## Descriptor and lifecycle
 
@@ -145,6 +143,12 @@ type RuntimeInputPart =
 Runtime implementations receive model/provider dependencies from application composition. They do
 not query Cherry provider or model tables.
 
+File input is resolved by the Host before it reaches a Runtime: attachments enter the application's
+file storage first, and the Host converts stored `file://` references into a directly consumable
+`uri` (such as a data URL). A Runtime never reads the device filesystem; until the Host-side
+resolution step lands (owned separately), local Runtimes declare `attachments: false` and reject
+file parts before partial execution.
+
 ### History
 
 ```ts
@@ -192,6 +196,11 @@ type RuntimeTool = {
 
 The Host supplies tool implementations after applying Agent policy. A Runtime validates tool input,
 enforces the approval mode, and invokes `execute` only after approval when the mode is `ask`.
+
+When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
+Runtime never invokes `execute`. It reports the tool part as `denied` and returns
+`{ "status": "denied", "reason": "..." }` to the model as that call's result, so the loop
+continues without the tool running. This feedback shape is a cross-implementation rule.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
@@ -276,7 +285,7 @@ message's protocol `usage` stays `null`.
 1. The Host validates that the Session is idle.
 2. It persists the user message and assistant placeholder.
 3. It loads the Session's execution target and resolves the current Agent configuration.
-4. The Router selects a Runtime from the target and configured Agent tools.
+4. The Host uses the Runtime bound to the Session; Version 1 routing resolves `local` to `ai-sdk`.
 5. The Host normalizes instructions, model, history, tools, input, and options.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
@@ -288,8 +297,10 @@ outside the corresponding implementation.
 ## Runtime registry
 
 Application composition registers implementations by descriptor id. The Router resolves its
-decision through this registry. Agent and Session configuration do not store a selected
-`runtimeId`; neither Runtime ids nor the registry are exposed through the Agent Protocol.
+decision through this registry. Application-owned Agent configuration does not carry a
+`runtimeId` and the client never supplies one; the Host persists the route resolved at Session
+creation as Host-private state so the pin survives restarts. Neither Runtime ids nor the registry
+are exposed through the Agent Protocol.
 
 ```text
 pi      -> Pi AgentRuntime
