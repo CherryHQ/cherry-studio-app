@@ -59,8 +59,11 @@ the next turn. If that changes the selected Runtime, the Host closes the old Run
 opening the new one.
 
 LAN and cloud may add execution-target variants and corresponding adapters later. They use this
-same routing point, but version 1 does not define their markers, connections, authority, or fallback
-behavior.
+same routing point, but a remote adapter is selected by target alone: Pi and the AI SDK are local
+engine choices, and whatever engine executes behind a remote endpoint is that endpoint's concern.
+The application layer is unaware either way — the Router assigns the implementation, and the
+protocol carries only normalized results. Version 1 does not define remote markers, connections,
+authority, or fallback behavior.
 
 ## Descriptor and lifecycle
 

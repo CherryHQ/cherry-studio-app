@@ -26,8 +26,8 @@ Pi Runtime | AI SDK Runtime
   execution target and resolved Agent configuration, then resolves a registered Runtime.
 - An **Agent Runtime** receives prepared execution input and emits normalized execution events. It
   does not know Cherry Agent rows, Session rows, SQLite, React, Expo, or application protocol types.
-- **Pi** and **AI SDK** are Host-private Runtime implementations. The Agent Client sees only the
-  Agent Protocol and protocol-level capabilities; Runtime identity never crosses that boundary.
+- **Pi** and **AI SDK** are Host-private local Runtime implementations. The Agent Client sees only
+  the Agent Protocol and protocol-level capabilities; Runtime identity never crosses that boundary.
 
 The Agent Client must not import the Agent Runtime contract. Only the Mobile Agent Host depends on
 both contracts and maps between them.
