@@ -132,6 +132,14 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('preserves private-use marker characters inside and outside inline code', () => {
+    const markdown = '\uE000 Keep `\uE000__init__` unchanged.';
+
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: '\uE000 Keep \uE000__init__ unchanged.',
+    });
+  });
+
   test('removes fenced and indented code nested in list and quote containers', () => {
     const message = createMessage([
       textPart(

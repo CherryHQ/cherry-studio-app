@@ -5,6 +5,7 @@ import { projectMarkdownInlineForSpeech } from './projectMarkdownInlineForSpeech
 export type AssistantReadAloudContent = { language?: string; text: string };
 
 const COMPLEX_LATEX_COMMAND = /\\[a-z]+/iu;
+const CODE_SPAN_MARKER = '\uE000';
 const SPEAKABLE_CHARACTER = /[\p{L}\p{N}]/u;
 
 export function projectAssistantMessageReadAloud(
@@ -61,10 +62,11 @@ function cleanMarkdownForSpeech(markdown: string): string {
   text = removeCodeBlocks(text);
 
   const codeSpans: string[] = [];
-  const codeSpanMarker = findUnusedMarker(text);
+  text = text.replaceAll(CODE_SPAN_MARKER, CODE_SPAN_MARKER.repeat(2));
   text = text.replace(/(`+)([^`\n]*?)\1/g, (_match, _delimiter: string, content: string) => {
-    const index = codeSpans.push(content) - 1;
-    return `${codeSpanMarker}${index}${codeSpanMarker}`;
+    const index =
+      codeSpans.push(content.replaceAll(CODE_SPAN_MARKER.repeat(2), CODE_SPAN_MARKER)) - 1;
+    return `${CODE_SPAN_MARKER}${index}${CODE_SPAN_MARKER}`;
   });
 
   text = text.replace(/\$\$[\s\S]*?(?:\$\$|$)/g, '');
@@ -88,9 +90,9 @@ function cleanMarkdownForSpeech(markdown: string): string {
   );
 
   const withoutBlockMarkers = text.split('\n').map(removeBlockMarkers).join('\n');
-  const projected = projectMarkdownInlineForSpeech(withoutBlockMarkers).replace(
-    new RegExp(`${codeSpanMarker}(\\d+)${codeSpanMarker}`, 'gu'),
-    (_match, index: string) => codeSpans[Number(index)],
+  const projected = restoreCodeSpans(
+    projectMarkdownInlineForSpeech(withoutBlockMarkers),
+    codeSpans,
   );
   return normalizeSpeechWhitespace(projected);
 }
@@ -125,12 +127,29 @@ function removeCodeBlocks(markdown: string): string {
   return output.join('\n');
 }
 
-function findUnusedMarker(text: string): string {
-  let marker = '\uE000';
-  while (text.includes(marker)) {
-    marker += '\uE000';
+function restoreCodeSpans(text: string, codeSpans: string[]): string {
+  const output: string[] = [];
+  let index = 0;
+
+  while (index < text.length) {
+    if (text[index] !== CODE_SPAN_MARKER) {
+      output.push(text[index]);
+      index += 1;
+      continue;
+    }
+    if (text[index + 1] === CODE_SPAN_MARKER) {
+      output.push(CODE_SPAN_MARKER);
+      index += 2;
+      continue;
+    }
+
+    const closingMarker = text.indexOf(CODE_SPAN_MARKER, index + 1);
+    const codeSpanIndex = Number(text.slice(index + 1, closingMarker));
+    output.push(codeSpans[codeSpanIndex]);
+    index = closingMarker + 1;
   }
-  return marker;
+
+  return output.join('');
 }
 
 function projectMarkdownTables(markdown: string): string {
