@@ -64,7 +64,7 @@ export type ProviderDisplayMetadata = {
   authMethods?: ProviderAuthMethod[];
   authOptional?: boolean;
   description?: string;
-  fastMode?: { transport: 'claude-code' | 'openai-priority' };
+  fastMode?: { transport: 'openai-priority' };
   modelListSource?: ProviderModelListSource;
   reportedCostCurrency?: Currency;
   websites?: ProviderWebsites;
@@ -376,7 +376,12 @@ export class ProviderRegistryService {
       authMethods: provider?.authMethods,
       authOptional: provider?.authOptional,
       description: provider?.description,
-      fastMode: provider?.fastMode,
+      // Presets may declare transports mobile has no runtime for (claude-code);
+      // only the one the AI layer implements passes through.
+      fastMode:
+        provider?.fastMode?.transport === 'openai-priority'
+          ? { transport: 'openai-priority' }
+          : undefined,
       modelListSource: provider?.modelListSource,
       reportedCostCurrency: provider?.reportedCostCurrency,
       websites: provider?.metadata?.website,
