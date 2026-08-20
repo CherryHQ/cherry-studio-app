@@ -69,6 +69,7 @@ describe('McpServerService', () => {
     });
 
     expect(server).toMatchObject({
+      disabledTools: [],
       endpointUrl: 'https://example.com/mcp',
       isEnabled: false,
       name: 'Example',
@@ -128,6 +129,22 @@ describe('McpServerService', () => {
     await expect(
       service.update(other.id, { isEnabled: true, name: 'Other' }),
     ).resolves.toMatchObject({ isEnabled: true, name: 'Other' });
+  });
+
+  it('stores the disabled tool rules as a set, and can clear them', async () => {
+    const server = await service.create({ endpointUrl: 'https://a.example/mcp', name: 'Rules' });
+
+    // The writer sends the whole list, so a duplicate is a caller slip rather
+    // than a second rule; storing it twice would survive every later patch.
+    const disabled = await service.update(server.id, { disabledTools: ['read', 'read', 'write'] });
+    expect(disabled.disabledTools).toEqual(['read', 'write']);
+    await expect(service.getById(server.id)).resolves.toMatchObject({
+      disabledTools: ['read', 'write'],
+    });
+
+    await expect(service.update(server.id, { disabledTools: [] })).resolves.toMatchObject({
+      disabledTools: [],
+    });
   });
 
   it('reports a missing server rather than silently succeeding', async () => {

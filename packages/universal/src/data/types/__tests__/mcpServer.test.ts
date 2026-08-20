@@ -4,6 +4,7 @@ const id = '00000000-0000-4000-8000-000000000000';
 
 const server = {
   createdAt: '2026-01-01T00:00:00.000Z',
+  disabledTools: ['search'],
   endpointUrl: 'https://example.com/mcp',
   id,
   isEnabled: true,
@@ -12,12 +13,13 @@ const server = {
 };
 
 describe('McpServerSchema', () => {
-  it('stores the connection and nothing else', () => {
+  it('stores the connection, the tool rules, and nothing else', () => {
     expect(Object.keys(McpServerSchema.shape)).toEqual([
       'id',
       'name',
       'endpointUrl',
       'isEnabled',
+      'disabledTools',
       'createdAt',
       'updatedAt',
     ]);
@@ -31,9 +33,14 @@ describe('McpServerSchema', () => {
   });
 
   it('rejects desktop transport and registry fields rather than storing them', () => {
-    for (const field of ['type', 'command', 'headers', 'timeout', 'disabledTools', 'sortOrder']) {
+    for (const field of ['type', 'command', 'headers', 'timeout', 'sortOrder']) {
       expect(() => McpServerSchema.parse({ ...server, [field]: 'desktop-value' })).toThrow();
     }
+  });
+
+  it('takes tool rules as a list of names, and rejects a bare one', () => {
+    expect(McpServerSchema.parse({ ...server, disabledTools: [] }).disabledTools).toEqual([]);
+    expect(() => McpServerSchema.parse({ ...server, disabledTools: 'search' })).toThrow();
   });
 
   it('rejects an endpoint that is not a URL', () => {

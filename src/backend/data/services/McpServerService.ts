@@ -36,6 +36,7 @@ export type ListMcpServersQuery = {
 function rowToMcpServer(row: McpServerRow): McpServer {
   return {
     createdAt: timestampToISO(row.createdAt),
+    disabledTools: row.disabledTools,
     endpointUrl: row.endpointUrl,
     id: row.id,
     isEnabled: row.isEnabled,
@@ -110,6 +111,7 @@ export class McpServerService {
     const [row] = await this.db
       .insert(mcpServerTable)
       .values({
+        disabledTools: parsed.disabledTools ?? [],
         endpointUrl: parsed.endpointUrl,
         isEnabled: parsed.isEnabled ?? false,
         name,
@@ -130,6 +132,9 @@ export class McpServerService {
     }
 
     const updates: Partial<InsertMcpServerRow> = {
+      ...(parsed.disabledTools !== undefined && {
+        disabledTools: [...new Set(parsed.disabledTools)],
+      }),
       ...(parsed.endpointUrl !== undefined && { endpointUrl: parsed.endpointUrl }),
       ...(parsed.isEnabled !== undefined && { isEnabled: parsed.isEnabled }),
       ...(name !== undefined && { name }),

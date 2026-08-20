@@ -1,25 +1,31 @@
-import { Button, Spinner } from '@cherrystudio/ui/components';
+import { Button, Spinner, Switch } from '@cherrystudio/ui/components';
 import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQuery } from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
 
 type McpToolsSectionProps = {
+  isDisabled?: boolean;
+  onToggleTool: (toolName: string, enabled: boolean) => void;
   server: McpServer;
 };
 
 /**
- * The tools a server currently exposes. Read-only by design: which tools are
- * available is the server's answer, and whether a call may run is fixed
- * application policy (every MCP tool asks before executing), so there is
- * nothing here for the user to configure.
+ * The tools a server exposes, each with the switch that keeps it out of the
+ * model's toolset. Only availability is configurable — whether a call may run
+ * is fixed application policy (every MCP tool asks before executing).
  */
-export function McpToolsSection({ server }: McpToolsSectionProps) {
+export function McpToolsSection({
+  isDisabled = false,
+  onToggleTool,
+  server,
+}: McpToolsSectionProps) {
   const { t } = useTranslation();
   const mcp = useBackendModule('mcp');
+  const disabledTools = useMemo(() => new Set(server.disabledTools), [server.disabledTools]);
 
   const toolsQuery = useQuery({
     enabled: /^https?:\/\//i.test(server.endpointUrl),
@@ -67,15 +73,25 @@ export function McpToolsSection({ server }: McpToolsSectionProps) {
   return (
     <View className="gap-3">
       {tools.map((tool) => (
-        <View className="min-w-0 gap-0.5" key={tool.name}>
-          <Text className="font-mono text-foreground text-sm" numberOfLines={1}>
-            {tool.name}
-          </Text>
-          {tool.description ? (
-            <Text className="text-foreground text-xs" numberOfLines={2}>
-              {tool.description}
+        <View className="flex-row items-center gap-4" key={tool.name}>
+          <View className="min-w-0 flex-1 gap-0.5">
+            <Text className="font-mono text-foreground text-sm" numberOfLines={1}>
+              {tool.name}
             </Text>
-          ) : null}
+            {tool.description ? (
+              <Text className="text-foreground text-xs" numberOfLines={2}>
+                {tool.description}
+              </Text>
+            ) : null}
+          </View>
+          <Switch
+            accessibilityLabel={t('settings.mcp.tools.enabledAccessibilityLabel', {
+              tool: tool.name,
+            })}
+            disabled={isDisabled}
+            onValueChange={(enabled) => onToggleTool(tool.name, enabled)}
+            value={!disabledTools.has(tool.name)}
+          />
         </View>
       ))}
     </View>

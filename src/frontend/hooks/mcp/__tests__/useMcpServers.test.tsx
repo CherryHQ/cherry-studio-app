@@ -36,6 +36,7 @@ function Probe() {
 function makeServer(overrides: Partial<McpServer> = {}): McpServer {
   return {
     createdAt: '2026-01-01T00:00:00.000Z',
+    disabledTools: [],
     endpointUrl: 'https://a.example/mcp',
     id: 'server-1',
     isEnabled: true,
