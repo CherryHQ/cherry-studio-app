@@ -5,6 +5,7 @@ const mockBackend = { kind: 'backend' };
 const mockDataApiDependencies = { kind: 'data-api-dependencies' };
 const mockDataApi = { kind: 'data-api' };
 const mockDataApiHandlers = { kind: 'handlers' };
+const mockAgent = { kind: 'agent' };
 const mockAi = { kind: 'ai' };
 const mockCache = { kind: 'cache' };
 const mockChat = { kind: 'chat' };
@@ -78,6 +79,7 @@ const createRuntime = () =>
     DbService: mockDb,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
+    MobileAgentHost: mockAgent,
     PreferenceService: mockPreference,
     WebSearchService: mockWebSearch,
   });
@@ -99,6 +101,7 @@ describe('createAppBootstrapRuntime', () => {
     // No `dbService`: the data services resolve it through `application`, so the
     // composition is only handed the infrastructure it cannot reach that way.
     expect(mockCreateBackendServices).toHaveBeenCalledWith({
+      agent: mockAgent,
       ai: mockAi,
       cache: mockCache,
       chat: mockChat,
