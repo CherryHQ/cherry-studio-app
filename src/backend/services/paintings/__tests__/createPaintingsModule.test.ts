@@ -1,4 +1,8 @@
-import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
+import {
+  type FileEntry,
+  type FileEntryId,
+  FileEntrySchema,
+} from '@cherrystudio/universal/data/types/file';
 import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
@@ -25,18 +29,15 @@ function painting(id: string, outputs: FileEntryId[] = []): Painting {
   };
 }
 
-function internalEntry(id: FileEntryId): InternalFileEntry {
-  return {
-    cleanupPolicy: 'delete_when_unreferenced',
-    contentHash: null,
+function fileEntry(id: FileEntryId): FileEntry {
+  return FileEntrySchema.parse({
     createdAt: 1,
-    ext: 'png',
+    filename: 'image.png',
     id,
-    name: 'image',
-    origin: 'internal',
+    mediaType: 'image/png',
     size: 1,
     updatedAt: 1,
-  };
+  });
 }
 
 function createSubject() {
@@ -57,7 +58,7 @@ function createSubject() {
       resetForRetryTx: jest.fn(async (_tx: Database, id: string) => painting(id)),
     },
     storage: {
-      createInternalEntry: jest.fn(async () => internalEntry(inputFileId)),
+      createInternalEntry: jest.fn(async () => fileEntry(inputFileId)),
       discard: jest.fn(async () => undefined),
     },
   };
@@ -103,13 +104,13 @@ describe('createPaintingsModule', () => {
       paintingId: 'painting-1',
     });
 
-    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith(
-      expect.objectContaining({
-        cleanupPolicy: 'delete_when_unreferenced',
-        source: 'uri',
-        uri: 'file:///picked.png',
-      }),
-    );
+    // Exact call shape: the media type rides along and no cleanup policy exists.
+    expect(dependencies.storage.createInternalEntry).toHaveBeenCalledWith({
+      mediaType: 'image/png',
+      name: 'input.png',
+      source: 'uri',
+      uri: 'file:///picked.png',
+    });
     expect(dependencies.paintings.createTx).toHaveBeenCalledWith(tx, {
       inputFileIds: [inputFileId],
       modelId,

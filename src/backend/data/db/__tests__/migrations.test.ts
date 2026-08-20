@@ -79,13 +79,9 @@ describe('bundled SQLite migrations', () => {
       ]);
       expect(columnNames(database, 'file_entry')).toEqual([
         'id',
-        'origin',
-        'name',
-        'ext',
+        'filename',
+        'media_type',
         'size',
-        'content_hash',
-        'external_path',
-        'cleanup_policy',
         'created_at',
         'updated_at',
         'deleted_at',
@@ -143,15 +139,7 @@ describe('bundled SQLite migrations', () => {
           'user_model_provider_model_unique',
         ]),
       );
-      expect(indexNames(database, 'file_entry')).toEqual(
-        expect.arrayContaining([
-          'fe_created_at_idx',
-          'fe_content_hash_idx',
-          'fe_deleted_at_idx',
-          'fe_external_path_idx',
-          'fe_external_path_lower_unique_idx',
-        ]),
-      );
+      expect(indexNames(database, 'file_entry')).toEqual(['fe_created_at_idx']);
       expect(indexList(database, 'chat_message_file_ref')).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ name: 'cmfr_entry_id_idx', unique: 0 }),
@@ -170,12 +158,10 @@ describe('bundled SQLite migrations', () => {
 
       const fileEntryTableSql = getSchemaSql(database, 'table', 'file_entry');
       expect(getSchemaSql(database, 'table', 'message')).toContain('message_root_parent_check');
-      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_check'));
-      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_origin_consistency'));
-      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_external_no_delete'));
-      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_cleanup_policy_check'));
-      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_contenthash_external_null'));
-      expect(fileEntryTableSql).toEqual(expect.stringContaining('fe_size_internal_only'));
+      // Every entry is a Cherry-owned immutable blob, so the desktop origin /
+      // external-path / cleanup-policy / content-hash invariants have nothing
+      // left to constrain.
+      expect(fileEntryTableSql).not.toContain('CHECK');
       expect(getSchemaSql(database, 'table', 'chat_message_file_ref')).toContain('cmfr_role_check');
       expect(getSchemaSql(database, 'table', 'painting_file_ref')).toContain('pfr_role_check');
       expect(getSchemaSql(database, 'index', 'message_topic_root_uniq')).toContain(
@@ -245,8 +231,8 @@ describe('bundled SQLite migrations', () => {
       database.exec(`
         INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
         VALUES ('painting-1', 'provider', 'provider::model', 'prompt', 'a0', 1, 1);
-        INSERT INTO file_entry (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
-        VALUES ('file-1', 'internal', 'input', 'png', 4, NULL, 1, 1, NULL);
+        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
+        VALUES ('file-1', 'input.png', 'image/png', 4, 1, 1, NULL);
         INSERT INTO painting_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
         VALUES ('ref-1', 'file-1', 'painting-1', 'input', 1, 1);
       `);
@@ -270,8 +256,8 @@ describe('bundled SQLite migrations', () => {
       database.exec(`
         INSERT INTO painting (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
         VALUES ('painting-2', 'provider', 'provider::model', 'prompt', 'a1', 2, 2);
-        INSERT INTO file_entry (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
-        VALUES ('file-2', 'internal', 'output', 'png', 4, NULL, 2, 2, NULL);
+        INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at, deleted_at)
+        VALUES ('file-2', 'output.png', 'image/png', 4, 2, 2, NULL);
         INSERT INTO painting_file_ref (id, file_entry_id, source_id, role, created_at, updated_at)
         VALUES ('ref-2', 'file-2', 'painting-2', 'output', 2, 2);
         DELETE FROM file_entry WHERE id = 'file-2';
@@ -282,16 +268,8 @@ describe('bundled SQLite migrations', () => {
 
       expect(() =>
         database.exec(`
-          INSERT INTO file_entry
-            (id, origin, name, ext, size, external_path, cleanup_policy, created_at, updated_at)
-          VALUES ('bad-policy', 'internal', 'bad', 'txt', 1, NULL, 'automatic', 1, 1);
-        `),
-      ).toThrow();
-      expect(() =>
-        database.exec(`
-          INSERT INTO file_entry
-            (id, origin, name, ext, size, content_hash, external_path, created_at, updated_at)
-          VALUES ('external-hash', 'external', 'bad', 'txt', NULL, 'sha256:abcd', '/tmp/bad', 1, 1);
+          INSERT INTO file_entry (id, filename, media_type, size, created_at, updated_at)
+          VALUES ('missing-size', 'bad.txt', 'text/plain', NULL, 1, 1);
         `),
       ).toThrow();
     } finally {

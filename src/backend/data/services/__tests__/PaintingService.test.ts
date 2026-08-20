@@ -264,8 +264,8 @@ function insertFile(database: DatabaseSync, fileId: string, timestamp: number) {
   database
     .prepare(
       `INSERT INTO file_entry
-       (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
-       VALUES (?, 'internal', ?, 'png', 4, NULL, ?, ?, NULL)`,
+       (id, filename, media_type, size, created_at, updated_at, deleted_at)
+       VALUES (?, ?, 'image/png', 4, ?, ?, NULL)`,
     )
-    .run(fileId, fileId, timestamp, timestamp);
+    .run(fileId, `${fileId}.png`, timestamp, timestamp);
 }

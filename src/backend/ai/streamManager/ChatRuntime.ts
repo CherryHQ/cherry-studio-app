@@ -15,7 +15,7 @@ import type {
   TopicStreamStatus,
 } from '@cherrystudio/universal/ai/transport';
 import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
-import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
+import type { FileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -412,7 +412,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
     }
 
     let fileRefsCommitted = false;
-    let createdEntries: InternalFileEntry[] = [];
+    let createdEntries: FileEntry[] = [];
     try {
       const topic = await this.dependencies.services.topic.getById(input.topicId);
       const modelId =
@@ -998,7 +998,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
     let assistantPlaceholders: Message[] = [];
     let terminalAssistantMessages: Message[] = [];
     let fileRefsCommitted = false;
-    let createdEntries: InternalFileEntry[] = [];
+    let createdEntries: FileEntry[] = [];
     let turnParts = [...parts];
     let handedOffToStream = false;
 

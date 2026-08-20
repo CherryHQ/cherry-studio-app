@@ -1,4 +1,4 @@
-import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
+import type { FileEntry, FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
@@ -85,7 +85,7 @@ async function startGeneration(
 ): Promise<PaintingGenerationStart> {
   const prompt = input.prompt.trim();
   const signature = generationSignature({ ...input, prompt });
-  const createdInputs: InternalFileEntry[] = [];
+  const createdInputs: FileEntry[] = [];
   let createdInputsSettled = false;
   try {
     const images: PaintingGenerateJobImage[] = [];
@@ -94,7 +94,7 @@ async function startGeneration(
         images.push({ fileEntryId: image.fileEntryId, mediaType: image.mediaType, uri: image.uri });
       } else {
         const entry = await dependencies.storage.createInternalEntry({
-          cleanupPolicy: 'delete_when_unreferenced',
+          mediaType: image.mediaType,
           name: image.name,
           source: 'uri',
           uri: image.uri,

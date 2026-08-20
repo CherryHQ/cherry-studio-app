@@ -6,6 +6,7 @@
  * rewrites those with Node fs; mobile uses Expo FileSystem to produce data URLs.
  */
 
+import { parseFileEntryUrl } from '@cherrystudio/universal/data/types/file';
 import type { FileUIPart } from '@cherrystudio/universal/data/types/message';
 import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { File } from 'expo-file-system';
@@ -30,7 +31,7 @@ export async function resolveFileUIPart(
   part: FileUIPart,
   resolveFileEntryUri?: ResolveFileEntryUri,
 ): Promise<FileUIPart | null> {
-  const fileEntryId = readCherryMeta(part)?.fileEntryId;
+  const fileEntryId = readCherryMeta(part)?.fileEntryId ?? parseFileEntryUrl(part.url);
 
   if (fileEntryId) {
     if (!resolveFileEntryUri) {

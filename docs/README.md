@@ -43,6 +43,7 @@ They are the source of truth for how the repository works today.
 | [AI Provider Integration](./references/ai/provider-integration.md) | Provider/model resolution, AI SDK adapters, options, and transport behavior |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Chat Runtime streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
+| [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |
 | [Storage Engine](./references/data/storage-engine.md) | Current SQLite engine, workarounds, and migration criteria |
 | [Web Search](./references/web-search.md) | External search providers and provider-native web search |
 

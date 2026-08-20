@@ -1,6 +1,6 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
-import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
+import type { FileEntry, FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { loggerService } from '@logger';
@@ -64,10 +64,10 @@ export type PaintingAi = {
 };
 
 export type PaintingFileStorage = {
-  createInternalEntry(input: CreateInternalEntryInput): Promise<InternalFileEntry>;
-  discard(entries: readonly InternalFileEntry[]): Promise<void>;
+  createInternalEntry(input: CreateInternalEntryInput): Promise<FileEntry>;
+  discard(entries: readonly FileEntry[]): Promise<void>;
   readDataUrl(uri: string, mediaType: string): Promise<string>;
-  getUri(entry: InternalFileEntry): string | undefined;
+  getUri(entry: FileEntry): string | undefined;
 };
 
 export type PaintingActivityDriver = {
@@ -142,13 +142,12 @@ export function createPaintingGenerateJobHandler(
           throw new Error('Image provider returned no image');
         }
 
-        const createdOutputs: InternalFileEntry[] = [];
+        const createdOutputs: FileEntry[] = [];
         let outputRefsCommitted = false;
         try {
           for (const image of result.images) {
             createdOutputs.push(
               await storage.createInternalEntry({
-                cleanupPolicy: 'delete_when_unreferenced',
                 data: image.base64,
                 mediaType: image.mediaType,
                 source: 'base64',

@@ -1,4 +1,4 @@
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
+import { type FileEntryId, fileEntryUrl } from '@cherrystudio/universal/data/types/file';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { DocumentPickerAsset } from 'expo-document-picker';
@@ -168,11 +168,15 @@ export function createComposerMessageParts(
     : [];
 
   for (const attachment of attachments) {
+    // Imported attachments persist the entry-id sentinel URL, never a sandbox
+    // path; un-imported ones keep their transient picker URI for send-time import.
     const filePart = {
       type: 'file',
       filename: attachment.name,
       mediaType: attachment.mediaType,
-      url: attachment.uri,
+      url: isComposerAttachmentReady(attachment)
+        ? fileEntryUrl(attachment.fileEntryId)
+        : attachment.uri,
     } as Extract<CherryMessagePart, { type: 'file' }>;
     parts.push(
       isComposerAttachmentReady(attachment)

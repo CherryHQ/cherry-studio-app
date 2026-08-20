@@ -5,7 +5,6 @@ import { assistantService } from '@/backend/data/services/AssistantService';
 import { contentSearchService } from '@/backend/data/services/ContentSearchService';
 import { entitySearchService } from '@/backend/data/services/EntitySearchService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
-import { fileRefService } from '@/backend/data/services/FileRefService';
 import { jobService } from '@/backend/data/services/JobService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { messageService } from '@/backend/data/services/MessageService';
@@ -39,7 +38,6 @@ export function createDataServices({
     contentSearch: contentSearchService,
     entitySearch: entitySearchService,
     fileEntry: fileEntryService,
-    fileRef: fileRefService,
     job: jobService,
     mcpServer: mcpServerService,
     message: messageService,

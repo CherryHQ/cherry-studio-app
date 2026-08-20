@@ -326,7 +326,7 @@ describe('PaintingComposer', () => {
           cherry: { fileEntryId: 'input-1' },
         },
         type: 'file',
-        url: 'file:///input.png',
+        url: 'cherry://file/input-1',
       },
     ]);
     expect(mockMessageListProps?.messages[1].status).toBe('error');
