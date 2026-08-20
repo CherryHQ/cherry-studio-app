@@ -7,7 +7,9 @@ describe('createProfileModule', () => {
     const dependencies: ProfileModuleDependencies = {
       avatars: {
         replace: jest.fn(async (_source, _previous, persist) => persist('file:next')),
-        resolve: jest.fn((avatar) => (avatar === 'file:next' ? 'file:///next.png' : undefined)),
+        resolve: jest.fn(async (avatar) =>
+          avatar === 'file:next' ? 'file:///next.png' : undefined,
+        ),
       },
       preferences: {
         readAvatar: jest.fn(() => 'file:previous'),
@@ -24,6 +26,6 @@ describe('createProfileModule', () => {
       expect.any(Function),
     );
     expect(dependencies.preferences.writeAvatar).toHaveBeenCalledWith('file:next');
-    expect(backend.resolveAvatar('file:next')).toBe('file:///next.png');
+    await expect(backend.resolveAvatar('file:next')).resolves.toBe('file:///next.png');
   });
 });

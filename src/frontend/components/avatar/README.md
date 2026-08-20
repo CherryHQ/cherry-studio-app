@@ -9,6 +9,8 @@ Cherry product data and presentation rules before composing that primitive.
 - `BrandAvatar`, `BrandAvatarIcon`, and `BrandAvatarPhoto` apply provider/model brand fallback and
   icon inset rules.
 - `ModelAvatar` resolves a model icon from its model and provider records.
+- `AvatarImagePicker` owns the shared camera/library and square-crop interaction while leaving
+  persistence to its caller.
 - `ProfileAvatarImage` resolves the persisted user avatar for display-only surfaces.
 - `ProfileEditableAvatar` adds a camera or pencil badge for avatar-editing surfaces.
 

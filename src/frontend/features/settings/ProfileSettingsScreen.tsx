@@ -1,19 +1,11 @@
-import {
-  Input,
-  Label,
-  Menu,
-  type MenuItem,
-  TextField,
-  useAlert,
-} from '@cherrystudio/ui/components';
+import { Input, Label, TextField, useAlert } from '@cherrystudio/ui/components';
 import { loggerService } from '@logger';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, TextInput, View } from 'react-native';
 
-import { ProfileEditableAvatar } from '@/frontend/components/avatar';
+import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/avatar';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
@@ -40,55 +32,6 @@ export default function ProfileSettingsScreen() {
     },
     [alert, t],
   );
-
-  const selectAvatarFromCamera = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-
-      if (!permission.granted) {
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        mediaTypes: ['images'],
-        quality: 1,
-      });
-
-      const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
-      if (assetUri) {
-        await persistSelectedAvatar(assetUri);
-      }
-    } catch (error) {
-      reportAvatarSaveError(error);
-    }
-  }, [persistSelectedAvatar, reportAvatarSaveError]);
-
-  const selectAvatarFromPhotoLibrary = useCallback(async () => {
-    try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-
-      if (!permission.granted) {
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        mediaTypes: ['images'],
-        quality: 1,
-        selectionLimit: 1,
-      });
-
-      const assetUri = result.canceled ? undefined : result.assets[0]?.uri;
-      if (assetUri) {
-        await persistSelectedAvatar(assetUri);
-      }
-    } catch (error) {
-      reportAvatarSaveError(error);
-    }
-  }, [persistSelectedAvatar, reportAvatarSaveError]);
 
   const blurInput = useCallback(() => {
     inputRef.current?.blur();
@@ -125,15 +68,19 @@ export default function ProfileSettingsScreen() {
       >
         <View className="gap-8 px-6 py-8">
           <View className="items-center">
-            <MenuAvatarTrigger
+            <AvatarImagePicker
               accessibilityLabel={t('settings.profile.changeAvatar')}
-              cameraLabel={t('chat.media.camera')}
-              onPress={blurInput}
-              onSelectCamera={selectAvatarFromCamera}
-              onSelectPhotos={selectAvatarFromPhotoLibrary}
-              photosLabel={t('chat.media.photos')}
+              onBeforeOpen={blurInput}
+              onError={reportAvatarSaveError}
+              onSelect={persistSelectedAvatar}
               size={profileAvatarSize}
-            />
+            >
+              <ProfileEditableAvatar
+                accessibilityLabel={t('settings.profile.changeAvatar')}
+                icon="camera"
+                size={profileAvatarSize}
+              />
+            </AvatarImagePicker>
           </View>
           <TextField>
             <Label>{t('settings.profile.userName')}</Label>
@@ -151,59 +98,5 @@ export default function ProfileSettingsScreen() {
         </View>
       </ScrollView>
     </>
-  );
-}
-
-type MenuAvatarTriggerProps = {
-  accessibilityLabel: string;
-  cameraLabel: string;
-  onPress: () => void;
-  onSelectCamera: () => Promise<void>;
-  onSelectPhotos: () => Promise<void>;
-  photosLabel: string;
-  size: number;
-};
-
-function MenuAvatarTrigger({
-  accessibilityLabel,
-  cameraLabel,
-  onPress,
-  onSelectCamera,
-  onSelectPhotos,
-  photosLabel,
-  size,
-}: MenuAvatarTriggerProps) {
-  const menuItems = useMemo<readonly MenuItem[]>(
-    () => [
-      {
-        id: 'camera',
-        label: cameraLabel,
-        onPress: () => void onSelectCamera(),
-        systemImage: 'camera',
-      },
-      {
-        id: 'photos',
-        label: photosLabel,
-        onPress: () => void onSelectPhotos(),
-        systemImage: 'photo',
-      },
-    ],
-    [cameraLabel, onSelectCamera, onSelectPhotos, photosLabel],
-  );
-
-  return (
-    <Menu items={menuItems} trigger="tap">
-      <View
-        accessibilityLabel={accessibilityLabel}
-        accessibilityRole="button"
-        onStartShouldSetResponderCapture={() => {
-          onPress();
-          return false;
-        }}
-        style={{ height: size, width: size }}
-      >
-        <ProfileEditableAvatar accessibilityLabel={accessibilityLabel} icon="camera" size={size} />
-      </View>
-    </Menu>
   );
 }
