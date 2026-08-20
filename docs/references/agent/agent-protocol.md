@@ -51,9 +51,13 @@ type AgentSessionView = {
 `local`; LAN and cloud may add target variants after their authority and transport contracts are
 designed. Runtime ids and Pi/AI SDK implementation details never appear in protocol values.
 
-`agentId` identifies the application-owned Agent configuration. Before each turn, the Host resolves
-that configuration, including its Agent tools, and passes the result to the Runtime Router. The
-client does not duplicate configuration or select a Runtime.
+`agentId` identifies the application-owned Agent configuration — the assistant/agent settings the
+user edits in the application (instructions, model, tools). That configuration is live: before
+each turn, the Host resolves its current state and builds the Runtime execution request from it,
+so an application-level edit applies from the next turn. What a configuration change can never do
+is re-route: the Runtime Router is consulted once at Session creation, and the Session stays
+pinned to that Runtime for its lifetime. The client does not duplicate configuration or select a
+Runtime.
 
 ### Turn
 

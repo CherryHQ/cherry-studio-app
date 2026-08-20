@@ -60,6 +60,13 @@ changes after creation never re-route an existing Session — a different Runtim
 Session (or a fork). A Session therefore keeps one Runtime, one capability set, and one execution
 behavior from creation to deletion.
 
+Configuration here means the application-owned assistant/agent settings, and it stays live within
+the pinned Runtime: each turn resolves the current instructions, model, and tools into the
+execution request. If a later edit would have selected a different Runtime — for example Agent
+tools added to an Agent whose Session is pinned to the AI SDK Runtime — existing Sessions simply
+continue within their pinned Runtime's capabilities; the edit takes full effect in the next new
+Session or fork.
+
 LAN and cloud may add execution-target variants and corresponding adapters later. They use this
 same routing point, but a remote adapter is selected by target alone: Pi and the AI SDK are local
 engine choices, and whatever engine executes behind a remote endpoint is that endpoint's concern.
