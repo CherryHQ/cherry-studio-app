@@ -53,6 +53,19 @@ describe('projectAssistantMessageReadAloud', () => {
     expect(projectAssistantMessageReadAloud(message)).toBe(null);
   });
 
+  test('replaces only the source block for a block-scoped translation', () => {
+    const message = createMessage([
+      textPart('Keep the first block.'),
+      textPart('Replace the second block.'),
+      translationPart('Deuxième bloc traduit.', 'fr', 'second-block'),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      language: 'fr',
+      text: 'Keep the first block.\n\nDeuxième bloc traduit.',
+    });
+  });
+
   test('projects only original text parts', () => {
     const message = createMessage([
       textPart('First paragraph'),
@@ -99,6 +112,50 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('preserves Markdown delimiter characters inside inline code spans', () => {
+    const message = createMessage([
+      textPart(
+        'Call `train_test_split`, `__init__`, and `a*b*c`; use `C:\\Users\\_temp` and keep `**inside**`.',
+      ),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'Call train_test_split, __init__, and a*b*c; use C:\\Users\\_temp and keep **inside**.',
+    });
+  });
+
+  test('preserves link and math syntax inside inline code spans', () => {
+    const markdown = 'Keep `[label](target)` and `$value$` unchanged.';
+
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: 'Keep [label](target) and $value$ unchanged.',
+    });
+  });
+
+  test('removes fenced and indented code nested in list and quote containers', () => {
+    const message = createMessage([
+      textPart(
+        'Steps:\n\n' +
+          '1. Install it:\n\n' +
+          '    ```bash\n' +
+          '    export API_KEY=sk-secret\n' +
+          '    ```\n\n' +
+          '2. Done.\n\n' +
+          '> Example:\n' +
+          '> ```js\n' +
+          '> console.log("hidden")\n' +
+          '> ```\n\n' +
+          'Also hidden:\n\n' +
+          '    const apiKey = "sk-secret";\n\n' +
+          'Finish.',
+      ),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'Steps:\n\nInstall it:\n\nDone.\n\nExample:\n\nAlso hidden:\n\nFinish.',
+    });
+  });
+
   test('removes an unterminated fenced code block through the end of the text', () => {
     const message = createMessage([
       textPart('Spoken intro.\n\n~~~python\nprint("never spoken")\nstill code'),
@@ -131,6 +188,23 @@ describe('projectAssistantMessageReadAloud', () => {
       text: 'Read the guide, then continue.',
     });
   });
+
+  test.each([
+    ['![image](', true],
+    ['[2](', false],
+    ['[label](', true],
+  ])(
+    'projects malformed %s destinations without exponential backtracking',
+    (prefix, hasSpeakableText) => {
+      const markdown = prefix + '\\'.repeat(40);
+      const startedAt = Date.now();
+
+      expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual(
+        hasSpeakableText ? { text: markdown } : null,
+      );
+      expect(Date.now() - startedAt).toBeLessThan(100);
+    },
+  );
 
   test('removes block markers and emphasis while preserving line and paragraph order', () => {
     const message = createMessage([
@@ -230,6 +304,16 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test.each([
+    'It costs $50 for the C:\\path option and $70 in total.',
+    'Budget is $5 and the premium tier is $10 per month.',
+    'Set $HOME first, then $PATH is used.',
+  ])('preserves currency and environment variables in %p', (markdown) => {
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: markdown,
+    });
+  });
+
   test('rejects content made only of fenced code', () => {
     expect(
       projectAssistantMessageReadAloud(
@@ -303,9 +387,10 @@ function textPart(text: string): CherryMessagePart {
 function translationPart(
   content: string,
   targetLanguage: string,
+  sourceBlockId?: string,
 ): Extract<CherryMessagePart, { type: 'data-translation' }> {
   return {
-    data: { content, targetLanguage },
+    data: { content, sourceBlockId, targetLanguage },
     type: 'data-translation',
   };
 }

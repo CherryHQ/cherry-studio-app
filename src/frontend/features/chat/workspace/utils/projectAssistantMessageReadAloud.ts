@@ -14,24 +14,7 @@ export function projectAssistantMessageReadAloud(
     return null;
   }
 
-  let translation: AssistantReadAloudContent | undefined;
-  for (const part of message.data.parts ?? []) {
-    if (part.type === 'data-translation' && part.data.content.trim()) {
-      translation = {
-        language: part.data.targetLanguage,
-        text: part.data.content,
-      };
-    }
-  }
-
-  const source =
-    translation ??
-    ({
-      text: (message.data.parts ?? [])
-        .filter((part) => part.type === 'text')
-        .map((part) => part.text)
-        .join('\n\n'),
-    } satisfies AssistantReadAloudContent);
+  const source = projectSpeakableSource(message.data.parts ?? []);
   const text = cleanMarkdownForSpeech(source.text);
 
   if (!SPEAKABLE_CHARACTER.test(text)) {
@@ -41,17 +24,57 @@ export function projectAssistantMessageReadAloud(
   return source.language ? { language: source.language, text } : { text };
 }
 
+function projectSpeakableSource(
+  parts: NonNullable<MessagePresentationItem['data']['parts']>,
+): AssistantReadAloudContent {
+  let messageTranslation: AssistantReadAloudContent | undefined;
+  for (const part of parts) {
+    if (part.type === 'data-translation' && !part.data.sourceBlockId && part.data.content.trim()) {
+      messageTranslation = { language: part.data.targetLanguage, text: part.data.content };
+    }
+  }
+  if (messageTranslation) {
+    return messageTranslation;
+  }
+
+  const blocks: string[] = [];
+  let language: string | undefined;
+  for (const part of parts) {
+    if (part.type === 'text') {
+      blocks.push(part.text);
+    } else if (
+      part.type === 'data-translation' &&
+      part.data.sourceBlockId &&
+      part.data.content.trim() &&
+      blocks.length > 0
+    ) {
+      blocks[blocks.length - 1] = part.data.content;
+      language = part.data.targetLanguage;
+    }
+  }
+
+  return language ? { language, text: blocks.join('\n\n') } : { text: blocks.join('\n\n') };
+}
+
 function cleanMarkdownForSpeech(markdown: string): string {
   let text = markdown.replace(/\r\n?/g, '\n');
-  text = removeFencedCodeBlocks(text);
+  text = removeCodeBlocks(text);
+
+  const codeSpans: string[] = [];
+  const codeSpanMarker = findUnusedMarker(text);
+  text = text.replace(/(`+)([^`\n]*?)\1/g, (_match, _delimiter: string, content: string) => {
+    const index = codeSpans.push(content) - 1;
+    return `${codeSpanMarker}${index}${codeSpanMarker}`;
+  });
+
   text = text.replace(/\$\$[\s\S]*?(?:\$\$|$)/g, '');
   text = text.replace(/\\\[[\s\S]*?(?:\\\]|$)/g, '');
   text = projectMarkdownTables(text);
 
-  text = text.replace(/!\[[^\]]*\]\((?:\\.|[^)])*\)/g, '');
+  text = text.replace(/!\[[^\]]*\]\((?:[^()\\]|\\.)*\)/g, '');
   text = text.replace(/!\[[^\]]*\]\[[^\]]*\]/g, '');
-  text = text.replace(/\[\d+\]\((?:\\.|[^)])*\)/g, '');
-  text = text.replace(/\[([^\]]+)\]\((?:\\.|[^)])*\)/g, '$1');
+  text = text.replace(/\[\d+\]\((?:[^()\\]|\\.)*\)/g, '');
+  text = text.replace(/\[([^\]]+)\]\((?:[^()\\]|\\.)*\)/g, '$1');
   text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1');
   text = text.replace(/\[(?:cite:[^\]]+|\d+)\]/giu, '');
   text = text.replace(/【\d+†[^】]*】/gu, '');
@@ -60,24 +83,30 @@ function cleanMarkdownForSpeech(markdown: string): string {
   text = text.replace(/\\\(([^\n]*?)\\\)/g, (_match, expression: string) =>
     isSimpleMath(expression) ? expression : '',
   );
-  text = text.replace(/\$([^$\n]+)\$/g, (_match, expression: string) =>
+  text = text.replace(/\$(?!\s)([^$\n]*?\S)\$/g, (_match, expression: string) =>
     isSimpleMath(expression) ? expression : '',
   );
-  text = text.replace(/(`+)([^`\n]*?)\1/g, '$2');
 
   const withoutBlockMarkers = text.split('\n').map(removeBlockMarkers).join('\n');
-  return normalizeSpeechWhitespace(projectMarkdownInlineForSpeech(withoutBlockMarkers));
+  const projected = projectMarkdownInlineForSpeech(withoutBlockMarkers).replace(
+    new RegExp(`${codeSpanMarker}(\\d+)${codeSpanMarker}`, 'gu'),
+    (_match, index: string) => codeSpans[Number(index)],
+  );
+  return normalizeSpeechWhitespace(projected);
 }
 
-function removeFencedCodeBlocks(markdown: string): string {
+function removeCodeBlocks(markdown: string): string {
   const output: string[] = [];
   let openFence: { character: string; length: number } | undefined;
 
   for (const line of markdown.split('\n')) {
-    const fence = line.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    const blockLine = removeBlockMarkers(line);
+    const fence = blockLine.match(/^\s*(`{3,}|~{3,})/u)?.[1];
     if (!openFence) {
       if (fence) {
         openFence = { character: fence[0], length: fence.length };
+      } else if (/^(?: {4}|\t)/u.test(blockLine)) {
+        continue;
       } else {
         output.push(line);
       }
@@ -87,13 +116,21 @@ function removeFencedCodeBlocks(markdown: string): string {
     if (
       fence?.[0] === openFence.character &&
       fence.length >= openFence.length &&
-      /^ {0,3}(?:`+|~+)\s*$/u.test(line)
+      /^\s*(?:`+|~+)\s*$/u.test(blockLine)
     ) {
       openFence = undefined;
     }
   }
 
   return output.join('\n');
+}
+
+function findUnusedMarker(text: string): string {
+  let marker = '\uE000';
+  while (text.includes(marker)) {
+    marker += '\uE000';
+  }
+  return marker;
 }
 
 function projectMarkdownTables(markdown: string): string {
