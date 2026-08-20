@@ -233,8 +233,9 @@ describe('AssistantMessageActionsProvider', () => {
     });
   });
 
-  test('ignores a pending regenerate failure after unmount', async () => {
+  test('logs a pending regenerate failure after unmount without showing outdated feedback', async () => {
     const regeneration = createDeferred<unknown>();
+    const error = new Error('regenerate failed');
     onRegenerate.mockReturnValueOnce(regeneration.promise);
     renderProvider();
 
@@ -242,9 +243,9 @@ describe('AssistantMessageActionsProvider', () => {
       probeRef.current?.actions.regenerateAssistantMessage('assistant-1');
     });
     unmountProvider();
-    await act(async () => regeneration.reject(new Error('regenerate failed')));
+    await act(async () => regeneration.reject(error));
 
     expect(mockAlertShow).not.toHaveBeenCalled();
-    expect(mockLoggerError).not.toHaveBeenCalled();
+    expect(mockLoggerError).toHaveBeenCalledWith('Regenerate assistant message failed', error);
   });
 });

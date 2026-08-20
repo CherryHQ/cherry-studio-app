@@ -91,11 +91,12 @@ export function AssistantMessageActionsProvider({
   const regenerateAssistantMessage = useCallback(
     (messageId: string) => {
       void onRegenerate({ messageId }).catch((error) => {
+        logger.error('Regenerate assistant message failed', error as Error);
+
         if (!isMountedRef.current) {
           return;
         }
 
-        logger.error('Regenerate assistant message failed', error as Error);
         alert.show({ title: t('chat.messageActions.regenerateFailed') });
       });
     },
