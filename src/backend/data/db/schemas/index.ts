@@ -7,6 +7,12 @@ import { chatMessageFileRefTable, paintingFileRefTable } from './fileRelations';
 import { jobTable } from './job';
 import { mcpServerTable } from './mcpServer';
 import { messageTable } from './message';
+import {
+  mobileAgentApprovalTable,
+  mobileAgentMessageTable,
+  mobileAgentSessionTable,
+  mobileAgentTurnTable,
+} from './mobileAgentSession';
 import { paintingTable } from './painting';
 import { preferenceTable } from './preference';
 import { topicTable } from './topic';
@@ -20,6 +26,7 @@ export * from './fileRelations';
 export * from './job';
 export * from './mcpServer';
 export * from './message';
+export * from './mobileAgentSession';
 export * from './painting';
 export * from './userModel';
 export * from './userProvider';
@@ -48,6 +55,10 @@ export const schema = {
   jobTable,
   mcpServerTable,
   messageTable,
+  mobileAgentApprovalTable,
+  mobileAgentMessageTable,
+  mobileAgentSessionTable,
+  mobileAgentTurnTable,
   paintingFileRefTable,
   paintingTable,
   preferenceTable,

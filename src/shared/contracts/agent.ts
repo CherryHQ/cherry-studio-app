@@ -1,0 +1,313 @@
+/**
+ * Cherry Agent Protocol: the application contract between the Agent Client and
+ * the Mobile Agent Host, per `docs/references/agent/agent-protocol.md`.
+ *
+ * Operation inputs, results, snapshots, and events are JSON-safe values
+ * validated at this boundary (invariant 9: every protocol value survives a
+ * JSON round trip and re-validates against its schema). Subscription callbacks
+ * and unsubscribe handles are process-local transport mechanics, not protocol
+ * data. Runtime ids and Pi/AI SDK implementation details never appear in
+ * protocol values.
+ *
+ * Types are inferred from the zod schemas so the validated shape and the
+ * static shape cannot drift.
+ */
+
+import * as z from 'zod';
+
+export const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.null(),
+    z.boolean(),
+    z.number(),
+    z.string(),
+    z.array(JsonValueSchema),
+    z.record(z.string(), JsonValueSchema),
+  ]),
+);
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+export const AgentViewSchema = z.strictObject({
+  id: z.string().min(1),
+  name: z.string(),
+});
+export type AgentView = z.infer<typeof AgentViewSchema>;
+
+/**
+ * Application intent, not implementation choice. Version 1 accepts only
+ * `local`; LAN and cloud may add variants after their authority and transport
+ * contracts are designed.
+ */
+export const AgentExecutionTargetSchema = z.strictObject({
+  kind: z.literal('local'),
+});
+export type AgentExecutionTarget = z.infer<typeof AgentExecutionTargetSchema>;
+
+export const AgentSessionViewSchema = z.strictObject({
+  id: z.string().min(1),
+  agentId: z.string().min(1),
+  executionTarget: AgentExecutionTargetSchema,
+  title: z.string(),
+  titleIsManual: z.boolean(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type AgentSessionView = z.infer<typeof AgentSessionViewSchema>;
+
+export const AgentErrorViewSchema = z.strictObject({
+  code: z.enum([
+    'AGENT_NOT_FOUND',
+    'SESSION_NOT_FOUND',
+    'SESSION_BUSY',
+    'CAPABILITY_UNSUPPORTED',
+    'APPROVAL_NOT_FOUND',
+    'EXECUTION_UNAVAILABLE',
+    'EXECUTION_FAILED',
+    'CANCELLED',
+    'INTERRUPTED',
+  ]),
+  message: z.string(),
+  retryable: z.boolean(),
+});
+export type AgentErrorView = z.infer<typeof AgentErrorViewSchema>;
+
+/** One submitted user input creates one turn and one assistant response. */
+export const AgentTurnViewSchema = z.strictObject({
+  id: z.string().min(1),
+  sessionId: z.string().min(1),
+  status: z.enum([
+    'running',
+    'awaiting-approval',
+    'cancelling',
+    'completed',
+    'failed',
+    'cancelled',
+    'interrupted',
+  ]),
+  assistantMessageId: z.string().min(1),
+  error: AgentErrorViewSchema.nullable(),
+  startedAt: z.iso.datetime(),
+  endedAt: z.iso.datetime().nullable(),
+});
+export type AgentTurnView = z.infer<typeof AgentTurnViewSchema>;
+
+export const AgentMessagePartSchema = z.union([
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.enum(['text', 'reasoning']),
+    text: z.string(),
+    state: z.enum(['streaming', 'done']),
+  }),
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('file'),
+    mediaType: z.string(),
+    name: z.string().optional(),
+    uri: z.string(),
+  }),
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('tool'),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    state: z.enum([
+      'input-available',
+      'awaiting-approval',
+      'running',
+      'output-available',
+      'denied',
+      'error',
+    ]),
+    input: JsonValueSchema.optional(),
+    output: JsonValueSchema.optional(),
+    approvalId: z.string().optional(),
+    error: AgentErrorViewSchema.optional(),
+  }),
+  z.strictObject({
+    id: z.string().min(1),
+    type: z.literal('error'),
+    error: AgentErrorViewSchema,
+  }),
+]);
+export type AgentMessagePart = z.infer<typeof AgentMessagePartSchema>;
+
+export const AgentUsageViewSchema = z.strictObject({
+  inputTokens: z.number().optional(),
+  outputTokens: z.number().optional(),
+  totalTokens: z.number().optional(),
+});
+export type AgentUsageView = z.infer<typeof AgentUsageViewSchema>;
+
+export const AgentMessageViewSchema = z.strictObject({
+  id: z.string().min(1),
+  sessionId: z.string().min(1),
+  turnId: z.string().min(1).nullable(),
+  role: z.enum(['user', 'assistant', 'system']),
+  status: z.enum(['pending', 'streaming', 'success', 'error', 'cancelled', 'interrupted']),
+  parts: z.array(AgentMessagePartSchema),
+  usage: AgentUsageViewSchema.nullable(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type AgentMessageView = z.infer<typeof AgentMessageViewSchema>;
+
+export const AgentInputPartSchema = z.union([
+  z.strictObject({ type: z.literal('text'), text: z.string() }),
+  z.strictObject({
+    type: z.literal('file'),
+    mediaType: z.string(),
+    name: z.string().optional(),
+    uri: z.string(),
+  }),
+]);
+export type AgentInputPart = z.infer<typeof AgentInputPartSchema>;
+
+export const AgentApprovalViewSchema = z.strictObject({
+  id: z.string().min(1),
+  sessionId: z.string().min(1),
+  turnId: z.string().min(1),
+  toolCallId: z.string(),
+  toolName: z.string(),
+  input: JsonValueSchema,
+  status: z.enum(['pending', 'approved', 'denied']),
+});
+export type AgentApprovalView = z.infer<typeof AgentApprovalViewSchema>;
+
+/**
+ * Projected on demand from the Session's current Agent configuration via the
+ * Host-owned Router. The client may branch on these flags, never on Runtime
+ * identity. Cancellation is required by the Runtime contract and is therefore
+ * not a capability flag.
+ */
+export const AgentCapabilitiesSchema = z.strictObject({
+  reasoning: z.boolean(),
+  tools: z.boolean(),
+  approvals: z.boolean(),
+  attachments: z.boolean(),
+});
+export type AgentCapabilities = z.infer<typeof AgentCapabilitiesSchema>;
+
+export const AgentMessageDeltaSchema = z.union([
+  z.strictObject({
+    op: z.literal('part.add'),
+    index: z.number().int().nonnegative(),
+    part: AgentMessagePartSchema,
+  }),
+  z.strictObject({
+    op: z.literal('text.append'),
+    partId: z.string().min(1),
+    text: z.string(),
+  }),
+  z.strictObject({
+    op: z.literal('part.replace'),
+    part: AgentMessagePartSchema,
+  }),
+]);
+export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
+
+export const AgentEventSchema = z.union([
+  z.strictObject({ type: z.literal('turn.updated'), turn: AgentTurnViewSchema }),
+  z.strictObject({ type: z.literal('message.created'), message: AgentMessageViewSchema }),
+  z.strictObject({
+    type: z.literal('message.delta'),
+    messageId: z.string().min(1),
+    delta: AgentMessageDeltaSchema,
+  }),
+  z.strictObject({ type: z.literal('message.finalized'), message: AgentMessageViewSchema }),
+  z.strictObject({ type: z.literal('approval.requested'), approval: AgentApprovalViewSchema }),
+  z.strictObject({ type: z.literal('approval.resolved'), approval: AgentApprovalViewSchema }),
+]);
+export type AgentEvent = z.infer<typeof AgentEventSchema>;
+
+/**
+ * Live state composed over persisted messages. Persisted transcript pagination
+ * remains a normal data read and is not duplicated here.
+ */
+export const AgentSessionSnapshotSchema = z.strictObject({
+  agent: AgentViewSchema,
+  session: AgentSessionViewSchema,
+  capabilities: AgentCapabilitiesSchema,
+  activeTurn: AgentTurnViewSchema.nullable(),
+  streamingMessage: AgentMessageViewSchema.nullable(),
+  pendingApprovals: z.array(AgentApprovalViewSchema),
+});
+export type AgentSessionSnapshot = z.infer<typeof AgentSessionSnapshotSchema>;
+
+/** Operation inputs, validated by the Host at the protocol boundary. */
+export const AgentCreateSessionInputSchema = z.strictObject({
+  agentId: z.string().min(1),
+  executionTarget: AgentExecutionTargetSchema,
+  title: z.string().optional(),
+});
+export const AgentRenameSessionInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  title: z.string().min(1),
+});
+export const AgentDeleteSessionInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+});
+export const AgentSubmitMessageInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  parts: z.array(AgentInputPartSchema).min(1),
+});
+export const AgentCancelTurnInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  turnId: z.string().min(1),
+});
+export const AgentRespondApprovalInputSchema = z.strictObject({
+  sessionId: z.string().min(1),
+  turnId: z.string().min(1),
+  approvalId: z.string().min(1),
+  decision: z.enum(['approve', 'deny']),
+});
+
+/**
+ * Protocol operation failure. The `view` is the JSON-safe protocol value; the
+ * Error wrapper is process-local transport, like subscription callbacks.
+ */
+export class AgentProtocolError extends Error {
+  constructor(readonly view: AgentErrorView) {
+    super(view.message);
+    this.name = 'AgentProtocolError';
+  }
+}
+
+export type AgentSessionObservation = {
+  snapshot: AgentSessionSnapshot;
+  unsubscribe(): void;
+};
+
+export interface AgentProtocol {
+  createSession(input: {
+    agentId: string;
+    executionTarget: AgentExecutionTarget;
+    title?: string;
+  }): Promise<AgentSessionView>;
+  renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView>;
+  deleteSession(input: { sessionId: string }): Promise<void>;
+
+  submitMessage(input: {
+    sessionId: string;
+    parts: AgentInputPart[];
+  }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>;
+
+  cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>;
+
+  respondApproval(input: {
+    sessionId: string;
+    turnId: string;
+    approvalId: string;
+    decision: 'approve' | 'deny';
+  }): Promise<void>;
+
+  observeSession(
+    sessionId: string,
+    listener: (event: AgentEvent) => void,
+  ): Promise<AgentSessionObservation>;
+}

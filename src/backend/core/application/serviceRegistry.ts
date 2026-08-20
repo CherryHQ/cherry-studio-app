@@ -1,3 +1,4 @@
+import { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
@@ -43,6 +44,7 @@ export const services = {
   McpRuntimeService,
   AiService,
   ChatRuntime,
+  MobileAgentHost,
   JobHandlerRegistry,
   JobRuntime,
 } as const;

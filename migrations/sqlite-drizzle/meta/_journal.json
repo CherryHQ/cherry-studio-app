@@ -15,6 +15,13 @@
       "when": 1787198173970,
       "tag": "0001_mcp-disabled-tools",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787214573193,
+      "tag": "0002_mobile-agent-sessions",
+      "breakpoints": true
     }
   ]
 }

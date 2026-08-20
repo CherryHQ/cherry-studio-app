@@ -121,6 +121,7 @@ export function createBackend(
 
   return {
     backend: {
+      agent: services.agent,
       chat: services.chat,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
