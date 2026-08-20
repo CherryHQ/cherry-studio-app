@@ -76,8 +76,9 @@ export function createPaintingsModule(dependencies: PaintingsModuleDependencies)
  * Creates the receipt and enqueues the `painting.generate` job in one write
  * transaction — on rollback neither exists. Draft-only images are materialized
  * into internal entries first (file IO cannot ride the transaction); the
- * receipt's input refs pin them, and any entry left unreferenced on failure or
- * on an idempotency hit is discarded before returning.
+ * receipt's `files.input` is what records them, so an entry no receipt ended up
+ * recording — on failure or on an idempotency hit — is discarded before
+ * returning.
  */
 async function startGeneration(
   dependencies: PaintingsModuleDependencies,
@@ -140,7 +141,7 @@ async function startGeneration(
     });
 
     if (result.reusedActive) {
-      // The active job's own receipt already pins its copies of these inputs.
+      // The reused receipt already lists its own copies of these inputs.
       await dependencies.storage.discard(createdInputs);
     }
     createdInputsSettled = true;

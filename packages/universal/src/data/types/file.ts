@@ -1,7 +1,5 @@
 import * as z from 'zod';
 
-import { MessageIdSchema } from './message';
-
 /**
  * Mobile-native file model.
  *
@@ -91,66 +89,7 @@ export function parseFileEntryUrl(url: string): FileEntryId | null {
   return parsed.success ? parsed.data : null;
 }
 
-// ============================================================================
-// Business references
-//
-// Pure usage index: reference rows never drive file lifecycle (no ref-counted
-// deletion, no GC). They exist so future surfaces can answer "which owners use
-// this file" (deletion warnings, usage navigation) and so topic fork can copy
-// associations. Every persistent source type registers a table in
-// `persistentFileRefTablesBySourceType`.
-// ============================================================================
-
-export const refCommonFields = Object.freeze({
-  createdAt: TimestampSchema,
-  fileEntryId: FileEntryIdSchema,
-  id: z.uuidv4(),
-  updatedAt: TimestampSchema,
-});
-
-export type BusinessRefShape = {
-  role: z.ZodEnum;
-  sourceId: z.ZodType<string>;
-  sourceType: z.ZodLiteral<string>;
-};
-
-export const createRefSchema = <TShape extends BusinessRefShape>(
-  shape: TShape,
-): z.ZodObject<typeof refCommonFields & TShape> =>
-  z.object({
-    ...refCommonFields,
-    ...shape,
-  });
-
-export const chatMessageSourceType = 'chat_message' as const;
-export const chatMessageRoles = ['attachment'] as const;
-export const chatMessageRoleSchema = z.enum(chatMessageRoles);
-export const chatMessageRefFields = {
-  role: chatMessageRoleSchema,
-  sourceId: MessageIdSchema,
-  sourceType: z.literal(chatMessageSourceType),
-};
-export const chatMessageFileRefSchema = createRefSchema(chatMessageRefFields);
-
-export const paintingSourceType = 'painting' as const;
-export const paintingRoles = ['output', 'input'] as const;
-export const paintingRoleSchema = z.enum(paintingRoles);
-export const paintingRefFields = {
-  role: paintingRoleSchema,
-  sourceId: z.uuidv4(),
-  sourceType: z.literal(paintingSourceType),
-};
-export const paintingFileRefSchema = createRefSchema(paintingRefFields);
-
-export const allSourceTypes = [
-  chatMessageSourceType,
-  paintingSourceType,
-] as const satisfies readonly string[];
-export type FileRefSourceType = (typeof allSourceTypes)[number];
-export const FileRefSourceTypeSchema = z.enum(allSourceTypes);
-
-export const FileRefSchema = z.discriminatedUnion('sourceType', [
-  chatMessageFileRefSchema,
-  paintingFileRefSchema,
-]);
-export type FileRef = z.infer<typeof FileRefSchema>;
+// Owners hold their own file ids — message parts carry them in JSON, a painting
+// row carries them in its `files` column. There is no association table and no
+// reverse index: nothing needs to ask which owners use a given file, and a file
+// outlives every owner that referenced it.

@@ -60,9 +60,7 @@ One structural consequence: `src/backend/data/db/schemas/job.ts` and the univers
 **desktop mirrors under the `$sync-cherry-desktop` audit**. Mobile-only state must not be patched
 into them, or every future sync becomes a merge conflict and the schema-AST audit reports drift.
 The design below therefore adds **no schema at all**: everything mobile-only is derived from the
-handler registry, carried in `metadata`, or expressed as a runtime invariant. (One as-built
-deviation exists outside the mirrors: `job_file_ref` — see
-[Phase 1 As-Built](#phase-1-as-built).)
+handler registry, carried in `metadata`, or expressed as a runtime invariant.
 
 ## Phase 1 As-Built
 
@@ -97,12 +95,10 @@ sits on the list.
 
 **As-built deviations from the design text:**
 
-- **`job_file_ref` exists but Phase 1 does not write it.** The table
-  (`src/backend/data/db/schemas/fileRelations.ts:88`, migration 0007) landed ahead of this
-  design — a deviation from "no schema at all", though it touches file relations, not the `job`
-  mirror. Phase 1 leaves it empty on purpose: the painting receipt's `painting_file_ref` rows
-  already pin the input files, created in the same transaction as the enqueue, so a job-level ref
-  would be redundant. It waits for a consumer whose files have no domain receipt of their own.
+- **A job never records the files it works on.** The domain receipt does: a `painting` row carries
+  its input entry ids in `files`, written in the same transaction as the enqueue. There is no
+  job-level file table and no association table anywhere — see
+  [File Model](data/file-model.md) for why ownership lives on the owning row.
 - **Handler input carries internal URIs alongside IDs.** As-built input is
   `{ images: { fileEntryId, mediaType, uri }[], mode, modelId, paintingId, paramValues, prompt }`.
   Draft picker images are materialized into durable internal file entries *before* enqueue; the

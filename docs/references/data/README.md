@@ -87,9 +87,10 @@ cache would weaken that module's invariants.
 workflow implementations. `DataApiService` performs typed in-process route dispatch and satisfies
 `ApiClient`; it adds no IPC, HTTP, or serialization.
 
-File entry and reference reads remain SQL-only Data API operations. Managed-file import, Expo URI
-resolution, and safe unreferenced cleanup use the mobile `FileModule` through `BackendProvider`,
-which is the platform adaptation of Cherry Desktop's filesystem-backed File IPC boundary.
+File entry reads remain SQL-only Data API operations. Managed-file import, Expo URI resolution, and
+user-triggered deletion use the mobile `FileModule` through `BackendProvider`, which is the platform
+adaptation of Cherry Desktop's filesystem-backed File IPC boundary. [File Model](file-model.md) has
+the ownership and lifecycle rules those operations follow.
 
 `src/shared/contracts/backend.ts` aggregates workflow-only modules. Multi-step behavior belongs in
 its owning backend domain, including:

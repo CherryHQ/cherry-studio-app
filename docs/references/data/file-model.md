@@ -17,12 +17,13 @@ here. Terms follow [Domain Language](../domain-language.md).
    bytes are copied into `Data/Files`. No entry references a path outside the sandbox.
 4. **Import happens when the file enters the app.** The composer imports at pick time (the upload
    affordance tells the user the file is stored), painting imports at generation time.
-5. **Business-object deletion never deletes files.** Deleting a topic, message, or painting removes
-   its reference rows and leaves the file in place.
+5. **Business-object deletion never deletes files.** Deleting a topic, message, or painting leaves
+   every file it pointed at in place.
 6. **Only the user deletes files.** Two paths exist: cancelling an attachment before send, and (once
    the file library ships) library deletion. There is no background garbage collection.
-7. **Reference rows are a usage index, not a lifecycle mechanism.** Nothing reads them to decide
-   whether a file may be removed.
+7. **Owners hold their own file ids; there is no association table.** A message carries them in its
+   part JSON, a painting in its `files` column. Nothing maintains a reverse index, because nothing
+   asks which owners use a given file — and a file outlives every owner that pointed at it.
 
 ## Storage
 
@@ -48,10 +49,22 @@ here. Terms follow [Domain Language](../domain-language.md).
 - `deletedAt` is reserved for the future library trash. It is `NULL` for every row today, no code
   branches on it, and no cleanup logic may consult it.
 
-Reference tables (`chat_message_file_ref`, `painting_file_ref`) map an entry to a business owner
-with a role. `persistentFileRefTablesBySourceType` is a compile-time completeness assertion: a new
-source type without a table fails typecheck. Chat refs are derived from message JSON on every
-message write; painting refs are written explicitly and validated against `file_entry` first.
+## Ownership
+
+An owner stores the entry ids it points at, inside its own row:
+
+| Owner | Where the ids live |
+| --- | --- |
+| Chat message | `message.data` JSON — `fileEntryId` in each file part's Cherry metadata |
+| Painting | `painting.files` — `{ input: string[], output: string[] }` |
+
+There is no association table and no foreign key from an owner to `file_entry`. That is the point:
+a foreign key would have to choose between `CASCADE` (deleting a file silently rewrites the
+receipts that referenced it) and `RESTRICT` (a file the user asked to delete cannot be deleted).
+Both contradict the model — the id stays, the bytes go, and the surface renders the unavailable
+placeholder. Writers validate ids against `file_entry` at write time (`assertFileEntriesExistTx`
+for paintings), which catches the mistake that actually happens: pointing at an entry that was
+never created.
 
 ## Message persistence
 
@@ -93,14 +106,17 @@ logos are similarly external (`{documentDirectory}/provider-avatars/`, resolved 
 **File library.** A library page is a query over `file_entry`; it needs no new table. Its trash uses
 the reserved `deletedAt`: delete sets it, restore clears it, emptying the trash hard-deletes rows and
 bytes, and other surfaces then show the unavailable placeholder. There is no retention timer —
-trashed files persist until the user empties the trash. A deletion warning ("used by 2 topics")
-reads the reference tables. The same iteration owns a cache-cleanup action, which is also where
-orphan-blob sweeping belongs (blobs in `Data/Files` with no matching row).
+trashed files persist until the user empties the trash. Deleting is deliberately unguarded: no
+"used by 2 topics" warning, because that would need the reverse index this model does without, and
+the user owns the consequences of their own deletion. The same iteration owns a cache-cleanup
+action, which is also where orphan-blob sweeping belongs (blobs in `Data/Files` with no matching
+row).
 
 **Agent file writes.** A write tool reads the current entry, creates a new one, and returns the new
-id; it must not rewrite a managed blob. Agent-owned files register through a new reference table
-(`agent_session_file_ref`) following the existing per-domain pattern. A file id returned inside a
-tool-result JSON payload is not a reference — it must be registered like any other owner.
+id; it must not rewrite a managed blob. Agent-owned files are stored the way every other owner
+stores them — ids on the owning row — not in an association table. A file id sitting in a
+tool-result JSON payload is not ownership: it has to reach a row that outlives the turn, or the
+file has no owner at all.
 
 **Provider upload cache.** A separate table keyed by content hash, added when the AI SDK's Files
 Upload API stabilizes.

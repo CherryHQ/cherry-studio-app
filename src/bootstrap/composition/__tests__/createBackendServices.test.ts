@@ -15,7 +15,6 @@ const mockDataServices = {
   assistant: { kind: 'assistant' },
   dataOnly: { kind: 'data-only' },
   fileEntry: { kind: 'file-entry' },
-  fileRef: { kind: 'file-ref' },
   mcpServer: { kind: 'mcp-server' },
   model: { kind: 'model' },
   preference: { kind: 'preference' },

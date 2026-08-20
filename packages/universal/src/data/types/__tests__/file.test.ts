@@ -1,18 +1,15 @@
 import {
-  allSourceTypes,
   FALLBACK_MEDIA_TYPE,
   FILE_ENTRY_URL_PREFIX,
   FileEntryIdSchema,
   FileEntrySchema,
   fileEntryUrl,
   filenameExtension,
-  FileRefSchema,
   MediaTypeSchema,
   parseFileEntryUrl,
 } from '../file';
 
 const entryId = '00000000-0000-7000-8000-000000000001';
-const refId = '00000000-0000-4000-8000-000000000002';
 
 describe('File contract', () => {
   it('validates the flat entry shape and rejects unknown fields', () => {
@@ -52,24 +49,5 @@ describe('File contract', () => {
     expect(parseFileEntryUrl(url)).toBe(id);
     expect(parseFileEntryUrl(`${FILE_ENTRY_URL_PREFIX}not-a-uuid`)).toBeNull();
     expect(parseFileEntryUrl(`file:///documents/${entryId}`)).toBeNull();
-  });
-
-  it.each([
-    { role: 'attachment', sourceId: refId, sourceType: 'chat_message' },
-    { role: 'input', sourceId: refId, sourceType: 'painting' },
-  ])('validates the $sourceType FileRef variant', (source) => {
-    expect(
-      FileRefSchema.parse({
-        ...source,
-        createdAt: 1,
-        fileEntryId: entryId,
-        id: refId,
-        updatedAt: 2,
-      }),
-    ).toEqual(expect.objectContaining(source));
-  });
-
-  it('exposes exactly the two persistent sources', () => {
-    expect(allSourceTypes).toEqual(['chat_message', 'painting']);
   });
 });

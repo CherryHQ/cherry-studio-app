@@ -26,7 +26,7 @@ export const PAINTING_JOB_QUEUE = 'painting';
 /**
  * Input images always carry a fileEntryId: `startGeneration` materializes
  * draft-only images into internal entries before the job is enqueued, and the
- * receipt's painting_file_ref rows pin them for the job's lifetime. The uri is
+ * receipt's `files.input` records them for the job's lifetime. The uri is
  * a same-process convenience for readDataUrl — an abandoned job never re-runs
  * (recovery `'abandon'`, maxAttempts 1), so it is never read across restarts.
  */

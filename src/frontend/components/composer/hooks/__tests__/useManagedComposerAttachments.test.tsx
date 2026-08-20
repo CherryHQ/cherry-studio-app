@@ -235,15 +235,12 @@ function readyAttachment(entryId: FileEntryId, name: string): ComposerAttachment
 function resolvedFile(entryId: FileEntryId, name: string) {
   return {
     entry: {
-      cleanupPolicy: 'delete_when_unreferenced' as const,
-      contentHash: null,
-      createdAt: '2026-08-08T00:00:00.000Z',
-      ext: 'pdf',
+      createdAt: 1_754_611_200_000,
+      filename: name,
       id: entryId,
-      name,
-      origin: 'internal' as const,
+      mediaType: 'application/pdf',
       size: 128,
-      updatedAt: '2026-08-08T00:00:00.000Z',
+      updatedAt: 1_754_611_200_000,
     },
     uri: `file:///managed/${name}`,
   };
