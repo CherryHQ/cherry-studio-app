@@ -1,5 +1,8 @@
-import type { WebSearchProvider } from '@/shared/data/preference';
-import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
+import type {
+  WebSearchProvider,
+  WebSearchExecutionConfig,
+  WebSearchResponse,
+} from '@/shared/data/types/webSearch';
 
 import type { ApiKeyRotationState } from '../utils/provider';
 import type { BaseWebSearchProvider } from './base/BaseWebSearchProvider';

@@ -1,8 +1,9 @@
 import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
 import type {
+  WebSearchCapability,
+  WebSearchProvider,
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
   WebSearchExecutionConfig,

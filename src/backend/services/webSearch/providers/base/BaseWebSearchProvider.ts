@@ -1,7 +1,7 @@
 import type * as z from 'zod';
 
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
-import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
+import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/types/webSearch';
 
 import type { ApiKeyRotationState } from '../../utils/provider';
 import { resolveProviderApiHost } from '../../utils/provider';

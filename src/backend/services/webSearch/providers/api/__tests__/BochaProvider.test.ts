@@ -1,5 +1,4 @@
-import type { WebSearchProvider } from '@/shared/data/preference';
-import type { WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
+import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
 
 import { ApiKeyRotationState } from '../../../utils/provider';
 import bochaResponse from '../../__tests__/fixtures/bocha-response.json';

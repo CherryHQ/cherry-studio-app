@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useBackendModule } from '@/frontend/data';
+import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
   WebSearchProvider,
   WebSearchProviderOverride,
-} from '@/shared/data/preference';
-import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
+} from '@/shared/data/types/webSearch';
 
 export function useWebSearchProviderCheck(
   provider: WebSearchProviderPreset,

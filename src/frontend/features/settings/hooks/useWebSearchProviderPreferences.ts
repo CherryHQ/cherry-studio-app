@@ -2,15 +2,15 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMultiplePreferences } from '@/frontend/data/hooks';
-import type {
-  WebSearchCompressionMethod,
-  WebSearchProviderId,
-  WebSearchProviderOverride,
-} from '@/shared/data/preference';
 import {
   getMobileSupportedWebSearchProvidersByCapability,
   type WebSearchProviderPreset,
 } from '@/shared/data/presets/webSearchProviders';
+import type {
+  WebSearchCompressionMethod,
+  WebSearchProviderId,
+  WebSearchProviderOverride,
+} from '@/shared/data/types/webSearch';
 
 import type { SettingOption } from '../settingOptions';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';

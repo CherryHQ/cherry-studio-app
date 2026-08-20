@@ -12,12 +12,12 @@
  */
 
 import type {
-  LanguageVarious,
-  PermissionMode,
   WebSearchCompressionMethod,
   WebSearchProviderId,
   WebSearchProviderOverrides,
-} from './preferenceTypes';
+} from '@/shared/data/types/webSearch';
+
+import type { LanguageVarious, PermissionMode } from './preferenceTypes';
 import { ThemeMode } from './preferenceTypes';
 
 export const FONT_SIZE_STEPS = [0, 1, 2] as const;

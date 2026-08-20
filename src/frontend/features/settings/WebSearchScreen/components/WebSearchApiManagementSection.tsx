@@ -3,13 +3,13 @@ import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
 import type {
   WebSearchCapability,
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
-} from '@/shared/data/preference';
-import type { WebSearchProviderPreset } from '@/shared/data/presets/webSearchProviders';
+} from '@/shared/data/types/webSearch';
 
 import { WebSearchApiServiceFieldGroup } from '../apiService/components/WebSearchApiServiceFields';
 import {
