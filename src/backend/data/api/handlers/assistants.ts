@@ -2,10 +2,6 @@ import { application } from '@/backend/core/application/Application';
 import type { AssistantService } from '@/backend/data/services/AssistantService';
 import { topicService } from '@/backend/data/services/TopicService';
 import {
-  OrderBatchRequestSchema,
-  OrderRequestSchema,
-} from '@/shared/data/api/schemas/_endpointHelpers';
-import {
   type AssistantSchemas,
   CreateAssistantSchema,
   DeleteAssistantQuerySchema,
@@ -14,6 +10,10 @@ import {
   type UpdateAssistantDto,
   UpdateAssistantSchema,
 } from '@/shared/data/api/schemas/assistants';
+import {
+  OrderBatchRequestSchema,
+  OrderRequestSchema,
+} from '@/shared/data/api/schemas/endpointHelpers';
 import type { HandlersFor } from '@/shared/data/api/types';
 
 type AssistantData = Pick<

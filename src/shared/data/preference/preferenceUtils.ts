@@ -1,5 +1,5 @@
-import type { PreferenceKeyType, PreferenceSchema } from './preference-schema';
-import { PreferenceDefaults } from './preference-schema';
+import type { PreferenceKeyType, PreferenceSchema } from './preferenceSchema';
+import { PreferenceDefaults } from './preferenceSchema';
 
 /**
  * Type guard: narrow a string to DB-backed preference keys.

@@ -4,7 +4,7 @@ import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
-import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
+import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type {
   ActiveNodeResponse,
   CreateTopicDto,

@@ -7,7 +7,7 @@ import * as z from 'zod';
 
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 
-import { type OrderEndpoints } from './_endpointHelpers';
+import { type OrderEndpoints } from './endpointHelpers';
 
 const ASSISTANT_MUTABLE_FIELDS = {
   description: true,
