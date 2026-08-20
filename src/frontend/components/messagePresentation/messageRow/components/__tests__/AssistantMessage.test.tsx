@@ -18,10 +18,6 @@ jest.mock('@cherrystudio/ui/components', () => ({
   DotMatrixSquare20: (props: { active: boolean; size: number }) => mockDotMatrixSquare20(props),
 }));
 
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
-
 // 真模块在 jest 下会去装 worklets 的原生 unpacker 并崩掉，本套件只关心渲染出什么。
 jest.mock('react-native-reanimated', () => {
   const { View: MockView } = jest.requireActual('react-native');

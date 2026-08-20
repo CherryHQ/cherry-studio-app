@@ -3,8 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import {
   AssistantMessageActionsProvider,
-  useAssistantMessageActionCommands,
-  useAssistantMessageActionState,
+  useAssistantMessageActions,
+  useAssistantMessageActionsState,
 } from '../AssistantMessageActionsProvider';
 
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
@@ -40,14 +40,14 @@ function createDeferred<T>() {
 }
 
 type ContextProbeHandle = {
-  commands: ReturnType<typeof useAssistantMessageActionCommands>;
-  state: ReturnType<typeof useAssistantMessageActionState>;
+  actions: ReturnType<typeof useAssistantMessageActions>;
+  state: ReturnType<typeof useAssistantMessageActionsState>;
 };
 
 function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
-  const commands = useAssistantMessageActionCommands();
-  const state = useAssistantMessageActionState();
-  useImperativeHandle(ref, () => ({ commands, state }), [commands, state]);
+  const actions = useAssistantMessageActions();
+  const state = useAssistantMessageActionsState();
+  useImperativeHandle(ref, () => ({ actions, state }), [actions, state]);
   return null;
 }
 
@@ -113,12 +113,12 @@ describe('AssistantMessageActionsProvider', () => {
   }
 
   function startCopy(messageId: string, text: string) {
-    act(() => probeRef.current?.commands.copyAssistantMessage({ messageId, text }));
+    act(() => probeRef.current?.actions.copyAssistantMessage({ messageId, text }));
   }
 
   async function copyAndFlush(messageId: string, text: string) {
     await act(async () => {
-      probeRef.current?.commands.copyAssistantMessage({ messageId, text });
+      probeRef.current?.actions.copyAssistantMessage({ messageId, text });
       await Promise.resolve();
     });
   }
@@ -128,30 +128,25 @@ describe('AssistantMessageActionsProvider', () => {
     renderer = undefined;
   }
 
-  test('keeps commands stable while copied feedback updates and expires', async () => {
+  test('shows copied feedback until it expires', async () => {
     renderProvider();
-    const commandsAtMount = probeRef.current?.commands;
 
     await copyAndFlush('assistant-1', 'Answer');
 
     expect(mockSetStringAsync).toHaveBeenCalledWith('Answer');
     expect(probeRef.current?.state.copiedMessageId).toBe('assistant-1');
-    expect(probeRef.current?.commands).toBe(commandsAtMount);
 
     act(() => jest.advanceTimersByTime(1_200));
 
     expect(probeRef.current?.state.copiedMessageId).toBeUndefined();
-    expect(probeRef.current?.commands).toBe(commandsAtMount);
   });
 
-  test('updates busy state without changing the commands context', () => {
+  test('updates busy state', () => {
     renderProvider();
-    const commandsAtMount = probeRef.current?.commands;
 
     updateProvider(true);
 
     expect(probeRef.current?.state.isRegenerateDisabled).toBe(true);
-    expect(probeRef.current?.commands).toBe(commandsAtMount);
   });
 
   test('routes copy failures to logging and user feedback', async () => {
@@ -163,6 +158,20 @@ describe('AssistantMessageActionsProvider', () => {
 
     expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
     expect(mockAlertShow).toHaveBeenCalledWith({ title: 'chat.messageActions.copyFailed' });
+  });
+
+  test('logs a stale copy failure without showing outdated user feedback', async () => {
+    const firstClipboardWrite = createDeferred<void>();
+    const error = new Error('stale copy failed');
+    mockSetStringAsync.mockReturnValueOnce(firstClipboardWrite.promise);
+    renderProvider();
+
+    startCopy('assistant-1', 'First');
+    await copyAndFlush('assistant-2', 'Second');
+    await act(async () => firstClipboardWrite.reject(error));
+
+    expect(mockLoggerError).toHaveBeenCalledWith('Copy assistant message failed', error);
+    expect(mockAlertShow).not.toHaveBeenCalled();
   });
 
   test('ignores a pending copy after unmount', async () => {
@@ -213,7 +222,7 @@ describe('AssistantMessageActionsProvider', () => {
     renderProvider();
 
     await act(async () => {
-      probeRef.current?.commands.regenerateAssistantMessage('assistant-1');
+      probeRef.current?.actions.regenerateAssistantMessage('assistant-1');
       await Promise.resolve();
     });
 
@@ -229,7 +238,7 @@ describe('AssistantMessageActionsProvider', () => {
     renderProvider();
 
     act(() => {
-      probeRef.current?.commands.regenerateAssistantMessage('assistant-1');
+      probeRef.current?.actions.regenerateAssistantMessage('assistant-1');
     });
     unmountProvider();
     await act(async () => regeneration.reject(new Error('regenerate failed')));

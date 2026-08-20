@@ -17,20 +17,20 @@ import { loggerService } from '@/shared/core/logger/LoggerService';
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
 const logger = loggerService.withContext('AssistantMessageActions');
 
-type AssistantMessageActionState = {
+type AssistantMessageActionsState = {
   copiedMessageId?: string;
   isRegenerateDisabled: boolean;
 };
 
-type AssistantMessageActionCommands = {
+type AssistantMessageActions = {
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
   regenerateAssistantMessage: (messageId: string) => void;
 };
 
-const AssistantMessageActionStateContext = createContext<AssistantMessageActionState | null>(null);
-const AssistantMessageActionCommandsContext = createContext<AssistantMessageActionCommands | null>(
+const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
   null,
 );
+const AssistantMessageActionsContext = createContext<AssistantMessageActions | null>(null);
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isRegenerateDisabled: boolean;
@@ -47,12 +47,7 @@ export function AssistantMessageActionsProvider({
   const [copiedMessageId, setCopiedMessageId] = useState<string>();
   const copiedFeedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyOperationIdRef = useRef(0);
-  const eventDependenciesRef = useRef({ alert, onRegenerate, t });
   const isMountedRef = useRef(true);
-
-  useEffect(() => {
-    eventDependenciesRef.current = { alert, onRegenerate, t };
-  }, [alert, onRegenerate, t]);
 
   const copyAssistantMessage = useCallback(
     ({ messageId, text }: { messageId: string; text: string }) => {
@@ -78,39 +73,37 @@ export function AssistantMessageActionsProvider({
           }, COPIED_FEEDBACK_DURATION_MS);
         })
         .catch((error) => {
+          logger.error('Copy assistant message failed', error as Error);
+
           if (!isMountedRef.current || copyOperationId !== copyOperationIdRef.current) {
             return;
           }
 
-          const { alert: currentAlert, t: currentT } = eventDependenciesRef.current;
-          logger.error('Copy assistant message failed', error as Error);
-          currentAlert.show({ title: currentT('chat.messageActions.copyFailed') });
+          alert.show({ title: t('chat.messageActions.copyFailed') });
         });
     },
-    [],
+    [alert, t],
   );
 
-  const regenerateAssistantMessage = useCallback((messageId: string) => {
-    const {
-      alert: currentAlert,
-      onRegenerate: currentOnRegenerate,
-      t: currentT,
-    } = eventDependenciesRef.current;
-    void currentOnRegenerate({ messageId }).catch((error) => {
-      if (!isMountedRef.current) {
-        return;
-      }
+  const regenerateAssistantMessage = useCallback(
+    (messageId: string) => {
+      void onRegenerate({ messageId }).catch((error) => {
+        if (!isMountedRef.current) {
+          return;
+        }
 
-      logger.error('Regenerate assistant message failed', error as Error);
-      currentAlert.show({ title: currentT('chat.messageActions.regenerateFailed') });
-    });
-  }, []);
+        logger.error('Regenerate assistant message failed', error as Error);
+        alert.show({ title: t('chat.messageActions.regenerateFailed') });
+      });
+    },
+    [alert, onRegenerate, t],
+  );
 
   const stateValue = useMemo(
     () => ({ copiedMessageId, isRegenerateDisabled }),
     [copiedMessageId, isRegenerateDisabled],
   );
-  const commandsValue = useMemo(
+  const actionsValue = useMemo(
     () => ({ copyAssistantMessage, regenerateAssistantMessage }),
     [copyAssistantMessage, regenerateAssistantMessage],
   );
@@ -129,32 +122,32 @@ export function AssistantMessageActionsProvider({
   }, []);
 
   return (
-    <AssistantMessageActionStateContext value={stateValue}>
-      <AssistantMessageActionCommandsContext value={commandsValue}>
+    <AssistantMessageActionsStateContext value={stateValue}>
+      <AssistantMessageActionsContext value={actionsValue}>
         {children}
-      </AssistantMessageActionCommandsContext>
-    </AssistantMessageActionStateContext>
+      </AssistantMessageActionsContext>
+    </AssistantMessageActionsStateContext>
   );
 }
 
-export function useAssistantMessageActionState() {
-  const context = use(AssistantMessageActionStateContext);
+export function useAssistantMessageActionsState() {
+  const context = use(AssistantMessageActionsStateContext);
 
   if (!context) {
     throw new Error(
-      'useAssistantMessageActionState must be used within AssistantMessageActionsProvider',
+      'useAssistantMessageActionsState must be used within AssistantMessageActionsProvider',
     );
   }
 
   return context;
 }
 
-export function useAssistantMessageActionCommands() {
-  const context = use(AssistantMessageActionCommandsContext);
+export function useAssistantMessageActions() {
+  const context = use(AssistantMessageActionsContext);
 
   if (!context) {
     throw new Error(
-      'useAssistantMessageActionCommands must be used within AssistantMessageActionsProvider',
+      'useAssistantMessageActions must be used within AssistantMessageActionsProvider',
     );
   }
 

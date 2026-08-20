@@ -14,6 +14,8 @@ const mockInputHeightShared = {
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
 const mockRegenerate = jest.fn(async () => undefined);
+const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
+const mockAlertShow = jest.fn();
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
@@ -27,25 +29,41 @@ let mockChatTopic: {
 };
 
 jest.mock('expo-clipboard', () => ({
-  setStringAsync: jest.fn(async () => undefined),
+  setStringAsync: (text: string) => mockSetStringAsync(text),
 }));
 
 jest.mock('expo-router/react-navigation', () => ({
   useHeaderHeight: () => 52,
 }));
 
+jest.mock('@cherrystudio/app-icons', () => ({
+  CheckIcon: () => null,
+  CopyIcon: () => null,
+  RefreshCwIcon: () => null,
+}));
+
+jest.mock('@cherrystudio/ui/components', () => {
+  const { createElement } = jest.requireActual('react');
+  return { Button: (props: object) => createElement('Button', props) };
+});
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 jest.mock('@/frontend/components/AlertProvider', () => ({
-  useAlert: () => ({ alert: { show: jest.fn() } }),
+  useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
 jest.mock('@/frontend/components/messagePresentation', () => ({
+  AssistantMessage: ({ children, message }: { children: React.ReactNode; message: Message }) => {
+    const { createElement } = jest.requireActual('react');
+    return createElement('AssistantMessage', { message }, children);
+  },
   MessageList: (props: MessageListProps) => {
     mockMessageListProps = props;
-    return null;
+    const assistant = props.messages.find((message) => message.role === 'assistant');
+    return assistant ? props.renderAssistantMessage?.(assistant) : null;
   },
 }));
 
@@ -75,10 +93,6 @@ jest.mock('../components/ChatInitialRenderCover', () => ({
   },
 }));
 
-jest.mock('../components/AssistantMessageToolbar', () => ({
-  AssistantMessageToolbar: () => null,
-}));
-
 jest.mock('../components/ChatOlderMessagesIndicator', () => ({
   ChatOlderMessagesIndicator: ({ isLoading }: { isLoading: boolean }) => {
     mockIsLoadingOlder = isLoading;
@@ -103,18 +117,30 @@ function createMessage(id: string, role: Message['role']): Message {
   };
 }
 
+function createDeferred<T>() {
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((_resolve, promiseReject) => {
+    reject = promiseReject;
+  });
+  return { promise, reject };
+}
+
 /** 预览态的取值由 ChatScreen 解析后传进来，这里照它传的两组值渲染。 */
-function renderWorkspace(isPreview: boolean, messages: readonly Message[]) {
+function renderWorkspace(isPreview: boolean, messages: readonly Message[], topicId = 'topic-1') {
   let renderer: ReactTestRenderer | undefined;
 
   act(() => {
-    renderer = create(createWorkspaceElement(isPreview, messages));
+    renderer = create(createWorkspaceElement(isPreview, messages, topicId));
   });
 
   return renderer;
 }
 
-function createWorkspaceElement(isPreview: boolean, messages: readonly Message[]) {
+function createWorkspaceElement(
+  isPreview: boolean,
+  messages: readonly Message[],
+  topicId = 'topic-1',
+) {
   return (
     <ChatWorkspace
       bottomAccessoryHeight={isPreview ? undefined : mockInputHeightShared}
@@ -127,8 +153,8 @@ function createWorkspaceElement(isPreview: boolean, messages: readonly Message[]
         loadOlder: mockLoadOlder,
         messages,
       }}
-      renderGateKey="topic-1:history"
-      topicId="topic-1"
+      renderGateKey={`${topicId}:history`}
+      topicId={topicId}
     />
   );
 }
@@ -184,7 +210,6 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.contentBottomInset).toBe(96);
     expect(mockMessageListProps?.keyboardOffset).toBe(26);
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
-    expect(mockMessageListProps?.renderAssistantMessage).toEqual(expect.any(Function));
     expect(mockIsLoadingOlder).toBe(true);
 
     const renderAssistantMessage = mockMessageListProps?.renderAssistantMessage;
@@ -192,6 +217,38 @@ describe('ChatWorkspace message presentation integration', () => {
     act(() => renderer?.update(createWorkspaceElement(false, messages)));
 
     expect(mockMessageListProps?.renderAssistantMessage).toBe(renderAssistantMessage);
+  });
+
+  test('composes assistant actions with topic busy and regenerate behavior', () => {
+    mockChatTopic.isBusy = true;
+    renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
+
+    const assistantMessage = renderer.root.findByType('AssistantMessage');
+    expect(
+      assistantMessage.findAllByProps({ testID: 'assistant-message-toolbar' }).length,
+    ).toBeGreaterThan(0);
+
+    const regenerateButton = assistantMessage.findByProps({
+      testID: 'assistant-message-regenerate',
+    });
+    expect(regenerateButton.props.disabled).toBe(true);
+
+    act(() => regenerateButton.props.onPress());
+    expect(mockRegenerate).toHaveBeenCalledWith({ messageId: 'assistant-1' });
+  });
+
+  test('does not show copy failure feedback from the previous topic', async () => {
+    const clipboardWrite = createDeferred<void>();
+    const assistant = createMessage('assistant-1', 'assistant');
+    mockSetStringAsync.mockReturnValueOnce(clipboardWrite.promise);
+    renderer = renderWorkspace(false, [assistant]);
+
+    const copyButton = renderer.root.findByProps({ testID: 'assistant-message-copy' });
+    act(() => copyButton.props.onPress());
+    act(() => renderer?.update(createWorkspaceElement(false, [assistant], 'topic-2')));
+    await act(async () => clipboardWrite.reject(new Error('copy failed')));
+
+    expect(mockAlertShow).not.toHaveBeenCalled();
   });
 
   test('omits the internal scroll button accessory in preview', () => {

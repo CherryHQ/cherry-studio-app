@@ -3,9 +3,11 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
 
 import { AssistantMessageActionsProvider } from '../../context/AssistantMessageActionsProvider';
+import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
 import { AssistantMessageToolbar } from '../AssistantMessageToolbar';
 
 const mockSetStringAsync = jest.fn(async (_text: string) => undefined);
+const mockCopyAssistantMessageText = jest.mocked(copyAssistantMessageText);
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: (text: string) => mockSetStringAsync(text),
@@ -36,6 +38,11 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
   },
 }));
 
+jest.mock('../../utils/copyAssistantMessageText', () => {
+  const actual = jest.requireActual('../../utils/copyAssistantMessageText');
+  return { ...actual, copyAssistantMessageText: jest.fn(actual.copyAssistantMessageText) };
+});
+
 describe('AssistantMessageToolbar', () => {
   let renderer: ReactTestRenderer | undefined;
   const onRegenerate = jest.fn(async (_input: { messageId: string }) => undefined);
@@ -52,7 +59,23 @@ describe('AssistantMessageToolbar', () => {
     renderToolbar(createMessage('pending', 'Answer'));
 
     expect(renderer?.root.findAllByType('Button')).toHaveLength(0);
+    expect(mockCopyAssistantMessageText).not.toHaveBeenCalled();
   });
+
+  test.each([
+    { isVisible: false, status: 'pending' },
+    { isVisible: true, status: 'success' },
+    { isVisible: true, status: 'error' },
+    { isVisible: true, status: 'paused' },
+  ] satisfies { isVisible: boolean; status: MessagePresentationItem['status'] }[])(
+    'sets toolbar visibility to $isVisible for $status messages',
+    ({ isVisible, status }) => {
+      renderToolbar(createMessage(status, 'Answer'));
+
+      const toolbarNodes = renderer?.root.findAllByProps({ testID: 'assistant-message-toolbar' });
+      expect(Boolean(toolbarNodes?.length)).toBe(isVisible);
+    },
+  );
 
   test('copies projected text and exposes copied feedback for only this message', async () => {
     renderToolbar(createMessage('success', ' Answer '));

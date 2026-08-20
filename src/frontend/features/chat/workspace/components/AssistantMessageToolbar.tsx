@@ -7,8 +7,8 @@ import { View } from 'react-native';
 import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
 
 import {
-  useAssistantMessageActionCommands,
-  useAssistantMessageActionState,
+  useAssistantMessageActions,
+  useAssistantMessageActionsState,
 } from '../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
@@ -20,9 +20,12 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const { copiedMessageId, isRegenerateDisabled } = useAssistantMessageActionState();
-  const { copyAssistantMessage, regenerateAssistantMessage } = useAssistantMessageActionCommands();
-  const copyText = useMemo(() => copyAssistantMessageText(message.data.parts ?? []), [message]);
+  const { copiedMessageId, isRegenerateDisabled } = useAssistantMessageActionsState();
+  const { copyAssistantMessage, regenerateAssistantMessage } = useAssistantMessageActions();
+  const copyText = useMemo(
+    () => (message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? [])),
+    [message],
+  );
   const isCopied = copiedMessageId === message.id;
 
   if (message.status === 'pending') {

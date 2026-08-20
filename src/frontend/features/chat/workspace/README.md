@@ -17,7 +17,7 @@ and message rendering live in `@/frontend/components/messagePresentation`.
 
 - `components/` contains Chat-only composer, loading, cover, and the assistant action toolbar
   composed through `AssistantMessage`.
-- `context/` owns assistant action state and commands. Dynamic copied/busy state is consumed only by
+- `context/` owns assistant action state and actions. Dynamic copied/busy state is consumed only by
   toolbar leaves; the virtualized list and expensive message body do not subscribe.
 - `hooks/` owns initial-render coordination.
 - `utils/` contains pure helpers with co-located tests, including copyable-text projection.
