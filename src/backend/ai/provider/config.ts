@@ -13,10 +13,6 @@ import {
   type AppProviderSettingsMap,
   appendDashScopeWebExtractor,
   appProviderIds,
-  buildCodexRequestHeaders,
-  buildGrokCliRequestHeaders,
-  coerceCodexRequestBody,
-  COPILOT_DEFAULT_HEADERS,
   dmxapiUsesCustomTransport,
   formatApiHost,
   formatOllamaApiHost,
@@ -31,7 +27,6 @@ import {
   type ResolvedEndpoint,
   resolveEffectiveEndpoint,
   routeToEndpoint,
-  rewriteGrokCliResponsesBody,
   stripArkUnsupportedIncludes,
   transformZhipuRequestBody,
   withoutTrailingApiVersion,
@@ -57,18 +52,8 @@ interface BaseConfig {
 }
 
 interface ProviderConfigRuntime {
-  authenticatedFetch?: (
-    providerId: string,
-    buildRequest: (credentials: { accessToken: string; accountId?: string | null }) => {
-      init: RequestInit;
-      input: RequestInfo | URL;
-    },
-    doFetch: (input: RequestInfo | URL, init: RequestInit) => Promise<Response>,
-    options?: { notSignedInMessage?: string },
-  ) => Promise<Response>;
   fetch?: typeof globalThis.fetch;
   getAuthConfig(providerId: string): Promise<AuthConfig | null>;
-  getCopilotToken?: (headers: Record<string, string>, signal?: AbortSignal) => Promise<string>;
   resolveApiKey(providerId: string, override?: string): Promise<ResolvedProviderApiKey>;
 }
 
@@ -173,16 +158,6 @@ function withSelectedApiKey(build: ProviderConfigBuilder): ConfigBuilderEntry['b
   };
 }
 
-function withProviderAuth(
-  method: Extract<ServingCredentialReceipt, { attribution: 'auth' }>['method'],
-  build: ProviderConfigBuilder,
-): ConfigBuilderEntry['build'] {
-  return async (ctx) => ({
-    config: await build(ctx),
-    credentialReceipt: { attribution: 'auth', method },
-  });
-}
-
 /** Endpoint priority: `model.endpointTypes[0]` > `provider.defaultChatEndpoint` > fallback. */
 export async function providerToAiSdkConfig(
   provider: Provider,
@@ -222,19 +197,7 @@ export async function resolveProviderAiSdkConfig(
   };
 
   const builders: ConfigBuilderEntry[] = [
-    {
-      match: (p) => isPreset(p, 'copilot'),
-      build: withProviderAuth('oauth', buildCopilotConfig),
-    },
     { match: (p) => isPreset(p, 'opencode'), build: withSelectedApiKey(buildOpenCodeConfig) },
-    {
-      match: (p) => isPreset(p, 'openai-codex'),
-      build: withProviderAuth('oauth', buildCodexConfig),
-    },
-    {
-      match: (p) => isPreset(p, 'grok-cli'),
-      build: withProviderAuth('oauth', buildGrokCliConfig),
-    },
     { match: (p) => isCherryAIProvider(p), build: withSelectedApiKey(buildCherryAIConfig) },
     { match: (p) => isOllamaProvider(p), build: withSelectedApiKey(buildOllamaConfig) },
     { match: (p) => isAzureOpenAIProvider(p), build: withSelectedApiKey(buildAzureConfig) },
@@ -351,27 +314,6 @@ export async function resolveProviderAiSdkConfig(
 
 // ── Config Builders ──
 
-async function buildCopilotConfig(
-  ctx: BuilderContext,
-): Promise<ProviderConfig<'github-copilot-openai-compatible'>> {
-  if (!ctx.runtime.getCopilotToken) {
-    throw new Error('GitHub Copilot requires the mobile Copilot token adapter.');
-  }
-  const headers = { ...COPILOT_DEFAULT_HEADERS, ...getExtraHeaders(ctx.actualProvider) };
-  const token = await ctx.runtime.getCopilotToken(headers);
-
-  return {
-    providerId: 'github-copilot-openai-compatible',
-    endpoint: ctx.endpoint,
-    providerSettings: {
-      ...ctx.baseConfig,
-      apiKey: token,
-      headers,
-      name: ctx.actualProvider.id,
-    },
-  };
-}
-
 function buildOpenCodeConfig(ctx: BuilderContext): ProviderConfig {
   const config =
     ctx.aiSdkProviderId === 'openai-compatible'
@@ -385,95 +327,6 @@ function buildOpenCodeConfig(ctx: BuilderContext): ProviderConfig {
     settings.headers = { 'x-opencode-session': ctx.sessionId, ...settings.headers };
   }
   return config;
-}
-
-function requireAuthenticatedFetch(ctx: BuilderContext) {
-  if (!ctx.runtime.authenticatedFetch) {
-    throw new Error(`OAuth runtime is unavailable for ${ctx.actualProvider.id}.`);
-  }
-  return ctx.runtime.authenticatedFetch;
-}
-
-function buildCodexConfig(ctx: BuilderContext): ProviderConfig<'openai'> {
-  const baseURL = (
-    getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.OPENAI_RESPONSES) ||
-    'https://chatgpt.com/backend-api/codex'
-  ).replace(/\/+$/, '');
-
-  return {
-    providerId: 'openai',
-    endpoint: ctx.endpoint,
-    providerSettings: {
-      ...ctx.baseConfig,
-      apiKey: 'codex-oauth',
-      baseURL,
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) =>
-        requireAuthenticatedFetch(ctx)(
-          'openai-codex',
-          (credentials) => ({
-            input,
-            init: {
-              ...init,
-              body: coerceCodexRequestBody(init?.body),
-              headers: buildCodexRequestHeaders(init?.headers, {
-                ...credentials,
-                accountId: credentials.accountId ?? null,
-              }),
-            },
-          }),
-          ctx.runtime.fetch ?? globalThis.fetch,
-          { notSignedInMessage: 'OpenAI Codex OAuth is not available on mobile.' },
-        ),
-    },
-  };
-}
-
-function buildGrokCliConfig(ctx: BuilderContext): ProviderConfig<'openai'> {
-  const baseURL = (
-    getBaseUrl(ctx.actualProvider, ENDPOINT_TYPE.OPENAI_RESPONSES) ||
-    'https://cli-chat-proxy.grok.com/v1'
-  ).replace(/\/+$/, '');
-
-  return {
-    providerId: 'openai',
-    endpoint: ctx.endpoint,
-    providerSettings: {
-      ...ctx.baseConfig,
-      apiKey: 'grok-cli-oauth',
-      baseURL,
-      headers: { ...defaultAppHeaders(), ...getExtraHeaders(ctx.actualProvider) },
-      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
-        let body = init?.body;
-        let modelId = '';
-        if (typeof body === 'string') {
-          try {
-            const parsed = JSON.parse(body) as Record<string, unknown>;
-            modelId = typeof parsed.model === 'string' ? parsed.model : '';
-            body = JSON.stringify(rewriteGrokCliResponsesBody(parsed));
-          } catch {
-            // Preserve a non-JSON body so the upstream request reports it.
-          }
-        }
-        return requireAuthenticatedFetch(ctx)(
-          'grok-cli',
-          (credentials) => ({
-            input,
-            init: {
-              ...init,
-              body,
-              headers: buildGrokCliRequestHeaders(init?.headers, {
-                accessToken: credentials.accessToken,
-                modelId,
-              }),
-            },
-          }),
-          ctx.runtime.fetch ?? globalThis.fetch,
-          { notSignedInMessage: 'Grok CLI OAuth is not available on mobile.' },
-        );
-      },
-    },
-  };
 }
 
 function buildCommonOptions(ctx: BuilderContext) {

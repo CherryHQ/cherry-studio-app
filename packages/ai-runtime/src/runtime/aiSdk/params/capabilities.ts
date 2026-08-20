@@ -35,7 +35,6 @@ export interface ResolveCapabilitiesOptions {
 
 export interface CapabilityPreferences {
   getMultipleRawCached(keys: readonly string[]): {
-    'chat.web_search.exclude_domains': string[];
     'chat.web_search.max_results': number;
   };
 }
@@ -82,13 +81,9 @@ function resolveWebSearchPluginConfig(
   aiSdkProviderId: string,
   preference: CapabilityPreferences,
 ): WebSearchPluginConfig | undefined {
-  const webSearchPreferences = preference.getMultipleRawCached([
-    'chat.web_search.max_results',
-    'chat.web_search.exclude_domains',
-  ]);
+  const webSearchPreferences = preference.getMultipleRawCached(['chat.web_search.max_results']);
   const webSearchConfig: CherryWebSearchConfig = {
     maxResults: webSearchPreferences['chat.web_search.max_results'],
-    excludeDomains: webSearchPreferences['chat.web_search.exclude_domains'],
   };
 
   if (extensionRegistry.has(aiSdkProviderId)) {

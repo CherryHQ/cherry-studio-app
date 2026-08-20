@@ -28,7 +28,3 @@ export function normalizeStartupColorScheme(
 ): 'dark' | 'light' {
   return colorScheme === 'dark' ? 'dark' : 'light';
 }
-
-export function isMessagesStartupRoute(segments: readonly string[]) {
-  return segments.includes('(messages)');
-}

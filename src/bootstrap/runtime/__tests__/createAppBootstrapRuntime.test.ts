@@ -11,8 +11,6 @@ const mockChat = { kind: 'chat' };
 const mockDb = { kind: 'db' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
-const mockOauth = { kind: 'oauth' };
-const mockOauthSession = { kind: 'oauth-session' };
 const mockPreference = { kind: 'preference' };
 const mockWebSearch = { kind: 'web-search' };
 const mockBackgroundActivityEnvironment = { configure: jest.fn() };
@@ -22,8 +20,6 @@ const mockServices = {
   chat: mockChat,
   jobRuntime: mockJobRuntime,
   mcpRuntime: mockMcpRuntime,
-  oauth: mockOauth,
-  oauthSession: mockOauthSession,
   preference: mockPreference,
   webSearch: mockWebSearch,
 };
@@ -82,9 +78,7 @@ const createRuntime = () =>
     DbService: mockDb,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
-    OAuthRuntimeService: mockOauthSession,
     PreferenceService: mockPreference,
-    ProviderOAuthService: mockOauth,
     WebSearchService: mockWebSearch,
   });
 
@@ -110,8 +104,6 @@ describe('createAppBootstrapRuntime', () => {
       chat: mockChat,
       jobRuntime: mockJobRuntime,
       mcpRuntime: mockMcpRuntime,
-      oauth: mockOauth,
-      oauthSession: mockOauthSession,
       preference: mockPreference,
       webSearch: mockWebSearch,
     });

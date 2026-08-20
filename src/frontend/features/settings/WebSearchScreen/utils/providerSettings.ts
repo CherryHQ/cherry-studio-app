@@ -24,11 +24,7 @@ export type WebSearchProviderFeatureSection = {
   entries: WebSearchProviderMenuEntry[];
 };
 
-export type WebSearchProviderDetailSection =
-  | { type: 'apiKeys' }
-  | { type: 'basicAuth' }
-  | { type: 'capabilityApiHosts' }
-  | { type: 'zhipuApiKeyShortcut' };
+export type WebSearchProviderDetailSection = { type: 'apiKeys' } | { type: 'zhipuApiKeyShortcut' };
 
 const WEB_SEARCH_CAPABILITY_ORDER: readonly WebSearchCapability[] = [
   'searchKeywords',
@@ -36,15 +32,15 @@ const WEB_SEARCH_CAPABILITY_ORDER: readonly WebSearchCapability[] = [
 ] as const;
 
 const WEB_SEARCH_PROVIDER_DETAIL_SECTIONS = {
-  bocha: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
-  exa: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
-  'exa-mcp': [{ type: 'capabilityApiHosts' }],
+  bocha: [{ type: 'apiKeys' }],
+  exa: [{ type: 'apiKeys' }],
+  'exa-mcp': [],
   fetch: [],
-  firecrawl: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
-  jina: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
-  querit: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
-  searxng: [{ type: 'capabilityApiHosts' }, { type: 'basicAuth' }],
-  tavily: [{ type: 'apiKeys' }, { type: 'capabilityApiHosts' }],
+  firecrawl: [{ type: 'apiKeys' }],
+  jina: [{ type: 'apiKeys' }],
+  querit: [{ type: 'apiKeys' }],
+  searxng: [],
+  tavily: [{ type: 'apiKeys' }],
   zhipu: [{ type: 'zhipuApiKeyShortcut' }],
 } as const satisfies Record<WebSearchProviderId, readonly WebSearchProviderDetailSection[]>;
 
@@ -96,10 +92,6 @@ export function getWebSearchFeatureSections(
 
     return entries.length > 0 ? [{ capability, entries }] : [];
   });
-}
-
-export function normalizeWebSearchApiHost(value: string): string {
-  return value.trim().replace(/\/+$/, '');
 }
 
 export function mergeWebSearchProviderOverride(

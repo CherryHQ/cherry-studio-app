@@ -10,7 +10,6 @@ import type { ApiKeyRequestSearchContext } from '../base/context';
 const BochaSearchParamsSchema = z.object({
   query: z.string(),
   count: z.number().int().positive(),
-  exclude: z.string(),
   summary: z.boolean(),
 });
 
@@ -62,7 +61,6 @@ export class BochaProvider extends BaseWebSearchProvider {
       requestBody: BochaSearchParamsSchema.parse({
         query,
         count: config.maxResults,
-        exclude: config.excludeDomains.join(','),
         summary: true,
       }),
       signal: httpOptions?.signal ?? undefined,

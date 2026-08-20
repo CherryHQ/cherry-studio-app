@@ -4,10 +4,10 @@ import { StyleSheet } from 'react-native';
 import { EnrichedMarkdownTextInput } from 'react-native-enriched-markdown';
 import { useResolveClassNames } from 'uniwind';
 
-import { useComposerActions, useComposerState } from '../composer.context';
-import { pasteWrapperStyle, textInputBoxStyle } from '../composer.layout';
 import type { ComposerInputHandle, ComposerInputProps } from '../composer.types';
-import { composerTextStyle } from '../composerTextStyle';
+import { useComposerActions, useComposerState } from '../hooks/use-composer-context';
+import { pasteWrapperStyle, textInputBoxStyle } from '../utils/composer-layout';
+import { composerTextStyle } from '../utils/composer-text-style/composer-text-style';
 
 const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
 

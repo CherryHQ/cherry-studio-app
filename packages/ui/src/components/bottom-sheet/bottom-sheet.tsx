@@ -1,15 +1,28 @@
 import { type Detent, ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
+import { SearchField } from '../search-field';
 import { Surface } from '../surface';
-import { BottomSheetHeader } from './bottom-sheet-header';
-import { BottomSheetPageTransition } from './bottom-sheet-page-transition';
-import { BottomSheetContext, controlledCloseReason } from './bottom-sheet.context';
+import {
+  BottomSheetContext,
+  BottomSheetRootContext,
+  controlledCloseReason,
+  useBottomSheetRoot,
+} from './bottom-sheet.context';
 import { bottomSheetLayout } from './bottom-sheet.layout';
-import type { BottomSheetCloseReason, BottomSheetProps } from './bottom-sheet.types';
+import type {
+  BottomSheetBodyProps,
+  BottomSheetCloseReason,
+  BottomSheetContentProps,
+  BottomSheetFooterProps,
+  BottomSheetRootProps,
+  BottomSheetScrollViewProps,
+  BottomSheetSearchFieldProps,
+  BottomSheetTriggerProps,
+} from './bottom-sheet.types';
 import { useScreenCornerRadius } from './use-screen-corner-radius';
 
 const CLOSED_INDEX = 0;
@@ -17,45 +30,84 @@ const OPEN_INDEX = 1;
 const DEFAULT_DETENTS: Detent[] = [0, 'content'];
 const TOP_CORNER_RADIUS = bottomSheetLayout.cornerRadius;
 
-function BottomSheetRoot({
-  backAccessibilityLabel,
+export function BottomSheetRoot({
   children,
-  closeAccessibilityLabel,
+  defaultOpen = false,
+  onOpenChange,
+  open: controlledOpen,
+}: BottomSheetRootProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(defaultOpen);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = useCallback(
+    (nextOpen: boolean) => {
+      if (controlledOpen === undefined) {
+        setUncontrolledOpen(nextOpen);
+      }
+      onOpenChange?.(nextOpen);
+    },
+    [controlledOpen, onOpenChange],
+  );
+  const contextValue = useMemo(() => ({ open, setOpen }), [open, setOpen]);
+
+  return (
+    <BottomSheetRootContext.Provider value={contextValue}>
+      {children}
+    </BottomSheetRootContext.Provider>
+  );
+}
+
+BottomSheetRoot.displayName = 'BottomSheet';
+
+export function BottomSheetTrigger({ children, onPress, ...props }: BottomSheetTriggerProps) {
+  const { setOpen } = useBottomSheetRoot();
+
+  return (
+    <Pressable
+      {...props}
+      onPress={(event) => {
+        onPress?.(event);
+        setOpen(true);
+      }}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+export function BottomSheetContent({
+  children,
   detents = DEFAULT_DETENTS,
-  headerRight,
   height,
   isCloseDisabled = false,
-  isOpen = true,
-  onBack,
   onClose,
   testID,
-  title,
-}: BottomSheetProps) {
+}: BottomSheetContentProps) {
+  const { open, setOpen } = useBottomSheetRoot();
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const screenCornerRadius = useScreenCornerRadius();
   const scrimStyle = useResolveClassNames('bg-scrim');
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
-  const [index, setIndex] = useState(isOpen ? OPEN_INDEX : CLOSED_INDEX);
-  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
+  const [previousOpen, setPreviousOpen] = useState(open);
   const reasonRef = useRef<BottomSheetCloseReason>('dismiss');
   const closedNotifiedRef = useRef(false);
 
-  if (isOpen !== prevIsOpen) {
-    setPrevIsOpen(isOpen);
-    setIndex(isOpen ? OPEN_INDEX : CLOSED_INDEX);
+  if (open !== previousOpen) {
+    setPreviousOpen(open);
+    setIndex(open ? OPEN_INDEX : CLOSED_INDEX);
   }
 
   useEffect(() => {
-    if (isOpen) {
+    if (open) {
       closedNotifiedRef.current = false;
       reasonRef.current = 'dismiss';
       return;
     }
 
     reasonRef.current = controlledCloseReason;
-  }, [isOpen]);
+  }, [open]);
 
   const sheetWidth = Math.max(0, windowWidth - bottomSheetLayout.outerInset * 2);
   const bottomCornerRadius = Math.max(
@@ -78,26 +130,24 @@ function BottomSheetRoot({
     },
     [isCloseDisabled],
   );
-
   const handleIndexChange = useCallback(
     (nextIndex: number) => {
       setIndex(nextIndex === CLOSED_INDEX && isCloseDisabled ? OPEN_INDEX : nextIndex);
     },
     [isCloseDisabled],
   );
-
   const handleSettle = useCallback(
     (nextIndex: number) => {
       if (nextIndex === CLOSED_INDEX && !closedNotifiedRef.current) {
         closedNotifiedRef.current = true;
-        onClose(reasonRef.current);
+        setOpen(false);
+        onClose?.(reasonRef.current);
       }
     },
-    [onClose],
+    [onClose, setOpen],
   );
 
   const isClosing = index === CLOSED_INDEX;
-  const isCloseButtonDisabled = isCloseDisabled || isClosing;
   const contextValue = useMemo(
     () => ({
       geometry: {
@@ -107,10 +157,12 @@ function BottomSheetRoot({
         sheetWidth,
         topCornerRadius: TOP_CORNER_RADIUS,
       },
+      isCloseDisabled: isCloseDisabled || isClosing,
       isClosing,
       requestClose,
+      testID,
     }),
-    [bottomCornerRadius, insets, isClosing, requestClose, sheetWidth],
+    [bottomCornerRadius, insets, isCloseDisabled, isClosing, requestClose, sheetWidth, testID],
   );
 
   return (
@@ -137,18 +189,6 @@ function BottomSheetRoot({
               style={[styles.surface, cornerStyle]}
               testID={testID ? `${testID}-sheet-surface` : undefined}
             />
-
-            <BottomSheetHeader
-              backAccessibilityLabel={backAccessibilityLabel}
-              closeAccessibilityLabel={closeAccessibilityLabel}
-              headerRight={headerRight}
-              isDisabled={isCloseButtonDisabled}
-              onBack={onBack}
-              onRequestClose={requestClose}
-              testID={testID}
-              title={title}
-            />
-
             {children}
           </View>
           <View
@@ -161,14 +201,42 @@ function BottomSheetRoot({
   );
 }
 
-BottomSheetRoot.displayName = 'BottomSheet';
+export function BottomSheetSearchField(props: BottomSheetSearchFieldProps) {
+  return (
+    <View className="px-4 pt-2">
+      <SearchField {...props} />
+    </View>
+  );
+}
 
-export const BottomSheet = Object.assign(BottomSheetRoot, {
-  PageTransition: BottomSheetPageTransition,
-});
+export function BottomSheetBody({ children, style, ...props }: BottomSheetBodyProps) {
+  return (
+    <View {...props} style={[styles.body, style]}>
+      {children}
+    </View>
+  );
+}
+
+export function BottomSheetScrollView({ children, style, ...props }: BottomSheetScrollViewProps) {
+  return (
+    <ScrollView {...props} style={[styles.body, style]}>
+      {children}
+    </ScrollView>
+  );
+}
+
+export function BottomSheetFooter({ children, style, ...props }: BottomSheetFooterProps) {
+  return (
+    <View {...props} style={[styles.footer, style]}>
+      {children}
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
+  body: { flex: 1, minHeight: 0 },
   bottomGap: { height: bottomSheetLayout.outerInset },
+  footer: { flexShrink: 0 },
   layout: { alignItems: 'center' },
   sheet: {
     borderCurve: 'continuous',

@@ -4,7 +4,7 @@ import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { ModelAvatar } from '@/frontend/components/ModelAvatar';
+import { ModelAvatar } from '@/frontend/components/avatar';
 import { getModelPickerRowTags, ModelPickerTagChip } from '@/frontend/components/modelPicker';
 
 /** `py-2` around the tallest thing in the row, which is the 26 avatar. */

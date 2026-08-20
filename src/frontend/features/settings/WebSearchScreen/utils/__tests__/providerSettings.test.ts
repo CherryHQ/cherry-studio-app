@@ -2,26 +2,16 @@ import {
   getWebSearchFeatureSections,
   getWebSearchProviderDetailSections,
   mergeWebSearchProviderOverride,
-  normalizeWebSearchApiHost,
 } from '../providerSettings';
 
 describe('web search provider settings', () => {
   test('returns provider detail sections', () => {
-    expect(getWebSearchProviderDetailSections('tavily')).toEqual([
-      { type: 'apiKeys' },
-      { type: 'capabilityApiHosts' },
-    ]);
+    expect(getWebSearchProviderDetailSections('tavily')).toEqual([{ type: 'apiKeys' }]);
     expect(getWebSearchProviderDetailSections('fetch')).toEqual([]);
     expect(getWebSearchProviderDetailSections('zhipu')).toEqual([{ type: 'zhipuApiKeyShortcut' }]);
-    expect(getWebSearchProviderDetailSections('searxng')).toEqual([
-      { type: 'capabilityApiHosts' },
-      { type: 'basicAuth' },
-    ]);
-    expect(getWebSearchProviderDetailSections('exa-mcp')).toEqual([{ type: 'capabilityApiHosts' }]);
-    expect(getWebSearchProviderDetailSections('firecrawl')).toEqual([
-      { type: 'apiKeys' },
-      { type: 'capabilityApiHosts' },
-    ]);
+    expect(getWebSearchProviderDetailSections('searxng')).toEqual([]);
+    expect(getWebSearchProviderDetailSections('exa-mcp')).toEqual([]);
+    expect(getWebSearchProviderDetailSections('firecrawl')).toEqual([{ type: 'apiKeys' }]);
   });
 
   test('groups providers by capability', () => {
@@ -32,7 +22,6 @@ describe('web search provider settings', () => {
     expect(sections[0].entries.map((entry) => entry.key)).toEqual([
       'searchKeywords:zhipu',
       'searchKeywords:tavily',
-      'searchKeywords:searxng',
       'searchKeywords:exa',
       'searchKeywords:exa-mcp',
       'searchKeywords:bocha',
@@ -45,14 +34,6 @@ describe('web search provider settings', () => {
       'fetchUrls:jina',
       'fetchUrls:firecrawl',
     ]);
-  });
-
-  test('normalizes api host input without strict url validation', () => {
-    expect(normalizeWebSearchApiHost(' https://api.example.com/// ')).toBe(
-      'https://api.example.com',
-    );
-    expect(normalizeWebSearchApiHost(' http://localhost:8080/ ')).toBe('http://localhost:8080');
-    expect(normalizeWebSearchApiHost('   ')).toBe('');
   });
 
   test('merges provider overrides without dropping sibling fields', () => {

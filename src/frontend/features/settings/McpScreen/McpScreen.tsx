@@ -1,6 +1,6 @@
 import { PlusIcon } from '@cherrystudio/app-icons';
 import { Button } from '@cherrystudio/ui/components';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -115,10 +115,10 @@ export function McpScreen() {
 }
 
 function getServerStatus(
-  server: StreamableHttpMcpServer,
+  server: McpServer,
   summary: McpServerRuntimeSummary | undefined,
 ): McpServerRuntimeSummary['state'] {
-  if (!server.isActive) {
+  if (!server.isEnabled) {
     return 'disabled';
   }
   return summary?.state ?? 'connecting';

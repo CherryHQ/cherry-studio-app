@@ -13,7 +13,6 @@ jest.mock('@/backend/data/services/TopicService', () => ({
 }));
 
 const ASSISTANT_ID = '00000000-0000-4000-8000-000000000001';
-const GROUP_ID = '11111111-1111-4111-8111-111111111111';
 
 function createService() {
   return {
@@ -41,7 +40,6 @@ describe('assistant handlers', () => {
 
     await handlers['/assistants'].GET({
       query: {
-        groupId: GROUP_ID,
         sortBy: 'updatedAt',
         sortOrder: 'desc',
         updatedAtFrom: '2026-05-01T00:00:00.000Z',
@@ -49,7 +47,6 @@ describe('assistant handlers', () => {
     });
 
     expect(service.list).toHaveBeenCalledWith({
-      groupId: GROUP_ID,
       limit: 100,
       page: 1,
       sortBy: 'updatedAt',
@@ -58,41 +55,39 @@ describe('assistant handlers', () => {
     });
   });
 
-  test('normalizes legacy imports and rejects fields outside the import contract', async () => {
+  test('rejects import fields outside the import contract', async () => {
     const service = createService();
     const handlers = createAssistantHandlers(service as unknown as AssistantService);
-    const groupName = 'x'.repeat(65);
 
     await handlers['/assistants:import'].POST({
-      body: { groupName: `  ${groupName}  `, name: 'Imported', prompt: 'legacy prompt' },
+      body: { name: 'Imported', prompt: 'legacy prompt' },
     });
     expect(service.createFromImport).toHaveBeenCalledWith({
-      groupName,
       name: 'Imported',
       prompt: 'legacy prompt',
     });
 
     await expect(
       handlers['/assistants:import'].POST({
-        body: { groupId: GROUP_ID, name: 'Invalid' } as never,
+        body: { modelId: 'openai::gpt-4', name: 'Invalid' } as never,
       }),
     ).rejects.toThrow();
     expect(service.createFromImport).toHaveBeenCalledTimes(1);
   });
 
-  test('preserves a group-only partial update and validates group ids', async () => {
+  test('preserves a single-field partial update and validates model ids', async () => {
     const service = createService();
     const handlers = createAssistantHandlers(service as unknown as AssistantService);
 
     await handlers['/assistants/:id'].PATCH({
-      body: { groupId: GROUP_ID },
+      body: { name: 'Renamed' },
       params: { id: ASSISTANT_ID },
     });
-    expect(service.update).toHaveBeenCalledWith(ASSISTANT_ID, { groupId: GROUP_ID });
+    expect(service.update).toHaveBeenCalledWith(ASSISTANT_ID, { name: 'Renamed' });
 
     await expect(
       handlers['/assistants/:id'].PATCH({
-        body: { groupId: 'not-a-uuid' } as never,
+        body: { modelId: 'not-a-unique-model-id' } as never,
         params: { id: ASSISTANT_ID },
       }),
     ).rejects.toThrow();

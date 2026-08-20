@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/BrandAvatar';
+import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/avatar';
 
 import type { AiUsageRankingItem } from '../types';
 import { displayAiUsageModelId } from '../utils/aiUsageDetail';

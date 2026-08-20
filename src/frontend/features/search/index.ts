@@ -1,1 +1,0 @@
-export { GlobalSearchScreen } from './GlobalSearchScreen';

@@ -1,4 +1,5 @@
 import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { useProviderModelCheck } from '../useProviderModelCheck';
@@ -8,6 +9,7 @@ type ModelCheck = ReturnType<typeof useProviderModelCheck>;
 const mockCheckHealth = jest.fn();
 const mockAlertShow = jest.fn();
 const mockToastShow = jest.fn();
+const EMPTY_API_KEYS: readonly ApiKeyEntry[] = [];
 
 jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
@@ -21,7 +23,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/AlertProvider', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 
@@ -46,13 +48,30 @@ const model: Model = {
   providerId: 'provider-1',
   supportsStreaming: true,
 };
+const otherModel: Model = {
+  ...model,
+  id: createUniqueModelId('provider-1', 'model-2'),
+  modelId: 'model-2',
+  name: 'Model Two',
+};
 
 describe('useProviderModelCheck', () => {
   let renderer: ReactTestRenderer | undefined;
   let modelCheck: ModelCheck | undefined;
 
-  function Probe() {
-    modelCheck = useProviderModelCheck({ apiKeys: [], models: [model], providerId: 'provider-1' });
+  function Probe({
+    apiKeys = EMPTY_API_KEYS,
+    selectedModelId,
+  }: {
+    apiKeys?: readonly ApiKeyEntry[];
+    selectedModelId?: string;
+  }) {
+    modelCheck = useProviderModelCheck({
+      apiKeys,
+      models: [model, otherModel],
+      providerId: 'provider-1',
+      selectedModelId,
+    });
     return null;
   }
 
@@ -79,5 +98,36 @@ describe('useProviderModelCheck', () => {
       title: 'settings.provider.models.checkFailed',
     });
     expect(mockToastShow).not.toHaveBeenCalled();
+  });
+
+  test('checks with the first enabled API key', async () => {
+    mockCheckHealth.mockResolvedValue([{ latency: 120, model, status: 'success' }]);
+    const apiKeys = [
+      { id: 'disabled', isEnabled: false, key: 'sk-disabled' },
+      { id: 'enabled', isEnabled: true, key: 'sk-enabled' },
+    ];
+
+    act(() => {
+      renderer?.update(<Probe apiKeys={apiKeys} />);
+    });
+    await act(async () => modelCheck?.startCheck());
+
+    expect(mockCheckHealth).toHaveBeenCalledWith(expect.objectContaining({ apiKey: 'sk-enabled' }));
+  });
+
+  test('stops reporting a result once another model is selected', async () => {
+    mockCheckHealth.mockResolvedValue([{ latency: 120, model, status: 'success' }]);
+
+    await act(async () => modelCheck?.startCheck());
+    expect(modelCheck?.modelStatus).toMatchObject({ status: 'success' });
+
+    // The selection arrives as a route param from the pushed picker, so this is
+    // the only way the section learns the answer on screen is stale.
+    act(() => {
+      renderer?.update(<Probe selectedModelId={otherModel.id} />);
+    });
+
+    expect(modelCheck?.selectedModel?.id).toBe(otherModel.id);
+    expect(modelCheck?.modelStatus).toMatchObject({ status: 'pending' });
   });
 });

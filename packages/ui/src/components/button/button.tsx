@@ -13,7 +13,7 @@ import { cn } from '../../utils';
 import { Spinner, type SpinnerSize } from '../loading/spinner';
 
 export type ButtonVariant = 'default' | 'destructive' | 'ghost' | 'outline' | 'secondary';
-export type ButtonSize = 'default' | 'lg' | 'sm';
+export type ButtonSize = 'default' | 'lg' | 'sm' | 'xs';
 
 export type ButtonProps = Omit<PressableProps, 'children'> & {
   children?: ReactNode;
@@ -54,6 +54,13 @@ const sizeStyles: Record<
     iconOnly: 'p-2',
     label: 'text-sm',
     root: 'gap-1.5 px-3 py-2',
+    spinner: 'sm',
+  },
+  xs: {
+    icon: 'size-4',
+    iconOnly: 'p-1.5',
+    label: 'text-sm',
+    root: 'gap-1 px-2 py-1.5',
     spinner: 'sm',
   },
 };
@@ -114,6 +121,7 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
     children,
     className,
     disabled = false,
+    hitSlop,
     icon,
     loading = false,
     size = 'default',
@@ -152,6 +160,7 @@ const ButtonRoot = forwardRef<View, ButtonProps>(function Button(
             className,
           )}
           disabled={isDisabled}
+          hitSlop={hitSlop ?? (size === 'xs' ? 8 : undefined)}
           ref={ref}
         >
           {loading ? (

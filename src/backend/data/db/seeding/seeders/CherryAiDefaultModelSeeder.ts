@@ -10,7 +10,7 @@ import {
 } from '@cherrystudio/universal/data/presets/cherryai';
 import type { ModelCapability } from '@cherrystudio/universal/data/types/model';
 import { loggerService } from '@logger';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import {
   preferenceTable,
@@ -25,7 +25,6 @@ import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';
 
 const logger = loggerService.withContext('CherryAiDefaultModelSeeder');
-const defaultPreferenceScope = 'default' as const;
 
 export const DEFAULT_MODEL_PREFERENCE_KEYS = [
   'chat.default_model_id',
@@ -83,7 +82,6 @@ function createCherryAiDefaultModelRow(): CherryAiDefaultModelRow {
 function createDefaultModelPreferenceRows() {
   return DEFAULT_MODEL_PREFERENCE_KEYS.map((key) => ({
     key,
-    scope: defaultPreferenceScope,
     value: CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
   }));
 }
@@ -134,12 +132,7 @@ export class CherryAiDefaultModelSeeder implements DatabaseSeeder {
         const [existing] = await tx
           .select({ key: preferenceTable.key })
           .from(preferenceTable)
-          .where(
-            and(
-              eq(preferenceTable.scope, preference.scope),
-              eq(preferenceTable.key, preference.key),
-            ),
-          )
+          .where(eq(preferenceTable.key, preference.key))
           .limit(1);
 
         if (existing) {

@@ -4,7 +4,7 @@ import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers'
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
-import { CherryInClient } from '@/backend/services/cherryin/CherryInClient';
+import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
 import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
@@ -17,6 +17,7 @@ import {
 } from '@/backend/services/profile/userAvatarStorage';
 import { createProvidersModule } from '@/backend/services/providers/createProvidersModule';
 import {
+  deleteProviderAvatar,
   getProviderAvatarUri,
   saveProviderAvatar,
 } from '@/backend/services/providers/providerAvatarStorage';
@@ -35,13 +36,6 @@ export function createBackend(
   infrastructure: { dbService: DbService },
 ): BackendComposition {
   const { dbService } = infrastructure;
-  const cherryin = new CherryInClient({
-    oauth: {
-      authenticatedFetch: (providerId, buildRequest, doFetch, options) =>
-        services.oauthSession.authenticatedFetch(providerId, buildRequest, doFetch, options),
-      hasToken: (providerId) => services.oauthSession.hasToken(providerId),
-    },
-  });
   const models = createModelsModule({
     ai: services.ai,
     materializeRemoteModels,
@@ -87,15 +81,16 @@ export function createBackend(
       warm: (server) => services.mcpRuntime.warmToolsCache(server),
     },
     servers: {
-      create: (input) => services.mcpServer.create(input, 'streamableHttp'),
-      get: (id) => services.mcpServer.getById(id, 'streamableHttp'),
-      remove: (id) => services.mcpServer.delete(id, 'streamableHttp'),
-      update: (id, input) => services.mcpServer.update(id, input, 'streamableHttp'),
+      create: (input) => services.mcpServer.create(input),
+      get: (id) => services.mcpServer.getById(id),
+      remove: (id) => services.mcpServer.delete(id),
+      update: (id, input) => services.mcpServer.update(id, input),
     },
   });
   const providers = createProvidersModule({
     avatars: {
       persist: saveProviderAvatar,
+      remove: deleteProviderAvatar,
       resolve: getProviderAvatarUri,
     },
     canRemove: canDeleteProvider,
@@ -111,10 +106,12 @@ export function createBackend(
       set: (key, value) => services.preference.set(key, value),
     },
   });
+  const userContentImages = createUserContentImageStorage(services.fileEntry);
   const profile = createProfileModule({
     avatars: {
-      replace: replaceUserAvatar,
-      resolve: resolveUserAvatarUri,
+      replace: (sourceUri, previousAvatar, persist) =>
+        replaceUserAvatar(userContentImages, sourceUri, previousAvatar, persist),
+      resolve: (avatar) => resolveUserAvatarUri(userContentImages, avatar),
     },
     preferences: {
       readAvatar: () => services.preference.readCached('app.user.avatar'),
@@ -125,7 +122,6 @@ export function createBackend(
   return {
     backend: {
       chat: services.chat,
-      cherryin,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
         deleteIfUnreferenced: services.fileContent.deleteIfUnreferenced,
@@ -133,7 +129,6 @@ export function createBackend(
       },
       mcp,
       models,
-      oauth: services.oauth,
       paintings,
       permissions,
       profile,

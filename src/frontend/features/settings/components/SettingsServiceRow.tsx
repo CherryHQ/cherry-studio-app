@@ -1,11 +1,9 @@
 import { ChevronRightIcon } from '@cherrystudio/app-icons';
-import { Section } from '@cherrystudio/ui/components';
+import { Image, Section } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';
 import { memo, type ReactNode, useState } from 'react';
 import { Text, View } from 'react-native';
-
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import { SettingsGroupedSeparator } from './SettingsGroupedSeparator';
 

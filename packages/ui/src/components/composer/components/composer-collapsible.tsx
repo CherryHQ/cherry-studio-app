@@ -7,8 +7,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { settleMotion } from '../composer.motion';
 import type { ComposerCollapsibleProps } from '../composer.types';
+import { settleMotion } from '../utils/composer-motion';
 
 /**
  * A row that grows from nothing to its content's height and shrinks back. Render

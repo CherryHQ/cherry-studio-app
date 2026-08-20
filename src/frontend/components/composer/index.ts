@@ -3,12 +3,10 @@
 // else is a part to arrange inside it, alongside the presentational
 // `Composer.*` parts from `@cherrystudio/ui`.
 //
-// Two pure-logic modules are deliberately left deep-importable —
-// `utils/composerAttachments` and `utils/composerLayout` — so logic-only
-// consumers and their node-env tests do not have to load this barrel and,
+// `utils/composerAttachments` is deliberately left deep-importable so logic-only
+// consumers and its node-env tests do not have to load this barrel and,
 // through it, the native modules the pickers and the field pull in.
 export { ComposerAttachments } from './components/ComposerAttachments';
-export { ComposerDock } from './components/ComposerDock';
 export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';
@@ -21,5 +19,4 @@ export {
   useComposerMeta,
   useComposerState,
 } from './context/ComposerProvider';
-export { useComposerDockLayout } from './hooks/useComposerDockLayout';
 export { useComposerFieldDismiss } from './hooks/useComposerFieldDismiss';

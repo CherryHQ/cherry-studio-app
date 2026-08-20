@@ -11,7 +11,6 @@ import type { AppProviderId } from '../types';
 /** Inputs for provider-builtin web-search plugin configuration. */
 export interface CherryWebSearchConfig {
   maxResults: number;
-  excludeDomains: string[];
 }
 
 export function getWebSearchParams(model: Model): Record<string, unknown> {
@@ -51,39 +50,6 @@ export function getWebSearchParams(model: Model): Record<string, unknown> {
 function servesResponsesWebSearch(model: Model): boolean {
   // Bailian serves the Responses web_search tool only for the Qwen 3.x line.
   return /^qwen3[.-]/.test(model.apiModelId ?? '');
-}
-
-/**
- * Ported subset of desktop's `@shared/utils/blacklistMatchPattern`'s
- * `mapRegexToPatterns` — extracts bare domains from user-entered blocklist
- * entries (plain domains, `https://...` URLs, or `/regex/`-wrapped patterns)
- * for providers whose web-search tool takes a domain blocklist.
- */
-export function mapRegexToPatterns(patterns: string[]): string[] {
-  const patternSet = new Set<string>();
-  const domainMatcher = /[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
-
-  patterns.forEach((pattern) => {
-    if (!pattern) return;
-
-    if (pattern.startsWith('/') && pattern.endsWith('/')) {
-      const rawPattern = pattern.slice(1, -1);
-      const normalizedPattern = rawPattern.replace(/\\\./g, '.').replace(/\\\//g, '/');
-      const matches = normalizedPattern.match(domainMatcher);
-      matches?.forEach((match) => {
-        patternSet.add(match.replace(/http(s)?:\/\//g, '').toLowerCase());
-      });
-    } else if (pattern.includes('://')) {
-      const matches = pattern.match(domainMatcher);
-      matches?.forEach((match) => {
-        patternSet.add(match.replace(/http(s)?:\/\//g, '').toLowerCase());
-      });
-    } else {
-      patternSet.add(pattern.toLowerCase());
-    }
-  });
-
-  return Array.from(patternSet);
 }
 
 /**
@@ -134,29 +100,15 @@ export function buildProviderBuiltinWebSearchConfig(
       };
     }
     case 'anthropic': {
-      const blockedDomains = mapRegexToPatterns(webSearchConfig.excludeDomains);
-      const anthropicSearchOptions: NonNullable<WebSearchPluginConfig['anthropic']> = {
-        maxUses: webSearchConfig.maxResults,
-        blockedDomains: blockedDomains.length > 0 ? blockedDomains : undefined,
-      };
       return {
-        anthropic: anthropicSearchOptions,
+        anthropic: { maxUses: webSearchConfig.maxResults },
       };
     }
     case 'xai':
     case 'xai-responses': {
-      const excludeDomains = mapRegexToPatterns(webSearchConfig.excludeDomains);
-      const xaiWebConfig: NonNullable<
-        NonNullable<WebSearchPluginConfig['xai-responses']>['webSearch']
-      > = {
-        enableImageUnderstanding: true,
-      };
-      if (excludeDomains.length > 0) {
-        xaiWebConfig.excludedDomains = excludeDomains.slice(0, 5);
-      }
       return {
         'xai-responses': {
-          webSearch: xaiWebConfig,
+          webSearch: { enableImageUnderstanding: true },
           xSearch: { enableImageUnderstanding: true },
         },
       };

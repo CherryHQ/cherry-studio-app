@@ -15,12 +15,8 @@ suffix.
 - `models`, `paintings`, `mcp`, `providers`, `permissions`, and `profile` expose mobile workflow
   factories named `createXxxModule()`. Their modules retain only orchestration that earns a
   frontend workflow contract; resource CRUD remains in Data API handlers.
-- `oauth` separates the desktop-aligned session runtime from mobile authorization adapters;
-  `webSearch` retains the desktop-aligned `WebSearchService`. See the OAuth
-  [README](./oauth/README.md).
-- `cherryin` owns the mobile-only `CherryInClient` for that provider's external account REST
-  surface. Device permissions are adapted by `DevicePermissions`; avatar storage remains a set of
-  domain functions.
+- `webSearch` retains the desktop-aligned `WebSearchService`. Device permissions are adapted by
+  `DevicePermissions`; avatar storage remains a set of domain functions.
 - `file` owns the Expo managed-file storage adapter, the validated `fileContent` port over it, and
   file maintenance orchestration. File-entry and reference persistence remain in
   `src/backend/data/services`.

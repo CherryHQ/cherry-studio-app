@@ -6,7 +6,6 @@ import type { AssistantRow } from '@/backend/data/db/schemas';
 
 import type { PreferenceService } from '../../PreferenceService';
 import { assistantService } from '../AssistantService';
-import { tagService } from '../TagService';
 import { applyMoves, insertWithOrderKey } from '../utils/orderKey';
 
 jest.mock('uuid', () => ({
@@ -28,7 +27,7 @@ describe('AssistantService', () => {
     jest.restoreAllMocks();
   });
 
-  test('reads desktop order and opaque knowledge/MCP relation ids without resolving targets', async () => {
+  test('reads desktop order and opaque MCP relation ids without resolving targets', async () => {
     const row = createAssistantRow({
       settings: {
         ...DEFAULT_ASSISTANT_SETTINGS,
@@ -37,10 +36,6 @@ describe('AssistantService', () => {
       },
     });
     const db = createReadDb(row);
-    // `createReadDb` only answers the projections this test drives, so the tag
-    // lookup is stubbed on the singleton the service imports rather than run for
-    // real against it.
-    jest.spyOn(tagService, 'getTagsByEntitiesTx').mockResolvedValue(new Map([[row.id, []]]));
     // The service resolves `DbService` per call, so the fake is installed as a
     // host override rather than handed to a constructor.
     await installTestHost({ DbService: { getDb: () => db } as unknown as DbService });
@@ -48,7 +43,6 @@ describe('AssistantService', () => {
     const assistant = await assistantService.getById(row.id);
 
     expect(assistant).toMatchObject({
-      knowledgeBaseIds: ['unknown-knowledge-id'],
       mcpServerIds: ['unknown-mcp-id'],
       orderKey: 'a0',
       settings: {
@@ -68,7 +62,6 @@ describe('AssistantService', () => {
     });
     const db = createReadDb(row);
     const { transaction, writtenSettings } = createUpdateTransaction(row);
-    jest.spyOn(tagService, 'getTagsByEntitiesTx').mockResolvedValue(new Map([[row.id, []]]));
     await installTestHost({
       DbService: {
         getDb: () => db,
@@ -84,7 +77,6 @@ describe('AssistantService', () => {
       toolUseMode: 'prompt',
     });
     expect(assistant).toMatchObject({
-      knowledgeBaseIds: ['unknown-knowledge-id'],
       mcpServerIds: ['unknown-mcp-id'],
       orderKey: 'a0',
       settings: {
@@ -108,7 +100,6 @@ describe('AssistantService', () => {
         from: jest.fn(() => ({ where: jest.fn(() => queryRows) })),
       })),
     };
-    jest.spyOn(tagService, 'getTagsByEntitiesTx').mockResolvedValue(new Map([[row.id, []]]));
     await installTestHost({
       DbService: {
         withWriteTx: async (callback: (transaction: typeof tx) => Promise<unknown>) => callback(tx),
@@ -149,12 +140,6 @@ function createReadDb(row: AssistantRow) {
 
       if ('mcpServerId' in projection) {
         return createRelationQuery([{ assistantId: row.id, mcpServerId: 'unknown-mcp-id' }]);
-      }
-
-      if ('knowledgeBaseId' in projection) {
-        return createRelationQuery([
-          { assistantId: row.id, knowledgeBaseId: 'unknown-knowledge-id' },
-        ]);
       }
 
       throw new Error(
@@ -200,7 +185,6 @@ function createAssistantRow(overrides: Partial<AssistantRow> = {}): AssistantRow
     deletedAt: null,
     description: '',
     emoji: '😀',
-    groupId: null,
     id: '00000000-0000-4000-8000-000000000001',
     modelId: null,
     name: 'Assistant',

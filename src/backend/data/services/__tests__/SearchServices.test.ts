@@ -27,7 +27,7 @@ function queryResult(rows: unknown[]) {
 afterEach(uninstallTestHost);
 
 describe('EntitySearchService', () => {
-  test('aggregates the five desktop entity groups in stable order', async () => {
+  test('aggregates the assistant and topic entity groups in stable order', async () => {
     const select = jest
       .fn()
       .mockReturnValueOnce(
@@ -44,17 +44,6 @@ describe('EntitySearchService', () => {
       .mockReturnValueOnce(
         queryResult([
           {
-            configuration: { avatar: '#' },
-            description: 'Agent result',
-            id: 'agent-1',
-            name: 'Needle Agent',
-            updatedAt: 200,
-          },
-        ]),
-      )
-      .mockReturnValueOnce(
-        queryResult([
-          {
             assistantId: 'assistant-1',
             assistantName: 'Needle Assistant',
             id: 'topic-1',
@@ -62,20 +51,6 @@ describe('EntitySearchService', () => {
             updatedAt: 300,
           },
         ]),
-      )
-      .mockReturnValueOnce(
-        queryResult([
-          {
-            agentId: 'agent-1',
-            agentName: 'Needle Agent',
-            id: 'session-1',
-            name: 'Needle Session',
-            updatedAt: 400,
-          },
-        ]),
-      )
-      .mockReturnValueOnce(
-        queryResult([{ id: 'knowledge-1', name: 'Needle Knowledge', updatedAt: 500 }]),
       );
     await installTestHost({
       DbService: { getDb: () => ({ select }) } as unknown as DbService,
@@ -84,25 +59,13 @@ describe('EntitySearchService', () => {
 
     const result = await service.search({ q: 'Needle' });
 
-    expect(result.groups.map((group) => group.type)).toEqual([
-      'assistant',
-      'agent',
-      'topic',
-      'session',
-      'knowledge-base',
-    ]);
-    expect(result.groups.map((group) => group.items[0]?.id)).toEqual([
-      'assistant-1',
-      'agent-1',
-      'topic-1',
-      'session-1',
-      'knowledge-1',
-    ]);
+    expect(result.groups.map((group) => group.type)).toEqual(['assistant', 'topic']);
+    expect(result.groups.map((group) => group.items[0]?.id)).toEqual(['assistant-1', 'topic-1']);
   });
 });
 
 describe('ContentSearchService', () => {
-  test('returns desktop topic/session groups with snippets', async () => {
+  test('returns the topic-message group with snippets', async () => {
     const all = jest
       .fn()
       .mockResolvedValueOnce([
@@ -118,19 +81,6 @@ describe('ContentSearchService', () => {
           topicUpdatedAt: 200,
         },
       ])
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          agentId: 'agent-1',
-          agentName: 'Agent',
-          createdAt: 400,
-          role: 'user',
-          rowId: 'session-message-1',
-          searchableText: 'needle session',
-          sessionId: 'session-1',
-          sessionName: 'Session',
-        },
-      ])
       .mockResolvedValueOnce([]);
     await installTestHost({
       DbService: { getDb: () => ({ all }) } as unknown as DbService,
@@ -139,17 +89,10 @@ describe('ContentSearchService', () => {
 
     const result = await service.search({ limitPerSource: 2, q: 'needle' });
 
-    expect(result.groups.map((group) => group.sourceType)).toEqual([
-      'topic-message',
-      'session-message',
-    ]);
+    expect(result.groups.map((group) => group.sourceType)).toEqual(['topic-message']);
     expect(result.groups[0].items[0]).toMatchObject({
       messageId: 'message-1',
       snippet: 'needle topic',
-    });
-    expect(result.groups[1].items[0]).toMatchObject({
-      messageId: 'session-message-1',
-      snippet: 'needle session',
     });
   });
 

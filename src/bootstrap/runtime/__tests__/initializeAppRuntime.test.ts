@@ -18,6 +18,9 @@ jest.mock('uniwind', () => ({
     updateCSSVariables: (...args: unknown[]) => mockUpdateCSSVariables(...args),
   },
 }));
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
 
 jest.mock('@/frontend/i18n', () => ({
   initI18n: (...args: unknown[]) => mockInitI18n(...args),

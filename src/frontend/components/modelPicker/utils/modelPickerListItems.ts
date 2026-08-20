@@ -2,8 +2,6 @@ import type { ModelPickerGroup, ModelPickerModelItem } from './modelPickerData';
 
 export type ModelPickerListItem =
   | {
-      count: number;
-      groupKind: ModelPickerGroup['groupKind'];
       isFirstGroup: boolean;
       key: string;
       provider: ModelPickerGroup['provider'];
@@ -30,8 +28,6 @@ export function buildModelPickerListItems(
     }
 
     listItems.push({
-      count: group.items.length,
-      groupKind: group.groupKind,
       isFirstGroup: groupIndex === 0,
       key: `header:${group.key}`,
       provider: group.provider,

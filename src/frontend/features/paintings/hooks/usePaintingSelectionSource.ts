@@ -1,18 +1,15 @@
 import { useMemo } from 'react';
 
-import {
-  type SelectionSource,
-  useMessagePendingDeletionIds,
-} from '@/frontend/components/messageTabs';
+import { type SelectionSource, usePendingDeletionIds } from '@/frontend/components/selection';
 
 import { useDeletePaintings, usePaintingIds } from './usePaintings';
 
-// Selection behavior the shared toolbar uses for the drawings tab. `enabled`
-// gates the (potentially large) all-ids query to edit mode on the active tab.
+// Selection behavior the shared toolbar uses for the painting history list.
+// `enabled` gates the (potentially large) all-ids query to edit mode.
 export function usePaintingSelectionSource(enabled: boolean): SelectionSource {
   const paintingIds = usePaintingIds({ enabled });
   const deletePaintings = useDeletePaintings();
-  const pendingDeletionIds = useMessagePendingDeletionIds('drawings');
+  const pendingDeletionIds = usePendingDeletionIds('drawings');
 
   return useMemo(
     () => ({

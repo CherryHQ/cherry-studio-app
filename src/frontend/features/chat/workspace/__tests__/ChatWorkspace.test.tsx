@@ -1,8 +1,9 @@
 import type { Message } from '@cherrystudio/universal/data/types/message';
+import type { ReactNode } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageListProps } from '@/frontend/components/messagePresentation';
+import type { MessageListProps } from '@/frontend/components/messages';
 
 import { ChatWorkspace } from '../ChatWorkspace';
 
@@ -44,26 +45,29 @@ jest.mock('@cherrystudio/app-icons', () => ({
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
-  return { Button: (props: object) => createElement('Button', props) };
+  return {
+    Button: (props: object) => createElement('Button', props),
+    useAlert: () => ({ alert: { show: mockAlertShow } }),
+  };
 });
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/AlertProvider', () => ({
-  useAlert: () => ({ alert: { show: mockAlertShow } }),
-}));
-
-jest.mock('@/frontend/components/messagePresentation', () => ({
-  AssistantMessage: ({ children, message }: { children: React.ReactNode; message: Message }) => {
+jest.mock('@/frontend/components/messages', () => ({
+  AssistantMessage: ({ children, message }: { children: ReactNode; message: Message }) => {
     const { createElement } = jest.requireActual('react');
     return createElement('AssistantMessage', { message }, children);
   },
   MessageList: (props: MessageListProps) => {
     mockMessageListProps = props;
     const assistant = props.messages.find((message) => message.role === 'assistant');
-    return assistant ? props.renderAssistantMessage?.(assistant) : null;
+    return assistant ? props.renderMessage(assistant) : null;
+  },
+  UserMessage: ({ message }: { message: Message }) => {
+    const { createElement } = jest.requireActual('react');
+    return createElement('UserMessage', { message });
   },
 }));
 
@@ -159,7 +163,7 @@ function createWorkspaceElement(
   );
 }
 
-describe('ChatWorkspace message presentation integration', () => {
+describe('ChatWorkspace message rendering integration', () => {
   let renderer: ReactTestRenderer | undefined;
   let requestAnimationFrameSpy: jest.SpyInstance;
   let readyFrame: FrameRequestCallback | undefined;
@@ -212,11 +216,11 @@ describe('ChatWorkspace message presentation integration', () => {
     expect(mockMessageListProps?.onLoadOlder).toBe(mockLoadOlder);
     expect(mockIsLoadingOlder).toBe(true);
 
-    const renderAssistantMessage = mockMessageListProps?.renderAssistantMessage;
+    const renderMessage = mockMessageListProps?.renderMessage;
     mockChatTopic = { ...mockChatTopic, isBusy: true };
     act(() => renderer?.update(createWorkspaceElement(false, messages)));
 
-    expect(mockMessageListProps?.renderAssistantMessage).toBe(renderAssistantMessage);
+    expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
   });
 
   test('composes assistant actions with topic busy and regenerate behavior', () => {
@@ -252,12 +256,12 @@ describe('ChatWorkspace message presentation integration', () => {
   });
 
   test('omits the internal scroll button accessory in preview', () => {
-    renderer = renderWorkspace(true, [createMessage('user-1', 'user')]);
+    renderer = renderWorkspace(true, [createMessage('assistant-1', 'assistant')]);
 
     expect(mockMessageListProps?.bottomAccessoryHeight).toBeUndefined();
     expect(mockMessageListProps?.contentBottomInset).toBe(12);
     expect(mockMessageListProps?.keyboardOffset).toBe(0);
-    expect(mockMessageListProps?.renderAssistantMessage).toBeUndefined();
+    expect(renderer.root.findAllByProps({ testID: 'assistant-message-toolbar' })).toHaveLength(0);
   });
 
   test('passes the initial-ready callback through to the history render gate', () => {

@@ -9,18 +9,17 @@ import {
   PersonCropSquareOnSquareAngledIcon,
   SparklesIcon,
 } from '@cherrystudio/app-icons';
-import { Section } from '@cherrystudio/ui/components';
+import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, View } from 'react-native';
-import { useBottomTabBarHeight } from 'react-native-bottom-tabs';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { Image } from '@/frontend/components/nativePrimitives';
+import { BackHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
@@ -30,7 +29,6 @@ export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
-  const tabBarHeight = useBottomTabBarHeight();
   const [userName] = usePreference('app.user.name');
   const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
@@ -47,8 +45,8 @@ export default function SettingsScreen() {
   // Own the insets explicitly: `never` keeps the scroll-offset zero point stable
   // (so scrollY reads 0 at rest and negative on iOS overscroll), which the hero
   // animation depends on. No top padding: the hero box is pinned to content y=0
-  // and draws under the status bar, exactly like the reference header.
-  const contentContainerStyle = useMemo(() => ({ paddingBottom: tabBarHeight }), [tabBarHeight]);
+  // and runs to the page's own top edge.
+  const contentContainerStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
 
   return (
     <View className="flex-1 bg-grouped-background">
@@ -142,7 +140,10 @@ export default function SettingsScreen() {
           </Section>
         </View>
       </Animated.ScrollView>
-      <ProfileStickyBar scrollY={scrollY} topInset={insets.top} userName={userName} />
+      {/* The transparent native header owns the top inset, so adding the safe
+          area again here would push the sticky bar down twice. */}
+      <ProfileStickyBar scrollY={scrollY} topInset={0} userName={userName} />
+      <BackHeader />
     </View>
   );
 }

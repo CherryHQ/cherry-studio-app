@@ -1,65 +1,41 @@
-import type { McpConfigSample } from '@cherrystudio/universal/data/types/mcpServer';
-import { sql } from 'drizzle-orm';
-import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { createUpdateTimestamps, uuidPrimaryKey } from './_columnHelpers';
 
 /**
- * MCP Server table - stores user-configured MCP server definitions
+ * MCP Server table - remote Streamable HTTP endpoints this client connects to.
  *
- * Migrated from Redux state.mcp.servers.
- * Runtime flags (isUvInstalled, isBunInstalled) are NOT migrated; current
- * binary availability is derived again at runtime.
+ * Mobile is an MCP *client* only, and the only transport it accepts is
+ * Streamable HTTP, so `endpointUrl` is the whole of the connection config —
+ * everything else the protocol needs is negotiated per connection. There is
+ * deliberately no `type` column: a single accepted transport is a constant, not
+ * a stored value.
+ *
+ * Runtime facts (protocol version, server info, tool list, connection state)
+ * are re-derived on every connection and belong to `McpRuntimeService`, not
+ * here. Execution approval is fixed application policy — every MCP tool asks
+ * before it runs — so there is no per-server approval column. Future OAuth
+ * credentials get their own storage keyed by server id; they must never land
+ * in this table.
  */
 export const mcpServerTable = sqliteTable(
   'mcp_server',
   {
     id: uuidPrimaryKey(),
     name: text().notNull(),
-    type: text(),
-    description: text(),
-    baseUrl: text(),
-    command: text(),
-    registryUrl: text(),
-    args: text({ mode: 'json' }).$type<string[]>(),
-    env: text({ mode: 'json' }).$type<Record<string, string>>(),
-    headers: text({ mode: 'json' }).$type<Record<string, string>>(),
-    provider: text(),
-    providerUrl: text(),
-    logoUrl: text(),
-    tags: text({ mode: 'json' }).$type<string[]>(),
-    longRunning: integer({ mode: 'boolean' }),
-    timeout: integer(),
-    dxtVersion: text(),
-    dxtPath: text(),
-    reference: text(),
-    searchKey: text(),
-    configSample: text({ mode: 'json' }).$type<McpConfigSample>(),
-    disabledTools: text({ mode: 'json' }).$type<string[]>(),
-    disabledAutoApproveTools: text({ mode: 'json' }).$type<string[]>(),
-    shouldConfig: integer({ mode: 'boolean' }),
-    sortOrder: integer().default(0),
-    isActive: integer({ mode: 'boolean' }).notNull().default(false),
-    installSource: text(),
-    isTrusted: integer({ mode: 'boolean' }),
-    trustedAt: integer(),
-    installedAt: integer(),
+    endpointUrl: text().notNull(),
+    isEnabled: integer({ mode: 'boolean' }).notNull().default(false),
+    /**
+     * Tool names this server may not offer, as the server reports them. The
+     * server decides what exists; this is the user's say over what reaches the
+     * model. Names that no longer exist stay put — a tool can come back after
+     * an upgrade, and dropping its rule would silently re-enable it.
+     */
+    disabledTools: text({ mode: 'json' }).$type<string[]>().notNull().default([]),
 
     ...createUpdateTimestamps,
   },
-  (t) => [
-    index('mcp_server_name_idx').on(t.name),
-    index('mcp_server_is_active_idx').on(t.isActive),
-    index('mcp_server_sort_order_idx').on(t.sortOrder),
-    check(
-      'mcp_server_type_check',
-      sql`${t.type} IS NULL OR ${t.type} IN ('stdio', 'sse', 'streamableHttp', 'inMemory')`,
-    ),
-    check(
-      'mcp_server_install_source_check',
-      sql`${t.installSource} IS NULL OR ${t.installSource} IN ('builtin', 'manual', 'protocol', 'unknown')`,
-    ),
-  ],
+  (t) => [index('mcp_server_is_enabled_idx').on(t.isEnabled)],
 );
 
 export type InsertMcpServerRow = typeof mcpServerTable.$inferInsert;

@@ -6,7 +6,7 @@ import {
   RssIcon,
   SquareArrowOutUpRightIcon,
 } from '@cherrystudio/app-icons';
-import { Section } from '@cherrystudio/ui/components';
+import { Image, Section } from '@cherrystudio/ui/components';
 import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
 import Constants from 'expo-constants';
 import { useCallback } from 'react';
@@ -15,7 +15,6 @@ import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Image } from '@/frontend/components/nativePrimitives';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';

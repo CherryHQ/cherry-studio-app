@@ -4,8 +4,6 @@ import {
   AssistantSchema,
   AssistantSettingsSchema,
 } from '@shared/data/types/assistant';
-import { GroupIdSchema, GroupNameSchema } from '@shared/data/types/group';
-import { TagIdSchema } from '@shared/data/types/tag';
 import * as z from 'zod';
 
 import { type OrderEndpoints } from './_endpointHelpers';
@@ -13,20 +11,18 @@ import { type OrderEndpoints } from './_endpointHelpers';
 const ASSISTANT_MUTABLE_FIELDS = {
   description: true,
   emoji: true,
-  groupId: true,
   modelId: true,
   name: true,
   prompt: true,
   settings: true,
 } as const;
 
-const TagIdsField = z.array(TagIdSchema).optional();
 const McpServerIdsField = z.array(z.string()).optional();
 
 export const CreateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIELDS)
   .partial()
   .required({ name: true })
-  .extend({ mcpServerIds: McpServerIdsField, tagIds: TagIdsField })
+  .extend({ mcpServerIds: McpServerIdsField })
   .strict();
 export type CreateAssistantDto = z.infer<typeof CreateAssistantSchema>;
 
@@ -36,8 +32,6 @@ export const ImportAssistantSchema = CreateAssistantSchema.pick({
   name: true,
   prompt: true,
   settings: true,
-}).extend({
-  groupName: GroupNameSchema.optional(),
 });
 export type ImportAssistantDto = z.infer<typeof ImportAssistantSchema>;
 
@@ -46,7 +40,6 @@ export const UpdateAssistantSchema = AssistantSchema.pick(ASSISTANT_MUTABLE_FIEL
   .extend({
     mcpServerIds: McpServerIdsField,
     settings: AssistantSettingsSchema.partial().optional(),
-    tagIds: TagIdsField,
   })
   .strict();
 export type UpdateAssistantDto = z.infer<typeof UpdateAssistantSchema>;
@@ -56,7 +49,6 @@ export const ASSISTANTS_DEFAULT_LIMIT = 100;
 export const ASSISTANTS_MAX_LIMIT = 500;
 
 export const ListAssistantsQuerySchema = z.strictObject({
-  groupId: GroupIdSchema.optional(),
   id: z.string().optional(),
   limit: z.coerce
     .number()
@@ -68,7 +60,6 @@ export const ListAssistantsQuerySchema = z.strictObject({
   search: z.string().trim().min(1).optional(),
   sortBy: z.enum(['createdAt', 'updatedAt', 'name', 'orderKey']).optional(),
   sortOrder: z.enum(['asc', 'desc']).optional(),
-  tagIds: z.array(TagIdSchema).min(1).optional(),
   updatedAtFrom: z.iso.datetime().optional(),
 });
 export type ListAssistantsQueryParams = z.input<typeof ListAssistantsQuerySchema>;

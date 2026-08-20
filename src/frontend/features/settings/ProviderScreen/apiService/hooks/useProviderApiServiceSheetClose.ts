@@ -1,10 +1,9 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import { useNavigation } from 'expo-router';
 import type { NavigationAction } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
-
-import { useAlert } from '@/frontend/components/AlertProvider';
 
 /** Confirms before leaving an edit screen that still holds uncommitted input. */
 export function useProviderApiServiceSheetClose({

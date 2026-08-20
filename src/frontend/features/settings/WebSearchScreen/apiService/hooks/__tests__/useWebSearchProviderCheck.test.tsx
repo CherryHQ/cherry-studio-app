@@ -15,7 +15,7 @@ jest.mock('react-i18next', () => ({
 jest.mock('heroui-native/toast', () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
-jest.mock('@/frontend/components/AlertProvider', () => ({
+jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
 }));
 jest.mock('@/frontend/data', () => ({

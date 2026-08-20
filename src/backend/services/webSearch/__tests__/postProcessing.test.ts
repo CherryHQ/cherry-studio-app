@@ -14,7 +14,6 @@ describe('web search post processing', () => {
     ];
     const config: WebSearchExecutionConfig = {
       compression: { cutoffLimit: 8, method: 'cutoff' },
-      excludeDomains: [],
       maxResults: 5,
     };
 

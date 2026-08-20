@@ -2,18 +2,19 @@ import '../frontend/styles/global.css';
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
 import '@/bootstrap/preboot/webCrypto';
+import { Alert } from '@cherrystudio/ui/components';
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { HeroUINativeProvider } from 'heroui-native/provider';
 import type { PropsWithChildren } from 'react';
+import { useTranslation } from 'react-i18next';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
-import { AlertProvider } from '@/frontend/components/AlertProvider';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import {
   getRootHeaderStyle,
@@ -42,11 +43,11 @@ export default function RootLayout() {
                 <AppBootstrapGate>
                   <StartupRouteReadyReporter>
                     <NavigationThemeProvider>
-                      <AlertProvider>
+                      <AppAlertProvider>
                         <BottomSheetProvider>
                           <RootStack />
                         </BottomSheetProvider>
-                      </AlertProvider>
+                      </AppAlertProvider>
                     </NavigationThemeProvider>
                   </StartupRouteReadyReporter>
                 </AppBootstrapGate>
@@ -56,6 +57,16 @@ export default function RootLayout() {
         </HeroUINativeProvider>
       </KeyboardProvider>
     </RootGestureView>
+  );
+}
+
+function AppAlertProvider({ children }: PropsWithChildren) {
+  const { t } = useTranslation();
+
+  return (
+    <Alert.Provider labels={{ cancel: t('common.cancel'), ok: t('common.ok') }}>
+      {children}
+    </Alert.Provider>
   );
 }
 
@@ -89,25 +100,17 @@ function RootStack() {
         headerTintColor: foregroundColor,
       }}
     >
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="oauth/authorize"
-        options={{
-          headerStyle: { backgroundColor },
-          headerTransparent: false,
-          presentation: 'modal',
-        }}
-      />
       <Stack.Screen
         name="topics"
         options={{
-          contentStyle: { backgroundColor: 'transparent' },
           headerBackButtonDisplayMode: 'minimal',
-          headerStyle: getTransparentHeaderStyle(),
-          headerTransparent: isLiquidGlassAvailable,
         }}
       />
+      {/* Settings owns a nested stack and draws its headers there, so the root
+          stack only needs to push the page without adding another header. */}
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen
         name="paintings/index"
         options={{

@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
-import { toolbarStyle } from '../composer.layout';
 import type { ComposerToolbarProps } from '../composer.types';
+import { toolbarStyle } from '../utils/composer-layout';
 
 /**
  * The row under the text field. It is one flex row and nothing more: tools sit

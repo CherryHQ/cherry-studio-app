@@ -1,8 +1,8 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { useMutation } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 

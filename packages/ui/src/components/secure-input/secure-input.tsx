@@ -89,7 +89,10 @@ export function SecureInput({
   return (
     <View
       className={cn(
-        'min-h-11 flex-row items-stretch overflow-hidden rounded-lg border border-border shadow-none',
+        // Same height as a plain `Input`: the two sit in adjacent fields of the
+        // same form (a provider's name, its Base URL, then its API key), so a
+        // secure field that stands taller reads as a different kind of control.
+        'min-h-10 flex-row items-stretch overflow-hidden rounded-lg border border-border shadow-none',
         isOnSurface ? 'bg-default' : 'bg-field',
         isDisabled && 'opacity-disabled',
         isInvalid && 'border-destructive',
@@ -133,7 +136,9 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     borderWidth: 0,
     flex: 1,
-    minHeight: 44,
+    // Two less than the frame's own minimum: the frame draws the border, and
+    // React Native counts it inside the height.
+    minHeight: 38,
     minWidth: 0,
     opacity: 1,
     outlineWidth: 0,

@@ -20,6 +20,9 @@ jest.mock('uniwind', () => ({
     updateCSSVariables: (...args: unknown[]) => mockUpdateCSSVariables(...args),
   },
 }));
+jest.mock('heroui-native/utils', () => ({
+  cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
+}));
 
 describe('theme runtime', () => {
   beforeEach(() => {

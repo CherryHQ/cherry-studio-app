@@ -24,6 +24,15 @@ export function getEffectiveAuthConfig(
   return authConfig ?? emptyAuthConfigFor(provider?.authType ?? 'api-key');
 }
 
+/**
+ * `authMethods` is the registry's capability catalogue, mirrored verbatim from
+ * desktop — it says what a provider *is*, not what this app implements. Only
+ * `api-key` drives UI here; `oauth` and `external-cli` are information the app
+ * reads past, so do not strip them from the array to "match" mobile support.
+ *
+ * `authType === 'oauth'` still shows keys: rows left behind by the removed OAuth
+ * sign-in hold minted API keys that are real, working credentials.
+ */
 export function shouldShowApiKeys(
   authType: AuthConfig['type'],
   provider?: Pick<Provider, 'authMethods'> | null,

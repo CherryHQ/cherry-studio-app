@@ -1,3 +1,4 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import type { Message } from '@cherrystudio/universal/data/types/message';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
@@ -5,12 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
-import {
-  AssistantMessage,
-  MessageList,
-  type MessagePresentationItem,
-} from '@/frontend/components/messagePresentation';
+import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -21,8 +17,8 @@ import {
   getPendingToolApprovals,
   mergeMessagesWithOverlay,
 } from '../runtime/chatRuntimeProjection';
-import { AssistantMessageToolbar } from './components/AssistantMessageToolbar';
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
+import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
 import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import {
@@ -33,6 +29,10 @@ import {
 const logger = loggerService.withContext('ChatWorkspace');
 // 诊断埋点：冷/暖首次进入 topic 的数据加载 + 遮罩可见性时序。`[GATE]` 前缀。
 const gateLog = loggerService.withContext('ChatGate');
+
+function renderChatMessage(message: MessageListItem) {
+  return <ChatMessage message={message} />;
+}
 
 type ChatWorkspaceProps = {
   isAssistantToolbarEnabled: boolean;
@@ -47,14 +47,6 @@ type ChatWorkspaceProps = {
   renderGateKey: string;
   topicId: string;
 };
-
-function renderChatAssistantMessage(message: MessagePresentationItem) {
-  return (
-    <AssistantMessage message={message}>
-      <AssistantMessageToolbar message={message} />
-    </AssistantMessage>
-  );
-}
 
 export function ChatWorkspace({
   bottomAccessoryHeight,
@@ -73,10 +65,10 @@ export function ChatWorkspace({
   const { alert } = useAlert();
   const messagesWithUser = mergeMessagesWithOverlay(messages, chatTopic.pendingUserMessage);
   const visibleMessages = mergeMessagesWithOverlay(messagesWithUser, chatTopic.overlayMessage);
-  const presentationMessages = useMemo(
+  const listMessages = useMemo(
     () =>
       visibleMessages.filter(
-        (message): message is Message & MessagePresentationItem =>
+        (message): message is Message & MessageListItem =>
           message.role === 'user' || message.role === 'assistant',
       ),
     [visibleMessages],
@@ -112,16 +104,17 @@ export function ChatWorkspace({
     gateLog.debug('[GATE] state', {
       isLoadingInitial,
       isCoverVisible,
-      len: presentationMessages.length,
+      len: listMessages.length,
       t: Date.now(),
     });
-  }, [isLoadingInitial, isCoverVisible, presentationMessages.length]);
+  }, [isLoadingInitial, isCoverVisible, listMessages.length]);
 
   return (
     <View className="flex-1 bg-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <AssistantMessageActionsProvider
         key={topicId}
+        isAssistantToolbarEnabled={isAssistantToolbarEnabled}
         isRegenerateDisabled={chatTopic.isBusy}
         onRegenerate={regenerateAssistantMessage}
       >
@@ -132,12 +125,10 @@ export function ChatWorkspace({
           contentTopInset={contentTopInset}
           enteringMessageId={chatTopic.pendingUserMessage?.id}
           keyboardOffset={keyboardOffset}
-          messages={presentationMessages}
+          messages={listMessages}
           onLoadOlder={loadOlder}
           onReady={markListLoaded}
-          renderAssistantMessage={
-            isAssistantToolbarEnabled ? renderChatAssistantMessage : undefined
-          }
+          renderMessage={renderChatMessage}
         />
       </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />

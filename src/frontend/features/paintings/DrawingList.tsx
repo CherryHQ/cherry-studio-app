@@ -1,5 +1,11 @@
 import { CheckIcon, ImageIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
-import { Button, ImageGenerationLoader } from '@cherrystudio/ui/components';
+import {
+  Button,
+  Image,
+  ImageGenerationLoader,
+  Section,
+  useAlert,
+} from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library';
 import { Link, useRouter } from 'expo-router';
@@ -15,22 +21,19 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
   type ComposerInitialAttachment,
   createPhotoAttachmentDraft,
 } from '@/frontend/components/composer/utils/composerAttachments';
-import {
-  useMessageListBottomInset,
-  useMessagePendingDeletionIds,
-  useMessageScope,
-  useMessageSelectionActions,
-  useMessageSelectionState,
-  useRegisterSelectionSource,
-} from '@/frontend/components/messageTabs';
-import { Image } from '@/frontend/components/nativePrimitives';
 import { PaintingZoomLink } from '@/frontend/components/navigation';
+import {
+  useListBottomInset,
+  usePendingDeletionIds,
+  useRegisterSelectionSource,
+  useSelectionActions,
+  useSelectionState,
+} from '@/frontend/components/selection';
 
 import {
   type PaintingGalleryItem,
@@ -54,15 +57,16 @@ export function DrawingList() {
   const { t } = useTranslation();
   const { alert } = useAlert();
   const router = useRouter();
-  const { scope } = useMessageScope();
-  const { isEditing, selectedIds } = useMessageSelectionState();
-  const pendingDeletionIds = useMessagePendingDeletionIds('drawings');
-  const { toggleId } = useMessageSelectionActions();
-  const selectionSource = usePaintingSelectionSource(isEditing && scope === 'drawings');
+  const { isEditing, selectedIds } = useSelectionState();
+  const pendingDeletionIds = usePendingDeletionIds('drawings');
+  const { toggleId } = useSelectionActions();
+  const selectionSource = usePaintingSelectionSource(isEditing);
   useRegisterSelectionSource('drawings', selectionSource);
-  const bottomInset = useMessageListBottomInset();
+  const bottomInset = useListBottomInset();
   const { width: windowWidth } = useWindowDimensions();
-  const recentPhotos = useRecentPaintingPhotos(scope === 'drawings');
+  // Mounted means visible now that the gallery owns a whole screen, so photo
+  // access is simply always armed here.
+  const recentPhotos = useRecentPaintingPhotos(true);
   const requestPhotoAccess = recentPhotos.requestAccess;
   const paintings = usePaintings();
   const gallery = usePaintingGalleryEntries(paintings.paintings);
@@ -152,9 +156,10 @@ export function DrawingList() {
   return (
     <ScrollView
       className="flex-1 bg-background"
-      // Stable across the edit⇄done flip (see useMessageListBottomInset) so the
+      // Stable across the edit⇄done flip (see useListBottomInset) so the
       // gallery never reflows on toggle.
       contentContainerStyle={{ flexGrow: 1, paddingBottom: bottomInset }}
+      contentInsetAdjustmentBehavior="automatic"
       onScroll={({ nativeEvent }) => {
         const distanceToEnd =
           nativeEvent.contentSize.height -
@@ -170,22 +175,18 @@ export function DrawingList() {
       {isEditing ? null : (
         <>
           <View className="pb-5 pt-2">
-            <View className="h-10 flex-row items-center justify-between px-4">
-              <Text className="font-semibold text-foreground text-base">
-                {t('painting.photos.title')}
-              </Text>
-              <Pressable
+            <Section.Header className="h-10 px-4" title={t('painting.photos.title')}>
+              <Button
                 accessibilityLabel={t('painting.photos.viewAll')}
-                accessibilityRole="button"
-                className="h-10 flex-row items-center px-1 active:opacity-60"
+                className="min-h-10 px-1 py-0"
                 onPress={() => void handleViewAllPress()}
+                size="xs"
                 testID="painting-photos-view-all"
+                variant="ghost"
               >
-                <Text className="font-medium text-foreground text-sm">
-                  {t('painting.photos.viewAll')}
-                </Text>
-              </Pressable>
-            </View>
+                <Button.Label numberOfLines={1}>{t('painting.photos.viewAll')}</Button.Label>
+              </Button>
+            </Section.Header>
             {recentPhotos.isLoading ? (
               <View className="h-20 items-center justify-center">
                 <ActivityIndicator />

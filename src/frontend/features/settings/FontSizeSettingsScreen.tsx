@@ -1,14 +1,13 @@
-import { Slider } from '@cherrystudio/ui/components';
+import { Slider, useAlert } from '@cherrystudio/ui/components';
+import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { BackHeader } from '@/frontend/components/headers';
 import { MarkdownText } from '@/frontend/components/markdown';
 import { usePreference } from '@/frontend/data/hooks';
 import { applyFontSizeStepPreference } from '@/frontend/utils/theme';
-import { normalizeFontSizeStep } from '@/frontend/utils/typographyScale';
 
 import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 

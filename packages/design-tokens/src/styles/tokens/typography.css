@@ -8,7 +8,7 @@
  *
  * 这里曾经还有 31 个字号/行高/段落间距/字体族 token，全部零消费者，已删。
  * 真正的来源分别是：
- * - 字号 / 行高：`src/frontend/utils/typographyScale.ts` 的 sizeSequence
+ * - 字号 / 行高：`@cherrystudio/ui/utils` 的字号阶梯
  *   （运行时按无障碍档位平移，写进 `--ui-text-*`）；
  * - 正文字体族：不设，各平台走系统字体；
  * - 等宽字体族：`src/frontend/styles/global.css` 的 `--font-mono`（Geist Mono）。

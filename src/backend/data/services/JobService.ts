@@ -29,7 +29,6 @@ export type JobListFilter = {
   offset?: number;
   parentId?: string;
   queue?: string;
-  scheduleId?: string;
   status?: JobStatus[];
   type?: string | string[];
 };
@@ -72,7 +71,6 @@ function rowToSnapshot(row: JobRow): JobSnapshot {
     parentId: row.parentId,
     priority: row.priority,
     queue: row.queue,
-    scheduleId: row.scheduleId,
     scheduledAt: timestampToISO(row.scheduledAt),
     startedAt: row.startedAt === null ? null : timestampToISO(row.startedAt),
     status: row.status as JobStatus,
@@ -99,7 +97,6 @@ export class JobService {
     if (Array.isArray(filter.type)) {
       if (filter.type.length) conditions.push(inArray(jobTable.type, filter.type));
     } else if (filter.type) conditions.push(eq(jobTable.type, filter.type));
-    if (filter.scheduleId) conditions.push(eq(jobTable.scheduleId, filter.scheduleId));
     if (filter.parentId) conditions.push(eq(jobTable.parentId, filter.parentId));
     let query = this.dbService
       .getDb()

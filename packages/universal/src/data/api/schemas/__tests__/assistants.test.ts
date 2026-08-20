@@ -14,16 +14,14 @@ describe('assistant api schemas', () => {
     });
   });
 
-  test('accepts desktop group and sorting query fields', () => {
+  test('accepts desktop sorting query fields', () => {
     expect(
       ListAssistantsQuerySchema.parse({
-        groupId: '11111111-1111-4111-8111-111111111111',
         sortBy: 'updatedAt',
         sortOrder: 'desc',
         updatedAtFrom: '2026-05-01T00:00:00.000Z',
       }),
     ).toMatchObject({
-      groupId: '11111111-1111-4111-8111-111111111111',
       sortBy: 'updatedAt',
       sortOrder: 'desc',
       updatedAtFrom: '2026-05-01T00:00:00.000Z',
@@ -31,15 +29,10 @@ describe('assistant api schemas', () => {
   });
 
   test.each([CreateAssistantSchema, UpdateAssistantSchema])(
-    'accepts a nullable group assignment',
+    'accepts a nullable model assignment',
     (schema) => {
-      expect(
-        schema.safeParse({
-          groupId: '11111111-1111-4111-8111-111111111111',
-          name: 'Assistant',
-        }).success,
-      ).toBe(true);
-      expect(schema.safeParse({ groupId: null, name: 'Assistant' }).success).toBe(true);
+      expect(schema.safeParse({ modelId: 'openai::gpt-4', name: 'Assistant' }).success).toBe(true);
+      expect(schema.safeParse({ modelId: null, name: 'Assistant' }).success).toBe(true);
     },
   );
 
@@ -69,18 +62,16 @@ describe('assistant api schemas', () => {
     });
   });
 
-  test('normalizes long legacy group names and rejects non-import fields', () => {
-    const groupName = 'x'.repeat(65);
+  test('rejects fields outside the import contract', () => {
     expect(
       ImportAssistantSchema.parse({
-        groupName: `  ${groupName}  `,
         name: 'Imported Assistant',
         prompt: 'legacy prompt',
       }),
-    ).toEqual({ groupName, name: 'Imported Assistant', prompt: 'legacy prompt' });
+    ).toEqual({ name: 'Imported Assistant', prompt: 'legacy prompt' });
     expect(
       ImportAssistantSchema.safeParse({
-        groupId: '11111111-1111-4111-8111-111111111111',
+        modelId: 'openai::gpt-4',
         name: 'Imported Assistant',
       }).success,
     ).toBe(false);

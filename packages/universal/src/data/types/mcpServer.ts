@@ -1,100 +1,33 @@
 /**
  * MCP Server entity types.
  *
- * Keep `McpServerSchema` aligned with desktop
- * `src/shared/data/types/mcpServer.ts`. Mobile-only projections and runtime
- * types live below the shared entity definition.
+ * MOBILE SYNC DIVERGENCE: desktop's `McpServer` describes a launcher for four
+ * transports plus a registry install lifecycle. Mobile is a client for one
+ * transport (Streamable HTTP) and installs nothing, so this entity is
+ * deliberately not desktop's — it is the stored connection, and nothing else.
  */
 
 import * as z from 'zod';
 
-// ============================================================================
-// Shared Sub-Schemas
-// ============================================================================
-
-/** MCP server configuration sample. */
-export const McpConfigSampleSchema = z.object({
-  command: z.string(),
-  args: z.array(z.string()),
-  env: z.record(z.string(), z.string()).optional(),
-});
-export type McpConfigSample = z.infer<typeof McpConfigSampleSchema>;
-
-/** MCP Server communication protocol. */
-export const McpServerTypeSchema = z.enum(['stdio', 'sse', 'streamableHttp', 'inMemory']);
-export type McpServerType = z.infer<typeof McpServerTypeSchema>;
-
-/** MCP Server install source. */
-export const McpServerInstallSourceSchema = z.enum(['builtin', 'manual', 'protocol', 'unknown']);
-export type McpServerInstallSource = z.infer<typeof McpServerInstallSourceSchema>;
-
-// ============================================================================
-// McpServer Entity
-// ============================================================================
-
 /**
- * Complete MCP Server entity as stored in the desktop-compatible database.
+ * A remote MCP endpoint as stored on device.
  *
- * Nullable DB columns are represented as optional (`?`); the service layer
- * converts SQL NULL to `undefined`.
+ * `endpointUrl` is the complete MCP endpoint (e.g. `https://example.com/mcp`).
+ * Protocol version, server info and the tool list are connection results, not
+ * configuration, and so are absent here by design.
+ *
+ * `disabledTools` holds raw tool names exactly as the server reports them.
+ * Desktop's rule vocabulary also admits minted ids and server wildcards, but
+ * neither end has ever written one, and mobile's row cannot sync to desktop's
+ * anyway, so a name is the whole rule here.
  */
 export const McpServerSchema = z.strictObject({
   id: z.uuidv4(),
   name: z.string().min(1),
-  type: McpServerTypeSchema.optional(),
-  description: z.string().optional(),
-  baseUrl: z.string().optional(),
-  command: z.string().optional(),
-  registryUrl: z.string().optional(),
-  args: z.array(z.string()).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-  headers: z.record(z.string(), z.string()).optional(),
-  provider: z.string().optional(),
-  providerUrl: z.string().optional(),
-  logoUrl: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  longRunning: z.boolean().optional(),
-  timeout: z.number().optional(),
-  dxtVersion: z.string().optional(),
-  dxtPath: z.string().optional(),
-  reference: z.string().optional(),
-  searchKey: z.string().optional(),
-  configSample: McpConfigSampleSchema.optional(),
-  disabledTools: z.array(z.string()).optional(),
-  disabledAutoApproveTools: z.array(z.string()).optional(),
-  shouldConfig: z.boolean().optional(),
-  sortOrder: z.number().optional(),
-  isActive: z.boolean(),
-  installSource: McpServerInstallSourceSchema.optional(),
-  isTrusted: z.boolean().optional(),
-  trustedAt: z.number().optional(),
-  installedAt: z.number().optional(),
-  createdAt: z.iso.datetime().optional(),
-  updatedAt: z.iso.datetime().optional(),
-});
-export type McpServer = z.infer<typeof McpServerSchema>;
-
-// ============================================================================
-// Mobile Projection
-// ============================================================================
-
-/**
- * Streamable HTTP rows visible to mobile.
- *
- * The service retains every desktop field while normalizing the fields the
- * mobile UI/runtime consumes directly. Unsupported transports never enter this
- * projection.
- */
-export const StreamableHttpMcpServerSchema = McpServerSchema.extend({
-  baseUrl: z.string(),
-  createdAt: z.iso.datetime(),
-  description: z.string(),
-  disabledAutoApproveTools: z.array(z.string()),
+  endpointUrl: z.url(),
+  isEnabled: z.boolean(),
   disabledTools: z.array(z.string()),
-  headers: z.record(z.string(), z.string()),
-  type: z.literal('streamableHttp'),
+  createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
-export type StreamableHttpMcpServer = z.infer<typeof StreamableHttpMcpServerSchema>;
-
-export const DEFAULT_MCP_TIMEOUT_SECONDS = 60;
+export type McpServer = z.infer<typeof McpServerSchema>;

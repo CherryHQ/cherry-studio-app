@@ -18,25 +18,25 @@ describe('MCP server Data API handlers', () => {
       mutations as unknown as McpServerMutations,
     );
 
-    await handlers['/mcp-servers'].GET({ query: { isActive: true } });
+    await handlers['/mcp-servers'].GET({ query: { isEnabled: true } });
     await handlers['/mcp-servers'].POST({
-      body: { baseUrl: 'https://example.com/mcp', name: 'Server' },
+      body: { endpointUrl: 'https://example.com/mcp', name: 'Server' },
     });
     await handlers['/mcp-servers/:id'].GET({ params: { id: 'server-1' } });
     await handlers['/mcp-servers/:id'].PATCH({
-      body: { baseUrl: 'https://example.com/next' },
+      body: { endpointUrl: 'https://example.com/next' },
       params: { id: 'server-1' },
     });
     await handlers['/mcp-servers/:id'].DELETE({ params: { id: 'server-1' } });
 
-    expect(service.list).toHaveBeenCalledWith({ isActive: true, type: 'streamableHttp' });
-    expect(service.getById).toHaveBeenCalledWith('server-1', 'streamableHttp');
+    expect(service.list).toHaveBeenCalledWith({ isEnabled: true });
+    expect(service.getById).toHaveBeenCalledWith('server-1');
     expect(mutations.createServer).toHaveBeenCalledWith({
-      baseUrl: 'https://example.com/mcp',
+      endpointUrl: 'https://example.com/mcp',
       name: 'Server',
     });
     expect(mutations.updateServer).toHaveBeenCalledWith('server-1', {
-      baseUrl: 'https://example.com/next',
+      endpointUrl: 'https://example.com/next',
     });
     expect(mutations.removeServer).toHaveBeenCalledWith('server-1');
   });

@@ -1,14 +1,9 @@
 import {
-  apiKeyEntriesSignature,
   buildApiKeysInputFromEntries,
   normalizeApiKeyEntries,
   normalizeApiKeySingleLine,
 } from '../apiService/utils/providerApiServiceApiKeys';
 import { shouldShowApiKeys } from '../apiService/utils/providerApiServiceAuth';
-import {
-  getProviderApiServiceApiKeysDirtyState,
-  getProviderApiServiceEndpointDirtyState,
-} from '../apiService/utils/providerApiServiceDirtyState';
 import type { EndpointDraft } from '../apiService/utils/providerApiServiceEndpointDraft';
 import {
   buildCustomProviderCreationPayload,
@@ -291,6 +286,38 @@ describe('provider API service form helpers', () => {
     });
   });
 
+  it('clears only the primary Base URL and preserves all other endpoint data', () => {
+    expect(
+      buildProviderPrimaryBaseUrlUpdates({
+        baseUrl: '',
+        provider: {
+          defaultChatEndpoint: 'openai-chat-completions',
+          endpointConfigs: {
+            'anthropic-messages': {
+              baseUrl: 'https://anthropic.example.com',
+              reasoningFormatType: 'anthropic',
+            },
+            'openai-chat-completions': {
+              baseUrl: 'https://chat.example.com',
+              reasoningFormatType: 'openai-chat',
+            },
+          },
+        } as never,
+      }),
+    ).toEqual({
+      defaultChatEndpoint: 'openai-chat-completions',
+      endpointConfigs: {
+        'anthropic-messages': {
+          baseUrl: 'https://anthropic.example.com',
+          reasoningFormatType: 'anthropic',
+        },
+        'openai-chat-completions': {
+          reasoningFormatType: 'openai-chat',
+        },
+      },
+    });
+  });
+
   it('normalizes API key entries before they reach the save call', () => {
     expect(
       normalizeApiKeyEntries([
@@ -303,61 +330,6 @@ describe('provider API service form helpers', () => {
       { id: 'key-a', isEnabled: false, key: 'sk-a' },
       { id: 'key-b', isEnabled: true, key: 'sk-b' },
     ]);
-  });
-
-  it('compares API key entries independent of ordering', () => {
-    expect(
-      apiKeyEntriesSignature([
-        { id: 'key-b', isEnabled: true, key: 'sk-b' },
-        { id: 'key-a', isEnabled: false, key: 'sk-a' },
-      ]),
-    ).toBe(
-      apiKeyEntriesSignature([
-        { id: 'key-a', isEnabled: false, key: 'sk-a' },
-        { id: 'key-b', isEnabled: true, key: 'sk-b' },
-      ]),
-    );
-  });
-
-  it('ignores empty new API key rows in dirty state', () => {
-    expect(
-      getProviderApiServiceApiKeysDirtyState({
-        apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
-        entries: [
-          { id: 'key-a', isEnabled: true, key: 'sk-a' },
-          { id: 'key-empty', isEnabled: true, key: '' },
-        ],
-      }),
-    ).toBe(false);
-  });
-
-  it('reports API key edits as dirty', () => {
-    expect(
-      getProviderApiServiceApiKeysDirtyState({
-        apiKeys: [{ id: 'key-a', isEnabled: true, key: 'sk-a' }],
-        entries: [{ id: 'key-a', isEnabled: true, key: 'sk-edited' }],
-      }),
-    ).toBe(true);
-  });
-
-  it('ignores empty new endpoint rows in dirty state', () => {
-    expect(
-      getProviderApiServiceEndpointDirtyState({
-        draft: createTestEndpointDraft({
-          baseUrlByEndpoint: {
-            'openai-chat-completions': 'https://chat.example.com',
-            'openai-responses': '',
-          },
-          visibleEndpointTypes: ['openai-chat-completions', 'openai-responses'],
-        }),
-        provider: {
-          authType: 'api-key',
-          endpointConfigs: {
-            'openai-chat-completions': { baseUrl: 'https://chat.example.com' },
-          },
-        } as never,
-      }),
-    ).toBe(false);
   });
 
   it('rejects invalid endpoint base URLs', () => {

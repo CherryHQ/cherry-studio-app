@@ -1,6 +1,6 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
+import type { MessageListItem } from '@/frontend/components/messages';
 
 import { AssistantMessageActionsProvider } from '../../context/AssistantMessageActionsProvider';
 import { copyAssistantMessageText } from '../../utils/copyAssistantMessageText';
@@ -21,15 +21,14 @@ jest.mock('@cherrystudio/app-icons', () => ({
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
-  return { Button: (props: object) => createElement('Button', props) };
+  return {
+    Button: (props: object) => createElement('Button', props),
+    useAlert: () => ({ alert: { show: jest.fn() } }),
+  };
 });
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
-}));
-
-jest.mock('@/frontend/components/AlertProvider', () => ({
-  useAlert: () => ({ alert: { show: jest.fn() } }),
 }));
 
 jest.mock('@/shared/core/logger/LoggerService', () => ({
@@ -67,7 +66,7 @@ describe('AssistantMessageToolbar', () => {
     { isVisible: true, status: 'success' },
     { isVisible: true, status: 'error' },
     { isVisible: true, status: 'paused' },
-  ] satisfies { isVisible: boolean; status: MessagePresentationItem['status'] }[])(
+  ] satisfies { isVisible: boolean; status: MessageListItem['status'] }[])(
     'sets toolbar visibility to $isVisible for $status messages',
     ({ isVisible, status }) => {
       renderToolbar(createMessage(status, 'Answer'));
@@ -114,10 +113,11 @@ describe('AssistantMessageToolbar', () => {
     expect(onRegenerate).toHaveBeenCalledWith({ messageId: 'assistant-1' });
   });
 
-  function renderToolbar(message: MessagePresentationItem, isRegenerateDisabled = false) {
+  function renderToolbar(message: MessageListItem, isRegenerateDisabled = false) {
     act(() => {
       renderer = create(
         <AssistantMessageActionsProvider
+          isAssistantToolbarEnabled
           isRegenerateDisabled={isRegenerateDisabled}
           onRegenerate={onRegenerate}
         >
@@ -128,10 +128,7 @@ describe('AssistantMessageToolbar', () => {
   }
 });
 
-function createMessage(
-  status: MessagePresentationItem['status'],
-  text: string,
-): MessagePresentationItem {
+function createMessage(status: MessageListItem['status'], text: string): MessageListItem {
   return {
     data: { parts: [{ text, type: 'text' }] },
     id: 'assistant-1',

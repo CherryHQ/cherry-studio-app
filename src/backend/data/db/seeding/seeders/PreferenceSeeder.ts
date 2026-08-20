@@ -4,7 +4,6 @@ import { preferenceTable } from '@/backend/data/db/schemas';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';
-import { collectPreferenceValueMigrations } from './preferenceValueMigrations';
 
 export class PreferenceSeeder implements DatabaseSeeder {
   readonly name = 'preference';
@@ -16,64 +15,23 @@ export class PreferenceSeeder implements DatabaseSeeder {
   }
 
   async run(dbService: Parameters<DatabaseSeeder['run']>[0]) {
-    const db = dbService.getDb();
-    const preferences = await db
-      .select({
-        scope: preferenceTable.scope,
-        key: preferenceTable.key,
-        value: preferenceTable.value,
-      })
+    const stored = await dbService
+      .getDb()
+      .select({ key: preferenceTable.key })
       .from(preferenceTable);
+    const storedKeys = new Set(stored.map((preference) => preference.key));
+    const missing = Object.entries(PreferenceDefaults).filter(([key]) => !storedKeys.has(key));
 
-    // Convert existing preferences to a Set for quick lookup.
-    const existingPreferences = new Set(
-      preferences.map((preference) => `${preference.scope}.${preference.key}`),
-    );
-    // Collect all new preferences to insert.
-    const newPreferences: {
-      scope: string;
-      key: string;
-      value: unknown;
-    }[] = collectPreferenceValueMigrations(preferences);
-
-    for (const preference of newPreferences) {
-      existingPreferences.add(`${preference.scope}.${preference.key}`);
-    }
-
-    // Process each scope in the complete mobile preference surface.
-    for (const [scope, scopeData] of Object.entries(PreferenceDefaults)) {
-      // Process each key-value pair in the scope.
-      for (const [key, value] of Object.entries(scopeData)) {
-        const preferenceKey = `${scope}.${key}`;
-
-        // Skip if this preference already exists.
-        if (existingPreferences.has(preferenceKey)) {
-          continue;
-        }
-
-        // Add to new preferences array.
-        newPreferences.push({
-          scope,
-          key,
-          value,
-        });
-      }
-    }
-
-    if (newPreferences.length === 0) {
+    if (missing.length === 0) {
       return;
     }
 
-    // Insert new preferences without overwriting existing user values.
+    // `onConflictDoNothing` rather than an upsert: a key already in the table
+    // holds the user's value, and seeding must never overwrite it.
     await dbService.withWriteTx(async (tx) => {
-      for (const preference of newPreferences) {
+      for (const [key, value] of missing) {
         // react-doctor-disable-next-line async-await-in-loop -- expo-sqlite 写事务内本质串行，并行化无收益
-        await tx
-          .insert(preferenceTable)
-          .values(preference)
-          .onConflictDoNothing({
-            target: [preferenceTable.scope, preferenceTable.key],
-          });
+        await tx.insert(preferenceTable).values({ key, value }).onConflictDoNothing();
       }
     });
   }

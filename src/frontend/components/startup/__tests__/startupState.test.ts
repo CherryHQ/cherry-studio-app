@@ -1,6 +1,5 @@
 import {
   getStartupExitDurationMs,
-  isMessagesStartupRoute,
   isStartupReadyToExit,
   normalizeStartupColorScheme,
   STARTUP_ATTRIBUTION_ENTER_DURATION_MS,
@@ -58,11 +57,5 @@ describe('startup state', () => {
     expect(normalizeStartupColorScheme('light')).toBe('light');
     expect(normalizeStartupColorScheme('unspecified')).toBe('light');
     expect(normalizeStartupColorScheme(null)).toBe('light');
-  });
-
-  test('distinguishes the default Messages route from other cold-start routes', () => {
-    expect(isMessagesStartupRoute(['(tabs)', '(messages)'])).toBe(true);
-    expect(isMessagesStartupRoute(['(tabs)', 'settings', 'appearance'])).toBe(false);
-    expect(isMessagesStartupRoute(['topics'])).toBe(false);
   });
 });

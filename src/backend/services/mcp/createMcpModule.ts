@@ -3,7 +3,7 @@ import type {
   McpUpdateServerResult,
   UpdateMcpServerDto,
 } from '@cherrystudio/universal/data/api/schemas/mcpServers';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import type {
@@ -15,21 +15,21 @@ import type {
 } from '@/shared/contracts';
 
 type McpServerData = {
-  create(input: CreateMcpServerDto): Promise<StreamableHttpMcpServer>;
-  get(id: string): Promise<StreamableHttpMcpServer>;
+  create(input: CreateMcpServerDto): Promise<McpServer>;
+  get(id: string): Promise<McpServer>;
   remove(id: string): Promise<void>;
-  update(id: string, input: UpdateMcpServerDto): Promise<StreamableHttpMcpServer>;
+  update(id: string, input: UpdateMcpServerDto): Promise<McpServer>;
 };
 
 type McpRuntime = {
   getRuntimeSummaries(
-    servers: readonly StreamableHttpMcpServer[],
+    servers: readonly McpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>>;
   getServerInfo(config: McpConnectionConfig): Promise<McpServerInfo>;
   invalidate(serverId: string, options?: { preserveSnapshot?: boolean }): void;
-  listTools(server: StreamableHttpMcpServer): Promise<McpToolSummary[]>;
+  listTools(server: McpServer): Promise<McpToolSummary[]>;
   test(config: McpConnectionConfig): Promise<McpToolSummary[]>;
-  warm(server: StreamableHttpMcpServer): Promise<void>;
+  warm(server: McpServer): Promise<void>;
 };
 
 export type McpModuleDependencies = {
@@ -40,16 +40,16 @@ export type McpModuleDependencies = {
 export function createMcpModule(
   dependencies: McpModuleDependencies,
 ): McpModule & McpServerMutations {
-  const createServer = async (input: CreateMcpServerDto): Promise<StreamableHttpMcpServer> => {
+  const createServer = async (input: CreateMcpServerDto): Promise<McpServer> => {
     const server = await dependencies.servers.create(input);
-    if (server.isActive) {
+    if (server.isEnabled) {
       void dependencies.runtime.warm(server);
     }
     return server;
   };
 
   const getRuntimeSummaries = (
-    servers: readonly StreamableHttpMcpServer[],
+    servers: readonly McpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>> =>
     dependencies.runtime.getRuntimeSummaries(servers);
 
@@ -86,18 +86,18 @@ export function createMcpModule(
 
     let toolsChanged = false;
     if (previous) {
-      const transportChanged = !hasSameTransport(previous, server);
-      toolsChanged = transportChanged;
-      const becameActive = !previous.isActive && server.isActive;
-      const becameInactive = previous.isActive && !server.isActive;
+      const endpointChanged = previous.endpointUrl !== server.endpointUrl;
+      toolsChanged = endpointChanged;
+      const becameEnabled = !previous.isEnabled && server.isEnabled;
+      const becameDisabled = previous.isEnabled && !server.isEnabled;
 
-      if (transportChanged) {
+      if (endpointChanged) {
         dependencies.runtime.invalidate(id);
-      } else if (becameInactive) {
+      } else if (becameDisabled) {
         dependencies.runtime.invalidate(id, { preserveSnapshot: true });
       }
 
-      if (server.isActive && (transportChanged || becameActive)) {
+      if (server.isEnabled && (endpointChanged || becameEnabled)) {
         void dependencies.runtime.warm(server);
       }
     }
@@ -118,17 +118,5 @@ export function createMcpModule(
 }
 
 function hasRuntimeRelevantPatch(input: UpdateMcpServerDto): boolean {
-  return input.baseUrl !== undefined || input.headers !== undefined || input.isActive !== undefined;
-}
-
-function hasSameTransport(left: StreamableHttpMcpServer, right: StreamableHttpMcpServer): boolean {
-  if (left.baseUrl !== right.baseUrl) {
-    return false;
-  }
-
-  const leftHeaders = Object.entries(left.headers);
-  return (
-    leftHeaders.length === Object.keys(right.headers).length &&
-    leftHeaders.every(([name, value]) => right.headers[name] === value)
-  );
+  return input.endpointUrl !== undefined || input.isEnabled !== undefined;
 }

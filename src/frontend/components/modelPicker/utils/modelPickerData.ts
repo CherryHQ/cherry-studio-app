@@ -1,16 +1,8 @@
 import { MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import {
-  isUniqueModelId,
-  type Model,
-  type UniqueModelId,
-} from '@cherrystudio/universal/data/types/model';
-import type { Pin } from '@cherrystudio/universal/data/types/pin';
+import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
-export type ModelPickerGroupKind = 'pinned' | 'provider';
-
 export type ModelPickerModelItem = {
-  isPinned: boolean;
   key: string;
   model: Model;
   modelId: UniqueModelId;
@@ -18,10 +10,9 @@ export type ModelPickerModelItem = {
 };
 
 export type ModelPickerGroup = {
-  groupKind: ModelPickerGroupKind;
   items: ModelPickerModelItem[];
   key: string;
-  provider?: Provider;
+  provider: Provider;
   title: string;
 };
 
@@ -64,21 +55,13 @@ const MODEL_PICKER_TAG_LABEL_KEYS = {
   free: 'models.capability.free',
 } as const satisfies Record<ModelPickerTag, string>;
 
-export function getPinnedModelIds(pins: readonly Pin[]): UniqueModelId[] {
-  return pins.flatMap((pin) =>
-    pin.entityType === 'model' && isUniqueModelId(pin.entityId) ? [pin.entityId] : [],
-  );
-}
-
 export function getModelPickerModelItem(
   modelId: string | null,
   {
     models,
-    pinnedModelIds,
     providers,
   }: {
     models: readonly Model[];
-    pinnedModelIds: readonly UniqueModelId[];
     providers: readonly Provider[];
   },
 ): ModelPickerModelItem | undefined {
@@ -90,12 +73,7 @@ export function getModelPickerModelItem(
     return undefined;
   }
 
-  return createModelPickerItem({
-    isPinned: pinnedModelIds.includes(model.id),
-    model,
-    provider,
-    suffix: 'selected',
-  });
+  return createModelPickerItem({ model, provider, suffix: 'selected' });
 }
 
 export function getModelPickerTagLabelKey(tag: ModelPickerTag) {
@@ -150,22 +128,17 @@ export function filterModelsByModelPickerTags(
 
 export function buildModelPickerGroups({
   models,
-  pinnedModelIds,
   providers,
   searchText,
   selectedTags = [],
-  showPinnedModels = true,
 }: {
   models: readonly Model[];
-  pinnedModelIds: readonly UniqueModelId[];
   providers: readonly Provider[];
   searchText: string;
   selectedTags?: readonly ModelPickerTag[];
-  showPinnedModels?: boolean;
 }): ModelPickerGroup[] {
   const providerById = new Map(providers.map((provider) => [provider.id, provider]));
   const keywords = getSearchKeywords(searchText);
-  const isSearching = keywords.length > 0;
   const selectableModels = getSelectableModelPickerModels(models, providers);
   const filteredModels = selectableModels.filter((model) => {
     const provider = providerById.get(model.providerId);
@@ -175,61 +148,22 @@ export function buildModelPickerGroups({
           matchesModelPickerSelectedTags(model, selectedTags)
       : false;
   });
-  const modelById = new Map(filteredModels.map((model) => [model.id, model]));
-  const pinnedIdSet = new Set(pinnedModelIds);
   const groups: ModelPickerGroup[] = [];
-
-  if (!isSearching && showPinnedModels && pinnedModelIds.length > 0) {
-    const pinnedItems = pinnedModelIds.flatMap((modelId) => {
-      const model = modelById.get(modelId);
-      const provider = model ? providerById.get(model.providerId) : undefined;
-
-      return model && provider
-        ? [
-            createModelPickerItem({
-              isPinned: true,
-              model,
-              provider,
-              suffix: 'pinned',
-            }),
-          ]
-        : [];
-    });
-
-    if (pinnedItems.length > 0) {
-      groups.push({
-        groupKind: 'pinned',
-        items: pinnedItems,
-        key: 'pinned-group',
-        title: 'models.pinned',
-      });
-    }
-  }
 
   for (const provider of providers) {
     if (!provider.isEnabled) {
       continue;
     }
 
-    const providerModels = filteredModels.filter(
-      (model) =>
-        model.providerId === provider.id &&
-        (isSearching || !showPinnedModels || !pinnedIdSet.has(model.id)),
-    );
+    const providerModels = filteredModels.filter((model) => model.providerId === provider.id);
 
     if (providerModels.length === 0) {
       continue;
     }
 
     groups.push({
-      groupKind: 'provider',
       items: providerModels.map((model) =>
-        createModelPickerItem({
-          isPinned: pinnedIdSet.has(model.id),
-          model,
-          provider,
-          suffix: 'provider',
-        }),
+        createModelPickerItem({ model, provider, suffix: 'provider' }),
       ),
       key: `provider:${provider.id}`,
       provider,
@@ -241,18 +175,15 @@ export function buildModelPickerGroups({
 }
 
 function createModelPickerItem({
-  isPinned,
   model,
   provider,
   suffix,
 }: {
-  isPinned: boolean;
   model: Model;
   provider: Provider;
   suffix: string;
 }): ModelPickerModelItem {
   return {
-    isPinned,
     key: `${model.id}:${suffix}`,
     model,
     modelId: model.id,

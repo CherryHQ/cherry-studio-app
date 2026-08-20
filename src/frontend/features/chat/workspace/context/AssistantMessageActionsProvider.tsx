@@ -1,3 +1,4 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import * as Clipboard from 'expo-clipboard';
 import {
   createContext,
@@ -11,7 +12,6 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 const COPIED_FEEDBACK_DURATION_MS = 1_200;
@@ -19,6 +19,7 @@ const logger = loggerService.withContext('AssistantMessageActions');
 
 type AssistantMessageActionsState = {
   copiedMessageId?: string;
+  isAssistantToolbarEnabled: boolean;
   isRegenerateDisabled: boolean;
 };
 
@@ -33,12 +34,14 @@ const AssistantMessageActionsStateContext = createContext<AssistantMessageAction
 const AssistantMessageActionsContext = createContext<AssistantMessageActions | null>(null);
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
+  isAssistantToolbarEnabled: boolean;
   isRegenerateDisabled: boolean;
   onRegenerate: (input: { messageId: string }) => Promise<unknown>;
 }>;
 
 export function AssistantMessageActionsProvider({
   children,
+  isAssistantToolbarEnabled,
   isRegenerateDisabled,
   onRegenerate,
 }: AssistantMessageActionsProviderProps) {
@@ -100,8 +103,8 @@ export function AssistantMessageActionsProvider({
   );
 
   const stateValue = useMemo(
-    () => ({ copiedMessageId, isRegenerateDisabled }),
-    [copiedMessageId, isRegenerateDisabled],
+    () => ({ copiedMessageId, isAssistantToolbarEnabled, isRegenerateDisabled }),
+    [copiedMessageId, isAssistantToolbarEnabled, isRegenerateDisabled],
   );
   const actionsValue = useMemo(
     () => ({ copyAssistantMessage, regenerateAssistantMessage }),

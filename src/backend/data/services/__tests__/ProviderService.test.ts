@@ -5,7 +5,6 @@ import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/
 import type { DbService } from '@/backend/data/db/DbService';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
 
-import { pinService } from '../PinService';
 import { providerRegistryService } from '../ProviderRegistryService';
 import { canDeleteProvider, ProviderService } from '../ProviderService';
 
@@ -25,17 +24,7 @@ jest.mock('../ProviderRegistryService', () => ({
   },
 }));
 
-// `delete` reaches `pinService` as a module singleton, so the purge is stubbed
-// on the real instance: letting it run would issue a second `tx.delete` against
-// the fake transactions below.
-const purgeForEntitiesTx = jest
-  .spyOn(pinService, 'purgeForEntitiesTx')
-  .mockResolvedValue(undefined);
-
-afterEach(async () => {
-  await uninstallTestHost();
-  purgeForEntitiesTx.mockClear();
-});
+afterEach(uninstallTestHost);
 
 describe('ProviderService', () => {
   test('projects unsupported preset providers out while retaining custom providers', async () => {
@@ -180,9 +169,8 @@ describe('ProviderService', () => {
     });
   });
 
-  test('deletes a custom provider after purging pins for its models', async () => {
+  test('deletes a custom provider', async () => {
     const tx = createDeleteTransaction({
-      modelIds: ['custom-provider::model-a', 'custom-provider::model-b'],
       presetProviderId: null,
       providerId: 'custom-provider',
     });
@@ -190,16 +178,11 @@ describe('ProviderService', () => {
 
     await service.delete('custom-provider');
 
-    expect(purgeForEntitiesTx).toHaveBeenCalledWith(tx, 'model', [
-      'custom-provider::model-a',
-      'custom-provider::model-b',
-    ]);
     expect(tx.delete).toHaveBeenCalledTimes(1);
   });
 
   test('allows deleting a user clone of a registry provider', async () => {
     const tx = createDeleteTransaction({
-      modelIds: [],
       presetProviderId: 'openai',
       providerId: 'openai-clone',
     });
@@ -322,7 +305,6 @@ describe('ProviderService', () => {
 
   test('deleting a provider resets its rotation state', async () => {
     const tx = createDeleteTransaction({
-      modelIds: [],
       presetProviderId: null,
       providerId: 'custom-provider',
     });
@@ -336,7 +318,6 @@ describe('ProviderService', () => {
 
   test('rejects deleting registry and canonical preset providers', async () => {
     const registryTx = createDeleteTransaction({
-      modelIds: [],
       presetProviderId: null,
       providerId: 'openai',
     });
@@ -348,7 +329,6 @@ describe('ProviderService', () => {
     expect(registryTx.delete).not.toHaveBeenCalled();
 
     const canonicalTx = createDeleteTransaction({
-      modelIds: [],
       presetProviderId: 'canonical',
       providerId: 'canonical',
     });
@@ -428,26 +408,18 @@ function createCacheService(): CacheService {
   return service;
 }
 
-function createDeleteTransaction(input: {
-  modelIds: string[];
-  presetProviderId: string | null;
-  providerId: string;
-}) {
+function createDeleteTransaction(input: { presetProviderId: string | null; providerId: string }) {
   return {
     delete: jest.fn(() => ({
       where: jest.fn(() => ({
         returning: jest.fn(async () => [{ providerId: input.providerId }]),
       })),
     })),
-    select: jest.fn((projection: Record<string, unknown>) => ({
+    select: jest.fn(() => ({
       from: jest.fn(() => ({
-        where: jest.fn(() =>
-          'presetProviderId' in projection
-            ? {
-                limit: jest.fn(async () => [{ presetProviderId: input.presetProviderId }]),
-              }
-            : Promise.resolve(input.modelIds.map((id) => ({ id }))),
-        ),
+        where: jest.fn(() => ({
+          limit: jest.fn(async () => [{ presetProviderId: input.presetProviderId }]),
+        })),
       })),
     })),
   };

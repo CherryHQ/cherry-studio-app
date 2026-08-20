@@ -3196,9 +3196,7 @@ function createAssistant(id: string, modelId: UniqueModelId | null): Assistant {
     createdAt: now,
     description: '',
     emoji: '🌟',
-    groupId: null,
     id,
-    knowledgeBaseIds: [],
     mcpServerIds: [],
     modelId,
     modelName: modelId,
@@ -3206,7 +3204,6 @@ function createAssistant(id: string, modelId: UniqueModelId | null): Assistant {
     orderKey: 'a0',
     prompt: '',
     settings: DEFAULT_ASSISTANT_SETTINGS,
-    tags: [],
     updatedAt: now,
   };
 }

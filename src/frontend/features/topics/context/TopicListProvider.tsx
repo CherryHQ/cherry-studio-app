@@ -11,17 +11,13 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
-import { usePins, useTopics } from '@/frontend/hooks/chat';
+import { useTopics } from '@/frontend/hooks/chat';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 
 type TopicListData = InfiniteData<CursorPaginationResponse<TopicListItem>, string | undefined>;
 
 type TopicListTopicsContextValue = {
-  isPinActionDisabled: boolean;
-  isPinsLoading: boolean;
   isTopicListLoading: boolean;
-  pinQueryError?: Error;
-  pinnedTopicIds: readonly string[];
   topicQueryError?: Error;
   topics: readonly TopicListItem[];
 };
@@ -31,7 +27,6 @@ type TopicListActionsContextValue = {
   deleteTopics: (topicIds: readonly string[]) => Promise<void>;
   loadMoreTopics: () => void;
   renameTopic: (topicId: string, name: string) => Promise<void>;
-  toggleTopicPin: (topicId: string) => Promise<void>;
 };
 
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
@@ -44,9 +39,6 @@ type TopicListProviderProps = PropsWithChildren<{
 export function TopicListProvider({ children, searchText = '' }: TopicListProviderProps) {
   const queryClient = useQueryClient();
   const topicList = useTopics({ q: searchText });
-  const topicPins = usePins('topic');
-  const togglePin = topicPins.togglePin;
-  const isPinActionDisabled = topicPins.isLoading || topicPins.isRefreshing || topicPins.isMutating;
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
     onMutate: async (variables) => {
@@ -147,37 +139,13 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
     [queryClient, removeTopics],
   );
 
-  const toggleTopicPin = useCallback(
-    async (topicId: string) => {
-      if (isPinActionDisabled) {
-        return;
-      }
-
-      await togglePin(topicId);
-      await queryClient.invalidateQueries({ queryKey: queryKeys.topics.all() });
-    },
-    [isPinActionDisabled, queryClient, togglePin],
-  );
-
   const topicsValue = useMemo(
     () => ({
-      isPinActionDisabled,
-      isPinsLoading: topicPins.isLoading,
       isTopicListLoading: topicList.isLoadingInitial,
-      pinQueryError: topicPins.error,
-      pinnedTopicIds: topicPins.pinnedIds,
       topicQueryError: topicList.error,
       topics: topicList.topics,
     }),
-    [
-      isPinActionDisabled,
-      topicList.error,
-      topicList.isLoadingInitial,
-      topicList.topics,
-      topicPins.error,
-      topicPins.isLoading,
-      topicPins.pinnedIds,
-    ],
+    [topicList.error, topicList.isLoadingInitial, topicList.topics],
   );
   const actionsValue = useMemo(
     () => ({
@@ -185,9 +153,8 @@ export function TopicListProvider({ children, searchText = '' }: TopicListProvid
       deleteTopics,
       loadMoreTopics: topicList.loadMore,
       renameTopic,
-      toggleTopicPin,
     }),
-    [deleteTopic, deleteTopics, renameTopic, topicList.loadMore, toggleTopicPin],
+    [deleteTopic, deleteTopics, renameTopic, topicList.loadMore],
   );
 
   return (

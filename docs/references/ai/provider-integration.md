@@ -123,13 +123,17 @@ CherryAI:
 CherryIN:
 
 - Uses provider settings and endpoint routing through the normal provider config path.
-- Provider settings UI exposes an OAuth card only for `provider.id === "cherryin"`.
-- OAuth uses Expo AuthSession with PKCE against `https://open.cherryin.ai`.
-- OAuth token state is stored in the CherryIN provider `authConfig` as OAuth credentials.
-- OAuth-derived gateway keys are stored in the same provider `apiKeys` array as manual keys and labeled `OAuth`.
-- This mirrors desktop Cherry Studio: OAuth keys are ordinary provider API key entries with `id`, `key`, `label`, and `isEnabled`; runtime key selection filters by enabled state, not by label.
-- The `OAuth` label is only ownership metadata for CherryIN OAuth flows, especially logout cleanup.
-- Logout clears token state and removes OAuth-labeled keys.
+- Authenticates with an API key like every other gateway provider.
+
+Provider sign-in:
+
+- Mobile has no provider OAuth sign-in. Every provider authenticates with an API key or with cloud
+  IAM credentials.
+- `authMethods` in the provider registry still carries `oauth` because it mirrors the desktop
+  catalog verbatim. It describes what a provider supports, not what this app implements, so nothing
+  in the app branches on it beyond `api-key`.
+- Preset providers whose only auth path is OAuth (`copilot`, `openai-codex`, `grok-cli`) are
+  projected out of every provider read by `MobileRegistryLoader.isProviderExcluded`.
 
 Azure:
 

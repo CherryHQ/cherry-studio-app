@@ -1,3 +1,4 @@
+import { useAlert } from '@cherrystudio/ui/components';
 import type {
   WebSearchCapability,
   WebSearchProvider,
@@ -8,7 +9,6 @@ import { useToast } from 'heroui-native/toast';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAlert } from '@/frontend/components/AlertProvider';
 import { useBackendModule } from '@/frontend/data';
 
 export function useWebSearchProviderCheck(

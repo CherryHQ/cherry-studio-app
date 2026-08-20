@@ -39,9 +39,6 @@ describe('File contract', () => {
   it.each([
     { role: 'attachment', sourceId: refId, sourceType: 'chat_message' },
     { role: 'input', sourceId: refId, sourceType: 'painting' },
-    { role: 'mask', sourceId: entryId, sourceType: 'job' },
-    { sourceId: 'provider', sourceType: 'provider_logo' },
-    { sourceId: 'mini-app', sourceType: 'mini_app_logo' },
   ])('validates the $sourceType FileRef variant', (source) => {
     expect(
       FileRefSchema.parse({
@@ -54,14 +51,8 @@ describe('File contract', () => {
     ).toEqual(expect.objectContaining(source));
   });
 
-  it('exposes exactly the five persistent sources and file locator helper', () => {
-    expect(allSourceTypes).toEqual([
-      'chat_message',
-      'painting',
-      'job',
-      'provider_logo',
-      'mini_app_logo',
-    ]);
+  it('exposes exactly the two persistent sources and file locator helper', () => {
+    expect(allSourceTypes).toEqual(['chat_message', 'painting']);
     expect(allSourceTypes).not.toContain('temp_session');
     expect(tagStoredFileRef(entryId)).toBe(`file:${entryId}`);
   });

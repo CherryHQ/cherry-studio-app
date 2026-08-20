@@ -1,4 +1,4 @@
-import { CheckIcon, SettingsIcon } from '@cherrystudio/app-icons';
+import { SettingsIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import type {
   PermissionMode,
@@ -104,15 +104,12 @@ function PermissionModeGroup({
       {permissionModes.map((option) => {
         const selected = option === mode;
         return (
-          <Section.Item
-            accessibilityRole="radio"
-            accessibilityState={{ checked: selected, disabled: isUpdating }}
+          <Section.RadioItem
             disabled={isUpdating}
             key={option}
             label={t(`settings.permissions.mode.${option}`)}
             onPress={() => void selectMode(option)}
-            showChevron={false}
-            trailing={selected ? <CheckIcon className="size-5 text-foreground" /> : null}
+            selected={selected}
           />
         );
       })}

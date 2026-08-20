@@ -1,4 +1,3 @@
-import type { CatchUpPolicy, Trigger } from '@cherrystudio/universal/data/api/schemas/jobs';
 import type { JobError } from '@cherrystudio/universal/data/api/schemas/jobs';
 import { sql } from 'drizzle-orm';
 import {
@@ -11,44 +10,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
 
-import { createUpdateTimestamps, uuidPrimaryKey, uuidPrimaryKeyOrdered } from './_columnHelpers';
-
-/**
- * Persistent schedule registry for recurring/once jobs.
- *
- * Each row maps a logical `type` (+ optional `name` for multi-instance types)
- * to a `Trigger` (cron / interval / once) and a `jobInputTemplate` that becomes
- * the `input` of every job spawned by this schedule. JobManager.registerJobSchedule
- * owns the lifecycle; SchedulerService receives a `() => jobManager.enqueue(...)`
- * callback and does not look at this table.
- *
- * NOTE: `name=''` is the singleton sentinel for single-instance types. The
- * external API schema (JobScheduleNameAtomSchema) rejects empty strings, so
- * only JobScheduleService writes `''` internally. UNIQUE(type, name) then
- * DB-enforces the "one schedule per single-instance type" invariant — every
- * empty string compares equal under SQLite UNIQUE semantics.
- */
-export const jobScheduleTable = sqliteTable(
-  'job_schedule',
-  {
-    id: uuidPrimaryKey(),
-    type: text().notNull(),
-    name: text().notNull().default(''),
-    trigger: text({ mode: 'json' }).$type<Trigger>().notNull(),
-    jobInputTemplate: text({ mode: 'json' }).$type<unknown>().notNull(),
-    enabled: integer({ mode: 'boolean' }).notNull().default(true),
-    nextRun: integer(),
-    lastRun: integer(),
-    catchUpPolicy: text({ mode: 'json' }).$type<CatchUpPolicy>().notNull(),
-    metadata: text({ mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
-    ...createUpdateTimestamps,
-  },
-  (t) => [
-    uniqueIndex('job_schedule_type_name_uq').on(t.type, t.name),
-    index('job_schedule_enabled_next_run_idx').on(t.enabled, t.nextRun),
-    index('job_schedule_type_idx').on(t.type),
-  ],
-);
+import { createUpdateTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 
 /**
  * Single source of truth for every job's lifecycle. Six states:
@@ -62,9 +24,6 @@ export const jobScheduleTable = sqliteTable(
  * job_queue_status_scheduled_at_idx covers it.
  *
  * idempotencyKey partial unique guarantees at most one non-terminal job per key.
- * scheduleId index by (scheduleId, finishedAt) supports
- * "last N terminal jobs by schedule" — used by handler.onSettled for circuit
- * breaker logic (no separate tracker table needed).
  */
 export const jobTable = sqliteTable(
   'job',
@@ -75,7 +34,6 @@ export const jobTable = sqliteTable(
     priority: integer().notNull().default(0),
     queue: text().notNull(),
     idempotencyKey: text(),
-    scheduleId: text().references(() => jobScheduleTable.id, { onDelete: 'set null' }),
     scheduledAt: integer().notNull(),
     startedAt: integer(),
     finishedAt: integer(),
@@ -97,7 +55,6 @@ export const jobTable = sqliteTable(
     ),
     index('job_queue_status_scheduled_at_idx').on(t.queue, t.status, t.scheduledAt),
     index('job_status_idx').on(t.status),
-    index('job_schedule_id_finished_at_idx').on(t.scheduleId, t.finishedAt),
     index('job_parent_id_idx').on(t.parentId),
     uniqueIndex('job_idempotency_key_partial_uq')
       .on(t.idempotencyKey)
@@ -113,5 +70,3 @@ export const jobTable = sqliteTable(
 
 export type JobRow = typeof jobTable.$inferSelect;
 export type InsertJobRow = typeof jobTable.$inferInsert;
-export type JobScheduleRow = typeof jobScheduleTable.$inferSelect;
-export type InsertJobScheduleRow = typeof jobScheduleTable.$inferInsert;

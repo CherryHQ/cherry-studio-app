@@ -4,7 +4,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import type { MessagePresentationItem } from '@/frontend/components/messagePresentation';
+import type { MessageListItem } from '@/frontend/components/messages';
 
 import {
   useAssistantMessageActions,
@@ -13,22 +13,26 @@ import {
 import { copyAssistantMessageText } from '../utils/copyAssistantMessageText';
 
 type AssistantMessageToolbarProps = {
-  message: MessagePresentationItem;
+  message: MessageListItem;
 };
 
 export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const { copiedMessageId, isRegenerateDisabled } = useAssistantMessageActionsState();
+  const { copiedMessageId, isAssistantToolbarEnabled, isRegenerateDisabled } =
+    useAssistantMessageActionsState();
   const { copyAssistantMessage, regenerateAssistantMessage } = useAssistantMessageActions();
   const copyText = useMemo(
-    () => (message.status === 'pending' ? '' : copyAssistantMessageText(message.data.parts ?? [])),
-    [message],
+    () =>
+      !isAssistantToolbarEnabled || message.status === 'pending'
+        ? ''
+        : copyAssistantMessageText(message.data.parts ?? []),
+    [isAssistantToolbarEnabled, message],
   );
   const isCopied = copiedMessageId === message.id;
 
-  if (message.status === 'pending') {
+  if (!isAssistantToolbarEnabled || message.status === 'pending') {
     return null;
   }
 

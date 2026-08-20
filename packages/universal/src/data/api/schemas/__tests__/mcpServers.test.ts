@@ -1,36 +1,35 @@
 import { CreateMcpServerSchema, UpdateMcpServerSchema } from '@shared/data/api/schemas/mcpServers';
 
-describe('mobile MCP server DTO schemas', () => {
-  it('accepts only the remote fields mobile owns', () => {
+describe('MCP server DTO schemas', () => {
+  it('creates from an endpoint and a name, with the enable switch optional', () => {
     expect(
       CreateMcpServerSchema.parse({
-        baseUrl: 'https://example.com/mcp',
-        disabledAutoApproveTools: ['write'],
-        disabledTools: ['delete'],
-        headers: { Authorization: 'Bearer token' },
-        isActive: false,
+        endpointUrl: 'https://example.com/mcp',
+        isEnabled: true,
         name: 'Example',
-        timeout: null,
       }),
     ).toEqual({
-      baseUrl: 'https://example.com/mcp',
-      disabledAutoApproveTools: ['write'],
-      disabledTools: ['delete'],
-      headers: { Authorization: 'Bearer token' },
-      isActive: false,
+      endpointUrl: 'https://example.com/mcp',
+      isEnabled: true,
       name: 'Example',
-      timeout: null,
     });
+    expect(
+      CreateMcpServerSchema.parse({ endpointUrl: 'https://example.com/mcp', name: 'Example' }),
+    ).toEqual({ endpointUrl: 'https://example.com/mcp', name: 'Example' });
+    expect(() => CreateMcpServerSchema.parse({ name: 'No endpoint' })).toThrow();
   });
 
-  it.each(['type', 'provider', 'dxtVersion', 'sortOrder', 'installSource', 'isTrusted'])(
-    'rejects the synchronized desktop-only field %s',
+  it.each(['type', 'headers', 'timeout', 'disabledAutoApproveTools', 'isActive'])(
+    'rejects the removed field %s',
     (field) => {
-      expect(() =>
-        UpdateMcpServerSchema.parse({
-          [field]: field === 'isTrusted' ? true : 'desktop-value',
-        }),
-      ).toThrow();
+      expect(() => UpdateMcpServerSchema.parse({ [field]: 'value' })).toThrow();
     },
   );
+
+  it('patches the tool rules as a whole list', () => {
+    expect(UpdateMcpServerSchema.parse({ disabledTools: ['search'] })).toEqual({
+      disabledTools: ['search'],
+    });
+    expect(UpdateMcpServerSchema.parse({ disabledTools: [] })).toEqual({ disabledTools: [] });
+  });
 });
