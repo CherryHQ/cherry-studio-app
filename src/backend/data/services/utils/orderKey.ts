@@ -8,12 +8,11 @@ import {
   eq,
   getTableName,
   gt,
-  inArray,
   lt,
   ne,
   type SQL,
 } from 'drizzle-orm';
-import type { AnySQLiteColumn, SQLiteTable } from 'drizzle-orm/sqlite-core';
+import type { SQLiteTable } from 'drizzle-orm/sqlite-core';
 import { generateKeyBetween, generateNKeysBetween } from 'fractional-indexing';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
@@ -167,66 +166,6 @@ export async function applyMoves(
       .set({ orderKey: newKey })
       .where(scope ? and(eq(pkColumn, move.id), scope) : eq(pkColumn, move.id));
   }
-}
-
-/**
- * Apply a batch of moves that are implicitly scoped by a discriminator column
- * (e.g. `entityType`). The scope value for each target is looked up from the
- * row itself — callers only declare the `scopeColumn`; they do not pre-compute
- * or pass in the scope value.
- *
- * Contract rejections (surfaced as `DataApiError` for direct propagation to
- * the API layer):
- * - The batch spans more than one distinct scope value → `VALIDATION_ERROR`.
- *   Scoped reorders must not cross scope boundaries; a single request is
- *   expected to stay within one scope bucket.
- * - Missing target / anchor ids → `NOT_FOUND` (raised from `applyMoves`,
- *   which performs the actual scoped lookup per move).
- *
- * Empty `moves` is a no-op (no DB access).
- */
-export async function applyScopedMoves<TTable extends TableWithOrderKey>(
-  tx: TxLike,
-  table: TTable,
-  moves: { anchor: OrderRequest; id: string }[],
-  options: { pkColumn: AnySQLiteColumn; scopeColumn: AnySQLiteColumn },
-): Promise<void> {
-  if (moves.length === 0) {
-    return;
-  }
-
-  const { pkColumn, scopeColumn } = options;
-  const ids = moves.map((move) => move.id);
-
-  const rows = (await tx
-    .select({ id: pkColumn, scope: scopeColumn })
-    .from(table)
-    .where(inArray(pkColumn, ids))) as { id: string; scope: unknown }[];
-
-  // All requested ids are missing — drizzle would reject `eq(scopeColumn, undefined)`
-  // at the driver layer before applyMoves can issue its own NOT_FOUND. Surface
-  // the same DataApiError shape applyMoves would produce, so the contract is
-  // observable as a single uniform error regardless of which layer detected it.
-  if (rows.length === 0) {
-    throw DataApiErrorFactory.notFound(getTableName(table), ids[0]);
-  }
-
-  // Cross-scope batch check — applyMoves cannot do this because it doesn't know
-  // `scopeColumn`. Partial-miss cases (some ids found, some missing) are still
-  // delegated to applyMoves, which throws NOT_FOUND when it walks to the missing
-  // move within the derived scope.
-  const scopes = new Set(rows.map((row) => row.scope));
-  if (scopes.size > 1) {
-    const scopeList = [...scopes].map((scope) => String(scope)).join(', ');
-    const message = `applyScopedMoves: batch spans multiple scopes (${scopeList})`;
-    throw DataApiErrorFactory.validation({ _root: [message] }, message);
-  }
-
-  const [scopeValue] = [...scopes];
-  await applyMoves(tx, table, moves, {
-    pkColumn,
-    scope: eq(scopeColumn, scopeValue),
-  });
 }
 
 export async function resetOrder<T extends Record<string, unknown>>(

@@ -18,13 +18,144 @@ import { PlusIcon } from '@cherrystudio/app-icons';
 <Button accessibilityLabel="Add" icon={<PlusIcon />} onPress={add} />;
 ```
 
+`Image` wraps `expo-image` with Uniwind `className` support while preserving the underlying image
+API.
+
+`FilePreview` renders and opens a business-neutral file descriptor. The caller supplies display
+metadata, whether the file is an image or document, localized state labels, and an error callback;
+the component owns platform rendering, loading and unavailable states, system opening, and iOS
+Quick Look thumbnail caching:
+
+```tsx
+<FilePreview
+  file={{
+    displayName: 'brief.pdf',
+    extensionLabel: 'PDF',
+    id: 'file-1',
+    kind: 'document',
+    revision: 4,
+    uri: 'file:///documents/brief.pdf',
+  }}
+  labels={{ loading: 'Loading', openWith: 'Open with', unavailable: 'Unavailable' }}
+  onError={(error, operation) => reportPreviewError(error, operation)}
+/>;
+```
+
+`onError` distinguishes `open` from `thumbnail`, allowing product code to alert for a failed open
+while treating thumbnail generation as a recoverable fallback. CherryUI carries no file database,
+logging, or translation dependency.
+
+`MarkdownText` is the shared GitHub-flavored Markdown renderer. It uses the streaming renderer
+while content is arriving and the enriched native renderer afterward; both receive the same theme
+tokens, syntax palette, LaTeX flags, and typography scale. Product code supplies the active font
+size step and decides how links open:
+
+```tsx
+<MarkdownText
+  fontSizeStep={fontSizeStep}
+  isStreaming={isStreaming}
+  markdown={markdown}
+  onLinkPress={openLink}
+/>;
+```
+
+Typography utilities are exported from `@cherrystudio/ui/utils`: `normalizeFontSizeStep`,
+`resolveTypographyScale`, and `createTypographyCSSVariables` keep native style objects, runtime CSS
+variables, MessageList geometry, and settings previews on the same three-step scale.
+
+`MessagePart` is the business-neutral visual family for structured chat content. It owns status
+rows, reasoning and tool detail sheets, feedback blocks, source links, placeholders, translation
+separators, unknown-part warnings, and structured detail sections. Product code supplies resolved
+labels, states, content, and actions; CherryUI does not read message schemas, tool metadata,
+translations, file identifiers, or application navigation:
+
+```tsx
+<MessagePart.Tool
+  closeAccessibilityLabel="Close"
+  state="complete"
+  statusText="3 results"
+  title="Web search"
+>
+  <MessagePart.Source label="Cherry Studio" onPress={openSource} url="https://cherry-ai.com" />
+</MessagePart.Tool>
+```
+
+The native Storybook exposes these states under the dedicated top-level `Message Parts` section.
+`Message Parts/Playground` collects every public message-part primitive and state on one interactive
+page for visual debugging.
+`MessagePart.Pending` owns the empty-response loader and its stable text-line height, while
+`MessagePart.Reasoning state="running"` owns the active thinking row. Storybook groups both under
+`Message Parts/Loading` for direct animation and theme inspection.
+
+`ScrollToBottomButton` is a localized floating control for scrollable surfaces with a measured
+bottom accessory. It owns the CherryUI surface, position, and visibility motion; the caller owns
+the at-bottom state and the one-shot scroll action:
+
+```tsx
+<ScrollToBottomButton
+  accessibilityLabel={t('chat.message.scrollToBottom')}
+  bottomAccessoryHeight={composerHeight}
+  gap={5}
+  isAtBottom={isAtBottom}
+  onPress={scrollToBottom}
+/>;
+```
+
+`Alert` is the shared native dialog primitive. Mount one provider at the application root and
+inject localized default action labels there; feature code can then enqueue informational,
+confirmation, and prompt dialogs through `useAlert()` without owning dialog rendering:
+
+```tsx
+<Alert.Provider labels={{ cancel: t('common.cancel'), ok: t('common.ok') }}>
+  <App />
+</Alert.Provider>
+```
+
+The provider presents queued dialogs in request order. Confirmation and prompt actions close
+without waiting for asynchronous business work, so failures can enqueue their own follow-up alert.
+The standalone `<Alert>` primitive remains available for controlled dialog composition.
+
+`Avatar` composes an image or fallback inside a clipped face while keeping badges outside that
+clipping boundary. It accepts numeric sizes so product avatars can follow their surrounding layout,
+and supports circular and rounded-square faces:
+
+```tsx
+<Avatar accessibilityLabel="OpenAI" shape="rounded" size={26}>
+  <Avatar.Image contentFit="contain" scale={0.8125} source={source} />
+  <Avatar.Badge placement="bottom-end">
+    <StatusDot />
+  </Avatar.Badge>
+</Avatar>
+```
+
+Use `Avatar.Fallback` when no image is available. `Avatar.Image`, `Avatar.Fallback`, and
+`Avatar.Badge` read the root size through context and must be nested directly inside `Avatar`.
+
 `Button` is backed by React Native's `Pressable` on both iOS and Android. It supports `default`,
 `destructive`, `outline`, `secondary`, and `ghost` variants, along with loading and disabled
-behavior. The `sm`, `default`, and `lg` sizes use content-driven typography and padding without
+behavior. The `xs`, `sm`, `default`, and `lg` sizes use content-driven typography and padding without
 fixed dimensions. The `icon` prop renders an icon before the label and automatically switches to
 the matching icon-only padding when no label is provided. Icon-only buttons must provide an
 `accessibilityLabel`. `Button.Label` remains available for custom composed content. Callers do not
-need an Expo UI `Host`.
+need an Expo UI `Host`. The visually compact `xs` size supplies an 8-point hit slop by default so
+its effective touch target remains usable.
+
+`Section.RadioItem` is the controlled single-choice variant for grouped rows. It owns the radio
+accessibility state, selected checkmark, disclosure behavior, separators, and leading-content inset;
+the caller owns the selected value and persistence:
+
+```tsx
+<Section>
+  {options.map((option) => (
+    <Section.RadioItem
+      key={option.value}
+      label={option.label}
+      onPress={() => setValue(option.value)}
+      selected={option.value === value}
+    />
+  ))}
+</Section>
+```
 
 `Chip` has three explicit variants for compact metadata and filters. All three use quiet neutral
 surfaces: the background is the lightest, the border is stronger, and the label has the highest
@@ -56,6 +187,26 @@ assistive technology.
 Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.
+
+`TextAnimation.Rotating` cycles short, single-line phrases vertically while reserving the width of
+the longest phrase, so surrounding content does not move between changes. Use the compound root to
+share timing across animated values, or use the variant by itself:
+
+```tsx
+import { TextAnimation } from '@cherrystudio/ui/components';
+import { Text } from 'react-native';
+
+<TextAnimation duration={2200}>
+  <Text>Cherry Studio is </Text>
+  <TextAnimation.Rotating
+    text={['focused', 'fluid', 'yours']}
+    textClassName="font-semibold text-primary"
+  />
+</TextAnimation>;
+```
+
+The variant respects Reduce Motion and `enabled={false}`. Its `className` styles the clipping
+container; `textClassName` styles the phrases.
 
 `SecureInput` is the shared single-line field for passwords, API keys, and other sensitive text. It
 keeps the controlled value with the caller, owns only whether that value is revealed, and renders
@@ -110,19 +261,33 @@ The native implementation is adapted from MIT-licensed Nitro menu projects. See
 
 `BottomSheet` is the shared floating-card sheet over
 `@swmansion/react-native-bottom-sheet`. It owns card geometry, Liquid Glass fallback, scrim,
-safe-area information, close reasons, and nested-page header controls. The host app keeps one
-`BottomSheetProvider` at its root.
-
-Multi-level flows keep their business stack in the feature and pass only the current page identity
-and depth to the package transition:
+safe-area information, and close reasons. The host app keeps one `BottomSheetProvider` at its root.
+Its compound components make fixed and scrolling regions explicit:
 
 ```tsx
-<BottomSheet title={current.title} onBack={stack.length > 1 ? pop : undefined} onClose={close}>
-  <BottomSheet.PageTransition depth={stack.length - 1} pageKey={current.key}>
-    {current.content}
-  </BottomSheet.PageTransition>
+<BottomSheet open={isOpen} onOpenChange={setIsOpen}>
+  <BottomSheet.Trigger>Open</BottomSheet.Trigger>
+  <BottomSheet.Content height={520} onClose={close}>
+    <BottomSheet.Header>
+      <BottomSheet.CloseButton accessibilityLabel="Close" />
+      <BottomSheet.Title>Models</BottomSheet.Title>
+      <BottomSheet.HeaderSpacer />
+    </BottomSheet.Header>
+    <BottomSheet.SearchField {...searchProps} />
+    <BottomSheet.Body>{list}</BottomSheet.Body>
+    <BottomSheet.Footer>{actions}</BottomSheet.Footer>
+  </BottomSheet.Content>
 </BottomSheet>
 ```
+
+`Trigger` is optional for sheets controlled by feature state. `Body` is a bounded viewport and does
+not scroll by itself, so virtualized lists can own scrolling without nesting. Use
+`BottomSheet.ScrollView` for ordinary scrolling content. `SearchField`, headers, and footers remain
+pinned because they are siblings of the scrolling region. `BottomSheet.Selection` is the explicit
+single-choice variant and remains under the same `BottomSheet` export.
+
+Multi-level flows keep their business stack in the feature and render it through
+`BottomSheet.PageTransition` inside `Content`.
 
 Increasing depth uses the package's forward push motion, decreasing depth reverses it, and a
 same-depth key change cross-fades in place. The transition keeps the outgoing page mounted only for
@@ -172,6 +337,20 @@ they are written and `Composer.Send` pins itself right, so adding one never move
 callers never need grouping views. `Composer.Action` is the button shell every tool should use: it
 owns the circle, the 44pt slop, and the tint, so the row stays one size and one material no matter
 who contributed a button to it.
+
+`Composer.Dock` floats a composed input above screen content, applies horizontal and safe-area
+insets, follows the keyboard, and reports its measured height. Pair it with
+`useComposerDockLayout()` when content above the dock needs the reserved inset, keyboard offset, or
+shared live height used by another floating control:
+
+```tsx
+const dock = useComposerDockLayout();
+
+<MessageList contentBottomInset={dock.contentBottomInset} renderMessage={renderMessage} />;
+<Composer.Dock onHeightChange={dock.handleInputHeightChange}>
+  <ComposerSurface />
+</Composer.Dock>;
+```
 
 `Composer.Pill` is its wide sibling, for a tool that has to say what it is *set to* rather than only
 what it does — the model in use, a mode. Same height and material, but sized to its label, and it is

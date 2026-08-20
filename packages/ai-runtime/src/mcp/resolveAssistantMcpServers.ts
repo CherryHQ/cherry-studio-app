@@ -1,5 +1,5 @@
 import type { Assistant, McpMode } from '@cherrystudio/universal/data/types/assistant';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 /**
  * Effective MCP mode for an assistant, ported from desktop
@@ -15,13 +15,13 @@ export function getEffectiveMcpMode(assistant: Assistant): McpMode {
 
 /**
  * Servers whose tools this assistant should receive.
- * `auto` → all active servers; `manual` → active ∩ selected; `disabled` → none.
+ * `auto` → all enabled servers; `manual` → enabled ∩ selected; `disabled` → none.
  * Dangling `mcpServerIds` (deleted servers) drop out of the intersection.
  */
 export function resolveServersForAssistant(
   assistant: Assistant,
-  activeServers: StreamableHttpMcpServer[],
-): StreamableHttpMcpServer[] {
+  enabledServers: McpServer[],
+): McpServer[] {
   const mode = getEffectiveMcpMode(assistant);
 
   if (mode === 'disabled') {
@@ -29,9 +29,9 @@ export function resolveServersForAssistant(
   }
 
   if (mode === 'auto') {
-    return activeServers;
+    return enabledServers;
   }
 
   const selectedIds = new Set(assistant.mcpServerIds);
-  return activeServers.filter((server) => selectedIds.has(server.id));
+  return enabledServers.filter((server) => selectedIds.has(server.id));
 }

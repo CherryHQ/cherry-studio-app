@@ -21,15 +21,17 @@ export function EmojiPickerBottomSheet({ isOpen, onClose, onSelect }: EmojiPicke
   const sheetHeight = (windowHeight - insets.top - insets.bottom) * emojiSheetSnapPointFraction;
 
   return (
-    <BottomSheet
-      closeAccessibilityLabel={t('common.close')}
-      height={sheetHeight}
-      isOpen={isOpen}
-      onClose={() => onClose?.()}
-      testID="emoji-picker"
-      title={t('assistant.emoji.title')}
-    >
-      <EmojiPickerSheetBody onSelect={onSelect} />
+    <BottomSheet open={isOpen ?? true}>
+      <BottomSheet.Content height={sheetHeight} onClose={() => onClose?.()} testID="emoji-picker">
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
+          <BottomSheet.Title>{t('assistant.emoji.title')}</BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <BottomSheet.Body>
+          <EmojiPickerSheetBody onSelect={onSelect} />
+        </BottomSheet.Body>
+      </BottomSheet.Content>
     </BottomSheet>
   );
 }

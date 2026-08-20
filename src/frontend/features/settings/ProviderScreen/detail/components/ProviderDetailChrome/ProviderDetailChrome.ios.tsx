@@ -1,4 +1,4 @@
-import { Color, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
@@ -6,19 +6,11 @@ import type { ProviderDetailChromeProps } from './ProviderDetailChrome.types';
 import { PullSpinner } from './PullSpinner';
 
 export function ProviderDetailChrome({
-  canDelete,
   editAction,
-  isActive,
-  isDisabled,
-  onDelete,
-  onToggleActive,
   pullAction,
   selection,
 }: ProviderDetailChromeProps) {
   const { t } = useTranslation();
-  const toggleLabel = t(
-    isActive ? 'settings.provider.disableProvider' : 'settings.provider.enableProvider',
-  );
 
   if (selection) {
     return (
@@ -36,14 +28,14 @@ export function ProviderDetailChrome({
     );
   }
 
+  // Nothing to put in the bar: the configuration tab's own actions are the
+  // switch in the banner and the delete button on the settings screen.
+  if (!pullAction && !editAction) {
+    return null;
+  }
+
   return (
     <Stack.Toolbar placement="bottom">
-      <Stack.Toolbar.Button
-        accessibilityLabel={toggleLabel}
-        disabled={isDisabled}
-        icon={isActive ? 'pause' : 'play'}
-        onPress={onToggleActive}
-      />
       {pullAction ? (
         pullAction.isLoading ? (
           // A native bar button item cannot animate its SF Symbol, so an in-flight
@@ -74,15 +66,6 @@ export function ProviderDetailChrome({
           disabled={editAction.isDisabled}
           icon="checklist"
           onPress={editAction.onPress}
-        />
-      ) : null}
-      {canDelete ? (
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('settings.provider.deleteProvider')}
-          disabled={isDisabled}
-          icon="trash"
-          onPress={onDelete}
-          tintColor={Color.ios.systemRed}
         />
       ) : null}
       {/* Holds the actions against the leading edge. Without it a lone toggle

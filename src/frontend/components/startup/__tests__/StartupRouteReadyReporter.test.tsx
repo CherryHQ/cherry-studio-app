@@ -63,21 +63,22 @@ describe('StartupRouteReadyReporter', () => {
     jest.restoreAllMocks();
   });
 
-  test('leaves the default Messages route to its list readiness signal', () => {
+  test('reports the default chat route two frames after its root layout', () => {
     const reportContentReady = jest.fn();
-    mockSegments = ['(tabs)', '(messages)'];
+    mockSegments = ['(drawer)', '(chat)'];
     const reporter = renderReporter(reportContentReady);
 
     reporter.layout();
+    act(() => frames.shift()?.());
+    act(() => frames.shift()?.());
 
-    expect(frames).toHaveLength(0);
-    expect(reportContentReady).not.toHaveBeenCalled();
+    expect(reportContentReady).toHaveBeenCalledTimes(1);
     reporter.unmount();
   });
 
   test('reports a deep-linked route two frames after its root layout', () => {
     const reportContentReady = jest.fn();
-    mockSegments = ['(tabs)', 'settings', 'appearance'];
+    mockSegments = ['(drawer)', 'settings', 'appearance'];
     const reporter = renderReporter(reportContentReady);
 
     reporter.layout();

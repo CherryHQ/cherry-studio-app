@@ -77,14 +77,14 @@ function createChatNavigation(input: { pathname: string; router: ReturnType<type
 
   return {
     openTopic: (topicId: string) => {
-      if (navigation.pathname === '/topics') {
+      if (navigation.pathname === '/') {
         navigation.router.setParams({ topicId });
         return;
       }
 
       navigation.router.replace({
         params: { topicId },
-        pathname: '/topics',
+        pathname: '/',
       });
     },
     update: (nextNavigation: typeof input) => {

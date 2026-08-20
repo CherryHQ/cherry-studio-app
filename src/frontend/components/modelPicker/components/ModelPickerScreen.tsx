@@ -41,9 +41,7 @@ export function ModelPickerScreen({
   const [searchText, setSearchText] = useState('');
   const deferredSearchText = useDeferredValue(searchText);
   const [typeFilter, setTypeFilter] = useState<ModelTypeFilter>('all');
-  const { groups, isLoading, pinnedModelIds } = useModelPickerData({
-    searchText: deferredSearchText,
-  });
+  const { groups, isLoading } = useModelPickerData({ searchText: deferredSearchText });
   // Counted over what the search left behind but before the type filter, so a
   // tab's number says how many models picking it would show.
   const typeCounts = useMemo(
@@ -81,7 +79,6 @@ export function ModelPickerScreen({
           listItems={listItems}
           loadingText={t('settings.provider.models.loading')}
           onSelect={onSelect}
-          pinnedModelIds={pinnedModelIds}
           selectedModelId={selectedModelId}
         />
       </View>

@@ -498,7 +498,6 @@ export class JobRuntime extends BaseService {
       priority: opts.priority ?? 0,
       queue: opts.queue ?? handler.defaultQueue?.(input as never) ?? type,
       scheduledAt,
-      scheduleId: opts.scheduleId ?? null,
       status: scheduledAt > now ? 'delayed' : 'pending',
       timeoutMs: opts.timeoutMs ?? handler.defaultTimeoutMs ?? null,
       type,
@@ -1059,7 +1058,6 @@ export class JobRuntime extends BaseService {
           metadata: snapshot.metadata,
           output: snapshot.output ?? undefined,
           parentId: snapshot.parentId,
-          scheduleId: snapshot.scheduleId,
           status,
           type: snapshot.type,
         });
@@ -1133,7 +1131,6 @@ export class JobRuntime extends BaseService {
       priority: 0,
       queue: 'unknown',
       scheduledAt: nowIso,
-      scheduleId: null,
       startedAt: null,
       status: 'failed',
       timeoutMs: null,

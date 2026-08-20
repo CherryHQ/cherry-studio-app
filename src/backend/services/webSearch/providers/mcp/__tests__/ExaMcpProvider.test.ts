@@ -15,7 +15,6 @@ jest.mock('@/shared/core/logger/LoggerService', () => ({
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 4,
-  excludeDomains: [],
   compression: { method: 'none', cutoffLimit: 2000 },
 };
 

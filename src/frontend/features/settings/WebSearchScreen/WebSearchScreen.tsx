@@ -1,12 +1,11 @@
 import { ChevronRightIcon } from '@cherrystudio/app-icons';
-import { Section } from '@cherrystudio/ui/components';
+import { Image, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
-import { Image } from '@/frontend/components/nativePrimitives';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
@@ -43,7 +42,6 @@ export default function WebSearchSettingsScreen() {
           capability="searchKeywords"
           provider={searchProvider}
           providerOverrides={webSearchProviders.providerOverrides.value}
-          onCapabilityApiHostChange={webSearchProviders.providerOverrides.onCapabilityApiHostChange}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
         >
           <Section.Item
@@ -57,7 +55,6 @@ export default function WebSearchSettingsScreen() {
           capability="fetchUrls"
           provider={fetchProvider}
           providerOverrides={webSearchProviders.providerOverrides.value}
-          onCapabilityApiHostChange={webSearchProviders.providerOverrides.onCapabilityApiHostChange}
           onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
         >
           <Section.Item

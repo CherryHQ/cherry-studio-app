@@ -101,6 +101,12 @@ describe('Button', () => {
     {
       iconClassName: 'size-4',
       labelClassName: 'text-sm',
+      rootClassNames: ['gap-1', 'px-2', 'py-1.5'],
+      size: 'xs',
+    },
+    {
+      iconClassName: 'size-4',
+      labelClassName: 'text-sm',
       rootClassNames: ['gap-1.5', 'px-3', 'py-2'],
       size: 'sm',
     },
@@ -141,6 +147,16 @@ describe('Button', () => {
     );
     expect(icon.props.className).not.toContain('size-5');
     expect(icon.props.className).not.toContain('text-foreground');
+  });
+
+  test('keeps the xs visual density inside a usable touch target', () => {
+    const tree = render(null, {
+      accessibilityLabel: 'More',
+      icon: <View testID="icon" />,
+      size: 'xs',
+    });
+
+    expect(findPressable(tree).props.hitSlop).toBe(8);
   });
 
   test('uses content-driven square padding for an icon-only button', () => {

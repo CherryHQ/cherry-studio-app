@@ -1,6 +1,6 @@
 import type { Assistant, McpMode } from '@cherrystudio/universal/data/types/assistant';
 import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 import { getEffectiveMcpMode, resolveServersForAssistant } from '../resolveAssistantMcpServers';
 
@@ -9,9 +9,7 @@ function makeAssistant(overrides: { mcpMode?: McpMode; mcpServerIds?: string[] }
     createdAt: '2026-01-01T00:00:00.000Z',
     description: '',
     emoji: '🌟',
-    groupId: null,
     id: '00000000-0000-4000-8000-000000000000',
-    knowledgeBaseIds: [],
     mcpServerIds: overrides.mcpServerIds ?? [],
     modelId: null,
     modelName: null,
@@ -22,28 +20,23 @@ function makeAssistant(overrides: { mcpMode?: McpMode; mcpServerIds?: string[] }
       ...DEFAULT_ASSISTANT_SETTINGS,
       ...(overrides.mcpMode ? { mcpMode: overrides.mcpMode } : {}),
     },
-    tags: [],
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
 
-function makeServer(id: string): StreamableHttpMcpServer {
+function makeServer(id: string): McpServer {
   return {
-    baseUrl: `https://${id}.example/mcp`,
     createdAt: '2026-01-01T00:00:00.000Z',
-    description: '',
-    disabledAutoApproveTools: [],
     disabledTools: [],
-    headers: {},
+    endpointUrl: `https://${id}.example/mcp`,
     id,
-    isActive: true,
+    isEnabled: true,
     name: id,
-    type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
 
-const activeServers = [makeServer('a'), makeServer('b'), makeServer('c')];
+const enabledServers = [makeServer('a'), makeServer('b'), makeServer('c')];
 
 describe('getEffectiveMcpMode', () => {
   it('honors an explicit mode', () => {
@@ -66,21 +59,21 @@ describe('getEffectiveMcpMode', () => {
 });
 
 describe('resolveServersForAssistant', () => {
-  it('returns all active servers in auto mode', () => {
-    const result = resolveServersForAssistant(makeAssistant({ mcpMode: 'auto' }), activeServers);
+  it('returns all enabled servers in auto mode', () => {
+    const result = resolveServersForAssistant(makeAssistant({ mcpMode: 'auto' }), enabledServers);
     expect(result.map((s) => s.id)).toEqual(['a', 'b', 'c']);
   });
 
   it('returns nothing in disabled mode', () => {
     expect(
-      resolveServersForAssistant(makeAssistant({ mcpMode: 'disabled' }), activeServers),
+      resolveServersForAssistant(makeAssistant({ mcpMode: 'disabled' }), enabledServers),
     ).toEqual([]);
   });
 
   it('intersects selected ids in manual mode and ignores dangling ids', () => {
     const result = resolveServersForAssistant(
       makeAssistant({ mcpMode: 'manual', mcpServerIds: ['b', 'deleted-server'] }),
-      activeServers,
+      enabledServers,
     );
     expect(result.map((s) => s.id)).toEqual(['b']);
   });

@@ -43,9 +43,7 @@ describe('assistant data schemas', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       description: '',
       emoji: '😀',
-      groupId: null,
       id: '00000000-0000-4000-8000-000000000001',
-      knowledgeBaseIds: [],
       mcpServerIds: [],
       modelId: null,
       modelName: null,
@@ -53,7 +51,6 @@ describe('assistant data schemas', () => {
       orderKey: 'a0',
       prompt: '',
       settings: DEFAULT_ASSISTANT_SETTINGS,
-      tags: [],
       updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
@@ -66,9 +63,7 @@ describe('assistant data schemas', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         description: '',
         emoji: 'assistant',
-        groupId: null,
         id: '00000000-0000-4000-8000-000000000001',
-        knowledgeBaseIds: [],
         mcpServerIds: [],
         modelId: null,
         modelName: null,
@@ -76,7 +71,6 @@ describe('assistant data schemas', () => {
         orderKey: 'a0',
         prompt: '',
         settings: DEFAULT_ASSISTANT_SETTINGS,
-        tags: [],
         updatedAt: '2026-01-01T00:00:00.000Z',
       }).success,
     ).toBe(false);

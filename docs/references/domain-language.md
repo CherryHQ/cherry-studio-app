@@ -97,21 +97,9 @@ A provider/model routing description that selects the endpoint type and AI SDK a
 _Avoid_: URL string
 
 **Preference**:
-A scoped local setting persisted in the mobile database and accessed through the separate
+A local setting persisted in the mobile database under its own key and accessed through the separate
 `PreferenceClient` and preference hooks.
 _Avoid_: global variable, config constant
-
-**Pin**:
-A polymorphic marker that raises supported entities such as topics, providers, or models in product ordering.
-_Avoid_: favorite
-
-**Tag**:
-A polymorphic label attached to supported entities through entity tagging.
-_Avoid_: category, folder
-
-**Prompt**:
-A reusable prompt template persisted in the local data layer.
-_Avoid_: message, assistant
 
 ### AI And Search
 
@@ -131,15 +119,6 @@ _Avoid_: Web Search Provider
 **Web Search Provider**:
 An external search/fetch provider configured by web-search preferences and executed by WebSearchService.
 _Avoid_: Provider-Native Web Search
-
-**CherryIN OAuth Session**:
-The CherryIN authorization state that stores OAuth credentials and OAuth-derived API keys for the CherryIN Provider.
-_Avoid_: CherryAI signature, manual API key
-
-**CherryIN Client**:
-The mobile external-account client for CherryIN profile and balance requests. Authentication stays
-owned by the provider-aligned OAuth Runtime Service.
-_Avoid_: CherryIN Service, OAuth runtime
 
 **CherryAI Signature**:
 The request signing data added to CherryAI chat completion requests.

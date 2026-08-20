@@ -1,10 +1,1 @@
-import { ChatScreen } from '@/frontend/features/chat';
-import { ChatProvider } from '@/frontend/features/chat/runtime';
-
-export default function TopicsRoute() {
-  return (
-    <ChatProvider>
-      <ChatScreen />
-    </ChatProvider>
-  );
-}
+export { TopicListScreen as default } from '@/frontend/features/topics';

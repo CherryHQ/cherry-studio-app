@@ -1,5 +1,5 @@
 import type { ApiClient } from '@cherrystudio/universal/data/api/types';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
@@ -33,18 +33,14 @@ function Probe() {
   return null;
 }
 
-function makeServer(overrides: Partial<StreamableHttpMcpServer> = {}): StreamableHttpMcpServer {
+function makeServer(overrides: Partial<McpServer> = {}): McpServer {
   return {
-    baseUrl: 'https://a.example/mcp',
     createdAt: '2026-01-01T00:00:00.000Z',
-    description: '',
-    disabledAutoApproveTools: [],
     disabledTools: [],
-    headers: {},
+    endpointUrl: 'https://a.example/mcp',
     id: 'server-1',
-    isActive: true,
+    isEnabled: true,
     name: 'Server',
-    type: 'streamableHttp',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -76,11 +72,11 @@ describe('useMcpServerMutations', () => {
   });
 
   it('keeps the tools cache when the backend reports unchanged tools', async () => {
-    const server = makeServer({ disabledTools: ['search'] });
+    const server = makeServer({ name: 'Renamed' });
     mockPatch.mockResolvedValue({ server, toolsChanged: false });
 
     await act(async () => {
-      await actions?.updateServer(server.id, { disabledTools: ['search'] });
+      await actions?.updateServer(server.id, { name: 'Renamed' });
     });
 
     expect(queryClient.setQueryData).toHaveBeenCalledWith(
@@ -88,7 +84,7 @@ describe('useMcpServerMutations', () => {
       server,
     );
     expect(mockPatch).toHaveBeenCalledWith(`/mcp-servers/${server.id}`, {
-      body: { disabledTools: ['search'] },
+      body: { name: 'Renamed' },
       query: undefined,
     });
     expect(mockInvalidateQueries).not.toHaveBeenCalledWith({
@@ -97,11 +93,11 @@ describe('useMcpServerMutations', () => {
   });
 
   it('invalidates the tools cache when the backend reports a transport change', async () => {
-    const server = makeServer({ baseUrl: 'https://b.example/mcp' });
+    const server = makeServer({ endpointUrl: 'https://b.example/mcp' });
     mockPatch.mockResolvedValue({ server, toolsChanged: true });
 
     await act(async () => {
-      await actions?.updateServer(server.id, { baseUrl: server.baseUrl });
+      await actions?.updateServer(server.id, { endpointUrl: server.endpointUrl });
     });
 
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
@@ -114,11 +110,11 @@ describe('useMcpServerMutations', () => {
     mockPost.mockResolvedValue(server);
 
     await act(async () => {
-      await actions?.createServer({ baseUrl: server.baseUrl, name: server.name });
+      await actions?.createServer({ endpointUrl: server.endpointUrl, name: server.name });
     });
 
     expect(mockPost).toHaveBeenCalledWith('/mcp-servers', {
-      body: { baseUrl: server.baseUrl, name: server.name },
+      body: { endpointUrl: server.endpointUrl, name: server.name },
       query: undefined,
     });
     expect(queryClient.setQueryData).toHaveBeenCalledWith(

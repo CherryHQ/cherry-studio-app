@@ -4,7 +4,6 @@ import {
   type Model,
   type ModelCapability,
 } from '@cherrystudio/universal/data/types/model';
-import type { Pin } from '@cherrystudio/universal/data/types/pin';
 import {
   DEFAULT_API_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
@@ -18,11 +17,8 @@ import {
   getAvailableModelPickerFilterTagsForModels,
   getModelPickerModelItem,
   getModelPickerRowTags,
-  getPinnedModelIds,
 } from '../modelPickerData';
 import { buildModelPickerListItems } from '../modelPickerListItems';
-
-const fixtureTimestamp = '2026-01-01T00:00:00.000Z';
 
 function createProvider(input: {
   defaultChatEndpoint?: Provider['defaultChatEndpoint'];
@@ -69,17 +65,6 @@ function createModel(input: {
     outputModalities: input.outputModalities ?? [MODALITY.TEXT],
     providerId: input.providerId,
     supportsStreaming: true,
-  };
-}
-
-function createPin(id: string, entityId: string): Pin {
-  return {
-    createdAt: fixtureTimestamp,
-    entityId,
-    entityType: 'model',
-    id,
-    orderKey: id,
-    updatedAt: fixtureTimestamp,
   };
 }
 
@@ -187,37 +172,31 @@ const models: readonly Model[] = [
   }),
 ];
 
-const pins: readonly Pin[] = [
-  createPin('11111111-1111-4111-8111-111111111111', 'openai::gpt-4o'),
-  createPin('22222222-2222-4222-9222-222222222222', 'anthropic::claude-3-5-sonnet'),
-];
-
 describe('model picker data helpers', () => {
-  test('builds a pinned group before provider groups and excludes pinned provider duplicates', () => {
-    const pinnedModelIds = getPinnedModelIds(pins);
-    const groups = buildModelPickerGroups({
-      models,
-      pinnedModelIds,
-      providers,
-      searchText: '',
-    });
-    const openAiGroup = groups.find((group) => group.provider?.id === 'openai');
+  test('groups selectable models under their provider', () => {
+    const groups = buildModelPickerGroups({ models, providers, searchText: '' });
 
-    expect(groups[0]).toMatchObject({ groupKind: 'pinned', key: 'pinned-group' });
-    expect(groups[0]?.items.map((item) => item.modelId)).toEqual(pinnedModelIds);
-    expect(openAiGroup?.items.some((item) => item.modelId === 'openai::gpt-4o')).toBe(false);
+    expect(groups.map((group) => group.provider.id)).toEqual([
+      'openai',
+      'anthropic',
+      'gemini',
+      'deepseek',
+    ]);
+    expect(groups[0]?.items.map((item) => item.modelId)).toEqual([
+      'openai::gpt-4o',
+      'openai::gpt-4o-mini',
+    ]);
   });
 
-  test('searches across model and provider text and keeps pinned models in provider groups', () => {
+  test('searches across model and provider text', () => {
     const groups = buildModelPickerGroups({
       models,
-      pinnedModelIds: getPinnedModelIds(pins),
       providers,
       searchText: 'openai gpt',
     });
 
     expect(groups).toHaveLength(1);
-    expect(groups[0]?.provider?.id).toBe('openai');
+    expect(groups[0]?.provider.id).toBe('openai');
     expect(groups[0]?.items.map((item) => item.modelId)).toEqual([
       'openai::gpt-4o',
       'openai::gpt-4o-mini',
@@ -225,26 +204,14 @@ describe('model picker data helpers', () => {
   });
 
   test('gets a selected model item with provider details from explicit data', () => {
-    expect(
-      getModelPickerModelItem('openai::gpt-4o', {
-        models,
-        pinnedModelIds: getPinnedModelIds(pins),
-        providers,
-      }),
-    ).toMatchObject({
-      isPinned: true,
+    expect(getModelPickerModelItem('openai::gpt-4o', { models, providers })).toMatchObject({
       model: { name: 'GPT-4o' },
       provider: { name: 'OpenAI' },
     });
   });
 
   test('filters hidden, disabled, orphan, and disabled-provider models', () => {
-    const groups = buildModelPickerGroups({
-      models,
-      pinnedModelIds: [],
-      providers,
-      searchText: '',
-    });
+    const groups = buildModelPickerGroups({ models, providers, searchText: '' });
 
     expect(groups.flatMap((group) => group.items.map((item) => item.model.name))).not.toEqual(
       expect.arrayContaining([
@@ -254,13 +221,7 @@ describe('model picker data helpers', () => {
         'Disabled Provider Model',
       ]),
     );
-    expect(
-      getModelPickerModelItem('openai::hidden-model', {
-        models,
-        pinnedModelIds: [],
-        providers,
-      }),
-    ).toBeUndefined();
+    expect(getModelPickerModelItem('openai::hidden-model', { models, providers })).toBeUndefined();
   });
 
   test('returns available filter tags from selectable models', () => {
@@ -280,7 +241,6 @@ describe('model picker data helpers', () => {
   test('filters models by selected tags using intersection semantics', () => {
     const groups = buildModelPickerGroups({
       models,
-      pinnedModelIds: getPinnedModelIds(pins),
       providers,
       searchText: '',
       selectedTags: [MODEL_CAPABILITY.REASONING],
@@ -311,11 +271,9 @@ describe('model picker data helpers', () => {
     ];
     const groups = buildModelPickerGroups({
       models: imageModels,
-      pinnedModelIds: [],
       providers,
       searchText: '',
       selectedTags: [MODEL_CAPABILITY.IMAGE_GENERATION],
-      showPinnedModels: false,
     });
 
     expect(groups.flatMap((group) => group.items.map((item) => item.modelId))).toEqual([
@@ -380,12 +338,7 @@ describe('model picker data helpers', () => {
   });
 
   test('builds list items up to the visible limit without a trailing empty group', () => {
-    const groups = buildModelPickerGroups({
-      models,
-      pinnedModelIds: [],
-      providers,
-      searchText: '',
-    });
+    const groups = buildModelPickerGroups({ models, providers, searchText: '' });
     const listItems = buildModelPickerListItems(groups, 3);
 
     expect(listItems.map((item) => item.key)).toEqual([

@@ -111,7 +111,6 @@ export function useAssistantMutations() {
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['/assistants'] }),
-        queryClient.invalidateQueries({ queryKey: ['/pins'] }),
         ...(requests.some((request) => request.deleteTopics)
           ? [queryClient.invalidateQueries({ queryKey: ['/topics'] })]
           : []),

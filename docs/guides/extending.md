@@ -45,14 +45,14 @@ workflow interface and observable results.
 - Keep resource-specific composition in the owning frontend hook or feature, not in shared or
   backend code.
 
-New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts`; render dispatch belongs in
-`src/frontend/components/messagePresentation/messageContent`. A new JSON part does not require a table migration, but
-FTS indexes only text parts.
+New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts`; render
+dispatch belongs in `src/frontend/components/messages/parts/MessagePartRenderer.tsx`. A new JSON
+part does not require a table migration, but FTS indexes only text parts.
 
 ## Add AI Or Backend Service Behavior
 
 AI SDK adapters live under `src/backend/ai`. Device and third-party capabilities live in their
-owning domain under `src/backend/services`, such as `permissions`, `oauth`, and `webSearch`.
+owning domain under `src/backend/services`, such as `permissions`, `models`, and `webSearch`.
 Cross-layer AI tool and transport rules belong in `packages/universal/src/ai`
 (`@cherrystudio/universal/ai`). General pure helpers used by both sides belong in `src/shared/utils`
 when they are mobile-native, or in `packages/universal/src/utils` when they mirror a desktop helper,

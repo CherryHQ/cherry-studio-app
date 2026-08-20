@@ -5,7 +5,6 @@ import {
   buildProviderBuiltinWebSearchConfig,
   type CherryWebSearchConfig,
   getWebSearchParams,
-  mapRegexToPatterns,
 } from '../websearch';
 
 function createModel(overrides: Partial<Model> = {}): Model {
@@ -29,26 +28,7 @@ const webSearchConfig = (
   overrides: Partial<CherryWebSearchConfig> = {},
 ): CherryWebSearchConfig => ({
   maxResults: 5,
-  excludeDomains: [],
   ...overrides,
-});
-
-describe('mapRegexToPatterns', () => {
-  it('lowercases bare domains', () => {
-    expect(mapRegexToPatterns(['Example.com'])).toEqual(['example.com']);
-  });
-
-  it('extracts the domain from full URLs', () => {
-    expect(mapRegexToPatterns(['https://example.com/path'])).toEqual(['example.com']);
-  });
-
-  it('extracts domains from /regex/-wrapped patterns', () => {
-    expect(mapRegexToPatterns(['/example\\.com/'])).toEqual(['example.com']);
-  });
-
-  it('dedupes and drops empty entries', () => {
-    expect(mapRegexToPatterns(['example.com', 'example.com', ''])).toEqual(['example.com']);
-  });
 });
 
 describe('buildProviderBuiltinWebSearchConfig', () => {
@@ -143,30 +123,16 @@ describe('buildProviderBuiltinWebSearchConfig', () => {
     ).toEqual({ 'openai-chat': { searchContextSize: 'low' } });
   });
 
-  it('builds anthropic maxUses + blockedDomains, omitting blockedDomains when empty', () => {
-    expect(
-      buildProviderBuiltinWebSearchConfig(
-        'anthropic',
-        webSearchConfig({ maxResults: 3, excludeDomains: ['blocked.com'] }),
-      ),
-    ).toEqual({ anthropic: { maxUses: 3, blockedDomains: ['blocked.com'] } });
-
+  it('maps anthropic maxUses from maxResults', () => {
     expect(
       buildProviderBuiltinWebSearchConfig('anthropic', webSearchConfig({ maxResults: 3 })),
-    ).toEqual({
-      anthropic: { maxUses: 3, blockedDomains: undefined },
-    });
+    ).toEqual({ anthropic: { maxUses: 3 } });
   });
 
-  it('caps xai excludedDomains at 5 and always enables image understanding', () => {
-    const manyDomains = Array.from({ length: 8 }, (_, i) => `d${i}.com`);
-    const result = buildProviderBuiltinWebSearchConfig(
-      'xai-responses',
-      webSearchConfig({ excludeDomains: manyDomains }),
-    );
-    expect(result).toEqual({
+  it('enables image understanding on both xai search tools', () => {
+    expect(buildProviderBuiltinWebSearchConfig('xai-responses', webSearchConfig())).toEqual({
       'xai-responses': {
-        webSearch: { enableImageUnderstanding: true, excludedDomains: manyDomains.slice(0, 5) },
+        webSearch: { enableImageUnderstanding: true },
         xSearch: { enableImageUnderstanding: true },
       },
     });
@@ -187,9 +153,7 @@ describe('buildProviderBuiltinWebSearchConfig', () => {
     });
     expect(
       buildProviderBuiltinWebSearchConfig('cherryin', webSearchConfig({ maxResults: 3 }), model),
-    ).toEqual({
-      anthropic: { maxUses: 3, blockedDomains: undefined },
-    });
+    ).toEqual({ anthropic: { maxUses: 3 } });
   });
 
   it('returns an empty config for cherryin with no resolvable endpoint', () => {

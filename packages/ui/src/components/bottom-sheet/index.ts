@@ -1,9 +1,21 @@
-export { BottomSheet } from './bottom-sheet';
+export { BottomSheet } from './bottom-sheet.compound';
 export { controlledCloseReason, useBottomSheet } from './bottom-sheet.context';
 export type {
+  BottomSheetBackButtonProps,
+  BottomSheetBodyProps,
+  BottomSheetCloseButtonProps,
   BottomSheetCloseReason,
+  BottomSheetContentProps,
   BottomSheetContextValue,
+  BottomSheetFooterProps,
   BottomSheetGeometry,
+  BottomSheetHeaderProps,
   BottomSheetPageTransitionProps,
-  BottomSheetProps,
+  BottomSheetRootProps,
+  BottomSheetScrollViewProps,
+  BottomSheetSearchFieldProps,
+  BottomSheetSelectionOption,
+  BottomSheetSelectionProps,
+  BottomSheetTitleProps,
+  BottomSheetTriggerProps,
 } from './bottom-sheet.types';

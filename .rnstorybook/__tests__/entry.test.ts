@@ -37,11 +37,13 @@ describe('Storybook entry wiring', () => {
     expect(read('metro.config.js')).toContain(`process.env.${flag} === 'true'`);
   });
 
-  test('collects package stories', () => {
+  test('collects package primitives and application presentation stories', () => {
     const main = read('.rnstorybook/main.ts');
     const generated = read('.rnstorybook/storybook.requires.ts');
 
     expect(main).toContain('../packages/ui/stories/**/*.stories.?(ts|tsx|js|jsx)');
+    expect(main).toContain('./stories/**/*.stories.?(ts|tsx|js|jsx)');
     expect(generated).toContain('../packages/ui/stories');
+    expect(generated).toContain('./.rnstorybook/stories');
   });
 });

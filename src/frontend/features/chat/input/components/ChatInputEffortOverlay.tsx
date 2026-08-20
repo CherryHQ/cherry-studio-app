@@ -1,4 +1,4 @@
-import { Portal } from '@cherrystudio/ui/components';
+import { Portal, TextAnimation } from '@cherrystudio/ui/components';
 import { easing } from '@cherrystudio/ui/motion';
 import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,7 +15,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { SlotText } from '@/frontend/components/SlotText';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 import { EffortSlider } from '../effortSlider';
@@ -255,8 +254,9 @@ export function ChatInputEffortOverlay({
         pointerEvents="none"
         style={[labelContainerStyle, layout.labelFrame, labelStyle]}
       >
-        <SlotText
+        <TextAnimation.Rotating
           ellipsizeMode="tail"
+          numberOfLines={1}
           text={displayLabel}
           textClassName="text-center font-semibold text-foreground text-base"
           testID="chat-input-effort-label"

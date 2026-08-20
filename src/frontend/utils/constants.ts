@@ -8,14 +8,6 @@ import { nativeStackHeaderHeight } from './nativeNavigationMetrics/nativeNavigat
 export const defaultLanguage = 'en-US';
 export const isLiquidGlassAvailable = isSystemLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
-// Geist Mono, embedded natively by the expo-font plugin (see app.json). This is
-// the font's PostScript name, which is also its filename, so iOS and Android
-// both resolve it from this single string. Components that style through
-// `className` should use the `font-mono` utility instead; this constant exists
-// for the few places that build RN style objects directly (MarkdownText).
-// Must stay in sync with `--font-mono` in src/frontend/styles/global.css.
-export const monoFontFamily = 'GeistMono-Regular';
-
 // Gap kept between the keyboard and the focused input inside scrollable forms.
 export const keyboardBottomOffset = 16;
 
@@ -23,11 +15,6 @@ export const keyboardBottomOffset = 16;
 // smaller than this (home-button devices report 0), so the button never sits
 // flush against the screen edge.
 export const screenBottomActionInset = 16;
-
-// Delay before imperatively focusing the native header search bar on iOS.
-// UISearchController attaches to the navigation bar asynchronously, and a
-// focus() call landing before that is silently ignored by UIKit.
-export const searchBarAutoFocusDelayMs = 100;
 
 // Native transition played over a theme switch (react-native-nitro-theme-transition).
 // The theme itself is instant — Uniwind commits it to the shadow tree in C++ — so
@@ -113,6 +100,30 @@ export const profileHero = {
   lockTimingMs: 220, // lock / unlock spring-to-rest duration
   expandedRadius: 20, // locked full-width photo bottom-corner radius
   nameOverlayInsetX: 20, // locked name left inset from the photo edge
+} as const;
+
+// The drawer sidebar sits still underneath a surface that slides right, so the
+// reveal reads as the display itself moving. The sidebar's own content is what
+// carries the motion: it starts slightly down and scaled in, and catches up as
+// the surface clears it. Without that the sidebar reads as a static backdrop
+// the pane happens to uncover.
+//
+// `revealFadeStart` is a drawer-progress value, not a duration: content stays
+// fully transparent until the surface has moved that far, so nothing shows
+// through the sliver at the start of a drag.
+export const appSidebar = {
+  widthRatio: 0.8, // sidebar width as a fraction of the screen width
+  fallbackCornerRadius: 55, // surface radius when the device is missing from expo-screen-corner-radius' table
+  revealFadeStart: 0.3, // progress at which content begins fading in
+  revealOffsetY: 24, // content's starting vertical offset, in points
+  revealScale: 0.94, // content's starting scale
+  dockHeight: 46, // floating bottom dock's button height, shared by both buttons
+  dockMinInset: 16, // floor for the dock's concentric inset (see SidebarDock)
+  headerRowHeight: 40, // brand row's height below the status bar; the body scrolls under it
+  headerGapY: 8, // header's breathing room above and below the brand row
+  scrollShadowSize: 112, // ScrollShadow's dissolve depth, shared by both ends
+  headerBlurSize: 124, // progressive-blur depth under the brand row, in points; the dock end needs no blur
+  recentTopicLimit: 20, // most-recent topics shown before the "view all" row
 } as const;
 
 // Providers that exist as rows but must never appear in the provider settings

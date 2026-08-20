@@ -11,8 +11,11 @@
  * Built-in ("内置头像") logos are intentionally not supported here; the desktop
  * `icon:<id>` convention is resolved separately via `resolveProviderIcon`.
  */
+import { loggerService } from '@logger';
+import { randomUUID } from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 
+const logger = loggerService.withContext('ProviderAvatarStorage');
 const AVATAR_DIRECTORY_NAME = 'provider-avatars';
 
 function avatarDirectory(): Directory {
@@ -29,31 +32,67 @@ function ensureAvatarDirectory(): Directory {
   return directory;
 }
 
-function avatarFile(providerId: string): File {
-  return new File(avatarDirectory(), providerId);
+/**
+ * Every file this provider owns, newest name last. There is normally exactly
+ * one; a second only survives a crash between writing the new file and deleting
+ * the old one. The bare `providerId` is the name this module used before avatars
+ * were versioned, so those files still resolve.
+ */
+function findAvatarFiles(providerId: string): File[] {
+  const directory = avatarDirectory();
+
+  if (!directory.exists) {
+    return [];
+  }
+
+  return directory
+    .list()
+    .filter(
+      (entry): entry is File =>
+        entry instanceof File &&
+        (entry.name === providerId || entry.name.startsWith(`${providerId}.`)),
+    )
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function deleteAvatarFiles(files: readonly File[]): void {
+  for (const file of files) {
+    try {
+      if (file.exists) {
+        file.delete();
+      }
+    } catch (error) {
+      logger.warn('Failed to delete stored provider avatar', error as Error, { uri: file.uri });
+    }
+  }
 }
 
 /**
  * Persist a picked image (a temporary picker `uri`) as this provider's avatar.
  * Returns the stable `file://` uri of the stored copy.
+ *
+ * The copy lands under a fresh name rather than overwriting the previous one:
+ * the uri is the image cache key on both platforms, so reusing the path would
+ * keep the old photo on screen until the app restarts.
  */
 export async function saveProviderAvatar(providerId: string, sourceUri: string): Promise<string> {
   ensureAvatarDirectory();
 
-  const destination = avatarFile(providerId);
-
-  if (destination.exists) {
-    destination.delete();
-  }
+  const previousFiles = findAvatarFiles(providerId);
+  const destination = new File(avatarDirectory(), `${providerId}.${randomUUID()}`);
 
   await new File(sourceUri).copy(destination);
+  deleteAvatarFiles(previousFiles);
 
   return destination.uri;
 }
 
+/** Drop this provider's custom avatar, falling back to its built-in logo. */
+export function deleteProviderAvatar(providerId: string): void {
+  deleteAvatarFiles(findAvatarFiles(providerId));
+}
+
 /** Stable `file://` uri of a provider's stored avatar, or `undefined` if none. */
 export function getProviderAvatarUri(providerId: string): string | undefined {
-  const file = avatarFile(providerId);
-
-  return file.exists ? file.uri : undefined;
+  return findAvatarFiles(providerId).at(-1)?.uri;
 }

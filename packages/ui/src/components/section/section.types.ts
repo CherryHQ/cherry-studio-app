@@ -53,3 +53,14 @@ type SectionItemCustomProps = {
 
 export type SectionItemProps = SectionItemBaseProps &
   (SectionItemSlotsProps | SectionItemCustomProps);
+
+export type SectionRadioItemProps = Omit<
+  SectionItemBaseProps,
+  'accessibilityRole' | 'accessibilityState' | 'onPress'
+> & {
+  description?: ReactNode;
+  label: ReactNode;
+  leading?: ReactNode;
+  onPress: () => void;
+  selected: boolean;
+};

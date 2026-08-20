@@ -25,7 +25,6 @@ function jobSnapshot(overrides: Partial<JobSnapshot>): JobSnapshot {
     priority: 0,
     queue: 'painting',
     scheduledAt: '2026-01-01T00:00:00.000Z',
-    scheduleId: null,
     startedAt: null,
     status: 'running',
     timeoutMs: null,

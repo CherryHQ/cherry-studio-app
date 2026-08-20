@@ -71,7 +71,6 @@ export interface JobContext<TPayload = unknown> {
 export interface JobSettledEvent<TPayload = unknown> {
   jobId: string;
   type: string;
-  scheduleId: string | null;
   parentId: string | null;
   status: Extract<JobStatus, 'completed' | 'failed' | 'cancelled'>;
   readonly input: TPayload;
@@ -156,7 +155,6 @@ export interface EnqueueOptions {
   idempotencyKey?: string;
   /** Unix ms; future values enqueue as `delayed`. Defaults to now. */
   scheduledAt?: number;
-  scheduleId?: string;
   parentId?: string;
   timeoutMs?: number;
   maxAttempts?: number;

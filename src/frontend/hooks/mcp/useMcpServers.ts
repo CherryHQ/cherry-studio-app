@@ -2,7 +2,7 @@ import type {
   CreateMcpServerDto,
   UpdateMcpServerDto,
 } from '@cherrystudio/universal/data/api/schemas/mcpServers';
-import type { StreamableHttpMcpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQueryClient, useQuery as useTanStackQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
@@ -15,10 +15,10 @@ import {
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 
-const EMPTY_MCP_SERVERS: readonly StreamableHttpMcpServer[] = Object.freeze([]);
+const EMPTY_MCP_SERVERS: readonly McpServer[] = Object.freeze([]);
 const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =
   Object.freeze({});
-type McpServerListData = { items: StreamableHttpMcpServer[]; total: number };
+type McpServerListData = { items: McpServer[]; total: number };
 
 export function useMcpServersApi() {
   const query = useQuery('/mcp-servers');
@@ -48,7 +48,7 @@ export function useMcpServerApiById(id: string | undefined) {
   };
 }
 
-export function useMcpServerRuntimeSummaries(servers: readonly StreamableHttpMcpServer[]) {
+export function useMcpServerRuntimeSummaries(servers: readonly McpServer[]) {
   const mcp = useBackendModule('mcp');
   const query = useTanStackQuery({
     enabled: servers.length > 0,

@@ -23,8 +23,7 @@ Desktop's `src/shared` means "shared between the Electron main and renderer proc
 
 The directory layout maps one-to-one onto desktop `src/shared/{data,ai,types,utils}`.
 Mobile-native shared code stays in `src/shared`: `contracts/` (in-process API boundary, the mobile
-counterpart of desktop IPC), `core/logger`, and `oauth/` (the OAuth provider registry, which is
-keyed by mobile provider ids and read by both layers).
+counterpart of desktop IPC) and `core/logger`.
 
 ## Admission Criteria
 
@@ -32,19 +31,21 @@ Apply these when deciding whether a desktop `src/shared` file belongs in the pac
 
 1. Reject files that name Electron surfaces (windows, IPC channels, settings routes, boot config,
    the v1→v2 migration wizard).
-2. Reject files that encode host-OS capabilities mobile cannot have (binary tool installation, CLI
-   OAuth launch, local ONNX runtimes, OCR file processing).
+2. Reject files that encode host-OS capabilities mobile cannot have (binary tool installation,
+   local ONNX runtimes, OCR file processing).
 3. Admit pure logic consumed by the mobile runtime, or shapes of data that mobile persists, backs
    up, or exchanges with desktop.
 4. Check the import graph: a file whose only consumers are desktop-process-only files is not
    admitted, whatever its own contents look like.
 5. Split welded hybrids surgically: keep the serialized shape, drop the desktop capability logic,
    and register the trim as a `shapeOnlyPorts` entry in `desktop-sync-manifest.json` (see
-   `types/codeCli.ts`, `utils/shortcut.ts`, `ai/prompts.ts`).
+   `ai/prompts.ts`).
 
-Rejected files become `explicitExclusions` in the Manifest. Seeded ghost preference keys backing
-excluded features (`feature.binary.*`, `feature.code_cli.configs`) stay: they are serialized data
-under the preference-parity invariant, not code.
+Rejected files become `explicitExclusions` in the Manifest.
+
+Preferences are the exception to all of the above: mobile's preference schema is hand-maintained in
+`data/preference/preference-schema.ts` and holds only the keys mobile reads, so a desktop key is not
+admitted by being serialized data. There is no preference-parity invariant to satisfy.
 
 ## Imports And Aliasing
 

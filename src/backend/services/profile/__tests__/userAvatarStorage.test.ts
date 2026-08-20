@@ -1,9 +1,11 @@
+import { type FileEntryId, FileEntryIdSchema } from '@cherrystudio/universal/data/types/file';
+
+import type { UserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
+
 import { replaceUserAvatar, resolveUserAvatarUri } from '../userAvatarStorage';
 
 jest.mock('expo-file-system', () => {
-  const directories = new Set<string>();
   const files = new Set<string>();
-  const copies: { destination: string; source: string }[] = [];
   const joinUri = (parts: (string | { uri: string })[], isDirectory: boolean) => {
     const [first, ...rest] = parts.map((part) => (typeof part === 'string' ? part : part.uri));
     let uri = first?.replace(/\/+$/, '') ?? '';
@@ -21,14 +23,6 @@ jest.mock('expo-file-system', () => {
     constructor(...parts: (string | { uri: string })[]) {
       this.uri = joinUri(parts, true);
     }
-
-    get exists() {
-      return directories.has(this.uri);
-    }
-
-    create() {
-      directories.add(this.uri);
-    }
   }
 
   class MockFile {
@@ -42,11 +36,6 @@ jest.mock('expo-file-system', () => {
       return files.has(this.uri);
     }
 
-    async copy(destination: MockFile) {
-      copies.push({ destination: destination.uri, source: this.uri });
-      files.add(destination.uri);
-    }
-
     delete() {
       files.delete(this.uri);
     }
@@ -56,87 +45,108 @@ jest.mock('expo-file-system', () => {
     Directory: MockDirectory,
     File: MockFile,
     Paths: { document: { uri: 'file:///documents/' } },
-    testState: { copies, directories, files },
+    testState: { files },
   };
 });
 
-type FileSystemTestState = {
-  copies: { destination: string; source: string }[];
-  directories: Set<string>;
-  files: Set<string>;
-};
+const fileIds = [
+  FileEntryIdSchema.parse('00000000-0000-4000-8000-000000000001'),
+  FileEntryIdSchema.parse('00000000-0000-4000-8000-000000000002'),
+];
 
-const { testState } = jest.requireMock<{ testState: FileSystemTestState }>('expo-file-system');
+const { testState } = jest.requireMock<{ testState: { files: Set<string> } }>('expo-file-system');
 
 describe('userAvatarStorage', () => {
   beforeEach(() => {
-    testState.copies.length = 0;
-    testState.directories.clear();
     testState.files.clear();
   });
 
-  it('stores a picked image behind a path-resilient file reference', async () => {
+  it('stores a picked image behind a managed file reference', async () => {
+    const images = createImageStorage();
     let avatar = '';
 
-    await replaceUserAvatar('file:///picker/avatar.jpg', '', async (nextAvatar) => {
+    await replaceUserAvatar(images, 'file:///picker/avatar.jpg', '', async (nextAvatar) => {
       avatar = nextAvatar;
     });
 
-    expect(avatar).toMatch(
-      /^file:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
-    expect(testState.copies).toEqual([
-      {
-        destination: `file:///documents/user-avatars/${avatar.slice('file:'.length)}`,
-        source: 'file:///picker/avatar.jpg',
-      },
-    ]);
-    expect(resolveUserAvatarUri(avatar)).toBe(
-      `file:///documents/user-avatars/${avatar.slice('file:'.length)}`,
+    expect(avatar).toBe(`file:${fileIds[0]}`);
+    expect(images.create).toHaveBeenCalledWith('file:///picker/avatar.jpg');
+    await expect(resolveUserAvatarUri(images, avatar)).resolves.toBe(
+      `file:///managed/${fileIds[0]}.webp`,
     );
   });
 
   it('deletes the previous managed file only after persisting its replacement', async () => {
+    const images = createImageStorage();
     let previousAvatar = '';
-    await replaceUserAvatar('file:///picker/first.jpg', '', async (nextAvatar) => {
+    await replaceUserAvatar(images, 'file:///picker/first.jpg', '', async (nextAvatar) => {
       previousAvatar = nextAvatar;
     });
 
     let nextAvatar = '';
-    await replaceUserAvatar('file:///picker/second.jpg', previousAvatar, async (value) => {
+    await replaceUserAvatar(images, 'file:///picker/second.jpg', previousAvatar, async (value) => {
       nextAvatar = value;
-      expect(resolveUserAvatarUri(previousAvatar)).toBeDefined();
+      await expect(resolveUserAvatarUri(images, previousAvatar)).resolves.toBeDefined();
     });
 
-    expect(resolveUserAvatarUri(previousAvatar)).toBeUndefined();
-    expect(resolveUserAvatarUri(nextAvatar)).toBeDefined();
+    await expect(resolveUserAvatarUri(images, previousAvatar)).resolves.toBeUndefined();
+    await expect(resolveUserAvatarUri(images, nextAvatar)).resolves.toBeDefined();
   });
 
   it('compensates the new file and preserves the previous avatar when persistence fails', async () => {
+    const images = createImageStorage();
     let previousAvatar = '';
-    await replaceUserAvatar('file:///picker/first.jpg', '', async (nextAvatar) => {
+    await replaceUserAvatar(images, 'file:///picker/first.jpg', '', async (nextAvatar) => {
       previousAvatar = nextAvatar;
     });
 
     let rejectedAvatar = '';
     await expect(
-      replaceUserAvatar('file:///picker/second.jpg', previousAvatar, async (nextAvatar) => {
+      replaceUserAvatar(images, 'file:///picker/second.jpg', previousAvatar, async (nextAvatar) => {
         rejectedAvatar = nextAvatar;
         throw new Error('preference write failed');
       }),
     ).rejects.toThrow('preference write failed');
 
-    expect(resolveUserAvatarUri(previousAvatar)).toBeDefined();
-    expect(resolveUserAvatarUri(rejectedAvatar)).toBeUndefined();
+    await expect(resolveUserAvatarUri(images, previousAvatar)).resolves.toBeDefined();
+    await expect(resolveUserAvatarUri(images, rejectedAvatar)).resolves.toBeUndefined();
   });
 
-  it('keeps legacy image URIs and rejects non-image or unresolved values', () => {
-    expect(resolveUserAvatarUri('https://example.com/avatar.png')).toBe(
+  it('keeps legacy references readable until their separate cleanup', async () => {
+    const images = createImageStorage();
+    const legacyRef = `file:${fileIds[0]}`;
+    testState.files.add(`file:///documents/user-avatars/${fileIds[0]}`);
+
+    await expect(resolveUserAvatarUri(images, legacyRef)).resolves.toBe(
+      `file:///documents/user-avatars/${fileIds[0]}`,
+    );
+    await expect(resolveUserAvatarUri(images, 'https://example.com/avatar.png')).resolves.toBe(
       'https://example.com/avatar.png',
     );
-    expect(resolveUserAvatarUri('data:image/png;base64,abc')).toBe('data:image/png;base64,abc');
-    expect(resolveUserAvatarUri('file:///legacy/avatar.png')).toBe('file:///legacy/avatar.png');
-    expect(resolveUserAvatarUri('😀')).toBeUndefined();
-    expect(resolveUserAvatarUri('file:00000000-0000-4000-8000-000000000000')).toBeUndefined();
+    await expect(resolveUserAvatarUri(images, 'data:image/png;base64,abc')).resolves.toBe(
+      'data:image/png;base64,abc',
+    );
+    await expect(resolveUserAvatarUri(images, 'file:///legacy/avatar.png')).resolves.toBe(
+      'file:///legacy/avatar.png',
+    );
+    await expect(resolveUserAvatarUri(images, '😀')).resolves.toBeUndefined();
   });
 });
+
+function createImageStorage(): UserContentImageStorage {
+  const uris = new Map<FileEntryId, string>();
+  let nextId = 0;
+
+  return {
+    create: jest.fn(async () => {
+      const id = fileIds[nextId++];
+      if (!id) {
+        throw new Error('No test FileEntry id available');
+      }
+      uris.set(id, `file:///managed/${id}.webp`);
+      return id;
+    }),
+    remove: jest.fn(async (id) => uris.delete(id)),
+    resolve: jest.fn(async (id) => uris.get(id)),
+  };
+}

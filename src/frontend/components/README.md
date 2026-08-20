@@ -56,8 +56,8 @@ Only add the subdirectories that the module actually needs.
 ## Reusable vs Feature-Owned
 
 - Count independent owners, not import statements. Reuse between `ChatScreen/input` and
-  `ChatScreen/workspace` is still owned by `ChatScreen`; structured message presentation moved to
-  `messagePresentation` only after painting became a second owner.
+  `ChatScreen/workspace` is still owned by `ChatScreen`; structured message rendering moved to
+  `messages` only after painting became a second owner.
 - Put UI or behavior in an independent module, such as `modelPicker`, when a second screen or
   component domain consumes it.
 - Keep feature-specific UI inside the owning module under `src/frontend/features`.

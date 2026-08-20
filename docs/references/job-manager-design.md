@@ -600,6 +600,20 @@ readers know they are decisions, not oversights:
    shape is reserved for when it exists.
 8. **`server-required` is not an execution class value.** It is a product-mapping decision
    ("don't build this locally"); a local row with that class would be a bug, not a state.
+9. **Silent audio is used as a mechanism, against the assessment's ruling — with the review risk
+   accepted, not refuted.** The assessment states that silent audio "does not satisfy Apple's
+   production background audio contract" and "must not become the Job Manager's execution
+   foundation". Those are two separate objections, and the appendix revised the ruling on
+   continuation evidence without separating them. *Foundation*: honored — job correctness never
+   depends on keep-alive. The ledger, the fence, and cold-start recovery are what make a job
+   correct; keep-alive only extends a window.
+   *Contract*: the objection stands and is accepted as a known liability. `UIBackgroundModes:
+   ["audio"]` without audible content is reviewable under App Review guideline 2.5.4, and Apple
+   documents an interruption path for a session that "goes silent for too long" — which is why
+   `KeepAliveCoordinator.handlePlayerStatusUpdate` has to restart playback. The mitigation is the
+   exit already named in the appendix (iOS 26 Continued Processing, Android FGS); see
+   [Agent Runtime execution lifetime](./agent/agent-runtime.md#execution-lifetime), which treats
+   Mobile's local execution window as bounded and non-resumable in v1.
 
 ## Open Questions
 

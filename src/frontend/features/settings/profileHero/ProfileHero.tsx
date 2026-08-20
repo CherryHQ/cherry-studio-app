@@ -1,3 +1,4 @@
+import { Image } from '@cherrystudio/ui/components';
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, Pressable, Text, useWindowDimensions } from 'react-native';
@@ -9,7 +10,6 @@ import Animated, {
   useSharedValue,
 } from 'react-native-reanimated';
 
-import { Image } from '@/frontend/components/nativePrimitives';
 import { useAvatar } from '@/frontend/hooks/useAvatar';
 import { profileHero } from '@/frontend/utils/constants';
 

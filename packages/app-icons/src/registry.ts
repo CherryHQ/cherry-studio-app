@@ -68,6 +68,11 @@ export const iconRegistry = {
   EyeOffIcon: { sf: 'eye.slash', material: 'visibility_off' },
   FileIcon: { sf: 'doc', material: 'draft' },
   FileTextIcon: { sf: 'doc.text', material: 'description' },
+  FilterIcon: { sf: 'line.3.horizontal.decrease', material: 'filter_list' },
+  // Assistants are personas, not a generic robot: `BotIcon` maps to the same SF
+  // glyph as `BrainIcon`, so the sidebar row reads as "thinking" rather than
+  // "the cast of assistants you can talk to".
+  PersonaIcon: { sf: 'person.2', material: 'groups' },
   FolderOpenIcon: { sf: 'folder', material: 'folder_open' },
   GiftIcon: { sf: 'gift', material: 'redeem' },
   GlobeIcon: { sf: 'globe', material: 'public' },
@@ -87,6 +92,7 @@ export const iconRegistry = {
   MessageCircleIcon: { sf: 'message', material: 'chat_bubble' },
   MessageCircleMoreIcon: { sf: 'ellipsis.bubble', material: 'more_horiz' },
   MessageCircleWarningIcon: { sf: 'exclamationmark.bubble', material: 'chat_error' },
+  MenuIcon: { sf: 'line.3.horizontal', material: 'menu' },
   MicIcon: { sf: 'mic', material: 'mic' },
   MinusIcon: { sf: 'minus', material: 'remove' },
   MonitorCloudIcon: { sf: 'externaldrive.badge.icloud', material: 'backup' },
@@ -137,10 +143,3 @@ export type IconExportName = keyof typeof iconRegistry;
  * sources, not React components). iOS tabs pass SF Symbol names straight to the navigator, so
  * their names live in `src/app/(tabs)/_layout.tsx` instead.
  */
-export const tabBarIcons = {
-  assistants: 'group',
-  home: 'home',
-  messages: 'chat',
-  search: 'search',
-  settings: 'settings',
-} as const satisfies Record<string, MaterialSymbolName>;

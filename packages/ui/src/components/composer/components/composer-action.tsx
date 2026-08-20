@@ -2,8 +2,8 @@ import { Pressable } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import { Surface } from '../../surface';
-import { actionHitSlop, actionStyle, composerActionSize } from '../composer.layout';
 import type { ComposerActionProps } from '../composer.types';
+import { actionHitSlop, actionStyle, composerActionSize } from '../utils/composer-layout';
 
 /**
  * A toolbar button: a circular surface carrying one icon. Every tool injected

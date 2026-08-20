@@ -7,7 +7,6 @@ import { ZhipuProvider } from '../ZhipuProvider';
 
 const runtimeConfig: WebSearchExecutionConfig = {
   maxResults: 2,
-  excludeDomains: [],
   compression: { method: 'none', cutoffLimit: 2000 },
 };
 

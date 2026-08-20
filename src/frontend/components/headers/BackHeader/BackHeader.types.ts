@@ -1,3 +1,4 @@
+import type { MenuItem } from '@cherrystudio/ui/components';
 import type { StackToolbarButtonProps } from 'expo-router';
 import type { ComponentType, ReactElement } from 'react';
 
@@ -12,12 +13,14 @@ export type HeaderToolbarAction = Pick<
   androidIcon?: ComponentType<HeaderAndroidIconProps>;
   /**
    * Custom toolbar content (e.g. a circular avatar), as a single element. When
-   * set, the icon fields are ignored: TabRootHeader renders it via
+   * set, the icon fields are ignored: DrawerRootHeader renders it via
    * `Stack.Toolbar.View` on iOS and a `Fragment` inside `headerRight` on
    * Android. Must have an explicit size.
    */
   element?: ReactElement;
   key: string;
+  /** Native overflow menu shown from this toolbar position. */
+  menuItems?: readonly MenuItem[];
   /**
    * Text rendered in place of the icon, for system-style word buttons such as
    * "Edit". Takes precedence over `icon`/`androidIcon` when set.

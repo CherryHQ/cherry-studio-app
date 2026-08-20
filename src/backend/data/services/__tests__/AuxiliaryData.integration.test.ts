@@ -9,7 +9,6 @@ import { customSqlStatements } from '@/backend/data/db/customSql';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
 
-import { agentGlobalSkillService } from '../AgentGlobalSkillService';
 import { contentSearchService } from '../ContentSearchService';
 import { entitySearchService } from '../EntitySearchService';
 import { temporaryChatService } from '../TemporaryChatService';
@@ -132,51 +131,6 @@ describe('auxiliary Data API integration', () => {
     expect(root).toBeDefined();
     expect(persistedRows.find((row) => row.id === first.id)?.parent_id).toBe(root?.id);
     expect(persistedRows.find((row) => row.id === last.id)?.parent_id).toBe(first.id);
-  });
-
-  test('projects global skill enablement per agent without changing stored defaults', async () => {
-    const row = await agentGlobalSkillService.insert({
-      contentHash: 'hash-1',
-      folderName: 'builtin-skill',
-      isEnabled: true,
-      name: 'Builtin Skill',
-      source: 'builtin',
-    });
-    await dbService
-      .getDb()
-      .insert(schema.agentTable)
-      .values({
-        description: '',
-        configuration: { builtin_role: 'assistant' },
-        instructions: '',
-        model: null,
-        name: 'Agent',
-        orderKey: 'a0',
-        type: 'claude-code',
-      });
-    const [agent] = await dbService.getDb().select().from(schema.agentTable).limit(1);
-
-    await expect(agentGlobalSkillService.list()).resolves.toEqual([
-      expect.objectContaining({ id: row.id, isEnabled: false, name: 'Builtin Skill' }),
-    ]);
-    await expect(agentGlobalSkillService.list({ agentId: agent.id })).resolves.toEqual([
-      expect.objectContaining({ id: row.id, isEnabled: true }),
-    ]);
-    await agentGlobalSkillService.upsertJoin(agent.id, row.id, false);
-    await expect(agentGlobalSkillService.list({ agentId: agent.id })).resolves.toEqual([
-      expect.objectContaining({ id: row.id, isEnabled: false }),
-    ]);
-
-    const search = await entitySearchService.search({
-      q: 'Diagnose issues',
-      types: ['agent'],
-    });
-    expect(search.groups[0]?.items).toEqual([
-      expect.objectContaining({
-        id: agent.id,
-        subtitle: expect.stringContaining('Built-in Cherry Studio advisor'),
-      }),
-    ]);
   });
 });
 

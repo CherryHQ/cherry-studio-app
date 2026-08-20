@@ -3,8 +3,7 @@
   "repository": "https://github.com/CherryHQ/cherry-studio.git",
   "delegatedManifests": {
     "ai-runtime": "packages/ai-runtime/desktop-sync-map.json",
-    "design": "packages/design-tokens/src/sync-manifest.json",
-    "services:oauth": "src/backend/services/oauth/desktop-sync-map.json"
+    "design": "packages/design-tokens/src/sync-manifest.json"
   },
   "domains": {
     "design-catalog": {
@@ -55,17 +54,9 @@
       "shapeOnlyPorts": [
         {
           "path": "src/shared/data/preference/preferenceTypes.ts",
-          "keeps": "DB-backed preference types",
-          "drops": "BootConfigPreferenceKeys intersection in UnifiedPreferenceType (Electron boot-config file does not exist on mobile)"
+          "keeps": "Value types for the preference keys mobile reads",
+          "drops": "The generated preferenceSchemas.ts key set and every type that only described it; mobile's preference schema is hand-maintained and deliberately diverged, so there is no key-level alignment left to audit"
         }
-      ],
-      "mobilePreferenceExtensions": [
-        "permissions.calendar_read",
-        "permissions.calendar_write",
-        "permissions.health_read",
-        "permissions.location_read",
-        "permissions.reminders_read",
-        "permissions.reminders_write"
       ]
     },
     "shared-portable": {
@@ -73,25 +64,21 @@
       "status": "unbaselined",
       "sourcePaths": [
         "src/shared/types/aiSdk.ts",
-        "src/shared/types/codeCli.ts",
         "src/shared/types/error.ts",
         "src/shared/types/serializable.ts",
         "src/shared/utils/conversationTitle.ts",
         "src/shared/utils/keywordSearch.ts",
         "src/shared/utils/model.ts",
-        "src/shared/utils/shortcut.ts",
         "src/shared/utils/text.ts",
         "src/shared/utils/url.ts"
       ],
       "targetPaths": [
         "packages/universal/src/types/aiSdk.ts",
-        "packages/universal/src/types/codeCli.ts",
         "packages/universal/src/types/error.ts",
         "packages/universal/src/types/serializable.ts",
         "packages/universal/src/utils/conversationTitle.ts",
         "packages/universal/src/utils/keywordSearch.ts",
         "packages/universal/src/utils/model.ts",
-        "packages/universal/src/utils/shortcut.ts",
         "packages/universal/src/utils/text.ts",
         "packages/universal/src/utils/url.ts"
       ],
@@ -103,16 +90,6 @@
           "path": "src/shared/types/aiSdk.ts",
           "keeps": "ReasoningEffortOption plus its Zod schema, and the AiSdkParam standard-parameter vocabulary with its isAiSdkParam guard",
           "drops": "OpenAIVerbosity/ValidOpenAIVerbosity/OpenAIReasoningSummary/OpenAICompletionsStreamOptions, which alias into the @cherrystudio/openai SDK that mobile does not depend on; backend/ai/utils/options.ts re-declares the verbosity union it needs as a literal type"
-        },
-        {
-          "path": "src/shared/types/codeCli.ts",
-          "keeps": "CodeCli enum backing the seeded feature.code_cli.configs preference value",
-          "drops": "TerminalApp/TerminalConfig launch configs, CLI gateway and own-login virtual provider ids (mobile cannot launch CLIs)"
-        },
-        {
-          "path": "src/shared/utils/shortcut.ts",
-          "keeps": "Shortcut token vocabulary, ShortcutToken/ShortcutBinding types, isShortcutToken guard backing seeded shortcut.* preference values",
-          "drops": "Accelerator/hotkey conversion, key display formatting, binding validation for the desktop command system"
         }
       ]
     },
@@ -247,11 +224,6 @@
       ],
       "mobileExtensions": [
         {
-          "path": "packages/universal/src/ai/tools/mcpSourcePolicy.ts",
-          "keeps": "all six desktop exports unchanged",
-          "adds": "the write side — hasMcpServerWildcardRule, withMcpToolRuleAdded and withMcpToolRuleCleared. Desktop edits rule arrays inline at each call site; mobile's MCP settings screen needs one shared implementation"
-        },
-        {
           "path": "packages/universal/src/ai/transport/toolApprovals.ts",
           "keeps": "nothing, there is no desktop counterpart",
           "adds": "mobile's own approval settlement helpers. Note this overlaps the ported transport/applyApprovalDecisions.ts, which is barrel-only dead code here, and the two declare their own ApprovalDecision types — collapsing them is open work, not an intended fork"
@@ -270,7 +242,7 @@
       "targetPaths": ["src/backend/services", "src/backend/data/services", "src/backend/ai"],
       "sourceCommit": null,
       "sourceSha256": null,
-      "explicitExclusions": []
+      "explicitExclusions": ["src/main/services/oauth", "src/main/services/CopilotService.ts"]
     },
     "dependencies": {
       "strategy": "semantic-port",

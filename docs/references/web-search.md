@@ -36,7 +36,6 @@ Runtime behavior:
 - Runs one provider request per normalized keyword/url input.
 - Merges successful results.
 - Logs partial input failures.
-- Filters blacklisted domains.
 - Applies post-processing and compression settings.
 
 Abort errors are propagated when the caller's signal is aborted.
@@ -94,7 +93,6 @@ Important preferences include:
 - max result count.
 - compression settings.
 - provider overrides.
-- excluded domains.
 
 Provider overrides hold provider-specific API configuration for the external web search path.
 
@@ -106,7 +104,7 @@ Document this as an exception, not evidence that WebSearchService has merged int
 
 ## Post-Processing
 
-Search results pass through blacklist filtering and response post-processing before they are returned. Compression settings are part of runtime config.
+Search results pass through response post-processing before they are returned. Compression settings are part of runtime config.
 
 ## Reopen When
 

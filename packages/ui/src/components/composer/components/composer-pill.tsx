@@ -2,8 +2,8 @@ import { Pressable, View } from 'react-native';
 import { useResolveClassNames } from 'uniwind';
 
 import { Surface } from '../../surface';
-import { actionHitSlop, composerActionSize, pillStyle } from '../composer.layout';
 import type { ComposerPillProps } from '../composer.types';
+import { actionHitSlop, composerActionSize, pillStyle } from '../utils/composer-layout';
 
 /**
  * `Composer.Action`'s wide sibling: the same height and material, but sized to a

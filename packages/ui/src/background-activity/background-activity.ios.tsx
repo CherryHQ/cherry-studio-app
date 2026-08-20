@@ -1,3 +1,4 @@
+import { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
   activityBackgroundTint,
@@ -16,8 +17,21 @@ import {
   widgetAccentedRenderingMode,
 } from '@expo/ui/swift-ui/modifiers';
 import type { LiveActivityComponent } from 'expo-widgets';
+import type { SFSymbols7_0 } from 'sf-symbols-typescript';
 
 import type { BackgroundActivityNativePresentation } from './background-activity.types';
+
+const iconSymbolMap: Record<BackgroundActivityIcon, SFSymbols7_0> = {
+  brain: 'brain.head.profile',
+  'bubble-ellipsis': 'ellipsis.bubble.fill',
+  'bubble-exclamation': 'exclamationmark.bubble.fill',
+  'check-circle': 'checkmark.circle.fill',
+  hourglass: 'hourglass',
+  paintbrush: 'paintbrush.pointed.fill',
+  'warning-triangle': 'exclamationmark.triangle.fill',
+  wrench: 'wrench.and.screwdriver.fill',
+  'x-circle': 'xmark.circle.fill',
+} as const;
 
 export const renderBackgroundActivity: LiveActivityComponent<
   BackgroundActivityNativePresentation
@@ -34,42 +48,8 @@ export const renderBackgroundActivity: LiveActivityComponent<
     lower: new Date(props.startedAtEpochMs),
     upper: new Date(props.finishedAtEpochMs ?? props.startedAtEpochMs + 24 * 60 * 60 * 1000),
   };
-  const iconSymbol =
-    props.icon === 'brain'
-      ? 'brain.head.profile'
-      : props.icon === 'bubble-ellipsis'
-        ? 'ellipsis.bubble.fill'
-        : props.icon === 'bubble-exclamation'
-          ? 'exclamationmark.bubble.fill'
-          : props.icon === 'check-circle'
-            ? 'checkmark.circle.fill'
-            : props.icon === 'hourglass'
-              ? 'hourglass'
-              : props.icon === 'paintbrush'
-                ? 'paintbrush.pointed.fill'
-                : props.icon === 'warning-triangle'
-                  ? 'exclamationmark.triangle.fill'
-                  : props.icon === 'wrench'
-                    ? 'wrench.and.screwdriver.fill'
-                    : 'xmark.circle.fill';
-  const compactIconSymbol =
-    props.compactIcon === 'brain'
-      ? 'brain.head.profile'
-      : props.compactIcon === 'bubble-ellipsis'
-        ? 'ellipsis.bubble.fill'
-        : props.compactIcon === 'bubble-exclamation'
-          ? 'exclamationmark.bubble.fill'
-          : props.compactIcon === 'check-circle'
-            ? 'checkmark.circle.fill'
-            : props.compactIcon === 'hourglass'
-              ? 'hourglass'
-              : props.compactIcon === 'paintbrush'
-                ? 'paintbrush.pointed.fill'
-                : props.compactIcon === 'warning-triangle'
-                  ? 'exclamationmark.triangle.fill'
-                  : props.compactIcon === 'wrench'
-                    ? 'wrench.and.screwdriver.fill'
-                    : 'xmark.circle.fill';
+  const iconSymbol = iconSymbolMap[props.icon];
+  const compactIconSymbol = iconSymbolMap[props.compactIcon];
 
   return {
     banner: (

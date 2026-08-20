@@ -1,9 +1,7 @@
 import * as z from 'zod';
 
 import { ReasoningEffortOptionSchema } from '../../types/aiSdk';
-import { GroupIdSchema } from './group';
 import { UniqueModelIdSchema } from './model';
-import { TagSchema } from './tag';
 
 export const McpModeSchema = z.enum(['disabled', 'auto', 'manual']);
 export type McpMode = z.infer<typeof McpModeSchema>;
@@ -54,9 +52,7 @@ export const AssistantSchema = z.strictObject({
   createdAt: z.iso.datetime(),
   description: z.string(),
   emoji: z.emoji(),
-  groupId: GroupIdSchema.nullable(),
   id: AssistantIdSchema,
-  knowledgeBaseIds: z.array(z.string()),
   mcpServerIds: z.array(z.string()),
   modelId: UniqueModelIdSchema.nullable(),
   modelName: z.string().nullable(),
@@ -64,7 +60,6 @@ export const AssistantSchema = z.strictObject({
   orderKey: z.string(),
   prompt: z.string(),
   settings: AssistantSettingsSchema,
-  tags: z.array(TagSchema),
   updatedAt: z.iso.datetime(),
 });
 export type Assistant = z.infer<typeof AssistantSchema>;

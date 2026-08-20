@@ -1,5 +1,5 @@
-import type { EndpointType } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry, EndpointConfigs } from '@cherrystudio/universal/data/types/provider';
+import type { UpdateProviderInput } from '@cherrystudio/universal/data/api/schemas/providers';
+import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
@@ -47,7 +47,7 @@ export function useProviderApiServiceQueries(providerId: string) {
   const saveProviderRequest = saveMutation.trigger;
   const replaceApiKeysRequest = replaceMutation.trigger;
   const saveProvider = useCallback(
-    (updates: { defaultChatEndpoint: EndpointType; endpointConfigs: EndpointConfigs }) =>
+    (updates: UpdateProviderInput) =>
       saveProviderRequest({ body: updates, params: { id: providerId } }),
     [providerId, saveProviderRequest],
   );

@@ -96,7 +96,7 @@ its owning backend domain, including:
 
 - the app-owned Chat Runtime under `src/backend/ai`;
 - painting generation sessions and incomplete receipts;
-- provider/model pull, reconcile, health, OAuth, and avatar workflows;
+- provider/model pull, reconcile, health, and avatar workflows;
 - MCP runtime coordination;
 - permission policy and profile avatar workflows.
 
@@ -138,15 +138,20 @@ writes the terminal, paused, or error state to the placeholder.
 
 `createBackendServices()` constructs concrete backend classes such as `CacheService`,
 `PreferenceService`, `ProviderService`, `MessageService`, `McpRuntimeService`, `WebSearchService`,
-`ToolResolver`, and `AiService`. The graph is private to bootstrap. `createBackend()` creates one
-`ChatRuntime`, builds the factory-shaped workflow modules, and returns the workflow-only `Backend`
-plus the MCP mutation coordinator needed by Data API handlers.
+`ToolResolver`, and `AiService`. The graph is private to bootstrap. `createBackend()` builds the
+factory-shaped workflow modules and returns the workflow-only `Backend` plus the MCP mutation
+coordinator needed by Data API handlers.
 `createAppBootstrapRuntime()` wires those handlers into `DataApiService` and exposes
 `PreferenceService` only through the `PreferenceClient` interface. The concrete graph and caches are
 never exposed to frontend code.
 
-There is no desktop application singleton, IPC handler layer, lifecycle registry, or frontend DI
-container for these concrete classes.
+Lifecycle-owned services are declared once in `src/backend/core/application/serviceRegistry.ts` and
+instantiated per `ApplicationHost` generation; `ChatRuntime` is one of them, and `createBackend()`
+exposes the instance rather than constructing it. See [Lifecycle](../lifecycle/README.md).
+
+There is no IPC handler layer or frontend DI container for these concrete classes. Mobile does have
+an application singleton and a lifecycle service registry — they are backend-private, and frontend
+code reaches this graph only through `Backend`, `ApiClient`, and `PreferenceClient`.
 
 ## Seeding And Compatibility
 
