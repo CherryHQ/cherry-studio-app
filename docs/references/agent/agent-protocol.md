@@ -91,6 +91,7 @@ type AgentMessageView = {
   role: 'user' | 'assistant' | 'system'
   status: 'pending' | 'streaming' | 'success' | 'error' | 'cancelled' | 'interrupted'
   parts: AgentMessagePart[]
+  usage: AgentUsageView | null
   createdAt: string
   updatedAt: string
 }
@@ -131,10 +132,21 @@ type AgentMessagePart =
       type: 'error'
       error: AgentErrorView
     }
+
+type AgentUsageView = {
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+}
 ```
 
 Part ids are stable within a message. The protocol owns these normalized parts; neither Pi nor the
 AI SDK shape leaks through the boundary.
+
+`usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
+the turn and commits the final value together with the terminal message state, so
+`message.finalized` and later transcript reads both carry it. While the message is streaming,
+`usage` is `null`; there is no dedicated usage event.
 
 ### Input and approval
 
@@ -164,7 +176,11 @@ type AgentCapabilities = {
 `assistant` remains the standard message role; the configurable product entity is always `Agent`.
 
 Cancellation is required by the Runtime contract and is therefore not a capability flag.
-The Host projects these values from the selected Runtime descriptor.
+The Host evaluates capabilities on demand from the Session's current Agent configuration: it asks
+the Router which Runtime that configuration selects and projects that descriptor's capability
+flags. No turn needs to have run, so a fresh Session's snapshot already carries correct values.
+Configuration changes do not push a capabilities event; a new observation is the only refresh
+point, and an already-admitted turn still finishes on its original route.
 The Agent Client may branch on these protocol capabilities, never on Runtime identity.
 
 ## Operations

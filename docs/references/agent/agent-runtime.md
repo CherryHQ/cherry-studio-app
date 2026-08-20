@@ -41,7 +41,9 @@ interface AgentRuntimeRouter {
 ```
 
 The Host derives `agentToolIds` from the current Agent configuration; the client does not send this
-derived field or a Runtime id. Version 1 routing is deliberately small:
+derived field or a Runtime id. What qualifies as an Agent tool is not yet defined; see the
+[open question](./README.md#open-questions) in the overview. Version 1 routing is deliberately
+small:
 
 | Execution target | Resolved Agent configuration | Runtime |
 | --- | --- | --- |
@@ -50,7 +52,9 @@ derived field or a Runtime id. Version 1 routing is deliberately small:
 
 The Router is the only component that branches on `pi` or `ai-sdk`. It resolves the selected
 implementation through the Runtime registry and fails closed when no registered Runtime satisfies
-the route. The selected route is fixed for an active turn; configuration changes are evaluated on
+the route. Route selection is a pure function of the execution target and resolved configuration,
+so the Host may also evaluate it without starting execution; protocol capabilities are projected
+this way. The selected route is fixed for an active turn; configuration changes are evaluated on
 the next turn. If that changes the selected Runtime, the Host closes the old Runtime session before
 opening the new one.
 
@@ -259,6 +263,10 @@ type RuntimeError = {
 
 Every execution emits exactly one terminal event: `completed`, `failed`, or `cancelled`. No event
 may follow it. Runtime-native errors are normalized and must not expose credentials or stack traces.
+
+`usage` values are cumulative for the execution; the last report before the terminal event is
+authoritative. A Runtime that cannot report usage emits no `usage` event, and the assistant
+message's protocol `usage` stays `null`.
 
 ## Host execution flow
 

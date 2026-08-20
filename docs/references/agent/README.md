@@ -53,6 +53,12 @@ LAN/cloud execution targets, their Runtime adapters, and remote-authoritative Se
 direction. They enter through the same Router, but their transport, security, storage, and recovery
 rules require a separate design. Version 1 defines none of those details.
 
+## Open Questions
+
+- **Agent tool** is the sole routing criterion, but it does not yet have a precise definition:
+  which tool kinds qualify (built-in, MCP, or both) and how they relate to the Runtime contract's
+  `RuntimeTool` are TODO, pending confirmation before implementation.
+
 ## Documents
 
 | Document | Scope |
