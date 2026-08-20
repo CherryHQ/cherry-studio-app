@@ -10,8 +10,8 @@
  *
  * Protocol invariants implemented here (agent-protocol.md):
  * 1.  one active turn per Session (synchronous admission guard);
- * 2.  reservation of user message + assistant placeholder + turn commits in one
- *     transaction before execution;
+ * 2.  reservation of user message + assistant placeholder + turn commits
+ *     atomically before execution;
  * 3/4. the Runtime contract guarantees exactly one terminal event and silence
  *     after it; the run loop stops at the first terminal;
  * 5.  terminal message and turn state commit before terminal events publish;
@@ -41,7 +41,6 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
-import { mobileAgentSessionService } from '@/backend/data/services/MobileAgentSessionService';
 import {
   AgentCancelTurnInputSchema,
   AgentCreateSessionInputSchema,
@@ -71,6 +70,7 @@ import {
   type AgentDefinition,
   type AgentDefinitionSource,
 } from './agentDefinitions';
+import type { AgentSessionStore } from './AgentSessionStore';
 import { createAiSdkModelResolver } from './aiSdkModelResolver';
 import {
   toAgentApprovalView,
@@ -94,11 +94,10 @@ const INTERRUPTED_ERROR: AgentErrorView = {
   retryable: true,
 };
 
-export interface MobileAgentHostDependencies {
+type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
-  persistence: typeof mobileAgentSessionService;
   router: AgentRuntimeRouter;
-}
+};
 
 type ActiveTurnState = {
   turn: AgentTurnView;
@@ -119,7 +118,7 @@ function cloneJson<T>(value: T): T {
 
 @Injectable('MobileAgentHost')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['DbService'])
+@DependsOn(['AgentSessionStore'])
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
@@ -132,16 +131,21 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly runningTurns = new Set<Promise<void>>();
   private lazyRouter: AgentRuntimeRouter | undefined;
 
-  /** Every entry is optional so the container can construct this with no arguments. */
-  constructor(private readonly overrides: Partial<MobileAgentHostDependencies> = {}) {
+  /**
+   * Lifecycle composition supplies the selected store adapter. Tests may
+   * replace only the Agent and Router ports.
+   */
+  constructor(
+    private readonly store: AgentSessionStore,
+    private readonly overrides: Partial<MobileAgentHostOverrides> = {},
+  ) {
     super();
   }
 
-  private get services(): MobileAgentHostDependencies {
+  private get services(): MobileAgentHostOverrides {
     const { overrides } = this;
     return {
       agents: overrides.agents ?? (this.lazyAgents ??= createAssistantAgentDefinitionSource()),
-      persistence: overrides.persistence ?? mobileAgentSessionService,
       router: overrides.router ?? this.getDefaultRouter(),
     };
   }
@@ -158,7 +162,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     return this.lazyRouter;
   }
 
-  /** Startup reconciliation: unfinished local turns cannot resume. */
+  /** Reconcile any unfinished state available from the selected store. */
   protected override async onInit(): Promise<void> {
     await this.reconcileInterruptedTurns();
   }
@@ -177,7 +181,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   async reconcileInterruptedTurns(): Promise<number> {
-    return this.services.persistence.reconcileInterrupted(INTERRUPTED_ERROR);
+    return this.store.reconcileInterrupted(INTERRUPTED_ERROR);
   }
 
   // ── Protocol operations ──
@@ -192,7 +196,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (!agent) {
       fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
     }
-    return this.services.persistence.createSession({
+    return this.store.createSession({
       agentId: parsed.agentId,
       title: parsed.title,
     });
@@ -200,7 +204,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   async renameSession(input: { sessionId: string; title: string }): Promise<AgentSessionView> {
     const parsed = AgentRenameSessionInputSchema.parse(input);
-    const session = await this.services.persistence.renameSession(parsed.sessionId, parsed.title);
+    const session = await this.store.renameSession(parsed.sessionId, parsed.title);
     if (!session) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
     }
@@ -218,7 +222,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.runtimeSessions.delete(parsed.sessionId);
       await cached.session.close();
     }
-    const deleted = await this.services.persistence.deleteSession(parsed.sessionId);
+    const deleted = await this.store.deleteSession(parsed.sessionId);
     if (!deleted) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
     }
@@ -236,7 +240,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     // await below still fails SESSION_BUSY (invariant 1).
     this.admittingSessions.add(sessionId);
     try {
-      const session = await this.services.persistence.getSession(sessionId);
+      const session = await this.store.getSession(sessionId);
       if (!session) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
       }
@@ -249,8 +253,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         fail('CAPABILITY_UNSUPPORTED', 'File attachments are not supported for this Agent.');
       }
 
-      // History is everything persisted before this turn.
-      const priorMessages = await this.services.persistence.listMessages(sessionId);
+      // History is everything stored before this turn.
+      const priorMessages = await this.store.listMessages(sessionId);
 
       const userParts: AgentMessagePart[] = parsed.parts.map((part, index) =>
         part.type === 'text'
@@ -265,7 +269,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
 
       // Invariant 2: reservation commits before execution starts.
-      const reserved = await this.services.persistence.reserveTurn({ sessionId, userParts });
+      const reserved = await this.store.reserveTurn({ sessionId, userParts });
       const runtimeSession = await this.getRuntimeSession(sessionId, runtime);
 
       const state: ActiveTurnState = {
@@ -308,7 +312,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       return; // invariant 6: idempotent, including after the turn settled
     }
     if (active.turn.status !== 'cancelling') {
-      const turn = await this.services.persistence.setTurnStatus(parsed.turnId, 'cancelling');
+      const turn = await this.store.setTurnStatus(parsed.turnId, 'cancelling');
       if (turn && this.activeTurns.get(parsed.sessionId) === active) {
         active.turn = turn;
         this.publish(parsed.sessionId, { type: 'turn.updated', turn });
@@ -341,7 +345,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     sessionId: string,
     listener: (event: AgentEvent) => void,
   ): Promise<AgentSessionObservation> {
-    const session = await this.services.persistence.getSession(sessionId);
+    const session = await this.store.getSession(sessionId);
     if (!session) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
     }
@@ -465,11 +469,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       case 'approval.requested': {
         const approval = toAgentApprovalView(event.approval, sessionId);
         state.pendingApprovals.set(approval.id, approval);
-        await this.services.persistence.upsertApproval(approval);
-        const turn = await this.services.persistence.setTurnStatus(
-          state.turn.id,
-          'awaiting-approval',
-        );
+        await this.store.upsertApproval(approval);
+        const turn = await this.store.setTurnStatus(state.turn.id, 'awaiting-approval');
         if (turn) {
           state.turn = turn;
           this.publish(sessionId, { type: 'turn.updated', turn });
@@ -480,12 +481,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       case 'approval.resolved': {
         const approval = toAgentApprovalView(event.approval, sessionId);
         state.pendingApprovals.set(approval.id, approval);
-        await this.services.persistence.upsertApproval(approval);
+        await this.store.upsertApproval(approval);
         const hasPending = [...state.pendingApprovals.values()].some(
           (entry) => entry.status === 'pending',
         );
         if (!hasPending && state.turn.status === 'awaiting-approval') {
-          const turn = await this.services.persistence.setTurnStatus(state.turn.id, 'running');
+          const turn = await this.store.setTurnStatus(state.turn.id, 'running');
           if (turn) {
             state.turn = turn;
             this.publish(sessionId, { type: 'turn.updated', turn });
@@ -532,7 +533,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
     // Invariant 5: terminal message and turn state commit before the terminal
     // events publish.
-    const finalized = await this.services.persistence.finalizeTurn({
+    const finalized = await this.store.finalizeTurn({
       turnId: state.turn.id,
       turnStatus: outcome,
       turnError: error,

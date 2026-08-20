@@ -1,6 +1,5 @@
 import m0000 from '../../../../migrations/sqlite-drizzle/0000_release_baseline.sql';
 import m0001 from '../../../../migrations/sqlite-drizzle/0001_mcp-disabled-tools.sql';
-import m0002 from '../../../../migrations/sqlite-drizzle/0002_mobile-agent-sessions.sql';
 import journal from '../../../../migrations/sqlite-drizzle/meta/_journal.json';
 
 // Expo SQLite migrations must be bundled into JS; unlike the desktop main
@@ -12,6 +11,5 @@ export const migrations = {
   migrations: {
     m0000,
     m0001,
-    m0002,
   },
 };

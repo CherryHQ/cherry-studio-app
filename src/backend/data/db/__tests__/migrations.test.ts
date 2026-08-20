@@ -54,10 +54,6 @@ describe('bundled SQLite migrations', () => {
         'job',
         'mcp_server',
         'message',
-        'mobile_agent_approval',
-        'mobile_agent_message',
-        'mobile_agent_session',
-        'mobile_agent_turn',
         'painting',
         'painting_file_ref',
         'preference',
@@ -78,48 +74,6 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'preference')).toEqual([
         'key',
         'value',
-        'created_at',
-        'updated_at',
-      ]);
-      expect(columnNames(database, 'mobile_agent_session')).toEqual([
-        'id',
-        'agent_id',
-        'execution_target_kind',
-        'title',
-        'title_is_manual',
-        'created_at',
-        'updated_at',
-      ]);
-      expect(columnNames(database, 'mobile_agent_turn')).toEqual([
-        'id',
-        'session_id',
-        'status',
-        'assistant_message_id',
-        'error',
-        'started_at',
-        'ended_at',
-        'created_at',
-        'updated_at',
-      ]);
-      expect(columnNames(database, 'mobile_agent_message')).toEqual([
-        'id',
-        'session_id',
-        'turn_id',
-        'role',
-        'status',
-        'parts',
-        'usage',
-        'created_at',
-        'updated_at',
-      ]);
-      expect(columnNames(database, 'mobile_agent_approval')).toEqual([
-        'id',
-        'session_id',
-        'turn_id',
-        'tool_call_id',
-        'tool_name',
-        'input',
-        'status',
         'created_at',
         'updated_at',
       ]);

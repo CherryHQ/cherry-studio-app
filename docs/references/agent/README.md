@@ -1,6 +1,6 @@
 # Agent Architecture
 
-Status: **design**. Version 1 is local-only.
+Status: **Phase 1–3 architecture slice implemented**. Version 1 is local-only.
 
 Cherry Mobile owns Agents and Sessions. An independent Agent Runtime executes one prepared turn.
 The first Runtime implementations may use Pi or the AI SDK; both implement the same contract and
@@ -84,8 +84,16 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 ## Current Implementation
 
-This design does not yet replace the current Topic, Chat Runtime, or desktop-aligned `agent_*`
-surfaces. Current-state references remain authoritative until implementation lands.
+The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Agent Host, and V1
+Router are implemented as an architecture slice. The Host consumes the stable `AgentSessionStore`
+port; lifecycle composition currently selects a process-local in-memory reference adapter. That
+adapter validates Host orchestration and remains useful in tests, but it deliberately provides no
+restart durability. Durable Mobile Agent persistence is pending the authority and schema work
+tracked by [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
+
+No frontend currently consumes `Backend.agent`. This slice does not replace the current Topic,
+Chat Runtime, or desktop-aligned `agent_*` surfaces. Pi, attachments, durable persistence, and UI
+integration remain follow-up work.
 
 ## Related
 

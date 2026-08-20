@@ -1,3 +1,4 @@
+import { InMemoryAgentSessionStore } from '@/backend/ai/agentHost/InMemoryAgentSessionStore';
 import { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
@@ -44,6 +45,8 @@ export const services = {
   McpRuntimeService,
   AiService,
   ChatRuntime,
+  // Architecture-slice adapter; durable Mobile Agent persistence is tracked by #568.
+  AgentSessionStore: InMemoryAgentSessionStore,
   MobileAgentHost,
   JobHandlerRegistry,
   JobRuntime,

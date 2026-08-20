@@ -1,23 +1,17 @@
 /**
- * End-to-end behavior of the Mobile Agent Host: real persistence (in-memory
- * SQLite over the real migrations), real Router and registry, real AiSdkRuntime
- * driven by a mock language model. No network, no React, no screens.
+ * End-to-end behavior of the Mobile Agent Host against the process-local
+ * reference store, real Router and registry, and real AiSdkRuntime driven by a
+ * mock language model. Durable-adapter behavior is outside this suite.
  */
-
-import { DatabaseSync } from 'node:sqlite';
 
 import type { LanguageModelV3StreamPart, LanguageModelV3Usage } from '@ai-sdk/provider';
 import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
-import { eq } from 'drizzle-orm';
 
 import { AiSdkRuntime, FakeRuntime } from '@/backend/ai/agent';
-import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
-import { mobileAgentTurnTable } from '@/backend/data/db/schemas';
-import { createTestDb, type TestDb } from '@/backend/data/services/__tests__/_testDb';
-import { mobileAgentSessionService } from '@/backend/data/services/MobileAgentSessionService';
 import { AgentEventSchema, AgentProtocolError, type AgentEvent } from '@/shared/contracts/agent';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
+import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { MobileAgentHost } from '../MobileAgentHost';
 import { AgentRuntimeRegistry, createAgentRuntimeRouter } from '../runtimeRouting';
 
@@ -65,7 +59,7 @@ function textStreamParts(text: string): LanguageModelV3StreamPart[] {
 function hostWithModel(model: MockLanguageModelV3): MobileAgentHost {
   const runtime = new AiSdkRuntime({ resolveModel: () => ({ model }) });
   const registry = new AgentRuntimeRegistry().register(runtime);
-  return new MobileAgentHost({ agents, router: createAgentRuntimeRouter(registry) });
+  return new MobileAgentHost(store, { agents, router: createAgentRuntimeRouter(registry) });
 }
 
 async function waitFor(predicate: () => boolean, what: string): Promise<void> {
@@ -95,22 +89,14 @@ function assertJsonRoundTrip(events: AgentEvent[]): void {
   }
 }
 
+let store: InMemoryAgentSessionStore;
+
 describe('MobileAgentHost', () => {
-  let sqlite: DatabaseSync;
-  let testDb: TestDb;
-
-  beforeEach(async () => {
-    sqlite = new DatabaseSync(':memory:');
-    testDb = createTestDb(sqlite);
-    await installTestHost({ DbService: testDb.dbService });
+  beforeEach(() => {
+    store = new InMemoryAgentSessionStore();
   });
 
-  afterEach(async () => {
-    await uninstallTestHost();
-    sqlite.close();
-  });
-
-  test('runs basic chat end to end: create, observe, submit, stream, persist', async () => {
+  test('runs basic chat end to end: create, observe, submit, stream, record', async () => {
     let call = 0;
     const model = new MockLanguageModelV3({
       doStream: async () => ({
@@ -170,8 +156,8 @@ describe('MobileAgentHost', () => {
     expect(terminal?.turn.endedAt).not.toBeNull();
     expect(terminal?.turn.error).toBeNull();
 
-    // Persisted transcript is the source of truth.
-    const transcript = await mobileAgentSessionService.listMessages(session.id);
+    // The stored transcript is the source of truth for the next turn.
+    const transcript = await store.listMessages(session.id);
     expect(transcript.map((message) => [message.role, message.status])).toEqual([
       ['user', 'success'],
       ['assistant', 'success'],
@@ -185,7 +171,7 @@ describe('MobileAgentHost', () => {
       'user',
     ]);
 
-    // A second turn feeds the persisted transcript back as history.
+    // A second turn feeds the stored transcript back as history.
     const secondEvents: AgentEvent[] = [];
     const second = await host.observeSession(session.id, (event) => secondEvents.push(event));
     expect(second.snapshot.activeTurn).toBeNull();
@@ -244,9 +230,9 @@ describe('MobileAgentHost', () => {
     expect(statuses).toEqual(['running', 'cancelling', 'cancelled']);
     assertJsonRoundTrip(events);
 
-    const transcript = await mobileAgentSessionService.listMessages(session.id);
+    const transcript = await store.listMessages(session.id);
     expect(transcript[1]?.status).toBe('cancelled');
-    // Streaming parts settle as done in the persisted transcript.
+    // Streaming parts settle as done in the stored transcript.
     expect(transcript[1]?.parts).toEqual([
       { id: 'text-t1', type: 'text', text: 'Working', state: 'done' },
     ]);
@@ -261,10 +247,11 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
-  test('startup reconciliation marks unfinished turns and messages interrupted', async () => {
-    const session = await mobileAgentSessionService.createSession({ agentId: AGENT_ID });
-    // Simulate a process death mid-turn: the reservation committed, no terminal.
-    const reserved = await mobileAgentSessionService.reserveTurn({
+  test('reconciliation marks preloaded unfinished turns and messages interrupted', async () => {
+    // Preload the reference adapter with the state a durable adapter would
+    // restore after a process death.
+    const session = await store.createSession({ agentId: AGENT_ID });
+    const reserved = await store.reserveTurn({
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
@@ -273,15 +260,12 @@ describe('MobileAgentHost', () => {
     const count = await host.reconcileInterruptedTurns();
     expect(count).toBe(1);
 
-    const [turnRow] = await testDb.database
-      .select()
-      .from(mobileAgentTurnTable)
-      .where(eq(mobileAgentTurnTable.id, reserved.turn.id));
-    expect(turnRow?.status).toBe('interrupted');
-    expect(turnRow?.error?.code).toBe('INTERRUPTED');
-    expect(turnRow?.endedAt).not.toBeNull();
+    const turn = await store.getTurn(reserved.turn.id);
+    expect(turn?.status).toBe('interrupted');
+    expect(turn?.error?.code).toBe('INTERRUPTED');
+    expect(turn?.endedAt).not.toBeNull();
 
-    const transcript = await mobileAgentSessionService.listMessages(session.id);
+    const transcript = await store.listMessages(session.id);
     expect(transcript.map((message) => message.status)).toEqual(['success', 'interrupted']);
 
     // Reconciliation is idempotent and the session observes as idle.
@@ -352,7 +336,10 @@ describe('MobileAgentHost', () => {
       controller.emit({ type: 'completed' });
     });
     const registry = new AgentRuntimeRegistry().register(fake);
-    const host = new MobileAgentHost({ agents, router: createAgentRuntimeRouter(registry) });
+    const host = new MobileAgentHost(store, {
+      agents,
+      router: createAgentRuntimeRouter(registry),
+    });
 
     const session = await host.createSession({
       agentId: AGENT_ID,
@@ -404,7 +391,7 @@ describe('MobileAgentHost', () => {
     expect(events.some((event) => event.type === 'approval.resolved')).toBe(true);
     assertJsonRoundTrip(events);
 
-    const transcript = await mobileAgentSessionService.listMessages(session.id);
+    const transcript = await store.listMessages(session.id);
     const toolPart = transcript[1]?.parts[0];
     expect(toolPart).toMatchObject({ type: 'tool', state: 'output-available' });
   });
@@ -433,7 +420,7 @@ describe('MobileAgentHost', () => {
         parts: [{ type: 'file', mediaType: 'image/png', uri: 'file:///x.png' }],
       }),
     ).rejects.toMatchObject({ view: { code: 'CAPABILITY_UNSUPPORTED' } });
-    expect(await mobileAgentSessionService.listMessages(session.id)).toEqual([]);
+    expect(await store.listMessages(session.id)).toEqual([]);
 
     // Rename and delete round out the session lifecycle.
     const renamed = await host.renameSession({ sessionId: session.id, title: 'My Chat' });
