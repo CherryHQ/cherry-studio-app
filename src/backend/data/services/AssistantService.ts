@@ -12,6 +12,7 @@ import {
   assistantTable,
   userModelTable,
 } from '@/backend/data/db/schemas';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import {
   type CreateAssistantDto,
@@ -21,7 +22,7 @@ import {
   ListAssistantsQuerySchema,
   type UpdateAssistantDto,
 } from '@/shared/data/api/schemas/assistants';
-import { DataApiErrorFactory, type OffsetPaginationResponse } from '@/shared/data/api/types';
+import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 
 import { modelService } from './ModelService';
 import { topicService } from './TopicService';

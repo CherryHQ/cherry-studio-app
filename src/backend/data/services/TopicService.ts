@@ -3,6 +3,7 @@ import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm'
 import * as Crypto from 'expo-crypto';
 
 import { application } from '@/backend/core/application/Application';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { OrderRequest } from '@/shared/data/api/schemas/_endpointHelpers';
 import type {
   ActiveNodeResponse,
@@ -13,7 +14,7 @@ import type {
   TopicListItem,
   UpdateTopicDto,
 } from '@/shared/data/api/schemas/topics';
-import { type CursorPaginationResponse, DataApiErrorFactory } from '@/shared/data/api/types';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import type { Topic } from '@/shared/data/types/topic';
 
 import {

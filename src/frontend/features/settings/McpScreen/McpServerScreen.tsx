@@ -12,7 +12,7 @@ import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { DataApiError, ErrorCode } from '@/shared/data/api/types';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';
 import { McpServerTabs } from './components/McpServerTabs/McpServerTabs';

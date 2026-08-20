@@ -23,7 +23,7 @@ import type {
   UserProviderRow,
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';

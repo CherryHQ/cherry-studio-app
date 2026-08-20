@@ -4,7 +4,7 @@ import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import type { ToolSet } from 'ai';
 
 import { mcpServerService } from '@/backend/data/services/McpServerService';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 
 import { McpRuntimeService } from '../McpRuntimeService';
 

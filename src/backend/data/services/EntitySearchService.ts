@@ -37,7 +37,6 @@ function withTypeContext(type: EntitySearchType, error: unknown) {
     apiError.code,
     `${context} failed: ${apiError.message}`,
     apiError.details,
-    apiError.requestContext,
   );
 }
 
