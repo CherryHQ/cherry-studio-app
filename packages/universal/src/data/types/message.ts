@@ -152,82 +152,6 @@ export type {
   UITools,
 };
 
-export enum ReferenceCategory {
-  CITATION = 'citation',
-  MENTION = 'mention',
-}
-
-export enum CitationType {
-  KNOWLEDGE = 'knowledge',
-  MEMORY = 'memory',
-  WEB = 'web',
-}
-
-export interface BaseReference {
-  category: ReferenceCategory;
-  marker?: string;
-  range?: { end: number; start: number };
-}
-
-interface BaseCitationReference extends BaseReference {
-  category: ReferenceCategory.CITATION;
-  citationType: CitationType;
-}
-
-export interface WebCitationReference extends BaseCitationReference {
-  citationType: CitationType.WEB;
-  content: {
-    results?: unknown;
-    source: unknown;
-  };
-}
-
-export interface KnowledgeCitationReference extends BaseCitationReference {
-  citationType: CitationType.KNOWLEDGE;
-  content: {
-    content: string;
-    file?: unknown;
-    id: number;
-    metadata?: Record<string, unknown>;
-    sourceUrl: string;
-    type: string;
-  }[];
-}
-
-export interface MemoryCitationReference extends BaseCitationReference {
-  citationType: CitationType.MEMORY;
-  content: {
-    createdAt?: string;
-    hash?: string;
-    id: string;
-    memory: string;
-    metadata?: Record<string, unknown>;
-    score?: number;
-    updatedAt?: string;
-  }[];
-}
-
-export type CitationReference =
-  | KnowledgeCitationReference
-  | MemoryCitationReference
-  | WebCitationReference;
-
-export interface MentionReference extends BaseReference {
-  category: ReferenceCategory.MENTION;
-  displayName?: string;
-  modelId: string;
-}
-
-export type ContentReference = CitationReference | MentionReference;
-
-export interface SerializedErrorData {
-  cause?: unknown;
-  code?: string;
-  message: string;
-  name?: string;
-  stack?: string;
-}
-
 export const MessageDataSchema: z.ZodType<MessageData> = z.strictObject({
   parts: z.array(z.custom<CherryMessagePart>()).optional(),
   turnOptions: z
@@ -262,9 +186,6 @@ export type ContentMessageRole = z.infer<typeof ContentMessageRoleSchema>;
 
 export const TOPIC_MESSAGE_SEARCH_ROLES = ['user', 'assistant'] as const;
 export type TopicMessageSearchRole = (typeof TOPIC_MESSAGE_SEARCH_ROLES)[number];
-
-export const AGENT_SESSION_MESSAGE_SEARCH_ROLES = ['user', 'assistant', 'system'] as const;
-export type AgentSessionMessageSearchRole = (typeof AGENT_SESSION_MESSAGE_SEARCH_ROLES)[number];
 
 export function coerceSearchRole<TRole extends MessageRole>(
   role: string,

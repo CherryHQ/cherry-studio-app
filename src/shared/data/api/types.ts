@@ -4,16 +4,6 @@ import type { ApiSchemas } from './schemas/apiSchemas';
 export type HttpMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT';
 
 /**
- * Offset-based pagination parameters.
- */
-export interface OffsetPaginationParams {
-  /** Page number (1-based). */
-  page?: number;
-  /** Items per page. */
-  limit?: number;
-}
-
-/**
  * Cursor-based pagination parameters.
  */
 export interface CursorPaginationParams {
@@ -21,15 +11,6 @@ export interface CursorPaginationParams {
   cursor?: string;
   /** Items per page. */
   limit?: number;
-}
-
-export interface SortParams {
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
-}
-
-export interface SearchParams {
-  search?: string;
 }
 
 /**
@@ -56,20 +37,11 @@ export interface CursorPaginationResponse<T> {
   nextCursor?: string;
 }
 
-export type PaginationResponse<T> = CursorPaginationResponse<T> | OffsetPaginationResponse<T>;
-
 export type InferPaginationMode<R> =
   R extends OffsetPaginationResponse<unknown>
     ? 'offset'
     : R extends CursorPaginationResponse<unknown>
       ? 'cursor'
-      : never;
-
-export type InferPaginationItem<R> =
-  R extends OffsetPaginationResponse<infer T>
-    ? T
-    : R extends CursorPaginationResponse<infer T>
-      ? T
       : never;
 
 export interface ApiClient {
@@ -138,12 +110,3 @@ export type HandlersFor<Schemas> = Pick<
   ApiImplementation,
   Extract<keyof Schemas, keyof ApiImplementation>
 >;
-
-export interface ServiceOptions {
-  /** Database transaction to use. */
-  transaction?: unknown;
-  /** User context for authorization. */
-  user?: unknown;
-  /** Additional service-specific options. */
-  metadata?: Record<string, unknown>;
-}
