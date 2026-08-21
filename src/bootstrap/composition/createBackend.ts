@@ -1,9 +1,11 @@
-import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
+import {
+  createMcpServerMutations,
+  type McpServerMutations,
+} from '@/backend/data/api/handlers/mcpServers';
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
 import { canDeleteProvider } from '@/backend/data/services/ProviderService';
 import { createUserContentImageStorage } from '@/backend/services/file/userContentImageStorage';
-import { createMcpModule } from '@/backend/services/mcp/createMcpModule';
 import { createModelsModule } from '@/backend/services/models/createModelsModule';
 import { createPaintingsModule } from '@/backend/services/paintings/createPaintingsModule';
 import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
@@ -70,21 +72,9 @@ export function createBackend(
     paintings: services.painting,
     storage: paintingFileStorage,
   });
-  const mcp = createMcpModule({
-    runtime: {
-      getRuntimeSummaries: (servers) => services.mcpRuntime.getRuntimeSummaries(servers),
-      getServerInfo: (config) => services.mcpRuntime.getServerInfo(config),
-      invalidate: (id, options) => services.mcpRuntime.invalidateServer(id, options),
-      listTools: (server) => services.mcpRuntime.listToolsForServer(server),
-      test: (config) => services.mcpRuntime.testConnection(config),
-      warm: (server) => services.mcpRuntime.warmToolsCache(server),
-    },
-    servers: {
-      create: (input) => services.mcpServer.create(input),
-      get: (id) => services.mcpServer.getById(id),
-      remove: (id) => services.mcpServer.delete(id),
-      update: (id, input) => services.mcpServer.update(id, input),
-    },
+  const mcpServerMutations = createMcpServerMutations({
+    runtime: services.mcpRuntime,
+    servers: services.mcpServer,
   });
   const providers = createProvidersModule({
     avatars: {
@@ -127,7 +117,7 @@ export function createBackend(
         delete: services.fileContent.delete,
         getUri: services.fileContent.getUri,
       },
-      mcp,
+      mcp: services.mcpRuntime,
       models,
       paintings,
       permissions,
@@ -136,7 +126,7 @@ export function createBackend(
       webSearch: services.webSearch,
     },
     dataApiDependencies: {
-      mcpServerMutations: mcp,
+      mcpServerMutations,
     },
   };
 }
