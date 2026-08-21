@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { buildThemeModel, type Declaration, loadThemeSources, stylesDir } from './css-contract';
-import { CHERRY_PRODUCT_COLOR_TOKENS, SHADCN_COLOR_TOKENS } from './theme-contract';
+import { CHERRY_PRODUCT_COLOR_TOKENS, SHADCN_PUBLIC_COLOR_TOKENS } from './theme-contract';
 
 const outputPath = path.join(stylesDir, 'native.css');
 
@@ -42,7 +42,10 @@ export async function buildNativeCss(): Promise<string> {
   // which are static defaults rather than theme-flipping tokens — one class
   // name, two provenances. Storybook reads the ramps through `useCSSVariable`
   // instead, which needs no adapter entry.
-  const publicColors = unique([...SHADCN_COLOR_TOKENS, ...CHERRY_PRODUCT_COLOR_TOKENS]);
+  // HeroUI-reserved names (`muted`, `accent`, `accent-foreground`) are excluded:
+  // the app host in global.css maps their `--color-*` forms to HeroUI's meaning,
+  // so emitting them here would give one utility name two owners.
+  const publicColors = unique([...SHADCN_PUBLIC_COLOR_TOKENS, ...CHERRY_PRODUCT_COLOR_TOKENS]);
   // Font weights need no adapter line either: `tokens/typography.css` already
   // authors `--font-weight-bold` under its final Tailwind name.
   const adapterLines = [

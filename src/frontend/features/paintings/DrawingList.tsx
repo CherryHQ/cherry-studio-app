@@ -534,7 +534,7 @@ function renderTileContent({
   return (
     <View className="flex-1 items-center justify-center gap-1 px-2">
       <RotateCcwIcon className="size-5 text-foreground-tertiary" />
-      <Text className="text-center font-medium text-foreground-secondary text-xs">
+      <Text className="text-center font-medium text-muted-foreground text-xs">
         {interruptedLabel}
       </Text>
       {item.message ? (

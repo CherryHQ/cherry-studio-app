@@ -12,7 +12,6 @@ import {
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
-import { useCSSVariable } from 'uniwind';
 
 import type { ModelPickerTag } from '../utils/modelPickerData';
 import { getModelPickerTagLabelKey } from '../utils/modelPickerData';
@@ -20,20 +19,14 @@ import { getModelPickerTagLabelKey } from '../utils/modelPickerData';
 type ModelPickerTagHue = 'amber' | 'blue' | 'green' | 'red';
 
 /**
- * `[tint, ink]` per hue. The palette is built for exactly this shape: the 100
- * step is the wash a badge sits on and the 900 step is the mark drawn on it, and
- * both flip with the theme, so one pair covers light and dark.
- *
- * Read through `useCSSVariable` rather than as `bg-*`/`text-*` classes because
- * palette steps are deliberately not Tailwind utilities — `check.ts` asserts
- * that every generated colour utility is a semantic contract name. Direct reads
- * are the sanctioned way in (the Storybook foundations pages do the same).
+ * `--tag-*` is the wash a badge sits on and `--tag-*-foreground` the mark drawn
+ * on it; both flip with the theme, so one pair covers light and dark.
  */
-const tagHueVariables: Record<ModelPickerTagHue, string[]> = {
-  amber: ['--amber-100', '--amber-900'],
-  blue: ['--blue-100', '--blue-900'],
-  green: ['--green-100', '--green-900'],
-  red: ['--red-100', '--red-900'],
+const tagHueClassNames: Record<ModelPickerTagHue, { chip: string; icon: string }> = {
+  amber: { chip: 'bg-tag-amber', icon: 'text-tag-amber-foreground' },
+  blue: { chip: 'bg-tag-blue', icon: 'text-tag-blue-foreground' },
+  green: { chip: 'bg-tag-green', icon: 'text-tag-green-foreground' },
+  red: { chip: 'bg-tag-red', icon: 'text-tag-red-foreground' },
 };
 
 /**
@@ -81,16 +74,15 @@ const modelPickerTagMeta = {
 export function ModelPickerTagChip({ tag }: { tag: ModelPickerTag }) {
   const { t } = useTranslation();
   const { hue, Icon } = modelPickerTagMeta[tag];
-  const [tint, ink] = useCSSVariable(tagHueVariables[hue]) as [string, string];
+  const { chip, icon } = tagHueClassNames[hue];
 
   return (
     <View
       accessibilityLabel={t(getModelPickerTagLabelKey(tag))}
       accessible
-      className="h-5 flex-row items-center justify-center rounded-lg px-1.5"
-      style={{ backgroundColor: tint }}
+      className={`h-5 flex-row items-center justify-center rounded-lg px-1.5 ${chip}`}
     >
-      <Icon className="size-3" color={ink} />
+      <Icon className={`size-3 ${icon}`} />
     </View>
   );
 }
