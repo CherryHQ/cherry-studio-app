@@ -1,4 +1,4 @@
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from './cherryai';
 

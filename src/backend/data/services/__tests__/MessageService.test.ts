@@ -1,8 +1,7 @@
-import type { Message, MessageData } from '@cherrystudio/universal/data/types/message';
-
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
 import { messageTable } from '@/backend/data/db/schemas';
+import type { Message, MessageData } from '@/shared/data/types/message';
 
 import { registerDataService } from '../dataServiceRegistry';
 import { messageService } from '../MessageService';

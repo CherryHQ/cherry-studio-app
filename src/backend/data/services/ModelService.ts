@@ -1,10 +1,3 @@
-import {
-  createUniqueModelId,
-  type EndpointType,
-  type Model,
-  parseUniqueModelId,
-  type UniqueModelId,
-} from '@cherrystudio/universal/data/types/model';
 import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
@@ -21,6 +14,13 @@ import {
   CHERRYAI_PROVIDER_ID,
   isManagedCherryAiDefaultModel,
 } from '@/shared/data/presets/cherryai';
+import {
+  createUniqueModelId,
+  type EndpointType,
+  type Model,
+  parseUniqueModelId,
+  type UniqueModelId,
+} from '@/shared/data/types/model';
 import { deepEqual } from '@/shared/utils/deepEqual';
 
 import {

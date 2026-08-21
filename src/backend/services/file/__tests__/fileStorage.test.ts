@@ -1,8 +1,7 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
-
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 import { type FileEntry, FileEntrySchema, fileEntryUrl } from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   createInternalEntry,

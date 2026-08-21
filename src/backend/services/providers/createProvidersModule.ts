@@ -1,6 +1,5 @@
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
-
 import type { ProvidersModule } from '@/shared/contracts';
+import type { Provider } from '@/shared/data/types/provider';
 
 type ProviderAvatarStorage = {
   persist(providerId: string, sourceUri: string): Promise<string>;

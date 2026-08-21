@@ -1,4 +1,4 @@
-import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Model } from '@/shared/data/types/model';
 
 /**
  * The model is picked on a screen of its own and travels back as a route param,

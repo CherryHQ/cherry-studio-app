@@ -1,7 +1,3 @@
-import {
-  coerceSearchRole,
-  TOPIC_MESSAGE_SEARCH_ROLES,
-} from '@cherrystudio/universal/data/types/message';
 import { loggerService } from '@logger';
 import { sql } from 'drizzle-orm';
 
@@ -14,6 +10,7 @@ import {
   type ContentSearchResponse,
   type TopicMessageContentSearchItem,
 } from '@/shared/data/api/schemas/search';
+import { coerceSearchRole, TOPIC_MESSAGE_SEARCH_ROLES } from '@/shared/data/types/message';
 
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch';
 import { timestampToISO } from './utils/rowMappers';

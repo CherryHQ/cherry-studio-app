@@ -1,6 +1,5 @@
 import { PlusIcon } from '@cherrystudio/app-icons';
 import { Button } from '@cherrystudio/ui/components';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +8,7 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { SettingsServiceRow } from '../components/SettingsServiceRow';
 

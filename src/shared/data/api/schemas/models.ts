@@ -1,3 +1,5 @@
+import * as z from 'zod';
+
 import {
   ENDPOINT_TYPE,
   type ImageGenerationSupport,
@@ -11,8 +13,7 @@ import {
   RuntimeModelPricingSchema,
   type UniqueModelId,
   UniqueModelIdSchema,
-} from '@cherrystudio/universal/data/types/model';
-import * as z from 'zod';
+} from '@/shared/data/types/model';
 
 export const ListModelsQuerySchema = z.object({
   capability: z.enum(objectValues(MODEL_CAPABILITY)).optional(),

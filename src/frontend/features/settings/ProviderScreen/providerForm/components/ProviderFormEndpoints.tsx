@@ -1,6 +1,7 @@
 import { Input } from '@cherrystudio/ui/components';
-import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { useTranslation } from 'react-i18next';
+
+import type { EndpointType } from '@/shared/data/types/model';
 
 import { useProviderForm } from '../context';
 import { ProviderFormField } from './ProviderFormField';

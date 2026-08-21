@@ -8,13 +8,6 @@ import {
   TextField,
   useAlert,
 } from '@cherrystudio/ui/components';
-import {
-  type Assistant,
-  type AssistantSettings,
-  DEFAULT_ASSISTANT_SETTINGS,
-  type McpMode,
-} from '@cherrystudio/universal/data/types/assistant';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -29,6 +22,13 @@ import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/cha
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { CreateAssistantDto } from '@/shared/data/api/schemas/assistants';
+import {
+  type Assistant,
+  type AssistantSettings,
+  DEFAULT_ASSISTANT_SETTINGS,
+  type McpMode,
+} from '@/shared/data/types/assistant';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { EmojiPickerBottomSheet } from './components/EmojiPickerBottomSheet';
 

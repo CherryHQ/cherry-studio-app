@@ -1,14 +1,11 @@
 import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import {
-  createUniqueModelId,
-  type Model,
-  type ModelCapability,
-} from '@cherrystudio/universal/data/types/model';
+
+import { createUniqueModelId, type Model, type ModelCapability } from '@/shared/data/types/model';
 import {
   DEFAULT_API_FEATURES,
   DEFAULT_PROVIDER_SETTINGS,
   type Provider,
-} from '@cherrystudio/universal/data/types/provider';
+} from '@/shared/data/types/provider';
 
 import {
   buildModelPickerGroups,

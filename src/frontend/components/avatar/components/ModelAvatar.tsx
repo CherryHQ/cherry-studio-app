@@ -1,7 +1,8 @@
 import { resolveIcon } from '@cherrystudio/ui/icons';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useUniwind } from 'uniwind';
+
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { BrandAvatar, BrandAvatarIcon } from './BrandAvatar';
 

@@ -1,9 +1,7 @@
-import {
-  type Assistant,
-  DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/universal/data/types/assistant';
 import { tool } from 'ai';
 import * as z from 'zod';
+
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import { ToolResolver } from '../ToolResolver';
 import type { ToolEntry } from '../types';

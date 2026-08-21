@@ -4,14 +4,6 @@ import {
   countPendingToolApprovals,
   finalizeDanglingToolApprovals,
 } from '@cherrystudio/universal/ai/transport/toolApprovals';
-import type {
-  CherryMessagePart,
-  Message,
-  MessageData,
-  MessageRuntimeStatsInput,
-  MessageStats,
-} from '@cherrystudio/universal/data/types/message';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { isToolUIPart } from 'ai';
 import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
@@ -30,6 +22,14 @@ import type {
   TreeResponse,
   UpdateMessageDto,
 } from '@/shared/data/api/schemas/messages';
+import type {
+  CherryMessagePart,
+  Message,
+  MessageData,
+  MessageRuntimeStatsInput,
+  MessageStats,
+} from '@/shared/data/types/message';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { type MessageRow, messageTable, topicTable } from '../db/schemas';
 import { createOrderedUuid } from '../db/schemas/_columnHelpers';

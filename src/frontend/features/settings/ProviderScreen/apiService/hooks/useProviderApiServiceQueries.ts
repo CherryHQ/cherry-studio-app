@@ -1,4 +1,3 @@
-import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
@@ -8,6 +7,7 @@ import {
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
+import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 export function useProviderApiServiceQueries(providerId: string) {
   const queryClient = useQueryClient();

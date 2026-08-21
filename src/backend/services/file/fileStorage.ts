@@ -1,5 +1,3 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
@@ -17,6 +15,8 @@ import {
   SafeExtSchema,
   SafeNameSchema,
 } from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 const DATA_DIRECTORY_NAME = 'Data';

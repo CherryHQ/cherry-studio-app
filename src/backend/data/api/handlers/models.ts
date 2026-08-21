@@ -1,5 +1,3 @@
-import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
-
 import type { ModelService } from '@/backend/data/services/ModelService';
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
@@ -14,6 +12,7 @@ import {
   UpdateModelSchema,
 } from '@/shared/data/api/schemas/models';
 import type { HandlersFor } from '@/shared/data/api/types';
+import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 
 function parseUniqueId(uniqueModelId: string) {
   if (!isUniqueModelId(uniqueModelId)) {

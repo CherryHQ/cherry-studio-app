@@ -1,8 +1,8 @@
 import type { ModelCapability } from '@cherrystudio/provider-registry';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
-import { type CherryMessagePart, type Message } from '@cherrystudio/universal/data/types/message';
 import { generateNKeysBetween } from 'fractional-indexing';
 
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import { type CherryMessagePart, type Message } from '@/shared/data/types/message';
 import type { Topic } from '@/shared/data/types/topic';
 
 const baseDateMs = Date.parse('2026-05-15T00:00:00.000Z');

@@ -1,14 +1,4 @@
 import type { ComposerQueuedMessagePayload } from '@cherrystudio/universal/ai/transport';
-import {
-  type Assistant,
-  DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/universal/data/types/assistant';
-import type {
-  CherryMessagePart,
-  CherryUIMessage,
-  Message,
-} from '@cherrystudio/universal/data/types/message';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { UIMessageChunk } from 'ai';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
@@ -20,7 +10,10 @@ import type {
 } from '@/backend/services/backgroundReply';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import { type FileEntry, FileEntrySchema } from '@/shared/data/types/file';
+import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 import { ChatRuntime, type ChatRuntimeConfig } from '../ChatRuntime';
 import type { ChatRuntimeServices, ChatStreamRequest } from '../ChatRuntimeDependencies';

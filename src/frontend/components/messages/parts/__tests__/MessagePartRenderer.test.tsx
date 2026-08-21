@@ -1,5 +1,6 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { MessagePartRenderer } from '../MessagePartRenderer';
 

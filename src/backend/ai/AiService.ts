@@ -19,11 +19,6 @@ import {
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -44,7 +39,12 @@ import {
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { devicePermissions } from '@/backend/services/permissions';
+import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
+import type { Assistant } from '@/shared/data/types/assistant';
 import type { FileEntryId } from '@/shared/data/types/file';
+import type { Model } from '@/shared/data/types/model';
+import { parseUniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { createAiUsagePlugin } from './hooks/billingHook';
 import { resolveUIMessageFileUrls } from './messages/attachmentRouting';

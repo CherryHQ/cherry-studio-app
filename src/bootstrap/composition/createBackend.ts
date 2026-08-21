@@ -1,5 +1,3 @@
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
@@ -23,6 +21,7 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
