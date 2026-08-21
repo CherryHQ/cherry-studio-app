@@ -267,8 +267,9 @@ describe('projectAssistantMessageReadAloud', () => {
 
   test.each([
     ['[Wikipedia](https://en.wikipedia.org/wiki/Foo_(bar))', 'Before Wikipedia after.'],
-    ['![diagram](https://example.com/Foo_(bar))', 'Before after.'],
-    ['[2](https://example.com/Foo_(bar))', 'Before after.'],
+    ['[Wikipedia](https://en.wikipedia.org/wiki/Foo_\\(bar\\))', 'Before Wikipedia after.'],
+    ['![diagram](https://example.com/Foo_\\(bar\\))', 'Before after.'],
+    ['[2](https://example.com/Foo_\\(bar\\))', 'Before after.'],
   ])('projects a balanced-parenthesis destination in %s', (inlineMarkdown, expectedText) => {
     const message = createMessage([textPart(`Before ${inlineMarkdown} after.`)]);
 
