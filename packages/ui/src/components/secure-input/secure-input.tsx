@@ -22,6 +22,7 @@ const visibilityIconMotion = {
   easing: easing.settle,
   reduceMotion: ReduceMotion.System,
 } as const;
+const blurredSelection = { end: 0, start: 0 } as const;
 
 function VisibilityIcon({
   className,
@@ -71,15 +72,21 @@ export function SecureInput({
   const isOnSurface = useIsOnSurface();
   const textField = useTextField();
   const inputRef = useRef<TextInput>(null);
+  const [isFocused, setIsFocused] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
   const visibilityProgress = useSharedValue(0);
   const isDisabled = disabled ?? textField?.isDisabled ?? false;
   const isInvalid = invalid ?? textField?.isInvalid ?? false;
-  const { onBlur, ...restInputProps } = inputProps;
+  const { onBlur, onFocus, selection, ...restInputProps } = inputProps;
 
   const handleBlur: NonNullable<TextInputProps['onBlur']> = (event) => {
+    setIsFocused(false);
     onBlur?.(event);
-    inputRef.current?.setNativeProps({ selection: { end: 0, start: 0 } });
+  };
+
+  const handleFocus: NonNullable<TextInputProps['onFocus']> = (event) => {
+    setIsFocused(true);
+    onFocus?.(event);
   };
 
   const handleVisibilityToggle = () => {
@@ -105,19 +112,23 @@ export function SecureInput({
       )}
       style={[styles.root, style]}
     >
-      <Input
-        ref={inputRef}
-        {...restInputProps}
-        autoCapitalize="none"
-        autoCorrect={false}
-        disabled={isDisabled}
-        invalid={isInvalid}
-        multiline={false}
-        onBlur={handleBlur}
-        secureTextEntry={!isVisible}
-        style={styles.input}
-        testID={testID}
-      />
+      <View className="min-w-0 flex-1 overflow-hidden">
+        <Input
+          ref={inputRef}
+          {...restInputProps}
+          autoCapitalize="none"
+          autoCorrect={false}
+          disabled={isDisabled}
+          invalid={isInvalid}
+          multiline={false}
+          onBlur={handleBlur}
+          onFocus={handleFocus}
+          secureTextEntry={!isVisible}
+          selection={isFocused ? selection : blurredSelection}
+          style={styles.input}
+          testID={testID}
+        />
+      </View>
       <View className="w-11 shrink-0 items-center justify-center">
         <Button
           accessibilityLabel={
