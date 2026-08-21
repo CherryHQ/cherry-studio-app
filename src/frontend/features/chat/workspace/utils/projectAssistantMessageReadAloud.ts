@@ -331,7 +331,7 @@ function removeCodeBlocks(markdown: string): string {
 
   for (const line of markdown.split('\n')) {
     const containerLine = removeBlockQuoteMarkers(line);
-    const listMarker = parseListMarker(containerLine);
+    const listMarker = parseListMarker(containerLine, listContentIndents);
     const leadingIndent = countLeadingIndentColumns(containerLine);
     if (listMarker) {
       while ((listContentIndents.at(-1) ?? -1) > listMarker.markerIndent) {
@@ -381,13 +381,21 @@ function removeBlockQuoteMarkers(line: string): string {
 
 function parseListMarker(
   line: string,
+  listContentIndents: number[],
 ): { contentIndent: number; markerIndent: number } | undefined {
-  const match = line.match(/^( {0,3})([-+*]|\d{1,9}[.)])([ \t]+)/u);
+  const match = line.match(/^([ \t]*)([-+*]|\d{1,9}[.)])([ \t]+)/u);
   if (!match) {
     return undefined;
   }
 
   const markerIndent = countLeadingIndentColumns(match[1]);
+  const belongsToListContainer = listContentIndents.some(
+    (contentIndent) => markerIndent >= contentIndent && markerIndent <= contentIndent + 3,
+  );
+  if (markerIndent > 3 && !belongsToListContainer) {
+    return undefined;
+  }
+
   const markerEnd = markerIndent + match[2].length;
   const paddingEnd = countLeadingIndentColumns(match[3], markerEnd);
   const padding = paddingEnd - markerEnd;

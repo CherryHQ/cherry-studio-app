@@ -211,6 +211,18 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('distinguishes continuation text and code in a deeply nested list', () => {
+    const message = createMessage([
+      textPart(
+        '1. outer\n   - inner\n     - deep\n         continued explanation\n\n           const hidden = true;',
+      ),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'outer\ninner\ndeep\ncontinued explanation',
+    });
+  });
+
   test('removes an unterminated fenced code block through the end of the text', () => {
     const message = createMessage([
       textPart('Spoken intro.\n\n~~~python\nprint("never spoken")\nstill code'),
