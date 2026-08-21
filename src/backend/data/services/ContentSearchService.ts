@@ -69,7 +69,6 @@ function withSourceContext(sourceType: ContentSearchSourceType, error: unknown) 
     sourcedError.code,
     `content search source ${sourceType} failed: ${sourcedError.message}`,
     sourcedError.details,
-    sourcedError.requestContext,
   );
 }
 

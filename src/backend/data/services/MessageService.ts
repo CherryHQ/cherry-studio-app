@@ -17,6 +17,7 @@ import { and, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type {
   ActiveNodeStrategy,
   ClearTopicMessagesResponse,
@@ -29,7 +30,6 @@ import type {
   TreeResponse,
   UpdateMessageDto,
 } from '@/shared/data/api/schemas/messages';
-import { DataApiErrorFactory } from '@/shared/data/api/types';
 
 import { type MessageRow, messageTable, topicTable } from '../db/schemas';
 import { createOrderedUuid } from '../db/schemas/_columnHelpers';

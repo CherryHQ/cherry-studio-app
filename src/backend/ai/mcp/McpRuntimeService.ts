@@ -19,7 +19,7 @@ import type {
   McpToolSummary,
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { DataApiError, ErrorCode } from '@/shared/data/api/types';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
 
 const logger = loggerService.withContext('McpRuntimeService');
 
