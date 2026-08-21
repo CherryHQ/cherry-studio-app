@@ -1,7 +1,7 @@
 import { EyeIcon, EyeOffIcon } from '@cherrystudio/app-icons';
 import { useIsOnSurface } from 'heroui-native/hooks';
 import { useRef, useState } from 'react';
-import { StyleSheet, type TextInput, View } from 'react-native';
+import { StyleSheet, type TextInput, type TextInputProps, View } from 'react-native';
 import Animated, {
   ReduceMotion,
   type SharedValue,
@@ -75,6 +75,12 @@ export function SecureInput({
   const visibilityProgress = useSharedValue(0);
   const isDisabled = disabled ?? textField?.isDisabled ?? false;
   const isInvalid = invalid ?? textField?.isInvalid ?? false;
+  const { onBlur, ...restInputProps } = inputProps;
+
+  const handleBlur: NonNullable<TextInputProps['onBlur']> = (event) => {
+    onBlur?.(event);
+    inputRef.current?.setNativeProps({ selection: { end: 0, start: 0 } });
+  };
 
   const handleVisibilityToggle = () => {
     if (blurOnVisibilityToggle) {
@@ -101,12 +107,13 @@ export function SecureInput({
     >
       <Input
         ref={inputRef}
-        {...inputProps}
+        {...restInputProps}
         autoCapitalize="none"
         autoCorrect={false}
         disabled={isDisabled}
         invalid={isInvalid}
         multiline={false}
+        onBlur={handleBlur}
         secureTextEntry={!isVisible}
         style={styles.input}
         testID={testID}
