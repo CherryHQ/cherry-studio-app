@@ -26,10 +26,10 @@ const logger = loggerService.withContext('McpRuntimeService');
 const TOOLS_CACHE_TTL_MS = 5 * 60 * 1000;
 const ENABLED_PREWARM_CONCURRENCY = 3;
 const ASSISTANT_WARM_TIMEOUT_MS = 3 * 1000;
-/** Ceiling for connect + tools/list. `@ai-sdk/mcp` implements no request timeout
- * of its own: `RequestOptions.timeout` is declared but never read, and neither
- * `initialize` nor `tools()` forwards a signal. Without this a server that
- * accepts the socket then stalls would pin a client slot indefinitely. */
+/** Ceiling for connect + tools/list, enforced through abort signals the SDK
+ * forwards to the transport (native support since `@ai-sdk/mcp@1.0.66`).
+ * Without it a server that accepts the socket then stalls would pin a client
+ * slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
 /** Backoff after a failed refresh, doubling per consecutive failure. Without it
  * a permanently-rejecting server costs a full connect attempt on every message,
@@ -69,6 +69,9 @@ type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'sta
 };
 
 type ServerRuntimeState = {
+  /** Cancels every in-flight request of the current generation; replaced on
+   * reset so later work runs under a fresh signal. */
+  abort: AbortController;
   client?: MCPClient;
   connectionPromise?: Promise<MCPClient>;
   endpointUrl: string;
@@ -77,7 +80,6 @@ type ServerRuntimeState = {
   refreshPromise?: Promise<void>;
   runtimeError?: string;
   serverId: string;
-  timeoutCancellations: Set<() => void>;
   toolsCache?: ToolsCacheEntry;
 };
 
@@ -104,13 +106,16 @@ function toolDescription(tool: Tool): string | undefined {
   return typeof tool.description === 'string' ? tool.description : undefined;
 }
 
-async function listAllTools(client: MCPClient): Promise<ToolSet> {
+async function listAllTools(client: MCPClient, signal: AbortSignal): Promise<ToolSet> {
   const definitions: ListToolsResult['tools'] = [];
   const seenCursors = new Set<string>();
   let cursor: string | undefined;
 
   while (true) {
-    const page = await client.listTools(cursor ? { params: { cursor } } : undefined);
+    const page = await client.listTools({
+      options: { signal },
+      ...(cursor ? { params: { cursor } } : {}),
+    });
     definitions.push(...page.tools);
 
     if (!page.nextCursor) {
@@ -126,9 +131,12 @@ async function listAllTools(client: MCPClient): Promise<ToolSet> {
   return castMcpToolSet(client.toolsFromDefinitions({ tools: definitions }));
 }
 
-function createHttpClient(config: McpConnectionConfig): Promise<MCPClient> {
+/** On failure — including an aborted initialize — the SDK closes its own
+ * transport before rethrowing, so callers never inherit a half-open client. */
+function createHttpClient(config: McpConnectionConfig, signal: AbortSignal): Promise<MCPClient> {
   return createMCPClient({
     clientName: 'Cherry Studio',
+    initializationOptions: { signal },
     transport: {
       type: 'http',
       url: config.endpointUrl,
@@ -142,57 +150,41 @@ function hasRunnableUrl(server: McpServer): boolean {
 }
 
 /**
- * Race a promise against a wall clock, running `onTimeout` when it wins.
+ * A timeout signal composed with the upstream signals a request must also obey
+ * (state eviction, the chat turn's own abort).
  *
- * Not `AbortSignal.timeout` — Expo's winter runtime does install it, but the
- * awaited work here (`client.tools()`, `rawTool.execute`) exposes no seam to
- * pass a signal into, and eviction has to happen as a side effect either way.
+ * The SDK forwards the composed signal to the transport, so timing out — or
+ * evicting — genuinely cancels the network request. Rejections are then
+ * classified by inspecting our own signals rather than the SDK's error types,
+ * which are not exported and are free to change across SDK majors.
+ *
+ * `AbortSignal.timeout`/`AbortSignal.any` are installed on the native runtime
+ * by Expo's winter `installAbortSignalPatch`.
  */
-function withTimeout<T>(
-  promise: Promise<T>,
+type BoundedSignal = {
+  didTimeout: () => boolean;
+  /** Settle the bound: clears the pending timer once the work is over. */
+  done: () => void;
+  signal: AbortSignal;
+};
+
+function boundedSignal(
   timeoutMs: number,
-  label: string,
-  onTimeout: () => void,
-  cancellations?: Set<() => void>,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    let settled = false;
-    let handle: ReturnType<typeof setTimeout>;
-    const cleanup = () => {
-      clearTimeout(handle);
-      cancellations?.delete(cancel);
-    };
-    const cancel = () => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      reject(new McpEvictedError(`${label} was invalidated`));
-    };
+  ...upstream: readonly (AbortSignal | undefined)[]
+): BoundedSignal {
+  const timeoutController = new AbortController();
+  let timedOut = false;
+  const handle = setTimeout(() => {
+    timedOut = true;
+    timeoutController.abort();
+  }, timeoutMs);
 
-    handle = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      onTimeout();
-      reject(new McpTimeoutError(`${label} timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
-    cancellations?.add(cancel);
-
-    promise.then(
-      (value) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(value);
-      },
-      (error) => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(error);
-      },
-    );
-  });
+  const signals = [timeoutController.signal, ...upstream.filter((signal) => signal !== undefined)];
+  return {
+    didTimeout: () => timedOut,
+    done: () => clearTimeout(handle),
+    signal: signals.length === 1 ? timeoutController.signal : AbortSignal.any(signals),
+  };
 }
 
 /**
@@ -380,7 +372,11 @@ export class McpRuntimeService extends BaseService {
    * enters the pool.
    */
   async testConnection(config: McpConnectionConfig): Promise<McpToolSummary[]> {
-    const rawTools = await this.withTemporaryClient(config, 'MCP connection test', listAllTools);
+    const rawTools = await this.withTemporaryClient(
+      config,
+      'MCP connection test',
+      (client, signal) => listAllTools(client, signal),
+    );
     return Object.entries(rawTools).map(([name, tool]) => ({
       description: toolDescription(tool),
       name,
@@ -451,10 +447,10 @@ export class McpRuntimeService extends BaseService {
     }
 
     const state: ServerRuntimeState = {
+      abort: new AbortController(),
       endpointUrl: server.endpointUrl,
       generation,
       serverId: server.id,
-      timeoutCancellations: new Set(),
     };
     this.runtimeStates.set(server.id, state);
     return state;
@@ -583,7 +579,11 @@ export class McpRuntimeService extends BaseService {
     state.runtimeError = errorMessage(error);
   }
 
-  private async getClient(server: McpServer, state: ServerRuntimeState): Promise<MCPClient> {
+  private async getClient(
+    server: McpServer,
+    state: ServerRuntimeState,
+    signal: AbortSignal,
+  ): Promise<MCPClient> {
     if (!this.isCurrentState(state)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated`);
     }
@@ -596,7 +596,7 @@ export class McpRuntimeService extends BaseService {
     }
 
     const generation = state.generation;
-    const initPromise: Promise<MCPClient> = createHttpClient(server)
+    const initPromise: Promise<MCPClient> = createHttpClient(server, signal)
       .then((client) => {
         if (state.connectionPromise !== initPromise || !this.isCurrentState(state, generation)) {
           this.closeQuietly(client);
@@ -622,36 +622,23 @@ export class McpRuntimeService extends BaseService {
   private async withTemporaryClient<TValue>(
     config: McpConnectionConfig,
     label: string,
-    operation: (client: MCPClient) => Promise<TValue> | TValue,
+    operation: (client: MCPClient, signal: AbortSignal) => Promise<TValue> | TValue,
   ): Promise<TValue> {
+    const bound = boundedSignal(TOOLS_FETCH_TIMEOUT_MS);
     let client: MCPClient | undefined;
-    let acceptClient = true;
-    const request = createHttpClient(config).then(async (createdClient) => {
-      if (!acceptClient) {
-        this.closeQuietly(createdClient);
-        throw new McpEvictedError(`${label} already ended`);
-      }
-      client = createdClient;
-      return operation(createdClient);
-    });
-
     try {
-      return await withTimeout(request, TOOLS_FETCH_TIMEOUT_MS, label, () => {
-        acceptClient = false;
-      });
+      client = await createHttpClient(config, bound.signal);
+      return await operation(client, bound.signal);
+    } catch (error) {
+      if (bound.didTimeout()) {
+        throw new McpTimeoutError(`${label} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`);
+      }
+      throw error;
     } finally {
-      acceptClient = false;
+      bound.done();
       if (client) {
         this.closeQuietly(client);
       }
-    }
-  }
-
-  private cancelTimeouts(state: ServerRuntimeState): void {
-    const cancellations = [...state.timeoutCancellations];
-    state.timeoutCancellations.clear();
-    for (const cancel of cancellations) {
-      cancel();
     }
   }
 
@@ -661,7 +648,8 @@ export class McpRuntimeService extends BaseService {
     }
 
     state.generation += 1;
-    this.cancelTimeouts(state);
+    state.abort.abort();
+    state.abort = new AbortController();
     state.connectionPromise = undefined;
     state.toolsCache = undefined;
     if (state.client) {
@@ -675,7 +663,7 @@ export class McpRuntimeService extends BaseService {
       this.runtimeStates.delete(state.serverId);
     }
     state.generation += 1;
-    this.cancelTimeouts(state);
+    state.abort.abort();
     state.connectionPromise = undefined;
     state.refreshPromise = undefined;
     state.failure = undefined;
@@ -716,16 +704,30 @@ export class McpRuntimeService extends BaseService {
 
   private async fetchRawTools(server: McpServer, state: ServerRuntimeState): Promise<ToolSet> {
     const generation = state.generation;
-    const rawTools = await withTimeout(
-      (async () => {
-        const client = await this.getClient(server, state);
-        return listAllTools(client);
-      })(),
-      TOOLS_FETCH_TIMEOUT_MS,
-      `MCP server ${server.name}`,
-      () => this.resetConnection(state),
-      state.timeoutCancellations,
-    );
+    // One bound covers connect + full pagination, matching the old wall-clock
+    // ceiling. Eviction rides the same composed signal.
+    const bound = boundedSignal(TOOLS_FETCH_TIMEOUT_MS, state.abort.signal);
+    let rawTools: ToolSet;
+    try {
+      const client = await this.getClient(server, state, bound.signal);
+      rawTools = await listAllTools(client, bound.signal);
+    } catch (error) {
+      if (error instanceof McpEvictedError) {
+        throw error;
+      }
+      if (!this.isCurrentState(state, generation)) {
+        throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
+      }
+      if (bound.didTimeout()) {
+        this.resetConnection(state);
+        throw new McpTimeoutError(
+          `MCP server ${server.name} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`,
+        );
+      }
+      throw error;
+    } finally {
+      bound.done();
+    }
     if (!this.isCurrentState(state, generation)) {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
@@ -785,7 +787,8 @@ export class McpRuntimeService extends BaseService {
     }
 
     const wrappedExecute = async (
-      ...callArgs: Parameters<typeof execute>
+      input: Parameters<typeof execute>[0],
+      callOptions: Parameters<typeof execute>[1],
     ): Promise<McpCallToolResult & { metadata: McpResultSource }> => {
       const current = await this.assertToolStillAllowed(server, rawToolName);
       if (this.getRuntimeState(current) !== state) {
@@ -793,32 +796,39 @@ export class McpRuntimeService extends BaseService {
       }
 
       const label = `${current.name}/${rawToolName}`;
+      const callerSignal = callOptions?.abortSignal;
+      const bound = boundedSignal(TOOL_CALL_TIMEOUT_MS, state.abort.signal, callerSignal);
 
       let result: McpCallToolResult;
       try {
-        result = (await withTimeout(
-          Promise.resolve(execute(...callArgs)),
-          TOOL_CALL_TIMEOUT_MS,
-          `MCP tool ${label}`,
-          // A timed-out connection may be wedged — don't let later calls reuse it.
-          () => this.resetConnection(state),
-          state.timeoutCancellations,
-        )) as McpCallToolResult;
+        result = (await execute(input, {
+          ...callOptions,
+          abortSignal: bound.signal,
+        })) as McpCallToolResult;
+        bound.done();
       } catch (error) {
+        bound.done();
+        if (callerSignal?.aborted) {
+          // The chat turn itself was aborted. The transport cancelled this one
+          // request cleanly, so the pooled client is not suspect.
+          throw error;
+        }
         // Any transport/protocol failure means the pooled client is suspect;
         // dropping here is what keeps a dead session from sticking around for
         // the rest of the cache TTL. The call itself is not retried — MCP tool
         // calls are not guaranteed idempotent.
         this.resetConnection(state);
         this.recordRuntimeError(state, error);
-        if (error instanceof McpTimeoutError) {
-          // Nothing was cancelled: no signal reaches the server, so the work may
-          // still be running. Say so, or the model retries a write it already made.
+        if (bound.didTimeout()) {
+          // Cancelled client-side only — the server may have received the
+          // request and still be working. Say so, or the model retries a write
+          // it already made.
           throw new Error(
-            `${error.message}. The server may still be processing it — do not repeat this call without checking its effect first.`,
+            `MCP tool ${label} timed out after ${TOOL_CALL_TIMEOUT_MS}ms. The server may still be processing it — do not repeat this call without checking its effect first.`,
+            { cause: error },
           );
         }
-        throw new Error(`MCP tool ${label} failed: ${errorMessage(error)}`);
+        throw new Error(`MCP tool ${label} failed: ${errorMessage(error)}`, { cause: error });
       }
 
       if (result === undefined || result === null) {

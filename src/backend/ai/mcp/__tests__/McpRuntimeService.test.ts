@@ -12,8 +12,66 @@ jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 const mockCreateMCPClient = jest.fn();
 jest.mock('@ai-sdk/mcp', () => ({
-  createMCPClient: (...args: unknown[]) => mockCreateMCPClient(...args),
+  createMCPClient: (...args: unknown[]) => mockSdkInitContract(...args),
 }));
+
+/**
+ * Settle `promise` normally, but reject as soon as `signal` aborts — the
+ * request-level contract the real SDK implements (verified against 1.0.71).
+ * Built without `Promise.race` so the losing branch never becomes an
+ * unhandled rejection.
+ */
+function abortable<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  message: string,
+  onAbort?: () => void,
+): Promise<T> {
+  if (!signal) {
+    return promise;
+  }
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => {
+      reject(new Error(message));
+      onAbort?.();
+    };
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    signal.addEventListener('abort', abort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', abort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', abort);
+        reject(error);
+      },
+    );
+  });
+}
+
+/**
+ * The real factory owns cleanup before it resolves: an initialize aborted via
+ * `initializationOptions.signal` rejects, and a transport that finishes
+ * connecting after that is closed by the SDK itself, never handed out.
+ */
+function mockSdkInitContract(...args: unknown[]): Promise<unknown> {
+  const config = args[0] as { initializationOptions?: { signal?: AbortSignal } } | undefined;
+  const connect = Promise.resolve(mockCreateMCPClient(...args));
+  return abortable(
+    connect,
+    config?.initializationOptions?.signal,
+    'MCP client initialization was aborted',
+    () => {
+      void connect
+        .then((client) => (client as { close?: () => Promise<void> } | undefined)?.close?.())
+        .catch(() => undefined);
+    },
+  );
+}
 
 type FakeClient = {
   close: jest.Mock;
@@ -67,15 +125,22 @@ function makeAssistant(): Assistant {
   };
 }
 
+/** The abort contract a real MCP tool's execute honors via its transport. */
+function abortableExecute(run: () => Promise<unknown>) {
+  return jest.fn((_input: unknown, options?: { abortSignal?: AbortSignal }) =>
+    abortable(run(), options?.abortSignal, 'Request was aborted'),
+  );
+}
+
 function makeRawTools(names: string[]): ToolSet {
   return Object.fromEntries(
     names.map((name) => [
       name,
       {
         description: `desc ${name}`,
-        execute: jest.fn(async () => {
+        execute: abortableExecute(async () => {
           // A macrotask, not just a microtask, so a call that outlives a tick
-          // still has to beat the timeout race rather than winning it for free.
+          // still has to beat the timeout bound rather than winning it for free.
           await new Promise((resolve) => setTimeout(resolve, 5));
           return { content: [{ text: `ok ${name}`, type: 'text' }] };
         }),
@@ -89,7 +154,12 @@ function makeRawTools(names: string[]): ToolSet {
 /** A tool whose execute resolves with whatever the caller supplies. */
 function makeRawTool(name: string, execute: () => Promise<unknown>): ToolSet {
   return {
-    [name]: { description: name, execute: jest.fn(execute), inputSchema: {}, type: 'dynamic' },
+    [name]: {
+      description: name,
+      execute: abortableExecute(execute),
+      inputSchema: {},
+      type: 'dynamic',
+    },
   } as unknown as ToolSet;
 }
 
@@ -111,9 +181,13 @@ function makeClient(tools: ToolSet): FakeClient {
     tools: jest.fn(async () => tools),
     toolsFromDefinitions: jest.fn(),
   };
-  client.listTools.mockImplementation(async () => ({
-    tools: makeToolDefinitions(await client.tools()),
-  }));
+  client.listTools.mockImplementation((args?: { options?: { signal?: AbortSignal } }) =>
+    abortable(
+      (async () => ({ tools: makeToolDefinitions(await client.tools()) }))(),
+      args?.options?.signal,
+      'Request was aborted',
+    ),
+  );
   client.toolsFromDefinitions.mockImplementation(
     ({ tools: definitions }: { tools: ReturnType<typeof makeToolDefinitions> }) =>
       Object.fromEntries(definitions.map((definition) => [definition.name, definition.rawTool])),
@@ -924,8 +998,13 @@ describe('listToolsForServer', () => {
         toolCount: 2,
       },
     });
-    expect(client.listTools).toHaveBeenNthCalledWith(1, undefined);
-    expect(client.listTools).toHaveBeenNthCalledWith(2, { params: { cursor: 'page-2' } });
+    expect(client.listTools).toHaveBeenNthCalledWith(1, {
+      options: { signal: expect.any(AbortSignal) },
+    });
+    expect(client.listTools).toHaveBeenNthCalledWith(2, {
+      options: { signal: expect.any(AbortSignal) },
+      params: { cursor: 'page-2' },
+    });
   });
 
   it('shares an in-flight warm with an explicit settings listing', async () => {
