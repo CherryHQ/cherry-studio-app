@@ -24,27 +24,14 @@ import type { McpServer } from '@/shared/data/types/mcpServer';
 
 const logger = loggerService.withContext('McpRuntimeService');
 
-const TOOLS_CACHE_TTL_MS = 5 * 60 * 1000;
-const ENABLED_PREWARM_CONCURRENCY = 3;
-const ASSISTANT_WARM_TIMEOUT_MS = 3 * 1000;
 /** Ceiling for connect + tools/list, enforced through abort signals the SDK
  * forwards to the transport (native support since `@ai-sdk/mcp@1.0.66`).
  * Without it a server that accepts the socket then stalls would pin a client
  * slot indefinitely. */
 const TOOLS_FETCH_TIMEOUT_MS = 15 * 1000;
-/** Backoff after a failed refresh, doubling per consecutive failure. Without it
- * a permanently-rejecting server costs a full connect attempt on every message,
- * forever, on a phone. */
-const REFRESH_BACKOFF_BASE_MS = 30 * 1000;
-const REFRESH_BACKOFF_MAX_MS = 10 * 60 * 1000;
 /** Ceiling for one tool call. Fixed application policy: the table stores the
  * connection, not per-server tuning. */
 const TOOL_CALL_TIMEOUT_MS = 60 * 1000;
-
-type ToolsCacheEntry = {
-  fetchedAt: number;
-  rawTools: ToolSet;
-};
 
 /**
  * Stamped on every MCP result, mirroring what desktop's `mcpTools.ts` puts on
@@ -58,13 +45,6 @@ type McpResultSource = {
   type: 'mcp';
 };
 
-/** Refresh-failure streak for a server, kept so `readCachedTools` backs off
- * instead of retrying a dead one on every message. */
-type ToolsRefreshFailure = {
-  consecutive: number;
-  failedAt: number;
-};
-
 type McpServerRuntimeSnapshot = Omit<McpServerRuntimeSummary, 'lastError' | 'state'> & {
   endpointUrl: string;
 };
@@ -76,12 +56,9 @@ type ServerRuntimeState = {
   client?: MCPClient;
   connectionPromise?: Promise<MCPClient>;
   endpointUrl: string;
-  failure?: ToolsRefreshFailure;
   generation: number;
-  refreshPromise?: Promise<void>;
   runtimeError?: string;
   serverId: string;
-  toolsCache?: ToolsCacheEntry;
 };
 
 /** Distinguishes "we gave up waiting" from a real transport error, so the
@@ -191,14 +168,29 @@ function boundedSignal(
 /**
  * Runtime MCP client manager (remote Streamable HTTP servers only).
  *
- * The chat hot path serves existing tools cache-only. A cold cache gets one
- * bounded warm before the request is built; dead or slow servers can delay the
- * first request by at most `ASSISTANT_WARM_TIMEOUT_MS`. Connecting is otherwise
- * owned by background refresh and by `listTools`, which the settings screen
- * calls. All live reads are timeout-bounded.
+ * Every read fetches `tools/list` live, bounded by `TOOLS_FETCH_TIMEOUT_MS`.
+ * Fetches reconnect once; tool calls are never replayed.
  *
- * Background refresh preserves the last good cache and backs off after failure.
- * Explicit tool listings reconnect once; tool calls are never replayed.
+ * ## TODO: design a mobile caching strategy
+ *
+ * The tool cache this service used to carry was ported from desktop
+ * (`MCPService.ts`'s `withCache(..., 5 * 60 * 1000)`) and then patched with
+ * mobile-only behaviour — stale-while-revalidate, failure backoff, startup and
+ * post-save prewarming, a cache-only chat path. That stack was never designed
+ * against mobile constraints, so it was removed wholesale rather than tuned.
+ * What replaces it has to answer, for a phone on cellular:
+ * - `getToolEntriesForAssistant` runs on every message. A live `initialize` +
+ *   `tools/list` per enabled server now sits in front of every send, and an
+ *   unreachable server costs the full `TOOLS_FETCH_TIMEOUT_MS` each time.
+ * - The settings list reports `connected` off a live client, so a row that has
+ *   never been read this session shows `connecting` until something reads it.
+ * - Nothing rate-limits a dead server anymore; that was the backoff's job.
+ *
+ * Connection reuse (`runtimeStates`) deliberately stayed: the SDK builds each
+ * tool's `execute` as a closure over its client, and one send can run up to 20
+ * tool steps, so the client has to outlive the ToolSet that borrowed it.
+ * Replacing the pool means giving connections a request-scoped lifetime with an
+ * explicit dispose, which is a design change rather than a deletion.
  *
  * ## AI SDK v7 migration seams
  *
@@ -217,14 +209,13 @@ function boundedSignal(
 export class McpRuntimeService extends BaseService implements McpModule {
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
-  private enabledPrewarmPromise?: Promise<void>;
 
   /**
    * Request-scoped registry entries keyed `mcp__{server}__{tool}`.
    *
-   * Gives cold servers one shared, bounded warm before reading the cache. Stale
-   * tools are returned immediately while they refresh in the background.
-   * Returns an empty list when nothing applies and never surfaces MCP failures.
+   * Fetches every server's tools live and in parallel. A server that fails or
+   * times out drops out of this turn rather than failing the send, so MCP
+   * problems never surface as chat errors.
    */
   async getToolEntriesForAssistant(
     assistant: Assistant,
@@ -241,30 +232,38 @@ export class McpRuntimeService extends BaseService implements McpModule {
     // Outside the try: this is a pure filter over what we just read, so a throw
     // from it is a bug, not an unreachable server, and must not be swallowed.
     const servers = resolveServersForAssistant(assistant, enabledServers).filter(hasRunnableUrl);
-    const preparedServers = servers.map((server) => ({
-      server,
-      state: this.getRuntimeState(server),
-    }));
-    await this.warmColdToolCaches(preparedServers);
+    const fetched = await Promise.all(
+      servers.map(async (server) => {
+        const state = this.getRuntimeState(server);
+        try {
+          // One attempt only: a reconnect would double what an unreachable
+          // server costs the send. The settings screen retries, this does not.
+          return { rawTools: await this.fetchRawTools(server, state), server, state };
+        } catch (error) {
+          if (!(error instanceof McpEvictedError)) {
+            logger.warn('MCP tools unavailable for this turn', { error, server: server.name });
+          }
+          return undefined;
+        }
+      }),
+    );
 
     const selectedToolIdSet = selectedToolIds ? new Set(selectedToolIds) : undefined;
     const entries: ToolEntry[] = [];
     const registeredNames = new Set<string>();
-    for (const { server, state } of preparedServers) {
-      // A save/disable while the bounded warm was running invalidates this
-      // request's transport snapshot. The next request will read the new row.
-      if (!this.isCurrentState(state)) {
+    for (const entry of fetched) {
+      if (!entry) {
         continue;
       }
-      const cached = this.readCachedTools(server, state);
-      if (!cached) {
+      const { rawTools, server, state } = entry;
+      // A save or disable during the fetch retires this request's transport.
+      // The next request reads the new row.
+      if (!this.isCurrentState(state)) {
         continue;
       }
 
       const disabledTools = new Set(server.disabledTools);
-      for (const [rawName, rawTool] of Object.entries(cached.rawTools)) {
-        // Filtered here rather than at the cache: the cache mirrors what the
-        // server offers, and a re-enabled tool must not need a refetch.
+      for (const [rawName, rawTool] of Object.entries(rawTools)) {
         if (disabledTools.has(rawName)) {
           continue;
         }
@@ -286,7 +285,7 @@ export class McpRuntimeService extends BaseService implements McpModule {
           description: toolDescription(rawTool) ?? rawName,
           name: key,
           namespace: `mcp:${server.name}`,
-          tool: this.wrapTool(rawTool, server, rawName, cached.state),
+          tool: this.wrapTool(rawTool, server, rawName, state),
         });
       }
     }
@@ -294,89 +293,23 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return entries;
   }
 
-  /**
-   * Warm the tool cache for every enabled server so the next chat request can
-   * offer their tools. Calls share one concurrency-limited run and failures are
-   * logged rather than surfaced.
-   */
-  prewarmEnabledServers(): Promise<void> {
-    if (this.enabledPrewarmPromise) {
-      return this.enabledPrewarmPromise;
-    }
-
-    const task = (async () => {
-      try {
-        const { items } = await mcpServerService.list({ isEnabled: true });
-        const servers = items.filter(hasRunnableUrl);
-        for (let index = 0; index < servers.length; index += ENABLED_PREWARM_CONCURRENCY) {
-          const batch = servers.slice(index, index + ENABLED_PREWARM_CONCURRENCY);
-          await Promise.allSettled(batch.map((server) => this.warmToolsCache(server)));
-        }
-      } catch (error) {
-        logger.warn('Failed to prewarm MCP servers', { error });
-      }
-    })().finally(() => {
-      if (this.enabledPrewarmPromise === task) {
-        this.enabledPrewarmPromise = undefined;
-      }
-    });
-    this.enabledPrewarmPromise = task;
-    return task;
-  }
-
-  /** Runtime metadata for the settings list. Enabled servers share the existing
-   * concurrency-limited prewarm instead of opening one connection per row. */
-  async getRuntimeSummaries(
+  /** Runtime metadata for the settings list, reported from live client state. */
+  getRuntimeSummaries(
     servers: readonly McpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>> {
-    if (servers.some((server) => server.isEnabled && hasRunnableUrl(server))) {
-      await this.prewarmEnabledServers();
-    }
-
-    return Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)]));
+    return Promise.resolve(
+      Object.fromEntries(servers.map((server) => [server.id, this.getRuntimeSummary(server)])),
+    );
   }
 
-  /** Warm one stored server without exposing transport failures to callers. */
-  async warmToolsCache(server: McpServer): Promise<void> {
-    if (!server.isEnabled || !hasRunnableUrl(server)) {
-      return;
-    }
-
-    const state = this.getRuntimeState(server);
-    const cache = state.toolsCache;
-    if (cache && Date.now() - cache.fetchedAt < TOOLS_CACHE_TTL_MS) {
-      return;
-    }
-
-    await this.refreshToolsInBackground(server, state);
-  }
-
-  /** Tool list for the server edit screen — connects, unlike the chat path. */
+  /** Tool list for the server edit screen. */
   async listTools(serverId: string): Promise<McpToolSummary[]> {
     const server = await mcpServerService.getById(serverId);
-    return this.listToolsForServer(server);
-  }
-
-  private async listToolsForServer(server: McpServer): Promise<McpToolSummary[]> {
     if (!hasRunnableUrl(server)) {
       throw new Error(`MCP server ${server.name} has no valid HTTP URL`);
     }
-    const state = this.getRuntimeState(server);
-    const cacheBeforeRefresh = state.toolsCache;
-    if (state.refreshPromise) {
-      await state.refreshPromise;
-      if (!this.isCurrentState(state)) {
-        throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
-      }
-    }
 
-    // Reuse a successful in-flight warm. If that warm failed, do one explicit
-    // reconnect attempt so the settings screen still surfaces the live error.
-    const rawTools =
-      state.toolsCache && state.toolsCache !== cacheBeforeRefresh
-        ? state.toolsCache.rawTools
-        : await this.fetchToolsWithRetry(server);
-
+    const rawTools = await this.fetchToolsWithRetry(server, this.getRuntimeState(server));
     return Object.entries(rawTools).map(([name, tool]) => ({
       description: toolDescription(tool),
       name,
@@ -393,17 +326,8 @@ export class McpRuntimeService extends BaseService implements McpModule {
   }
 
   /**
-   * Warming the caches is the whole of this service's startup, and it is
-   * deliberately not on the gate: the chat path reads tools cache-only, so a
-   * dead or slow server must never delay first paint.
-   */
-  protected onInit(): Promise<void> {
-    return this.prewarmEnabledServers();
-  }
-
-  /**
-   * Drop every server's runtime. Without it the pooled clients stay open and
-   * the refresh timers keep firing against a service nothing will read again.
+   * Drop every server's runtime. Without it the pooled clients stay open
+   * against a service nothing will read again.
    */
   protected onStop(): void {
     for (const state of [...this.runtimeStates.values()]) {
@@ -411,7 +335,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
     }
 
     this.runtimeSnapshots.clear();
-    this.enabledPrewarmPromise = undefined;
   }
 
   /** Drop one server's runtime after transport change, disable, or delete. */
@@ -480,99 +403,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
     if (state?.runtimeError) {
       return { ...snapshot, lastError: state.runtimeError, state: 'error' };
     }
-    if (state?.toolsCache) {
+    if (state?.client) {
       return { ...snapshot, state: 'connected' };
     }
     return { ...snapshot, state: 'connecting' };
-  }
-
-  /** Cached tools if we have any, serving stale while a refresh runs. */
-  private readCachedTools(
-    server: McpServer,
-    state = this.getRuntimeState(server),
-  ): { rawTools: ToolSet; state: ServerRuntimeState } | undefined {
-    const entry = state.toolsCache;
-    if (!entry || Date.now() - entry.fetchedAt >= TOOLS_CACHE_TTL_MS) {
-      this.refreshToolsInBackground(server, state);
-    }
-    return entry ? { rawTools: entry.rawTools, state } : undefined;
-  }
-
-  /** Cold-cache warm shared by all of an assistant's servers. The underlying
-   * refreshes survive the cap; only the current request stops waiting. */
-  private async warmColdToolCaches(
-    servers: readonly { server: McpServer; state: ServerRuntimeState }[],
-  ): Promise<void> {
-    const coldServers = servers.filter(({ state }) => !state.toolsCache);
-    if (coldServers.length === 0) {
-      return;
-    }
-
-    const warm = Promise.all(coldServers.map(({ server }) => this.warmToolsCache(server)));
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<void>((resolve) => {
-      timeoutHandle = setTimeout(resolve, ASSISTANT_WARM_TIMEOUT_MS);
-    });
-
-    await Promise.race([warm.then(() => undefined), timeout]);
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-    }
-  }
-
-  private refreshToolsInBackground(
-    server: McpServer,
-    state = this.getRuntimeState(server),
-  ): Promise<void> | undefined {
-    if (state.refreshPromise) {
-      return state.refreshPromise;
-    }
-    if (this.isBackingOff(state)) {
-      return undefined;
-    }
-
-    const refresh = this.fetchRawTools(server, state)
-      .then(() => undefined)
-      .catch((error: unknown) => {
-        if (error instanceof McpEvictedError) {
-          return;
-        }
-        if (!this.isCurrentState(state)) {
-          return;
-        }
-        this.recordFailure(state, error);
-        logger.warn('MCP tools refresh failed', { error, server: server.name });
-        // Keep the last good cache and its client through transient refresh
-        // failures; tool-call failures and timeouts reset both.
-      })
-      .finally(() => {
-        if (state.refreshPromise === refresh) {
-          state.refreshPromise = undefined;
-        }
-      });
-
-    state.refreshPromise = refresh;
-    return refresh;
-  }
-
-  private isBackingOff(state: ServerRuntimeState): boolean {
-    const failure = state.failure;
-    if (!failure) {
-      return false;
-    }
-    const wait = Math.min(
-      REFRESH_BACKOFF_BASE_MS * 2 ** (failure.consecutive - 1),
-      REFRESH_BACKOFF_MAX_MS,
-    );
-    return Date.now() - failure.failedAt < wait;
-  }
-
-  private recordFailure(state: ServerRuntimeState, error: unknown): void {
-    state.failure = {
-      consecutive: (state.failure?.consecutive ?? 0) + 1,
-      failedAt: Date.now(),
-    };
-    state.runtimeError = errorMessage(error);
   }
 
   private recordRuntimeError(state: ServerRuntimeState, error: unknown): void {
@@ -651,7 +485,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.abort.abort();
     state.abort = new AbortController();
     state.connectionPromise = undefined;
-    state.toolsCache = undefined;
     if (state.client) {
       this.closeQuietly(state.client);
       state.client = undefined;
@@ -665,9 +498,6 @@ export class McpRuntimeService extends BaseService implements McpModule {
     state.generation += 1;
     state.abort.abort();
     state.connectionPromise = undefined;
-    state.refreshPromise = undefined;
-    state.failure = undefined;
-    state.toolsCache = undefined;
     if (state.client) {
       this.closeQuietly(state.client);
       state.client = undefined;
@@ -678,8 +508,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
     return this.runtimeStates.get(state.serverId) === state && state.generation === generation;
   }
 
-  private async fetchToolsWithRetry(server: McpServer): Promise<ToolSet> {
-    const state = this.getRuntimeState(server);
+  private async fetchToolsWithRetry(
+    server: McpServer,
+    state: ServerRuntimeState,
+  ): Promise<ToolSet> {
     try {
       return await this.fetchRawTools(server, state);
     } catch (error) {
@@ -732,13 +564,10 @@ export class McpRuntimeService extends BaseService implements McpModule {
       throw new McpEvictedError(`MCP server ${server.name} was invalidated while listing tools`);
     }
 
-    const fetchedAt = Date.now();
     const client = state.client;
-    state.failure = undefined;
     state.runtimeError = undefined;
-    state.toolsCache = { fetchedAt, rawTools };
     this.runtimeSnapshots.set(server.id, {
-      lastConnectedAt: fetchedAt,
+      lastConnectedAt: Date.now(),
       endpointUrl: state.endpointUrl,
       serverName: client?.serverInfo.name,
       serverTitle: client?.serverInfo.title,
@@ -814,9 +643,9 @@ export class McpRuntimeService extends BaseService implements McpModule {
           throw error;
         }
         // Any transport/protocol failure means the pooled client is suspect;
-        // dropping here is what keeps a dead session from sticking around for
-        // the rest of the cache TTL. The call itself is not retried — MCP tool
-        // calls are not guaranteed idempotent.
+        // dropping it here keeps a dead session from being handed to the next
+        // caller. The call itself is not retried — MCP tool calls are not
+        // guaranteed idempotent.
         this.resetConnection(state);
         this.recordRuntimeError(state, error);
         if (bound.didTimeout()) {
