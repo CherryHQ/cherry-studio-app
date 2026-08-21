@@ -53,7 +53,7 @@ describe('projectAssistantMessageReadAloud', () => {
     expect(projectAssistantMessageReadAloud(message)).toBe(null);
   });
 
-  test('replaces only the source block for a block-scoped translation', () => {
+  test('omits a single language for mixed original and block-translated text', () => {
     const message = createMessage([
       textPart('Keep the first block.'),
       textPart('Replace the second block.'),
@@ -61,8 +61,21 @@ describe('projectAssistantMessageReadAloud', () => {
     ]);
 
     expect(projectAssistantMessageReadAloud(message)).toEqual({
-      language: 'fr',
       text: 'Keep the first block.\n\nDeuxième bloc traduit.',
+    });
+  });
+
+  test('keeps the language when every projected block uses the same translation language', () => {
+    const message = createMessage([
+      textPart('Replace the first block.'),
+      translationPart('Premier bloc traduit.', 'fr', 'first-block'),
+      textPart('Replace the second block.'),
+      translationPart('Deuxième bloc traduit.', 'fr', 'second-block'),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      language: 'fr',
+      text: 'Premier bloc traduit.\n\nDeuxième bloc traduit.',
     });
   });
 
@@ -124,6 +137,14 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('closes an inline code span only with an equal-length backtick run', () => {
+    const message = createMessage([textPart('Keep ``alpha ` beta`` after.')]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'Keep alpha ` beta after.',
+    });
+  });
+
   test('preserves link and math syntax inside inline code spans', () => {
     const markdown = 'Keep `[label](target)` and `$value$` unchanged.';
 
@@ -164,6 +185,24 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('keeps a list continuation indented within the item content', () => {
+    const message = createMessage([textPart('1. First line\n    continued explanation')]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'First line\ncontinued explanation',
+    });
+  });
+
+  test('removes indented code four spaces beyond the list content indent', () => {
+    const message = createMessage([
+      textPart('1. Example:\n\n       const hidden = true;\n\n   Continued explanation.'),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'Example:\n\nContinued explanation.',
+    });
+  });
+
   test('removes an unterminated fenced code block through the end of the text', () => {
     const message = createMessage([
       textPart('Spoken intro.\n\n~~~python\nprint("never spoken")\nstill code'),
@@ -195,6 +234,24 @@ describe('projectAssistantMessageReadAloud', () => {
     expect(projectAssistantMessageReadAloud(message)).toEqual({
       text: 'Read the guide, then continue.',
     });
+  });
+
+  test.each([
+    ['[Wikipedia](https://en.wikipedia.org/wiki/Foo_(bar))', 'Before Wikipedia after.'],
+    ['![diagram](https://example.com/Foo_(bar))', 'Before after.'],
+    ['[2](https://example.com/Foo_(bar))', 'Before after.'],
+  ])('projects a balanced-parenthesis destination in %s', (inlineMarkdown, expectedText) => {
+    const message = createMessage([textPart(`Before ${inlineMarkdown} after.`)]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({ text: expectedText });
+  });
+
+  test('keeps inline code adjacent to a linked URL label', () => {
+    const message = createMessage([
+      textPart('Use [https://example.com](https://example.com)`code` after.'),
+    ]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({ text: 'Use code after.' });
   });
 
   test.each([

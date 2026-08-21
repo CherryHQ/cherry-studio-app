@@ -38,23 +38,28 @@ function projectSpeakableSource(
     return messageTranslation;
   }
 
-  const blocks: string[] = [];
-  let language: string | undefined;
+  const blocks: AssistantReadAloudContent[] = [];
   for (const part of parts) {
     if (part.type === 'text') {
-      blocks.push(part.text);
+      blocks.push({ text: part.text });
     } else if (
       part.type === 'data-translation' &&
       part.data.sourceBlockId &&
       part.data.content.trim() &&
       blocks.length > 0
     ) {
-      blocks[blocks.length - 1] = part.data.content;
-      language = part.data.targetLanguage;
+      blocks[blocks.length - 1] = {
+        language: part.data.targetLanguage,
+        text: part.data.content,
+      };
     }
   }
 
-  return language ? { language, text: blocks.join('\n\n') } : { text: blocks.join('\n\n') };
+  const language = blocks[0]?.language;
+  const text = blocks.map((block) => block.text).join('\n\n');
+  return language && blocks.every((block) => block.language === language)
+    ? { language, text }
+    : { text };
 }
 
 function cleanMarkdownForSpeech(markdown: string): string {
@@ -63,24 +68,15 @@ function cleanMarkdownForSpeech(markdown: string): string {
 
   const codeSpans: string[] = [];
   text = text.replaceAll(CODE_SPAN_MARKER, CODE_SPAN_MARKER.repeat(2));
-  text = text.replace(/(`+)([^`\n]*?)\1/g, (_match, _delimiter: string, content: string) => {
-    const index =
-      codeSpans.push(content.replaceAll(CODE_SPAN_MARKER.repeat(2), CODE_SPAN_MARKER)) - 1;
-    return `${CODE_SPAN_MARKER}${index}${CODE_SPAN_MARKER}`;
-  });
+  text = protectCodeSpans(text, codeSpans);
 
   text = text.replace(/\$\$[\s\S]*?(?:\$\$|$)/g, '');
   text = text.replace(/\\\[[\s\S]*?(?:\\\]|$)/g, '');
   text = projectMarkdownTables(text);
 
-  text = text.replace(/!\[[^\]]*\]\((?:[^()\\]|\\.)*\)/g, '');
-  text = text.replace(/!\[[^\]]*\]\[[^\]]*\]/g, '');
-  text = text.replace(/\[\d+\]\((?:[^()\\]|\\.)*\)/g, '');
-  text = text.replace(/\[([^\]]+)\]\((?:[^()\\]|\\.)*\)/g, '$1');
-  text = text.replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1');
+  text = projectMarkdownLinksForSpeech(text);
   text = text.replace(/\[(?:cite:[^\]]+|\d+)\]/giu, '');
   text = text.replace(/【\d+†[^】]*】/gu, '');
-  text = text.replace(/https?:\/\/[^\s<>]+/giu, preserveTrailingPunctuation);
 
   text = text.replace(/\\\(([^\n]*?)\\\)/g, (_match, expression: string) =>
     isSimpleMath(expression) ? expression : '',
@@ -97,17 +93,171 @@ function cleanMarkdownForSpeech(markdown: string): string {
   return normalizeSpeechWhitespace(projected);
 }
 
+function protectCodeSpans(markdown: string, codeSpans: string[]): string {
+  return markdown
+    .split('\n')
+    .map((line) => protectCodeSpansOnLine(line, codeSpans))
+    .join('\n');
+}
+
+function protectCodeSpansOnLine(line: string, codeSpans: string[]): string {
+  const runs: { end: number; length: number; start: number }[] = [];
+  for (let index = 0; index < line.length;) {
+    if (line[index] !== '`') {
+      index += 1;
+      continue;
+    }
+
+    let end = index + 1;
+    while (line[end] === '`') {
+      end += 1;
+    }
+    runs.push({ end, length: end - index, start: index });
+    index = end;
+  }
+
+  const nextRunByLength = new Map<number, number>();
+  const closingRuns: (number | undefined)[] = Array.from({ length: runs.length });
+  for (let index = runs.length - 1; index >= 0; index -= 1) {
+    const run = runs[index];
+    closingRuns[index] = nextRunByLength.get(run.length);
+    nextRunByLength.set(run.length, index);
+  }
+
+  const output: string[] = [];
+  let cursor = 0;
+  for (let index = 0; index < runs.length; index += 1) {
+    const openingRun = runs[index];
+    if (openingRun.start < cursor) {
+      continue;
+    }
+
+    const closingRunIndex = closingRuns[index];
+    if (closingRunIndex === undefined) {
+      continue;
+    }
+
+    const closingRun = runs[closingRunIndex];
+    const content = line
+      .slice(openingRun.end, closingRun.start)
+      .replaceAll(CODE_SPAN_MARKER.repeat(2), CODE_SPAN_MARKER);
+    const codeSpanIndex = codeSpans.push(content) - 1;
+    output.push(line.slice(cursor, openingRun.start));
+    output.push(`${CODE_SPAN_MARKER}${codeSpanIndex}${CODE_SPAN_MARKER}`);
+    cursor = closingRun.end;
+    index = closingRunIndex;
+  }
+  output.push(line.slice(cursor));
+  return output.join('');
+}
+
+function projectMarkdownLinksForSpeech(markdown: string): string {
+  const inlineLinkStart = /(!?)\[([^\u005B\u005D\n]*)\]\(/gu;
+  const output: string[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+  while ((match = inlineLinkStart.exec(markdown)) !== null) {
+    const destinationEnd = findInlineLinkDestinationEnd(markdown, inlineLinkStart.lastIndex);
+    if (destinationEnd === undefined) {
+      break;
+    }
+
+    output.push(markdown.slice(cursor, match.index));
+    if (!match[1] && !/^\d+$/u.test(match[2])) {
+      output.push(match[2]);
+    }
+    cursor = destinationEnd;
+    inlineLinkStart.lastIndex = destinationEnd;
+  }
+  output.push(markdown.slice(cursor));
+
+  const projected = output
+    .join('')
+    .replace(/!\[[^\u005B\u005D]*\]\[[^\u005B\u005D]*\]/g, '')
+    .replace(/\[([^\u005B\u005D]+)\]\[[^\u005B\u005D]*\]/g, '$1');
+  return removeBareUrls(projected);
+}
+
+function findInlineLinkDestinationEnd(markdown: string, start: number): number | undefined {
+  let depth = 0;
+  for (let index = start; index < markdown.length; index += 1) {
+    if (markdown[index] === '\\') {
+      index += 1;
+    } else if (markdown[index] === '\n') {
+      return undefined;
+    } else if (markdown[index] === '(') {
+      depth += 1;
+    } else if (markdown[index] === ')') {
+      if (depth === 0) {
+        return index + 1;
+      }
+      depth -= 1;
+    }
+  }
+  return undefined;
+}
+
+function removeBareUrls(text: string): string {
+  const output: string[] = [];
+  let index = 0;
+  while (index < text.length) {
+    const bareUrl = readBareUrl(text, index);
+    if (!bareUrl) {
+      output.push(text[index]);
+      index += 1;
+      continue;
+    }
+    output.push(bareUrl.trailingPunctuation);
+    index = bareUrl.end;
+  }
+  return output.join('');
+}
+
+function readBareUrl(
+  text: string,
+  start: number,
+): { end: number; trailingPunctuation: string } | undefined {
+  const prefix = text.slice(start, start + 8).toLowerCase();
+  if (!prefix.startsWith('http://') && !prefix.startsWith('https://')) {
+    return undefined;
+  }
+
+  let end = start;
+  while (end < text.length && text[end] !== CODE_SPAN_MARKER && !/[\s<>]/u.test(text[end])) {
+    end += 1;
+  }
+  return {
+    end,
+    trailingPunctuation: preserveTrailingPunctuation(text.slice(start, end)),
+  };
+}
+
 function removeCodeBlocks(markdown: string): string {
   const output: string[] = [];
+  const listContentIndents: number[] = [];
   let openFence: { character: string; length: number } | undefined;
 
   for (const line of markdown.split('\n')) {
+    const containerLine = removeBlockQuoteMarkers(line);
+    const listMarker = parseListMarker(containerLine);
+    const leadingIndent = countLeadingIndentColumns(containerLine);
+    if (listMarker) {
+      while ((listContentIndents.at(-1) ?? -1) > listMarker.markerIndent) {
+        listContentIndents.pop();
+      }
+      listContentIndents.push(listMarker.contentIndent);
+    } else if (containerLine.trim()) {
+      while ((listContentIndents.at(-1) ?? -1) > leadingIndent) {
+        listContentIndents.pop();
+      }
+    }
+
     const blockLine = removeBlockMarkers(line);
     const fence = blockLine.match(/^\s*(`{3,}|~{3,})/u)?.[1];
     if (!openFence) {
       if (fence) {
         openFence = { character: fence[0], length: fence.length };
-      } else if (/^(?: {4}|\t)/u.test(blockLine)) {
+      } else if (leadingIndent >= (listContentIndents.at(-1) ?? 0) + 4 && !listMarker) {
         continue;
       } else {
         output.push(line);
@@ -125,6 +275,48 @@ function removeCodeBlocks(markdown: string): string {
   }
 
   return output.join('\n');
+}
+
+function removeBlockQuoteMarkers(line: string): string {
+  let result = line;
+  let marker = result.match(/^ {0,3}>\s?/u)?.[0];
+  while (marker) {
+    result = result.slice(marker.length);
+    marker = result.match(/^ {0,3}>\s?/u)?.[0];
+  }
+  return result;
+}
+
+function parseListMarker(
+  line: string,
+): { contentIndent: number; markerIndent: number } | undefined {
+  const match = line.match(/^( {0,3})([-+*]|\d{1,9}[.)])([ \t]+)/u);
+  if (!match) {
+    return undefined;
+  }
+
+  const markerIndent = countLeadingIndentColumns(match[1]);
+  const markerEnd = markerIndent + match[2].length;
+  const paddingEnd = countLeadingIndentColumns(match[3], markerEnd);
+  const padding = paddingEnd - markerEnd;
+  return {
+    contentIndent: markerEnd + (padding <= 4 ? padding : 1),
+    markerIndent,
+  };
+}
+
+function countLeadingIndentColumns(text: string, initialColumn = 0): number {
+  let column = initialColumn;
+  for (const character of text) {
+    if (character === ' ') {
+      column += 1;
+    } else if (character === '\t') {
+      column += 4 - (column % 4);
+    } else {
+      break;
+    }
+  }
+  return column;
 }
 
 function restoreCodeSpans(text: string, codeSpans: string[]): string {
