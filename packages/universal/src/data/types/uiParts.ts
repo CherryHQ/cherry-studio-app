@@ -1,3 +1,14 @@
+/**
+ * Cherry UI part vocabulary and per-part `providerMetadata.cherry` shapes.
+ *
+ * MOBILE SYNC DIVERGENCE: `CherryFileMeta` is mobile's, not desktop's. Mobile
+ * file parts carry `fileEntryId` / `fileTokenSourceId` / `composerFileKind`,
+ * and a managed FileUIPart's `url` holds the `cherry://file/<fileEntryId>`
+ * sentinel that the file storage layer resolves at send time — desktop
+ * addresses files by path and has none of this. The rest of the part
+ * vocabulary still parallels desktop's uiParts.ts.
+ */
+
 import * as z from 'zod';
 
 import type { CherryMessagePart } from './message';
