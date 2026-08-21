@@ -9,7 +9,7 @@ export type SecureInputVisibilityAccessibilityLabels = {
 
 export type SecureInputProps = Omit<
   InputProps,
-  'autoCapitalize' | 'autoCorrect' | 'multiline' | 'secureTextEntry' | 'style'
+  'autoCapitalize' | 'autoCorrect' | 'multiline' | 'secureTextEntry' | 'selection' | 'style'
 > & {
   blurOnVisibilityToggle?: boolean;
   style?: StyleProp<ViewStyle>;
