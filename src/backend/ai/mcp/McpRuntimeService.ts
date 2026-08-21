@@ -12,6 +12,7 @@ import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lif
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import type {
   McpConnectionConfig,
+  McpModule,
   McpServerInfo,
   McpServerRuntimeSummary,
   McpToolSummary,
@@ -193,15 +194,27 @@ function boundedSignal(
  * The chat hot path serves existing tools cache-only. A cold cache gets one
  * bounded warm before the request is built; dead or slow servers can delay the
  * first request by at most `ASSISTANT_WARM_TIMEOUT_MS`. Connecting is otherwise
- * owned by background refresh and by `listToolsForServer`, which the settings
- * screen calls. All live reads are timeout-bounded.
+ * owned by background refresh and by `listTools`, which the settings screen
+ * calls. All live reads are timeout-bounded.
  *
  * Background refresh preserves the last good cache and backs off after failure.
  * Explicit tool listings reconnect once; tool calls are never replayed.
+ *
+ * ## AI SDK v7 migration seams
+ *
+ * Everything version-sensitive is pinned to a single site, so moving to
+ * `ai@7` + `@ai-sdk/mcp@2` touches exactly:
+ * - `wrapTool`'s `needsApproval: true` — v7 replaces the tool property with a
+ *   `toolApproval` setting on the generation call.
+ * - `castMcpToolSet` and the `schemaBrand.test.ts` canary — obsolete once both
+ *   packages share one `provider-utils`.
+ * - This file and `preboot/abortSignal.ts` are the only `@ai-sdk/mcp` imports.
+ * Persisted shapes (`metadata.cherry.tool`, result `output.metadata`, the
+ * `mcp__{server}__{tool}` name mint) are frozen and migrate as-is.
  */
 @Injectable('McpRuntimeService')
 @ServicePhase(Phase.PostReady)
-export class McpRuntimeService extends BaseService {
+export class McpRuntimeService extends BaseService implements McpModule {
   private readonly runtimeStates = new Map<string, ServerRuntimeState>();
   private readonly runtimeSnapshots = new Map<string, McpServerRuntimeSnapshot>();
   private enabledPrewarmPromise?: Promise<void>;
@@ -291,7 +304,18 @@ export class McpRuntimeService extends BaseService {
       return this.enabledPrewarmPromise;
     }
 
-    const task = this.prewarmEnabledServerTools().finally(() => {
+    const task = (async () => {
+      try {
+        const { items } = await mcpServerService.list({ isEnabled: true });
+        const servers = items.filter(hasRunnableUrl);
+        for (let index = 0; index < servers.length; index += ENABLED_PREWARM_CONCURRENCY) {
+          const batch = servers.slice(index, index + ENABLED_PREWARM_CONCURRENCY);
+          await Promise.allSettled(batch.map((server) => this.warmToolsCache(server)));
+        }
+      } catch (error) {
+        logger.warn('Failed to prewarm MCP servers', { error });
+      }
+    })().finally(() => {
       if (this.enabledPrewarmPromise === task) {
         this.enabledPrewarmPromise = undefined;
       }
@@ -327,21 +351,13 @@ export class McpRuntimeService extends BaseService {
     await this.refreshToolsInBackground(server, state);
   }
 
-  private async prewarmEnabledServerTools(): Promise<void> {
-    try {
-      const { items } = await mcpServerService.list({ isEnabled: true });
-      const servers = items.filter(hasRunnableUrl);
-      for (let index = 0; index < servers.length; index += ENABLED_PREWARM_CONCURRENCY) {
-        const batch = servers.slice(index, index + ENABLED_PREWARM_CONCURRENCY);
-        await Promise.allSettled(batch.map((server) => this.warmToolsCache(server)));
-      }
-    } catch (error) {
-      logger.warn('Failed to prewarm MCP servers', { error });
-    }
+  /** Tool list for the server edit screen — connects, unlike the chat path. */
+  async listTools(serverId: string): Promise<McpToolSummary[]> {
+    const server = await mcpServerService.getById(serverId);
+    return this.listToolsForServer(server);
   }
 
-  /** Tool list for the server edit screen — connects, unlike the chat path. */
-  async listToolsForServer(server: McpServer): Promise<McpToolSummary[]> {
+  private async listToolsForServer(server: McpServer): Promise<McpToolSummary[]> {
     if (!hasRunnableUrl(server)) {
       throw new Error(`MCP server ${server.name} has no valid HTTP URL`);
     }
@@ -361,22 +377,6 @@ export class McpRuntimeService extends BaseService {
         ? state.toolsCache.rawTools
         : await this.fetchToolsWithRetry(server);
 
-    return Object.entries(rawTools).map(([name, tool]) => ({
-      description: toolDescription(tool),
-      name,
-    }));
-  }
-
-  /**
-   * Connection test against unsaved form values: a throwaway client that never
-   * enters the pool.
-   */
-  async testConnection(config: McpConnectionConfig): Promise<McpToolSummary[]> {
-    const rawTools = await this.withTemporaryClient(
-      config,
-      'MCP connection test',
-      (client, signal) => listAllTools(client, signal),
-    );
     return Object.entries(rawTools).map(([name, tool]) => ({
       description: toolDescription(tool),
       name,
@@ -622,13 +622,13 @@ export class McpRuntimeService extends BaseService {
   private async withTemporaryClient<TValue>(
     config: McpConnectionConfig,
     label: string,
-    operation: (client: MCPClient, signal: AbortSignal) => Promise<TValue> | TValue,
+    operation: (client: MCPClient) => Promise<TValue> | TValue,
   ): Promise<TValue> {
     const bound = boundedSignal(TOOLS_FETCH_TIMEOUT_MS);
     let client: MCPClient | undefined;
     try {
       client = await createHttpClient(config, bound.signal);
-      return await operation(client, bound.signal);
+      return await operation(client);
     } catch (error) {
       if (bound.didTimeout()) {
         throw new McpTimeoutError(`${label} timed out after ${TOOLS_FETCH_TIMEOUT_MS}ms`);
