@@ -10,7 +10,6 @@ import type { McpServerService } from '../../services/McpServerService';
 import type { MessageService } from '../../services/MessageService';
 import type { PaintingService } from '../../services/PaintingService';
 import type { ProviderService } from '../../services/ProviderService';
-import type { TemporaryChatService } from '../../services/TemporaryChatService';
 import type { TopicService } from '../../services/TopicService';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';
@@ -22,7 +21,6 @@ import { createModelHandlers } from './models';
 import { createPaintingHandlers } from './paintings';
 import { createProviderHandlers } from './providers';
 import { createSearchHandlers } from './search';
-import { createTemporaryChatHandlers } from './temporaryChats';
 import { createTopicHandlers } from './topics';
 
 export type DataApiDependencies = {
@@ -38,7 +36,6 @@ export type DataApiDependencies = {
   models: import('../../services/ModelService').ModelService;
   paintings: PaintingService;
   providers: ProviderService;
-  temporaryChats: TemporaryChatService;
   topics: TopicService;
 };
 
@@ -54,7 +51,6 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createPaintingHandlers(dependencies.paintings),
     ...createProviderHandlers(dependencies.providers),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
-    ...createTemporaryChatHandlers(dependencies.temporaryChats),
     ...createTopicHandlers(dependencies.topics),
   };
 }
