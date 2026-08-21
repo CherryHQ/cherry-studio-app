@@ -61,7 +61,7 @@ First answer: **does this role already have a name?** Among the 46 product token
 
 ### Literal Colours: Four Exemptions
 
-There is no fifth. A new literal must state in its commit which case it falls under.
+There is no fifth. A new literal must state in its commit which case it falls under, and register its file with that case in the `colorLiteralAllowlist` of `packages/design-tokens/scripts/check-app-theme.ts` — the check scans `src` and `packages/ui/src` for colour literals and fails on any unregistered file (and on registered files whose literals are gone).
 
 | Case | Examples | Why a token cannot serve |
 |---|---|---|
