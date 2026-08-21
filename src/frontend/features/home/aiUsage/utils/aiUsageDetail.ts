@@ -3,7 +3,7 @@ import type {
   AiUsageRecordStatsResponse,
   AiUsageRecordTimelineBucket,
   AiUsageRecordTimelineQueryParams,
-} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+} from '@/shared/data/api/schemas/aiUsageRecords';
 
 import type {
   AiUsageModelIdentity,

@@ -1,9 +1,9 @@
-import type { FileEntry } from '@cherrystudio/universal/data/types/file';
+import { type FileEntry, filenameExtension } from '@/shared/data/types/file';
 
-export function fileEntryDisplayName(entry: Pick<FileEntry, 'ext' | 'name'>): string {
-  return entry.ext ? `${entry.name}.${entry.ext}` : entry.name;
+export function fileEntryDisplayName(entry: Pick<FileEntry, 'filename'>): string {
+  return entry.filename;
 }
 
-export function fileEntryExtensionLabel(entry: Pick<FileEntry, 'ext'>): string {
-  return entry.ext?.slice(0, 5).toUpperCase() ?? '';
+export function fileEntryExtensionLabel(entry: Pick<FileEntry, 'filename'>): string {
+  return filenameExtension(entry.filename)?.slice(0, 5).toUpperCase() ?? '';
 }

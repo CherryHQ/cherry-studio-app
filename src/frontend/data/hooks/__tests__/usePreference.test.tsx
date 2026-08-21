@@ -1,15 +1,15 @@
+import { useEffect } from 'react';
+import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import type {
   PreferenceClient,
   PreferenceSchema,
   PreferenceKeyType,
   PreferenceMappedValues,
   PreferenceMapping,
-} from '@cherrystudio/universal/data/preference';
-import { getDefaultValue, ThemeMode } from '@cherrystudio/universal/data/preference';
-import { useEffect } from 'react';
-import { act, create, type ReactTestRenderer } from 'react-test-renderer';
-
-import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
+} from '@/shared/data/preference';
+import { getDefaultValue, ThemeMode } from '@/shared/data/preference';
 
 import { useMultiplePreferences, usePreference } from '../usePreference';
 

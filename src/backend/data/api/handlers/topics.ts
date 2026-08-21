@@ -1,7 +1,10 @@
+import { application } from '@/backend/core/application/Application';
+import type { ResourceScope } from '@/backend/core/resources/types';
+import type { TopicService } from '@/backend/data/services/TopicService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
+} from '@/shared/data/api/schemas/endpointHelpers';
 import {
   CreateTopicSchema,
   DeleteTopicsQuerySchema,
@@ -10,12 +13,8 @@ import {
   SetActiveNodeSchema,
   type TopicSchemas,
   UpdateTopicSchema,
-} from '@cherrystudio/universal/data/api/schemas/topics';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-
-import { application } from '@/backend/core/application/Application';
-import type { ResourceScope } from '@/backend/core/resources/types';
-import type { TopicService } from '@/backend/data/services/TopicService';
+} from '@/shared/data/api/schemas/topics';
+import type { HandlersFor } from '@/shared/data/api/types';
 
 const topicScopes = (ids: readonly string[]): ResourceScope[] =>
   ids.map((id) => ({ id, kind: 'topic' }));

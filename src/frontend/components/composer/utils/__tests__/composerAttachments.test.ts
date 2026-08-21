@@ -1,4 +1,4 @@
-import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   appendComposerAttachments,
@@ -154,11 +154,12 @@ describe('composer attachments', () => {
 
     expect(parts).toHaveLength(2);
     expect(parts[0]).toEqual({ type: 'text', text: 'summarize this' });
+    // An imported attachment persists the entry-id sentinel, never a sandbox path.
     expect(parts[1]).toMatchObject({
       filename: 'file-a.pdf',
       mediaType: 'application/pdf',
       type: 'file',
-      url: 'file-a.pdf',
+      url: `cherry://file/${readyFileAttachment.fileEntryId}`,
     });
     expect(readCherryMeta(parts[1])).toEqual({
       fileEntryId: readyFileAttachment.fileEntryId,

@@ -1,12 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { PaintingFiles } from '@/shared/data/types/painting';
 
 import { PaintingService } from '../PaintingService';
 
@@ -74,13 +75,12 @@ describe('PaintingService integration', () => {
   });
 
   it('pages newest receipts first and keeps output-less ones so the gallery can show them', async () => {
-    insertPainting(sqlite, 'painting-new', 'a0', 3);
-    insertPainting(sqlite, 'painting-pending', 'a1', 2);
-    insertPainting(sqlite, 'painting-old', 'a2', 1);
-    insertFileAndRef(sqlite, 'new-output', 'painting-new', 'output', 3);
-    insertFileAndRef(sqlite, 'pending-input', 'painting-pending', 'input', 2);
-    insertFileAndRef(sqlite, 'old-input', 'painting-old', 'input', 1);
-    insertFileAndRef(sqlite, 'old-output', 'painting-old', 'output', 1);
+    insertPainting(sqlite, 'painting-new', 'a0', 3, { input: [], output: ['new-output'] });
+    insertPainting(sqlite, 'painting-pending', 'a1', 2, { input: ['pending-input'], output: [] });
+    insertPainting(sqlite, 'painting-old', 'a2', 1, {
+      input: ['old-input'],
+      output: ['old-output'],
+    });
 
     const firstPage = await service.listByCursor({ limit: 2 });
     const secondPage = await service.listByCursor({ cursor: firstPage.nextCursor, limit: 2 });
@@ -97,9 +97,14 @@ describe('PaintingService integration', () => {
   });
 
   it('attaches generated outputs atomically without changing the original receipt', async () => {
-    insertPainting(sqlite, 'painting-original', 'a0', 1);
-    insertPainting(sqlite, 'painting-regenerated', 'Zz', 2);
-    insertFileAndRef(sqlite, 'original-output', 'painting-original', 'output', 1);
+    insertPainting(sqlite, 'painting-original', 'a0', 1, {
+      input: [],
+      output: ['original-output'],
+    });
+    insertPainting(sqlite, 'painting-regenerated', 'Zz', 2, {
+      input: ['regenerated-input'],
+      output: [],
+    });
     const regeneratedFileId = '00000000-0000-7000-8000-000000000002';
     insertFile(sqlite, regeneratedFileId, 2);
 
@@ -108,19 +113,48 @@ describe('PaintingService integration', () => {
     await expect(service.getById('painting-original')).resolves.toEqual(
       expect.objectContaining({ files: { input: [], output: ['original-output'] } }),
     );
-    expect(regenerated.files.output).toEqual(['00000000-0000-7000-8000-000000000002']);
+    // Only `output` is rewritten; the inputs the attempt started from survive.
+    expect(regenerated.files).toEqual({
+      input: ['regenerated-input'],
+      output: [regeneratedFileId],
+    });
   });
 
-  it('deletes a painting and its file relationships', async () => {
-    insertPainting(sqlite, 'painting-delete', 'a0', 1);
-    insertFileAndRef(sqlite, 'delete-output', 'painting-delete', 'output', 1);
+  it('refuses to attach an output whose file entry does not exist', async () => {
+    insertPainting(sqlite, 'painting-pending', 'a0', 1);
+
+    await expect(
+      service.replaceOutputs('painting-pending', ['never-stored' as FileEntryId]),
+    ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+    expect(readPaintingFiles(sqlite, 'painting-pending')).toEqual({ input: [], output: [] });
+  });
+
+  it('keeps a receipt pointing at a file entry that was deleted', async () => {
+    insertPainting(sqlite, 'painting-orphaned', 'a0', 1, {
+      input: ['kept-input'],
+      output: ['removed-output'],
+    });
+    insertFile(sqlite, 'kept-input', 1);
+    insertFile(sqlite, 'removed-output', 1);
+
+    sqlite.prepare('DELETE FROM file_entry WHERE id = ?').run('removed-output');
+
+    // The receipt is frozen: losing the bytes must not rewrite it, so the
+    // gallery still has a slot to render the unavailable placeholder in.
+    await expect(service.getById('painting-orphaned')).resolves.toMatchObject({
+      files: { input: ['kept-input'], output: ['removed-output'] },
+    });
+  });
+
+  it('deletes a painting without touching its files', async () => {
+    insertPainting(sqlite, 'painting-delete', 'a0', 1, { input: [], output: ['delete-output'] });
+    insertFile(sqlite, 'delete-output', 1);
 
     await service.delete('painting-delete');
 
     expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting').get()).toEqual({ count: 0 });
-    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting_file_ref').get()).toEqual({
-      count: 0,
-    });
+    expect(sqlite.prepare('SELECT id FROM file_entry').all()).toEqual([{ id: 'delete-output' }]);
   });
 
   it('reports a missing painting when delete returns no row', async () => {
@@ -129,31 +163,34 @@ describe('PaintingService integration', () => {
     });
   });
 
-  it('deletes multiple paintings with their file relationships and ignores duplicate ids', async () => {
-    insertPainting(sqlite, 'painting-a', 'a0', 1);
-    insertPainting(sqlite, 'painting-b', 'a1', 2);
-    insertPainting(sqlite, 'painting-kept', 'a2', 3);
-    insertFileAndRef(sqlite, 'a-output', 'painting-a', 'output', 1);
-    insertFileAndRef(sqlite, 'b-output', 'painting-b', 'output', 2);
-    insertFileAndRef(sqlite, 'kept-output', 'painting-kept', 'output', 3);
+  it('deletes multiple paintings and ignores duplicate ids', async () => {
+    insertPainting(sqlite, 'painting-a', 'a0', 1, { input: [], output: ['a-output'] });
+    insertPainting(sqlite, 'painting-b', 'a1', 2, { input: [], output: ['b-output'] });
+    insertPainting(sqlite, 'painting-kept', 'a2', 3, { input: [], output: ['kept-output'] });
 
     await service.deleteMany(['painting-a', 'painting-b', 'painting-a']);
 
     expect(sqlite.prepare('SELECT id FROM painting').all()).toEqual([{ id: 'painting-kept' }]);
-    expect(sqlite.prepare('SELECT file_entry_id FROM painting_file_ref').all()).toEqual([
-      { file_entry_id: 'kept-output' },
-    ]);
+    expect(readPaintingFiles(sqlite, 'painting-kept')).toEqual({
+      input: [],
+      output: ['kept-output'],
+    });
   });
 
   it('rolls back the batch when any selected painting is missing', async () => {
-    insertPainting(sqlite, 'painting-existing', 'a0', 1);
-    insertFileAndRef(sqlite, 'existing-output', 'painting-existing', 'output', 1);
+    insertPainting(sqlite, 'painting-existing', 'a0', 1, {
+      input: [],
+      output: ['existing-output'],
+    });
 
     await expect(
       service.deleteMany(['painting-existing', 'missing-painting']),
     ).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
-    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM painting').get()).toEqual({ count: 1 });
+    expect(readPaintingFiles(sqlite, 'painting-existing')).toEqual({
+      input: [],
+      output: ['existing-output'],
+    });
   });
 
   it('does nothing when deleteMany receives no ids', async () => {
@@ -165,12 +202,9 @@ describe('PaintingService integration', () => {
   });
 
   it('lists every painting id in gallery order so select-all matches what is on screen', async () => {
-    insertPainting(sqlite, 'painting-first', 'a0', 3);
-    insertPainting(sqlite, 'painting-pending', 'a1', 2);
-    insertPainting(sqlite, 'painting-last', 'a2', 1);
-    insertFileAndRef(sqlite, 'first-output', 'painting-first', 'output', 3);
-    insertFileAndRef(sqlite, 'pending-input', 'painting-pending', 'input', 2);
-    insertFileAndRef(sqlite, 'last-output', 'painting-last', 'output', 1);
+    insertPainting(sqlite, 'painting-first', 'a0', 3, { input: [], output: ['first-output'] });
+    insertPainting(sqlite, 'painting-pending', 'a1', 2, { input: ['pending-input'], output: [] });
+    insertPainting(sqlite, 'painting-last', 'a2', 1, { input: [], output: ['last-output'] });
 
     await expect(service.listAllIds()).resolves.toEqual([
       'painting-first',
@@ -180,8 +214,7 @@ describe('PaintingService integration', () => {
   });
 
   it('reuses an interrupted receipt: keeps its id, swaps inputs, moves it to the head', async () => {
-    insertPainting(sqlite, 'painting-retry', 'a5', 1);
-    insertFileAndRef(sqlite, 'stale-input', 'painting-retry', 'input', 1);
+    insertPainting(sqlite, 'painting-retry', 'a5', 1, { input: ['stale-input'], output: [] });
     insertFile(sqlite, 'fresh-input', 2);
 
     const retried = await service.resetForRetryTx(database, 'painting-retry', {
@@ -198,14 +231,14 @@ describe('PaintingService integration', () => {
       orderKey: 'Zz',
       prompt: 'retry prompt',
     });
-    expect(sqlite.prepare('SELECT file_entry_id FROM painting_file_ref').all()).toEqual([
-      { file_entry_id: 'fresh-input' },
-    ]);
+    expect(readPaintingFiles(sqlite, 'painting-retry')).toEqual({
+      input: ['fresh-input'],
+      output: [],
+    });
   });
 
   it('refuses to reuse a receipt that already holds outputs', async () => {
-    insertPainting(sqlite, 'painting-done', 'a0', 1);
-    insertFileAndRef(sqlite, 'done-output', 'painting-done', 'output', 1);
+    insertPainting(sqlite, 'painting-done', 'a0', 1, { input: [], output: ['done-output'] });
 
     await expect(
       service.resetForRetryTx(database, 'painting-done', {
@@ -233,39 +266,43 @@ function applyMigrations(database: DatabaseSync) {
   }
 }
 
-function insertPainting(database: DatabaseSync, id: string, orderKey: string, timestamp: number) {
+function insertPainting(
+  database: DatabaseSync,
+  id: string,
+  orderKey: string,
+  timestamp: number,
+  files: PaintingFiles = { input: [], output: [] },
+) {
   database
     .prepare(
       `INSERT INTO painting
-       (id, provider_id, model_id, prompt, order_key, created_at, updated_at)
-       VALUES (?, 'provider', 'provider::model', 'prompt', ?, ?, ?)`,
+       (id, provider_id, model_id, prompt, order_key, created_at, updated_at, files)
+       VALUES (?, 'provider', 'provider::model', 'prompt', ?, ?, ?, ?)`,
     )
-    .run(id, orderKey, timestamp, timestamp);
+    .run(id, orderKey, timestamp, timestamp, JSON.stringify(files));
 }
 
-function insertFileAndRef(
-  database: DatabaseSync,
-  fileId: string,
-  paintingId: string,
-  role: 'input' | 'output',
-  timestamp: number,
-) {
-  insertFile(database, fileId, timestamp);
-  database
-    .prepare(
-      `INSERT INTO painting_file_ref
-       (id, file_entry_id, source_id, role, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    )
-    .run(`ref-${fileId}`, fileId, paintingId, role, timestamp, timestamp);
+/**
+ * Reads the receipt straight from SQLite so the assertion sees the stored JSON
+ * rather than whatever the service hands back.
+ */
+function readPaintingFiles(database: DatabaseSync, id: string): PaintingFiles | undefined {
+  const row = database.prepare('SELECT files FROM painting WHERE id = ?').get(id) as
+    | { files: string }
+    | undefined;
+  return row ? (JSON.parse(row.files) as PaintingFiles) : undefined;
 }
 
+/**
+ * A painting's `files` column is not foreign-keyed, so entries only need to
+ * exist where the service checks them at write time.
+ */
 function insertFile(database: DatabaseSync, fileId: string, timestamp: number) {
   database
     .prepare(
       `INSERT INTO file_entry
-       (id, origin, name, ext, size, external_path, created_at, updated_at, deleted_at)
-       VALUES (?, 'internal', ?, 'png', 4, NULL, ?, ?, NULL)`,
+       (id, filename, media_type, size, created_at, updated_at, deleted_at)
+       VALUES (?, ?, 'image/png', 4, ?, ?, NULL)`,
     )
-    .run(fileId, fileId, timestamp, timestamp);
+    .run(fileId, `${fileId}.png`, timestamp, timestamp);
 }

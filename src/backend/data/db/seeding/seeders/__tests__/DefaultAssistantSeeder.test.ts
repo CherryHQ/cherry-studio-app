@@ -1,10 +1,10 @@
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@cherrystudio/universal/data/presets/cherryai';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 import { getLocales } from 'expo-localization';
 
 import type { DbService } from '@/backend/data/db/DbService';
 import { createRootMessageTx } from '@/backend/data/services/MessageService';
 import { insertWithOrderKey } from '@/backend/data/services/utils/orderKey';
+import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@/shared/data/presets/cherryai';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import { DefaultAssistantSeeder } from '../DefaultAssistantSeeder';
 

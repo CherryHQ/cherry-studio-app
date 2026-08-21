@@ -1,8 +1,6 @@
 import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from '@cherrystudio/app-icons';
 import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
-import type { EndpointType } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +11,8 @@ import {
 } from 'react-native-keyboard-controller';
 
 import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import type { EndpointType } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { useProviderDetailSettings } from './detail';
 import { useProviderModelAdd } from './models/hooks/useProviderModelAdd';

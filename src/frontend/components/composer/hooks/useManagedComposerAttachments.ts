@@ -54,9 +54,9 @@ export function useManagedComposerAttachments(
   const deleteEntry = useCallback(
     async (entryId: ComposerAttachmentReady['fileEntryId']) => {
       try {
-        await file.deleteIfUnreferenced(entryId);
+        await file.delete(entryId);
       } catch (error) {
-        logger.warn('Failed to delete an unreferenced attachment', toError(error), { entryId });
+        logger.warn('Failed to delete a cancelled attachment', toError(error), { entryId });
       }
     },
     [file],
@@ -80,10 +80,11 @@ export function useManagedComposerAttachments(
 
       try {
         const resolved = await file.createInternalEntry({
+          mediaType: source.mediaType,
           name: source.name,
           uri: source.uri,
         });
-        importedSize = resolved.entry.origin === 'internal' ? resolved.entry.size : source.size;
+        importedSize = resolved.entry.size;
 
         if (cancelledImportTokensRef.current.delete(token)) {
           await deleteEntry(resolved.entry.id);

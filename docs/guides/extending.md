@@ -8,10 +8,9 @@ existing deep module over a new registry or pass-through wrapper. Read
 
 ## Add A Resource Endpoint
 
-1. Put entities and DTO schemas in `packages/universal/src/data` (`@cherrystudio/universal/data`) when
-   both sides need them; this package mirrors desktop `src/shared`, so keep additions
-   desktop-compatible.
-2. Define the endpoint under `packages/universal/src/data/api/schemas` and add it to `apiSchemas.ts`.
+1. Put entities and DTO schemas in `src/shared/data` (`@/shared/data`) when both sides need them;
+   the data layer is mobile-owned, so add only what mobile code reads.
+2. Define the endpoint under `src/shared/data/api/schemas` and add it to `apiSchemas.ts`.
 3. Implement simple persistence directly in `src/backend/data/services`.
 4. Add an endpoint-family handler under `src/backend/data/api/handlers` and register it in
    `apiHandlers.ts`.
@@ -40,12 +39,13 @@ workflow interface and observable results.
 
 - Add Drizzle schemas under `src/backend/data/db/schemas` and register them in its barrel.
 - Generate and bundle the migration under `src/backend/data/db`.
-- Keep Drizzle row types backend-only; expose entities/DTOs from `@cherrystudio/universal/data`.
+- Keep Drizzle row types backend-only; expose entities/DTOs from `@/shared/data`.
 - Expose frontend access through a Data API endpoint, not a new `Backend` module.
 - Keep resource-specific composition in the owning frontend hook or feature, not in shared or
   backend code.
 
-New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts`; render
+New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts` (the
+transitional home of the entity types `packages/ai-runtime` imports); render
 dispatch belongs in `src/frontend/components/messages/parts/MessagePartRenderer.tsx`. A new JSON
 part does not require a table migration, but FTS indexes only text parts.
 

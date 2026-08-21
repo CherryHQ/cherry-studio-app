@@ -23,42 +23,6 @@
         "opencode": "general/open-code"
       }
     },
-    "schema": {
-      "strategy": "opaque-retention",
-      "status": "unbaselined",
-      "sourcePaths": ["src/main/data/db/schemas", "migrations/sqlite-drizzle/meta"],
-      "targetPaths": ["src/backend/data/db/schemas", "migrations/sqlite-drizzle/meta"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": []
-    },
-    "shared-data": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["src/shared/data"],
-      "targetPaths": ["packages/universal/src/data"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": [
-        "src/shared/data/bootConfig/**",
-        "src/shared/data/migration/**",
-        "src/shared/data/presets/binaryTools.ts",
-        "src/shared/data/presets/claudeCode.ts",
-        "src/shared/data/presets/codex.ts",
-        "src/shared/data/presets/grokCli.ts",
-        "src/shared/data/presets/localEmbedding.ts",
-        "src/shared/data/presets/localModel.ts",
-        "src/shared/data/types/fileProcessing.ts",
-        "src/shared/data/types/settingsPath.ts"
-      ],
-      "shapeOnlyPorts": [
-        {
-          "path": "src/shared/data/preference/preferenceTypes.ts",
-          "keeps": "Value types for the preference keys mobile reads",
-          "drops": "The generated preferenceSchemas.ts key set and every type that only described it; mobile's preference schema is hand-maintained and deliberately diverged, so there is no key-level alignment left to audit"
-        }
-      ]
-    },
     "shared-portable": {
       "strategy": "semantic-port",
       "status": "unbaselined",
@@ -92,24 +56,6 @@
           "drops": "OpenAIVerbosity/ValidOpenAIVerbosity/OpenAIReasoningSummary/OpenAICompletionsStreamOptions, which alias into the @cherrystudio/openai SDK that mobile does not depend on; backend/ai/utils/options.ts re-declares the verbosity union it needs as a literal type"
         }
       ]
-    },
-    "data-main": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["src/main/data"],
-      "targetPaths": ["src/backend/data"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": ["src/main/data/migration/v2/**"]
-    },
-    "data-renderer": {
-      "strategy": "semantic-port",
-      "status": "unbaselined",
-      "sourcePaths": ["src/renderer/data"],
-      "targetPaths": ["src/frontend/data"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": []
     },
     "ai-core": {
       "strategy": "mirror",
@@ -202,20 +148,20 @@
       "explicitExclusions": [
         "src/shared/ai/agentSessionApiRetry.ts",
         "src/shared/ai/agentSessionBackgroundTasks.ts",
+        "src/shared/ai/agentSessionCompaction.ts",
         "src/shared/ai/agentSessionContextUsage.ts",
         "src/shared/ai/agentSessionFlowParts.ts",
         "src/shared/ai/agentSessionSlashCommands.ts",
         "src/shared/ai/agentSlashCommands.ts",
         "src/shared/ai/claudecode/**",
+        "src/shared/ai/prompts.ts",
         "src/shared/ai/slashCommands.ts",
-        "src/shared/ai/tool.ts"
+        "src/shared/ai/tool.ts",
+        "src/shared/ai/transport/applyApprovalDecisions.ts",
+        "src/shared/ai/transport/deferredToolResult.ts",
+        "src/shared/ai/transport/turnState.ts"
       ],
       "shapeOnlyPorts": [
-        {
-          "path": "src/shared/ai/prompts.ts",
-          "keeps": "TRANSLATE_PROMPT — seeded default of feature.translate.model_prompt",
-          "drops": "AGENT_PROMPT/SUMMARIZE_PROMPT/LANG_DETECT_PROMPT desktop templates with no mobile consumer"
-        },
         {
           "path": "src/shared/ai/tools/__tests__/mcpToolName.test.ts",
           "keeps": "the identity-critical regressions: the 63-character cap, the server hash suffix that stops two long server names from colliding after truncation, single-server attribution for truncated ids, collision suffixes staying inside maxLength, and the mcp__server__tool round-trip",
@@ -226,7 +172,7 @@
         {
           "path": "packages/universal/src/ai/transport/toolApprovals.ts",
           "keeps": "nothing, there is no desktop counterpart",
-          "adds": "mobile's own approval settlement helpers. Note this overlaps the ported transport/applyApprovalDecisions.ts, which is barrel-only dead code here, and the two declare their own ApprovalDecision types — collapsing them is open work, not an intended fork"
+          "adds": "mobile's own approval settlement helpers. Desktop's transport/applyApprovalDecisions.ts was ported here once, stayed barrel-only dead code, and has been deleted with the rest of the unconsumed transport mirrors; the desktop file is an explicit exclusion now"
         },
         {
           "path": "packages/universal/src/ai/tools/mcpResult.ts",
@@ -252,20 +198,6 @@
       "sourceCommit": null,
       "sourceSha256": null,
       "explicitExclusions": []
-    },
-    "backup": {
-      "strategy": "opaque-retention",
-      "status": "blocked",
-      "sourcePaths": [
-        "src/main/services/LegacyBackupManager.ts",
-        "src/main/data/db/restore",
-        "src/main/data/CacheService.ts"
-      ],
-      "targetPaths": ["src/backend/data", "src/backend/services"],
-      "sourceCommit": null,
-      "sourceSha256": null,
-      "explicitExclusions": [],
-      "blocker": "Desktop v7 direct backups archive Data/cherrystudio.sqlite, resources, cache.json, and the desktop migration chain; mobile currently uses cherry.db, a different migration chain, and MMKV cache, so it cannot produce or restore that archive losslessly."
     }
   }
 }

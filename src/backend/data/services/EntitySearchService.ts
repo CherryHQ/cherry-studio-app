@@ -1,8 +1,9 @@
-import {
-  DataApiErrorFactory,
-  isDataApiError,
-  toDataApiError,
-} from '@cherrystudio/universal/data/api/errors';
+import { loggerService } from '@logger';
+import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
+
+import { application } from '@/backend/core/application/Application';
+import { assistantTable, topicTable } from '@/backend/data/db/schemas';
+import { DataApiErrorFactory, isDataApiError, toDataApiError } from '@/shared/data/api/errors';
 import {
   ENTITY_SEARCH_MAX_LIMIT_PER_TYPE,
   type EntitySearchGroup,
@@ -11,12 +12,7 @@ import {
   type EntitySearchResponse,
   type EntitySearchType,
   entitySearchTypes,
-} from '@cherrystudio/universal/data/api/schemas/search';
-import { loggerService } from '@logger';
-import { and, asc, desc, eq, gte, isNull, or, type SQL, sql } from 'drizzle-orm';
-
-import { application } from '@/backend/core/application/Application';
-import { assistantTable, topicTable } from '@/backend/data/db/schemas';
+} from '@/shared/data/api/schemas/search';
 
 import { timestampToISO } from './utils/rowMappers';
 
@@ -41,7 +37,6 @@ function withTypeContext(type: EntitySearchType, error: unknown) {
     apiError.code,
     `${context} failed: ${apiError.message}`,
     apiError.details,
-    apiError.requestContext,
   );
 }
 

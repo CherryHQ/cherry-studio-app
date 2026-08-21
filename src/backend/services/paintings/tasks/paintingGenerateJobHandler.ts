@@ -1,8 +1,5 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
-import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { loggerService } from '@logger';
 
 import type {
@@ -15,6 +12,9 @@ import type {
   PaintingActivityProps,
 } from '@/shared/backgroundActivity/painting';
 import type { PaintingGenerationResult } from '@/shared/contracts';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import type { UniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type { CreateInternalEntryInput } from '../../file/fileStorage';
 
@@ -26,7 +26,7 @@ export const PAINTING_JOB_QUEUE = 'painting';
 /**
  * Input images always carry a fileEntryId: `startGeneration` materializes
  * draft-only images into internal entries before the job is enqueued, and the
- * receipt's painting_file_ref rows pin them for the job's lifetime. The uri is
+ * receipt's `files.input` records them for the job's lifetime. The uri is
  * a same-process convenience for readDataUrl — an abandoned job never re-runs
  * (recovery `'abandon'`, maxAttempts 1), so it is never read across restarts.
  */
@@ -64,10 +64,10 @@ export type PaintingAi = {
 };
 
 export type PaintingFileStorage = {
-  createInternalEntry(input: CreateInternalEntryInput): Promise<InternalFileEntry>;
-  discard(entries: readonly InternalFileEntry[]): Promise<void>;
+  createInternalEntry(input: CreateInternalEntryInput): Promise<FileEntry>;
+  discard(entries: readonly FileEntry[]): Promise<void>;
   readDataUrl(uri: string, mediaType: string): Promise<string>;
-  getUri(entry: InternalFileEntry): string | undefined;
+  getUri(entry: FileEntry): string | undefined;
 };
 
 export type PaintingActivityDriver = {
@@ -142,13 +142,12 @@ export function createPaintingGenerateJobHandler(
           throw new Error('Image provider returned no image');
         }
 
-        const createdOutputs: InternalFileEntry[] = [];
+        const createdOutputs: FileEntry[] = [];
         let outputRefsCommitted = false;
         try {
           for (const image of result.images) {
             createdOutputs.push(
               await storage.createInternalEntry({
-                cleanupPolicy: 'delete_when_unreferenced',
                 data: image.base64,
                 mediaType: image.mediaType,
                 source: 'base64',

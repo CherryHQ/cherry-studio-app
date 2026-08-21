@@ -1,29 +1,19 @@
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/types';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
-import { createUniqueModelId, isUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type {
-  Painting,
-  PaintingFileRole,
-  PaintingFiles,
-} from '@cherrystudio/universal/data/types/painting';
 import { and, asc, eq, gt, inArray, or } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { Database } from '@/backend/data/db/DbService';
-import {
-  fileEntryTable,
-  type PaintingRow,
-  paintingFileRefTable,
-  paintingTable,
-} from '@/backend/data/db/schemas';
+import { fileEntryTable, type PaintingRow, paintingTable } from '@/backend/data/db/schemas';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { FileEntryId } from '@/shared/data/types/file';
+import { createUniqueModelId, isUniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 
 import { computeNewOrderKey, insertWithOrderKey } from './utils/orderKey';
 import { timestampToISO } from './utils/rowMappers';
 
 const defaultLimit = 20;
 const maxLimit = 100;
-const emptyFiles: PaintingFiles = { input: [], output: [] };
 
 type PaintingCursor = { id: string; orderKey: string };
 
@@ -73,11 +63,10 @@ export class PaintingService {
       .orderBy(asc(paintingTable.orderKey), asc(paintingTable.id))
       .limit(limit + 1);
     const pageRows = rows.slice(0, limit);
-    const files = await this.loadFiles(pageRows.map((row) => row.id));
     const last = pageRows.at(-1);
 
     return {
-      items: pageRows.map((row) => rowToPainting(row, files.get(row.id) ?? emptyFiles)),
+      items: pageRows.map(rowToPainting),
       ...(rows.length > limit && last
         ? { nextCursor: encodeCursor({ id: last.id, orderKey: last.orderKey }) }
         : {}),
@@ -102,8 +91,7 @@ export class PaintingService {
       throw DataApiErrorFactory.notFound('Painting', id);
     }
 
-    const files = await this.loadFiles([id]);
-    return rowToPainting(row, files.get(id) ?? emptyFiles);
+    return rowToPainting(row);
   }
 
   async create(input: CreatePaintingInput): Promise<Painting> {
@@ -112,20 +100,20 @@ export class PaintingService {
 
   /** Rides the caller's write transaction (`withWriteTx` is not reentrant). */
   async createTx(tx: Database, input: CreatePaintingInput): Promise<Painting> {
-    const inputFileIds = [...(input.inputFileIds ?? [])];
+    const inputFileIds = await assertFileEntriesExistTx(tx, input.inputFileIds ?? []);
     const inserted = (await insertWithOrderKey(
       tx,
       paintingTable,
       {
+        files: { input: inputFileIds, output: [] },
         modelId: normalizeModelId(input.providerId, input.modelId),
         prompt: input.prompt,
         providerId: input.providerId,
       },
       { pkColumn: paintingTable.id, position: 'first' },
     )) as PaintingRow;
-    await insertFileRefsTx(tx, inserted.id, 'input', inputFileIds);
 
-    return rowToPainting(inserted, { input: inputFileIds, output: [] });
+    return rowToPainting(inserted);
   }
 
   /**
@@ -138,7 +126,7 @@ export class PaintingService {
    */
   async resetForRetryTx(tx: Database, id: string, input: CreatePaintingInput): Promise<Painting> {
     const [row] = await tx
-      .select({ id: paintingTable.id })
+      .select({ files: paintingTable.files, id: paintingTable.id })
       .from(paintingTable)
       .where(eq(paintingTable.id, id))
       .limit(1);
@@ -146,8 +134,7 @@ export class PaintingService {
       throw DataApiErrorFactory.notFound('Painting', id);
     }
 
-    const existingFiles = await loadFilesTx(tx, [id]);
-    if ((existingFiles.get(id)?.output.length ?? 0) > 0) {
+    if (row.files.output.length > 0) {
       // Reuse would drop finished images on the floor. Callers are meant to
       // gate on the interrupted state (zero outputs); getting here means the
       // caller mistook a finished painting for one worth retrying.
@@ -157,20 +144,17 @@ export class PaintingService {
       );
     }
 
-    const inputFileIds = [...(input.inputFileIds ?? [])];
+    const inputFileIds = await assertFileEntriesExistTx(tx, input.inputFileIds ?? []);
     const orderKey = await computeNewOrderKey(
       tx,
       paintingTable,
       { position: 'first' },
       { excludePkValue: id, pkColumn: paintingTable.id },
     );
-    await tx
-      .delete(paintingFileRefTable)
-      .where(and(eq(paintingFileRefTable.sourceId, id), eq(paintingFileRefTable.role, 'input')));
-    await insertFileRefsTx(tx, id, 'input', inputFileIds);
     const [updated] = await tx
       .update(paintingTable)
       .set({
+        files: { input: inputFileIds, output: [] },
         modelId: normalizeModelId(input.providerId, input.modelId),
         orderKey,
         prompt: input.prompt,
@@ -180,13 +164,13 @@ export class PaintingService {
       .where(eq(paintingTable.id, id))
       .returning();
 
-    return rowToPainting(updated as PaintingRow, { input: inputFileIds, output: [] });
+    return rowToPainting(updated as PaintingRow);
   }
 
   async replaceOutputs(id: string, outputFileIds: readonly FileEntryId[]): Promise<Painting> {
     await this.dbService.withWriteTx(async (tx) => {
       const [painting] = await tx
-        .select({ id: paintingTable.id })
+        .select({ files: paintingTable.files, id: paintingTable.id })
         .from(paintingTable)
         .where(eq(paintingTable.id, id))
         .limit(1);
@@ -194,11 +178,11 @@ export class PaintingService {
         throw DataApiErrorFactory.notFound('Painting', id);
       }
 
+      const outputs = await assertFileEntriesExistTx(tx, outputFileIds);
       await tx
-        .delete(paintingFileRefTable)
-        .where(and(eq(paintingFileRefTable.sourceId, id), eq(paintingFileRefTable.role, 'output')));
-      await insertFileRefsTx(tx, id, 'output', outputFileIds);
-      await tx.update(paintingTable).set({ updatedAt: Date.now() }).where(eq(paintingTable.id, id));
+        .update(paintingTable)
+        .set({ files: { ...painting.files, output: outputs }, updatedAt: Date.now() })
+        .where(eq(paintingTable.id, id));
     });
 
     return await this.getById(id);
@@ -227,21 +211,16 @@ export class PaintingService {
       }
     });
   }
-
-  private async loadFiles(ids: readonly string[]): Promise<Map<string, PaintingFiles>> {
-    return loadFilesTx(this.db, ids);
-  }
 }
 
-async function insertFileRefsTx(
+/** Deduplicates the ids and fails the write if any of them has no `file_entry` row. */
+async function assertFileEntriesExistTx(
   tx: Database,
-  paintingId: string,
-  role: PaintingFileRole,
   fileEntryIds: readonly FileEntryId[],
-): Promise<void> {
+): Promise<FileEntryId[]> {
   const uniqueIds = [...new Set(fileEntryIds)];
   if (uniqueIds.length === 0) {
-    return;
+    return [];
   }
 
   const existing = await tx
@@ -252,39 +231,7 @@ async function insertFileRefsTx(
     throw DataApiErrorFactory.notFound('FileEntry', 'one or more painting files');
   }
 
-  await tx.insert(paintingFileRefTable).values(
-    uniqueIds.map((fileEntryId) => ({
-      fileEntryId,
-      role,
-      sourceId: paintingId,
-    })),
-  );
-}
-
-async function loadFilesTx(
-  tx: Database,
-  paintingIds: readonly string[],
-): Promise<Map<string, PaintingFiles>> {
-  if (paintingIds.length === 0) {
-    return new Map();
-  }
-
-  const rows = await tx
-    .select({
-      fileEntryId: paintingFileRefTable.fileEntryId,
-      role: paintingFileRefTable.role,
-      sourceId: paintingFileRefTable.sourceId,
-    })
-    .from(paintingFileRefTable)
-    .where(inArray(paintingFileRefTable.sourceId, paintingIds))
-    .orderBy(asc(paintingFileRefTable.createdAt), asc(paintingFileRefTable.id));
-  const result = new Map<string, PaintingFiles>();
-  for (const row of rows) {
-    const files = result.get(row.sourceId) ?? { input: [], output: [] };
-    files[row.role].push(row.fileEntryId);
-    result.set(row.sourceId, files);
-  }
-  return result;
+  return uniqueIds;
 }
 
 function normalizeModelId(providerId: string, modelId: string | null | undefined): string | null {
@@ -294,10 +241,10 @@ function normalizeModelId(providerId: string, modelId: string | null | undefined
   return isUniqueModelId(modelId) ? modelId : createUniqueModelId(providerId, modelId);
 }
 
-function rowToPainting(row: PaintingRow, files: PaintingFiles): Painting {
+function rowToPainting(row: PaintingRow): Painting {
   return {
     createdAt: timestampToISO(row.createdAt),
-    files,
+    files: row.files,
     id: row.id,
     modelId: row.modelId,
     orderKey: row.orderKey,

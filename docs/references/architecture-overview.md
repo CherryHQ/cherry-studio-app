@@ -28,15 +28,16 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Workflow module factories, device adapters, external clients, avatars, and web search |
 | `src/shared/contracts` | Workflow-only `Backend` modules, runtime projections, sessions, events, and results |
+| `src/shared/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors (`@/shared/data`) |
 | `src/shared/core` / `src/shared/utils` | Cross-layer foundations and mobile-native pure utilities |
 | `src/types` | Truly global or generated declarations only |
 | `packages/universal/src/ai` | Cross-layer AI tool and transport rules (`@cherrystudio/universal/ai`) |
-| `packages/universal/src/data` | Entities, endpoint DTOs, `ApiClient`, preferences, `PreferenceClient`, cache schemas, and data errors (`@cherrystudio/universal/data`) |
+| `packages/universal/src/data/types` | Transitional home of the entity types `packages/ai-runtime` still imports (`@cherrystudio/universal/data/types`) |
 | `packages/universal/src/{types,utils}` | Portable desktop-mirrored types and pure helpers (`@cherrystudio/universal/{types,utils}`) |
 
 Only `bootstrap` may import both frontend and backend. Frontend resource data uses typed Data API
-hooks and `@cherrystudio/universal/data/api`; preferences use the separate
-`@cherrystudio/universal/data/preference` client; workflows use `useBackendModule(key)` and
+hooks and `@/shared/data/api`; preferences use the separate
+`@/shared/data/preference` client; workflows use `useBackendModule(key)` and
 `@/shared/contracts`. Frontend never imports SQLite, Drizzle, AI SDK, or concrete device and
 persistence implementations. ESLint enforces these directions.
 
@@ -56,9 +57,9 @@ workflow and lifecycle code is named by ownership as `Module`, `Runtime`, `Sessi
 ## Frontend Interfaces
 
 - Resource CRUD and pagination use typed React Query hooks backed by `ApiClient` from
-  `@cherrystudio/universal/data/api`.
+  `@/shared/data/api`.
 - Preference reads, writes, and subscriptions use `PreferenceClient` from
-  `@cherrystudio/universal/data/preference`.
+  `@/shared/data/preference`.
 - Multi-step workflows, app-owned runtime projections, and caller-owned sessions use
   `useBackendModule(key)` and the workflow-only `Backend` from `@/shared/contracts`.
 

@@ -1,4 +1,4 @@
-import type { PreferenceSchema, PreferenceKeyType } from '@cherrystudio/universal/data/preference';
+import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 
 import {
   getProviderForCapability,

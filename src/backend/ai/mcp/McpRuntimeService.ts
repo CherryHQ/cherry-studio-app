@@ -4,9 +4,6 @@ import { resolveServersForAssistant } from '@cherrystudio/ai-runtime/tools';
 import type { McpCallToolResult } from '@cherrystudio/universal/ai/tools/mcpResult';
 import { mcpResultToTextSummary } from '@cherrystudio/universal/ai/tools/mcpResult';
 import { buildFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
-import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import type { Tool, ToolSet } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -20,6 +17,9 @@ import type {
   McpToolSummary,
 } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
+import type { Assistant } from '@/shared/data/types/assistant';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 const logger = loggerService.withContext('McpRuntimeService');
 

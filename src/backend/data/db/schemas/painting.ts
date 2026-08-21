@@ -1,5 +1,7 @@
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import type { PaintingFiles } from '@/shared/data/types/painting';
+
 import {
   createUpdateTimestamps,
   orderKeyColumns,
@@ -10,13 +12,15 @@ import {
 /**
  * Painting row — a frozen receipt of a completed image generation.
  *
- * Output and input files are NOT stored on the row. Each painting has zero or
- * more `painting_file_ref` rows with `sourceId=painting.id`,
- * `role='output'|'input'`. PaintingService writes those refs on create/update;
- * row deletion cascades refs at the database layer. The frozen receipt shape
- * avoids carrying mutable form state (mode, size, seed, etc.) on the row — the
- * live painting draft lives in renderer React state and is discarded on app
- * exit.
+ * `files` holds the entry ids the receipt points at, the same way a message
+ * carries its file parts: the painting owns its own file list rather than
+ * deriving it from association rows. That keeps a file's deletion from
+ * rewriting the receipt — the id stays, and the surface renders the
+ * unavailable placeholder (see docs/references/data/file-model.md).
+ *
+ * The frozen receipt shape avoids carrying mutable form state (mode, size,
+ * seed, etc.) on the row — the live painting draft lives in renderer React
+ * state and is discarded on app exit.
  */
 export const paintingTable = sqliteTable(
   'painting',
@@ -27,6 +31,12 @@ export const paintingTable = sqliteTable(
     prompt: text().notNull(),
     ...orderKeyColumns,
     ...createUpdateTimestamps,
+    // Declared last to match the physical column order: SQLite's ADD COLUMN
+    // appends, and this column arrived that way in 0002.
+    files: text({ mode: 'json' })
+      .$type<PaintingFiles>()
+      .notNull()
+      .$defaultFn(() => ({ input: [], output: [] })),
   },
   (t) => [orderKeyIndex('painting')(t)],
 );

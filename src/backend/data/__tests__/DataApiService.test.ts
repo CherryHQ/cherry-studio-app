@@ -1,4 +1,4 @@
-import { ErrorCode } from '@cherrystudio/universal/data/api/types';
+import { ErrorCode } from '@/shared/data/api/errors';
 
 import { DataApiService } from '../DataApiService';
 

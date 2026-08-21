@@ -1,5 +1,6 @@
 import { ENDPOINT_TYPE, MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
 import { filterModelsByType, getModelTypeCounts, matchesModelTypeFilter } from '../modelTypeFilter';
 

@@ -1,5 +1,3 @@
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
 import type { DbService } from '@/backend/data/db/DbService';
 import { materializeRemoteModels } from '@/backend/data/services/materializeRemoteModels';
@@ -23,6 +21,7 @@ import {
 } from '@/backend/services/providers/providerAvatarStorage';
 import type { BackendServices } from '@/bootstrap/composition/createBackendServices';
 import type { Backend } from '@/shared/contracts';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 export type BackendComposition = {
   backend: Backend;
@@ -106,7 +105,7 @@ export function createBackend(
       set: (key, value) => services.preference.set(key, value),
     },
   });
-  const userContentImages = createUserContentImageStorage(services.fileEntry);
+  const userContentImages = createUserContentImageStorage();
   const profile = createProfileModule({
     avatars: {
       replace: (sourceUri, previousAvatar, persist) =>
@@ -121,10 +120,11 @@ export function createBackend(
 
   return {
     backend: {
+      agent: services.agent,
       chat: services.chat,
       file: {
         createInternalEntry: services.fileContent.createInternalEntry,
-        deleteIfUnreferenced: services.fileContent.deleteIfUnreferenced,
+        delete: services.fileContent.delete,
         getUri: services.fileContent.getUri,
       },
       mcp,

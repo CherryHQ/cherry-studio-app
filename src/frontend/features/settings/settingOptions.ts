@@ -1,4 +1,4 @@
-import type { LanguageVarious } from '@cherrystudio/universal/data/preference';
+import type { LanguageVarious } from '@/shared/data/preference';
 
 export type SettingOption<TValue extends string> = {
   label: string;

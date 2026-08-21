@@ -1,3 +1,4 @@
+export * from './agent';
 export * from './backend';
 export * from './chat';
 export * from './file';

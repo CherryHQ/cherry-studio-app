@@ -1,4 +1,3 @@
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -7,17 +6,18 @@ import type {
   ComposerAttachmentSource,
   ComposerInitialAttachment,
 } from '@/frontend/components/composer/utils/composerAttachments';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 import { useManagedComposerAttachments } from '../useManagedComposerAttachments';
 
 const mockCreateInternalEntry = jest.fn();
-const mockDeleteIfUnreferenced = jest.fn(async () => true);
+const mockDeleteEntry = jest.fn(async () => true);
 const mockAlertShow = jest.fn();
 const mockLoggerDebug = jest.fn();
 const mockLoggerWarn = jest.fn();
 const mockFileModule = {
   createInternalEntry: mockCreateInternalEntry,
-  deleteIfUnreferenced: mockDeleteIfUnreferenced,
+  delete: mockDeleteEntry,
   getUri: jest.fn(),
 };
 
@@ -110,7 +110,7 @@ describe('useManagedComposerAttachments', () => {
     });
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDeleteIfUnreferenced).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000003');
+    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000003');
   });
 
   it('safely deletes a ready attachment when the user removes it', async () => {
@@ -120,7 +120,7 @@ describe('useManagedComposerAttachments', () => {
     await act(async () => snapshot?.removeAttachment(ready.id));
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDeleteIfUnreferenced).toHaveBeenCalledWith(ready.fileEntryId);
+    expect(mockDeleteEntry).toHaveBeenCalledWith(ready.fileEntryId);
     expect(mockCreateInternalEntry).not.toHaveBeenCalled();
   });
 
@@ -131,7 +131,7 @@ describe('useManagedComposerAttachments', () => {
     await act(async () => snapshot?.clearAttachments());
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDeleteIfUnreferenced).not.toHaveBeenCalled();
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
   });
 
   it('imports transient initial attachments but mounts managed ones as ready', async () => {
@@ -235,15 +235,12 @@ function readyAttachment(entryId: FileEntryId, name: string): ComposerAttachment
 function resolvedFile(entryId: FileEntryId, name: string) {
   return {
     entry: {
-      cleanupPolicy: 'delete_when_unreferenced' as const,
-      contentHash: null,
-      createdAt: '2026-08-08T00:00:00.000Z',
-      ext: 'pdf',
+      createdAt: 1_754_611_200_000,
+      filename: name,
       id: entryId,
-      name,
-      origin: 'internal' as const,
+      mediaType: 'application/pdf',
       size: 128,
-      updatedAt: '2026-08-08T00:00:00.000Z',
+      updatedAt: 1_754_611_200_000,
     },
     uri: `file:///managed/${name}`,
   };

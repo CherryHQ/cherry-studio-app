@@ -1,20 +1,17 @@
-import { type FileEntry, FileEntrySchema } from '@cherrystudio/universal/data/types/file';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
-
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import { type FileEntry, FileEntrySchema, fileEntryUrl } from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import {
   createInternalEntry,
   createMessageParts,
+  deleteInternalEntry,
   deleteInternalFile,
-  deleteInternalFileUri,
   discardInternalEntries,
-  deleteInternalEntryIfUnreferenced,
   getFileUri,
   getInternalFileUri,
   imageUriToDataUrl,
-  listInternalFiles,
   resolveFileEntry,
 } from '../fileStorage';
 
@@ -26,7 +23,6 @@ jest.mock('uuid', () => ({
 jest.mock('expo-file-system', () => {
   const directories = new Set<string>();
   const files = new Map<string, number>();
-  const modificationTimes = new Map<string, number | null>();
   const copies: { destination: string; source: string }[] = [];
   const failures = new Set<string>();
   const writeFailures = new Set<string>();
@@ -57,12 +53,6 @@ jest.mock('expo-file-system', () => {
     create() {
       directories.add(this.uri);
     }
-
-    list() {
-      return [...files.keys()]
-        .filter((uri) => uri.startsWith(this.uri) && !uri.slice(this.uri.length).includes('/'))
-        .map((uri) => new MockFile(uri));
-    }
   }
 
   class MockFile {
@@ -82,14 +72,6 @@ jest.mock('expo-file-system', () => {
 
     get size() {
       return files.get(this.uri) ?? 0;
-    }
-
-    get modificationTime() {
-      return modificationTimes.get(this.uri) ?? null;
-    }
-
-    get parentDirectory() {
-      return new MockDirectory(this.uri.slice(0, this.uri.lastIndexOf('/') + 1));
     }
 
     get type() {
@@ -130,7 +112,6 @@ jest.mock('expo-file-system', () => {
       directories,
       failures,
       files,
-      modificationTimes,
       paths,
       writeFailures,
       writes,
@@ -143,7 +124,6 @@ type FileSystemTestState = {
   directories: Set<string>;
   failures: Set<string>;
   files: Map<string, number>;
-  modificationTimes: Map<string, number | null>;
   paths: { document: { uri: string } };
   writeFailures: Set<string>;
   writes: { content: string; options?: unknown; uri: string }[];
@@ -157,7 +137,6 @@ describe('fileStorage', () => {
     testState.directories.clear();
     testState.failures.clear();
     testState.files.clear();
-    testState.modificationTimes.clear();
     testState.writeFailures.clear();
     testState.writes.length = 0;
     testState.paths.document.uri = 'file:///documents/';
@@ -173,30 +152,31 @@ describe('fileStorage', () => {
 
     expect(managed.entries).toEqual([
       {
-        cleanupPolicy: 'delete_when_unreferenced',
-        contentHash: null,
         createdAt: 1,
-        ext: 'pdf',
+        filename: 'Quarterly Brief.pdf',
         id: '00000000-0000-7000-8000-000000000001',
-        name: 'Quarterly Brief',
-        origin: 'internal',
+        mediaType: 'application/octet-stream',
         size: 42,
         updatedAt: 1,
       },
     ]);
-    expect(entries.create).toHaveBeenCalledWith(
-      expect.objectContaining({ cleanupPolicy: 'delete_when_unreferenced', origin: 'internal' }),
-    );
-    expect(managed.parts[0]).toEqual(
-      expect.objectContaining({
-        url: 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf',
-      }),
-    );
+    expect(entries.create).toHaveBeenCalledWith({
+      filename: 'Quarterly Brief.pdf',
+      id: '00000000-0000-7000-8000-000000000001',
+      mediaType: 'application/octet-stream',
+      size: 42,
+    });
+    expect(
+      testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.pdf'),
+    ).toBe(true);
     const managedPart = managed.parts[0];
     expect(managedPart.type).toBe('file');
     if (managedPart.type !== 'file') {
       throw new Error('Expected a managed file part');
     }
+    expect(managedPart.url).toBe(fileEntryUrl(managed.entries[0].id));
+    expect(managedPart.url).toBe('cherry://file/00000000-0000-7000-8000-000000000001');
+    expect(managedPart.mediaType).toBe('application/octet-stream');
     expect(readCherryMeta(managedPart)?.fileEntryId).toBe('00000000-0000-7000-8000-000000000001');
   });
 
@@ -207,12 +187,10 @@ describe('fileStorage', () => {
       createFilePart('file:///picker/README', 'README'),
     ]);
 
-    expect(managed.entries[0]).toEqual(
-      expect.objectContaining({
-        ext: null,
-        name: 'README',
-      }),
-    );
+    expect(managed.entries[0]).toEqual(expect.objectContaining({ filename: 'README' }));
+    expect(
+      testState.files.has('file:///documents/Data/Files/00000000-0000-7000-8000-000000000001'),
+    ).toBe(true);
   });
 
   test('uses the source extension when a camera display name has none', async () => {
@@ -222,14 +200,55 @@ describe('fileStorage', () => {
       createFilePart('file:///camera/IMG_0001.JPG', 'Photo'),
     ]);
 
-    expect(managed.entries[0]).toEqual(expect.objectContaining({ ext: 'jpg', name: 'Photo' }));
+    expect(managed.entries[0]).toEqual(expect.objectContaining({ filename: 'Photo.jpg' }));
+  });
+
+  test('folds an unsafe extension into the filename so writes and reads agree', async () => {
+    testState.files.set('file:///picker/report', 9);
+    const entries = createEntryStore();
+
+    const entry = await createInternalEntry(entries, {
+      name: 'report.final version',
+      source: 'uri',
+      uri: 'file:///picker/report',
+    });
+
+    expect(entry.filename).toBe('report.final version');
+    const extensionlessUri = 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001';
+    expect(testState.files.has(extensionlessUri)).toBe(true);
+    expect(getInternalFileUri(entry)).toBe(extensionlessUri);
+  });
+
+  test('resolves the media type from the picker, then the source file, then the fallback', async () => {
+    testState.files.set('file:///camera/IMG_0001.jpg', 8);
+    testState.files.set('file:///picker/unknown.bin', 8);
+    const entries = createEntryStore();
+
+    const fromSource = await createInternalEntry(entries, {
+      source: 'uri',
+      uri: 'file:///camera/IMG_0001.jpg',
+    });
+    expect(fromSource.mediaType).toBe('image/jpeg');
+
+    const fromInput = await createInternalEntry(entries, {
+      mediaType: 'image/heic',
+      source: 'uri',
+      uri: 'file:///camera/IMG_0001.jpg',
+    });
+    expect(fromInput.mediaType).toBe('image/heic');
+
+    const fallback = await createInternalEntry(entries, {
+      source: 'uri',
+      uri: 'file:///picker/unknown.bin',
+    });
+    expect(fallback.mediaType).toBe('application/octet-stream');
   });
 
   test('rebuilds managed paths from the current document directory', () => {
     const entry = {
-      ext: 'png',
+      filename: 'image.png',
       id: '00000000-0000-7000-8000-000000000001',
-    } as const;
+    } as Pick<FileEntry, 'filename' | 'id'>;
     testState.files.set(
       'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png',
       10,
@@ -251,13 +270,10 @@ describe('fileStorage', () => {
   test('resolves persisted entries against the current document directory', async () => {
     const entries = createEntryStore();
     const entry = FileEntrySchema.parse({
-      cleanupPolicy: 'manual',
-      contentHash: null,
       createdAt: 1,
-      ext: 'png',
+      filename: 'image.png',
       id: '00000000-0000-7000-8000-000000000001',
-      name: 'image',
-      origin: 'internal',
+      mediaType: 'image/png',
       size: 10,
       updatedAt: 1,
     });
@@ -268,24 +284,6 @@ describe('fileStorage', () => {
 
     await expect(resolveFileEntry(entries, entry.id)).resolves.toEqual({ entry, uri });
     await expect(getFileUri(entries, entry.id)).resolves.toBe(uri);
-  });
-
-  test('keeps external entries opaque instead of resolving their paths', async () => {
-    const entries = createEntryStore();
-    const entry = FileEntrySchema.parse({
-      cleanupPolicy: 'manual',
-      createdAt: 1,
-      ext: 'png',
-      externalPath: '/user-selected/image.png',
-      id: '00000000-0000-7000-8000-000000000001',
-      name: 'image',
-      origin: 'external',
-      updatedAt: 1,
-    });
-    entries.stored.set(entry.id, entry);
-
-    await expect(resolveFileEntry(entries, entry.id)).resolves.toBeNull();
-    await expect(getFileUri(entries, entry.id)).resolves.toBeUndefined();
   });
 
   test('removes every copied destination when a later copy fails partially', async () => {
@@ -311,7 +309,6 @@ describe('fileStorage', () => {
   test('writes generated base64 and persists its internal entry', async () => {
     const entries = createEntryStore();
     const entry = await createInternalEntry(entries, {
-      cleanupPolicy: 'delete_when_unreferenced',
       data: 'data:image/png;base64,AAAA',
       mediaType: 'image/png',
       source: 'base64',
@@ -319,7 +316,8 @@ describe('fileStorage', () => {
 
     expect(entry).toEqual(
       expect.objectContaining({
-        ext: 'png',
+        filename: 'painting-00000000-0000-7000-8000-000000000001.png',
+        mediaType: 'image/png',
         size: 4,
       }),
     );
@@ -334,7 +332,6 @@ describe('fileStorage', () => {
 
     await expect(
       createInternalEntry(createEntryStore(), {
-        cleanupPolicy: 'delete_when_unreferenced',
         data: 'AAAA',
         mediaType: 'image/png',
         source: 'base64',
@@ -350,7 +347,6 @@ describe('fileStorage', () => {
 
     await expect(
       createInternalEntry(entries, {
-        cleanupPolicy: 'manual',
         name: 'brief.txt',
         source: 'uri',
         uri: 'file:///picker/brief.txt',
@@ -366,12 +362,11 @@ describe('fileStorage', () => {
     testState.files.set('file:///picker/brief.txt', 42);
     const entries = createEntryStore();
     const entry = await createInternalEntry(entries, {
-      cleanupPolicy: 'delete_when_unreferenced',
       name: 'brief.txt',
       source: 'uri',
       uri: 'file:///picker/brief.txt',
     });
-    entries.delete.mockRejectedValueOnce(new Error('file is referenced'));
+    entries.delete.mockRejectedValueOnce(new Error('database failed'));
 
     await discardInternalEntries(entries, [entry]);
 
@@ -380,7 +375,7 @@ describe('fileStorage', () => {
     ).toBe(true);
   });
 
-  test('discards an unreferenced managed entry and its file', async () => {
+  test('hard-deletes an entry row and its file', async () => {
     const entry = internalEntry();
     const uri = `file:///documents/Data/Files/${entry.id}.txt`;
     testState.files.set(uri, entry.size);
@@ -390,74 +385,42 @@ describe('fileStorage', () => {
       findByIdTx: jest.fn(async () => entry),
       withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback(tx)),
     };
-    const refs = { countPersistentRefsByEntryIdTx: jest.fn(async () => 0) };
 
-    await expect(
-      deleteInternalEntryIfUnreferenced(entries as never, refs as never, entry.id),
-    ).resolves.toBe(true);
+    await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(true);
 
     expect(entries.deleteTx).toHaveBeenCalledWith(tx, entry.id);
     expect(testState.files.has(uri)).toBe(false);
   });
 
-  test('keeps managed entries that have persistent references', async () => {
+  test('reports a missing entry row without deleting anything', async () => {
     const entry = internalEntry();
     const entries = {
       deleteTx: jest.fn(async () => undefined),
-      findByIdTx: jest.fn(async () => entry),
+      findByIdTx: jest.fn(async () => null),
       withWriteTx: jest.fn(async (callback: (value: unknown) => Promise<unknown>) => callback({})),
     };
-    const refs = { countPersistentRefsByEntryIdTx: jest.fn(async () => 1) };
 
-    await expect(
-      deleteInternalEntryIfUnreferenced(entries as never, refs as never, entry.id),
-    ).resolves.toBe(false);
+    await expect(deleteInternalEntry(entries as never, entry.id)).resolves.toBe(false);
     expect(entries.deleteTx).not.toHaveBeenCalled();
   });
 
-  test('resolves a local image as a data URL', async () => {
-    await expect(imageUriToDataUrl('file:///picker/photo.jpg', 'image/*')).resolves.toBe(
+  test('resolves a local image as a data URL, falling back to the file type', async () => {
+    await expect(imageUriToDataUrl('file:///picker/photo.jpg', 'unknown')).resolves.toBe(
       'data:image/jpeg;base64,encoded',
     );
   });
 
-  test('enumerates only UUID files with a safe optional extension', () => {
-    const directory = 'file:///documents/Data/Files/';
-    testState.directories.add(directory);
-    const valid = `${directory}00000000-0000-7000-8000-000000000001.png`;
-    const extensionless = `${directory}00000000-0000-7000-8000-000000000002`;
-    testState.files.set(valid, 1);
-    testState.files.set(extensionless, 2);
-    testState.files.set(`${directory}00000000-0000-7000-8000-000000000003.bad.ext`, 3);
-    testState.files.set(`${directory}not-an-id.png`, 4);
-    testState.modificationTimes.set(valid, 10);
-    testState.modificationTimes.set(extensionless, 20);
-
-    expect(listInternalFiles()).toEqual([
-      {
-        id: '00000000-0000-7000-8000-000000000001',
-        modificationTime: 10,
-        name: '00000000-0000-7000-8000-000000000001.png',
-        uri: valid,
-      },
-      {
-        id: '00000000-0000-7000-8000-000000000002',
-        modificationTime: 20,
-        name: '00000000-0000-7000-8000-000000000002',
-        uri: extensionless,
-      },
-    ]);
-  });
-
-  test('deletes only managed Data/Files paths', () => {
+  test('deletes only an existing managed blob', () => {
     const uri = 'file:///documents/Data/Files/00000000-0000-7000-8000-000000000001.png';
     testState.files.set(uri, 1);
+    const entry = {
+      filename: 'image.png',
+      id: '00000000-0000-7000-8000-000000000001',
+    } as Pick<FileEntry, 'filename' | 'id'>;
 
-    expect(deleteInternalFile({ ext: 'png', id: '00000000-0000-7000-8000-000000000001' })).toBe(
-      true,
-    );
+    expect(deleteInternalFile(entry)).toBe(true);
     expect(testState.files.has(uri)).toBe(false);
-    expect(() => deleteInternalFileUri('file:///tmp/outside.png')).toThrow('outside Data/Files');
+    expect(deleteInternalFile(entry)).toBe(false);
   });
 });
 
@@ -491,16 +454,13 @@ function createFilePart(url: string, filename: string): CherryMessagePart {
   };
 }
 
-function internalEntry(): Extract<FileEntry, { origin: 'internal' }> {
+function internalEntry(): FileEntry {
   return FileEntrySchema.parse({
-    cleanupPolicy: 'delete_when_unreferenced',
-    contentHash: null,
     createdAt: 1,
-    ext: 'txt',
+    filename: 'notes.txt',
     id: '00000000-0000-7000-8000-000000000001',
-    name: 'notes',
-    origin: 'internal',
+    mediaType: 'text/plain',
     size: 12,
     updatedAt: 1,
-  }) as Extract<FileEntry, { origin: 'internal' }>;
+  });
 }

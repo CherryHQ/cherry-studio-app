@@ -5,14 +5,12 @@ import { assistantService } from '@/backend/data/services/AssistantService';
 import { contentSearchService } from '@/backend/data/services/ContentSearchService';
 import { entitySearchService } from '@/backend/data/services/EntitySearchService';
 import { fileEntryService } from '@/backend/data/services/FileEntryService';
-import { fileRefService } from '@/backend/data/services/FileRefService';
 import { jobService } from '@/backend/data/services/JobService';
 import { mcpServerService } from '@/backend/data/services/McpServerService';
 import { messageService } from '@/backend/data/services/MessageService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { paintingService } from '@/backend/data/services/PaintingService';
 import { providerService } from '@/backend/data/services/ProviderService';
-import { temporaryChatService } from '@/backend/data/services/TemporaryChatService';
 import { topicService } from '@/backend/data/services/TopicService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
@@ -39,7 +37,6 @@ export function createDataServices({
     contentSearch: contentSearchService,
     entitySearch: entitySearchService,
     fileEntry: fileEntryService,
-    fileRef: fileRefService,
     job: jobService,
     mcpServer: mcpServerService,
     message: messageService,
@@ -47,7 +44,6 @@ export function createDataServices({
     painting: paintingService,
     preference,
     provider: providerService,
-    temporaryChat: temporaryChatService,
     topic: topicService,
   };
 }

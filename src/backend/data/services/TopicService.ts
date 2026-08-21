@@ -1,4 +1,9 @@
-import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
+import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
+import * as Crypto from 'expo-crypto';
+
+import { application } from '@/backend/core/application/Application';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type {
   ActiveNodeResponse,
   CreateTopicDto,
@@ -7,21 +12,13 @@ import type {
   ListTopicsQuery,
   TopicListItem,
   UpdateTopicDto,
-} from '@cherrystudio/universal/data/api/schemas/topics';
-import {
-  type CursorPaginationResponse,
-  DataApiErrorFactory,
-} from '@cherrystudio/universal/data/api/types';
-import type { MessageStats } from '@cherrystudio/universal/data/types/message';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
-import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
-import * as Crypto from 'expo-crypto';
-
-import { application } from '@/backend/core/application/Application';
+} from '@/shared/data/api/schemas/topics';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { MessageStats } from '@/shared/data/types/message';
+import type { Topic } from '@/shared/data/types/topic';
 
 import {
   assistantTable,
-  chatMessageFileRefTable,
   type MessageRow,
   messageTable,
   type TopicRow,
@@ -35,8 +32,6 @@ import { timestampToISO } from './utils/rowMappers';
 
 const defaultLimit = 50;
 const maxLimit = 200;
-const sqliteInArrayChunk = 500;
-const sqliteInsertChunk = 100;
 
 type DbOrTx = any;
 export class TopicService {
@@ -151,13 +146,7 @@ export class TopicService {
         },
       )) as TopicRow;
       const destinationRootId = await createRootMessageTx(tx, newTopic.id);
-      const { activeNodeId, sourceIdMap } = await copyPathRowsTx(
-        tx,
-        sourcePath,
-        newTopic.id,
-        destinationRootId,
-      );
-      await copyChatMessageFileRefsTx(tx, sourceIdMap);
+      const activeNodeId = await copyPathRowsTx(tx, sourcePath, newTopic.id, destinationRootId);
 
       const [updated] = await tx
         .update(topicTable)
@@ -494,7 +483,9 @@ async function copyPathRowsTx(
   rows: MessageRow[],
   topicId: string,
   destinationRootId: string,
-): Promise<{ activeNodeId: string; sourceIdMap: Map<string, string> }> {
+): Promise<string> {
+  // Source-to-copy ids, so a copied message reparents onto its copied parent
+  // rather than the source one.
   const sourceIdMap = new Map<string, string>();
   let activeNodeId = '';
   for (const source of rows) {
@@ -520,7 +511,7 @@ async function copyPathRowsTx(
     sourceIdMap.set(source.id, copy.id);
     activeNodeId = copy.id;
   }
-  return { activeNodeId, sourceIdMap };
+  return activeNodeId;
 }
 
 function copyTimingStats(stats: MessageStats | null): MessageStats | null {
@@ -534,35 +525,6 @@ function copyTimingStats(stats: MessageStats | null): MessageStats | null {
     ...(stats.timeThinkingMs !== undefined ? { timeThinkingMs: stats.timeThinkingMs } : {}),
   };
   return Object.keys(copy).length > 0 ? copy : null;
-}
-
-async function copyChatMessageFileRefsTx(
-  tx: DbOrTx,
-  sourceIdMap: ReadonlyMap<string, string>,
-): Promise<void> {
-  const sourceIds = [...sourceIdMap.keys()];
-  for (let index = 0; index < sourceIds.length; index += sqliteInArrayChunk) {
-    // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
-    const refs = await tx
-      .select()
-      .from(chatMessageFileRefTable)
-      .where(
-        inArray(
-          chatMessageFileRefTable.sourceId,
-          sourceIds.slice(index, index + sqliteInArrayChunk),
-        ),
-      );
-    const values = refs.flatMap((ref: { fileEntryId: string; role: string; sourceId: string }) => {
-      const sourceId = sourceIdMap.get(ref.sourceId);
-      return sourceId ? [{ fileEntryId: ref.fileEntryId, role: ref.role, sourceId }] : [];
-    });
-    for (let offset = 0; offset < values.length; offset += sqliteInsertChunk) {
-      // react-doctor-disable-next-line async-await-in-loop -- chunks avoid SQLite's variable limit
-      await tx
-        .insert(chatMessageFileRefTable)
-        .values(values.slice(offset, offset + sqliteInsertChunk));
-    }
-  }
 }
 
 function buildSearchPredicate(query: string | undefined): SQL | undefined {

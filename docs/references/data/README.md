@@ -35,7 +35,7 @@ It contains:
 - `BackendProvider` and `useBackendModule(key)` for workflows only.
 - `QueryProvider` and endpoint-specific files under the `queryKeys` registry.
 - The frontend `CacheService.ts` and cache hooks; its MMKV adapter is private to the service, while
-  pure cache schemas live in `@cherrystudio/universal/data/cache`.
+  pure cache schemas live in `@/shared/data/cache`.
 
 Feature and cross-feature hooks own resource-specific queries and call endpoint paths through the
 typed Data API hooks. `frontend/data/queryKeys` supplies one cache-key file per endpoint family
@@ -45,9 +45,10 @@ concrete service graph. Frontend tests inject an `ApiClient`, `PreferenceClient`
 
 ## Shared Data
 
-`packages/universal/src/data` (`@cherrystudio/universal/data`) contains values both sides may know. The
-package mirrors the cross-platform subset of Cherry Desktop's `src/shared`, so its contents stay
-desktop-compatible:
+`src/shared/data` (`@/shared/data`) contains values both sides may know. It is mobile-owned and
+independent of Cherry Desktop — schemas, fields, and routes exist only while mobile code reads
+them. The entity types that `packages/ai-runtime` still imports remain temporarily under
+`@cherrystudio/universal/data/types` (see that package's `src/data/README.md` ledger):
 
 - `api`: endpoint DTO schemas, pagination shapes, data errors, and `ApiClient`.
 - `preference`: preference keys, value schemas, defaults, pure helpers, and `PreferenceClient`.
@@ -76,20 +77,21 @@ cursor. It omits Electron-only IPC, shared-window relay, and BrowserWindow synch
 backend persist tier uses its own `cherry-backend-cache-persist` MMKV store and is not readable
 through the frontend cache API.
 
-Both caches use schemas and pure cache helpers from `@cherrystudio/universal/data/cache`, but their concrete
+Both caches use schemas and pure cache helpers from `@/shared/data/cache`, but their concrete
 classes, adapters, values, subscriptions, and lifecycles remain independent. Domain-specific
 caches, such as MCP tool snapshots, may remain private to the owning backend module when a generic
 cache would weaken that module's invariants.
 
 ## Data API And Workflow Contracts
 
-`src/backend/data/api/handlers` maps endpoint families from `@cherrystudio/universal/data/api` to persistence or
+`src/backend/data/api/handlers` maps endpoint families from `@/shared/data/api` to persistence or
 workflow implementations. `DataApiService` performs typed in-process route dispatch and satisfies
 `ApiClient`; it adds no IPC, HTTP, or serialization.
 
-File entry and reference reads remain SQL-only Data API operations. Managed-file import, Expo URI
-resolution, and safe unreferenced cleanup use the mobile `FileModule` through `BackendProvider`,
-which is the platform adaptation of Cherry Desktop's filesystem-backed File IPC boundary.
+File entry reads remain SQL-only Data API operations. Managed-file import, Expo URI resolution, and
+user-triggered deletion use the mobile `FileModule` through `BackendProvider`, which is the platform
+adaptation of Cherry Desktop's filesystem-backed File IPC boundary. [File Model](file-model.md) has
+the ownership and lifecycle rules those operations follow.
 
 `src/shared/contracts/backend.ts` aggregates workflow-only modules. Multi-step behavior belongs in
 its owning backend domain, including:

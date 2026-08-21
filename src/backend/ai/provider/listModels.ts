@@ -2,10 +2,10 @@ import {
   listModels as listPortableModels,
   type ModelListContext as PortableModelListContext,
 } from '@cherrystudio/ai-runtime/provider';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 export type ModelListContext = Omit<PortableModelListContext, 'appHeaders'>;
 

@@ -1,27 +1,16 @@
-import {
-  DataApiErrorFactory,
-  ErrorCode,
-  isDataApiError,
-  toDataApiError,
-} from '@cherrystudio/universal/data/api/errors';
-import {
-  CONTENT_SEARCH_DEFAULT_LIMIT_PER_SOURCE,
-  CONTENT_SEARCH_MAX_LIMIT_PER_SOURCE,
-  type ContentSearchGroup,
-  type ContentSearchQuery,
-  type ContentSearchResponse,
-  type ContentSearchSourceType,
-  contentSearchSourceTypes,
-  type TopicMessageContentSearchItem,
-} from '@cherrystudio/universal/data/api/schemas/search';
-import {
-  coerceSearchRole,
-  TOPIC_MESSAGE_SEARCH_ROLES,
-} from '@cherrystudio/universal/data/types/message';
 import { loggerService } from '@logger';
 import { sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
+import { toDataApiError } from '@/shared/data/api/errors';
+import {
+  CONTENT_SEARCH_DEFAULT_LIMIT,
+  CONTENT_SEARCH_MAX_LIMIT,
+  type ContentSearchQuery,
+  type ContentSearchResponse,
+  type TopicMessageContentSearchItem,
+} from '@/shared/data/api/schemas/search';
+import { coerceSearchRole, TOPIC_MESSAGE_SEARCH_ROLES } from '@/shared/data/types/message';
 
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch';
 import { timestampToISO } from './utils/rowMappers';
@@ -45,34 +34,6 @@ type TopicMessageSearchRow = {
   topicUpdatedAt: number;
 };
 
-function toSourceCursorError(sourceType: ContentSearchSourceType, error: unknown): unknown {
-  if (!isDataApiError(error) || error.code !== ErrorCode.VALIDATION_ERROR) return error;
-  const details = error.details as { fieldErrors?: Record<string, string[]> } | undefined;
-  const cursorErrors = details?.fieldErrors?.cursor;
-  if (!cursorErrors) return error;
-  return DataApiErrorFactory.validation({ [`cursors.${sourceType}`]: cursorErrors }, error.message);
-}
-
-function withSourceContext(sourceType: ContentSearchSourceType, error: unknown) {
-  const sourcedError = toSourceCursorError(sourceType, error);
-  if (!isDataApiError(sourcedError)) {
-    return toDataApiError(sourcedError, `content search source ${sourceType}`);
-  }
-  const details = sourcedError.details as { fieldErrors?: Record<string, string[]> } | undefined;
-  if (
-    sourcedError.code === ErrorCode.VALIDATION_ERROR &&
-    details?.fieldErrors?.[`cursors.${sourceType}`]
-  ) {
-    return sourcedError;
-  }
-  return DataApiErrorFactory.create(
-    sourcedError.code,
-    `content search source ${sourceType} failed: ${sourcedError.message}`,
-    sourcedError.details,
-    sourcedError.requestContext,
-  );
-}
-
 export class ContentSearchService {
   /**
    * Resolved per call rather than injected once, so the instance holds no
@@ -88,47 +49,19 @@ export class ContentSearchService {
   }
 
   async search(query: ContentSearchQuery): Promise<ContentSearchResponse> {
-    const requestedSources = new Set(query.sources ?? contentSearchSourceTypes);
-    const sources = contentSearchSourceTypes.filter((sourceType) =>
-      requestedSources.has(sourceType),
-    );
-    const limit = Math.min(
-      query.limitPerSource ?? CONTENT_SEARCH_DEFAULT_LIMIT_PER_SOURCE,
-      CONTENT_SEARCH_MAX_LIMIT_PER_SOURCE,
-    );
-    const groups: ContentSearchGroup[] = [];
-
-    for (const sourceType of sources) {
-      try {
-        groups.push(await this.searchSource(sourceType, query, limit));
-      } catch (error) {
-        logger.error('content search source failed', error as Error, { sourceType });
-        throw withSourceContext(sourceType, error);
-      }
-    }
-    return { groups, query: query.q };
-  }
-
-  private async searchSource(
-    sourceType: ContentSearchSourceType,
-    query: ContentSearchQuery,
-    limit: number,
-  ): Promise<ContentSearchGroup> {
-    switch (sourceType) {
-      case 'topic-message': {
-        const result = await this.searchTopicMessages({
-          createdAtFrom: query.createdAtFrom,
-          cursor: query.cursors?.[sourceType],
-          limit,
-          q: query.q,
-          topicId: query.filters?.[sourceType]?.topicId,
-        });
-        return { ...result, sourceType };
-      }
-      default: {
-        const exhaustive: never = sourceType;
-        throw new Error(`Unknown content search source: ${exhaustive}`);
-      }
+    const limit = Math.min(query.limit ?? CONTENT_SEARCH_DEFAULT_LIMIT, CONTENT_SEARCH_MAX_LIMIT);
+    try {
+      const result = await this.searchTopicMessages({
+        createdAtFrom: query.createdAtFrom,
+        cursor: query.cursor,
+        limit,
+        q: query.q,
+        topicId: query.topicId,
+      });
+      return { ...result, query: query.q };
+    } catch (error) {
+      logger.error('content search failed', error as Error);
+      throw toDataApiError(error, 'content search');
     }
   }
 

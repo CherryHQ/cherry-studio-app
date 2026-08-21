@@ -1,4 +1,4 @@
-import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
+import type { CherryMessagePart, Message } from '@/shared/data/types/message';
 
 import { getPendingToolApprovals, mergeMessagesWithOverlay } from '../chatRuntimeProjection';
 

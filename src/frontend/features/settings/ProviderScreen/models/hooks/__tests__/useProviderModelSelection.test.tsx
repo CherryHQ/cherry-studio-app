@@ -1,5 +1,6 @@
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { useProviderModelSelection } from '../useProviderModelSelection';
 

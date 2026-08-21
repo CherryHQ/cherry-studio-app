@@ -1,7 +1,3 @@
-import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
-import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
-
 import type { Database } from '@/backend/data/db/DbService';
 import type {
   PaintingGenerationInput,
@@ -10,6 +6,9 @@ import type {
   ResolvedFile,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import { parseUniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type {
   PaintingFileStorage,
@@ -76,8 +75,9 @@ export function createPaintingsModule(dependencies: PaintingsModuleDependencies)
  * Creates the receipt and enqueues the `painting.generate` job in one write
  * transaction — on rollback neither exists. Draft-only images are materialized
  * into internal entries first (file IO cannot ride the transaction); the
- * receipt's input refs pin them, and any entry left unreferenced on failure or
- * on an idempotency hit is discarded before returning.
+ * receipt's `files.input` is what records them, so an entry no receipt ended up
+ * recording — on failure or on an idempotency hit — is discarded before
+ * returning.
  */
 async function startGeneration(
   dependencies: PaintingsModuleDependencies,
@@ -85,7 +85,7 @@ async function startGeneration(
 ): Promise<PaintingGenerationStart> {
   const prompt = input.prompt.trim();
   const signature = generationSignature({ ...input, prompt });
-  const createdInputs: InternalFileEntry[] = [];
+  const createdInputs: FileEntry[] = [];
   let createdInputsSettled = false;
   try {
     const images: PaintingGenerateJobImage[] = [];
@@ -94,7 +94,7 @@ async function startGeneration(
         images.push({ fileEntryId: image.fileEntryId, mediaType: image.mediaType, uri: image.uri });
       } else {
         const entry = await dependencies.storage.createInternalEntry({
-          cleanupPolicy: 'delete_when_unreferenced',
+          mediaType: image.mediaType,
           name: image.name,
           source: 'uri',
           uri: image.uri,
@@ -140,7 +140,7 @@ async function startGeneration(
     });
 
     if (result.reusedActive) {
-      // The active job's own receipt already pins its copies of these inputs.
+      // The reused receipt already lists its own copies of these inputs.
       await dependencies.storage.discard(createdInputs);
     }
     createdInputsSettled = true;

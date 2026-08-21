@@ -1,10 +1,3 @@
-import type {
-  CreateAssistantDto,
-  DeleteAssistantResult,
-  UpdateAssistantDto,
-} from '@cherrystudio/universal/data/api/schemas/assistants';
-import type { OffsetPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
@@ -15,6 +8,13 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
+import type {
+  CreateAssistantDto,
+  DeleteAssistantResult,
+  UpdateAssistantDto,
+} from '@/shared/data/api/schemas/assistants';
+import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);

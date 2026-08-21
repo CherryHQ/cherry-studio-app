@@ -1,20 +1,22 @@
-import {
-  type CleanupPolicy,
-  type FileEntryId,
-  FileEntryIdSchema,
-  type InternalFileEntry,
-  SafeExtSchema,
-  SafeNameSchema,
-} from '@cherrystudio/universal/data/types/file';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { Directory, File, Paths } from 'expo-file-system';
 
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { FileRefService } from '@/backend/data/services/FileRefService';
 import type { ResolvedFile } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import {
+  FALLBACK_MEDIA_TYPE,
+  type FileEntry,
+  type FileEntryId,
+  FileEntryIdSchema,
+  fileEntryUrl,
+  filenameExtension,
+  MediaTypeSchema,
+  SafeExtSchema,
+  SafeNameSchema,
+} from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 const DATA_DIRECTORY_NAME = 'Data';
@@ -23,14 +25,14 @@ const logger = loggerService.withContext('fileStorage');
 
 export type CreateInternalEntryInput =
   | {
-      cleanupPolicy: CleanupPolicy;
+      /** Authoritative media type from the picker; extension inference is the fallback. */
+      mediaType?: string;
       name?: string;
       /** Transient import source; its bytes are copied to Data/Files and the URI is not persisted. */
       source: 'uri';
       uri: string;
     }
   | {
-      cleanupPolicy: CleanupPolicy;
       data: string;
       mediaType: string;
       name?: string;
@@ -38,17 +40,10 @@ export type CreateInternalEntryInput =
     };
 
 type WrittenInternalFile = {
-  ext: string | null;
+  filename: string;
   id: FileEntryId;
-  name: string;
+  mediaType: string;
   size: number;
-};
-
-export type InternalFileOnDisk = {
-  id: FileEntryId;
-  modificationTime: number | null;
-  name: string;
-  uri: string;
 };
 
 function fileDirectory(): Directory {
@@ -69,48 +64,64 @@ function managedFile(id: FileEntryId, ext: string | null): File {
   return new File(fileDirectory(), `${safeId}${safeExt ? `.${safeExt}` : ''}`);
 }
 
-function projectFileName(displayFilename: string, sourceFilename: string) {
+function managedFileForEntry(entry: Pick<FileEntry, 'filename' | 'id'>): File {
+  return managedFile(entry.id, filenameExtension(entry.filename));
+}
+
+function projectFilename(displayFilename: string, sourceFilename: string): string {
   const displayBase =
     basenameForProjection(displayFilename) || basenameForProjection(sourceFilename);
   const displayDot = displayBase.lastIndexOf('.');
   const sourceBase = basenameForProjection(sourceFilename);
   const sourceDot = sourceBase.lastIndexOf('.');
-  const name = displayDot > 0 ? displayBase.slice(0, displayDot) : displayBase;
-  const ext =
+  const rawExt =
     displayDot > 0
       ? displayBase.slice(displayDot + 1).toLowerCase()
       : sourceDot > 0
         ? sourceBase.slice(sourceDot + 1).toLowerCase()
         : null;
-
-  return {
-    ext: ext ? SafeExtSchema.parse(ext) : null,
-    name: SafeNameSchema.parse(name),
-  };
+  // An unsafe extension is folded back into the base name so the stored
+  // filename and the on-disk suffix stay in agreement with filenameExtension().
+  const ext = rawExt && SafeExtSchema.safeParse(rawExt).success ? rawExt : null;
+  const name = displayDot > 0 ? displayBase.slice(0, displayDot) : displayBase;
+  const filename = ext ? `${name}.${ext}` : displayBase;
+  return SafeNameSchema.parse(filename);
 }
 
 function basenameForProjection(value: string): string {
   return (value.split(/[\\/]/).pop() ?? value).replace(/[\s.]+$/, '');
 }
 
+function resolveMediaType(...candidates: (string | null | undefined)[]): string {
+  for (const candidate of candidates) {
+    if (candidate && MediaTypeSchema.safeParse(candidate).success) {
+      return candidate;
+    }
+  }
+  return FALLBACK_MEDIA_TYPE;
+}
+
 async function writeInternalFile(input: CreateInternalEntryInput): Promise<WrittenInternalFile> {
   const id = createOrderedUuid();
-  let ext: string | null;
-  let name: string;
+  let filename: string;
+  let mediaType: string;
   let write: (destination: File) => Promise<void> | void;
 
   if (input.source === 'uri') {
     const source = new File(input.uri);
-    ({ ext, name } = projectFileName(input.name ?? source.name, source.name));
+    filename = projectFilename(input.name ?? source.name, source.name);
+    mediaType = resolveMediaType(input.mediaType, source.type);
     write = (destination) => source.copy(destination);
   } else {
-    ext = SafeExtSchema.parse(generatedImageExtension(input.mediaType));
-    name = SafeNameSchema.parse(input.name ?? `painting-${id}`);
+    mediaType = resolveMediaType(input.mediaType);
+    const ext = SafeExtSchema.parse(generatedImageExtension(mediaType));
+    const name = SafeNameSchema.parse(input.name ?? `painting-${id}`);
+    filename = filenameExtension(name) ? name : `${name}.${ext}`;
     const payload = input.data.includes(',') ? (input.data.split(',', 2)[1] ?? '') : input.data;
     write = (destination) => destination.write(payload, { encoding: 'base64' });
   }
 
-  const destination = new File(ensureFileDirectory(), `${id}${ext ? `.${ext}` : ''}`);
+  const destination = new File(ensureFileDirectory(), `${id}${extSuffix(filename)}`);
 
   try {
     await write(destination);
@@ -124,7 +135,7 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
       throw new Error(`Internal file has an invalid size: ${destination.uri}`);
     }
 
-    return { ext, id, name, size };
+    return { filename, id, mediaType, size };
   } catch (error) {
     try {
       if (destination.exists) {
@@ -139,25 +150,18 @@ async function writeInternalFile(input: CreateInternalEntryInput): Promise<Writt
   }
 }
 
+function extSuffix(filename: string): string {
+  const ext = filenameExtension(filename);
+  return ext ? `.${ext}` : '';
+}
+
 export async function createInternalEntry(
   entries: Pick<FileEntryService, 'create'>,
   input: CreateInternalEntryInput,
-): Promise<InternalFileEntry> {
+): Promise<FileEntry> {
   const written = await writeInternalFile(input);
   try {
-    const entry = await entries.create({
-      cleanupPolicy: input.cleanupPolicy,
-      contentHash: null,
-      ext: written.ext,
-      id: written.id,
-      name: written.name,
-      origin: 'internal',
-      size: written.size,
-    });
-    if (entry.origin !== 'internal') {
-      throw new Error(`Created FileEntry is not internal: ${entry.id}`);
-    }
-    return entry;
+    return await entries.create(written);
   } catch (error) {
     try {
       deleteInternalFile(written);
@@ -175,8 +179,8 @@ export async function createInternalEntry(
 export async function createMessageParts(
   entries: Pick<FileEntryService, 'create' | 'delete'>,
   parts: readonly CherryMessagePart[],
-): Promise<{ entries: InternalFileEntry[]; parts: CherryMessagePart[] }> {
-  const createdEntries: InternalFileEntry[] = [];
+): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }> {
+  const createdEntries: FileEntry[] = [];
   const managedParts: CherryMessagePart[] = [];
 
   try {
@@ -187,17 +191,18 @@ export async function createMessageParts(
       }
 
       const entry = await createInternalEntry(entries, {
-        cleanupPolicy: 'delete_when_unreferenced',
+        mediaType: part.mediaType,
         name: part.filename,
         source: 'uri',
         uri: part.url,
       });
       createdEntries.push(entry);
-      const uri = getInternalFileUri(entry);
-      if (!uri) {
-        throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
-      }
-      managedParts.push(withCherryMeta({ ...part, url: uri }, { fileEntryId: entry.id }));
+      managedParts.push(
+        withCherryMeta(
+          { ...part, mediaType: entry.mediaType, url: fileEntryUrl(entry.id) },
+          { fileEntryId: entry.id },
+        ),
+      );
     }
   } catch (error) {
     await discardInternalEntries(entries, createdEntries);
@@ -209,7 +214,7 @@ export async function createMessageParts(
 
 export async function discardInternalEntries(
   entries: Pick<FileEntryService, 'delete'>,
-  createdEntries: readonly InternalFileEntry[],
+  createdEntries: readonly Pick<FileEntry, 'filename' | 'id'>[],
 ): Promise<void> {
   for (const entry of createdEntries) {
     try {
@@ -226,22 +231,20 @@ export async function discardInternalEntries(
   }
 }
 
-export async function deleteInternalEntryIfUnreferenced(
+/**
+ * Hard-delete an entry and its bytes. The row is removed first; the unlink is
+ * best-effort (a leftover blob is reclaimable by the future cache-cleanup
+ * sweep, while a dangling row would not be).
+ */
+export async function deleteInternalEntry(
   entries: Pick<FileEntryService, 'deleteTx' | 'findByIdTx' | 'withWriteTx'>,
-  refs: Pick<FileRefService, 'countPersistentRefsByEntryIdTx'>,
   id: FileEntryId,
 ): Promise<boolean> {
   const deletedEntry = await entries.withWriteTx(async (tx) => {
     const entry = await entries.findByIdTx(tx, id);
-    if (
-      !entry ||
-      entry.origin !== 'internal' ||
-      entry.cleanupPolicy !== 'delete_when_unreferenced' ||
-      (await refs.countPersistentRefsByEntryIdTx(tx, id)) > 0
-    ) {
+    if (!entry) {
       return null;
     }
-
     await entries.deleteTx(tx, id);
     return entry;
   });
@@ -253,7 +256,7 @@ export async function deleteInternalEntryIfUnreferenced(
   try {
     deleteInternalFile(deletedEntry);
   } catch (error) {
-    logger.warn('Failed to unlink a discarded internal file', error as Error, { id });
+    logger.warn('Failed to unlink a deleted internal file', error as Error, { id });
   }
   return true;
 }
@@ -263,8 +266,7 @@ export async function resolveFileEntry(
   id: FileEntryId,
 ): Promise<ResolvedFile | null> {
   const entry = await entries.findById(id);
-  // External rows are opaque desktop-compatibility data on mobile; never dereference externalPath.
-  if (!entry || entry.origin !== 'internal') return null;
+  if (!entry) return null;
   const uri = getInternalFileUri(entry);
   return uri ? { entry, uri } : null;
 }
@@ -276,8 +278,8 @@ export async function getFileUri(
   return (await resolveFileEntry(entries, id))?.uri;
 }
 
-export function deleteInternalFile(entry: Pick<InternalFileEntry, 'ext' | 'id'>): boolean {
-  const file = managedFile(entry.id, entry.ext);
+export function deleteInternalFile(entry: Pick<FileEntry, 'filename' | 'id'>): boolean {
+  const file = managedFileForEntry(entry);
   if (!file.exists) {
     return false;
   }
@@ -285,48 +287,8 @@ export function deleteInternalFile(entry: Pick<InternalFileEntry, 'ext' | 'id'>)
   return true;
 }
 
-export function listInternalFiles(): InternalFileOnDisk[] {
-  const directory = fileDirectory();
-  if (!directory.exists) {
-    return [];
-  }
-
-  return directory
-    .list()
-    .filter((entry): entry is File => entry instanceof File)
-    .flatMap((file) => {
-      const dotIndex = file.name.indexOf('.');
-      const id = dotIndex < 0 ? file.name : file.name.slice(0, dotIndex);
-      const parsedId = FileEntryIdSchema.safeParse(id);
-      const ext = dotIndex < 0 ? null : file.name.slice(dotIndex + 1);
-      if (!parsedId.success || (ext !== null && !SafeExtSchema.safeParse(ext).success)) {
-        return [];
-      }
-      return [
-        {
-          id: parsedId.data,
-          modificationTime: file.modificationTime,
-          name: file.name,
-          uri: file.uri,
-        },
-      ];
-    });
-}
-
-export function deleteInternalFileUri(uri: string): void {
-  const file = new File(uri);
-  if (file.parentDirectory.uri !== fileDirectory().uri) {
-    throw new Error(`Refusing to delete a file outside Data/Files: ${uri}`);
-  }
-  if (file.exists) {
-    file.delete();
-  }
-}
-
-export function getInternalFileUri(
-  entry: Pick<InternalFileEntry, 'ext' | 'id'>,
-): string | undefined {
-  const file = managedFile(entry.id, entry.ext);
+export function getInternalFileUri(entry: Pick<FileEntry, 'filename' | 'id'>): string | undefined {
+  const file = managedFileForEntry(entry);
   return file.exists ? file.uri : undefined;
 }
 
@@ -336,6 +298,6 @@ export async function imageUriToDataUrl(uri: string, mediaType: string): Promise
   }
   const file = new File(uri);
   const base64 = await file.base64();
-  const resolvedMediaType = file.type || mediaType || 'image/*';
+  const resolvedMediaType = resolveMediaType(mediaType, file.type, 'image/*');
   return `data:${resolvedMediaType};base64,${base64}`;
 }

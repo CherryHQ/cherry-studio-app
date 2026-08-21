@@ -15,6 +15,20 @@
       "when": 1787198173970,
       "tag": "0001_mcp-disabled-tools",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787284573970,
+      "tag": "0002_file-entry-mobile-model",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1787229930835,
+      "tag": "0003_retire-oauth-provider-auth",
+      "breakpoints": true
     }
   ]
 }

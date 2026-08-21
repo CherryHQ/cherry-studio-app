@@ -1,7 +1,8 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement, ReactNode } from 'react';
 import { Text, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { GenericToolPart } from '../GenericToolPart';
 import { McpToolPart } from '../McpToolPart';

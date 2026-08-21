@@ -1,5 +1,6 @@
-import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import { createContext, type PropsWithChildren, use } from 'react';
+
+import type { ApiClient } from '@/shared/data/api/types';
 
 const DataApiContext = createContext<ApiClient | null>(null);
 

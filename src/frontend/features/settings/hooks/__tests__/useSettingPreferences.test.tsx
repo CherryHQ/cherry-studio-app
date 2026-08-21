@@ -1,5 +1,6 @@
-import { ThemeMode } from '@cherrystudio/universal/data/preference';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { ThemeMode } from '@/shared/data/preference';
 
 import { useSettingPreferences } from '../useSettingPreferences';
 

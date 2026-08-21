@@ -1,4 +1,4 @@
-import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import type { ResolvedPaintingAttachment } from '../../hooks/usePaintings';
 import { createPaintingMessages } from '../paintingMessages';

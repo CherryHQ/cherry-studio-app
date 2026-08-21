@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { access, readFile, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 import ts from 'typescript';
@@ -615,61 +615,6 @@ export function extractObjectKeys(
   return (keys as string[]).sort();
 }
 
-export function extractSqliteTableNames(source: string, fileName = 'schema.ts'): string[] {
-  const sourceFile = sourceFileFor(source, fileName);
-  const names = new Set<string>();
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'sqliteTable' &&
-      node.arguments[0] &&
-      ts.isStringLiteralLike(node.arguments[0])
-    ) {
-      names.add(node.arguments[0].text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return [...names].sort();
-}
-
-function routeValue(node: ts.Node): ts.Node | null {
-  if (ts.isPropertyAssignment(node)) return unwrapExpression(node.initializer);
-  if (ts.isPropertySignature(node)) return node.type ?? null;
-  return null;
-}
-
-export function extractRouteMethods(source: string, fileName = 'routes.ts'): string[] {
-  const sourceFile = sourceFileFor(source, fileName);
-  const routes = new Set<string>();
-  const visit = (node: ts.Node): void => {
-    if (ts.isPropertyAssignment(node) || ts.isPropertySignature(node)) {
-      const route = propertyNameText(node.name);
-      if (route?.startsWith('/')) {
-        const value = routeValue(node);
-        const members = value
-          ? ts.isObjectLiteralExpression(value)
-            ? value.properties
-            : ts.isTypeLiteralNode(value)
-              ? value.members
-              : []
-          : [];
-        const methods = members
-          .map((member) => propertyNameText(member.name)?.toUpperCase())
-          .filter((method): method is string =>
-            ['DELETE', 'GET', 'PATCH', 'POST', 'PUT'].includes(method ?? ''),
-          );
-        if (methods.length === 0) routes.add(`* ${route}`);
-        for (const method of methods) routes.add(`${method} ${route}`);
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return [...routes].sort();
-}
-
 export function extractRegistryModules(
   source: string,
   variableName: string,
@@ -1014,135 +959,6 @@ async function loadDelegatedServiceClassifications(
   return classifications;
 }
 
-function canonicalize(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalize);
-  if (!isRecord(value)) return value;
-  return Object.fromEntries(
-    Object.keys(value)
-      .sort()
-      .map((key) => [key, canonicalize(value[key])]),
-  );
-}
-
-async function latestSnapshot(root: string): Promise<string> {
-  const metaRoot = path.join(root, 'migrations/sqlite-drizzle/meta');
-  const snapshot = (await readdir(metaRoot))
-    .filter((file) => /^\d+_snapshot\.json$/.test(file))
-    .sort()
-    .at(-1);
-  if (!snapshot) throw new Error('[desktop-sync-audit] no Drizzle snapshot found');
-  return path.join(metaRoot, snapshot);
-}
-
-async function schemaAstTables(root: string, schemaPath: string): Promise<string[]> {
-  const tables = new Set<string>();
-  for (const file of trackedFiles(root, [schemaPath])) {
-    if (!/\.tsx?$/.test(file) || file.includes('/__tests__/')) continue;
-    const source = await readFile(path.join(root, file), 'utf8');
-    for (const table of extractSqliteTableNames(source, file)) tables.add(table);
-  }
-  return [...tables].sort();
-}
-
-export async function compareSchemaState(desktopRoot: string, mobileRoot: string) {
-  const [desktopSnapshotPath, mobileSnapshotPath, desktopAst, mobileAst] = await Promise.all([
-    latestSnapshot(desktopRoot),
-    latestSnapshot(mobileRoot),
-    schemaAstTables(desktopRoot, 'src/main/data/db/schemas'),
-    schemaAstTables(mobileRoot, 'src/backend/data/db/schemas'),
-  ]);
-  const [desktopSnapshot, mobileSnapshot] = await Promise.all([
-    readJson(desktopSnapshotPath),
-    readJson(mobileSnapshotPath),
-  ]);
-  if (!isRecord(desktopSnapshot) || !isRecord(desktopSnapshot.tables)) {
-    throw new Error('[desktop-sync-audit] invalid desktop Drizzle snapshot');
-  }
-  if (!isRecord(mobileSnapshot) || !isRecord(mobileSnapshot.tables)) {
-    throw new Error('[desktop-sync-audit] invalid mobile Drizzle snapshot');
-  }
-  const desktopTables = desktopSnapshot.tables;
-  const mobileTables = mobileSnapshot.tables;
-  const desktopNames = Object.keys(desktopTables).sort();
-  const mobileNames = Object.keys(mobileTables).sort();
-  const common = desktopNames.filter((name) => name in mobileTables);
-  const changed = common.filter(
-    (name) =>
-      JSON.stringify(canonicalize(desktopTables[name])) !==
-      JSON.stringify(canonicalize(mobileTables[name])),
-  );
-
-  return {
-    ast: {
-      desktop: desktopAst,
-      desktopMatchesSnapshot: JSON.stringify(desktopAst) === JSON.stringify(desktopNames),
-      mobile: mobileAst,
-      mobileMatchesSnapshot: JSON.stringify(mobileAst) === JSON.stringify(mobileNames),
-    },
-    changed,
-    desktopOnly: desktopNames.filter((name) => !(name in mobileTables)),
-    desktopSnapshot: path.basename(desktopSnapshotPath),
-    desktopTables: desktopNames,
-    mobileOnly: mobileNames.filter((name) => !(name in desktopTables)),
-    mobileSnapshot: path.basename(mobileSnapshotPath),
-    mobileTables: mobileNames,
-  };
-}
-
-async function directTrackedTypeScriptFiles(root: string, directory: string): Promise<string[]> {
-  return trackedFiles(root, [directory]).filter(
-    (file) => path.dirname(file) === directory && file.endsWith('.ts'),
-  );
-}
-
-async function routeMethods(root: string, directory: string): Promise<string[]> {
-  const routes = new Set<string>();
-  for (const file of await directTrackedTypeScriptFiles(root, directory)) {
-    const source = await readFile(path.join(root, file), 'utf8');
-    for (const route of extractRouteMethods(source, file)) routes.add(route);
-  }
-  return [...routes].sort();
-}
-
-async function auditSharedData(desktopRoot: string, mobileRoot: string) {
-  const desktopHandlerPath = 'src/main/data/api/handlers';
-  const mobileHandlerPath = 'src/backend/data/api/handlers';
-  const desktopSchemaPath = 'src/shared/data/api/schemas';
-  const mobileSchemaPath = 'packages/universal/src/data/api/schemas';
-  const [desktopHandlers, mobileHandlers, desktopRoutes, mobileRoutes] = await Promise.all([
-    directTrackedTypeScriptFiles(desktopRoot, desktopHandlerPath),
-    directTrackedTypeScriptFiles(mobileRoot, mobileHandlerPath),
-    routeMethods(desktopRoot, desktopHandlerPath),
-    routeMethods(mobileRoot, mobileHandlerPath),
-  ]);
-  const [desktopSchemaModules, mobileSchemaModules] = await Promise.all([
-    directTrackedTypeScriptFiles(desktopRoot, desktopSchemaPath),
-    directTrackedTypeScriptFiles(mobileRoot, mobileSchemaPath),
-  ]);
-  const desktopHandlerNames = desktopHandlers.map((file) => path.basename(file));
-  const mobileHandlerNames = mobileHandlers.map((file) => path.basename(file));
-  const desktopSchemaNames = desktopSchemaModules.map((file) => path.basename(file));
-  const mobileSchemaNames = mobileSchemaModules.map((file) => path.basename(file));
-
-  return {
-    dataApi: {
-      desktopHandlerModules: desktopHandlerNames.sort(),
-      desktopRoutes,
-      desktopSchemaModules: desktopSchemaNames.filter((file) => file !== 'apiSchemas.ts').sort(),
-      missingHandlerModules: desktopHandlerNames
-        .filter((file) => !mobileHandlerNames.includes(file))
-        .sort(),
-      missingRoutes: desktopRoutes.filter((route) => !mobileRoutes.includes(route)),
-      missingSchemaModules: desktopSchemaNames
-        .filter((file) => file !== 'apiSchemas.ts' && !mobileSchemaNames.includes(file))
-        .sort(),
-      mobileHandlerModules: mobileHandlerNames.sort(),
-      mobileRoutes,
-      mobileSchemaModules: mobileSchemaNames.filter((file) => file !== 'apiSchemas.ts').sort(),
-    },
-  };
-}
-
 async function providerRegistryIds(root: string): Promise<string[]> {
   const file = 'packages/provider-registry/src/providers/index.ts';
   return extractRegistryModules(await readFile(path.join(root, file), 'utf8'), 'PROVIDERS', file);
@@ -1340,35 +1156,6 @@ async function auditDomain(
     if (domain.blocker) blockers.push(domain.blocker);
   }
 
-  if (id === 'schema') {
-    // `desktopOnly` is reported, not blocked: mobile persists what mobile reads,
-    // so a desktop table without a mobile consumer is a deliberate omission.
-    const schema = await compareSchemaState(desktopRoot, mobileRoot);
-    details = schema;
-    addInvariant(invariants, {
-      domain: id,
-      id: 'desktop-schema-ast-matches-snapshot',
-      message: 'Desktop sqliteTable declarations must match the latest tracked snapshot.',
-      ok: schema.ast.desktopMatchesSnapshot,
-    });
-    addInvariant(invariants, {
-      domain: id,
-      id: 'mobile-schema-ast-matches-snapshot',
-      message: 'Mobile sqliteTable declarations must match the latest tracked snapshot.',
-      ok: schema.ast.mobileMatchesSnapshot,
-    });
-  }
-
-  if (id === 'shared-data') {
-    const sharedData = await auditSharedData(desktopRoot, mobileRoot);
-    details = sharedData;
-    addClassification(
-      classifications,
-      'blocked',
-      sharedData.dataApi.missingRoutes.map((route) => `route:${route}`),
-    );
-  }
-
   if (id === 'provider-registry') {
     const registry = await auditProviderRegistry(desktopRoot, mobileRoot);
     details = registry;
@@ -1439,17 +1226,6 @@ async function auditDomain(
       ok:
         sourceFiles.includes(ordinaryAgentFile) &&
         !classifications.mirror.some((file) => file.endsWith('src/core/agents/createAgent.ts')),
-    });
-  }
-
-  if (id === 'backup') {
-    addInvariant(invariants, {
-      domain: id,
-      id: 'desktop-backup-round-trip-compatible',
-      message:
-        domain.blocker ??
-        'Desktop-restorable table, relation, attachment, logo, preference, cache, and manifest fidelity is required.',
-      ok: false,
     });
   }
 

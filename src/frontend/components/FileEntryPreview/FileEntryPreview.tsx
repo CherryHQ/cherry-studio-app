@@ -4,12 +4,11 @@ import {
   type FilePreviewOperation,
   useAlert,
 } from '@cherrystudio/ui/components';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import { isImageFileExtension } from '@/shared/utils/imageFileTypes';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 import { useResolvedFile } from './hooks/useResolvedFile';
 import { fileEntryDisplayName, fileEntryExtensionLabel } from './utils/fileEntryPresentation';
@@ -25,7 +24,7 @@ export function FileEntryPreview({ entryId, size }: { entryId: FileEntryId; size
         displayName: fileEntryDisplayName(data.entry),
         extensionLabel: fileEntryExtensionLabel(data.entry),
         id: data.entry.id,
-        kind: isImageFileExtension(data.entry.ext) ? 'image' : 'document',
+        kind: data.entry.mediaType.startsWith('image/') ? 'image' : 'document',
         revision: data.entry.updatedAt,
         uri: data.uri,
       }

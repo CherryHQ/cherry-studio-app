@@ -1,12 +1,8 @@
 import type {
-  CherryMessagePart,
-  CherryUIMessage,
-} from '@cherrystudio/universal/data/types/message';
-
-import type {
   BackgroundReplyContent,
   BackgroundReplyPhase,
 } from '@/shared/backgroundActivity/chatReply';
+import type { CherryMessagePart, CherryUIMessage } from '@/shared/data/types/message';
 
 import type { BackgroundReplyOutcome } from './backgroundReplyTypes';
 

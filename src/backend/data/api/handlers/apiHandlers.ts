@@ -1,17 +1,15 @@
-import type { ApiImplementation } from '@cherrystudio/universal/data/api/types';
+import type { ApiImplementation } from '@/shared/data/api/types';
 
 import type { AiUsageRecordService } from '../../services/AiUsageRecordService';
 import type { AssistantService } from '../../services/AssistantService';
 import type { ContentSearchService } from '../../services/ContentSearchService';
 import type { EntitySearchService } from '../../services/EntitySearchService';
 import type { FileEntryService } from '../../services/FileEntryService';
-import type { FileRefService } from '../../services/FileRefService';
 import type { JobService } from '../../services/JobService';
 import type { McpServerService } from '../../services/McpServerService';
 import type { MessageService } from '../../services/MessageService';
 import type { PaintingService } from '../../services/PaintingService';
 import type { ProviderService } from '../../services/ProviderService';
-import type { TemporaryChatService } from '../../services/TemporaryChatService';
 import type { TopicService } from '../../services/TopicService';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';
@@ -23,7 +21,6 @@ import { createModelHandlers } from './models';
 import { createPaintingHandlers } from './paintings';
 import { createProviderHandlers } from './providers';
 import { createSearchHandlers } from './search';
-import { createTemporaryChatHandlers } from './temporaryChats';
 import { createTopicHandlers } from './topics';
 
 export type DataApiDependencies = {
@@ -32,7 +29,6 @@ export type DataApiDependencies = {
   contentSearch: ContentSearchService;
   entitySearch: EntitySearchService;
   files: FileEntryService;
-  fileRefs: FileRefService;
   jobs: JobService;
   mcpServerMutations: McpServerMutations;
   mcpServers: McpServerService;
@@ -40,7 +36,6 @@ export type DataApiDependencies = {
   models: import('../../services/ModelService').ModelService;
   paintings: PaintingService;
   providers: ProviderService;
-  temporaryChats: TemporaryChatService;
   topics: TopicService;
 };
 
@@ -48,7 +43,7 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
   return {
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
     ...createAssistantHandlers(dependencies.assistants),
-    ...createFileHandlers(dependencies.files, dependencies.fileRefs),
+    ...createFileHandlers(dependencies.files),
     ...createJobHandlers(dependencies.jobs),
     ...createMcpServerHandlers(dependencies.mcpServers, dependencies.mcpServerMutations),
     ...createMessageHandlers(dependencies.messages),
@@ -56,7 +51,6 @@ export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImp
     ...createPaintingHandlers(dependencies.paintings),
     ...createProviderHandlers(dependencies.providers),
     ...createSearchHandlers(dependencies.contentSearch, dependencies.entitySearch),
-    ...createTemporaryChatHandlers(dependencies.temporaryChats),
     ...createTopicHandlers(dependencies.topics),
   };
 }

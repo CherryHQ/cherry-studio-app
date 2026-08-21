@@ -1,7 +1,7 @@
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/messages';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type {
   PaintingGenerationInput,
@@ -326,7 +326,7 @@ describe('PaintingComposer', () => {
           cherry: { fileEntryId: 'input-1' },
         },
         type: 'file',
-        url: 'file:///input.png',
+        url: 'cherry://file/input-1',
       },
     ]);
     expect(mockMessageListProps?.messages[1].status).toBe('error');

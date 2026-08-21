@@ -1,15 +1,4 @@
 import type { ComposerQueuedMessagePayload } from '@cherrystudio/universal/ai/transport';
-import {
-  type Assistant,
-  DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/universal/data/types/assistant';
-import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
-import type {
-  CherryMessagePart,
-  CherryUIMessage,
-  Message,
-} from '@cherrystudio/universal/data/types/message';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { UIMessageChunk } from 'ai';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
@@ -21,6 +10,10 @@ import type {
 } from '@/backend/services/backgroundReply';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import { type FileEntry, FileEntrySchema } from '@/shared/data/types/file';
+import type { CherryMessagePart, CherryUIMessage, Message } from '@/shared/data/types/message';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 
 import { ChatRuntime, type ChatRuntimeConfig } from '../ChatRuntime';
 import type { ChatRuntimeServices, ChatStreamRequest } from '../ChatRuntimeDependencies';
@@ -29,14 +22,12 @@ const mockReadUIMessageStream = jest.fn();
 const mockCreateMessageParts = jest.fn(
   async (
     parts: readonly CherryMessagePart[],
-  ): Promise<{ entries: InternalFileEntry[]; parts: CherryMessagePart[] }> => ({
+  ): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }> => ({
     entries: [],
     parts: [...parts],
   }),
 );
-const mockDiscardInternalEntries = jest.fn(
-  async (_entries: readonly InternalFileEntry[]) => undefined,
-);
+const mockDiscardInternalEntries = jest.fn(async (_entries: readonly FileEntry[]) => undefined);
 
 describe('ChatRuntime', () => {
   let scopes: ResourceScopeCoordinator;
@@ -639,8 +630,8 @@ describe('ChatRuntime', () => {
     const services = createServices();
     const runtime = createRuntime({ services });
     const partialChunk = createUiMessage('assistant-1', 'partial');
-    const createdEntry = createInternalFileEntry();
-    const managedUri = 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf';
+    const createdEntry = createFileEntry();
+    const managedUri = 'cherry://file/00000000-0000-7000-8000-000000000001';
     mockCreateMessageParts.mockResolvedValueOnce({
       entries: [createdEntry],
       parts: [createFilePart(managedUri)],
@@ -1032,9 +1023,9 @@ describe('ChatRuntime', () => {
       providerMetadata: {
         cherry: { fileEntryId: '00000000-0000-7000-8000-000000000001' },
       },
-      url: 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf',
+      url: 'cherry://file/00000000-0000-7000-8000-000000000001',
     } as CherryMessagePart;
-    const createdEntry = createInternalFileEntry();
+    const createdEntry = createFileEntry();
     mockCreateMessageParts.mockResolvedValueOnce({
       entries: [createdEntry],
       parts: [managedPart],
@@ -1081,8 +1072,8 @@ describe('ChatRuntime', () => {
 
   test('rejects and restores the topic snapshot when reservation fails', async () => {
     const services = createServices();
-    const createdEntry = createInternalFileEntry();
-    const managedUri = 'file:///documents/files/00000000-0000-7000-8000-000000000001.pdf';
+    const createdEntry = createFileEntry();
+    const managedUri = 'cherry://file/00000000-0000-7000-8000-000000000001';
     mockCreateMessageParts.mockResolvedValueOnce({
       entries: [createdEntry],
       parts: [createFilePart(managedUri)],
@@ -3156,18 +3147,15 @@ function createFilePart(url: string): CherryMessagePart {
   } as CherryMessagePart;
 }
 
-function createInternalFileEntry(): InternalFileEntry {
-  return {
-    cleanupPolicy: 'delete_when_unreferenced',
-    contentHash: null,
+function createFileEntry(): FileEntry {
+  return FileEntrySchema.parse({
     createdAt: 1,
-    ext: 'pdf',
-    id: '00000000-0000-7000-8000-000000000001' as FileEntryId,
-    name: 'brief',
-    origin: 'internal',
+    filename: 'brief.pdf',
+    id: '00000000-0000-7000-8000-000000000001',
+    mediaType: 'application/pdf',
     size: 12,
     updatedAt: 1,
-  };
+  });
 }
 
 function createMessage(id: string, role: Message['role']): Message {

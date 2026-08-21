@@ -1,9 +1,8 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import { JOB_ERROR_CODES } from '@cherrystudio/universal/data/api/schemas/jobs';
-
 import { uninstallTestHost } from '@/backend/core/application/testHost';
+import { JOB_ERROR_CODES } from '@/shared/data/api/schemas/jobs';
 
 import { DISPOSE_DRAIN_TIMEOUT_MS } from '../JobRuntime';
 import { MAX_CANCEL_REASON_CHARS } from '../types';

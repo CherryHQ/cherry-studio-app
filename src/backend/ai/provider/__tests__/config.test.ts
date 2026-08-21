@@ -1,8 +1,8 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
-import type { AuthConfig, Provider } from '@cherrystudio/universal/data/types/provider';
 
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
 import { providerToAiSdkConfig, resolveProviderAiSdkConfig } from '../config';
 

@@ -1,16 +1,16 @@
 import { ChevronRightIcon, RefreshCwIcon } from '@cherrystudio/app-icons';
 import { Button, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import type {
-  AiUsageRecordCostTotal,
-  AiUsageRecordTimelineBucket,
-} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/avatar';
+import type {
+  AiUsageRecordCostTotal,
+  AiUsageRecordTimelineBucket,
+} from '@/shared/data/api/schemas/aiUsageRecords';
 
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';

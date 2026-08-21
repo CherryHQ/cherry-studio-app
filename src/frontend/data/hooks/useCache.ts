@@ -1,14 +1,14 @@
+import { loggerService } from '@logger';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
+
+import { cacheService } from '@/frontend/data/CacheService';
 import type {
   InferUseCacheValue,
   PersistCacheKey,
   PersistCacheSchema,
   UseCacheKey,
-} from '@cherrystudio/universal/data/cache/cacheSchemas';
-import { getUseCacheDefaultValue } from '@cherrystudio/universal/data/cache/templateKey';
-import { loggerService } from '@logger';
-import { useCallback, useEffect, useSyncExternalStore } from 'react';
-
-import { cacheService } from '@/frontend/data/CacheService';
+} from '@/shared/data/cache/cacheSchemas';
+import { getUseCacheDefaultValue } from '@/shared/data/cache/templateKey';
 
 const logger = loggerService.withContext('useCache');
 

@@ -22,7 +22,7 @@
  * first loaded. In tests, ensure the sibling module is imported (a bare
  * side-effect import is enough) so its registration runs.
  */
-import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 
 import type { topicService } from './TopicService';
 

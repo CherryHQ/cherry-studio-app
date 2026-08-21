@@ -1,6 +1,3 @@
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
   type InfiniteData,
   keepPreviousData,
@@ -24,7 +21,9 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
-import { imageMediaTypeFromExtension } from '@/shared/utils/imageFileTypes';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { Painting } from '@/shared/data/types/painting';
 
 import { imageParamsAspectRatio, imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import {
@@ -161,19 +160,16 @@ export function useResolvedPaintingFiles(painting: Painting | undefined) {
       }
 
       const resolved = await paintings.resolveFiles(painting);
-      const resolveAttachment = ({ entry, uri }: (typeof resolved.inputs)[number]) => {
-        const mediaType = imageMediaTypeFromExtension(entry.ext);
-        return {
-          fileEntryId: entry.id,
-          id: `painting-file:${entry.id}`,
-          kind: 'image' as const,
-          mediaType,
-          name: entry.ext ? `${entry.name}.${entry.ext}` : entry.name,
-          size: entry.origin === 'internal' ? entry.size : undefined,
-          status: 'ready' as const,
-          uri,
-        };
-      };
+      const resolveAttachment = ({ entry, uri }: (typeof resolved.inputs)[number]) => ({
+        fileEntryId: entry.id,
+        id: `painting-file:${entry.id}`,
+        kind: 'image' as const,
+        mediaType: entry.mediaType,
+        name: entry.filename,
+        size: entry.size,
+        status: 'ready' as const,
+        uri,
+      });
 
       const outputs = resolved.outputs.map(resolveAttachment);
       return {

@@ -14,20 +14,6 @@ import type {
   TopicStatusSnapshotEntry,
   TopicStreamStatus,
 } from '@cherrystudio/universal/ai/transport';
-import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
-import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
-import type {
-  CherryMessagePart,
-  CherryUIMessage,
-  Message,
-  MessageData,
-  MessageRuntimeStatsInput,
-  MessageSnapshot,
-  ModelSnapshot,
-} from '@cherrystudio/universal/data/types/message';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import {
   buildFirstUserMessageTitle,
   sanitizeConversationTitle,
@@ -73,6 +59,20 @@ import type {
 } from '@/shared/contracts';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { PreferenceKeyType } from '@/shared/data/preference';
+import type { FileEntry } from '@/shared/data/types/file';
+import type {
+  CherryMessagePart,
+  CherryUIMessage,
+  Message,
+  MessageData,
+  MessageRuntimeStatsInput,
+  MessageSnapshot,
+  ModelSnapshot,
+} from '@/shared/data/types/message';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import { isUniqueModelId } from '@/shared/data/types/model';
+import type { Topic } from '@/shared/data/types/topic';
 
 import type { ChatRuntimeDependencies, ChatRuntimeServices } from './ChatRuntimeDependencies';
 import { extractMainText, maybeRenameTopicFromConversationSummary } from './topicNaming';
@@ -411,8 +411,8 @@ export class ChatRuntime extends BaseService implements ChatModule {
       return;
     }
 
-    let fileRefsCommitted = false;
-    let createdEntries: InternalFileEntry[] = [];
+    let entriesCommitted = false;
+    let createdEntries: FileEntry[] = [];
     try {
       const topic = await this.dependencies.services.topic.getById(input.topicId);
       const modelId =
@@ -433,7 +433,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
           },
         },
       });
-      fileRefsCommitted = true;
+      entriesCommitted = true;
       this.appendPendingSteer(input.topicId, {
         fastMode: input.payload.fastMode === true,
         reasoningEffort: input.payload.reasoningEffort,
@@ -445,7 +445,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
         await this.startNextPendingTurn(input.topicId);
       }
     } finally {
-      if (!fileRefsCommitted) {
+      if (!entriesCommitted) {
         await this.dependencies.files.discard(createdEntries);
       }
     }
@@ -997,8 +997,8 @@ export class ChatRuntime extends BaseService implements ChatModule {
     let userMessage: Message | undefined;
     let assistantPlaceholders: Message[] = [];
     let terminalAssistantMessages: Message[] = [];
-    let fileRefsCommitted = false;
-    let createdEntries: InternalFileEntry[] = [];
+    let entriesCommitted = false;
+    let createdEntries: FileEntry[] = [];
     let turnParts = [...parts];
     let handedOffToStream = false;
 
@@ -1069,7 +1069,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
             };
           }),
         });
-      fileRefsCommitted = true;
+      entriesCommitted = true;
       if (abortController.signal.aborted) {
         await this.cancelReservedTurn({
           topicId,
@@ -1121,7 +1121,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
         throw toError(error);
       }
     } finally {
-      if (!fileRefsCommitted) {
+      if (!entriesCommitted) {
         await this.dependencies.files.discard(createdEntries);
       }
 

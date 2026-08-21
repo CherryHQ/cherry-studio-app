@@ -6,23 +6,21 @@
  * there is no transport to branch on and no projection to normalize.
  */
 
-import {
-  type CreateMcpServerDto,
-  CreateMcpServerSchema,
-  type UpdateMcpServerDto,
-  UpdateMcpServerSchema,
-} from '@cherrystudio/universal/data/api/schemas/mcpServers';
-import {
-  DataApiErrorFactory,
-  type OffsetPaginationResponse,
-} from '@cherrystudio/universal/data/api/types';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { and, asc, eq, ne, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
 import type { InsertMcpServerRow, McpServerRow } from '@/backend/data/db/schemas';
 import { mcpServerTable } from '@/backend/data/db/schemas';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import {
+  type CreateMcpServerDto,
+  CreateMcpServerSchema,
+  type UpdateMcpServerDto,
+  UpdateMcpServerSchema,
+} from '@/shared/data/api/schemas/mcpServers';
+import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { timestampToISO } from './utils/rowMappers';
 
