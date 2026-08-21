@@ -1,4 +1,4 @@
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 export type McpConnectionConfig = {
   endpointUrl: string;
@@ -26,12 +26,15 @@ export type McpServerRuntimeSummary = {
   toolCount?: number;
 };
 
+/**
+ * The read surface the settings screens consume. Exactly what the UI calls,
+ * nothing speculative: mutations travel through the Data API handlers, and
+ * runtime invalidation is an implementation detail of those mutations.
+ */
 export interface McpModule {
   getRuntimeSummaries(
     servers: readonly McpServer[],
   ): Promise<Record<string, McpServerRuntimeSummary>>;
   getServerInfo(config: McpConnectionConfig): Promise<McpServerInfo>;
-  invalidate(serverId: string): void;
   listTools(serverId: string): Promise<McpToolSummary[]>;
-  test(config: McpConnectionConfig): Promise<McpToolSummary[]>;
 }

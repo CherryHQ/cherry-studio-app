@@ -1,4 +1,4 @@
-import type { FileEntry, FileEntryId } from '@cherrystudio/universal/data/types/file';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
 export type ResolvedFile = {
   entry: FileEntry;

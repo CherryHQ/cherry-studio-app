@@ -1,8 +1,9 @@
 import { MessagePart } from '@cherrystudio/ui/components';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 import { PartMarkdown } from './PartMarkdown';
 import { useThinkingTimerMs } from './useThinkingTimerMs';

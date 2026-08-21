@@ -1,8 +1,6 @@
 import { Settings2Icon } from '@cherrystudio/app-icons';
 import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
-import { isUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +20,8 @@ import {
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
+import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type {
   PaintingGenerationInput,

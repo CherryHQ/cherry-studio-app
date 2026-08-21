@@ -1,6 +1,13 @@
 import { type Detent, ModalBottomSheet } from '@swmansion/react-native-bottom-sheet';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResolveClassNames } from 'uniwind';
 
@@ -10,6 +17,7 @@ import {
   BottomSheetContext,
   BottomSheetRootContext,
   controlledCloseReason,
+  useBottomSheet,
   useBottomSheetRoot,
 } from './bottom-sheet.context';
 import { bottomSheetLayout } from './bottom-sheet.layout';
@@ -153,6 +161,7 @@ export function BottomSheetContent({
       geometry: {
         bottomCornerRadius,
         insets,
+        isContentSized: height === undefined,
         outerInset: bottomSheetLayout.outerInset,
         sheetWidth,
         topCornerRadius: TOP_CORNER_RADIUS,
@@ -162,7 +171,16 @@ export function BottomSheetContent({
       requestClose,
       testID,
     }),
-    [bottomCornerRadius, insets, isCloseDisabled, isClosing, requestClose, sheetWidth, testID],
+    [
+      bottomCornerRadius,
+      height,
+      insets,
+      isCloseDisabled,
+      isClosing,
+      requestClose,
+      sheetWidth,
+      testID,
+    ],
   );
 
   return (
@@ -210,19 +228,36 @@ export function BottomSheetSearchField(props: BottomSheetSearchFieldProps) {
 }
 
 export function BottomSheetBody({ children, style, ...props }: BottomSheetBodyProps) {
+  const viewportStyle = useViewportStyle();
+
   return (
-    <View {...props} style={[styles.body, style]}>
+    <View {...props} style={[viewportStyle, style]}>
       {children}
     </View>
   );
 }
 
 export function BottomSheetScrollView({ children, style, ...props }: BottomSheetScrollViewProps) {
+  const viewportStyle = useViewportStyle();
+
   return (
-    <ScrollView {...props} style={[styles.body, style]}>
+    <ScrollView {...props} style={[viewportStyle, style]}>
       {children}
     </ScrollView>
   );
+}
+
+/**
+ * A card given a height bounds the viewport, so the body takes whatever the
+ * pinned chrome leaves it. A card measuring to its content has nothing to leave:
+ * `flex: 1` resolves to a zero flex basis, which contributes nothing to an auto
+ * height, so the card would measure to its chrome alone and the body would land
+ * at zero height. There the body has to size to its own content instead.
+ */
+function useViewportStyle(): ViewStyle {
+  const { geometry } = useBottomSheet();
+
+  return geometry.isContentSized ? styles.contentViewport : styles.boundedViewport;
 }
 
 export function BottomSheetFooter({ children, style, ...props }: BottomSheetFooterProps) {
@@ -234,8 +269,9 @@ export function BottomSheetFooter({ children, style, ...props }: BottomSheetFoot
 }
 
 const styles = StyleSheet.create({
-  body: { flex: 1, minHeight: 0 },
   bottomGap: { height: bottomSheetLayout.outerInset },
+  boundedViewport: { flex: 1, minHeight: 0 },
+  contentViewport: { flexShrink: 1, minHeight: 0 },
   footer: { flexShrink: 0 },
   layout: { alignItems: 'center' },
   sheet: {

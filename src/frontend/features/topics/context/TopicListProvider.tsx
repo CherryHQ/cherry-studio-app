@@ -1,6 +1,3 @@
-import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { type InfiniteData, useQueryClient } from '@tanstack/react-query';
 import { createContext, type PropsWithChildren, use, useCallback, useMemo } from 'react';
 
@@ -13,6 +10,9 @@ import {
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import { useTopics } from '@/frontend/hooks/chat';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
+import type { TopicListItem } from '@/shared/data/api/schemas/topics';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { Topic } from '@/shared/data/types/topic';
 
 type TopicListData = InfiniteData<CursorPaginationResponse<TopicListItem>, string | undefined>;
 

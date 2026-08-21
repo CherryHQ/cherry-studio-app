@@ -37,12 +37,24 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
   const actions = useMemo<SidebarActions>(
     () => ({
       closeDrawer: () => navigation.closeDrawer(),
-      navigateAssistants: () => navigation.navigate('assistants'),
-      openPaintings: () => navigation.navigate('drawings'),
+      navigateAssistants: () => {
+        navigation.navigate('assistants');
+        navigation.closeDrawer();
+      },
+      openPaintings: () => {
+        navigation.navigate('drawings');
+        navigation.closeDrawer();
+      },
       // Settings lives in the root stack so it can push over the drawer and
       // return to the exact drawer-backed route that opened it.
-      openSettings: () => router.push('/settings'),
-      openTopicList: () => router.push('/topics'),
+      openSettings: () => {
+        navigation.closeDrawer();
+        router.push('/settings');
+      },
+      openTopicList: () => {
+        navigation.closeDrawer();
+        router.push('/topics');
+      },
       startNewChat: () => {
         // No topic row is created here: the chat surface with no `topicId` is
         // the new-chat state, and the backend creates the topic on first send.

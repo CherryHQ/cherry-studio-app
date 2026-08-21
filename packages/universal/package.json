@@ -11,12 +11,6 @@
       "import": "./src/data/types/index.ts",
       "default": "./src/data/types/index.ts"
     },
-    "./data/preference": {
-      "types": "./src/data/preference/index.ts",
-      "react-native": "./src/data/preference/index.ts",
-      "import": "./src/data/preference/index.ts",
-      "default": "./src/data/preference/index.ts"
-    },
     "./ai/transport": {
       "types": "./src/ai/transport/index.ts",
       "react-native": "./src/ai/transport/index.ts",

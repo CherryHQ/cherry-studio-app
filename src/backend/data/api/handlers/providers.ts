@@ -1,7 +1,6 @@
-import type { ProviderSchemas } from '@cherrystudio/universal/data/api/schemas/providers';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import type { ProviderSchemas } from '@/shared/data/api/schemas/providers';
+import type { HandlersFor } from '@/shared/data/api/types';
 
 export function createProviderHandlers(service: ProviderService): HandlersFor<ProviderSchemas> {
   return {

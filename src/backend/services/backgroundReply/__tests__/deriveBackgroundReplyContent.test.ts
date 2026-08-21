@@ -1,7 +1,4 @@
-import type {
-  CherryMessagePart,
-  CherryUIMessage,
-} from '@cherrystudio/universal/data/types/message';
+import type { CherryMessagePart, CherryUIMessage } from '@/shared/data/types/message';
 
 import {
   deriveBackgroundReplyContent,

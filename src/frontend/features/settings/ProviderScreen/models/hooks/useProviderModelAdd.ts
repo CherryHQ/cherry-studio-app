@@ -1,11 +1,11 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import type { EndpointType } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMutation, useQuery } from '@/frontend/data';
+import type { EndpointType } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import {
   buildProviderModelAddInputs,

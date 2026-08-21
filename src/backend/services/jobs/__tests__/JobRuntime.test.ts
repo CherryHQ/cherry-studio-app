@@ -1,12 +1,11 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import { JOB_ERROR_CODES, type JobProgress } from '@cherrystudio/universal/data/api/schemas/jobs';
-
 import { uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
 import { JobService } from '@/backend/data/services/JobService';
+import { JOB_ERROR_CODES, type JobProgress } from '@/shared/data/api/schemas/jobs';
 
 import { JobRuntime } from '../JobRuntime';
 import { GC_TERMINAL_TTL_MS, type JobHandler, MAX_INPUT_BYTES } from '../types';

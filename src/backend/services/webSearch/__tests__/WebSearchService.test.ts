@@ -1,7 +1,6 @@
-import type { PreferenceSchema, PreferenceKeyType } from '@cherrystudio/universal/data/preference';
-
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 
 describe('WebSearchService', () => {
   const originalFetch = global.fetch;

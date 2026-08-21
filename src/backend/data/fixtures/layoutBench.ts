@@ -11,9 +11,9 @@
 
 import type { ModelCapability } from '@cherrystudio/provider-registry';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
 
 import type { CreateProviderInput } from '@/backend/data/services/ProviderService';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import { LAYOUT_BENCH_ASSISTANT_ID } from '@/shared/devBench/layoutBenchProbe';
 
 /** provider 行 id；`buildOpenAICompatibleConfig` 会把它原样写进 `providerSettings.name`。 */

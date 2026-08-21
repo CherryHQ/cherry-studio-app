@@ -1,3 +1,9 @@
+import { loggerService } from '@logger';
+import { and, asc, count, desc, eq, inArray, lte, type SQL } from 'drizzle-orm';
+
+import { application } from '@/backend/core/application/Application';
+import type { Database } from '@/backend/data/db/DbService';
+import { type InsertJobRow, type JobRow, jobTable } from '@/backend/data/db/schemas/job';
 import {
   ACTIVE_JOB_STATUSES,
   type JobError,
@@ -5,13 +11,7 @@ import {
   type JobSnapshot,
   type JobStatus,
   TERMINAL_JOB_STATUSES,
-} from '@cherrystudio/universal/data/api/schemas/jobs';
-import { loggerService } from '@logger';
-import { and, asc, count, desc, eq, inArray, lte, type SQL } from 'drizzle-orm';
-
-import { application } from '@/backend/core/application/Application';
-import type { Database } from '@/backend/data/db/DbService';
-import { type InsertJobRow, type JobRow, jobTable } from '@/backend/data/db/schemas/job';
+} from '@/shared/data/api/schemas/jobs';
 
 import { timestampToISO } from './utils/rowMappers';
 

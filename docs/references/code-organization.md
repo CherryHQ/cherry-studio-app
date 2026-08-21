@@ -18,7 +18,7 @@ independent consumer creates a broader owner.
 | Backend persistence and Data API implementation | `src/backend/data` |
 | Backend workflow, platform, and external capability | `src/backend/services` |
 | Mobile-native pure contract or helper used by frontend and backend | `src/shared` |
-| Desktop-mirrored portable contract or helper | `packages/universal` |
+| Desktop-mirrored portable AI contract or helper | `packages/universal` (dissolving; do not add new modules) |
 | Reusable platform-neutral product interaction component | `packages/ui` |
 | Global or generated declaration | `src/types` |
 
@@ -53,7 +53,8 @@ Repeated bucket names express different owners:
 | Path | Ownership |
 | --- | --- |
 | `src/frontend/data` | Frontend providers, endpoint query keys, data hooks, and UI cache state |
-| `packages/universal/src/data` | Desktop-mirrored entities, DTO schemas, preferences, and data errors |
+| `src/shared/data` | Mobile-owned entities, DTO schemas, preferences, cache schemas, and data errors |
+| `packages/universal/src/data/types` | Transitional home of the entity types `packages/ai-runtime` still imports |
 | `src/backend/data` | Backend cache, preferences, SQLite, migrations, and persistence services |
 | `src/frontend/utils` | Pure helpers used by independent frontend domains |
 | `src/backend/utils` | Pure helpers used by independent backend domains |

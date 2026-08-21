@@ -1,6 +1,4 @@
 import { Button, Input, Label, TextField, useAlert } from '@cherrystudio/ui/components';
-import { DataApiError, ErrorCode } from '@cherrystudio/universal/data/api/types';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useState } from 'react';
@@ -13,6 +11,8 @@ import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { DataApiError, ErrorCode } from '@/shared/data/api/errors';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { McpServerChrome } from './components/McpServerChrome/McpServerChrome';
 import { McpServerTabs } from './components/McpServerTabs/McpServerTabs';

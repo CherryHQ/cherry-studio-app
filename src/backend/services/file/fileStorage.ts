@@ -1,3 +1,9 @@
+import { Directory, File, Paths } from 'expo-file-system';
+
+import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
+import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import type { ResolvedFile } from '@/shared/contracts';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import {
   FALLBACK_MEDIA_TYPE,
   type FileEntry,
@@ -8,15 +14,9 @@ import {
   MediaTypeSchema,
   SafeExtSchema,
   SafeNameSchema,
-} from '@cherrystudio/universal/data/types/file';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta, withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
-import { Directory, File, Paths } from 'expo-file-system';
-
-import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
-import type { FileEntryService } from '@/backend/data/services/FileEntryService';
-import type { ResolvedFile } from '@/shared/contracts';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+} from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta, withCherryMeta } from '@/shared/data/types/uiParts';
 import { generatedImageExtension } from '@/shared/utils/imageFileTypes';
 
 const DATA_DIRECTORY_NAME = 'Data';

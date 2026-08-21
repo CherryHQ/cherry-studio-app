@@ -1,21 +1,3 @@
-import type { OrderRequest } from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
-import {
-  type CreateAssistantDto,
-  type DeleteAssistantResult,
-  type ImportAssistantDto,
-  type ListAssistantsQueryParams,
-  ListAssistantsQuerySchema,
-  type UpdateAssistantDto,
-} from '@cherrystudio/universal/data/api/schemas/assistants';
-import {
-  DataApiErrorFactory,
-  type OffsetPaginationResponse,
-} from '@cherrystudio/universal/data/api/types';
-import {
-  type Assistant,
-  DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/universal/data/types/assistant';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { and, asc, desc, eq, gte, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
@@ -25,6 +7,19 @@ import {
   assistantTable,
   userModelTable,
 } from '@/backend/data/db/schemas';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import {
+  type CreateAssistantDto,
+  type DeleteAssistantResult,
+  type ImportAssistantDto,
+  type ListAssistantsQueryParams,
+  ListAssistantsQuerySchema,
+  type UpdateAssistantDto,
+} from '@/shared/data/api/schemas/assistants';
+import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
+import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { modelService } from './ModelService';
 import { topicService } from './TopicService';

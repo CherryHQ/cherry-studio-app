@@ -1,5 +1,4 @@
 import { Button } from '@cherrystudio/ui/components';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +9,7 @@ import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/head
 import { ModelPickerIcon, useModelPickerData } from '@/frontend/components/modelPicker';
 import { useAssistantApiById } from '@/frontend/hooks/chat';
 import { screenBottomActionInset } from '@/frontend/utils/constants';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 export default function AssistantDetailScreen() {
   const { t } = useTranslation();

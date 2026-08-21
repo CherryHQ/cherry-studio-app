@@ -1,6 +1,6 @@
+import { ReasoningEffortOptionSchema } from '@shared/types/aiSdk';
 import * as z from 'zod';
 
-import { ReasoningEffortOptionSchema } from '../../types/aiSdk';
 import { UniqueModelIdSchema } from './model';
 
 export const McpModeSchema = z.enum(['disabled', 'auto', 'manual']);

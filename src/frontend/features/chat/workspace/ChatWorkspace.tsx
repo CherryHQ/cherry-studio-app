@@ -1,5 +1,4 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +9,7 @@ import { MessageList, type MessageListItem } from '@/frontend/components/message
 import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { Message } from '@/shared/data/types/message';
 
 import { ToolApprovalSheet } from '../approval/ToolApprovalSheet';
 import { useChat, useChatTopic } from '../runtime/ChatProvider';

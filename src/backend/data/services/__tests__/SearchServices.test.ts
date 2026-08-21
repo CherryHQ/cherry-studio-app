@@ -87,16 +87,15 @@ describe('ContentSearchService', () => {
     });
     const service = new ContentSearchService();
 
-    const result = await service.search({ limitPerSource: 2, q: 'needle' });
+    const result = await service.search({ limit: 2, q: 'needle' });
 
-    expect(result.groups.map((group) => group.sourceType)).toEqual(['topic-message']);
-    expect(result.groups[0].items[0]).toMatchObject({
+    expect(result.items[0]).toMatchObject({
       messageId: 'message-1',
       snippet: 'needle topic',
     });
   });
 
-  test('rewrites malformed cursor errors onto the source-specific field', async () => {
+  test('rejects a malformed cursor as a field validation error', async () => {
     await installTestHost({
       DbService: { getDb: () => ({ all: jest.fn() }) } as unknown as DbService,
     });
@@ -104,15 +103,14 @@ describe('ContentSearchService', () => {
 
     await expect(
       service.search({
-        cursors: { 'topic-message': 'not-a-cursor' },
+        cursor: 'not-a-cursor',
         q: 'needle',
-        sources: ['topic-message'],
       }),
     ).rejects.toMatchObject({
       code: 'VALIDATION_ERROR',
       details: {
         fieldErrors: {
-          'cursors.topic-message': ['must be a valid search cursor'],
+          cursor: ['must be a valid search cursor'],
         },
       },
     });

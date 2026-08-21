@@ -1,14 +1,4 @@
 import { Alert } from '@cherrystudio/ui/components';
-import type { ApiClient } from '@cherrystudio/universal/data/api/types';
-import {
-  getDefaultValue,
-  type PreferenceClient,
-  type PreferenceSchema,
-  type PreferenceKeyType,
-  type PreferenceMappedValues,
-  type PreferenceMapping,
-} from '@cherrystudio/universal/data/preference';
-import { FileEntrySchema } from '@cherrystudio/universal/data/types/file';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createInstance } from 'i18next';
 import type { PropsWithChildren } from 'react';
@@ -20,6 +10,16 @@ import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import { PreferenceProvider } from '@/frontend/data/PreferenceProvider';
 import enUS from '@/frontend/i18n/locales/en-us.json';
 import type { Backend } from '@/shared/contracts';
+import type { ApiClient } from '@/shared/data/api/types';
+import {
+  getDefaultValue,
+  type PreferenceClient,
+  type PreferenceSchema,
+  type PreferenceKeyType,
+  type PreferenceMappedValues,
+  type PreferenceMapping,
+} from '@/shared/data/preference';
+import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { STORY_FILE_ENTRY_ID } from './messageFixtures';
 

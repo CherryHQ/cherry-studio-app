@@ -1,6 +1,5 @@
 import { BotIcon, CheckIcon, EllipsisIcon } from '@cherrystudio/app-icons';
 import { type MenuItem, useAlert } from '@cherrystudio/ui/components';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +16,7 @@ import {
 } from '@/frontend/components/selection';
 import { SelectionToolbar } from '@/frontend/components/selection/SelectionToolbar/SelectionToolbar';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 import { AssistantListSearchBar } from './AssistantListSearchBar/AssistantListSearchBar';
 

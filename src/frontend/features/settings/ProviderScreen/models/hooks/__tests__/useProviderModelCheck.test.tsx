@@ -1,6 +1,7 @@
-import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry } from '@cherrystudio/universal/data/types/provider';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
+import type { ApiKeyEntry } from '@/shared/data/types/provider';
 
 import { useProviderModelCheck } from '../useProviderModelCheck';
 

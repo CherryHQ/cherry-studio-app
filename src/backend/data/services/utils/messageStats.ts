@@ -3,7 +3,7 @@ import type {
   MessageRuntimeStatsInput,
   MessageRuntimeTiming,
   MessageStats,
-} from '@cherrystudio/universal/data/types/message';
+} from '@/shared/data/types/message';
 
 function mergeRuntimeSpan(
   existing: MessageRuntimeSpan,

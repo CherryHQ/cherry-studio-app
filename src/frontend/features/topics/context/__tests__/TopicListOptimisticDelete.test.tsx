@@ -1,10 +1,10 @@
-import type { ApiClient, CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { type InfiniteData, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import type { ApiClient, CursorPaginationResponse } from '@/shared/data/api/types';
+import type { Topic } from '@/shared/data/types/topic';
 
 import { TopicListProvider, useTopicListActions } from '../TopicListProvider';
 

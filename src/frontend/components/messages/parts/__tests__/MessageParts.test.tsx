@@ -1,6 +1,7 @@
-import type { MessageStatus } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { MessageStatus } from '@/shared/data/types/message';
 
 import type { MessageListItem } from '../../types';
 import { MessageParts } from '../MessageParts';

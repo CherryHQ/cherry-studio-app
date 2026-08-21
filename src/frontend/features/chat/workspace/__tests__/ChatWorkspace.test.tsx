@@ -1,8 +1,8 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/messages';
+import type { Message } from '@/shared/data/types/message';
 
 import { ChatWorkspace } from '../ChatWorkspace';
 

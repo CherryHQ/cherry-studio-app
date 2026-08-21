@@ -1,7 +1,8 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { ReactElement, ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import type { MessageListItem } from '../../types';
 import { UserMessage } from '../UserMessage';

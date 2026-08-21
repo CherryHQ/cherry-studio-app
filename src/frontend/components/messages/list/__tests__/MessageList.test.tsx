@@ -1,9 +1,10 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { LegendListRef } from '@legendapp/list/react-native';
 import type { ReactNode, Ref } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import type { Message } from '@/shared/data/types/message';
 
 import { MessageList } from '../../MessageList';
 import type { MessageSlideInFlight } from '../../motion/useMessageSlideInFlight';

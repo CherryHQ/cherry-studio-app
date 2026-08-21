@@ -1,5 +1,4 @@
 import { Composer } from '@cherrystudio/ui/components';
-import { isUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
@@ -37,6 +36,7 @@ import {
 } from '@/frontend/hooks/chat/utils/modelReconcile';
 import { type ToolMentionId, toolMentions, toolMentionUrl } from '@/frontend/utils/toolMentions';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { isUniqueModelId } from '@/shared/data/types/model';
 
 import { useChatTopic } from '../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';

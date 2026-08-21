@@ -1,12 +1,11 @@
+import type { FileEntryService } from '@/backend/data/services/FileEntryService';
 /**
  * Read-only File DataApi handlers. Keep filesystem-backed operations in the
  * mobile FileModule rather than adding platform routes to FileSchemas.
  */
-import type { FileSchemas } from '@cherrystudio/universal/data/api/schemas/files';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-import { FileEntryIdSchema } from '@cherrystudio/universal/data/types/file';
-
-import type { FileEntryService } from '@/backend/data/services/FileEntryService';
+import type { FileSchemas } from '@/shared/data/api/schemas/files';
+import type { HandlersFor } from '@/shared/data/api/types';
+import { FileEntryIdSchema } from '@/shared/data/types/file';
 
 export function createFileHandlers(entries: FileEntryService): HandlersFor<FileSchemas> {
   return {

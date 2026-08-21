@@ -1,6 +1,6 @@
 import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
-import { ScrollView, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { PendingToolApproval } from '../../runtime/chatRuntimeProjection';
@@ -41,7 +41,23 @@ jest.mock('@cherrystudio/ui/components', () => {
     Title: component(),
   });
 
-  return { BottomSheet, Button: MockButton };
+  return {
+    BottomSheet,
+    Button: MockButton,
+    useBottomSheet: () => ({
+      geometry: {
+        bottomCornerRadius: 28,
+        insets: { bottom: 34, left: 0, right: 0, top: 59 },
+        isContentSized: true,
+        outerInset: 4,
+        sheetWidth: 380,
+        topCornerRadius: 28,
+      },
+      isCloseDisabled: true,
+      isClosing: false,
+      requestClose: () => undefined,
+    }),
+  };
 });
 
 jest.mock('@/frontend/components/messages', () => ({
@@ -162,6 +178,18 @@ describe('ToolApprovalSheet', () => {
       approved: false,
       messageId: 'assistant-1',
     });
+  });
+
+  test('keeps the decision buttons clear of the home indicator', () => {
+    render();
+
+    // The card measures to its content and reaches the bottom of the screen, so
+    // the buttons are the last thing above the indicator. Padding them by the
+    // safe inset less the gap the card already leaves is what a user needs to be
+    // able to press deny at all.
+    expect(
+      StyleSheet.flatten(renderer.root.findByType(BottomSheet.Body).props.style),
+    ).toMatchObject({ paddingBottom: 30 });
   });
 
   test('uses a solid danger action for denial', () => {

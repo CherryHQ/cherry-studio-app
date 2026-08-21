@@ -1,4 +1,4 @@
-import type { Model } from '@cherrystudio/universal/data/types/model';
+import type { Model } from '@/shared/data/types/model';
 
 export function filterModelsByKeywords(searchText: string, models: Model[]): Model[] {
   const keywords = searchText

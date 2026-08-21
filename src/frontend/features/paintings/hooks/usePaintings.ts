@@ -1,9 +1,7 @@
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import {
   type InfiniteData,
-  keepPreviousData,
+  queryOptions,
+  useQueries,
   useQueryClient,
   useQuery as useTanStackQuery,
 } from '@tanstack/react-query';
@@ -24,6 +22,10 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
+import type { PaintingsModule } from '@/shared/contracts';
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { Painting } from '@/shared/data/types/painting';
 
 import { imageParamsAspectRatio, imageParamsResolutionLabel } from '../utils/imageGenerationParams';
 import {
@@ -137,6 +139,9 @@ export function useDeletePaintings() {
       for (const id of uniqueIds) {
         // Drop rather than invalidate: refetching a deleted painting would throw.
         queryClient.removeQueries({ queryKey: queryKeys.paintings.detail(id) });
+        queryClient.removeQueries({ queryKey: queryKeys.paintings.galleryFiles(id) });
+        queryClient.removeQueries({ queryKey: queryKeys.paintings.imageAspectRatios(id) });
+        queryClient.removeQueries({ queryKey: queryKeys.paintings.resolvedFiles(id) });
       }
     },
     [activeByPaintingId, deletePaintings, paintingsBackend, queryClient],
@@ -152,73 +157,126 @@ export function usePainting(id: string | undefined) {
 
 export function useResolvedPaintingFiles(painting: Painting | undefined) {
   const paintings = useBackendModule('paintings');
-  return useTanStackQuery({
+  const resolvedFiles = useTanStackQuery({
+    ...resolvedPaintingFilesQueryOptions(paintings, painting),
     enabled: Boolean(painting),
-    queryFn: async (): Promise<ResolvedPaintingFiles> => {
-      if (!painting) {
-        return { inputs: [], outputs: [] };
-      }
-
-      const resolved = await paintings.resolveFiles(painting);
-      const resolveAttachment = ({ entry, uri }: (typeof resolved.inputs)[number]) => ({
-        fileEntryId: entry.id,
-        id: `painting-file:${entry.id}`,
-        kind: 'image' as const,
-        mediaType: entry.mediaType,
-        name: entry.filename,
-        size: entry.size,
-        status: 'ready' as const,
-        uri,
-      });
-
-      const outputs = resolved.outputs.map(resolveAttachment);
-      return {
-        inputs: resolved.inputs.map(resolveAttachment),
-        outputAspectRatio: outputs[0] ? await loadImageAspectRatio(outputs[0].uri) : undefined,
-        outputs,
-      };
-    },
-    queryKey: ['painting-files', painting?.id ?? '', painting?.updatedAt ?? ''],
   });
+  const primaryOutput = resolvedFiles.data?.outputs[0];
+  const outputAspectRatio = useTanStackQuery({
+    ...imageAspectRatioQueryOptions(painting?.id, primaryOutput?.entry.id, primaryOutput?.uri),
+    enabled: Boolean(primaryOutput),
+  });
+  const data = useMemo<ResolvedPaintingFiles | undefined>(() => {
+    const resolved = resolvedFiles.data;
+    if (!resolved) {
+      return undefined;
+    }
+
+    const resolveAttachment = ({ entry, uri }: (typeof resolved.inputs)[number]) => ({
+      fileEntryId: entry.id,
+      id: `painting-file:${entry.id}`,
+      kind: 'image' as const,
+      mediaType: entry.mediaType,
+      name: entry.filename,
+      size: entry.size,
+      status: 'ready' as const,
+      uri,
+    });
+
+    return {
+      inputs: resolved.inputs.map(resolveAttachment),
+      outputAspectRatio: outputAspectRatio.data,
+      outputs: resolved.outputs.map(resolveAttachment),
+    };
+  }, [outputAspectRatio.data, resolvedFiles.data]);
+
+  return {
+    data,
+    isLoading: resolvedFiles.isLoading || outputAspectRatio.isLoading,
+  };
 }
 
 export function usePaintingGalleryItems(paintings: readonly Painting[]) {
   const paintingsBackend = useBackendModule('paintings');
-  return useTanStackQuery({
-    enabled: paintings.length > 0,
-    // The key embeds every painting's updatedAt, so loading another page (or a
-    // regeneration) mints a fresh key. Keep the previous resolved items visible
-    // until the new set resolves so the masonry never blinks to empty mid-scroll.
-    placeholderData: keepPreviousData,
-    queryFn: async (): Promise<PaintingOutputGalleryItem[]> => {
-      const items = (
-        await Promise.all(
-          paintings.map(async (painting) => ({
-            painting,
-            resolved: await paintingsBackend.resolveFiles(painting),
-          })),
-        )
-      ).flatMap(({ painting, resolved }) =>
-        resolved.outputs.map(({ entry, uri }) => ({
-          fileEntryId: entry.id,
-          painting,
-          uri,
-        })),
-      );
-      return await Promise.all(
-        items.map(async ({ fileEntryId, painting, uri }) => {
-          const base = {
-            fileEntryId,
-            key: `${painting.id}:${fileEntryId}`,
-            kind: 'output' as const,
-            painting,
-            uri,
-          };
-          return { ...base, aspectRatio: await loadImageAspectRatio(uri) };
+  const queryClient = useQueryClient();
+  const queries = useMemo(
+    () =>
+      paintings.map((painting) =>
+        queryOptions({
+          queryKey: queryKeys.paintings.galleryFilesRevision(painting.id, painting.updatedAt),
+          queryFn: async (): Promise<PaintingOutputGalleryItem[]> => {
+            const resolved = await queryClient.ensureQueryData(
+              resolvedPaintingFilesQueryOptions(paintingsBackend, painting),
+            );
+            return await Promise.all(
+              resolved.outputs.map(async ({ entry, uri }) => ({
+                aspectRatio: await queryClient.ensureQueryData(
+                  imageAspectRatioQueryOptions(painting.id, entry.id, uri),
+                ),
+                fileEntryId: entry.id,
+                key: `${painting.id}:${entry.id}`,
+                kind: 'output' as const,
+                painting,
+                uri,
+              })),
+            );
+          },
+          staleTime: Infinity,
         }),
+      ),
+    [paintings, paintingsBackend, queryClient],
+  );
+  const combine = useCallback(
+    (results: readonly PaintingGalleryQueryResult[]) => {
+      const items = results.flatMap((result) => result.data ?? []);
+      const settledPaintingIds = new Set(
+        paintings.flatMap((painting, index) => (results[index]?.isPending ? [] : [painting.id])),
       );
+      return {
+        data: items,
+        isLoading:
+          paintings.length > 0 &&
+          settledPaintingIds.size === 0 &&
+          results.some((result) => result.isLoading),
+        settledPaintingIds,
+      };
     },
-    queryKey: ['painting-gallery-files', ...paintings.map((painting) => painting.updatedAt)],
+    [paintings],
+  );
+
+  return useQueries({ combine, queries });
+}
+
+type PaintingGalleryQueryResult = {
+  data: PaintingOutputGalleryItem[] | undefined;
+  isLoading: boolean;
+  isPending: boolean;
+};
+
+function resolvedPaintingFilesQueryOptions(
+  paintings: PaintingsModule,
+  painting: Painting | undefined,
+) {
+  return queryOptions({
+    queryFn: async () =>
+      painting ? await paintings.resolveFiles(painting) : { inputs: [], outputs: [] },
+    queryKey: queryKeys.paintings.resolvedFilesRevision(
+      painting?.id ?? '',
+      painting?.updatedAt ?? '',
+    ),
+    staleTime: Infinity,
+  });
+}
+
+function imageAspectRatioQueryOptions(
+  paintingId: string | undefined,
+  fileEntryId: string | undefined,
+  uri: string | undefined,
+) {
+  return queryOptions({
+    queryFn: () => loadImageAspectRatio(uri ?? ''),
+    queryKey: queryKeys.paintings.imageAspectRatio(paintingId ?? '', fileEntryId ?? '', uri ?? ''),
+    staleTime: Infinity,
   });
 }
 
@@ -258,6 +316,12 @@ export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
       if (resolved && resolved.length > 0) {
         return resolved;
       }
+      if (
+        !outputs.settledPaintingIds.has(painting.id) &&
+        !jobs.activeByPaintingId.has(painting.id)
+      ) {
+        return [];
+      }
       const activeJob = jobs.activeByPaintingId.get(painting.id);
       const interruptedJob = jobs.interruptedByPaintingId.get(painting.id);
       const paramValues = paintingJobParamValues(activeJob ?? interruptedJob);
@@ -275,7 +339,13 @@ export function usePaintingGalleryEntries(paintings: readonly Painting[]) {
         },
       ];
     });
-  }, [jobs.activeByPaintingId, jobs.interruptedByPaintingId, outputItems, paintings]);
+  }, [
+    jobs.activeByPaintingId,
+    jobs.interruptedByPaintingId,
+    outputItems,
+    outputs.settledPaintingIds,
+    paintings,
+  ]);
 
   return { isLoading: outputs.isLoading || jobs.isLoading, items };
 }

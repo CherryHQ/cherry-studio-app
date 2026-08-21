@@ -316,7 +316,7 @@ export const AllStates: Story = {
 function StoryGroup({ children, title }: { children: ReactNode; title: string }) {
   return (
     <View className="gap-2.5">
-      <Text className="font-semibold text-foreground-secondary text-sm">{title}</Text>
+      <Text className="font-semibold text-muted-foreground text-sm">{title}</Text>
       {children}
     </View>
   );

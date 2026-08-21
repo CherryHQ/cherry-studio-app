@@ -1,4 +1,4 @@
-import { BottomSheet, Button } from '@cherrystudio/ui/components';
+import { BottomSheet, Button, useBottomSheet } from '@cherrystudio/ui/components';
 import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,7 +25,6 @@ type ToolApprovalSheetProps = {
 /** Shows one AI SDK tool approval at a time, regardless of the tool's source. */
 export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApprovalSheetProps) {
   const { t } = useTranslation();
-  const [isSubmitting, setIsSubmitting] = useState(false);
   // Keep the last request mounted during the sheet's close animation.
   const [lastApproval, setLastApproval] = useState<PendingToolApproval | undefined>(approvals[0]);
   if (approvals[0] && approvals[0].approvalId !== lastApproval?.approvalId) {
@@ -36,6 +35,41 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
   if (!approval) {
     return null;
   }
+
+  return (
+    <BottomSheet open={isOpen}>
+      <BottomSheet.Content isCloseDisabled onClose={ignoreClose}>
+        <BottomSheet.Header>
+          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
+          <BottomSheet.Title>{t('chat.tool.approval.title')}</BottomSheet.Title>
+          <BottomSheet.HeaderSpacer />
+        </BottomSheet.Header>
+        <ToolApprovalSheetBody
+          approval={approval}
+          onRespond={onRespond}
+          pendingCount={approvals.length}
+        />
+      </BottomSheet.Content>
+    </BottomSheet>
+  );
+}
+
+function ToolApprovalSheetBody({
+  approval,
+  onRespond,
+  pendingCount,
+}: {
+  approval: PendingToolApproval;
+  onRespond: (input: ToolApprovalRespondInput) => Promise<void>;
+  pendingCount: number;
+}) {
+  const { t } = useTranslation();
+  const { geometry } = useBottomSheet();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // The buttons are the last thing in a card that measures to its content, so
+  // this padding is what keeps them clear of the home indicator: `insets.bottom`
+  // measured from the screen's bottom, minus the gap the card already leaves.
+  const bottomPadding = Math.max(16, geometry.insets.bottom - geometry.outerInset);
 
   const submit = async (approved: boolean) => {
     if (isSubmitting) {
@@ -55,49 +89,40 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
   };
 
   return (
-    <BottomSheet open={isOpen}>
-      <BottomSheet.Content isCloseDisabled onClose={ignoreClose}>
-        <BottomSheet.Header>
-          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
-          <BottomSheet.Title>{t('chat.tool.approval.title')}</BottomSheet.Title>
-          <BottomSheet.HeaderSpacer />
-        </BottomSheet.Header>
-        <BottomSheet.Body className="gap-4 px-4 pb-4">
-          <View className="gap-1">
-            <Text className="text-foreground-tertiary text-sm">
-              {t('chat.tool.approval.description')}
-            </Text>
-            <Text className="font-semibold text-base text-foreground" selectable>
-              {formatApprovalTitle(approval, t)}
-            </Text>
-            {approvals.length > 1 ? (
-              <Text className="text-foreground-tertiary text-xs">
-                {t('chat.tool.approval.pendingCount', { count: approvals.length })}
-              </Text>
-            ) : null}
-          </View>
-          <ApprovalArgumentsPreview input={approval.input} />
-          <View className="flex-row gap-3">
-            <Button
-              className="flex-1"
-              disabled={isSubmitting}
-              onPress={() => void submit(false)}
-              variant="destructive"
-            >
-              <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
-            </Button>
-            <Button
-              className="flex-1"
-              disabled={isSubmitting}
-              onPress={() => void submit(true)}
-              variant="default"
-            >
-              <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
-            </Button>
-          </View>
-        </BottomSheet.Body>
-      </BottomSheet.Content>
-    </BottomSheet>
+    <BottomSheet.Body className="gap-4 px-4" style={{ paddingBottom: bottomPadding }}>
+      <View className="gap-1">
+        <Text className="text-foreground-tertiary text-sm">
+          {t('chat.tool.approval.description')}
+        </Text>
+        <Text className="font-semibold text-base text-foreground" selectable>
+          {formatApprovalTitle(approval, t)}
+        </Text>
+        {pendingCount > 1 ? (
+          <Text className="text-foreground-tertiary text-xs">
+            {t('chat.tool.approval.pendingCount', { count: pendingCount })}
+          </Text>
+        ) : null}
+      </View>
+      <ApprovalArgumentsPreview input={approval.input} />
+      <View className="flex-row gap-3">
+        <Button
+          className="flex-1"
+          disabled={isSubmitting}
+          onPress={() => void submit(false)}
+          variant="destructive"
+        >
+          <Button.Label>{t('chat.tool.approval.deny')}</Button.Label>
+        </Button>
+        <Button
+          className="flex-1"
+          disabled={isSubmitting}
+          onPress={() => void submit(true)}
+          variant="default"
+        >
+          <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
+        </Button>
+      </View>
+    </BottomSheet.Body>
   );
 }
 

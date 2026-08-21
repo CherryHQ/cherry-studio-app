@@ -1,4 +1,4 @@
-import type { RetryPolicy } from '@cherrystudio/universal/data/api/schemas/jobs';
+import type { RetryPolicy } from '@/shared/data/api/schemas/jobs';
 
 import { computeBackoff } from '../backoff';
 

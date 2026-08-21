@@ -10,7 +10,6 @@
 
 import { createExecutor } from '@cherrystudio/ai-core';
 import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 
 import type {
   AiSdkModelResolution,
@@ -21,6 +20,7 @@ import type {
 import { resolveProviderAiSdkConfig } from '@/backend/ai/provider/config';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 export function createAiSdkModelResolver(): AiSdkRuntimeDependencies {
   return {

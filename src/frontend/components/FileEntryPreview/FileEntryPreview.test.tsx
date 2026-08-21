@@ -1,5 +1,6 @@
-import { FileEntrySchema } from '@cherrystudio/universal/data/types/file';
 import { act, create } from 'react-test-renderer';
+
+import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { FileEntryPreview } from './FileEntryPreview';
 
