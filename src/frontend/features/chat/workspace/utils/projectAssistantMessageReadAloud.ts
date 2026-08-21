@@ -76,7 +76,7 @@ function cleanMarkdownForSpeech(markdown: string): string {
   text = projectMarkdownTables(text);
 
   text = projectMarkdownLinksForSpeech(text);
-  text = text.replace(/\[(?:cite:[^\]]+|\d+)\]/giu, '');
+  text = text.replace(/\[cite:[^\]]+\]/giu, '');
   text = text.replace(/【\d+†[^】]*】/gu, '');
 
   text = text.replace(/\\\(([^\n]*?)\\\)/g, (_match, expression: string) =>

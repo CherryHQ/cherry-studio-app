@@ -228,7 +228,7 @@ describe('projectAssistantMessageReadAloud', () => {
     ]);
 
     expect(projectAssistantMessageReadAloud(message)).toEqual({
-      text: 'Read the guide, then visit.',
+      text: 'Read the guide [2], then visit.',
     });
   });
 
@@ -243,6 +243,15 @@ describe('projectAssistantMessageReadAloud', () => {
       text: 'Read the guide, then continue.',
     });
   });
+
+  test.each(['Set values[2] to 5.', 'Keep plain [2] text.'])(
+    'preserves ambiguous numeric brackets in %p',
+    (markdown) => {
+      expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+        text: markdown,
+      });
+    },
+  );
 
   test.each([
     ['[Wikipedia](https://en.wikipedia.org/wiki/Foo_(bar))', 'Before Wikipedia after.'],
@@ -264,7 +273,7 @@ describe('projectAssistantMessageReadAloud', () => {
 
   test.each([
     ['![image](', true],
-    ['[2](', false],
+    ['[2](', true],
     ['[label](', true],
   ])(
     'projects malformed %s destinations without exponential backtracking',
