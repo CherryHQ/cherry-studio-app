@@ -1,4 +1,4 @@
-import type { WebSearchProvider } from '@/shared/data/preference';
+import type { WebSearchProvider } from '@/shared/data/types/webSearch';
 
 import { WebSearchConfigError } from '../../WebSearchConfigError';
 import { ApiKeyRotationState, resolveProviderApiHost } from '../provider';

@@ -58,37 +58,19 @@ export type EntitySearchSchemas = {
   };
 };
 
-export const contentSearchSourceTypes = ['topic-message'] as const satisfies readonly string[];
-export type ContentSearchSourceType = (typeof contentSearchSourceTypes)[number];
-export const ContentSearchSourceTypeSchema = z.enum(contentSearchSourceTypes);
+export const CONTENT_SEARCH_DEFAULT_LIMIT = 50;
+export const CONTENT_SEARCH_MAX_LIMIT = 1000;
 
-export const CONTENT_SEARCH_DEFAULT_LIMIT_PER_SOURCE = 50;
-export const CONTENT_SEARCH_MAX_LIMIT_PER_SOURCE = 1000;
-const ContentSearchCursorSchema = z.string().min(1);
-
-export const TopicMessageContentSearchFilterSchema = z.strictObject({
-  topicId: z.string().min(1).optional(),
-});
-export type TopicMessageContentSearchFilter = z.output<
-  typeof TopicMessageContentSearchFilterSchema
->;
-
-export const ContentSearchFiltersSchema = z.strictObject({
-  'topic-message': TopicMessageContentSearchFilterSchema.optional(),
-});
-export type ContentSearchFilters = z.output<typeof ContentSearchFiltersSchema>;
-
+/**
+ * Content search reads one source — topic messages over FTS. The former
+ * multi-source shell (`sources` array, per-source cursor/filter records)
+ * described desktop surfaces mobile never had.
+ */
 export const ContentSearchQuerySchema = z.strictObject({
   q: z.string().trim().min(1),
-  sources: z.array(ContentSearchSourceTypeSchema).min(1).optional(),
-  cursors: z.partialRecord(ContentSearchSourceTypeSchema, ContentSearchCursorSchema).optional(),
-  filters: ContentSearchFiltersSchema.optional(),
-  limitPerSource: z.coerce
-    .number()
-    .int()
-    .positive()
-    .max(CONTENT_SEARCH_MAX_LIMIT_PER_SOURCE)
-    .optional(),
+  cursor: z.string().min(1).optional(),
+  topicId: z.string().min(1).optional(),
+  limit: z.coerce.number().int().positive().max(CONTENT_SEARCH_MAX_LIMIT).optional(),
   createdAtFrom: z.iso.datetime().optional(),
 });
 export type ContentSearchQueryParams = z.input<typeof ContentSearchQuerySchema>;
@@ -106,17 +88,10 @@ export interface TopicMessageContentSearchItem {
   createdAt: string;
 }
 
-export type TopicMessageContentSearchGroup = {
-  sourceType: 'topic-message';
-  items: TopicMessageContentSearchItem[];
-  nextCursor?: string;
-};
-
-export type ContentSearchGroup = TopicMessageContentSearchGroup;
-
 export type ContentSearchResponse = {
   query: string;
-  groups: ContentSearchGroup[];
+  items: TopicMessageContentSearchItem[];
+  nextCursor?: string;
 };
 
 export type ContentSearchSchemas = {

@@ -11,19 +11,6 @@ export type {
   PreferenceSchema,
 } from './preference-schema';
 export { FONT_SIZE_STEPS, PreferenceDefaults } from './preference-schema';
-export type {
-  LanguageVarious,
-  PermissionMode,
-  PreferenceUpdateOptions,
-  WebSearchCapability,
-  WebSearchCompressionMethod,
-  WebSearchProvider,
-  WebSearchProviderCapabilityOverride,
-  WebSearchProviderCapabilityOverrides,
-  WebSearchProviderId,
-  WebSearchProviderOverride,
-  WebSearchProviderOverrides,
-  WebSearchProviderType,
-} from './preferenceTypes';
-export { ThemeMode, WEB_SEARCH_PROVIDER_IDS } from './preferenceTypes';
+export type { LanguageVarious, PermissionMode, PreferenceUpdateOptions } from './preferenceTypes';
+export { ThemeMode } from './preferenceTypes';
 export { getDefaultValue, getPreferenceKeys, isPreferenceKey } from './preferenceUtils';

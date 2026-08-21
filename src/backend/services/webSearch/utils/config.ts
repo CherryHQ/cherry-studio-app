@@ -1,15 +1,14 @@
-import type {
-  PreferenceSchema,
-  PreferenceKeyType,
-  WebSearchCapability,
-  WebSearchProvider,
-  WebSearchProviderOverrides,
-} from '@/shared/data/preference';
+import type { PreferenceSchema, PreferenceKeyType } from '@/shared/data/preference';
 import {
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
 } from '@/shared/data/presets/webSearchProviders';
-import type { WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
+import type {
+  WebSearchCapability,
+  WebSearchProvider,
+  WebSearchProviderOverrides,
+  WebSearchExecutionConfig,
+} from '@/shared/data/types/webSearch';
 import { normalizeWebSearchCutoffLimit } from '@/shared/data/types/webSearch';
 
 import { WebSearchConfigError } from '../WebSearchConfigError';

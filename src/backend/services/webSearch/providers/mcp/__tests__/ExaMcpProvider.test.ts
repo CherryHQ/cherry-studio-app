@@ -1,8 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import type { WebSearchProvider } from '@/shared/data/preference';
-import type { WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
+import type { WebSearchProvider, WebSearchExecutionConfig } from '@/shared/data/types/webSearch';
 
 import { ApiKeyRotationState } from '../../../utils/provider';
 import { ExaMcpProvider } from '../ExaMcpProvider';

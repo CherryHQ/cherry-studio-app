@@ -109,9 +109,8 @@ describe('auxiliary Data API integration', () => {
 
     const contentResult = await contentSearchService.search({
       q: 'needle',
-      sources: ['topic-message'],
     });
-    expect(contentResult.groups[0]?.items).toEqual([
+    expect(contentResult.items).toEqual([
       expect.objectContaining({
         messageId: last.id,
         snippet: 'needle answer',
