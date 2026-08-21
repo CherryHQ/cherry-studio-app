@@ -3,7 +3,7 @@ import * as z from 'zod';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
 import { type Topic, TopicNameSchema, TopicSchema } from '@/shared/data/types/topic';
 
-import type { OrderEndpoints } from './_endpointHelpers';
+import type { OrderEndpoints } from './endpointHelpers';
 
 export const CreateTopicSchema = TopicSchema.pick({
   assistantId: true,

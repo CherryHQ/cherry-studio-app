@@ -4,7 +4,7 @@ import type { TopicService } from '@/backend/data/services/TopicService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@/shared/data/api/schemas/_endpointHelpers';
+} from '@/shared/data/api/schemas/endpointHelpers';
 import {
   CreateTopicSchema,
   DeleteTopicsQuerySchema,
