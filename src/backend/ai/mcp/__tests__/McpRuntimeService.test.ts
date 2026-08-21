@@ -894,69 +894,22 @@ describe('getServerInfo', () => {
   });
 });
 
-describe('testConnection', () => {
-  it('returns tool summaries and always closes the throwaway client', async () => {
-    const client = makeClient(makeRawTools(['a', 'b']));
-    mockCreateMCPClient.mockResolvedValue(client);
-    const { service } = makeService([]);
-
-    const result = await service.testConnection({ endpointUrl: 'https://x.example/mcp' });
-
-    expect(result.map((t) => t.name)).toEqual(['a', 'b']);
-    expect(client.close).toHaveBeenCalled();
-    // Testing an unsaved form must not leave anything behind in the pool.
-    expect(await getProjectedToolSet(service, makeAssistant())).toBeUndefined();
-  });
-
-  it('closes the client when the connected server then rejects the listing', async () => {
-    const client = makeClient(makeRawTools(['a']));
-    client.tools.mockRejectedValue(new Error('403 forbidden'));
-    mockCreateMCPClient.mockResolvedValue(client);
-    const { service } = makeService([]);
-
-    await expect(service.testConnection({ endpointUrl: 'https://x.example/mcp' })).rejects.toThrow(
-      '403 forbidden',
-    );
-    expect(client.close).toHaveBeenCalled();
-  });
-
-  it('times out client initialization and closes a client that connects late', async () => {
-    jest.useFakeTimers({ doNotFake: ['setImmediate'] });
-    try {
-      let settleConnect: ((client: FakeClient) => void) | undefined;
-      const client = makeClient(makeRawTools(['a']));
-      mockCreateMCPClient.mockReturnValue(
-        new Promise<FakeClient>((resolve) => {
-          settleConnect = resolve;
-        }),
-      );
-      const { service } = makeService([]);
-
-      const request = service.testConnection({ endpointUrl: 'https://x.example/mcp' });
-      const assertion = expect(request).rejects.toThrow(
-        'MCP connection test timed out after 15000ms',
-      );
-      jest.advanceTimersByTime(15 * 1000);
-      await assertion;
-
-      settleConnect?.(client);
-      await flush();
-      expect(client.close).toHaveBeenCalled();
-      expect(client.tools).not.toHaveBeenCalled();
-    } finally {
-      jest.clearAllTimers();
-      jest.useRealTimers();
-    }
-  });
-});
-
-describe('listToolsForServer', () => {
+describe('listTools', () => {
   it('rejects a non-http endpoint before opening a connection', async () => {
     const server = makeServer({ endpointUrl: 'ftp://a.example/mcp' });
     const { service } = makeService([server]);
 
-    await expect(service.listToolsForServer(server)).rejects.toThrow('has no valid HTTP URL');
+    await expect(service.listTools(server.id)).rejects.toThrow('has no valid HTTP URL');
     expect(mockCreateMCPClient).not.toHaveBeenCalled();
+  });
+
+  it('reads the stored row for the id instead of trusting the caller', async () => {
+    const { mcpServer, service } = makeService([makeServer()]);
+    mockCreateMCPClient.mockResolvedValue(makeClient(makeRawTools(['search'])));
+
+    await service.listTools('server-1');
+
+    expect(mcpServer.getById).toHaveBeenCalledWith('server-1');
   });
 
   it('reconnects once when the pooled client has gone stale', async () => {
@@ -967,7 +920,7 @@ describe('listToolsForServer', () => {
     const server = makeServer();
     const { service } = makeService([server]);
 
-    const tools = await service.listToolsForServer(server);
+    const tools = await service.listTools(server.id);
 
     expect(tools).toEqual([{ description: 'desc search', name: 'search' }]);
     expect(stale.close).toHaveBeenCalled();
@@ -985,7 +938,7 @@ describe('listToolsForServer', () => {
     const server = makeServer();
     const { service } = makeService([server]);
 
-    await expect(service.listToolsForServer(server)).resolves.toEqual([
+    await expect(service.listTools(server.id)).resolves.toEqual([
       { description: 'desc search', name: 'search' },
       { description: 'desc open', name: 'open' },
     ]);
@@ -1017,7 +970,7 @@ describe('listToolsForServer', () => {
 
     const warm = service.warmToolsCache(server);
     await flush();
-    const listing = service.listToolsForServer(server);
+    const listing = service.listTools(server.id);
     tools.resolve(makeRawTools(['search']));
 
     await expect(warm).resolves.toBeUndefined();
@@ -1035,7 +988,10 @@ describe('listToolsForServer', () => {
 
     const warm = service.warmToolsCache(server);
     await flush();
-    const listing = service.listToolsForServer(server);
+    const listing = service.listTools(server.id);
+    // Let the listing re-read its row and join the in-flight warm before the
+    // config change lands — the interleaving this test is about.
+    await flush();
     service.invalidateServer(server.id);
 
     await expect(warm).resolves.toBeUndefined();
@@ -1052,7 +1008,7 @@ describe('listToolsForServer', () => {
 
     // The settings screen renders this message — swallowing it would leave the
     // user with "failed to load tools" and no way to tell why.
-    await expect(service.listToolsForServer(server)).rejects.toThrow('401 unauthorized');
+    await expect(service.listTools(server.id)).rejects.toThrow('401 unauthorized');
   });
 
   it('does not retry a tools listing invalidated by a configuration change', async () => {
@@ -1062,7 +1018,7 @@ describe('listToolsForServer', () => {
     const server = makeServer();
     const { service } = makeService([server]);
 
-    const listing = service.listToolsForServer(server);
+    const listing = service.listTools(server.id);
     const assertion = expect(listing).rejects.toThrow('was invalidated');
     await flush();
     service.invalidateServer(server.id);
