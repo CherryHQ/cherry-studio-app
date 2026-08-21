@@ -82,7 +82,7 @@ export const SEMANTIC_GROUPS: SemanticGroup[] = [
   },
   {
     title: '交互叠加',
-    hint: '半透明叠加层，随下方表面变化。secondary/muted/accent 三个名字目前是同一个值（gray-alpha-100），按下才升到 300 档。',
+    hint: '半透明叠加层，随下方表面变化。secondary/muted/accent 三个名字目前是同一个值（gray-alpha-100），按下才升到 300 档。muted 与 accent 是 HeroUI 保留名：契约变量仍声明（此页直接读变量），但不作为 Tailwind 颜色工具类暴露 —— global.css 把它们的 --color-* 形式映射成了 HeroUI 自己的角色。',
     kind: 'surface',
     variables: ['--secondary', '--secondary-active', '--muted', '--accent'],
   },

@@ -62,6 +62,26 @@ export const SHADCN_COLOR_TOKENS = [
 
 export const SHADCN_VARIABLE_TOKENS = [...SHADCN_COLOR_TOKENS, 'radius'] as const
 
+/**
+ * HeroUI 1.x claims these names for its own roles: the host maps
+ * `--color-accent` to `--primary` and `--color-muted` to `--muted-foreground`
+ * in `src/frontend/styles/global.css`, overriding what the generated adapter
+ * would emit. The contract variables (`--muted`, `--accent`, …) stay declared —
+ * the HeroUI bridge reads them — but they must not become Cherry utilities or
+ * `useThemeColor` names, or the same name resolves to two different colours
+ * depending on which layer wins.
+ */
+export const HEROUI_RESERVED_COLOR_TOKENS = ['muted', 'accent', 'accent-foreground'] as const
+
+type ShadcnColorToken = (typeof SHADCN_COLOR_TOKENS)[number]
+type HerouiReservedColorToken = (typeof HEROUI_RESERVED_COLOR_TOKENS)[number]
+
+/** Shadcn roles exposed as Tailwind colours and `useThemeColor` names. */
+export const SHADCN_PUBLIC_COLOR_TOKENS = SHADCN_COLOR_TOKENS.filter(
+  (name): name is Exclude<ShadcnColorToken, HerouiReservedColorToken> =>
+    !(HEROUI_RESERVED_COLOR_TOKENS as readonly string[]).includes(name)
+)
+
 export const CHERRY_PRODUCT_VARIABLE_TOKENS = [
   /* Shared product semantics */
   'brand',

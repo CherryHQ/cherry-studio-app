@@ -46,6 +46,8 @@ const [accent, ring] = useThemeColor(['primary', 'constant-white']);
 
 `useThemeColor` takes contract names without the `--color-` prefix. A string returns a string; an array returns a tuple of the same length.
 
+Three shadcn names are **HeroUI-reserved and not part of either entry point**: `muted`, `accent`, and `accent-foreground`. HeroUI 1.x uses `accent` for its brand role and `muted` for its secondary-text role, so the app host remaps `--color-accent` and `--color-muted` in `global.css`. The contract variables stay declared for the HeroUI bridge, but there is no `bg-muted` / `bg-accent` utility and `useThemeColor` rejects the names at typecheck. For the meanings Cherry intends, use `secondary` (overlay fill) and `muted-foreground` (secondary text), which remain public.
+
 ### Adding A Token
 
 First answer: **does this role already have a name?** Among the 46 product tokens it usually does. If it genuinely does not:
