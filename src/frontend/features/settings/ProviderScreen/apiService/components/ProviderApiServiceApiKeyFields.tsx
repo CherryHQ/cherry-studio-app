@@ -1,7 +1,7 @@
 import {
+  Input,
+  type InputPasswordVisibilityAccessibilityLabels,
   Label,
-  SecureInput,
-  type SecureInputVisibilityAccessibilityLabels,
   TextField,
 } from '@cherrystudio/ui/components';
 import { useCallback, useState } from 'react';
@@ -53,7 +53,7 @@ function ApiKeysCommitInput({
   onCommit: (value: string) => void;
   placeholder: string;
   value: string;
-  visibilityAccessibilityLabels: SecureInputVisibilityAccessibilityLabels;
+  visibilityAccessibilityLabels: InputPasswordVisibilityAccessibilityLabels;
 }) {
   const [draftValue, setDraftValue] = useState(value);
   const [sourceValue, setSourceValue] = useState(value);
@@ -74,7 +74,7 @@ function ApiKeysCommitInput({
   }, []);
 
   return (
-    <SecureInput
+    <Input
       accessibilityLabel={accessibilityLabel}
       lineBreakModeIOS="clip"
       numberOfLines={1}
@@ -83,6 +83,7 @@ function ApiKeysCommitInput({
       placeholder={placeholder}
       returnKeyType="done"
       selectTextOnFocus
+      type="password"
       value={draftValue}
       visibilityAccessibilityLabels={visibilityAccessibilityLabels}
     />

@@ -1,8 +1,8 @@
 import { ActivityIcon } from '@cherrystudio/app-icons';
 import {
   Button,
-  SecureInput,
-  type SecureInputVisibilityAccessibilityLabels,
+  Input,
+  type InputPasswordVisibilityAccessibilityLabels,
   TextField,
 } from '@cherrystudio/ui/components';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -74,7 +74,7 @@ type ApiKeysCommitInputProps = {
   onDraftChange: (value: string) => void;
   placeholder: string;
   value: string;
-  visibilityAccessibilityLabels: SecureInputVisibilityAccessibilityLabels;
+  visibilityAccessibilityLabels: InputPasswordVisibilityAccessibilityLabels;
 };
 
 function ApiKeysCommitInput({
@@ -143,7 +143,7 @@ function ApiKeysCommitInput({
   }, [commitValue]);
 
   return (
-    <SecureInput
+    <Input
       accessibilityLabel={accessibilityLabel}
       blurOnVisibilityToggle={blurOnVisibilityToggle}
       lineBreakModeIOS="clip"
@@ -155,6 +155,7 @@ function ApiKeysCommitInput({
       placeholder={placeholder}
       returnKeyType="done"
       selectTextOnFocus
+      type="password"
       value={draftValue}
       visibilityAccessibilityLabels={visibilityAccessibilityLabels}
     />
