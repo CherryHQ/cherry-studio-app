@@ -263,6 +263,17 @@ describe('projectAssistantMessageReadAloud', () => {
     expect(projectAssistantMessageReadAloud(message)).toEqual({ text: expectedText });
   });
 
+  test.each([
+    ['See https://en.wikipedia.org/wiki/Foo_(bar).', 'See.'],
+    ['See <https://example.com/path>.', 'See.'],
+    ['Read [foo [bar]](https://example.com/source) now.', 'Read foo [bar] now.'],
+    ['Read [foo \\] bar](https://example.com/source) now.', 'Read foo ] bar now.'],
+  ])('projects structural link syntax in %p', (markdown, expectedText) => {
+    expect(projectAssistantMessageReadAloud(createMessage([textPart(markdown)]))).toEqual({
+      text: expectedText,
+    });
+  });
+
   test('keeps inline code adjacent to a linked URL label', () => {
     const message = createMessage([
       textPart('Use [https://example.com](https://example.com)`code` after.'),

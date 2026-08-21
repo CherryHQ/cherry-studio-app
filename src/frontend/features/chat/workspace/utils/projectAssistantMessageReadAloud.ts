@@ -7,6 +7,11 @@ export type AssistantReadAloudContent = { language?: string | null; text: string
 const COMPLEX_LATEX_COMMAND = /\\[a-z]+/iu;
 const CODE_SPAN_MARKER = '\uE000';
 const SPEAKABLE_CHARACTER = /[\p{L}\p{N}]/u;
+const TRAILING_URL_PUNCTUATION = /[.,!?;:]/u;
+
+type InlineLinkReadResult =
+  | { end: number; type: 'literal' }
+  | { end: number; isImage: boolean; label: string; type: 'link' };
 
 export function projectAssistantMessageReadAloud(
   message: MessageListItem,
@@ -147,30 +152,105 @@ function protectCodeSpans(markdown: string, codeSpans: string[]): string {
 }
 
 function projectMarkdownLinksForSpeech(markdown: string): string {
-  const inlineLinkStart = /(!?)\[([^\u005B\u005D\n]*)\]\(/gu;
   const output: string[] = [];
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-  while ((match = inlineLinkStart.exec(markdown)) !== null) {
-    const destinationEnd = findInlineLinkDestinationEnd(markdown, inlineLinkStart.lastIndex);
-    if (destinationEnd === undefined) {
-      break;
+  let index = 0;
+  while (index < markdown.length) {
+    const autolinkEnd = readHttpAutolinkEnd(markdown, index);
+    if (autolinkEnd !== undefined) {
+      index = autolinkEnd;
+      continue;
     }
 
-    output.push(markdown.slice(cursor, match.index));
-    if (!match[1] && !/^\d+$/u.test(match[2])) {
-      output.push(match[2]);
+    const inlineLink = readInlineMarkdownLink(markdown, index);
+    if (!inlineLink) {
+      output.push(markdown[index]);
+      index += 1;
+      continue;
     }
-    cursor = destinationEnd;
-    inlineLinkStart.lastIndex = destinationEnd;
+
+    if (inlineLink.type === 'literal') {
+      output.push(markdown.slice(index, inlineLink.end));
+    } else if (!inlineLink.isImage && !/^\d+$/u.test(inlineLink.label)) {
+      output.push(inlineLink.label);
+    }
+    index = inlineLink.end;
   }
-  output.push(markdown.slice(cursor));
 
   const projected = output
     .join('')
     .replace(/!\[[^\u005B\u005D]*\]\[[^\u005B\u005D]*\]/g, '')
     .replace(/\[([^\u005B\u005D]+)\]\[[^\u005B\u005D]*\]/g, '$1');
   return removeBareUrls(projected);
+}
+
+function readInlineMarkdownLink(markdown: string, start: number): InlineLinkReadResult | undefined {
+  const isImage = markdown[start] === '!' && markdown[start + 1] === '[';
+  if (!isImage && markdown[start] !== '[') {
+    return undefined;
+  }
+
+  const label: string[] = [];
+  let depth = 0;
+  let index = start + (isImage ? 2 : 1);
+  while (index < markdown.length && markdown[index] !== '\n') {
+    const character = markdown[index];
+    const escapedCharacter = markdown[index + 1];
+    if (character === '\\' && isAsciiPunctuation(escapedCharacter)) {
+      label.push(escapedCharacter);
+      index += 2;
+      continue;
+    }
+    if (character === '[') {
+      depth += 1;
+      label.push(character);
+      index += 1;
+      continue;
+    }
+    if (character !== ']') {
+      label.push(character);
+      index += 1;
+      continue;
+    }
+    if (depth > 0) {
+      depth -= 1;
+      label.push(character);
+      index += 1;
+      continue;
+    }
+
+    const destinationMarker = index + 1;
+    if (markdown[destinationMarker] !== '(') {
+      return { end: destinationMarker, type: 'literal' };
+    }
+    const destinationStart = destinationMarker + 1;
+    const destinationEnd = findInlineLinkDestinationEnd(markdown, destinationStart);
+    return destinationEnd === undefined
+      ? { end: findLineEnd(markdown, destinationStart), type: 'literal' }
+      : { end: destinationEnd, isImage, label: label.join(''), type: 'link' };
+  }
+
+  return { end: findLineEnd(markdown, index), type: 'literal' };
+}
+
+function readHttpAutolinkEnd(markdown: string, start: number): number | undefined {
+  if (markdown[start] !== '<' || !hasHttpUrlPrefix(markdown, start + 1)) {
+    return undefined;
+  }
+
+  for (let index = start + 1; index < markdown.length; index += 1) {
+    if (markdown[index] === '>') {
+      return index + 1;
+    }
+    if (markdown[index] === CODE_SPAN_MARKER || /\s/u.test(markdown[index])) {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+function findLineEnd(text: string, start: number): number {
+  const lineEnd = text.indexOf('\n', start);
+  return lineEnd === -1 ? text.length : lineEnd;
 }
 
 function findInlineLinkDestinationEnd(markdown: string, start: number): number | undefined {
@@ -212,8 +292,7 @@ function readBareUrl(
   text: string,
   start: number,
 ): { end: number; trailingPunctuation: string } | undefined {
-  const prefix = text.slice(start, start + 8).toLowerCase();
-  if (!prefix.startsWith('http://') && !prefix.startsWith('https://')) {
+  if (!hasHttpUrlPrefix(text, start)) {
     return undefined;
   }
 
@@ -225,6 +304,24 @@ function readBareUrl(
     end,
     trailingPunctuation: preserveTrailingPunctuation(text.slice(start, end)),
   };
+}
+
+function hasHttpUrlPrefix(text: string, start: number): boolean {
+  const prefix = text.slice(start, start + 8).toLowerCase();
+  return prefix.startsWith('http://') || prefix.startsWith('https://');
+}
+
+function isAsciiPunctuation(character: string | undefined): character is string {
+  if (character === undefined) {
+    return false;
+  }
+  const codePoint = character.codePointAt(0) ?? 0;
+  return (
+    (codePoint >= 33 && codePoint <= 47) ||
+    (codePoint >= 58 && codePoint <= 64) ||
+    (codePoint >= 91 && codePoint <= 96) ||
+    (codePoint >= 123 && codePoint <= 126)
+  );
 }
 
 function removeCodeBlocks(markdown: string): string {
@@ -384,7 +481,35 @@ function parseTableSeparator(line: string): boolean {
 }
 
 function preserveTrailingPunctuation(url: string): string {
-  return url.match(/[.,!?;:)\]}]+$/u)?.[0] ?? '';
+  const balance: Record<')' | ']' | '}', number> = { ')': 0, ']': 0, '}': 0 };
+  for (const character of url) {
+    if (character === '(') {
+      balance[')'] += 1;
+    } else if (character === '[') {
+      balance[']'] += 1;
+    } else if (character === '{') {
+      balance['}'] += 1;
+    } else if (character === ')' || character === ']' || character === '}') {
+      balance[character] -= 1;
+    }
+  }
+
+  let boundary = url.length;
+  while (boundary > 0) {
+    const character = url[boundary - 1];
+    if (TRAILING_URL_PUNCTUATION.test(character)) {
+      boundary -= 1;
+    } else if (
+      (character === ')' || character === ']' || character === '}') &&
+      balance[character] < 0
+    ) {
+      balance[character] += 1;
+      boundary -= 1;
+    } else {
+      break;
+    }
+  }
+  return url.slice(boundary);
 }
 
 function isSimpleMath(expression: string): boolean {
