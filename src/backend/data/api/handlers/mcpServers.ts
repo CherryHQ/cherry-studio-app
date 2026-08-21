@@ -16,19 +16,17 @@ export type McpServerMutations = {
 
 type McpMutationRuntime = {
   invalidateServer(serverId: string, options?: { preserveSnapshot?: boolean }): void;
-  warmToolsCache(server: McpServer): Promise<void>;
 };
 
-type McpMutationData = {
-  create(input: CreateMcpServerDto): Promise<McpServer>;
-  delete(id: string): Promise<void>;
-  getById(id: string): Promise<McpServer>;
-  update(id: string, input: UpdateMcpServerDto): Promise<McpServer>;
-};
+type McpMutationData = Pick<McpServerService, 'create' | 'delete' | 'getById' | 'update'>;
 
 /**
- * Server mutations with their runtime side effects: a row change is only half
- * a mutation — the pooled connection and tools cache must follow the row.
+ * Server mutations with the runtime side effects a row change cannot express.
+ *
+ * Only connection release lives here. A changed URL needs no notification: the
+ * runtime keys its pooled client on the endpoint, so the next read retires the
+ * old one on its own. A deleted or disabled server never gets that next read,
+ * which is why those two have to say so.
  */
 export function createMcpServerMutations(dependencies: {
   runtime: McpMutationRuntime;
@@ -37,12 +35,8 @@ export function createMcpServerMutations(dependencies: {
   const { runtime, servers } = dependencies;
 
   return {
-    async createServer(input) {
-      const server = await servers.create(input);
-      if (server.isEnabled) {
-        void runtime.warmToolsCache(server);
-      }
-      return server;
+    createServer(input) {
+      return servers.create(input);
     },
 
     async removeServer(id) {
@@ -51,29 +45,15 @@ export function createMcpServerMutations(dependencies: {
     },
 
     async updateServer(id, input) {
-      if (!id) {
-        throw new Error('updateServer requires a server id');
-      }
-
       const previous = hasRuntimeRelevantPatch(input) ? await servers.getById(id) : undefined;
       const server = await servers.update(id, input);
 
-      let toolsChanged = false;
-      if (previous) {
-        const endpointChanged = previous.endpointUrl !== server.endpointUrl;
-        toolsChanged = endpointChanged;
-        const becameEnabled = !previous.isEnabled && server.isEnabled;
-        const becameDisabled = previous.isEnabled && !server.isEnabled;
-
-        if (endpointChanged) {
-          runtime.invalidateServer(id);
-        } else if (becameDisabled) {
-          runtime.invalidateServer(id, { preserveSnapshot: true });
-        }
-
-        if (server.isEnabled && (endpointChanged || becameEnabled)) {
-          void runtime.warmToolsCache(server);
-        }
+      // Reported so the client can drop its own cached tool list for this row.
+      const toolsChanged = previous ? previous.endpointUrl !== server.endpointUrl : false;
+      if (previous?.isEnabled && !server.isEnabled) {
+        // The snapshot outlives the connection so the settings row can still
+        // report what the server last offered.
+        runtime.invalidateServer(id, { preserveSnapshot: true });
       }
 
       return { server, toolsChanged };

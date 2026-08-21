@@ -22,10 +22,7 @@ function server(overrides: Partial<McpServer> = {}): McpServer {
 
 function createMutationsSubject() {
   const current = server();
-  const runtime = {
-    invalidateServer: jest.fn(),
-    warmToolsCache: jest.fn(async () => undefined),
-  };
+  const runtime = { invalidateServer: jest.fn() };
   const servers = {
     create: jest.fn(async () => current),
     delete: jest.fn(async () => undefined),
@@ -36,28 +33,30 @@ function createMutationsSubject() {
 }
 
 describe('createMcpServerMutations', () => {
-  it('warms an enabled server after creation', async () => {
-    const { mutations, runtime } = createMutationsSubject();
+  it('creates without touching the runtime', async () => {
+    const { mutations, runtime, servers } = createMutationsSubject();
 
-    const created = await mutations.createServer({
+    await mutations.createServer({
       endpointUrl: 'https://example.com/mcp',
       isEnabled: true,
       name: 'Server',
     });
 
-    expect(runtime.warmToolsCache).toHaveBeenCalledWith(created);
+    expect(servers.create).toHaveBeenCalled();
+    expect(runtime.invalidateServer).not.toHaveBeenCalled();
   });
 
-  it('invalidates the transport and warms after a URL change', async () => {
+  it('reports changed tools after a URL change without notifying the runtime', async () => {
     const { mutations, runtime } = createMutationsSubject();
 
     const result = await mutations.updateServer('server-1', {
       endpointUrl: 'https://example.com/new-mcp',
     });
 
+    // The runtime keys its pooled client on the endpoint, so the next read
+    // retires the old one; only the client's own cache needs telling.
     expect(result.toolsChanged).toBe(true);
-    expect(runtime.invalidateServer).toHaveBeenCalledWith('server-1');
-    expect(runtime.warmToolsCache).toHaveBeenCalledWith(result.server);
+    expect(runtime.invalidateServer).not.toHaveBeenCalled();
   });
 
   it('preserves the last runtime snapshot when a server is disabled', async () => {
@@ -68,7 +67,6 @@ describe('createMcpServerMutations', () => {
     expect(runtime.invalidateServer).toHaveBeenCalledWith('server-1', {
       preserveSnapshot: true,
     });
-    expect(runtime.warmToolsCache).not.toHaveBeenCalled();
   });
 
   it('reports unchanged tools when a rename skips the runtime', async () => {
@@ -79,7 +77,6 @@ describe('createMcpServerMutations', () => {
     });
     expect(servers.getById).not.toHaveBeenCalled();
     expect(runtime.invalidateServer).not.toHaveBeenCalled();
-    expect(runtime.warmToolsCache).not.toHaveBeenCalled();
   });
 
   it('invalidates runtime state after removing a server', async () => {
