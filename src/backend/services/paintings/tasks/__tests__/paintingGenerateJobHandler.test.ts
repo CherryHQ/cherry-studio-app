@@ -1,7 +1,11 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { FileEntryId, InternalFileEntry } from '@cherrystudio/universal/data/types/file';
+import {
+  type FileEntry,
+  type FileEntryId,
+  FileEntrySchema,
+} from '@cherrystudio/universal/data/types/file';
 import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { loggerService } from '@logger';
@@ -36,18 +40,15 @@ function painting(id: string, outputs: FileEntryId[] = []): Painting {
   };
 }
 
-function internalEntry(id: FileEntryId): InternalFileEntry {
-  return {
-    cleanupPolicy: 'delete_when_unreferenced',
-    contentHash: null,
+function fileEntry(id: FileEntryId): FileEntry {
+  return FileEntrySchema.parse({
     createdAt: 1,
-    ext: 'png',
+    filename: 'image.png',
     id,
-    name: 'image',
-    origin: 'internal',
+    mediaType: 'image/png',
     size: 1,
     updatedAt: 1,
-  };
+  });
 }
 
 function createDependencies(): PaintingGenerateJobDependencies {
@@ -61,7 +62,7 @@ function createDependencies(): PaintingGenerateJobDependencies {
       replaceOutputs: jest.fn(async () => painting('painting-1', [outputFileId])),
     },
     storage: {
-      createInternalEntry: jest.fn(async () => internalEntry(outputFileId)),
+      createInternalEntry: jest.fn(async () => fileEntry(outputFileId)),
       discard: jest.fn(async () => undefined),
       getUri: jest.fn(() => 'file:///output.png'),
       readDataUrl: jest.fn(async () => 'data:image/png;base64,aW1hZ2U='),

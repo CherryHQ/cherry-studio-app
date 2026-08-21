@@ -7,6 +7,12 @@ the mobile platform and application-service boundaries around that package.
 ## Backend Ownership
 
 - `AiService.ts` is the private backend AI entry point and preserves its existing app contract.
+- `agent/` owns the independent Agent Runtime contract, its FakeRuntime test double, and the
+  AI SDK Runtime implementation (`docs/references/agent/agent-runtime.md`). It must not import
+  application protocol types, persistence, React, or Expo modules (ESLint-enforced).
+- `agentHost/` owns the Mobile Agent Host: the only adapter between the Agent Protocol
+  (`@/shared/contracts/agent`) and the Runtime contract, plus the Host-owned Runtime Router,
+  registry, Agent definition source, and the production `resolveModel` composition.
 - `provider/` injects Expo environment values and app headers, then builds provider configuration
   from mobile data services.
 - `runtime/aiSdk/` retains Agent construction and request parameter orchestration that needs Expo

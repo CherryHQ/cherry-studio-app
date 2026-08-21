@@ -25,6 +25,7 @@ export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
 
 export interface PreferenceSchema {
   'app.language': LanguageVarious | null;
+  /** `avatar-file:{uuid}.webp` for a managed avatar image, or a direct image URI. */
   'app.user.avatar': string;
   'app.user.name': string;
 

@@ -7,7 +7,7 @@ import type {
   UpdateTopicDto,
 } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { InternalFileEntry } from '@cherrystudio/universal/data/types/file';
+import type { FileEntry } from '@cherrystudio/universal/data/types/file';
 import type {
   BranchMessagesResponse,
   CherryMessagePart,
@@ -138,8 +138,8 @@ export type ChatRuntimeDependencies = {
   files: {
     createParts(
       parts: readonly CherryMessagePart[],
-    ): Promise<{ entries: InternalFileEntry[]; parts: CherryMessagePart[] }>;
-    discard(entries: readonly InternalFileEntry[]): Promise<void>;
+    ): Promise<{ entries: FileEntry[]; parts: CherryMessagePart[] }>;
+    discard(entries: readonly FileEntry[]): Promise<void>;
   };
   services: ChatRuntimeServices;
 };

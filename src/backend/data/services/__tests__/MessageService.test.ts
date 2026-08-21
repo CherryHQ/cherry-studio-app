@@ -2,19 +2,12 @@ import type { Message, MessageData } from '@cherrystudio/universal/data/types/me
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { DbService } from '@/backend/data/db/DbService';
-import { chatMessageFileRefTable, messageTable } from '@/backend/data/db/schemas';
+import { messageTable } from '@/backend/data/db/schemas';
 
 import { registerDataService } from '../dataServiceRegistry';
 import { messageService } from '../MessageService';
 
 jest.mock('@/backend/data/db/schemas', () => ({
-  chatMessageFileRefTable: {
-    fileEntryId: 'chatMessageFileRef.fileEntryId',
-    sourceId: 'chatMessageFileRef.sourceId',
-  },
-  fileEntryTable: {
-    id: 'fileEntry.id',
-  },
   messageTable: {
     deletedAt: 'message.deletedAt',
     id: 'message.id',
@@ -563,54 +556,6 @@ describe('MessageService', () => {
     });
   });
 
-  test('creates messages and deduplicated refs for existing file entries', async () => {
-    const firstId = '00000000-0000-7000-8000-000000000001';
-    const secondId = '00000000-0000-7000-8000-000000000002';
-    const unknownId = '00000000-0000-7000-8000-000000000003';
-    const userData = {
-      parts: [filePart(firstId), filePart(firstId), filePart(unknownId)],
-    } satisfies MessageData;
-    const placeholderData = { parts: [filePart(secondId)] } satisfies MessageData;
-    const userRow = createMessageRow('user-1', 'user', userData, 'root-1');
-    const placeholderRow = createMessageRow('assistant-1', 'assistant', placeholderData, 'user-1');
-    const { insertCalls, tx } = createWriteTx({
-      insertRows: [userRow, placeholderRow],
-      selectResults: [
-        [{ id: 'topic-1' }],
-        [{ id: 'root-1' }],
-        [{ id: firstId }],
-        [{ id: secondId }],
-      ],
-    });
-    const dbService = {
-      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
-        callback(tx),
-      ),
-    } as unknown as DbService;
-    await installTestHost({ DbService: dbService });
-    registerDataService('TopicService', {
-      setActiveNodeTx: jest.fn(async () => undefined),
-    } as never);
-
-    await messageService.createUserMessageWithPlaceholders({
-      placeholders: [{ data: placeholderData, role: 'assistant' }],
-      topicId: 'topic-1',
-      userMessage: { dto: { data: userData, role: 'user' }, mode: 'create' },
-    });
-
-    expect(insertCalls.filter((call) => call.table === messageTable)).toHaveLength(2);
-    expect(insertCalls.filter((call) => call.table === chatMessageFileRefTable)).toEqual([
-      {
-        table: chatMessageFileRefTable,
-        values: [{ fileEntryId: firstId, role: 'attachment', sourceId: 'user-1' }],
-      },
-      {
-        table: chatMessageFileRefTable,
-        values: [{ fileEntryId: secondId, role: 'attachment', sourceId: 'assistant-1' }],
-      },
-    ]);
-  });
-
   test('writes the ids the caller allocated for the reserved turn', async () => {
     const userMessageId = '00000000-0000-7000-8000-0000000000a1';
     const placeholderId = '00000000-0000-7000-8000-0000000000a2';
@@ -655,61 +600,6 @@ describe('MessageService', () => {
     // 缺省时连这个键都不能出现：`id: undefined` 会盖掉 drizzle 的 `$defaultFn`。
     expect(insertCalls[0]?.values).not.toHaveProperty('id');
   });
-
-  test('creates refs from the general create and createSibling entry points', async () => {
-    const fileEntryId = '00000000-0000-7000-8000-000000000001';
-    const data = { parts: [filePart(fileEntryId)] } satisfies MessageData;
-    const createdRow = createMessageRow('message-1', 'user', data, 'active-1');
-    const createTx = createWriteTx({
-      insertRows: [createdRow],
-      selectResults: [[{ activeNodeId: 'active-1', id: 'topic-1' }], [{ id: fileEntryId }]],
-    });
-    await installMessageServiceHost(createTx.tx);
-
-    await messageService.create('topic-1', { data, role: 'user' });
-
-    expect(createTx.insertCalls).toContainEqual({
-      table: chatMessageFileRefTable,
-      values: [{ fileEntryId, role: 'attachment', sourceId: 'message-1' }],
-    });
-
-    const sourceRow = createMessageRow('source-1', 'user', { parts: [] }, 'root-1');
-    const siblingRow = createMessageRow('sibling-1', 'user', data, 'root-1');
-    const siblingTx = createWriteTx({
-      insertRows: [siblingRow],
-      selectResults: [[sourceRow], [{ id: fileEntryId }]],
-    });
-    // The singleton keeps no connection of its own, so the second half of this
-    // case swaps the host rather than building a second service.
-    await installMessageServiceHost(siblingTx.tx);
-
-    await messageService.createSibling('source-1', data);
-
-    expect(siblingTx.insertCalls).toContainEqual({
-      table: chatMessageFileRefTable,
-      values: [{ fileEntryId, role: 'attachment', sourceId: 'sibling-1' }],
-    });
-  });
-
-  test('replaces refs when message data is updated', async () => {
-    const fileEntryId = '00000000-0000-7000-8000-000000000002';
-    const previous = createMessageRow('message-1', 'user', { parts: [] }, 'root-1');
-    const data = { parts: [filePart(fileEntryId)] } satisfies MessageData;
-    const updated = { ...previous, data };
-    const { deleteCalls, insertCalls, tx } = createWriteTx({
-      selectResults: [[previous], [{ id: fileEntryId }]],
-      updateRows: [updated],
-    });
-    await installMessageServiceHost(tx);
-
-    await messageService.update('message-1', { data });
-
-    expect(deleteCalls).toContain(chatMessageFileRefTable);
-    expect(insertCalls).toContainEqual({
-      table: chatMessageFileRefTable,
-      values: [{ fileEntryId, role: 'attachment', sourceId: 'message-1' }],
-    });
-  });
 });
 
 function createMessage(id: string, role: Message['role']): Message {
@@ -726,16 +616,6 @@ function createMessage(id: string, role: Message['role']): Message {
     status: 'pending',
     topicId: '750e8400-e29b-41d4-a716-446655440000',
     updatedAt: now,
-  };
-}
-
-function filePart(fileEntryId: string) {
-  return {
-    filename: 'brief.txt',
-    mediaType: 'text/plain',
-    providerMetadata: { cherry: { fileEntryId } },
-    type: 'file' as const,
-    url: 'file:///old-sandbox/brief.txt',
   };
 }
 

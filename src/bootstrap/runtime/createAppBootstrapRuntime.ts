@@ -2,6 +2,7 @@ import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 import { Uniwind } from 'uniwind';
 
+import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
@@ -54,6 +55,7 @@ export function createAppBootstrapRuntime(
     paintingPresenter: createLiveActivityPresenter(PaintingActivity),
     translate: (key) => i18n.t(key),
   });
+  const agent = host.container.get<MobileAgentHost>('MobileAgentHost');
   const ai = host.container.get<AiService>('AiService');
   const cache = host.container.get<CacheService>('CacheService');
   const chat = host.container.get<ChatRuntime>('ChatRuntime');
@@ -63,6 +65,7 @@ export function createAppBootstrapRuntime(
   const preference = host.container.get<PreferenceService>('PreferenceService');
   const webSearch = host.container.get<WebSearchService>('WebSearchService');
   const services = createBackendServices({
+    agent,
     ai,
     cache,
     chat,
@@ -80,7 +83,6 @@ export function createAppBootstrapRuntime(
       contentSearch: services.contentSearch,
       entitySearch: services.entitySearch,
       files: services.fileEntry,
-      fileRefs: services.fileRef,
       jobs: services.job,
       mcpServerMutations: dataApiDependencies.mcpServerMutations,
       mcpServers: services.mcpServer,

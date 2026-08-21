@@ -1,3 +1,4 @@
+import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
 import type { AiService } from '@/backend/ai/AiService';
 import type { McpRuntimeService } from '@/backend/ai/mcp';
 import type { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
@@ -19,6 +20,7 @@ export type BackendServices = ReturnType<typeof createBackendServices>;
  * here is one the composition still has to be handed rather than resolve.
  */
 export type BackendInfrastructure = {
+  agent: MobileAgentHost;
   ai: AiService;
   cache: CacheService;
   chat: ChatRuntime;
@@ -29,6 +31,7 @@ export type BackendInfrastructure = {
 };
 
 export function createBackendServices({
+  agent,
   ai,
   cache,
   chat,
@@ -39,6 +42,7 @@ export function createBackendServices({
 }: BackendInfrastructure) {
   return {
     ...createDataServices({ cache, preference }),
+    agent,
     ai,
     chat,
     // Module singletons, spread here only so the routing table reads one object.

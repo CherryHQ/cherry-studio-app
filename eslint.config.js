@@ -285,6 +285,31 @@ module.exports = defineConfig([
     ],
   ),
   restrictedImports(['src/backend/**/*.{ts,tsx}'], [backendLayer]),
+  // The Agent Runtime contract and its FakeRuntime are process-local but must
+  // stay independent of the application protocol, persistence, React, and Expo
+  // (Runtime dependency rule and conformance item 11 in
+  // docs/references/agent/agent-runtime.md). Tests under __tests__ arrange
+  // requests and may touch node builtins, so they are exempt.
+  {
+    files: ['src/backend/ai/agent/**/*.{ts,tsx}'],
+    ignores: ['src/backend/ai/agent/**/__tests__/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            backendLayer,
+            {
+              group: aliasRoots(['backend/data', 'backend/services']),
+              message:
+                'The Agent Runtime contract must not depend on persistence or the Data API; the Host adapts them.',
+            },
+            sharedPlatformIndependence,
+          ],
+        },
+      ],
+    },
+  },
   restrictedImports(['src/backend/services/**/*.{ts,tsx}'], [backendLayer, backendServicesLayer]),
   restrictedImports(['src/backend/data/**/*.{ts,tsx}'], [backendLayer, backendDataLayer]),
   restrictedImports(['src/backend/core/**/*.{ts,tsx}'], [backendLayer, backendCoreLayer]),
