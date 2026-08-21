@@ -11,7 +11,7 @@ import {
   RuntimeModelPricingSchema,
   type UniqueModelId,
   UniqueModelIdSchema,
-} from '@shared/data/types/model';
+} from '@cherrystudio/universal/data/types/model';
 import * as z from 'zod';
 
 export const ListModelsQuerySchema = z.object({

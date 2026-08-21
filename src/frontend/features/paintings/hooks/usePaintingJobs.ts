@@ -1,9 +1,9 @@
 import type { ParamValues } from '@cherrystudio/provider-registry';
-import type { JobSnapshot } from '@cherrystudio/universal/data/api/schemas/jobs';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { queryKeys, useQuery } from '@/frontend/data';
+import type { JobSnapshot } from '@/shared/data/api/schemas/jobs';
 
 export const PAINTING_GENERATE_JOB_TYPE = 'painting.generate';
 

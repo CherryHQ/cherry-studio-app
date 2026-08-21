@@ -1,4 +1,8 @@
-import { DataApiErrorFactory } from '@cherrystudio/universal/data/api/errors';
+import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
+
+import type { ModelService } from '@/backend/data/services/ModelService';
+import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import {
   BulkUpdateModelsSchema,
   CreateModelsSchema,
@@ -8,12 +12,8 @@ import {
   ReconcileProviderModelsSchema,
   ResolveProviderModelsQuerySchema,
   UpdateModelSchema,
-} from '@cherrystudio/universal/data/api/schemas/models';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
-
-import type { ModelService } from '@/backend/data/services/ModelService';
-import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+} from '@/shared/data/api/schemas/models';
+import type { HandlersFor } from '@/shared/data/api/types';
 
 function parseUniqueId(uniqueModelId: string) {
   if (!isUniqueModelId(uniqueModelId)) {

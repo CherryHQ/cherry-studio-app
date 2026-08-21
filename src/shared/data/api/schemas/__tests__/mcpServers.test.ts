@@ -1,4 +1,4 @@
-import { CreateMcpServerSchema, UpdateMcpServerSchema } from '@shared/data/api/schemas/mcpServers';
+import { CreateMcpServerSchema, UpdateMcpServerSchema } from '@/shared/data/api/schemas/mcpServers';
 
 describe('MCP server DTO schemas', () => {
   it('creates from an endpoint and a name, with the enable switch optional', () => {

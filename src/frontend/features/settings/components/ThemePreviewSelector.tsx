@@ -1,9 +1,10 @@
 import { CheckIcon } from '@cherrystudio/app-icons';
 import { Switch } from '@cherrystudio/ui/components';
-import { ThemeMode } from '@cherrystudio/universal/data/preference';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';
 import { ScopedTheme } from 'uniwind';
+
+import { ThemeMode } from '@/shared/data/preference';
 
 type ResolvedThemeMode = ThemeMode.dark | ThemeMode.light;
 

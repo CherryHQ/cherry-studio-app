@@ -10,7 +10,7 @@
  *
  * @example
  * ```typescript
- * import { DataApiError, DataApiErrorFactory, ErrorCode } from '@shared/data/api/errors'
+ * import { DataApiError, DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors'
  *
  * // Create and throw an error
  * throw DataApiErrorFactory.notFound('Topic', 'abc123')

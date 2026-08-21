@@ -1,5 +1,6 @@
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import { type InfiniteData, QueryClient } from '@tanstack/react-query';
+
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
 
 import {
   dataApiCollectionFilters,

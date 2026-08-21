@@ -1,7 +1,10 @@
+import { application } from '@/backend/core/application/Application';
+import type { AssistantService } from '@/backend/data/services/AssistantService';
+import { topicService } from '@/backend/data/services/TopicService';
 import {
   OrderBatchRequestSchema,
   OrderRequestSchema,
-} from '@cherrystudio/universal/data/api/schemas/_endpointHelpers';
+} from '@/shared/data/api/schemas/_endpointHelpers';
 import {
   type AssistantSchemas,
   CreateAssistantSchema,
@@ -10,12 +13,8 @@ import {
   ListAssistantsQuerySchema,
   type UpdateAssistantDto,
   UpdateAssistantSchema,
-} from '@cherrystudio/universal/data/api/schemas/assistants';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-
-import { application } from '@/backend/core/application/Application';
-import type { AssistantService } from '@/backend/data/services/AssistantService';
-import { topicService } from '@/backend/data/services/TopicService';
+} from '@/shared/data/api/schemas/assistants';
+import type { HandlersFor } from '@/shared/data/api/types';
 
 type AssistantData = Pick<
   AssistantService,

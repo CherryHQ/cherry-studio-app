@@ -1,8 +1,3 @@
-import type {
-  CreateMcpServerDto,
-  McpUpdateServerResult,
-  UpdateMcpServerDto,
-} from '@cherrystudio/universal/data/api/schemas/mcpServers';
 import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 
 import type { McpServerMutations } from '@/backend/data/api/handlers/mcpServers';
@@ -13,6 +8,11 @@ import type {
   McpServerRuntimeSummary,
   McpToolSummary,
 } from '@/shared/contracts';
+import type {
+  CreateMcpServerDto,
+  McpUpdateServerResult,
+  UpdateMcpServerDto,
+} from '@/shared/data/api/schemas/mcpServers';
 
 type McpServerData = {
   create(input: CreateMcpServerDto): Promise<McpServer>;

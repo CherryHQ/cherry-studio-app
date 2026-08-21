@@ -1,3 +1,5 @@
+import * as z from 'zod';
+
 import type {
   WebSearchCapability,
   WebSearchProviderCapabilityOverride,
@@ -6,9 +8,8 @@ import type {
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
   WebSearchProviderType,
-} from '@shared/data/preference';
-import { WEB_SEARCH_PROVIDER_IDS } from '@shared/data/preference';
-import * as z from 'zod';
+} from '@/shared/data/preference';
+import { WEB_SEARCH_PROVIDER_IDS } from '@/shared/data/preference';
 
 export const WebSearchProviderIdSchema = z.enum(WEB_SEARCH_PROVIDER_IDS);
 export const WebSearchProviderCapabilityOverrideSchema: z.ZodType<WebSearchProviderCapabilityOverride> =

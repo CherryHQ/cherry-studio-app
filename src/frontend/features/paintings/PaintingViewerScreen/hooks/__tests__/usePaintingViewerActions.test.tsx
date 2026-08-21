@@ -1,5 +1,3 @@
-import type { ApiClient } from '@cherrystudio/universal/data/api/types';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Linking } from 'react-native';
@@ -8,6 +6,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BackendProvider } from '@/frontend/data/BackendProvider';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { Backend } from '@/shared/contracts';
+import type { ApiClient } from '@/shared/data/api/types';
+import type { Painting } from '@/shared/data/types/painting';
 
 import { usePaintingViewerActions } from '../usePaintingViewerActions';
 

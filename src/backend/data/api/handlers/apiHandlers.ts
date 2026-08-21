@@ -1,4 +1,4 @@
-import type { ApiImplementation } from '@cherrystudio/universal/data/api/types';
+import type { ApiImplementation } from '@/shared/data/api/types';
 
 import type { AiUsageRecordService } from '../../services/AiUsageRecordService';
 import type { AssistantService } from '../../services/AssistantService';

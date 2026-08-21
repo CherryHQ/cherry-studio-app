@@ -5,20 +5,55 @@
  * Includes endpoints for tree visualization and conversation view.
  */
 
-import type { CursorPaginationParams } from '@shared/data/api/types';
 import type {
-  BranchMessagesResponse,
   Message,
   MessageData,
-  TreeResponse,
-} from '@shared/data/types/message';
+  MessageRole,
+  MessageStatus,
+} from '@cherrystudio/universal/data/types/message';
 import {
   ContentMessageRoleSchema,
   MessageDataSchema,
   MessageSnapshotSchema,
   MessageStatusSchema,
-} from '@shared/data/types/message';
+} from '@cherrystudio/universal/data/types/message';
 import * as z from 'zod';
+
+import type { CursorPaginationParams, CursorPaginationResponse } from '@/shared/data/api/types';
+
+export interface TreeNode {
+  createdAt: string;
+  hasChildren: boolean;
+  id: string;
+  modelId?: string | null;
+  parentId?: string | null;
+  preview: string;
+  role: MessageRole;
+  status: MessageStatus;
+}
+
+export interface SiblingsGroup {
+  nodes: Omit<TreeNode, 'parentId'>[];
+  parentId: string;
+  siblingsGroupId: number;
+}
+
+export interface TreeResponse {
+  activeNodeId: string | null;
+  nodes: TreeNode[];
+  rootId: null | string;
+  siblingsGroups: SiblingsGroup[];
+}
+
+export interface BranchMessage {
+  message: Message;
+  siblingsGroup?: Message[];
+}
+
+export interface BranchMessagesResponse extends CursorPaginationResponse<BranchMessage> {
+  activeNodeId: string | null;
+  assistantId: string | null;
+}
 
 // ============================================================================
 // DTOs

@@ -209,7 +209,7 @@ export interface AiStreamAbortRequest {
   topicId: string;
 }
 
-/** Resolve a tool output that was deferred at the boundary. See `transport/deferredToolResult`. */
+/** Resolve a tool output that was deferred at the boundary. */
 export interface AiToolResultRequest {
   topicId: string;
   messageId: string;

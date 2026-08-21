@@ -1,5 +1,4 @@
 import { Composer, useComposerDockLayout } from '@cherrystudio/ui/components';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import * as Crypto from 'expo-crypto';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useCallback, useMemo, useState } from 'react';
@@ -10,6 +9,7 @@ import { ManagedComposerProvider } from '@/frontend/components/composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
+import type { Painting } from '@/shared/data/types/painting';
 
 import {
   type PaintingGenerationInput,

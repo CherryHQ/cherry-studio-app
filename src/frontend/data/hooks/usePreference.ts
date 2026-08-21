@@ -1,12 +1,12 @@
+import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
+
+import { usePreferenceClient } from '@/frontend/data/PreferenceProvider';
 import type {
   PreferenceSchema,
   PreferenceKeyType,
   PreferenceUpdateOptions,
-} from '@cherrystudio/universal/data/preference';
-import { getDefaultValue } from '@cherrystudio/universal/data/preference';
-import { useCallback, useMemo, useRef, useSyncExternalStore } from 'react';
-
-import { usePreferenceClient } from '@/frontend/data/PreferenceProvider';
+} from '@/shared/data/preference';
+import { getDefaultValue } from '@/shared/data/preference';
 
 type PreferenceSetter<K extends PreferenceKeyType> = (
   value: PreferenceSchema[K],

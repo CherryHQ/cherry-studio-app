@@ -1,4 +1,3 @@
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
 import { useEffect } from 'react';
@@ -6,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
 import type { Backend } from '@/shared/contracts';
+import type { Painting } from '@/shared/data/types/painting';
 
 import { usePaintingGalleryEntries, useResolvedPaintingFiles } from '../usePaintings';
 

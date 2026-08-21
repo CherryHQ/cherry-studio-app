@@ -11,8 +11,9 @@
  * at the type level to keep full alignment with the persistent API surface.
  */
 
-import type { Message } from '@shared/data/types/message';
-import type { Topic } from '@shared/data/types/topic';
+import type { Message } from '@cherrystudio/universal/data/types/message';
+
+import type { Topic } from '@/shared/data/types/topic';
 
 import type { CreateMessageDto } from './messages';
 import type { CreateTopicDto } from './topics';

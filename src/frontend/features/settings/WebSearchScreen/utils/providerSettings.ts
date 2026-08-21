@@ -3,12 +3,12 @@ import type {
   WebSearchProviderId,
   WebSearchProviderOverride,
   WebSearchProviderOverrides,
-} from '@cherrystudio/universal/data/preference';
+} from '@/shared/data/preference';
 import {
   MOBILE_SUPPORTED_WEB_SEARCH_PROVIDERS,
   WEB_SEARCH_PROVIDER_PRESET_MAP,
   type WebSearchProviderPreset,
-} from '@cherrystudio/universal/data/presets/webSearchProviders';
+} from '@/shared/data/presets/webSearchProviders';
 
 export type WebSearchProviderCapability = WebSearchProviderPreset['capabilities'][number];
 

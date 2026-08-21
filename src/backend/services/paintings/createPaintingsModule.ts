@@ -1,6 +1,4 @@
-import type { FileEntry, FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 
 import type { Database } from '@/backend/data/db/DbService';
 import type {
@@ -10,6 +8,8 @@ import type {
   ResolvedFile,
   ResolvedPaintingFiles,
 } from '@/shared/contracts';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type {
   PaintingFileStorage,

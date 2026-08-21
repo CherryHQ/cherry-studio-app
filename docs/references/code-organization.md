@@ -53,7 +53,8 @@ Repeated bucket names express different owners:
 | Path | Ownership |
 | --- | --- |
 | `src/frontend/data` | Frontend providers, endpoint query keys, data hooks, and UI cache state |
-| `packages/universal/src/data` | Mobile-owned data contracts in a transitional home; moving to `src/shared/data` |
+| `src/shared/data` | Mobile-owned entities, DTO schemas, preferences, cache schemas, and data errors |
+| `packages/universal/src/data/types` | Transitional home of the entity types `packages/ai-runtime` still imports |
 | `src/backend/data` | Backend cache, preferences, SQLite, migrations, and persistence services |
 | `src/frontend/utils` | Pure helpers used by independent frontend domains |
 | `src/backend/utils` | Pure helpers used by independent backend domains |

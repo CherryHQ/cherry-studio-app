@@ -1,7 +1,4 @@
-import type {
-  WebSearchCapability,
-  WebSearchProvider,
-} from '@cherrystudio/universal/data/preference';
+import type { WebSearchCapability, WebSearchProvider } from '@/shared/data/preference';
 
 import { WebSearchConfigError } from '../WebSearchConfigError';
 

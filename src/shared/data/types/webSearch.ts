@@ -4,7 +4,7 @@ import type {
   WebSearchProvider,
   WebSearchProviderId,
   WebSearchProviderOverrides,
-} from '@shared/data/preference';
+} from '@/shared/data/preference';
 
 export const DEFAULT_WEB_SEARCH_CUTOFF_LIMIT = 2000;
 

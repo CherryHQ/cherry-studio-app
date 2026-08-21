@@ -1,5 +1,5 @@
-import type { McpServer } from '@shared/data/types/mcpServer';
-import { McpServerSchema } from '@shared/data/types/mcpServer';
+import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import { McpServerSchema } from '@cherrystudio/universal/data/types/mcpServer';
 import * as z from 'zod';
 
 const MCP_SERVER_MUTABLE_FIELDS = {

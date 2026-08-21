@@ -1,10 +1,7 @@
-import type {
-  WebSearchExecutionConfig,
-  WebSearchResponse,
-} from '@cherrystudio/universal/data/types/webSearch';
 import * as z from 'zod';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
 
 import { isValidUrl } from '../../utils/url';
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';

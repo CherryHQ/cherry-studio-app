@@ -21,7 +21,6 @@ import {
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { Model } from '@cherrystudio/universal/data/types/model';
 import { parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { Provider } from '@cherrystudio/universal/data/types/provider';
@@ -45,6 +44,7 @@ import {
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import { fileContent } from '@/backend/services/file/fileContent';
 import { devicePermissions } from '@/backend/services/permissions';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 import { createAiUsagePlugin } from './hooks/billingHook';
 import { resolveUIMessageFileUrls } from './messages/attachmentRouting';

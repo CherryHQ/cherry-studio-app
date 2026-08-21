@@ -1,5 +1,4 @@
 import { CURRENCY, objectValues } from '@cherrystudio/provider-registry';
-import type { CursorPaginationResponse } from '@shared/data/api/types';
 import { type ReasoningEffortOption, ReasoningEffortOptionSchema } from '@shared/types/aiSdk';
 import type {
   DataUIPart,
@@ -293,37 +292,3 @@ export const MessageSchema = z.strictObject({
   updatedAt: z.iso.datetime(),
 });
 export type Message = z.infer<typeof MessageSchema>;
-
-export interface TreeNode {
-  createdAt: string;
-  hasChildren: boolean;
-  id: string;
-  modelId?: string | null;
-  parentId?: string | null;
-  preview: string;
-  role: MessageRole;
-  status: MessageStatus;
-}
-
-export interface SiblingsGroup {
-  nodes: Omit<TreeNode, 'parentId'>[];
-  parentId: string;
-  siblingsGroupId: number;
-}
-
-export interface TreeResponse {
-  activeNodeId: string | null;
-  nodes: TreeNode[];
-  rootId: null | string;
-  siblingsGroups: SiblingsGroup[];
-}
-
-export interface BranchMessage {
-  message: Message;
-  siblingsGroup?: Message[];
-}
-
-export interface BranchMessagesResponse extends CursorPaginationResponse<BranchMessage> {
-  activeNodeId: string | null;
-  assistantId: string | null;
-}

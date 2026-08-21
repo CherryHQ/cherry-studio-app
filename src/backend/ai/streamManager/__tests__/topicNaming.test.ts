@@ -1,6 +1,7 @@
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@cherrystudio/universal/data/presets/cherryai';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
+
+import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@/shared/data/presets/cherryai';
 
 import {
   extractMainText,

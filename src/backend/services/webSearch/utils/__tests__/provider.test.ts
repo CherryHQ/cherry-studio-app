@@ -1,4 +1,4 @@
-import type { WebSearchProvider } from '@cherrystudio/universal/data/preference';
+import type { WebSearchProvider } from '@/shared/data/preference';
 
 import { WebSearchConfigError } from '../../WebSearchConfigError';
 import { ApiKeyRotationState, resolveProviderApiHost } from '../provider';

@@ -1,8 +1,6 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import type { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
-import type { FileEntry, FileEntryId } from '@cherrystudio/universal/data/types/file';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
 import { loggerService } from '@logger';
 
 import type {
@@ -15,6 +13,8 @@ import type {
   PaintingActivityProps,
 } from '@/shared/backgroundActivity/painting';
 import type { PaintingGenerationResult } from '@/shared/contracts';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
+import type { Painting } from '@/shared/data/types/painting';
 
 import type { CreateInternalEntryInput } from '../../file/fileStorage';
 

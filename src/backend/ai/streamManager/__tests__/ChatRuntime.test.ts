@@ -3,7 +3,6 @@ import {
   type Assistant,
   DEFAULT_ASSISTANT_SETTINGS,
 } from '@cherrystudio/universal/data/types/assistant';
-import { type FileEntry, FileEntrySchema } from '@cherrystudio/universal/data/types/file';
 import type {
   CherryMessagePart,
   CherryUIMessage,
@@ -21,6 +20,7 @@ import type {
 } from '@/backend/services/backgroundReply';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { type FileEntry, FileEntrySchema } from '@/shared/data/types/file';
 
 import { ChatRuntime, type ChatRuntimeConfig } from '../ChatRuntime';
 import type { ChatRuntimeServices, ChatStreamRequest } from '../ChatRuntimeDependencies';

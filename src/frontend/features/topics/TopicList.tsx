@@ -1,7 +1,5 @@
 import { CheckIcon } from '@cherrystudio/app-icons';
-import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
 import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +17,8 @@ import {
 } from '@/frontend/components/selection';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
+import type { TopicListItem } from '@/shared/data/api/schemas/topics';
+import type { Topic } from '@/shared/data/types/topic';
 
 import { useTopicActionAlerts } from './components/useTopicActionAlerts';
 import {

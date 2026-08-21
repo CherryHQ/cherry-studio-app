@@ -1,5 +1,3 @@
-import type { ApiClient } from '@cherrystudio/universal/data/api/types';
-import type { PreferenceClient } from '@cherrystudio/universal/data/preference';
 import { Uniwind } from 'uniwind';
 
 import type { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
@@ -26,6 +24,8 @@ import AssistantActivity from '@/frontend/features/chat/AssistantActivity/Assist
 import PaintingActivity from '@/frontend/features/paintings/PaintingActivity/PaintingActivity';
 import i18n from '@/frontend/i18n';
 import type { Backend } from '@/shared/contracts';
+import type { ApiClient } from '@/shared/data/api/types';
+import type { PreferenceClient } from '@/shared/data/preference';
 
 export type AppBootstrapRuntime = {
   readonly backend: Backend;

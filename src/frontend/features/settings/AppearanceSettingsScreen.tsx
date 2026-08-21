@@ -1,7 +1,6 @@
 import { ALargeSmallIcon, ChevronRightIcon, GlobeIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
-import { ThemeMode } from '@cherrystudio/universal/data/preference';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
@@ -9,6 +8,7 @@ import { useUniwind } from 'uniwind';
 
 import { BackHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
+import { ThemeMode } from '@/shared/data/preference';
 
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
 import { useSettingPreferences } from './hooks/useSettingPreferences';

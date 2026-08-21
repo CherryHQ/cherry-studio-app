@@ -1,12 +1,12 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { JobError } from '@cherrystudio/universal/data/api/schemas/jobs';
 import { eq } from 'drizzle-orm';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database } from '@/backend/data/db/DbService';
 import { type InsertJobRow, jobTable } from '@/backend/data/db/schemas/job';
+import type { JobError } from '@/shared/data/api/schemas/jobs';
 
 import { JobService } from '../JobService';
 import { createTestDb, type TestDb } from './_testDb';

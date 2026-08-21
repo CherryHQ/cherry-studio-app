@@ -1,3 +1,4 @@
+import type { JobRow } from '@/backend/data/db/schemas/job';
 /**
  * Startup recovery: reconcile non-terminal leftovers with the freshly booted
  * runtime, per handler recovery strategy.
@@ -11,9 +12,7 @@
  * Recovery is restartable — there is no cross-call atomicity requirement: a
  * crash mid-recovery just leaves rows for the next cold start to finish.
  */
-import { JOB_ERROR_CODES, type JobError } from '@cherrystudio/universal/data/api/schemas/jobs';
-
-import type { JobRow } from '@/backend/data/db/schemas/job';
+import { JOB_ERROR_CODES, type JobError } from '@/shared/data/api/schemas/jobs';
 
 import type { JobHandler } from '../types';
 

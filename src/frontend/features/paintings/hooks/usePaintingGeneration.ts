@@ -1,5 +1,4 @@
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import { isTerminalStatus } from '@cherrystudio/universal/data/api/schemas/jobs';
 import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -10,6 +9,7 @@ import type {
   PaintingGenerationResult as BackendPaintingGenerationResult,
   PaintingGenerationOutput,
 } from '@/shared/contracts';
+import { isTerminalStatus } from '@/shared/data/api/schemas/jobs';
 
 import { imageParamsAspectRatio } from '../utils/imageGenerationParams';
 import {

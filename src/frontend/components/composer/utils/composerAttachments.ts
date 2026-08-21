@@ -1,8 +1,8 @@
-import { type FileEntryId, fileEntryUrl } from '@cherrystudio/universal/data/types/file';
 import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { withCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import type { DocumentPickerAsset } from 'expo-document-picker';
 
+import { type FileEntryId, fileEntryUrl } from '@/shared/data/types/file';
 import {
   imageMediaTypeFromExtension,
   isAiSupportedImageMediaType,
