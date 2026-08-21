@@ -77,7 +77,7 @@ export function SecureInput({
   const visibilityProgress = useSharedValue(0);
   const isDisabled = disabled ?? textField?.isDisabled ?? false;
   const isInvalid = invalid ?? textField?.isInvalid ?? false;
-  const { onBlur, onFocus, selection, ...restInputProps } = inputProps;
+  const { onBlur, onFocus, ...restInputProps } = inputProps;
 
   const handleBlur: NonNullable<TextInputProps['onBlur']> = (event) => {
     setIsFocused(false);
@@ -124,7 +124,7 @@ export function SecureInput({
           onBlur={handleBlur}
           onFocus={handleFocus}
           secureTextEntry={!isVisible}
-          selection={isFocused ? selection : blurredSelection}
+          selection={isFocused ? undefined : blurredSelection}
           style={styles.input}
           testID={testID}
         />

@@ -2,6 +2,7 @@ import type { TextInputProps } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { SecureInput } from '../secure-input';
+import type { SecureInputProps } from '../secure-input.types';
 
 jest.mock('@cherrystudio/app-icons', () => ({
   EyeIcon: () => null,
@@ -76,18 +77,19 @@ describe('SecureInput', () => {
     const focusEvent = { nativeEvent: { target: 1 } } as Parameters<
       NonNullable<TextInputProps['onFocus']>
     >[0];
+    const props = {
+      accessibilityLabel: 'API key',
+      onBlur,
+      onChangeText: jest.fn(),
+      onFocus,
+      // @ts-expect-error SecureInput owns selection across its focus lifecycle.
+      selection: { end: 4, start: 4 },
+      value: 'a-very-long-secret',
+      visibilityAccessibilityLabels: { hide: 'Hide API key', show: 'Show API key' },
+    } satisfies SecureInputProps;
 
     act(() => {
-      renderer = create(
-        <SecureInput
-          accessibilityLabel="API key"
-          onBlur={onBlur}
-          onChangeText={jest.fn()}
-          onFocus={onFocus}
-          value="a-very-long-secret"
-          visibilityAccessibilityLabels={{ hide: 'Hide API key', show: 'Show API key' }}
-        />,
-      );
+      renderer = create(<SecureInput {...props} />);
     });
 
     const nativeInput = renderer!.root.findByType('secure-input-native');
