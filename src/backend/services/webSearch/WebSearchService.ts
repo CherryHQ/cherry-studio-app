@@ -1,19 +1,16 @@
+import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { loggerService } from '@/shared/core/logger/LoggerService';
 import type {
   WebSearchCapability,
   WebSearchProvider,
-} from '@cherrystudio/universal/data/preference';
-import type {
   WebSearchCheckProviderRequest,
   WebSearchCheckProviderResponse,
   WebSearchExecutionConfig,
   WebSearchFetchUrlsRequest,
   WebSearchResponse,
   WebSearchSearchKeywordsRequest,
-} from '@cherrystudio/universal/data/types/webSearch';
-
-import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
-import type { PreferenceService } from '@/backend/data/PreferenceService';
-import { loggerService } from '@/shared/core/logger/LoggerService';
+} from '@/shared/data/types/webSearch';
 
 import { postProcessWebSearchResponse } from './postProcessing';
 import type { WebSearchProviderDriver } from './providers/factory';

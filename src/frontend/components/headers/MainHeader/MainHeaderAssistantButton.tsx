@@ -1,9 +1,9 @@
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
 import { Pressable, Text } from 'react-native';
 
 import { useAssistantApiById, useTopic } from '@/frontend/hooks/chat';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 export function useMainHeaderAssistant() {
   const router = useRouter();

@@ -1,6 +1,5 @@
-import { FileEntrySchema } from '@cherrystudio/universal/data/types/file';
-
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
+import { FileEntrySchema } from '@/shared/data/types/file';
 
 import { createServiceTestDatabase } from '../../serviceTestDatabase';
 import { FileEntryService } from '../FileEntryService';

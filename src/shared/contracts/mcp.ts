@@ -1,4 +1,4 @@
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 export type McpConnectionConfig = {
   endpointUrl: string;

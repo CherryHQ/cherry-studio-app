@@ -1,6 +1,7 @@
 import type { ImageModelV3CallOptions, LanguageModelV3CallOptions } from '@ai-sdk/provider';
-import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 import { readUIMessageStream, type UIMessageChunk } from 'ai';
+
+import type { CherryUIMessage } from '@/shared/data/types/message';
 
 export function projectLanguageCall(call: LanguageModelV3CallOptions) {
   const value = {

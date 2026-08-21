@@ -2,7 +2,7 @@ import type {
   AiUsageRecordStatsMetrics,
   AiUsageRecordStatsResponse,
   AiUsageRecordTimelineBucket,
-} from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
+} from '@/shared/data/api/schemas/aiUsageRecords';
 
 import {
   buildAiUsageRanking,

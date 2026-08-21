@@ -1,7 +1,7 @@
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { useQuery } from '@tanstack/react-query';
 
 import { queryKeys, useBackendModule, useQuery as useDataQuery } from '@/frontend/data';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 export function useResolvedFile(entryId: FileEntryId) {
   const file = useBackendModule('file');

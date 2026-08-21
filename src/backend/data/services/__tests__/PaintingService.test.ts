@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
-import type { PaintingFiles } from '@cherrystudio/universal/data/types/painting';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { PaintingFiles } from '@/shared/data/types/painting';
 
 import { PaintingService } from '../PaintingService';
 

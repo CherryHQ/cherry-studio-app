@@ -1,12 +1,7 @@
-import {
-  createUniqueModelId,
-  type Model,
-  type UniqueModelId,
-} from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
-
 import type { ModelsModule } from '@/shared/contracts';
 import { ModelPullTimeoutError } from '@/shared/contracts';
+import { createUniqueModelId, type Model, type UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { createModelsModule, type ModelsModuleDependencies } from '../createModelsModule';
 

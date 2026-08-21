@@ -1,13 +1,8 @@
-import {
-  type FileEntry,
-  type FileEntryId,
-  FileEntrySchema,
-} from '@cherrystudio/universal/data/types/file';
-import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Painting } from '@cherrystudio/universal/data/types/painting';
-
 import type { Database } from '@/backend/data/db/DbService';
 import type { PaintingsModule } from '@/shared/contracts';
+import { type FileEntry, type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
+import { createUniqueModelId } from '@/shared/data/types/model';
+import type { Painting } from '@/shared/data/types/painting';
 
 import { createPaintingsModule, type PaintingsModuleDependencies } from '../createPaintingsModule';
 

@@ -1,12 +1,13 @@
 import { resolveReasoningEffortForModel } from '@cherrystudio/universal/ai/reasoning';
-import type { AssistantSettings } from '@cherrystudio/universal/data/types/assistant';
-import type { Model } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import {
   isFunctionCallingModel,
   isOpenRouterBuiltInWebSearchModel,
   isWebSearchModel,
 } from '@cherrystudio/universal/utils/model';
+
+import type { AssistantSettings } from '@/shared/data/types/assistant';
+import type { Model } from '@/shared/data/types/model';
 
 export type ReasoningEffortPatch = {
   reasoning_effort?: ReasoningEffortOption;

@@ -1,5 +1,6 @@
-import type { CursorPaginationResponse } from '@cherrystudio/universal/data/api/types';
 import type { InfiniteData, QueryClient, QueryFilters, QueryKey } from '@tanstack/react-query';
+
+import type { CursorPaginationResponse } from '@/shared/data/api/types';
 
 export type QuerySnapshot<TData> = [QueryKey, TData | undefined][];
 

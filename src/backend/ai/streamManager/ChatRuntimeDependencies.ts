@@ -1,30 +1,27 @@
+import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+import type { UIMessageChunk } from 'ai';
+
+import type { BackgroundReplyLifecycle } from '@/backend/services/backgroundReply';
+import type { ChatToolApprovalInput } from '@/shared/contracts';
 import type {
   BranchMessagesQueryParams,
   CreateMessageDto,
-} from '@cherrystudio/universal/data/api/schemas/messages';
+} from '@/shared/data/api/schemas/messages';
+import type { BranchMessagesResponse } from '@/shared/data/api/schemas/messages';
+import type { CreateTopicDto, UpdateTopicDto } from '@/shared/data/api/schemas/topics';
+import type { Assistant } from '@/shared/data/types/assistant';
+import type { FileEntry } from '@/shared/data/types/file';
 import type {
-  CreateTopicDto,
-  UpdateTopicDto,
-} from '@cherrystudio/universal/data/api/schemas/topics';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type { FileEntry } from '@cherrystudio/universal/data/types/file';
-import type {
-  BranchMessagesResponse,
   CherryMessagePart,
   CherryUIMessage,
   Message,
   MessageData,
   MessageRuntimeStatsInput,
   MessageRuntimeTimingSink,
-} from '@cherrystudio/universal/data/types/message';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
-import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
-import type { UIMessageChunk } from 'ai';
-
-import type { BackgroundReplyLifecycle } from '@/backend/services/backgroundReply';
-import type { ChatToolApprovalInput } from '@/shared/contracts';
+} from '@/shared/data/types/message';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
+import type { Topic } from '@/shared/data/types/topic';
 
 export type ChatStreamRequest = {
   assistantId?: string;

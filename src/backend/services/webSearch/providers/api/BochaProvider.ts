@@ -1,8 +1,6 @@
-import type {
-  WebSearchExecutionConfig,
-  WebSearchResponse,
-} from '@cherrystudio/universal/data/types/webSearch';
 import * as z from 'zod';
+
+import type { WebSearchExecutionConfig, WebSearchResponse } from '@/shared/data/types/webSearch';
 
 import { BaseWebSearchProvider } from '../base/BaseWebSearchProvider';
 import type { ApiKeyRequestSearchContext } from '../base/context';

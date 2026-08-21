@@ -1,8 +1,3 @@
-import type {
-  CreateMcpServerDto,
-  UpdateMcpServerDto,
-} from '@cherrystudio/universal/data/api/schemas/mcpServers';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQueryClient, useQuery as useTanStackQuery } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
@@ -14,6 +9,8 @@ import {
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
+import type { CreateMcpServerDto, UpdateMcpServerDto } from '@/shared/data/api/schemas/mcpServers';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 const EMPTY_MCP_SERVERS: readonly McpServer[] = Object.freeze([]);
 const EMPTY_MCP_RUNTIME_SUMMARIES: Readonly<Record<string, McpServerRuntimeSummary>> =

@@ -1,3 +1,14 @@
+import { sql } from 'drizzle-orm';
+import {
+  check,
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
+
 import {
   type AiUsageCostBreakdown,
   type AiUsagePricingSnapshot,
@@ -15,18 +26,8 @@ import {
   AiUsageRecordModalitySchema,
   type AiUsageRecordSourceType,
   AiUsageRecordSourceTypeSchema,
-} from '@cherrystudio/universal/data/types/aiUsageRecord';
-import { CURRENCY, type Currency, objectValues } from '@cherrystudio/universal/data/types/model';
-import { sql } from 'drizzle-orm';
-import {
-  check,
-  index,
-  integer,
-  real,
-  sqliteTable,
-  text,
-  uniqueIndex,
-} from 'drizzle-orm/sqlite-core';
+} from '@/shared/data/types/aiUsageRecord';
+import { CURRENCY, type Currency, objectValues } from '@/shared/data/types/model';
 
 import { uuidPrimaryKeyOrdered } from './_columnHelpers';
 

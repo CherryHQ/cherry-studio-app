@@ -45,9 +45,9 @@ The v0.2 merge (desktop-sync `fd1552c6`) brought in, all desktop-verbatim:
 
 | Piece | Location | State |
 | --- | --- | --- |
-| Jobs DTO contracts (status atoms, `Trigger`, `CatchUpPolicy`, `RetryPolicy`, `JobSnapshot`, `JobScheduleSnapshot`, `JobProgress`, `JOB_ERROR_CODES`, `JobSchemas` endpoints) | `packages/universal/src/data/api/schemas/jobs.ts` | Desktop mirror, formatting-only diff; already in the `ApiSchemas` intersection |
-| `job` + `job_schedule` drizzle tables | `src/backend/data/db/schemas/job.ts` | Desktop-verbatim columns, indexes, CHECK constraint, and the partial unique idempotency index |
-| Migration | `migrations/sqlite-drizzle/0006_*.sql` | Verified: the partial unique index and `job_status_check` emitted correctly |
+| Jobs DTO contracts (status atoms, `RetryPolicy`, `JobSnapshot`, `JobProgress`, `JOB_ERROR_CODES`, `JobSchemas` endpoints) | `src/shared/data/api/schemas/jobs.ts` | Mobile-owned since the data-layer split; the schedule vocabulary (`Trigger`, `CatchUpPolicy`, `JobScheduleSnapshot`, schedule DTOs) was deleted as zero-consumer |
+| `job` drizzle table | `src/backend/data/db/schemas/job.ts` | Columns, indexes, CHECK constraint, and the partial unique idempotency index; `job_schedule` was dropped with the other consumer-less tables (#573) |
+| Migration | `migrations/sqlite-drizzle/0000_release_baseline.sql` | The partial unique index and `job_status_check` live in the squashed baseline |
 | Read repository | `src/backend/data/services/JobService.ts` | `list` / `getById` / bare `create`; `rowToSnapshot` maps timestamps to ISO strings (matches desktop's string-typed snapshot) |
 | GET-only Data API | `src/backend/data/api/handlers/jobs.ts`, aggregated in `apiHandlers.ts`, `JobService` constructed in `createBackendServices` | `/jobs` and `/jobs/:id` reads work today |
 
@@ -56,11 +56,12 @@ recovery/GC), the handler registry and contract, the first business handler, and
 ownership of the pump — see [Phase 1 As-Built](#phase-1-as-built). Platform adapters (Phase 2+)
 remain unbuilt.
 
-One structural consequence: `src/backend/data/db/schemas/job.ts` and the universal `jobs.ts` are
-**desktop mirrors under the `$sync-cherry-desktop` audit**. Mobile-only state must not be patched
-into them, or every future sync becomes a merge conflict and the schema-AST audit reports drift.
-The design below therefore adds **no schema at all**: everything mobile-only is derived from the
-handler registry, carried in `metadata`, or expressed as a runtime invariant.
+One structural note: `src/backend/data/db/schemas/job.ts` and `src/shared/data/api/schemas/jobs.ts`
+are **mobile-owned** — the data domains left the desktop-sync audit when the mobile data layer
+split from desktop. Schema additions are allowed when a mobile consumer needs them; the design
+below still adds **no schema at all** because everything mobile-only is derived from the handler
+registry, carried in `metadata`, or expressed as a runtime invariant — a smaller persistent
+surface, not a sync constraint.
 
 ## Phase 1 As-Built
 
@@ -135,9 +136,9 @@ sits on the list.
   only desktop consumer — using the desktop contract as the reference.
 - **No push surface for progress.** Polling only, per Deviation 7; a CacheService-backed push
   face waits for a handler with high-frequency progress.
-- **Schedules stay dormant** (Phase 4): `job_schedule` is written and read by nothing on mobile;
-  desktop's `AgentTaskService` semantics occupy the table's shape, awaiting a mobile executor and
-  a product feature that needs one.
+- **Schedules do not exist yet** (Phase 4): the `job_schedule` table and its DTO vocabulary were
+  deleted as zero-consumer during the data-layer split. Phase 4 re-authors both mobile-first,
+  desktop's semantics as reference, when a product feature needs one.
 
 ## Desktop: What We Port And What We Don't
 
@@ -146,9 +147,9 @@ helpers, repositories, and shared zod contracts) splits cleanly along one line:
 
 | Desktop area | Verdict | Why |
 | --- | --- | --- |
-| Six-state machine (`pending/delayed/running/completed/failed/cancelled`), terminal/active sets | **Already landed** (universal mirror) | Pure vocabulary, zero Electron coupling |
-| `job` / `job_schedule` schemas, indexes, partial unique idempotency index, CHECK constraint | **Already landed** (schema + migration) | Same drizzle + SQLite on both ends |
-| Jobs DTO / error codes / endpoint map | **Already landed** (universal mirror) | Serialized data contract — dual-end alignment applies letter-for-letter |
+| Six-state machine (`pending/delayed/running/completed/failed/cancelled`), terminal/active sets | **Already landed** (mobile-owned vocabulary) | Pure vocabulary, zero Electron coupling |
+| `job` schema, indexes, partial unique idempotency index, CHECK constraint | **Already landed** (schema + migration); `job_schedule` dropped as consumer-less | Same drizzle + SQLite on both ends |
+| Jobs DTO / error codes / endpoint map | **Already landed**, now mobile-owned and trimmed to consumed vocabulary | The data layer no longer aligns with desktop; schedule DTOs return with Phase 4 |
 | `runtime/backoff.ts`, `runtime/catchUp.ts`, `runtime/recovery.ts` pure functions | **Port verbatim** | Zero platform dependencies; desktop tests port with them |
 | Claim query (`priority ASC, scheduledAt ASC`, `cancelRequested=false`, double-checked UPDATE) | **Port** | SQL is engine-portable |
 | `JobRegistry` declaration-merging type safety, `JobHandler` contract, `JobContext` (signal, `patchMetadata`, `reportProgress`) | **Port** | Pure TypeScript |
@@ -170,8 +171,8 @@ helpers, repositories, and shared zod contracts) splits cleanly along one line:
 Follows the standard "new backend module" drop points; read-path files already exist:
 
 ```text
-packages/universal/src/data/api/schemas/jobs.ts   # landed — desktop mirror, do not fork
-src/backend/data/db/schemas/job.ts                # landed — desktop mirror, do not fork
+src/shared/data/api/schemas/jobs.ts               # landed — mobile-owned DTO contract
+src/backend/data/db/schemas/job.ts                # landed — mobile-owned schema
 src/backend/data/services/JobService.ts           # landed — reads + claim/terminal/retry writers
 src/backend/data/api/handlers/jobs.ts             # landed — GET-only, stays read-only
 src/backend/services/jobs/JobHandlerRegistry.ts   # landed — frozen production handler assembly
@@ -186,10 +187,9 @@ src/backend/services/<domain>/tasks/<Name>JobHandler.ts   # handlers live with t
 src/backend/services/paintings/tasks/paintingGenerateJobHandler.ts   # landed — first handler
 ```
 
-Handler runtime types (`JobHandler`, `JobContext`) stay app-side, exactly as desktop keeps them
-out of `src/shared` ("main-process internals" per the universal file's own header comment). Ported
-runtime files carry the repo's alignment-comment convention
-(`// Keep aligned with desktop src/main/core/job/...`).
+Handler runtime types (`JobHandler`, `JobContext`) stay backend-side, out of `src/shared` — the
+frontend never instantiates them. Ported runtime files carry the repo's alignment-comment
+convention (`// Keep aligned with desktop src/main/core/job/...`).
 
 ### Ownership and composition
 
@@ -249,15 +249,14 @@ and idempotency keys out of the frontend.
 
 ## Data Model
 
-### Mirrored tables stay verbatim
+### The `job` table stays lean
 
-`job` and `job_schedule` are already desktop-verbatim and must remain so — they are sync-audited
-mirrors. Checkpoints (provider task IDs, cursors) live in `metadata` via `ctx.patchMetadata`,
-exactly like desktop's remote-poll handler; they get promoted to typed columns only when a
-handler's correctness depends on them, and any such promotion is negotiated as a deliberate,
-documented mirror divergence — not slipped in.
+The `job` table is mobile-owned, but its persistent surface stays minimal by design. Checkpoints
+(provider task IDs, cursors) live in `metadata` via `ctx.patchMetadata`, exactly like desktop's
+remote-poll handler; they get promoted to typed columns only when a handler's correctness depends
+on them, and any such promotion is a deliberate, documented schema change — not slipped in.
 
-Two properties the assessment wanted as columns are instead derived, keeping the mirror clean:
+Two properties the assessment wanted as columns are instead derived, keeping the row shape lean:
 
 - **Execution class** is a function of the handler, not the row: the registry maps
   `type → executionClass`, and the pump filters claimable candidates by
@@ -306,7 +305,7 @@ On iOS this is free (BGTaskScheduler wakes the same JS runtime). If an Android h
 ever forced to construct a second React context — two live runtimes against one database — this
 invariant breaks and the weak fence with it. That is the signal to introduce a per-attempt
 `runToken` (a `job_claim` sidecar keyed by `jobId`, holding `runToken` / `runtimeId` /
-`claimedAt` / `claimExpiresAt`, so the `job` mirror still never diverges). Build it then, on
+`claimedAt` / `claimExpiresAt`, keeping the `job` row shape untouched). Build it then, on
 evidence — not now, on speculation. Phase 2's device spike carries the check.
 
 ### The all-writes-in-tx rule
@@ -393,7 +392,7 @@ cold-start recovery cannot revive work cancelled by a resource mutation.
   consumer (image generation is a single provider call — there is nothing incremental to report),
   so we ship **no subscription surface yet**. When a progress-bearing handler arrives (Phase 2/3),
   add a ChatSession-style `subscribe(jobId)` snapshot listener on a jobs workflow contract,
-  reusing the universal `JobProgress` shape (`{progress: 0-100, detail}`) and throttling
+  reusing the shared `JobProgress` shape (`{progress: 0-100, detail}`) and throttling
   persistence to meaningful checkpoints. Do not build it speculatively.
 - Live Activity / Android notifications (Phase 3) observe progress; they never own it, and they
   never mark a job complete.
@@ -508,9 +507,11 @@ type JobExecutionLease = {
 
 ## Schedules (Phase 4)
 
-The `job_schedule` table already exists (mirror), but no runtime reads it until Phase 4. Port the
-semantics with the mobile inversion the assessment mandates: **durable rows are the schedule; OS
-registrations and foreground timers are replaceable hints.** Every pump transactionally evaluates
+Neither the `job_schedule` table nor its DTO vocabulary exists on mobile any more — both were
+deleted as zero-consumer during the data-layer split. Phase 4 re-authors them (desktop's
+`Trigger`/`CatchUpPolicy` semantics as reference) with the mobile inversion the assessment
+mandates: **durable rows are the schedule; OS registrations and foreground timers are replaceable
+hints.** Every pump transactionally evaluates
 due occurrences (ported `computeCatchUpAction`/`isScheduleOverdue` pure functions: cron by
 `nextRun`, interval by `lastRun + ms`, `once` never overdue) and creates occurrence jobs with
 deterministic `(scheduleId, occurrenceAt)` idempotency keys, so late, coalesced, or duplicated
@@ -575,7 +576,7 @@ readers know they are decisions, not oversights:
    We keep desktop's three.
 3. **No mobile columns on the `job` table at all — and no sidecar either.** The assessment wants
    execution class, payload version, fencing tokens, and checkpoint/provider IDs as typed job
-   columns. Post-merge, `job` is a sync-audited desktop mirror; execution class derives from the
+   columns. The `job` row shape stays minimal instead: execution class derives from the
    handler registry, payload version is a metadata convention, checkpoints stay in `metadata`
    desktop-style, and fencing is an invariant rather than state (see Fencing). Net schema change
    for the runtime: zero.
@@ -592,7 +593,7 @@ readers know they are decisions, not oversights:
    pays for it with an explicit single-runtime invariant. Upgrading to `runToken` is a decision
    deferred to evidence, not a schema paid for upfront.
 7. **No subscription/progress surface in Phase 1.** The first handler has no incremental
-   progress; building the listener plumbing now is speculation. The universal `JobProgress`
+   progress; building the listener plumbing now is speculation. The shared `JobProgress`
    shape is reserved for when it exists.
 8. **`server-required` is not an execution class value.** It is a product-mapping decision
    ("don't build this locally"); a local row with that class would be a bug, not a state.
@@ -615,12 +616,10 @@ readers know they are decisions, not oversights:
 
 - **Painting UX copy**: force-quit mid-generation now surfaces an honest failed/abandoned receipt
   instead of silently vanishing work — needs a small UI state for "interrupted, tap to retry".
-- **Sync-audit registration**: confirm with the `$sync-cherry-desktop` skill that the jobs mirror
-  files are classified correctly, and that `JobService`'s mobile-only writers (fenced signatures,
-  `*Tx`-only surface) read as `semantic-port` rather than drift.
-
-Resolved since the first draft: the drizzle partial unique index generates correctly (verified in
-`0006_*.sql`); snapshot timestamps follow desktop's ISO-string convention via the landed
+Resolved since the first draft: the data domains left the desktop-sync audit entirely, so the
+jobs files no longer need sync classification; the drizzle partial unique index generates
+correctly (now in `0000_release_baseline.sql`); snapshot timestamps keep the ISO-string
+convention via the landed
 `rowToSnapshot`; and the `useJob` polling cadence is settled as-built (1 s `refetchInterval`
 while a job is active, stop on terminal snapshots, restore-on-mount via `GET /jobs` filtered by
 type + active statuses).

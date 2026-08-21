@@ -2,9 +2,10 @@ import type {
   ComposerQueuedMessagePayload,
   TopicStatusSnapshotEntry,
 } from '@cherrystudio/universal/ai/transport';
-import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
+
+import type { CherryMessagePart, Message } from '@/shared/data/types/message';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 export const NEW_TOPIC_SNAPSHOT_KEY = '__new_topic__';
 

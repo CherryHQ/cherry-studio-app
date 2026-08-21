@@ -11,7 +11,6 @@ import { messageService } from '@/backend/data/services/MessageService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { paintingService } from '@/backend/data/services/PaintingService';
 import { providerService } from '@/backend/data/services/ProviderService';
-import { temporaryChatService } from '@/backend/data/services/TemporaryChatService';
 import { topicService } from '@/backend/data/services/TopicService';
 
 export type DataServices = ReturnType<typeof createDataServices>;
@@ -45,7 +44,6 @@ export function createDataServices({
     painting: paintingService,
     preference,
     provider: providerService,
-    temporaryChat: temporaryChatService,
     topic: topicService,
   };
 }

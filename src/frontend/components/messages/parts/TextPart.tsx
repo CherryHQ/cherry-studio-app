@@ -1,8 +1,8 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
 import { useMemo } from 'react';
 import { Text } from 'react-native';
 
 import { splitToolMentions } from '@/frontend/utils/toolMentions';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import type { ResolvedCitationText } from './citations';
 import type { MessagePartRenderMode } from './MessageParts';

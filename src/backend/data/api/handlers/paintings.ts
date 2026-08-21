@@ -1,8 +1,7 @@
-import type { PaintingSchemas } from '@cherrystudio/universal/data/api/schemas/paintings';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-
 import { application } from '@/backend/core/application/Application';
 import type { PaintingService } from '@/backend/data/services/PaintingService';
+import type { PaintingSchemas } from '@/shared/data/api/schemas/paintings';
+import type { HandlersFor } from '@/shared/data/api/types';
 
 export function createPaintingHandlers(service: PaintingService): HandlersFor<PaintingSchemas> {
   return {

@@ -1,7 +1,8 @@
 import { Switch } from '@cherrystudio/ui/components';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
+
+import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderAvatar } from '../../../components/ProviderAvatar';
 

@@ -1,9 +1,9 @@
 import type { ProtoProviderConfig } from '@cherrystudio/provider-registry';
 import { buildRuntimeEndpointConfigs, ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { ApiFeatures, AuthConfig } from '@cherrystudio/universal/data/types/provider';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
 import { type CreateProviderInput, providerService } from '@/backend/data/services/ProviderService';
+import type { ApiFeatures, AuthConfig } from '@/shared/data/types/provider';
 
 import type { DatabaseSeeder } from '../types';
 

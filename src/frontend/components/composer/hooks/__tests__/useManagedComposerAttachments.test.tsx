@@ -1,4 +1,3 @@
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -7,6 +6,7 @@ import type {
   ComposerAttachmentSource,
   ComposerInitialAttachment,
 } from '@/frontend/components/composer/utils/composerAttachments';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 import { useManagedComposerAttachments } from '../useManagedComposerAttachments';
 

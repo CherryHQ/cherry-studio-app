@@ -1,5 +1,6 @@
-import type { EndpointType } from '@cherrystudio/universal/data/types/model';
 import { createContext, use } from 'react';
+
+import type { EndpointType } from '@/shared/data/types/model';
 
 import type { ProviderFormValues } from './utils/providerFormValues';
 

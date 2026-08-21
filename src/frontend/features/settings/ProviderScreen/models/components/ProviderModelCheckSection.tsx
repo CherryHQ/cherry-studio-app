@@ -1,7 +1,5 @@
 import { ChevronDownIcon } from '@cherrystudio/app-icons';
 import { Button, Section } from '@cherrystudio/ui/components';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { ApiKeyEntry, Provider } from '@cherrystudio/universal/data/types/provider';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -11,6 +9,8 @@ import {
   ModelPickerIcon,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
+import type { Model } from '@/shared/data/types/model';
+import type { ApiKeyEntry, Provider } from '@/shared/data/types/provider';
 
 import { useProviderModelCheck } from '../hooks/useProviderModelCheck';
 

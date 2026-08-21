@@ -1,4 +1,4 @@
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { createMcpModule, type McpModuleDependencies } from '../createMcpModule';
 

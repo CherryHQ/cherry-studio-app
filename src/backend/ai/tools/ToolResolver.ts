@@ -1,6 +1,4 @@
 import { applyDeferExposition, ToolRegistry } from '@cherrystudio/ai-runtime/tools';
-import type { PermissionPreferenceKey } from '@cherrystudio/universal/data/preference';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import type { ToolSet } from 'ai';
 import { Platform } from 'react-native';
 
@@ -8,6 +6,8 @@ import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { DevicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { PermissionPreferenceKey } from '@/shared/data/preference';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 import type { McpRuntimeService } from '../mcp';
 import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';

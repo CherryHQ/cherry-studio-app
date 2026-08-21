@@ -8,9 +8,6 @@
  * variant that has no mobile equivalent).
  */
 
-import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@cherrystudio/universal/data/presets/cherryai';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { isUniqueModelId, parseUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import {
   buildFirstUserMessageTitle,
   normalizeConversationTitle,
@@ -18,6 +15,9 @@ import {
 } from '@cherrystudio/universal/utils/conversationTitle';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import { CHERRYAI_DEFAULT_UNIQUE_MODEL_ID } from '@/shared/data/presets/cherryai';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { isUniqueModelId, parseUniqueModelId } from '@/shared/data/types/model';
 
 import type { ChatRuntimeServices } from './ChatRuntimeDependencies';
 

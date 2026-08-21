@@ -1,3 +1,6 @@
+import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
+import type { DbService } from '@/backend/data/db/DbService';
+import { preferenceTable } from '@/backend/data/db/schemas';
 import {
   getDefaultValue,
   getPreferenceKeys,
@@ -7,11 +10,7 @@ import {
   type PreferenceSchema,
   type PreferenceKeyType,
   type PreferenceUpdateOptions,
-} from '@cherrystudio/universal/data/preference';
-
-import { BaseService, DependsOn, Injectable } from '@/backend/core/lifecycle';
-import type { DbService } from '@/backend/data/db/DbService';
-import { preferenceTable } from '@/backend/data/db/schemas';
+} from '@/shared/data/preference';
 
 type PreferenceListener = () => void;
 type PreferenceValue = PreferenceSchema[PreferenceKeyType];

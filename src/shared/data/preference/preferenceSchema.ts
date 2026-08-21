@@ -1,0 +1,92 @@
+/**
+ * Every DB-backed preference the mobile app has.
+ *
+ * Hand-maintained. This used to be generated from desktop's classification.json
+ * and carried all 244 desktop keys; mobile preference data is independent of
+ * desktop, so a key belongs here only when mobile code reads it.
+ *
+ * Key naming: `namespace.sub.key_name` — at least two dot-separated segments,
+ * each lowercase letters, digits, or underscores. Desktop enforces this with
+ * its `data-schema-key/valid-key` ESLint rule, which does not run here; the
+ * shape is asserted in `__tests__/preferenceUtils.test.ts` instead.
+ */
+
+import type {
+  WebSearchCompressionMethod,
+  WebSearchProviderId,
+  WebSearchProviderOverrides,
+} from '@/shared/data/types/webSearch';
+
+import type { LanguageVarious, PermissionMode } from './preferenceTypes';
+import { ThemeMode } from './preferenceTypes';
+
+export const FONT_SIZE_STEPS = [0, 1, 2] as const;
+export type FontSizeStep = (typeof FONT_SIZE_STEPS)[number];
+
+export interface PreferenceSchema {
+  'app.language': LanguageVarious | null;
+  /** `avatar-file:{uuid}.webp` for a managed avatar image, or a direct image URI. */
+  'app.user.avatar': string;
+  'app.user.name': string;
+
+  'chat.background_reply.enabled': boolean;
+  'chat.default_model_id': string | null;
+  'chat.web_search.compression.cutoff_limit': number;
+  'chat.web_search.compression.method': WebSearchCompressionMethod;
+  'chat.web_search.default_fetch_urls_provider': WebSearchProviderId;
+  'chat.web_search.default_search_keywords_provider': WebSearchProviderId;
+  'chat.web_search.max_results': number;
+  'chat.web_search.provider_overrides': WebSearchProviderOverrides;
+
+  'feature.quick_assistant.model_id': string | null;
+  'feature.translate.model_id': string | null;
+
+  'permissions.calendar_read': PermissionMode;
+  'permissions.calendar_write': PermissionMode;
+  'permissions.health_read': PermissionMode;
+  'permissions.location_read': PermissionMode;
+  'permissions.reminders_read': PermissionMode;
+  'permissions.reminders_write': PermissionMode;
+
+  'topic.naming.enabled': boolean;
+  'topic.naming.model_id': string | null;
+  'topic.naming_prompt': string;
+
+  'ui.font_size_step': FontSizeStep;
+  'ui.theme_mode': ThemeMode;
+}
+
+export const PreferenceDefaults = {
+  'app.language': null,
+  'app.user.avatar': '',
+  'app.user.name': '',
+
+  'chat.background_reply.enabled': true,
+  'chat.default_model_id': null,
+  'chat.web_search.compression.cutoff_limit': 2000,
+  'chat.web_search.compression.method': 'none',
+  'chat.web_search.default_fetch_urls_provider': 'jina',
+  'chat.web_search.default_search_keywords_provider': 'exa-mcp',
+  'chat.web_search.max_results': 5,
+  'chat.web_search.provider_overrides': {},
+
+  'feature.quick_assistant.model_id': null,
+  'feature.translate.model_id': null,
+
+  'permissions.calendar_read': 'never',
+  'permissions.calendar_write': 'never',
+  'permissions.health_read': 'never',
+  'permissions.location_read': 'never',
+  'permissions.reminders_read': 'never',
+  'permissions.reminders_write': 'never',
+
+  'topic.naming.enabled': true,
+  'topic.naming.model_id': null,
+  'topic.naming_prompt': '',
+
+  'ui.font_size_step': 0,
+  'ui.theme_mode': ThemeMode.system,
+} satisfies PreferenceSchema;
+
+export type PreferenceKeyType = keyof PreferenceSchema;
+export type PermissionPreferenceKey = Extract<PreferenceKeyType, `permissions.${string}`>;

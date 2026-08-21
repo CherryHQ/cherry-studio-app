@@ -2,12 +2,12 @@ import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 
-import type { CherryMessagePart, Message } from '@cherrystudio/universal/data/types/message';
 import { drizzle } from 'drizzle-orm/sqlite-proxy';
 
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import type { Database, DbService } from '@/backend/data/db/DbService';
 import { schema } from '@/backend/data/db/schemas';
+import type { CherryMessagePart, Message } from '@/shared/data/types/message';
 
 import { AiUsageRecordService } from '../AiUsageRecordService';
 import { messageService } from '../MessageService';

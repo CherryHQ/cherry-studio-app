@@ -1,9 +1,5 @@
-import type {
-  PermissionMode,
-  PermissionPreferenceKey,
-} from '@cherrystudio/universal/data/preference';
-
 import type { DevicePermission } from '@/shared/contracts';
+import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 export const permissionKinds = ['location', 'calendar', 'reminders', 'health'] as const;
 export type PermissionKind = (typeof permissionKinds)[number];
