@@ -27,7 +27,7 @@ Earlier items do not yield to later ones.
 tokens/colors/vercel.css   Palette (background / gray / gray-alpha / blue / green / amber / red)
         ↓
 shadcn.css                 32 shadcn role names
-product.css                38 Cherry product semantics
+product.css                46 Cherry product semantics
         ↓
 native.css                 Generated. Never edit by hand.
         ↓
@@ -48,7 +48,7 @@ const [accent, ring] = useThemeColor(['primary', 'constant-white']);
 
 ### Adding A Token
 
-First answer: **does this role already have a name?** Among the 38 product tokens it usually does. If it genuinely does not:
+First answer: **does this role already have a name?** Among the 46 product tokens it usually does. If it genuinely does not:
 
 1. Declare the value in `product.css`, pointing at a palette step (`var(--green-900)`), not an oklch literal — unless it must not follow the theme, see below.
 2. Add the name to `CHERRY_PRODUCT_VARIABLE_TOKENS` in `scripts/theme-contract.ts`.

@@ -147,6 +147,10 @@ export const SURFACE_PAIRS: string[][] = [
   ['--success-subtle', '--success-subtle-foreground'],
   ['--info-subtle', '--info-subtle-foreground'],
   ['--inline-code', '--inline-code-foreground'],
+  ['--tag-amber', '--tag-amber-foreground'],
+  ['--tag-blue', '--tag-blue-foreground'],
+  ['--tag-green', '--tag-green-foreground'],
+  ['--tag-red', '--tag-red-foreground'],
 ];
 
 export const PAIR_VARIABLES = SURFACE_PAIRS.flat();
