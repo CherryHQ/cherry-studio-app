@@ -5,8 +5,11 @@ const MINIMUM_SCRIPT_CHARACTERS = 2;
 
 export function resolveAssistantReadAloudLanguage(
   text: string,
-  explicitLanguage?: string,
+  explicitLanguage?: string | null,
 ): string | undefined {
+  if (explicitLanguage === null) {
+    return undefined;
+  }
   if (explicitLanguage) {
     return explicitLanguage;
   }

@@ -71,4 +71,31 @@ describe('resolveAssistantReadAloudLanguage', () => {
       'ja',
     );
   });
+
+  test('keeps mixed block translations on the system-default voice', () => {
+    const projection = projectAssistantMessageReadAloud({
+      data: {
+        parts: [
+          { text: 'OK.', type: 'text' },
+          { text: 'Replace this.', type: 'text' },
+          {
+            data: {
+              content: 'こんにちは世界',
+              sourceBlockId: 'second-block',
+              targetLanguage: 'ja',
+            },
+            type: 'data-translation',
+          },
+        ],
+      },
+      id: '00000000-0000-7000-8000-000000000010',
+      role: 'assistant',
+      status: 'success',
+    });
+
+    expect(projection).toEqual({ language: null, text: 'OK.\n\nこんにちは世界' });
+    expect(
+      resolveAssistantReadAloudLanguage(projection?.text ?? '', projection?.language),
+    ).toBeUndefined();
+  });
 });

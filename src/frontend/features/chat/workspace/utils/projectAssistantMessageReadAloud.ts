@@ -2,7 +2,7 @@ import type { MessageListItem } from '@/frontend/components/messages';
 
 import { projectMarkdownInlineForSpeech } from './projectMarkdownInlineForSpeech';
 
-export type AssistantReadAloudContent = { language?: string; text: string };
+export type AssistantReadAloudContent = { language?: string | null; text: string };
 
 const COMPLEX_LATEX_COMMAND = /\\[a-z]+/iu;
 const CODE_SPAN_MARKER = '\uE000';
@@ -22,7 +22,7 @@ export function projectAssistantMessageReadAloud(
     return null;
   }
 
-  return source.language ? { language: source.language, text } : { text };
+  return source.language !== undefined ? { language: source.language, text } : { text };
 }
 
 function projectSpeakableSource(
@@ -57,9 +57,10 @@ function projectSpeakableSource(
 
   const language = blocks[0]?.language;
   const text = blocks.map((block) => block.text).join('\n\n');
-  return language && blocks.every((block) => block.language === language)
-    ? { language, text }
-    : { text };
+  if (language && blocks.every((block) => block.language === language)) {
+    return { language, text };
+  }
+  return blocks.some((block) => block.language) ? { language: null, text } : { text };
 }
 
 function cleanMarkdownForSpeech(markdown: string): string {

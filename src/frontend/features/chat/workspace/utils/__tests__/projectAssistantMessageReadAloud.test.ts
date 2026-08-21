@@ -60,6 +60,7 @@ describe('projectAssistantMessageReadAloud', () => {
     ]);
 
     expect(projectAssistantMessageReadAloud(message)).toEqual({
+      language: null,
       text: 'Keep the first block.\n\nDeuxième bloc traduit.',
     });
   });
