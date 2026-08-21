@@ -76,7 +76,7 @@ There is no fifth. A new literal must state in its commit which case it falls un
 
 Both currently resolve to the same value, but they mean different things:
 
-- `--brand` — "this must be the product's green."
+- `--brand` — "this must be the Cherry logo red (`#ff5757`)."
 - `--primary` — "this is the accent, and would follow a theme-colour setting if one existed."
 
 The test: **if the user set the accent to purple, should this turn purple?**
@@ -107,7 +107,7 @@ Always pair colour with a non-colour cue. Icon shape, wording, or position must 
 
 ## Typography
 
-The scale is `sizeSequence` in `src/frontend/utils/typographyScale.ts`, 13 steps. The first nine adopt VBG size/leading pairs verbatim:
+The scale is `sizeSequence` in `packages/ui/src/utils/typography-scale.ts`, 13 steps. The first nine adopt VBG size/leading pairs verbatim:
 
 | Step | Value | Role |
 |---|---|---|
