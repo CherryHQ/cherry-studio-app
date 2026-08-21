@@ -95,22 +95,15 @@ function cleanMarkdownForSpeech(markdown: string): string {
 }
 
 function protectCodeSpans(markdown: string, codeSpans: string[]): string {
-  return markdown
-    .split('\n')
-    .map((line) => protectCodeSpansOnLine(line, codeSpans))
-    .join('\n');
-}
-
-function protectCodeSpansOnLine(line: string, codeSpans: string[]): string {
   const runs: { end: number; length: number; start: number }[] = [];
-  for (let index = 0; index < line.length;) {
-    if (line[index] !== '`') {
+  for (let index = 0; index < markdown.length;) {
+    if (markdown[index] !== '`') {
       index += 1;
       continue;
     }
 
     let end = index + 1;
-    while (line[end] === '`') {
+    while (markdown[end] === '`') {
       end += 1;
     }
     runs.push({ end, length: end - index, start: index });
@@ -139,16 +132,17 @@ function protectCodeSpansOnLine(line: string, codeSpans: string[]): string {
     }
 
     const closingRun = runs[closingRunIndex];
-    const content = line
+    const content = markdown
       .slice(openingRun.end, closingRun.start)
+      .replace(/\n/g, ' ')
       .replaceAll(CODE_SPAN_MARKER.repeat(2), CODE_SPAN_MARKER);
     const codeSpanIndex = codeSpans.push(content) - 1;
-    output.push(line.slice(cursor, openingRun.start));
+    output.push(markdown.slice(cursor, openingRun.start));
     output.push(`${CODE_SPAN_MARKER}${codeSpanIndex}${CODE_SPAN_MARKER}`);
     cursor = closingRun.end;
     index = closingRunIndex;
   }
-  output.push(line.slice(cursor));
+  output.push(markdown.slice(cursor));
   return output.join('');
 }
 

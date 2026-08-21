@@ -145,6 +145,14 @@ describe('projectAssistantMessageReadAloud', () => {
     });
   });
 
+  test('protects an equal-run code span across a soft line break', () => {
+    const message = createMessage([textPart('Keep `alpha\n__init__` after.')]);
+
+    expect(projectAssistantMessageReadAloud(message)).toEqual({
+      text: 'Keep alpha __init__ after.',
+    });
+  });
+
   test('preserves link and math syntax inside inline code spans', () => {
     const markdown = 'Keep `[label](target)` and `$value$` unchanged.';
 
