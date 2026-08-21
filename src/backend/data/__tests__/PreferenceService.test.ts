@@ -1,8 +1,7 @@
-import type { PreferenceKeyType } from '@cherrystudio/universal/data/preference';
-import { PreferenceDefaults } from '@cherrystudio/universal/data/preference';
-
 import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
+import type { PreferenceKeyType } from '@/shared/data/preference';
+import { PreferenceDefaults } from '@/shared/data/preference';
 
 jest.mock('@/backend/data/db/schemas', () => ({
   preferenceTable: {

@@ -1,9 +1,3 @@
-import type {
-  JobError,
-  JobSnapshot,
-  JobStatus,
-  RetryPolicy,
-} from '@cherrystudio/universal/data/api/schemas/jobs';
 /**
  * Job runtime handler contract and constants.
  *
@@ -20,6 +14,7 @@ import type {
 import type { LoggerService } from '@logger';
 
 import type { ResourceScope } from '@/backend/core/resources/types';
+import type { JobError, JobSnapshot, JobStatus, RetryPolicy } from '@/shared/data/api/schemas/jobs';
 
 import type { JobPayloadOf, JobType } from './jobRegistry';
 

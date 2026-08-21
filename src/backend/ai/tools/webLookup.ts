@@ -12,7 +12,6 @@
  */
 
 import type { WebSearchOutput } from '@cherrystudio/universal/ai/builtinTools';
-import type { WebSearchResponse } from '@cherrystudio/universal/data/types/webSearch';
 import * as z from 'zod';
 
 import { citeId, newCitePrefix } from '@/backend/ai/utils/citationIds';
@@ -21,6 +20,7 @@ import { isAbortError } from '@/backend/services/webSearch/utils/errors';
 import type { WebSearchConfigErrorCode } from '@/backend/services/webSearch/WebSearchConfigError';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { WebSearchResponse } from '@/shared/data/types/webSearch';
 
 const logger = loggerService.withContext('WebLookup');
 

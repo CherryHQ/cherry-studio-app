@@ -1,9 +1,10 @@
 import { Button } from '@cherrystudio/ui/components';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Text, View } from 'react-native';
+
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { type ProviderModelListSelection } from '../models/components/ProviderModelListContent';
 import { ProviderModelListLayout } from '../models/components/ProviderModelListLayout/ProviderModelListLayout';

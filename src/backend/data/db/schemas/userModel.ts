@@ -1,3 +1,6 @@
+import { sql } from 'drizzle-orm';
+import { check, index, integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+
 /**
  * User Model table schema
  *
@@ -9,7 +12,7 @@
  * - Single PK: id = "providerId::modelId" (deterministic UniqueModelId)
  * - providerId FK → user_provider (ON DELETE CASCADE)
  *
- * Type definitions are sourced from @shared/data/types/model
+ * Type definitions are sourced from @/shared/data/types/model
  */
 import type {
   EndpointType,
@@ -18,9 +21,7 @@ import type {
   ParameterSupport,
   ReasoningConfig,
   RuntimeModelPricing,
-} from '@cherrystudio/universal/data/types/model';
-import { sql } from 'drizzle-orm';
-import { check, index, integer, sqliteTable, text, unique } from 'drizzle-orm/sqlite-core';
+} from '@/shared/data/types/model';
 
 import { createUpdateTimestamps, orderKeyColumns, scopedOrderKeyIndex } from './_columnHelpers';
 import { userProviderTable } from './userProvider';

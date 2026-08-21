@@ -23,9 +23,16 @@ components explicitly compose the native modal card, fixed chrome, scrolling vie
 `onOpenChange` when feature state controls it. `Content` owns detents, card geometry, native close
 gestures, and the close-settle callback.
 
-`Body` provides a bounded `flex: 1` viewport but does not scroll. This lets `LegendList` and other
-virtualized controls own scrolling directly. Use `BottomSheet.ScrollView` instead for ordinary
-scrolling content. `Header`, `SearchField`, and `Footer` stay pinned as siblings of that viewport.
+`Body` provides a viewport but does not scroll. This lets `LegendList` and other virtualized
+controls own scrolling directly. Use `BottomSheet.ScrollView` instead for ordinary scrolling
+content. `Header`, `SearchField`, and `Footer` stay pinned as siblings of that viewport.
+
+Give `Content` a `height` and the viewport is bounded: it takes whatever the pinned chrome leaves,
+so a virtualized list or a `ScrollView` inside it scrolls. Omit `height` and the card measures to
+its content instead, so the viewport does too and nothing inside it scrolls — pick the mode from
+whether the content has a natural end. Content-sized cards reach the bottom of the screen, so
+whatever sits last in them owns its own home-indicator clearance; read it off
+`useBottomSheet().geometry`.
 
 `BottomSheet.Selection` is the explicit single-choice variant. It commits its selection only after
 the close animation settles. Callers pass translated labels; CherryUI owns no product language.

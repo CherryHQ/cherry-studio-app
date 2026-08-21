@@ -1,9 +1,5 @@
 import { SettingsIcon } from '@cherrystudio/app-icons';
 import { Section } from '@cherrystudio/ui/components';
-import type {
-  PermissionMode,
-  PermissionPreferenceKey,
-} from '@cherrystudio/universal/data/preference';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +8,7 @@ import { ScrollView, View } from 'react-native';
 import { BackHeader } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
+import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
 
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';

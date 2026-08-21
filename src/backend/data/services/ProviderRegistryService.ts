@@ -25,13 +25,14 @@ import {
   getMobileRegistryLoader,
   type MobileRegistryLoader,
 } from '@cherrystudio/provider-registry/mobile';
-import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 import type {
   ApiFeatures,
   ProviderAuthMethod,
   ProviderModelListSource,
   ProviderWebsites,
-} from '@cherrystudio/universal/data/types/provider';
+} from '@/shared/data/types/provider';
 
 const chatReasoningEndpointPriority: EndpointType[] = [
   ENDPOINT_TYPE.OPENAI_RESPONSES,
@@ -64,7 +65,7 @@ export type ProviderDisplayMetadata = {
   authMethods?: ProviderAuthMethod[];
   authOptional?: boolean;
   description?: string;
-  fastMode?: { transport: 'claude-code' | 'openai-priority' };
+  fastMode?: { transport: 'openai-priority' };
   modelListSource?: ProviderModelListSource;
   reportedCostCurrency?: Currency;
   websites?: ProviderWebsites;
@@ -376,7 +377,12 @@ export class ProviderRegistryService {
       authMethods: provider?.authMethods,
       authOptional: provider?.authOptional,
       description: provider?.description,
-      fastMode: provider?.fastMode,
+      // Presets may declare transports mobile has no runtime for (claude-code);
+      // only the one the AI layer implements passes through.
+      fastMode:
+        provider?.fastMode?.transport === 'openai-priority'
+          ? { transport: 'openai-priority' }
+          : undefined,
       modelListSource: provider?.modelListSource,
       reportedCostCurrency: provider?.reportedCostCurrency,
       websites: provider?.metadata?.website,

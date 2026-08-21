@@ -41,13 +41,6 @@ import {
   endpointImpliedCapability,
   MODEL_CAPABILITY,
 } from '@cherrystudio/provider-registry';
-import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
-import {
-  type Assistant,
-  DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/universal/data/types/assistant';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { isAnthropicModel, isFunctionCallingModel } from '@cherrystudio/universal/utils/model';
 import { type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
@@ -58,6 +51,10 @@ import {
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
+import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
 import type { ToolResolver } from '../../../tools';

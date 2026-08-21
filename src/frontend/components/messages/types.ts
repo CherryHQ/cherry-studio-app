@@ -1,6 +1,7 @@
-import type { Message } from '@cherrystudio/universal/data/types/message';
 import type { ReactNode } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
+
+import type { Message } from '@/shared/data/types/message';
 
 export type MessageListItem = Readonly<
   Pick<Message, 'data' | 'id' | 'status'> & {

@@ -1,6 +1,4 @@
 import { Section, Spinner } from '@cherrystudio/ui/components';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
@@ -15,6 +13,8 @@ import {
   ModelTypeFilterBar,
   type ModelTypeFilter,
 } from '@/frontend/components/modelPicker';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { useProviderDetailSettings } from './detail';
 import { ProviderModelPullChrome } from './models/components/ProviderModelPullChrome/ProviderModelPullChrome';

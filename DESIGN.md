@@ -27,7 +27,7 @@ Earlier items do not yield to later ones.
 tokens/colors/vercel.css   Palette (background / gray / gray-alpha / blue / green / amber / red)
         ↓
 shadcn.css                 32 shadcn role names
-product.css                38 Cherry product semantics
+product.css                46 Cherry product semantics
         ↓
 native.css                 Generated. Never edit by hand.
         ↓
@@ -46,9 +46,11 @@ const [accent, ring] = useThemeColor(['primary', 'constant-white']);
 
 `useThemeColor` takes contract names without the `--color-` prefix. A string returns a string; an array returns a tuple of the same length.
 
+Three shadcn names are **HeroUI-reserved and not part of either entry point**: `muted`, `accent`, and `accent-foreground`. HeroUI 1.x uses `accent` for its brand role and `muted` for its secondary-text role, so the app host remaps `--color-accent` and `--color-muted` in `global.css`. The contract variables stay declared for the HeroUI bridge, but there is no `bg-muted` / `bg-accent` utility and `useThemeColor` rejects the names at typecheck. For the meanings Cherry intends, use `secondary` (overlay fill) and `muted-foreground` (secondary text), which remain public.
+
 ### Adding A Token
 
-First answer: **does this role already have a name?** Among the 38 product tokens it usually does. If it genuinely does not:
+First answer: **does this role already have a name?** Among the 46 product tokens it usually does. If it genuinely does not:
 
 1. Declare the value in `product.css`, pointing at a palette step (`var(--green-900)`), not an oklch literal — unless it must not follow the theme, see below.
 2. Add the name to `CHERRY_PRODUCT_VARIABLE_TOKENS` in `scripts/theme-contract.ts`.
@@ -59,7 +61,7 @@ First answer: **does this role already have a name?** Among the 38 product token
 
 ### Literal Colours: Four Exemptions
 
-There is no fifth. A new literal must state in its commit which case it falls under.
+There is no fifth. A new literal must state in its commit which case it falls under, and register its file with that case in the `colorLiteralAllowlist` of `packages/design-tokens/scripts/check-app-theme.ts` — the check scans `src` and `packages/ui/src` for colour literals and fails on any unregistered file (and on registered files whose literals are gone).
 
 | Case | Examples | Why a token cannot serve |
 |---|---|---|
@@ -74,7 +76,7 @@ There is no fifth. A new literal must state in its commit which case it falls un
 
 Both currently resolve to the same value, but they mean different things:
 
-- `--brand` — "this must be the product's green."
+- `--brand` — "this must be the Cherry logo red (`#ff5757`)."
 - `--primary` — "this is the accent, and would follow a theme-colour setting if one existed."
 
 The test: **if the user set the accent to purple, should this turn purple?**
@@ -105,7 +107,7 @@ Always pair colour with a non-colour cue. Icon shape, wording, or position must 
 
 ## Typography
 
-The scale is `sizeSequence` in `src/frontend/utils/typographyScale.ts`, 13 steps. The first nine adopt VBG size/leading pairs verbatim:
+The scale is `sizeSequence` in `packages/ui/src/utils/typography-scale.ts`, 13 steps. The first nine adopt VBG size/leading pairs verbatim:
 
 | Step | Value | Role |
 |---|---|---|

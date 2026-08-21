@@ -1,4 +1,4 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 const CITABLE_TOOL_NAMES = new Set(['web_search', 'web_fetch', 'kb_search', 'kb_read']);
 const MARKDOWN_CODE_PATTERN = /```[\s\S]*?```|`[^`\n]*`/gm;

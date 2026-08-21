@@ -1,10 +1,10 @@
-import type { AiUsageRecordTimelineResponse } from '@cherrystudio/universal/data/api/schemas/aiUsageRecords';
-import type { ApiClient } from '@cherrystudio/universal/data/api/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { type ReactNode, useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import type { AiUsageRecordTimelineResponse } from '@/shared/data/api/schemas/aiUsageRecords';
+import type { ApiClient } from '@/shared/data/api/types';
 
 import { getAiUsageWeekRange, getAiUsageWeekTimelineQuery } from '../../utils/aiUsageDetail';
 import { useAiUsageWeekTimeline } from '../useAiUsageWeekTimeline';

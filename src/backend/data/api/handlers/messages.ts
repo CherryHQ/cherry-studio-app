@@ -1,9 +1,8 @@
-import type { MessageSchemas } from '@cherrystudio/universal/data/api/schemas/messages';
-import type { HandlersFor } from '@cherrystudio/universal/data/api/types';
-
 import { application } from '@/backend/core/application/Application';
 import type { ResourceScope } from '@/backend/core/resources/types';
 import type { MessageService } from '@/backend/data/services/MessageService';
+import type { MessageSchemas } from '@/shared/data/api/schemas/messages';
+import type { HandlersFor } from '@/shared/data/api/types';
 
 type MessageData = Pick<
   MessageService,

@@ -1,27 +1,27 @@
+import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
+
+import { application } from '@/backend/core/application/Application';
+import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
+import { userModelTable } from '@/backend/data/db/schemas/userModel';
+import { DataApiErrorFactory, ErrorCode } from '@/shared/data/api/errors';
 import type {
   CreateModelDto,
   ListModelsQuery,
   UpdateModelDto,
-} from '@cherrystudio/universal/data/api/schemas/models';
-import { DataApiErrorFactory, ErrorCode } from '@cherrystudio/universal/data/api/types';
-import { deepEqual } from '@cherrystudio/universal/data/cache/cacheUtils';
+} from '@/shared/data/api/schemas/models';
 import {
   CHERRYAI_DEFAULT_UNIQUE_MODEL_ID,
   CHERRYAI_PROVIDER_ID,
   isManagedCherryAiDefaultModel,
-} from '@cherrystudio/universal/data/presets/cherryai';
+} from '@/shared/data/presets/cherryai';
 import {
   createUniqueModelId,
   type EndpointType,
   type Model,
   parseUniqueModelId,
   type UniqueModelId,
-} from '@cherrystudio/universal/data/types/model';
-import { and, asc, eq, inArray, type SQL } from 'drizzle-orm';
-
-import { application } from '@/backend/core/application/Application';
-import type { InsertUserModelRow, UserModelRow } from '@/backend/data/db/schemas/userModel';
-import { userModelTable } from '@/backend/data/db/schemas/userModel';
+} from '@/shared/data/types/model';
+import { deepEqual } from '@/shared/utils/deepEqual';
 
 import {
   createCustomModel,

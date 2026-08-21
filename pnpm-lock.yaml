@@ -75,8 +75,8 @@ importers:
         specifier: ^1.0.50
         version: 1.0.50(zod@4.4.3)
       '@ai-sdk/mcp':
-        specifier: 1.0.64
-        version: 1.0.64(zod@4.4.3)
+        specifier: 1.0.71
+        version: 1.0.71(zod@4.4.3)
       '@ai-sdk/mistral':
         specifier: ^3.0.37
         version: 3.0.37(zod@4.4.3)
@@ -152,6 +152,9 @@ importers:
       '@react-native-masked-view/masked-view':
         specifier: 0.3.2
         version: 0.3.2(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+      '@shopify/flash-list':
+        specifier: 2.3.2
+        version: 2.3.2(@babel/runtime@7.29.7)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       '@shopify/react-native-skia':
         specifier: 2.6.2
         version: 2.6.2(react-native-reanimated@4.5.0(patch_hash=98a5ad9821aaded8cb131bcc4d0b77f31aa2489850cccfd2f13db70259fe1bd1)(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
@@ -367,7 +370,7 @@ importers:
         version: 1.3.0
       rn-expo-emoji-picker:
         specifier: ^0.1.0
-        version: 0.1.0(e11df60a02b513605a434ec2de5eb5e6)
+        version: 0.1.0(1003c8cdaf3aea7322dfeae88135e81c)
       tailwind-merge:
         specifier: ^3.6.0
         version: 3.6.0
@@ -908,8 +911,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4
 
-  '@ai-sdk/mcp@1.0.64':
-    resolution: {integrity: sha512-n6fZiIsiK0TWdJa7bdcjiQxOmg+GRa1wk8ns01gfzaiZbnNwIjmgt1oFMDIzLzgOjVq/LqktbXfxvBFlQ8RDnQ==}
+  '@ai-sdk/mcp@1.0.71':
+    resolution: {integrity: sha512-woKUwm/yiqxEC+E863tqAjEpiyWCERmy//k9pdNYP8Ta6+PF6Ge2X6p99e72BdBovB+/McUWgbJ4+Fiht+41WQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -4171,6 +4174,13 @@ packages:
 
   '@rtsao/scc@1.1.0':
     resolution: {integrity: sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==}
+
+  '@shopify/flash-list@2.3.2':
+    resolution: {integrity: sha512-vQnd0y0Ag11yzS30llaeCrtIU3xYTMe7KEOP3dveLImnVjQEUw6BEg1+Ztja6aODlVNz1BpvxtlQ5eZGxiLwKw==}
+    peerDependencies:
+      '@babel/runtime': '*'
+      react: '*'
+      react-native: '*'
 
   '@shopify/react-native-skia@2.6.2':
     resolution: {integrity: sha512-NzZ3+MRedZAUhguWw9DTCpWFd09Bq+tdGWhimGfJLGckuyoWGyimTiNTmaO2DeeivHTnGdv+eXbw7j/AV3LkRQ==}
@@ -9756,7 +9766,7 @@ snapshots:
       '@ai-sdk/provider-utils': 4.0.40(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/mcp@1.0.64(zod@4.4.3)':
+  '@ai-sdk/mcp@1.0.71(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.14
       '@ai-sdk/provider-utils': 4.0.40(zod@4.4.3)
@@ -12646,6 +12656,12 @@ snapshots:
     optional: true
 
   '@rtsao/scc@1.1.0': {}
+
+  '@shopify/flash-list@2.3.2(@babel/runtime@7.29.7)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@babel/runtime': 7.29.7
+      react: 19.2.3
+      react-native: 0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3)
 
   '@shopify/react-native-skia@2.6.2(react-native-reanimated@4.5.0(patch_hash=98a5ad9821aaded8cb131bcc4d0b77f31aa2489850cccfd2f13db70259fe1bd1)(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)':
     dependencies:
@@ -17726,12 +17742,13 @@ snapshots:
 
   retry@0.12.0: {}
 
-  rn-expo-emoji-picker@0.1.0(e11df60a02b513605a434ec2de5eb5e6):
+  rn-expo-emoji-picker@0.1.0(1003c8cdaf3aea7322dfeae88135e81c):
     dependencies:
       react: 19.2.3
       react-native: 0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3)
     optionalDependencies:
       '@legendapp/list': 3.3.3(react-dom@19.2.3(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
+      '@shopify/flash-list': 2.3.2(@babel/runtime@7.29.7)(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
       expo-modules-core: 57.0.5(react-native-worklets@0.10.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3))(react-native@0.86.0(@babel/core@7.29.7)(@react-native/jest-preset@0.86.0(@babel/core@7.29.7)(react@19.2.3))(@react-native/metro-config@0.86.0(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.3))(react@19.2.3)
 
   rolldown-plugin-dts@0.22.5(oxc-resolver@11.24.2)(rolldown@1.0.0-rc.3(@emnapi/core@1.11.2)(@emnapi/runtime@1.11.2))(typescript@5.9.3):

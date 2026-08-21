@@ -1,10 +1,9 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import { JOB_ERROR_CODES } from '@cherrystudio/universal/data/api/schemas/jobs';
-
 import { uninstallTestHost } from '@/backend/core/application/testHost';
 import { ScopeDrainTimeoutError } from '@/backend/core/resources/types';
+import { JOB_ERROR_CODES } from '@/shared/data/api/schemas/jobs';
 
 import {
   createTestRuntime,

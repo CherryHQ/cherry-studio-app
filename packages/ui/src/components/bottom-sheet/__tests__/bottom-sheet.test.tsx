@@ -268,6 +268,39 @@ describe('BottomSheet', () => {
   });
 
   test.each([
+    { expected: { flex: 1, minHeight: 0 }, height: 520, mode: 'bounded' },
+    // A zero flex basis contributes nothing to an auto height, so a body that
+    // flexed inside a content-sized card would collapse and take the card with
+    // it, leaving a sheet of nothing but chrome.
+    { expected: { flexShrink: 1, minHeight: 0 }, height: undefined, mode: 'content-sized' },
+  ])('gives a $mode card a viewport it can fill', ({ expected, height }) => {
+    act(() => {
+      renderer = create(
+        <BottomSheet defaultOpen>
+          <BottomSheet.Content height={height} onClose={jest.fn()}>
+            <BottomSheet.Body testID="sheet-body">
+              <Text>Body</Text>
+            </BottomSheet.Body>
+            <BottomSheet.ScrollView testID="sheet-scroll">
+              <Text>Scroll</Text>
+            </BottomSheet.ScrollView>
+          </BottomSheet.Content>
+        </BottomSheet>,
+      );
+    });
+
+    for (const testID of ['sheet-body', 'sheet-scroll']) {
+      // The composite wrapper carries the same testID, so read the style off the
+      // host instance the native side actually lays out.
+      const host = renderer?.root
+        .findAllByProps({ testID })
+        .find((node) => typeof node.type === 'string');
+
+      expect(StyleSheet.flatten(host?.props.style)).toMatchObject(expected);
+    }
+  });
+
+  test.each([
     { expected: 51, screenCornerRadius: 55 },
     { expected: 58, screenCornerRadius: 62 },
     { expected: 28, screenCornerRadius: 30 },

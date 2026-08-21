@@ -1,16 +1,16 @@
-import type {
-  WebSearchCompressionMethod,
-  WebSearchProviderId,
-  WebSearchProviderOverride,
-} from '@cherrystudio/universal/data/preference';
-import {
-  getMobileSupportedWebSearchProvidersByCapability,
-  type WebSearchProviderPreset,
-} from '@cherrystudio/universal/data/presets/webSearchProviders';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMultiplePreferences } from '@/frontend/data/hooks';
+import {
+  getMobileSupportedWebSearchProvidersByCapability,
+  type WebSearchProviderPreset,
+} from '@/shared/data/presets/webSearchProviders';
+import type {
+  WebSearchCompressionMethod,
+  WebSearchProviderId,
+  WebSearchProviderOverride,
+} from '@/shared/data/types/webSearch';
 
 import type { SettingOption } from '../settingOptions';
 import { mergeWebSearchProviderOverride } from '../WebSearchScreen/utils/providerSettings';

@@ -1,6 +1,5 @@
-import { PreferenceDefaults } from '@cherrystudio/universal/data/preference';
-
 import { preferenceTable } from '@/backend/data/db/schemas';
+import { PreferenceDefaults } from '@/shared/data/preference';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';

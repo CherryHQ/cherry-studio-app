@@ -1,20 +1,30 @@
-# Shared Data
+# Data (Transitional)
 
-Data entities, preferences, DTO schemas, pagination shapes, and data errors shared by the mobile
-frontend and backend. The layout follows Cherry Desktop's `src/shared/data` vocabulary.
+The mobile data layer lives in `src/shared/data` (`@/shared/data`); it moved out of this package
+because it is mobile-owned, not a Cherry Desktop mirror. What remains here is the transitional
+remainder that cannot move yet.
 
-## Scope
+## Why these files are still here
 
-- Keep entity schemas, limits, comments, and exported type names aligned with desktop unless mobile
-  has a documented runtime compatibility reason to diverge.
-- API-shaped DTO schemas, pagination shapes, and data errors live under `src/shared/data/api`.
-- `ApiClient` is the platform-neutral resource interface shared by frontend endpoint hooks and the
-  backend in-process `DataApiService` implementation.
-- DB-backed preference value types, defaults, and the separate `PreferenceClient` interface live
-  under `src/shared/data/preference`.
-- Cache schemas and pure cache-key helpers live under `src/shared/data/cache`; concrete cache
-  implementations remain with their runtime owner.
-- Entity and value types live under `src/shared/data/types`.
-- Excluded desktop domains are not migrated here yet: agent sessions, knowledge, jobs, translate,
-  miniapps, and agent workspaces. MCP, file, and painting types are present because their mobile
-  domains are implemented.
+`packages/ai-runtime` imports the entity vocabulary below, and workspace packages must not import
+app code. Until the AI-runtime vocabulary finds its final home (candidate: `packages/ai-runtime`
+itself), these modules stay importable as `@cherrystudio/universal/data/types/*` — but only for
+package-side consumers:
+
+- `types/model.ts`
+- `types/provider.ts`
+- `types/assistant.ts`
+- `types/message.ts`
+- `types/uiParts.ts`
+- `types/aiUsageRecord.ts`
+- `types/mcpServer.ts`
+
+They are mobile-owned all the same — the desktop-sync audit does not track them, and each follows
+"mobile persists what mobile reads".
+
+App code no longer spells this path: `src/shared/data/types` re-exports each module under its final
+name, and an ESLint tombstone keeps `src` off the package path. Dissolving this directory is
+therefore a paste into the matching `src/shared/data/types/*.ts` file plus repointing
+`packages/ai-runtime`, with no import migration in `src`.
+
+Do not add new modules here; put new mobile data contracts in `src/shared/data`.

@@ -1,5 +1,4 @@
 import { useAlert } from '@cherrystudio/ui/components';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useToast } from 'heroui-native/toast';
@@ -12,6 +11,7 @@ import {
   restoreQuerySnapshot,
   updateQueriesOptimistically,
 } from '@/frontend/data/utils/optimisticQueryUpdate';
+import type { Provider } from '@/shared/data/types/provider';
 
 /**
  * Deleting the provider, from wherever the action is offered — currently the

@@ -1,12 +1,12 @@
+import * as z from 'zod';
+
+import { fileEntryService } from '@/backend/data/services/FileEntryService';
 import {
   type FileEntryId,
   FileEntryIdSchema,
   MediaTypeSchema,
   SafeNameSchema,
-} from '@cherrystudio/universal/data/types/file';
-import * as z from 'zod';
-
-import { fileEntryService } from '@/backend/data/services/FileEntryService';
+} from '@/shared/data/types/file';
 
 import {
   createInternalEntry as createStoredInternalEntry,

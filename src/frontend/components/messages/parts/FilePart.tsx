@@ -1,8 +1,7 @@
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
-
 import { FileEntryPreview } from '@/frontend/components/FileEntryPreview';
+import type { FileEntryId } from '@/shared/data/types/file';
+import type { CherryMessagePart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 
 type FilePartProps = {
   part: Extract<CherryMessagePart, { type: 'file' }>;

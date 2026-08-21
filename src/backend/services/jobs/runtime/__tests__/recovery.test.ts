@@ -1,4 +1,4 @@
-import type { JobError } from '@cherrystudio/universal/data/api/schemas/jobs';
+import type { JobError } from '@/shared/data/api/schemas/jobs';
 
 import type { JobHandler, RecoveryStrategy } from '../../types';
 import { type RecoveryJobRow, type RecoveryRepo, runStartupRecovery } from '../recovery';

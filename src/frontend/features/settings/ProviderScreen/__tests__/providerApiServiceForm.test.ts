@@ -34,7 +34,8 @@ describe('provider API service form helpers', () => {
   it('hides manual keys only for login-only providers', () => {
     expect(shouldShowApiKeys('api-key', { authMethods: ['oauth'] })).toBe(false);
     expect(shouldShowApiKeys('api-key', { authMethods: ['api-key', 'oauth'] })).toBe(true);
-    expect(shouldShowApiKeys('oauth', { authMethods: ['api-key', 'oauth'] })).toBe(true);
+    expect(shouldShowApiKeys('api-key-aws', { authMethods: ['api-key'] })).toBe(true);
+    expect(shouldShowApiKeys('iam-gcp', { authMethods: ['api-key'] })).toBe(false);
   });
 
   it('removes line breaks from a single API key', () => {

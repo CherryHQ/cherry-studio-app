@@ -1,11 +1,11 @@
-import type { ApiClient } from '@cherrystudio/universal/data/api/types';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { queryKeys } from '@/frontend/data';
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
+import type { ApiClient } from '@/shared/data/api/types';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import { useMcpServerMutations } from '../useMcpServers';
 

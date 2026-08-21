@@ -1,5 +1,5 @@
 // Keep aligned with desktop src/main/core/job/runtime/backoff.ts.
-import type { RetryPolicy } from '@cherrystudio/universal/data/api/schemas/jobs';
+import type { RetryPolicy } from '@/shared/data/api/schemas/jobs';
 
 /**
  * Retry delay in ms for the given attempt number.

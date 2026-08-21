@@ -1,5 +1,3 @@
-import type { TopicListItem } from '@cherrystudio/universal/data/api/schemas/topics';
-import type { Topic } from '@cherrystudio/universal/data/types/topic';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';
@@ -12,6 +10,8 @@ import {
   useTopicListTopics,
 } from '@/frontend/features/topics';
 import { appSidebar } from '@/frontend/utils/constants';
+import type { TopicListItem } from '@/shared/data/api/schemas/topics';
+import type { Topic } from '@/shared/data/types/topic';
 
 import { useSidebarActions } from '../context';
 

@@ -1,5 +1,6 @@
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
-import type { WebSearchProviderId } from '@cherrystudio/universal/data/preference';
+
+import type { WebSearchProviderId } from '@/shared/data/types/webSearch';
 
 export function resolveWebSearchProviderIcon(providerId: WebSearchProviderId) {
   if (providerId === 'fetch') {

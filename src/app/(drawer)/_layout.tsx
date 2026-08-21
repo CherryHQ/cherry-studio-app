@@ -29,15 +29,15 @@ export default function DrawerLayout() {
       drawerContent={renderSidebar}
       screenOptions={{
         drawerStyle: { width: width * appSidebar.widthRatio },
-        // `back` keeps the sidebar still underneath and slides the surface off
-        // it, which is what makes the reveal read as the display moving.
-        drawerType: 'back',
+        // Keep the routed screen in place and slide the sidebar over it. The
+        // sidebar is a temporary surface and must not occupy scene layout space.
+        drawerType: 'front',
         headerShown: false,
         // No dimming pane. Tapping the exposed surface still closes the drawer.
         overlayColor: 'transparent',
         sceneStyle: {
-          // Scenes slide over the sidebar, so the container must be opaque even
-          // where a screen leaves its own content style transparent.
+          // Keep the scene opaque where a screen leaves its own content style
+          // transparent, including beneath the overlaid sidebar.
           backgroundColor,
           // The device's own radius, so the surface is already screen-shaped at
           // rest and its corners disappear into the bezel.

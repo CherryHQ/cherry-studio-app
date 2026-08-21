@@ -4,11 +4,11 @@ import {
   type FilePreviewOperation,
   useAlert,
 } from '@cherrystudio/ui/components';
-import type { FileEntryId } from '@cherrystudio/universal/data/types/file';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
+import type { FileEntryId } from '@/shared/data/types/file';
 
 import { useResolvedFile } from './hooks/useResolvedFile';
 import { fileEntryDisplayName, fileEntryExtensionLabel } from './utils/fileEntryPresentation';

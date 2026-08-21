@@ -1,4 +1,4 @@
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import type { MessageListItem } from '../../types';
 import { partitionUserMessageParts } from '../partitionUserMessageParts';

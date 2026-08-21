@@ -76,7 +76,7 @@ function ThemeGallery({ args, label, theme }: ThemeGalleryProps) {
               <View className="size-16 items-center justify-center">
                 <Component {...args} />
               </View>
-              <Text className="text-sm text-foreground-secondary">{loaderLabel}</Text>
+              <Text className="text-sm text-muted-foreground">{loaderLabel}</Text>
             </View>
           ))}
         </View>

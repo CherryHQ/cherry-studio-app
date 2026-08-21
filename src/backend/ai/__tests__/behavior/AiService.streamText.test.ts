@@ -1,9 +1,9 @@
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import type { CherryUIMessage } from '@cherrystudio/universal/data/types/message';
 import { MockLanguageModelV3 } from 'ai/test';
 import * as Crypto from 'expo-crypto';
 
 import { AiService } from '@/backend/ai/AiService';
+import type { CherryUIMessage } from '@/shared/data/types/message';
 
 import {
   collectStreamContract,

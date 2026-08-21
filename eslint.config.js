@@ -27,6 +27,21 @@ const retiredRootPatterns = [
   'utils',
 ].flatMap((root) => [`@/${root}`, `@/${root}/*`, `@/${root}/*/**`]);
 
+const universalDataTombstone = {
+  group: [
+    '@cherrystudio/universal/data/api/*',
+    '@cherrystudio/universal/data/api/*/**',
+    '@cherrystudio/universal/data/cache/*',
+    '@cherrystudio/universal/data/preference',
+    '@cherrystudio/universal/data/preference/*',
+    '@cherrystudio/universal/data/presets/*',
+    '@cherrystudio/universal/data/types',
+    '@cherrystudio/universal/data/types/*',
+  ],
+  message:
+    'The mobile data layer moved out of packages/universal. Import @/shared/data/* instead; the entity types packages/ai-runtime still shares are re-exported from @/shared/data/types.',
+};
+
 const tombstonePatterns = [
   {
     group: retiredRootPatterns,
@@ -47,8 +62,9 @@ const tombstonePatterns = [
   {
     group: ['@/shared/domain', '@/shared/domain/*', '@/shared/domain/*/**'],
     message:
-      'The generic shared domain root was retired. Use @cherrystudio/universal/ai for AI rules, @cherrystudio/universal/data for data vocabulary, or @cherrystudio/universal/utils and @/shared/utils for pure helpers.',
+      'The generic shared domain root was retired. Use @cherrystudio/universal/ai for AI rules, @/shared/data for data vocabulary, or @cherrystudio/universal/utils and @/shared/utils for pure helpers.',
   },
+  universalDataTombstone,
   {
     group: ['@/screens', '@/screens/*', '@/screens/*/**'],
     message: 'Screens moved to @/frontend/features/<name>.',
@@ -246,6 +262,21 @@ module.exports = defineConfig([
     files: ['src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', { paths: retiredImports, patterns: tombstonePatterns }],
+    },
+  },
+  {
+    // src/shared/data/types re-exports the entity declarations that stay in
+    // packages/universal while packages/ai-runtime imports them, so it is the
+    // one place allowed to spell that path. Every other tombstone still applies.
+    files: ['src/shared/data/types/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: retiredImports,
+          patterns: tombstonePatterns.filter((pattern) => pattern !== universalDataTombstone),
+        },
+      ],
     },
   },
   restrictedImports(
