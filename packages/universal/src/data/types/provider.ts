@@ -49,7 +49,7 @@ export type ApiKeyEntry = {
 
 export type RuntimeApiKey = Omit<ApiKeyEntry, 'key'>;
 
-export type AuthType = 'api-key' | 'oauth' | 'iam-aws' | 'api-key-aws' | 'iam-gcp' | 'iam-azure';
+export type AuthType = 'api-key' | 'iam-aws' | 'api-key-aws' | 'iam-gcp' | 'iam-azure';
 
 export type AuthConfig =
   | {
@@ -57,14 +57,6 @@ export type AuthConfig =
       prefix?: string;
       required?: boolean;
       type: 'api-key';
-    }
-  | {
-      accessToken?: string;
-      accountId?: string;
-      clientId: string;
-      expiresAt?: number;
-      refreshToken?: string;
-      type: 'oauth';
     }
   | {
       accessKeyId?: string;
@@ -120,8 +112,6 @@ export type ProviderSettings = {
   isAuthed?: boolean;
   keepAliveTime?: number;
   notes?: string;
-  oauthAvatar?: string;
-  oauthUsername?: string;
   rateLimit?: number;
   serviceTier?: string | null;
   streamOptions?: {
@@ -164,6 +154,12 @@ export type ProviderWebsites = {
 
 export type ProviderModelListSource = 'api' | 'registry';
 
+/**
+ * The registry's capability catalogue — what a provider *is* upstream, not what
+ * mobile implements. `oauth` and `external-cli` stay in the union even though
+ * mobile has neither flow: presets carry them, and the runtime reads
+ * `external-cli` to route work away from providers it cannot execute.
+ */
 export type ProviderAuthMethod = 'api-key' | 'oauth' | 'external-cli';
 
 export type Provider = {
@@ -175,7 +171,7 @@ export type Provider = {
   defaultChatEndpoint?: EndpointType;
   description?: string;
   endpointConfigs?: EndpointConfigs;
-  fastMode?: { transport: 'claude-code' | 'openai-priority' };
+  fastMode?: { transport: 'openai-priority' };
   id: string;
   isEnabled: boolean;
   modelListSource?: ProviderModelListSource;

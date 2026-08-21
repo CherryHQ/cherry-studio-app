@@ -10,8 +10,6 @@ export function emptyAuthConfigFor(type: AuthConfig['type']): AuthConfig {
       return { location: '', project: '', type: 'iam-gcp' };
     case 'iam-azure':
       return { apiVersion: '', type: 'iam-azure' };
-    case 'oauth':
-      return { clientId: '', type: 'oauth' };
     default:
       return { type: 'api-key' };
   }
@@ -30,13 +28,13 @@ export function getEffectiveAuthConfig(
  * `api-key` drives UI here; `oauth` and `external-cli` are information the app
  * reads past, so do not strip them from the array to "match" mobile support.
  *
- * `authType === 'oauth'` still shows keys: rows left behind by the removed OAuth
- * sign-in hold minted API keys that are real, working credentials.
+ * Rows left behind by the removed OAuth sign-in were converted to `api-key`
+ * by migration; the minted API keys they hold are real, working credentials.
  */
 export function shouldShowApiKeys(
   authType: AuthConfig['type'],
   provider?: Pick<Provider, 'authMethods'> | null,
 ): boolean {
   if (provider?.authMethods?.length && !provider.authMethods.includes('api-key')) return false;
-  return authType === 'api-key' || authType === 'api-key-aws' || authType === 'oauth';
+  return authType === 'api-key' || authType === 'api-key-aws';
 }
