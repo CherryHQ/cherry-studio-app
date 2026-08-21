@@ -1,6 +1,6 @@
 import { Input, type InputProps } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { fn } from 'storybook/test';
 import { ScopedTheme } from 'uniwind';
@@ -11,18 +11,22 @@ const themes = [
 ] as const;
 
 type ThemePreviewProps = {
-  args: InputProps;
+  args: Extract<InputProps, { type?: 'text' }>;
   label: string;
   theme: 'dark' | 'light';
 };
 
+const passwordVisibilityAccessibilityLabels = {
+  hide: 'Hide password',
+  show: 'Show password',
+} as const;
+
 function ThemePreview({ args, label, theme }: ThemePreviewProps) {
   const [value, setValue] = useState(args.value);
+  const [passwordValue, setPasswordValue] = useState('password');
   const [multilineValue, setMultilineValue] = useState(
     'Cherry Studio is a desktop client that supports multiple AI providers.\nAdd another line here.',
   );
-
-  useEffect(() => setValue(args.value), [args.value]);
 
   return (
     <ScopedTheme theme={theme}>
@@ -45,14 +49,47 @@ function ThemePreview({ args, label, theme }: ThemePreviewProps) {
           <Input {...args} disabled onChangeText={fn()} value="Disabled value" />
         </View>
         <View className="gap-2">
-          <Text className="text-sm font-medium text-muted-foreground">Secure</Text>
+          <Text className="text-sm font-medium text-muted-foreground">Password</Text>
           <Input
-            {...args}
             accessibilityLabel="Password"
+            onChangeText={setPasswordValue}
+            placeholder="Password"
+            type="password"
+            value={passwordValue}
+            visibilityAccessibilityLabels={passwordVisibilityAccessibilityLabels}
+          />
+        </View>
+        <View className="gap-2">
+          <Text className="text-sm font-medium text-muted-foreground">Empty password</Text>
+          <Input
+            accessibilityLabel="Empty password"
             onChangeText={fn()}
             placeholder="Password"
-            secureTextEntry
-            value="password"
+            type="password"
+            value=""
+            visibilityAccessibilityLabels={passwordVisibilityAccessibilityLabels}
+          />
+        </View>
+        <View className="gap-2">
+          <Text className="text-sm font-medium text-muted-foreground">Blur on toggle</Text>
+          <Input
+            accessibilityLabel="Blur-on-toggle password"
+            blurOnVisibilityToggle
+            onChangeText={fn()}
+            type="password"
+            value="blur-secret"
+            visibilityAccessibilityLabels={passwordVisibilityAccessibilityLabels}
+          />
+        </View>
+        <View className="gap-2">
+          <Text className="text-sm font-medium text-muted-foreground">Disabled password</Text>
+          <Input
+            accessibilityLabel="Disabled password"
+            disabled
+            onChangeText={fn()}
+            type="password"
+            value="disabled-secret"
+            visibilityAccessibilityLabels={passwordVisibilityAccessibilityLabels}
           />
         </View>
         <View className="gap-2">
@@ -83,7 +120,6 @@ const meta = {
     disabled: false,
     onChangeText: fn(),
     placeholder: 'Enter a value',
-    secureTextEntry: false,
     value: '',
   },
   argTypes: {
@@ -95,7 +131,6 @@ const meta = {
     autoFocus: { control: 'boolean' },
     disabled: { control: 'boolean' },
     multiline: { control: 'boolean' },
-    secureTextEntry: { control: 'boolean' },
     value: { control: 'text' },
   },
   decorators: [
@@ -110,7 +145,7 @@ const meta = {
       </ScrollView>
     ),
   ],
-} satisfies Meta<typeof Input>;
+} satisfies Meta<Extract<InputProps, { type?: 'text' }>>;
 
 export default meta;
 
@@ -120,7 +155,12 @@ export const Playground: Story = {
   render: (args) => (
     <View className="gap-4">
       {themes.map((theme) => (
-        <ThemePreview args={args} key={theme.value} label={theme.label} theme={theme.value} />
+        <ThemePreview
+          args={args}
+          key={`${theme.value}-${args.value}`}
+          label={theme.label}
+          theme={theme.value}
+        />
       ))}
     </View>
   ),
