@@ -121,7 +121,7 @@ describe('useResolvedPaintingFiles', () => {
       );
     });
 
-    await waitForCondition(() => query?.data !== undefined);
+    await waitForCondition(() => query?.isLoading === false);
 
     expect(query?.data?.outputAspectRatio).toBeCloseTo(1664 / 928);
     expect(ExpoImage.loadAsync).toHaveBeenCalledWith('file:///generated.png');
