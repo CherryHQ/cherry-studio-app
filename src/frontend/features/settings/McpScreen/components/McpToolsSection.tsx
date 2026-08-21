@@ -1,11 +1,11 @@
 import { Button, Spinner, Switch } from '@cherrystudio/ui/components';
-import type { McpServer } from '@cherrystudio/universal/data/types/mcpServer';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
+import type { McpServer } from '@/shared/data/types/mcpServer';
 
 type McpToolsSectionProps = {
   isDisabled?: boolean;

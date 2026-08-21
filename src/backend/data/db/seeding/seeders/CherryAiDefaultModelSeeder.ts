@@ -1,5 +1,4 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { ModelCapability } from '@cherrystudio/universal/data/types/model';
 import { loggerService } from '@logger';
 import { eq } from 'drizzle-orm';
 
@@ -20,6 +19,7 @@ import {
   CHERRYAI_PROVIDER_ID,
   CHERRYAI_PROVIDER_NAME,
 } from '@/shared/data/presets/cherryai';
+import type { ModelCapability } from '@/shared/data/types/model';
 
 import { hashObject } from '../hashObject';
 import type { DatabaseSeeder } from '../types';

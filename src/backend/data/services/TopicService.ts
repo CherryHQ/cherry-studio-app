@@ -1,4 +1,3 @@
-import type { MessageStats } from '@cherrystudio/universal/data/types/message';
 import { and, asc, desc, eq, inArray, isNull, type SQL, sql } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
@@ -15,6 +14,7 @@ import type {
   UpdateTopicDto,
 } from '@/shared/data/api/schemas/topics';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
+import type { MessageStats } from '@/shared/data/types/message';
 import type { Topic } from '@/shared/data/types/topic';
 
 import {

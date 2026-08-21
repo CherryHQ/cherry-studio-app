@@ -1,5 +1,3 @@
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import {
   LegendList,
   type LegendListRef,
@@ -7,6 +5,9 @@ import {
 } from '@legendapp/list/react-native';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { ProviderModelRow, providerModelRowEstimatedHeight } from './ProviderModelRow';
 

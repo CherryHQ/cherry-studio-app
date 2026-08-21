@@ -1,9 +1,7 @@
-import {
-  type Assistant,
-  DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/universal/data/types/assistant';
 import { Pressable } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from '../MainHeaderAssistantButton';
 

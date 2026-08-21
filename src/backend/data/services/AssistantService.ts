@@ -1,8 +1,3 @@
-import {
-  type Assistant,
-  DEFAULT_ASSISTANT_SETTINGS,
-} from '@cherrystudio/universal/data/types/assistant';
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { and, asc, desc, eq, gte, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 
 import { application } from '@/backend/core/application/Application';
@@ -23,6 +18,8 @@ import {
 } from '@/shared/data/api/schemas/assistants';
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 import { modelService } from './ModelService';
 import { topicService } from './TopicService';

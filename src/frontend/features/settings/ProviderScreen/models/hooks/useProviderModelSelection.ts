@@ -1,5 +1,6 @@
-import type { UniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { useCallback, useState } from 'react';
+
+import type { UniqueModelId } from '@/shared/data/types/model';
 
 const noneSelected: ReadonlySet<UniqueModelId> = new Set();
 

@@ -1,6 +1,7 @@
 import { MODALITY, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 export type ModelPickerModelItem = {
   key: string;

@@ -10,7 +10,6 @@ import {
   type ReasoningWireProfile,
 } from '@cherrystudio/provider-registry';
 import { MobileRegistryLoader } from '@cherrystudio/provider-registry/mobile';
-import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 import {
@@ -18,6 +17,7 @@ import {
   providerRegistryService,
   resolveReasoningProfileFromRegistry,
 } from '@/backend/data/services/ProviderRegistryService';
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
 type WireLeaf = string | number | boolean;
 type FlatWire = Record<string, WireLeaf>;

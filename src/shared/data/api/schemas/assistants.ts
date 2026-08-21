@@ -1,11 +1,11 @@
+import * as z from 'zod';
+
+import type { OffsetPaginationResponse } from '@/shared/data/api/types';
 import {
   type Assistant,
   AssistantSchema,
   AssistantSettingsSchema,
-} from '@cherrystudio/universal/data/types/assistant';
-import * as z from 'zod';
-
-import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+} from '@/shared/data/types/assistant';
 
 import { type OrderEndpoints } from './endpointHelpers';
 

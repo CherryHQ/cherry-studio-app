@@ -1,10 +1,10 @@
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { DataApiProvider } from '@/frontend/data/DataApiProvider';
 import type { ApiClient } from '@/shared/data/api/types';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 import { useAssistantMutations, useAssistantsApi } from '../useAssistant';
 

@@ -1,12 +1,12 @@
 import type { CallOverrides } from '@cherrystudio/ai-runtime/runtime';
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import { DEFAULT_ASSISTANT_SETTINGS } from '@cherrystudio/universal/data/types/assistant';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 
 import { providerRegistryService } from '@/backend/data/services/ProviderRegistryService';
+import type { Assistant } from '@/shared/data/types/assistant';
+import { DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import { buildAgentParams } from '../buildAgentParams';
 

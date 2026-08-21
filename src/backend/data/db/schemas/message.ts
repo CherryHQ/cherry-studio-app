@@ -1,8 +1,3 @@
-import type {
-  MessageData,
-  MessageSnapshot,
-  MessageStats,
-} from '@cherrystudio/universal/data/types/message';
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -13,6 +8,8 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
+
+import type { MessageData, MessageSnapshot, MessageStats } from '@/shared/data/types/message';
 
 import { createUpdateDeleteTimestamps, uuidPrimaryKeyOrdered } from './_columnHelpers';
 import { topicTable } from './topic';

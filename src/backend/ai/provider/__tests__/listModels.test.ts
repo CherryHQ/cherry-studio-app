@@ -1,5 +1,6 @@
 import { ENDPOINT_TYPE } from '@cherrystudio/provider-registry';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
+
+import type { Provider } from '@/shared/data/types/provider';
 
 import { listModels } from '../listModels';
 

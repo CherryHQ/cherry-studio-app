@@ -8,10 +8,9 @@
  * deliberately absent because V1 executes tool-less turns.
  */
 
-import { parseUniqueModelId, type UniqueModelId } from '@cherrystudio/universal/data/types/model';
-
 import type { RuntimeModel } from '@/backend/ai/agent';
 import { assistantService } from '@/backend/data/services/AssistantService';
+import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 
 export type AgentDefinition = {
   id: string;

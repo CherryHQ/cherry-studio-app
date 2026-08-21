@@ -1,11 +1,11 @@
 import { CheckIcon } from '@cherrystudio/app-icons';
-import type { Model } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/avatar';
 import { getModelPickerRowTags, ModelPickerTagChip } from '@/frontend/components/modelPicker';
+import type { Model } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 /** `py-2` around the tallest thing in the row, which is the 26 avatar. */
 export const providerModelRowEstimatedHeight = 42;

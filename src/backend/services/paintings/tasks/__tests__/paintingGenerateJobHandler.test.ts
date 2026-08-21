@@ -1,7 +1,6 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
-import { createUniqueModelId } from '@cherrystudio/universal/data/types/model';
 import { loggerService } from '@logger';
 
 import { uninstallTestHost } from '@/backend/core/application/testHost';
@@ -9,6 +8,7 @@ import { createTestRuntime, type TestRuntime } from '@/backend/services/jobs/__t
 import { jobHandlerEntry } from '@/backend/services/jobs/JobHandlerRegistry';
 import type { JobContext } from '@/backend/services/jobs/types';
 import { type FileEntry, type FileEntryId, FileEntrySchema } from '@/shared/data/types/file';
+import { createUniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
 
 import {

@@ -8,7 +8,8 @@ remainder that cannot move yet.
 
 `packages/ai-runtime` imports the entity vocabulary below, and workspace packages must not import
 app code. Until the AI-runtime vocabulary finds its final home (candidate: `packages/ai-runtime`
-itself), these modules stay importable as `@cherrystudio/universal/data/types/*`:
+itself), these modules stay importable as `@cherrystudio/universal/data/types/*` — but only for
+package-side consumers:
 
 - `types/model.ts`
 - `types/provider.ts`
@@ -20,5 +21,10 @@ itself), these modules stay importable as `@cherrystudio/universal/data/types/*`
 
 They are mobile-owned all the same — the desktop-sync audit does not track them, and each follows
 "mobile persists what mobile reads".
+
+App code no longer spells this path: `src/shared/data/types` re-exports each module under its final
+name, and an ESLint tombstone keeps `src` off the package path. Dissolving this directory is
+therefore a paste into the matching `src/shared/data/types/*.ts` file plus repointing
+`packages/ai-runtime`, with no import migration in `src`.
 
 Do not add new modules here; put new mobile data contracts in `src/shared/data`.

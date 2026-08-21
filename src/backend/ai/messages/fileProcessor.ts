@@ -6,12 +6,12 @@
  * rewrites those with Node fs; mobile uses Expo FileSystem to produce data URLs.
  */
 
-import type { FileUIPart } from '@cherrystudio/universal/data/types/message';
-import { readCherryMeta } from '@cherrystudio/universal/data/types/uiParts';
 import { File } from 'expo-file-system';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { parseFileEntryUrl } from '@/shared/data/types/file';
+import type { FileUIPart } from '@/shared/data/types/message';
+import { readCherryMeta } from '@/shared/data/types/uiParts';
 import {
   imageMediaTypeFromExtension,
   isAiSupportedImageMediaType,

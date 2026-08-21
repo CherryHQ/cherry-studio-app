@@ -1,14 +1,3 @@
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
-import type {
-  CherryMessagePart,
-  CherryUIMessage,
-  Message,
-  MessageData,
-  MessageRuntimeStatsInput,
-  MessageRuntimeTimingSink,
-} from '@cherrystudio/universal/data/types/message';
-import type { Model, UniqueModelId } from '@cherrystudio/universal/data/types/model';
-import type { Provider } from '@cherrystudio/universal/data/types/provider';
 import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk';
 import type { UIMessageChunk } from 'ai';
 
@@ -20,7 +9,18 @@ import type {
 } from '@/shared/data/api/schemas/messages';
 import type { BranchMessagesResponse } from '@/shared/data/api/schemas/messages';
 import type { CreateTopicDto, UpdateTopicDto } from '@/shared/data/api/schemas/topics';
+import type { Assistant } from '@/shared/data/types/assistant';
 import type { FileEntry } from '@/shared/data/types/file';
+import type {
+  CherryMessagePart,
+  CherryUIMessage,
+  Message,
+  MessageData,
+  MessageRuntimeStatsInput,
+  MessageRuntimeTimingSink,
+} from '@/shared/data/types/message';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 import type { Topic } from '@/shared/data/types/topic';
 
 export type ChatStreamRequest = {

@@ -1,19 +1,4 @@
 import { inferAdapterFamily } from '@cherrystudio/provider-registry';
-import type { EndpointType } from '@cherrystudio/universal/data/types/model';
-import type {
-  ApiKeyEntry,
-  AuthConfig,
-  AuthType,
-  EndpointConfig,
-  EndpointConfigs,
-  Provider,
-  ProviderSettings,
-  RuntimeApiFeatures,
-} from '@cherrystudio/universal/data/types/provider';
-import {
-  DEFAULT_API_FEATURES as DEFAULT_FEATURES,
-  DEFAULT_PROVIDER_SETTINGS,
-} from '@cherrystudio/universal/data/types/provider';
 import { asc, eq, inArray } from 'drizzle-orm';
 import * as Crypto from 'expo-crypto';
 
@@ -24,6 +9,21 @@ import type {
 } from '@/backend/data/db/schemas/userProvider';
 import { userProviderTable } from '@/backend/data/db/schemas/userProvider';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
+import type { EndpointType } from '@/shared/data/types/model';
+import type {
+  ApiKeyEntry,
+  AuthConfig,
+  AuthType,
+  EndpointConfig,
+  EndpointConfigs,
+  Provider,
+  ProviderSettings,
+  RuntimeApiFeatures,
+} from '@/shared/data/types/provider';
+import {
+  DEFAULT_API_FEATURES as DEFAULT_FEATURES,
+  DEFAULT_PROVIDER_SETTINGS,
+} from '@/shared/data/types/provider';
 
 import { providerRegistryService } from './ProviderRegistryService';
 import { insertManyWithOrderKey, insertWithOrderKey } from './utils/orderKey';

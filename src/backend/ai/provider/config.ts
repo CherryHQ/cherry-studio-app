@@ -33,13 +33,13 @@ import {
 } from '@cherrystudio/ai-runtime/provider';
 import type { CherryInProviderSettings } from '@cherrystudio/ai-sdk-provider';
 import { ENDPOINT_TYPE, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
-import type { ServingCredentialReceipt } from '@cherrystudio/universal/data/types/aiUsageRecord';
-import type { EndpointType, Model } from '@cherrystudio/universal/data/types/model';
-import type { AuthConfig, Provider } from '@cherrystudio/universal/data/types/provider';
 
 import { generateSignature } from '@/backend/ai/provider/cherryai';
 import type { ResolvedProviderApiKey } from '@/backend/data/services/ProviderService';
 import { defaultAppHeaders } from '@/backend/utils/defaultAppHeaders';
+import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
+import type { EndpointType, Model } from '@/shared/data/types/model';
+import type { AuthConfig, Provider } from '@/shared/data/types/provider';
 
 // Config dispatch reads the extension registry before Agent construction.
 registerProviderExtensions();

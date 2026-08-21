@@ -7,10 +7,14 @@ deliberate omission, not a gap.
 
 ## Scope
 
-- `types`: entity and value types with no package-side consumer (`FileEntry`, `Topic`, `Painting`,
-  web search, trace). The entity types `packages/ai-runtime` still imports (model, provider,
-  assistant, message, uiParts, aiUsageRecord, mcpServer) remain temporarily under
-  `@cherrystudio/universal/data/types`; see that package's `src/data/README.md` ledger.
+- `types`: entity and value types. Most are declared here (`FileEntry`, `Topic`, `Painting`, web
+  search, trace). Seven — model, provider, assistant, message, uiParts, aiUsageRecord, mcpServer —
+  are one-line re-exports of declarations that stay in `@cherrystudio/universal/data/types` because
+  `packages/ai-runtime` imports them and a workspace package must not import app code. App code
+  imports every entity type from here regardless, so dissolving universal means pasting those
+  declarations into files that already exist at the right path. Re-exporting rather than copying
+  keeps one declaration: two copies of the same zod schema across the app/package boundary would
+  drift silently. See that package's `src/data/README.md` ledger.
 - `api`: endpoint DTO schemas, pagination shapes, data errors, and `ApiClient` — the
   platform-neutral resource interface shared by frontend endpoint hooks and the backend in-process
   `DataApiService` implementation.

@@ -5,21 +5,16 @@
  * Includes endpoints for tree visualization and conversation view.
  */
 
-import type {
-  Message,
-  MessageData,
-  MessageRole,
-  MessageStatus,
-} from '@cherrystudio/universal/data/types/message';
+import * as z from 'zod';
+
+import type { CursorPaginationParams, CursorPaginationResponse } from '@/shared/data/api/types';
+import type { Message, MessageData, MessageRole, MessageStatus } from '@/shared/data/types/message';
 import {
   ContentMessageRoleSchema,
   MessageDataSchema,
   MessageSnapshotSchema,
   MessageStatusSchema,
-} from '@cherrystudio/universal/data/types/message';
-import * as z from 'zod';
-
-import type { CursorPaginationParams, CursorPaginationResponse } from '@/shared/data/api/types';
+} from '@/shared/data/types/message';
 
 export interface TreeNode {
   createdAt: string;

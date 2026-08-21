@@ -1,4 +1,3 @@
-import type { Assistant } from '@cherrystudio/universal/data/types/assistant';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
@@ -15,6 +14,7 @@ import type {
   UpdateAssistantDto,
 } from '@/shared/data/api/schemas/assistants';
 import type { OffsetPaginationResponse } from '@/shared/data/api/types';
+import type { Assistant } from '@/shared/data/types/assistant';
 
 const ASSISTANTS_LIST_LIMIT = 500;
 const EMPTY_ASSISTANTS: readonly Assistant[] = Object.freeze([]);

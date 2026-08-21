@@ -1,9 +1,8 @@
-import type { ApiKeyEntry, ProviderSettings } from '@cherrystudio/universal/data/types/provider';
-
 import { installTestHost, uninstallTestHost } from '@/backend/core/application/testHost';
 import { CacheService, createInMemoryBackendCacheStorage } from '@/backend/data/CacheService';
 import type { DbService } from '@/backend/data/db/DbService';
 import type { UserProviderRow } from '@/backend/data/db/schemas/userProvider';
+import type { ApiKeyEntry, ProviderSettings } from '@/shared/data/types/provider';
 
 import { providerRegistryService } from '../ProviderRegistryService';
 import { canDeleteProvider, ProviderService } from '../ProviderService';

@@ -1,5 +1,6 @@
 import { MessagePart } from '@cherrystudio/ui/components';
-import type { CherryMessagePart } from '@cherrystudio/universal/data/types/message';
+
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import { PartMarkdown } from './PartMarkdown';
 

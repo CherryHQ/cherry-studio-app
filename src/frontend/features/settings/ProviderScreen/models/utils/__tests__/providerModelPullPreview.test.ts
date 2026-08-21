@@ -1,4 +1,4 @@
-import { createUniqueModelId, type Model } from '@cherrystudio/universal/data/types/model';
+import { createUniqueModelId, type Model } from '@/shared/data/types/model';
 
 import {
   buildProviderModelPullListItems,
