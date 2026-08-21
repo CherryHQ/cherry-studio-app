@@ -10,7 +10,7 @@ Guides are task-oriented procedures for changing or extending the application.
 | --- | --- |
 | [Extending Cherry Mobile](./guides/extending.md) | Add resource endpoints, workflows, persistence, backend behavior, and UI |
 | [Git Workflow](./guides/git-workflow.md) | Commits, stacked PRs, review readiness, and case-only renames |
-| [Parallel Device Testing](./guides/parallel-device-testing.md) | Conductor port and iOS simulator isolation and cleanup |
+| [Parallel Device Testing](./guides/parallel-device-testing.md) | Conductor port, iOS simulator, and Android emulator isolation and cleanup |
 | [Testing And CI](./guides/testing-and-ci.md) | Focused checks, test value, local PR gates, and remote CI |
 | [UI Development](./guides/ui-development.md) | CherryUI ownership and reusable React component composition |
 
