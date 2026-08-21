@@ -75,8 +75,8 @@ importers:
         specifier: ^1.0.50
         version: 1.0.50(zod@4.4.3)
       '@ai-sdk/mcp':
-        specifier: 1.0.64
-        version: 1.0.64(zod@4.4.3)
+        specifier: 1.0.71
+        version: 1.0.71(zod@4.4.3)
       '@ai-sdk/mistral':
         specifier: ^3.0.37
         version: 3.0.37(zod@4.4.3)
@@ -908,8 +908,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4
 
-  '@ai-sdk/mcp@1.0.64':
-    resolution: {integrity: sha512-n6fZiIsiK0TWdJa7bdcjiQxOmg+GRa1wk8ns01gfzaiZbnNwIjmgt1oFMDIzLzgOjVq/LqktbXfxvBFlQ8RDnQ==}
+  '@ai-sdk/mcp@1.0.71':
+    resolution: {integrity: sha512-woKUwm/yiqxEC+E863tqAjEpiyWCERmy//k9pdNYP8Ta6+PF6Ge2X6p99e72BdBovB+/McUWgbJ4+Fiht+41WQ==}
     engines: {node: '>=18'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -9756,7 +9756,7 @@ snapshots:
       '@ai-sdk/provider-utils': 4.0.40(zod@4.4.3)
       zod: 4.4.3
 
-  '@ai-sdk/mcp@1.0.64(zod@4.4.3)':
+  '@ai-sdk/mcp@1.0.71(zod@4.4.3)':
     dependencies:
       '@ai-sdk/provider': 3.0.14
       '@ai-sdk/provider-utils': 4.0.40(zod@4.4.3)
