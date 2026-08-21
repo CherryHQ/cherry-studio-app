@@ -17,6 +17,8 @@ export type BottomSheetCloseReason = 'controlled' | 'dismiss' | (string & {});
 export type BottomSheetGeometry = {
   bottomCornerRadius: number;
   insets: EdgeInsets;
+  /** The card measures to its children instead of to a height `Content` imposed. */
+  isContentSized: boolean;
   outerInset: number;
   sheetWidth: number;
   topCornerRadius: number;
