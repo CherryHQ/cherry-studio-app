@@ -17,9 +17,9 @@ painting history screen, plus the nested viewer.
 
 - `components/`, `hooks/`, `utils/` hold the composer's private UI, `usePaintingGeneration`, and the
   shared painting helpers (`paintingDraftHandoff`, `paintingMessages`, `paintingOutputAttachment`,
-  `masonry`, `imageGenerationParams`, `imageGenerationLabels`).
+  `imageGenerationParams`, `imageGenerationLabels`).
 - `templates/` holds the bundled image-generation prompt templates and their preview row/sheet.
-- `DrawingList.tsx` is the history list body; `usePaintingSelectionSource.ts` wraps
+- `DrawingList.tsx` is the virtualized masonry history list body; `usePaintingSelectionSource.ts` wraps
   `hooks/usePaintings` into the `selection` source shape the history screen consumes.
 - `PaintingViewerScreen/` is the nested full-screen image area.
 - Painting data state lives in `hooks/usePaintings` (queries, delete,
