@@ -41,6 +41,7 @@ module.exports = {
     '^@cherrystudio/universal/(.*)$': '<rootDir>/packages/universal/src/$1',
     '^@cherrystudio/ai-runtime/(.*)$': '<rootDir>/packages/ai-runtime/src/$1/index.ts',
     '^@shared/(.*)$': '<rootDir>/packages/universal/src/$1',
+    '^@/assets/(.*)$': '<rootDir>/assets/$1',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@logger$': '<rootDir>/src/shared/core/logger/LoggerService.ts',
   },
