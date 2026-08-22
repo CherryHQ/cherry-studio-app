@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
@@ -75,7 +75,7 @@ function McpServerLoadState({
 
   return (
     <>
-      <BackHeader title={t('settings.mcp.tabs.configuration')} />
+      <RouteHeader title={t('settings.mcp.tabs.configuration')} />
       <View className="flex-1 items-center justify-center gap-3 px-6">
         {isLoading ? <ActivityIndicator size="small" /> : null}
         <Text
@@ -231,22 +231,27 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
   const isBusy = isSaving || isCreateMutationPending || isUpdating;
   const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [
-      {
-        accessibilityLabel: t('common.save'),
-        disabled: isBusy,
-        element: isBusy ? (
-          <ActivityIndicator
-            accessibilityLabel={t('common.save')}
-            size="small"
-            style={styles.headerActivityIndicator}
-          />
-        ) : undefined,
-        key: 'save',
-        label: t('common.save'),
-        onPress: () => {
-          void handleSave();
-        },
-      },
+      isBusy
+        ? {
+            element: (
+              <ActivityIndicator
+                accessibilityLabel={t('common.save')}
+                size="small"
+                style={styles.headerActivityIndicator}
+              />
+            ),
+            key: 'save',
+            type: 'custom',
+          }
+        : {
+            accessibilityLabel: t('common.save'),
+            key: 'save',
+            label: t('common.save'),
+            onPress: () => {
+              void handleSave();
+            },
+            type: 'label',
+          },
     ],
     [handleSave, isBusy, t],
   );
@@ -260,6 +265,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           setForm(createFormState(server));
           setIsEditing(true);
         },
+        type: 'label',
       },
     ],
     [server, t],
@@ -272,7 +278,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
 
   return (
     <>
-      <BackHeader
+      <RouteHeader
         rightActions={
           visibleTab === 'configuration' ? (isEditing ? saveActions : editActions) : undefined
         }

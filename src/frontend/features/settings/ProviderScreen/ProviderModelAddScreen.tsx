@@ -10,7 +10,7 @@ import {
   type KeyboardAwareScrollViewRef,
 } from 'react-native-keyboard-controller';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import type { EndpointType } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -40,7 +40,7 @@ export default function ProviderModelAddScreen() {
   // controls exist, and that block sits directly above the
   // "More settings" control — growing it a commit later moves a live tap target.
   if (!provider) {
-    return <BackHeader title={t('settings.provider.models.addTitle')} />;
+    return <RouteHeader title={t('settings.provider.models.addTitle')} />;
   }
 
   return <ProviderModelAddForm provider={provider} />;
@@ -135,11 +135,11 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
     () => [
       {
         accessibilityLabel: t('common.save'),
-        androidIcon: SaveIcon,
         disabled: isSubmitting || !canSubmit,
-        icon: 'checkmark',
+        icon: SaveIcon,
         key: 'save-model',
         onPress: () => void handleSubmit(),
+        type: 'icon',
       },
     ],
     [canSubmit, handleSubmit, isSubmitting, t],
@@ -149,7 +149,7 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('settings.provider.models.addTitle')} />
+      <RouteHeader rightActions={rightActions} title={t('settings.provider.models.addTitle')} />
       <View className="flex-1">
         <KeyboardAwareScrollView
           bottomOffset={

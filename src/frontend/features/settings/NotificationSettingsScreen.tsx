@@ -3,7 +3,7 @@ import { Section, Switch, useAlert } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 
 export default function NotificationSettingsScreen() {
@@ -21,7 +21,7 @@ export default function NotificationSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.notifications.title')} />
+      <RouteHeader title={t('settings.notifications.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

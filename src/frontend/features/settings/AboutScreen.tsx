@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { openExternalUrl } from '@/frontend/utils/openExternalUrl';
 
 const APP_VERSION = Constants.expoConfig?.version ?? 'latest';
@@ -44,7 +44,7 @@ export default function AboutSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.about.header')} />
+      <RouteHeader title={t('settings.about.header')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

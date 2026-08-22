@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
@@ -23,7 +23,7 @@ export default function WebSearchSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.pages.websearch.title')} />
+      <RouteHeader title={t('settings.pages.websearch.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

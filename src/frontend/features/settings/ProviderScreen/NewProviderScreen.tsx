@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMutation } from '@/frontend/data';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { ApiKeyEntry } from '@/shared/data/types/provider';
@@ -132,6 +132,7 @@ export default function NewProviderScreen() {
         key: 'finish-new-provider',
         label: t('common.save'),
         onPress: handleFinish,
+        type: 'label',
       },
     ],
     [canSubmit, handleFinish, t],
@@ -139,7 +140,7 @@ export default function NewProviderScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('settings.provider.add.title')} />
+      <RouteHeader rightActions={rightActions} title={t('settings.provider.add.title')} />
       <KeyboardAwareScrollView
         alwaysBounceVertical={false}
         bottomOffset={keyboardBottomOffset}

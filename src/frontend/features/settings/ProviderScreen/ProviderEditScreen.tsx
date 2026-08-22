@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
 import type { UpdateProviderInput } from '@/shared/data/api/schemas/providers';
 
@@ -153,7 +153,7 @@ export default function ProviderEditScreen() {
 
   return (
     <>
-      <BackHeader onBack={requestClose} title={t('settings.provider.edit.title')} />
+      <RouteHeader onBack={requestClose} title={t('settings.provider.edit.title')} />
       {/* One tree from the first frame, loaded or not: mounting the scroll view
           after the push settles leaves it with a zero top content inset. */}
       <KeyboardAwareScrollView

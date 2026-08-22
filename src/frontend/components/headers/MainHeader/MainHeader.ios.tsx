@@ -1,13 +1,16 @@
+import { SquarePenIcon } from '@cherrystudio/app-icons';
 import { Stack, useIsPreview } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { useOpenDrawer } from '../useOpenDrawer';
+import { HeaderAction } from '../components/HeaderAction';
+import { headerScreenOptions } from '../headerScreenOptions';
+import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
 
 export function MainHeader() {
   const isPreview = useIsPreview();
   const { t } = useTranslation();
-  const openDrawer = useOpenDrawer();
+  const leadingAction = useRouteHeaderLeadingAction();
   const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
 
   if (isPreview) {
@@ -18,26 +21,31 @@ export function MainHeader() {
     <>
       <Stack.Screen
         options={{
+          ...headerScreenOptions,
           headerTitle: '',
           title: '',
           headerTransparent: true,
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('navigation.openMenu')}
-          icon="line.3.horizontal"
-          onPress={openDrawer}
-        />
+        <Stack.Toolbar.View hidesSharedBackground>
+          <HeaderAction action={leadingAction} />
+        </Stack.Toolbar.View>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('navigation.newChat')}
-          icon="square.and.pencil"
-          onPress={openNewTopic}
-        />
+        <Stack.Toolbar.View hidesSharedBackground>
+          <HeaderAction
+            action={{
+              accessibilityLabel: t('navigation.newChat'),
+              icon: SquarePenIcon,
+              key: 'new-chat',
+              onPress: openNewTopic,
+              type: 'icon',
+            }}
+          />
+        </Stack.Toolbar.View>
         {assistant ? (
-          <Stack.Toolbar.View>
+          <Stack.Toolbar.View hidesSharedBackground>
             <MainHeaderAssistantButton assistant={assistant} onPress={openAssistant} />
           </Stack.Toolbar.View>
         ) : null}

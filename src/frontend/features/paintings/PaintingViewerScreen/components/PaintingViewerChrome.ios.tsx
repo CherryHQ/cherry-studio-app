@@ -1,6 +1,15 @@
+import { DownloadIcon, EllipsisIcon } from '@cherrystudio/app-icons';
+import type { MenuItem } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SFSymbol } from 'sf-symbols-typescript';
+
+import {
+  HeaderChrome,
+  type HeaderToolbarAction,
+  useRouteHeaderLeadingAction,
+} from '@/frontend/components/headers';
 
 import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 
@@ -15,12 +24,11 @@ const ASPECT_RATIO_ICONS: Record<string, SFSymbol> = {
   '16:9': 'rectangle.ratio.16.to.9',
 };
 
-// Native iOS 26 liquid-glass toolbars: X on the left, download + more menu on
-// the right, edit + resize menu in the bottom toolbar. Rendered from the screen
-// (a page component) so placement="bottom" is allowed.
+// The top actions use the app-wide white HeaderAction surface. The editing
+// actions stay in the native iOS bottom toolbar, which is a different control
+// region. Rendered from the screen so placement="bottom" is allowed.
 export function PaintingViewerChrome({
   aspectRatios,
-  onClose,
   onDelete,
   onDownload,
   onEdit,
@@ -28,31 +36,49 @@ export function PaintingViewerChrome({
   onViewConversation,
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
+  const leadingAction = useRouteHeaderLeadingAction();
+  const overflowMenuItems = useMemo<readonly MenuItem[]>(
+    () => [
+      {
+        id: 'view-conversation',
+        label: t('painting.viewer.viewConversation'),
+        onPress: onViewConversation,
+        systemImage: 'message',
+      },
+      {
+        destructive: true,
+        id: 'delete',
+        label: t('painting.viewer.delete'),
+        onPress: onDelete,
+        systemImage: 'trash',
+      },
+    ],
+    [onDelete, onViewConversation, t],
+  );
+  const leftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('painting.viewer.download'),
+        icon: DownloadIcon,
+        key: 'download',
+        onPress: onDownload,
+        type: 'icon',
+      },
+      {
+        accessibilityLabel: t('painting.viewer.more'),
+        icon: EllipsisIcon,
+        items: overflowMenuItems,
+        key: 'more',
+        type: 'menu',
+      },
+    ],
+    [onDownload, overflowMenuItems, t],
+  );
 
   return (
     <>
-      <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('painting.viewer.close')}
-          icon="xmark"
-          onPress={onClose}
-        />
-      </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button
-          accessibilityLabel={t('painting.viewer.download')}
-          icon="square.and.arrow.down"
-          onPress={onDownload}
-        />
-        <Stack.Toolbar.Menu accessibilityLabel={t('painting.viewer.more')} icon="ellipsis">
-          <Stack.Toolbar.MenuAction icon="message" onPress={onViewConversation}>
-            {t('painting.viewer.viewConversation')}
-          </Stack.Toolbar.MenuAction>
-          <Stack.Toolbar.MenuAction destructive icon="trash" onPress={onDelete}>
-            {t('painting.viewer.delete')}
-          </Stack.Toolbar.MenuAction>
-        </Stack.Toolbar.Menu>
-      </Stack.Toolbar>
+      <HeaderChrome leftActions={leftActions} rightActions={rightActions} />
       <Stack.Toolbar placement="bottom">
         <Stack.Toolbar.Button
           accessibilityLabel={t('painting.viewer.edit')}

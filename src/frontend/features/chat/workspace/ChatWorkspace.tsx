@@ -110,7 +110,7 @@ export function ChatWorkspace({
   }, [isLoadingInitial, isCoverVisible, listMessages.length]);
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-background-subtle">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
       <AssistantMessageActionsProvider
         key={topicId}

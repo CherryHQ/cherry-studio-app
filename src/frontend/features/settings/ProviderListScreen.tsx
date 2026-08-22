@@ -6,7 +6,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useQuery } from '@/frontend/data';
 import { hiddenProviderListIds } from '@/frontend/utils/constants';
 
@@ -127,10 +127,10 @@ export default function ProviderSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('settings.provider.add.title'),
-        androidIcon: PlusIcon,
-        icon: 'plus',
+        icon: PlusIcon,
         key: 'create-provider',
         onPress: openCreateProvider,
+        type: 'icon',
       },
     ],
     [openCreateProvider, t],
@@ -138,7 +138,7 @@ export default function ProviderSettingsScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
+      <RouteHeader rightActions={rightActions} title={t('settings.pages.provider.title')} />
       <ProviderListSearch searchText={searchText} setSearchText={setSearchText}>
         {filteredProviderItems.length > 0 ? (
           <View className="-mx-4 min-h-0 flex-1">

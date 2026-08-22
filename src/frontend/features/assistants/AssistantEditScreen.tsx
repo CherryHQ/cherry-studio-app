@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useModelPickerData } from '@/frontend/components/modelPicker';
 import { usePreference } from '@/frontend/data/hooks';
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
@@ -73,7 +73,7 @@ export default function AssistantEditScreen() {
   if (assistantId && isLoading) {
     return (
       <>
-        <BackHeader title={t('assistant.edit.title')} />
+        <RouteHeader title={t('assistant.edit.title')} />
         <View className="p-4">
           <Text className="text-center text-foreground text-sm">{t('assistant.form.loading')}</Text>
         </View>
@@ -224,6 +224,7 @@ function AssistantEditForm({
         onPress: () => {
           void handleSave();
         },
+        type: 'label',
       },
     ],
     [handleSave, isSaving, t],
@@ -231,7 +232,7 @@ function AssistantEditForm({
 
   return (
     <>
-      <BackHeader rightActions={saveActions} title={title} />
+      <RouteHeader rightActions={saveActions} title={title} />
       <KeyboardAwareScrollView
         alwaysBounceVertical={false}
         bottomOffset={keyboardBottomOffset}

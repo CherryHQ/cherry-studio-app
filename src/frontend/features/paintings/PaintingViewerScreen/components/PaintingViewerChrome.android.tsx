@@ -1,27 +1,24 @@
-import {
-  DownloadIcon,
-  EllipsisIcon,
-  PencilIcon,
-  ProportionsIcon,
-  XIcon,
-} from '@cherrystudio/app-icons';
+import { DownloadIcon, EllipsisIcon, PencilIcon, ProportionsIcon } from '@cherrystudio/app-icons';
 import { Menu, type MenuItem } from '@cherrystudio/ui/components';
-import { Stack } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HeaderIconButton } from '@/frontend/components/headers/components/HeaderIconButton';
+import {
+  HeaderChrome,
+  HeaderIconButton,
+  type HeaderToolbarAction,
+  useRouteHeaderLeadingAction,
+} from '@/frontend/components/headers';
 
 import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 
-// Android has no native bottom-header slot, so the top row goes through the
-// transparent Stack header (headerLeft/headerRight) and the bottom actions are a
-// custom overlay bar, mirroring SelectionToolbar.android.
+// Android has no native bottom-header slot. The top row uses the shared
+// HeaderChrome, while the bottom actions remain a custom overlay bar matching
+// SelectionToolbar.android.
 export function PaintingViewerChrome({
   aspectRatios,
-  onClose,
   onDelete,
   onDownload,
   onEdit,
@@ -30,6 +27,7 @@ export function PaintingViewerChrome({
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const leadingAction = useRouteHeaderLeadingAction();
   const overflowMenuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
@@ -55,43 +53,40 @@ export function PaintingViewerChrome({
       })),
     [aspectRatios, onResizeSelect],
   );
+  const leftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
+  const rightActions = useMemo<HeaderToolbarAction[]>(
+    () => [
+      {
+        accessibilityLabel: t('painting.viewer.download'),
+        icon: DownloadIcon,
+        key: 'download',
+        onPress: onDownload,
+        type: 'icon',
+      },
+      {
+        accessibilityLabel: t('painting.viewer.more'),
+        icon: EllipsisIcon,
+        items: overflowMenuItems,
+        key: 'more',
+        type: 'menu',
+      },
+    ],
+    [onDownload, overflowMenuItems, t],
+  );
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          headerLeft: () => (
-            <HeaderIconButton accessibilityLabel={t('painting.viewer.close')} onPress={onClose}>
-              <XIcon className="size-6 text-constant-white" />
-            </HeaderIconButton>
-          ),
-          headerRight: () => (
-            <View className="flex-row items-center gap-1">
-              <HeaderIconButton
-                accessibilityLabel={t('painting.viewer.download')}
-                onPress={onDownload}
-              >
-                <DownloadIcon className="size-6 text-constant-white" />
-              </HeaderIconButton>
-              <Menu items={overflowMenuItems} trigger="tap">
-                <View
-                  accessibilityLabel={t('painting.viewer.more')}
-                  accessibilityRole="button"
-                  className="size-9 items-center justify-center"
-                >
-                  <EllipsisIcon className="size-6 text-constant-white" />
-                </View>
-              </Menu>
-            </View>
-          ),
-        }}
-      />
+      <HeaderChrome leftActions={leftActions} rightActions={rightActions} />
       <View
         className="absolute inset-x-0 flex-row items-center justify-start gap-2 pl-2"
         pointerEvents="box-none"
         style={[styles.bottomBar, { bottom: Math.max(insets.bottom, 12) + 12 }]}
       >
-        <HeaderIconButton accessibilityLabel={t('painting.viewer.edit')} onPress={onEdit}>
+        <HeaderIconButton
+          accessibilityLabel={t('painting.viewer.edit')}
+          className="size-9 bg-transparent"
+          onPress={onEdit}
+        >
           <PencilIcon className="size-6 text-constant-white" />
         </HeaderIconButton>
         <Menu items={resizeMenuItems} trigger="tap">

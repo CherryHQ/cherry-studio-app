@@ -1,4 +1,5 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+/* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
+import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -55,7 +56,6 @@ function PaintingViewerContent({
   current: ResolvedPaintingAttachment;
   painting: Painting;
 }) {
-  const router = useRouter();
   const actions = usePaintingViewerActions({
     currentOutput: current,
     painting,
@@ -65,7 +65,6 @@ function PaintingViewerContent({
     <>
       <PaintingViewerChrome
         aspectRatios={paintingViewer.aspectRatios}
-        onClose={router.back}
         onDelete={() => void actions.remove()}
         onDownload={() => void actions.download()}
         onEdit={actions.edit}

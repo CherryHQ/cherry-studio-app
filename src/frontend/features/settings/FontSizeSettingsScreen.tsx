@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { MarkdownText } from '@/frontend/components/markdown';
 import { usePreference } from '@/frontend/data/hooks';
 import { applyFontSizeStepPreference } from '@/frontend/utils/theme';
@@ -39,7 +39,7 @@ export default function FontSizeSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.fontSize.title')} />
+      <RouteHeader title={t('settings.fontSize.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

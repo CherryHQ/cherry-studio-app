@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 
+import { headerScreenOptions } from '@/frontend/components/headers';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 
 export default function SettingsStackLayout() {
@@ -8,6 +9,7 @@ export default function SettingsStackLayout() {
   return (
     <Stack
       screenOptions={{
+        ...headerScreenOptions,
         // Every screen in this stack is a grouped list, so the page background
         // is set once here instead of on each screen's root view. Light mode is
         // the one that moves: the page goes gray and the cards go white, the way
@@ -19,13 +21,12 @@ export default function SettingsStackLayout() {
         // white would put a seam between a white bar and a gray page — iOS
         // Settings has no such seam, its bar matches the grouped background.
         headerStyle: { backgroundColor: groupedBackground },
-        headerShadowVisible: false,
         headerTransparent: false,
         headerTintColor: foregroundColor,
       }}
     >
-      {/* The root keeps the native header so its back button is the same glass
-          circle as every sub-screen's back button, and so pushing a sub-screen
+      {/* The root keeps the native header so its back button uses the same
+          top-action surface as every sub-screen's back button, and so pushing a sub-screen
           doesn't have to materialize a header that wasn't there — which is what
           made the bar jump on entry. It is transparent and untitled because the
           screen draws its own hero under it and its own title into the sticky

@@ -5,7 +5,7 @@ import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useSta
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import {
   filterModelsByType,
   getModelTypeCounts,
@@ -108,7 +108,7 @@ export default function ProviderModelPullScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.provider.models.pullPreviewTitle')} />
+      <RouteHeader title={t('settings.provider.models.pullPreviewTitle')} />
       {preview ? (
         <ProviderModelPullPreviewPage
           applyModelChange={applyModelChange}

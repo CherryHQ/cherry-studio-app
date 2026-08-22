@@ -7,7 +7,7 @@ import { type AccessibilityActionEvent, Pressable, ScrollView, Text, View } from
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
-import { DrawerRootHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {
   areAllSelected,
@@ -103,10 +103,10 @@ export default function AssistantListScreen() {
     () => [
       {
         accessibilityLabel: t('common.more'),
-        androidIcon: EllipsisIcon,
-        icon: 'ellipsis',
+        icon: EllipsisIcon,
+        items: menuItems,
         key: 'assistant-actions',
-        menuItems,
+        type: 'menu',
       },
     ],
     [menuItems, t],
@@ -118,6 +118,7 @@ export default function AssistantListScreen() {
         key: 'finish-selecting-assistants',
         label: t('common.done'),
         onPress: exitEditing,
+        type: 'label',
       },
     ],
     [exitEditing, t],
@@ -183,7 +184,7 @@ export default function AssistantListScreen() {
 
   return (
     <>
-      <DrawerRootHeader
+      <RouteHeader
         rightActions={isEditing ? doneActions : rightActions}
         title={t('assistant.list.title')}
       />

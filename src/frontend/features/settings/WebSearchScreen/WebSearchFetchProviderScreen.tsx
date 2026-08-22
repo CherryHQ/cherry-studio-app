@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { resolveWebSearchProviderIcon } from './utils/providerIcons';
@@ -18,7 +18,7 @@ export default function WebSearchFetchProviderScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.websearch.fetchUrlsProvider')} />
+      <RouteHeader title={t('settings.websearch.fetchUrlsProvider')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
