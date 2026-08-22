@@ -62,10 +62,10 @@ function TopicListScreenBody() {
     () => [
       {
         accessibilityLabel: t('common.more'),
-        androidIcon: EllipsisIcon,
-        icon: 'ellipsis',
+        icon: EllipsisIcon,
+        items: menuItems,
         key: 'topic-actions',
-        menuItems,
+        type: 'menu',
       },
     ],
     [menuItems, t],
@@ -78,6 +78,7 @@ function TopicListScreenBody() {
         key: 'finish-selecting-messages',
         label: t('common.done'),
         onPress: exitEditing,
+        type: 'label',
       },
     ],
     [exitEditing, isDeletionPending, t],

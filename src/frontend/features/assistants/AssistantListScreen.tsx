@@ -103,10 +103,10 @@ export default function AssistantListScreen() {
     () => [
       {
         accessibilityLabel: t('common.more'),
-        androidIcon: EllipsisIcon,
-        icon: 'ellipsis',
+        icon: EllipsisIcon,
+        items: menuItems,
         key: 'assistant-actions',
-        menuItems,
+        type: 'menu',
       },
     ],
     [menuItems, t],
@@ -118,6 +118,7 @@ export default function AssistantListScreen() {
         key: 'finish-selecting-assistants',
         label: t('common.done'),
         onPress: exitEditing,
+        type: 'label',
       },
     ],
     [exitEditing, t],

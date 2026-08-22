@@ -31,10 +31,10 @@ export function McpScreen() {
     () => [
       {
         accessibilityLabel: t('settings.mcp.addServer'),
-        androidIcon: PlusIcon,
-        icon: 'plus',
+        icon: PlusIcon,
         key: 'create-mcp-server',
         onPress: openCreate,
+        type: 'icon',
       },
     ],
     [openCreate, t],

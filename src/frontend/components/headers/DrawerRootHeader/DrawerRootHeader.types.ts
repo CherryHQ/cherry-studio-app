@@ -1,4 +1,4 @@
-import type { HeaderToolbarAction } from '../BackHeader/BackHeader.types';
+import type { HeaderToolbarAction } from '../components/HeaderAction';
 
 export type DrawerRootHeaderProps = {
   leftActions?: readonly HeaderToolbarAction[];

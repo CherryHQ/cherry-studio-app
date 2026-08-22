@@ -231,22 +231,27 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
   const isBusy = isSaving || isCreateMutationPending || isUpdating;
   const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [
-      {
-        accessibilityLabel: t('common.save'),
-        disabled: isBusy,
-        element: isBusy ? (
-          <ActivityIndicator
-            accessibilityLabel={t('common.save')}
-            size="small"
-            style={styles.headerActivityIndicator}
-          />
-        ) : undefined,
-        key: 'save',
-        label: t('common.save'),
-        onPress: () => {
-          void handleSave();
-        },
-      },
+      isBusy
+        ? {
+            element: (
+              <ActivityIndicator
+                accessibilityLabel={t('common.save')}
+                size="small"
+                style={styles.headerActivityIndicator}
+              />
+            ),
+            key: 'save',
+            type: 'custom',
+          }
+        : {
+            accessibilityLabel: t('common.save'),
+            key: 'save',
+            label: t('common.save'),
+            onPress: () => {
+              void handleSave();
+            },
+            type: 'label',
+          },
     ],
     [handleSave, isBusy, t],
   );
@@ -260,6 +265,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
           setForm(createFormState(server));
           setIsEditing(true);
         },
+        type: 'label',
       },
     ],
     [server, t],

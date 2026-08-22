@@ -224,6 +224,7 @@ function AssistantEditForm({
         onPress: () => {
           void handleSave();
         },
+        type: 'label',
       },
     ],
     [handleSave, isSaving, t],

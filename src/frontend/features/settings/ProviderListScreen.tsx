@@ -127,10 +127,10 @@ export default function ProviderSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('settings.provider.add.title'),
-        androidIcon: PlusIcon,
-        icon: 'plus',
+        icon: PlusIcon,
         key: 'create-provider',
         onPress: openCreateProvider,
+        type: 'icon',
       },
     ],
     [openCreateProvider, t],

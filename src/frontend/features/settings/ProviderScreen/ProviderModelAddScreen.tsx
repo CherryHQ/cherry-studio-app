@@ -135,11 +135,11 @@ function ProviderModelAddForm({ provider }: { provider: Provider }) {
     () => [
       {
         accessibilityLabel: t('common.save'),
-        androidIcon: SaveIcon,
         disabled: isSubmitting || !canSubmit,
-        icon: 'checkmark',
+        icon: SaveIcon,
         key: 'save-model',
         onPress: () => void handleSubmit(),
+        type: 'icon',
       },
     ],
     [canSubmit, handleSubmit, isSubmitting, t],

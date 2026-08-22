@@ -132,6 +132,7 @@ export default function NewProviderScreen() {
         key: 'finish-new-provider',
         label: t('common.save'),
         onPress: handleFinish,
+        type: 'label',
       },
     ],
     [canSubmit, handleFinish, t],

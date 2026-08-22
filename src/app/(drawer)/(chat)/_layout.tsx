@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 
+import { headerScreenOptions } from '@/frontend/components/headers';
 import { getTransparentHeaderStyle } from '@/frontend/components/navigation/rootStackPlatform/rootStackPlatform';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
@@ -10,13 +11,13 @@ import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
  * only exist inside a native stack screen.
  */
 export default function ChatStackLayout() {
-  const foregroundColor = useThemeColor('foreground');
+  const [foregroundColor, chatBackgroundColor] = useThemeColor(['foreground', 'background-subtle']);
 
   return (
     <Stack
       screenOptions={{
-        contentStyle: { backgroundColor: 'transparent' },
-        headerShadowVisible: false,
+        ...headerScreenOptions,
+        contentStyle: { backgroundColor: chatBackgroundColor },
         headerStyle: getTransparentHeaderStyle(),
         headerTintColor: foregroundColor,
         headerTransparent: isLiquidGlassAvailable,

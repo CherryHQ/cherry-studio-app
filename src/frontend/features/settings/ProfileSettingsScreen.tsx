@@ -51,6 +51,7 @@ export default function ProfileSettingsScreen() {
         key: 'finish-profile-edit',
         label: t('common.save'),
         onPress: finishEditing,
+        type: 'label',
       },
     ],
     [finishEditing, t],

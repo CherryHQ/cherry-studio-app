@@ -1,5 +1,6 @@
 import { Stack } from 'expo-router';
 
+import { headerScreenOptions } from '@/frontend/components/headers';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
@@ -14,7 +15,7 @@ export default function DrawingsStackLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: false,
+        ...headerScreenOptions,
         headerTransparent: isLiquidGlassAvailable,
         headerTintColor: foregroundColor,
       }}

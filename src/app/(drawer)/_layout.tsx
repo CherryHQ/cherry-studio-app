@@ -22,7 +22,7 @@ export const unstable_settings = {
 export default function DrawerLayout() {
   // Also re-reads the corner radius when a foldable switches displays.
   const { width } = useWindowDimensions();
-  const backgroundColor = useThemeColor('background');
+  const [backgroundColor, overlayColor] = useThemeColor(['background', 'scrim']);
 
   return (
     <Drawer
@@ -33,8 +33,9 @@ export default function DrawerLayout() {
         // sidebar is a temporary surface and must not occupy scene layout space.
         drawerType: 'front',
         headerShown: false,
-        // No dimming pane. Tapping the exposed surface still closes the drawer.
-        overlayColor: 'transparent',
+        // Dim the exposed scene while preserving the drawer's native progress
+        // animation and tap-to-close interaction.
+        overlayColor,
         sceneStyle: {
           // Keep the scene opaque where a screen leaves its own content style
           // transparent, including beneath the overlaid sidebar.

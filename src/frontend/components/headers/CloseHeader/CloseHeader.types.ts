@@ -1,15 +1,7 @@
-import type { StackToolbarButtonProps } from 'expo-router';
-
-export type CloseHeaderAction = Pick<
-  StackToolbarButtonProps,
-  'accessibilityLabel' | 'disabled' | 'hidden' | 'onPress' | 'tintColor' | 'variant'
-> & {
-  key: string;
-  label: string;
-};
+import type { HeaderToolbarAction } from '../components/HeaderAction';
 
 export type CloseHeaderProps = {
   onClose?: () => void;
-  rightActions?: readonly CloseHeaderAction[];
+  rightActions?: readonly HeaderToolbarAction[];
   title?: string;
 };

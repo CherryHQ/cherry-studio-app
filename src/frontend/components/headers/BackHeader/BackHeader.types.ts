@@ -1,29 +1,14 @@
-import type { MenuItem } from '@cherrystudio/ui/components';
-import type { StackToolbarButtonProps } from 'expo-router';
-import type { ComponentType, ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
-type HeaderAndroidIconProps = {
-  className?: string;
+import type { HeaderToolbarAction } from '../components/HeaderAction';
+
+export type BackHeaderProps = {
+  /** Replaces back navigation for modes that own their own exit behavior. */
+  leftActions?: readonly HeaderToolbarAction[];
+  onBack?: () => void;
+  rightActions?: readonly HeaderToolbarAction[];
+  title?: string;
+  titleElement?: ReactElement;
 };
 
-export type HeaderToolbarAction = Pick<
-  StackToolbarButtonProps,
-  'accessibilityLabel' | 'disabled' | 'hidden' | 'icon' | 'onPress' | 'tintColor' | 'variant'
-> & {
-  androidIcon?: ComponentType<HeaderAndroidIconProps>;
-  /**
-   * Custom toolbar content (e.g. a circular avatar), as a single element. When
-   * set, the icon fields are ignored: DrawerRootHeader renders it via
-   * `Stack.Toolbar.View` on iOS and a `Fragment` inside `headerRight` on
-   * Android. Must have an explicit size.
-   */
-  element?: ReactElement;
-  key: string;
-  /** Native overflow menu shown from this toolbar position. */
-  menuItems?: readonly MenuItem[];
-  /**
-   * Text rendered in place of the icon, for system-style word buttons such as
-   * "Edit". Takes precedence over `icon`/`androidIcon` when set.
-   */
-  label?: string;
-};
+export type { HeaderToolbarAction } from '../components/HeaderAction';

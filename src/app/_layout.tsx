@@ -15,6 +15,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
+import { headerScreenOptions } from '@/frontend/components/headers';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import {
   getRootHeaderStyle,
@@ -94,7 +95,7 @@ function RootStack() {
   return (
     <Stack
       screenOptions={{
-        headerShadowVisible: false,
+        ...headerScreenOptions,
         headerStyle: getRootHeaderStyle(backgroundColor),
         headerTransparent: isLiquidGlassAvailable,
         headerTintColor: foregroundColor,
@@ -102,12 +103,7 @@ function RootStack() {
     >
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="topics"
-        options={{
-          headerBackButtonDisplayMode: 'minimal',
-        }}
-      />
+      <Stack.Screen name="topics" />
       {/* Settings owns a nested stack and draws its headers there, so the root
           stack only needs to push the page without adding another header. */}
       <Stack.Screen name="settings" options={{ headerShown: false }} />
@@ -115,7 +111,6 @@ function RootStack() {
         name="paintings/index"
         options={{
           contentStyle: { backgroundColor: 'transparent' },
-          headerBackButtonDisplayMode: 'minimal',
           headerStyle: getTransparentHeaderStyle(),
           headerTransparent: isLiquidGlassAvailable,
         }}
@@ -137,7 +132,6 @@ function RootStack() {
         name="paintings/[paintingId]/conversation"
         options={{
           contentStyle: { backgroundColor: 'transparent' },
-          headerBackButtonDisplayMode: 'minimal',
           headerStyle: getTransparentHeaderStyle(),
           headerTransparent: isLiquidGlassAvailable,
         }}

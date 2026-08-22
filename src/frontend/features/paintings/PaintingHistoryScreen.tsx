@@ -54,10 +54,10 @@ function PaintingHistoryScreenBody() {
     () => [
       {
         accessibilityLabel: t('common.more'),
-        androidIcon: EllipsisIcon,
-        icon: 'ellipsis',
+        icon: EllipsisIcon,
+        items: menuItems,
         key: 'painting-actions',
-        menuItems,
+        type: 'menu',
       },
     ],
     [menuItems, t],
@@ -70,6 +70,7 @@ function PaintingHistoryScreenBody() {
         key: 'finish-selecting-paintings',
         label: t('common.done'),
         onPress: exitEditing,
+        type: 'label',
       },
     ],
     [exitEditing, isDeletionPending, t],

@@ -49,6 +49,7 @@ export default function AssistantDetailScreen() {
         key: 'edit-assistant',
         label: t('common.edit'),
         onPress: openEditAssistant,
+        type: 'label',
       },
     ],
     [openEditAssistant, t],

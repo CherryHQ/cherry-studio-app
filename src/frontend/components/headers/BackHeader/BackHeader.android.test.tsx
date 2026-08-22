@@ -2,7 +2,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import { BackHeader } from './BackHeader.android';
+import { BackHeader } from './BackHeader';
 
 jest.mock('expo-router', () => {
   const React = jest.requireActual('react');
@@ -27,17 +27,9 @@ jest.mock('@cherrystudio/ui/components', () => {
   };
 });
 
-jest.mock('heroui-native/utils', () => ({ cn: (...values: string[]) => values.join(' ') }));
-
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-
-jest.mock('../components/HeaderIconButton', () => {
-  const { View: MockView } = jest.requireActual('react-native');
-
-  return { HeaderIconButton: MockView };
-});
 
 describe('BackHeader.android', () => {
   let renderer: ReactTestRenderer | undefined;
@@ -51,7 +43,7 @@ describe('BackHeader.android', () => {
     await act(async () => {
       renderer = create(
         <BackHeader
-          rightActions={[{ key: 'edit', label: 'Edit', onPress: jest.fn() }]}
+          rightActions={[{ key: 'edit', label: 'Edit', onPress: jest.fn(), type: 'label' }]}
           title="Config"
           titleElement={<Text>Tabs</Text>}
         />,
@@ -65,7 +57,7 @@ describe('BackHeader.android', () => {
     await act(async () => {
       renderer?.update(
         <BackHeader
-          rightActions={[{ key: 'save', label: 'Save', onPress: jest.fn() }]}
+          rightActions={[{ key: 'save', label: 'Save', onPress: jest.fn(), type: 'label' }]}
           title="Config"
         />,
       );
@@ -94,10 +86,10 @@ describe('BackHeader.android', () => {
           rightActions={[
             {
               accessibilityLabel: 'More',
-              androidIcon: MoreIcon,
-              icon: 'ellipsis',
+              icon: MoreIcon,
+              items: menuItems,
               key: 'more',
-              menuItems,
+              type: 'menu',
             },
           ]}
           title="Models"
@@ -106,9 +98,9 @@ describe('BackHeader.android', () => {
     });
 
     const headerRight = getOptions().headerRight as () => ReactElement<{
-      items: readonly unknown[];
-    }>[];
-    expect(headerRight()[0]?.props.items).toBe(menuItems);
+      children: ReactElement<{ action: { items: readonly unknown[] } }>[];
+    }>;
+    expect(headerRight().props.children[0]?.props.action.items).toBe(menuItems);
   });
 
   function getOptions(): Record<string, unknown> {

@@ -1,9 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback } from 'react';
-import { Pressable, Text } from 'react-native';
+import { Text } from 'react-native';
 
 import { useAssistantApiById, useTopic } from '@/frontend/hooks/chat';
 import type { Assistant } from '@/shared/data/types/assistant';
+
+import { HeaderIconButton } from '../components/HeaderAction';
 
 export function useMainHeaderAssistant() {
   const router = useRouter();
@@ -48,15 +50,13 @@ export function MainHeaderAssistantButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <HeaderIconButton
       accessibilityLabel={assistant.name}
-      accessibilityRole="button"
-      className="size-10 items-center justify-center overflow-hidden rounded-full bg-secondary active:opacity-60"
-      hitSlop={8}
+      className="overflow-hidden"
       onPress={onPress}
       testID="current-assistant-button"
     >
       <Text className="text-emoji-xl">{assistant.emoji}</Text>
-    </Pressable>
+    </HeaderIconButton>
   );
 }

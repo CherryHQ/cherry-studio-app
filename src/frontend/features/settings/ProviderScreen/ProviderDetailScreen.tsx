@@ -1,6 +1,6 @@
 import { EllipsisIcon, SettingsIcon } from '@cherrystudio/app-icons';
 import { type MenuItem, Spinner, useAlert } from '@cherrystudio/ui/components';
-import { Color, Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -167,11 +167,11 @@ export default function ProviderDetailSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('settings.provider.edit.title'),
-        androidIcon: SettingsIcon,
         disabled: !provider,
-        icon: 'gearshape',
+        icon: SettingsIcon,
         key: 'provider-settings',
         onPress: openProviderSettings,
+        type: 'icon',
       },
     ],
     [openProviderSettings, provider, t],
@@ -232,11 +232,11 @@ export default function ProviderDetailSettingsScreen() {
     () => [
       {
         accessibilityLabel: t('common.more'),
-        androidIcon: EllipsisIcon,
         disabled: !provider,
-        icon: 'ellipsis',
+        icon: EllipsisIcon,
+        items: modelMenuItems,
         key: 'model-actions',
-        menuItems: modelMenuItems,
+        type: 'menu',
       },
     ],
     [modelMenuItems, provider, t],
@@ -287,6 +287,7 @@ export default function ProviderDetailSettingsScreen() {
         key: 'finish-selecting-models',
         label: t('common.done'),
         onPress: exitModelSelection,
+        type: 'label',
       },
     ],
     [exitModelSelection, t],
@@ -299,7 +300,7 @@ export default function ProviderDetailSettingsScreen() {
         key: 'remove-selected-models',
         label: t('common.delete'),
         onPress: requestRemoveSelectedModels,
-        tintColor: Color.ios.systemRed,
+        type: 'label',
       },
     ],
     [requestRemoveSelectedModels, selectedModels.length, t],
