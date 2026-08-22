@@ -15,7 +15,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
-import { headerScreenOptions } from '@/frontend/components/headers';
+import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/components/headers';
 import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import {
   getRootHeaderStyle,
@@ -46,7 +46,9 @@ export default function RootLayout() {
                     <NavigationThemeProvider>
                       <AppAlertProvider>
                         <BottomSheetProvider>
-                          <RootStack />
+                          <RouteHeaderProvider rootAction="back">
+                            <RootStack />
+                          </RouteHeaderProvider>
                         </BottomSheetProvider>
                       </AppAlertProvider>
                     </NavigationThemeProvider>

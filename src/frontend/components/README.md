@@ -14,7 +14,7 @@ actually consumes it.
 - Use lowercase plural bucket names only for categorical containers: `components`, `context`,
   `hooks`, `utils`.
 - Use `PascalCase` only when the directory itself is a component adapter or component family:
-  `BackHeader`, `CloseHeader`, `MainHeader`.
+  `RouteHeader`, `MainHeader`.
 - Avoid vague names such as `common`, `parts`, or `messages` when a domain name is available.
   Prefer names that say what the module owns.
 

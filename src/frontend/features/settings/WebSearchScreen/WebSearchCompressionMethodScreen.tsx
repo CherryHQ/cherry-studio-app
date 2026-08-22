@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 
@@ -14,7 +14,7 @@ export default function WebSearchCompressionMethodScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.websearch.compressionMethod')} />
+      <RouteHeader title={t('settings.websearch.compressionMethod')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

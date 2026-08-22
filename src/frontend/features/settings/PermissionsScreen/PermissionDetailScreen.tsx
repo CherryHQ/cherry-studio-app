@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
@@ -35,7 +35,7 @@ export default function PermissionDetailSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t(`settings.permissions.type.${kind}`)} />
+      <RouteHeader title={t(`settings.permissions.type.${kind}`)} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

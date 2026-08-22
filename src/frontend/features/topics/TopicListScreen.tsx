@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Platform, View } from 'react-native';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   SelectionControls,
   SelectionProvider,
@@ -87,7 +87,7 @@ function TopicListScreenBody() {
 
   return (
     <>
-      <BackHeader
+      <RouteHeader
         rightActions={isEditing ? doneActions : menuActions}
         title={t('topic.list.title')}
       />

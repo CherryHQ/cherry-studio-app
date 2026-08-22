@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useMcpServerRuntimeSummaries, useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
 import type { McpServerRuntimeSummary } from '@/shared/contracts';
 import type { McpServer } from '@/shared/data/types/mcpServer';
@@ -42,7 +42,7 @@ export function McpScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('settings.pages.mcp.title')} />
+      <RouteHeader rightActions={rightActions} title={t('settings.pages.mcp.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
@@ -52,7 +52,7 @@ export default function PermissionsSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.permissions.title')} />
+      <RouteHeader title={t('settings.permissions.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

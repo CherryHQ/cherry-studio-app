@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { DataDirectorySection } from './DataDirectorySection/DataDirectorySection';
 
@@ -17,7 +17,7 @@ export default function DataSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.pages.data.title')} />
+      <RouteHeader title={t('settings.pages.data.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

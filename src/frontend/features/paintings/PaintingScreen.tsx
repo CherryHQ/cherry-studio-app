@@ -2,7 +2,7 @@ import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { PaintingComposer } from './components/PaintingComposer';
 import { usePainting, useResolvedPaintingFiles } from './hooks/usePaintings';
@@ -49,7 +49,7 @@ export function PaintingScreen() {
 
   return (
     <View className="flex-1 bg-background">
-      <BackHeader />
+      <RouteHeader />
       {isLoading ? (
         <View className="flex-1 items-center justify-center">
           <ActivityIndicator />

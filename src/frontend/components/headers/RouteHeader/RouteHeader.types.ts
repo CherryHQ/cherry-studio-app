@@ -2,7 +2,9 @@ import type { ReactElement } from 'react';
 
 import type { HeaderToolbarAction } from '../components/HeaderAction';
 
-export type BackHeaderProps = {
+export type RouteHeaderRootAction = 'back' | 'close' | 'drawer';
+
+export type RouteHeaderProps = {
   /** Replaces back navigation for modes that own their own exit behavior. */
   leftActions?: readonly HeaderToolbarAction[];
   onBack?: () => void;
@@ -10,5 +12,3 @@ export type BackHeaderProps = {
   title?: string;
   titleElement?: ReactElement;
 };
-
-export type { HeaderToolbarAction } from '../components/HeaderAction';

@@ -1,8 +1,12 @@
-export { BackHeader, type HeaderToolbarAction } from './BackHeader/BackHeader';
-export { CloseHeader } from './CloseHeader/CloseHeader';
+export type { HeaderToolbarAction } from './components/HeaderAction';
 export { HeaderIconButton } from './components/HeaderAction';
 export { HeaderChrome } from './components/HeaderChrome';
 export { headerScreenOptions } from './headerScreenOptions';
 export { MainHeader } from './MainHeader/MainHeader';
-export { useOpenDrawer } from './useOpenDrawer';
-export { DrawerRootHeader, type DrawerRootHeaderProps } from './DrawerRootHeader/DrawerRootHeader';
+export {
+  RouteHeader,
+  RouteHeaderProvider,
+  type RouteHeaderProps,
+  type RouteHeaderRootAction,
+  useRouteHeaderLeadingAction,
+} from './RouteHeader';

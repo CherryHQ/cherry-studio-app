@@ -2,7 +2,7 @@ import { Section } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { useSettingPreferences } from './hooks/useSettingPreferences';
 
@@ -12,7 +12,7 @@ export default function LanguageSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.items.appLanguage')} />
+      <RouteHeader title={t('settings.items.appLanguage')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

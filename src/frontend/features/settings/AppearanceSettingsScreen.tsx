@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 import { ThemeMode } from '@/shared/data/preference';
 
@@ -37,7 +37,7 @@ export default function AppearanceSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.appearance.title')} />
+      <RouteHeader title={t('settings.appearance.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

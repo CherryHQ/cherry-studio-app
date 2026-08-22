@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { useMcpServerApiById, useMcpServerMutations } from '@/frontend/hooks/mcp/useMcpServers';
 import { keyboardBottomOffset } from '@/frontend/utils/constants';
@@ -75,7 +75,7 @@ function McpServerLoadState({
 
   return (
     <>
-      <BackHeader title={t('settings.mcp.tabs.configuration')} />
+      <RouteHeader title={t('settings.mcp.tabs.configuration')} />
       <View className="flex-1 items-center justify-center gap-3 px-6">
         {isLoading ? <ActivityIndicator size="small" /> : null}
         <Text
@@ -278,7 +278,7 @@ function McpServerEditor({ server, serverId }: { server?: McpServer; serverId?: 
 
   return (
     <>
-      <BackHeader
+      <RouteHeader
         rightActions={
           visibleTab === 'configuration' ? (isEditing ? saveActions : editActions) : undefined
         }

@@ -1,17 +1,17 @@
-import { MenuIcon, SquarePenIcon } from '@cherrystudio/app-icons';
+import { SquarePenIcon } from '@cherrystudio/app-icons';
 import { Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { HeaderAction } from '../components/HeaderAction';
-import { useOpenDrawer } from '../useOpenDrawer';
+import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
 
 export function MainHeader() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const openDrawer = useOpenDrawer();
+  const leadingAction = useRouteHeaderLeadingAction();
   const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
 
   return (
@@ -20,17 +20,9 @@ export function MainHeader() {
       <View className="bg-background-subtle">
         <View style={{ height: insets.top }} />
         <View className="h-11 flex-row items-center justify-between px-4">
-          {/* The chat surface is the drawer's root scene now: leading action
-              opens the sidebar, there is nothing to go back to. */}
-          <HeaderAction
-            action={{
-              accessibilityLabel: t('navigation.openMenu'),
-              icon: MenuIcon,
-              key: 'open-drawer',
-              onPress: openDrawer,
-              type: 'icon',
-            }}
-          />
+          {/* The chat route is currently a drawer root, so the route policy
+              resolves this leading action to the sidebar button. */}
+          <HeaderAction action={leadingAction} />
           <View className="flex-row items-center gap-2">
             <HeaderAction
               action={{

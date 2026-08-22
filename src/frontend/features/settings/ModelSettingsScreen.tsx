@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import {
   MODEL_SETTING_KIND_TITLE_KEYS,
   MODEL_SETTING_KINDS,
@@ -42,7 +42,7 @@ export default function ModelSettingsScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.pages.model.title')} />
+      <RouteHeader title={t('settings.pages.model.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

@@ -1,10 +1,4 @@
-import {
-  DownloadIcon,
-  EllipsisIcon,
-  PencilIcon,
-  ProportionsIcon,
-  XIcon,
-} from '@cherrystudio/app-icons';
+import { DownloadIcon, EllipsisIcon, PencilIcon, ProportionsIcon } from '@cherrystudio/app-icons';
 import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +9,7 @@ import {
   HeaderChrome,
   HeaderIconButton,
   type HeaderToolbarAction,
+  useRouteHeaderLeadingAction,
 } from '@/frontend/components/headers';
 
 import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
@@ -24,7 +19,6 @@ import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 // SelectionToolbar.android.
 export function PaintingViewerChrome({
   aspectRatios,
-  onClose,
   onDelete,
   onDownload,
   onEdit,
@@ -33,6 +27,7 @@ export function PaintingViewerChrome({
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const leadingAction = useRouteHeaderLeadingAction();
   const overflowMenuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
@@ -58,18 +53,7 @@ export function PaintingViewerChrome({
       })),
     [aspectRatios, onResizeSelect],
   );
-  const leftActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('painting.viewer.close'),
-        icon: XIcon,
-        key: 'close',
-        onPress: onClose,
-        type: 'icon',
-      },
-    ],
-    [onClose, t],
-  );
+  const leftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {

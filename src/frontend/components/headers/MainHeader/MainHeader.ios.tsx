@@ -1,16 +1,16 @@
-import { MenuIcon, SquarePenIcon } from '@cherrystudio/app-icons';
+import { SquarePenIcon } from '@cherrystudio/app-icons';
 import { Stack, useIsPreview } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { HeaderAction } from '../components/HeaderAction';
 import { headerScreenOptions } from '../headerScreenOptions';
-import { useOpenDrawer } from '../useOpenDrawer';
+import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
 import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
 
 export function MainHeader() {
   const isPreview = useIsPreview();
   const { t } = useTranslation();
-  const openDrawer = useOpenDrawer();
+  const leadingAction = useRouteHeaderLeadingAction();
   const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
 
   if (isPreview) {
@@ -29,15 +29,7 @@ export function MainHeader() {
       />
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.View hidesSharedBackground>
-          <HeaderAction
-            action={{
-              accessibilityLabel: t('navigation.openMenu'),
-              icon: MenuIcon,
-              key: 'open-drawer',
-              onPress: openDrawer,
-              type: 'icon',
-            }}
-          />
+          <HeaderAction action={leadingAction} />
         </Stack.Toolbar.View>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">

@@ -2,7 +2,7 @@ import { useHeaderHeight } from 'expo-router/react-navigation';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 
 import { AiUsageRankingSection } from './components/AiUsageRankingSection';
@@ -43,7 +43,7 @@ export function AiUsageScreen() {
           />
         ) : null}
       </View>
-      <BackHeader title={t('aiUsage.title')} />
+      <RouteHeader title={t('aiUsage.title')} />
     </>
   );
 }

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
 import type { ModelPickerGroup, ModelPickerModelItem } from '../utils/modelPickerData';
@@ -59,7 +59,7 @@ export function ModelPickerScreen({
 
   return (
     <>
-      <BackHeader title={title} />
+      <RouteHeader title={title} />
       {/* Pinned above the list rather than scrolling away with it: this is every
           model on the device in one column, and a filter you have to scroll back
           up to reach is one you stop reaching for. The platform controls own

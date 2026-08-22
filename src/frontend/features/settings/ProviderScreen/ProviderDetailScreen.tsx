@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 
 import {
   buildApiKeyEntriesFromInput,
@@ -329,7 +329,7 @@ export default function ProviderDetailSettingsScreen() {
     <>
       {/* Selecting takes the header over: the tabs would navigate out from under
           the selection, and "Done" belongs where the back button was. */}
-      <BackHeader
+      <RouteHeader
         leftActions={modelSelection.isEditing ? selectionHeaderLeftActions : undefined}
         rightActions={
           modelSelection.isEditing

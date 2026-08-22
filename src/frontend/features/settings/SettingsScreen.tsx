@@ -19,7 +19,7 @@ import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 
 import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
@@ -143,7 +143,7 @@ export default function SettingsScreen() {
       {/* The transparent native header owns the top inset, so adding the safe
           area again here would push the sticky bar down twice. */}
       <ProfileStickyBar scrollY={scrollY} topInset={0} userName={userName} />
-      <BackHeader />
+      <RouteHeader />
     </View>
   );
 }

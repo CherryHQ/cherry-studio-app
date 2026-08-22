@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ModelPickerIcon, useModelPickerData } from '@/frontend/components/modelPicker';
 import { useAssistantApiById } from '@/frontend/hooks/chat';
 import { screenBottomActionInset } from '@/frontend/utils/constants';
@@ -61,7 +61,7 @@ export default function AssistantDetailScreen() {
 
   return (
     <>
-      <BackHeader onBack={returnTopicId ? returnToTopic : undefined} rightActions={rightActions} />
+      <RouteHeader onBack={returnTopicId ? returnToTopic : undefined} rightActions={rightActions} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

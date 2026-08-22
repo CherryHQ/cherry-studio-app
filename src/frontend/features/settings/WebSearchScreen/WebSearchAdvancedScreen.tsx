@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
-import { BackHeader } from '@/frontend/components/headers';
+import { RouteHeader } from '@/frontend/components/headers';
 
 import { SettingNumberInput } from '../components/SettingNumberInput';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
@@ -19,7 +19,7 @@ export default function WebSearchAdvancedScreen() {
 
   return (
     <>
-      <BackHeader title={t('settings.websearch.advanced.title')} />
+      <RouteHeader title={t('settings.websearch.advanced.title')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"

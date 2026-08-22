@@ -1,11 +1,15 @@
-import { DownloadIcon, EllipsisIcon, XIcon } from '@cherrystudio/app-icons';
+import { DownloadIcon, EllipsisIcon } from '@cherrystudio/app-icons';
 import type { MenuItem } from '@cherrystudio/ui/components';
 import { Stack } from 'expo-router';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { SFSymbol } from 'sf-symbols-typescript';
 
-import { HeaderChrome, type HeaderToolbarAction } from '@/frontend/components/headers';
+import {
+  HeaderChrome,
+  type HeaderToolbarAction,
+  useRouteHeaderLeadingAction,
+} from '@/frontend/components/headers';
 
 import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 
@@ -25,7 +29,6 @@ const ASPECT_RATIO_ICONS: Record<string, SFSymbol> = {
 // region. Rendered from the screen so placement="bottom" is allowed.
 export function PaintingViewerChrome({
   aspectRatios,
-  onClose,
   onDelete,
   onDownload,
   onEdit,
@@ -33,6 +36,7 @@ export function PaintingViewerChrome({
   onViewConversation,
 }: PaintingViewerChromeProps) {
   const { t } = useTranslation();
+  const leadingAction = useRouteHeaderLeadingAction();
   const overflowMenuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
@@ -51,18 +55,7 @@ export function PaintingViewerChrome({
     ],
     [onDelete, onViewConversation, t],
   );
-  const leftActions = useMemo<HeaderToolbarAction[]>(
-    () => [
-      {
-        accessibilityLabel: t('painting.viewer.close'),
-        icon: XIcon,
-        key: 'close',
-        onPress: onClose,
-        type: 'icon',
-      },
-    ],
-    [onClose, t],
-  );
+  const leftActions = useMemo<HeaderToolbarAction[]>(() => [leadingAction], [leadingAction]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {

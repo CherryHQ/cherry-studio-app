@@ -5,7 +5,7 @@ import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { DrawerRootHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   SelectionControls,
   SelectionProvider,
@@ -78,7 +78,7 @@ function PaintingHistoryScreenBody() {
 
   return (
     <>
-      <DrawerRootHeader
+      <RouteHeader
         rightActions={isEditing ? doneActions : menuActions}
         title={t('painting.history.title')}
       />

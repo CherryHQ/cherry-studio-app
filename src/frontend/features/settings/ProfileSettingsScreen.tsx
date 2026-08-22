@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { Keyboard, ScrollView, TextInput, View } from 'react-native';
 
 import { AvatarImagePicker, ProfileEditableAvatar } from '@/frontend/components/avatar';
-import { BackHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
 
@@ -59,7 +59,7 @@ export default function ProfileSettingsScreen() {
 
   return (
     <>
-      <BackHeader rightActions={rightActions} title={t('settings.profile.edit')} />
+      <RouteHeader rightActions={rightActions} title={t('settings.profile.edit')} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
