@@ -208,16 +208,18 @@ import { Text } from 'react-native';
 The variant respects Reduce Motion and `enabled={false}`. Its `className` styles the clipping
 container; `textClassName` styles the phrases.
 
-`SecureInput` is the shared single-line field for passwords, API keys, and other sensitive text. It
-keeps the controlled value with the caller, owns only whether that value is revealed, and renders
-the visibility action inside the field. Callers must provide localized action labels:
+`Input` is the shared field for ordinary and sensitive text. Set `type="password"` for passwords,
+API keys, and other secrets; the password variant keeps the controlled value with the caller, owns
+whether that value is revealed and where blurred content is displayed, and renders the visibility
+action inside the field. Callers must provide localized action labels:
 
 ```tsx
-import { SecureInput } from '@cherrystudio/ui/components';
+import { Input } from '@cherrystudio/ui/components';
 
-<SecureInput
+<Input
   accessibilityLabel={t('settings.provider.apiService.apiKey')}
   onChangeText={setApiKey}
+  type="password"
   value={apiKey}
   visibilityAccessibilityLabels={{
     hide: t('settings.provider.apiService.hideApiKeys'),
@@ -226,11 +228,14 @@ import { SecureInput } from '@cherrystudio/ui/components';
 />;
 ```
 
-Visibility starts hidden on every mount. Toggling keeps input focus by default; set
+Password visibility starts hidden on every mount. Toggling keeps input focus by default; set
 `blurOnVisibilityToggle` only when a consumer intentionally relies on blur to dismiss the keyboard
-or commit its draft value. `SecureInput` fixes `multiline`, `secureTextEntry`, `autoCapitalize`, and
-`autoCorrect`, while forwarding the remaining `Input` props. Its `style` prop targets the composed
-field container. Disabling the field also disables its visibility action.
+or commit its draft value. Blurred content is positioned at the start; focusing releases selection
+control to the native input, including `selectTextOnFocus`. The password variant fixes `multiline`,
+`secureTextEntry`, `selection`, `autoCapitalize`, and `autoCorrect`, while forwarding the remaining
+compatible `Input` props. Its `style` prop targets the composed field container. Disabling the field
+also disables its visibility action. Plain inputs default to `type="text"`, and their `style` prop
+continues to target the native field.
 
 `Menu` is the shared native action menu. It accepts one trigger element and a flat, stable `items`
 array; the package owns Nitro wiring, native action dispatch, and platform gesture behavior:

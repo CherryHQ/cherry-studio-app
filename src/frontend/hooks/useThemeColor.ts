@@ -1,6 +1,6 @@
 import type {
   CHERRY_PRODUCT_COLOR_TOKENS,
-  SHADCN_COLOR_TOKENS,
+  SHADCN_PUBLIC_COLOR_TOKENS,
 } from '@cherrystudio/design-tokens/contract';
 import { useCSSVariable } from 'uniwind';
 
@@ -26,7 +26,7 @@ import { useCSSVariable } from 'uniwind';
  */
 export type ThemeColorName =
   | (typeof CHERRY_PRODUCT_COLOR_TOKENS)[number]
-  | (typeof SHADCN_COLOR_TOKENS)[number];
+  | (typeof SHADCN_PUBLIC_COLOR_TOKENS)[number];
 
 type ColorTuple<T extends readonly ThemeColorName[]> = {
   [K in keyof T]: string;

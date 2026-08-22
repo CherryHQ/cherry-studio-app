@@ -1,7 +1,7 @@
 # Parallel Device Testing
 
-This guide defines iOS simulator and Metro isolation for concurrent Conductor worktrees. Android
-emulator provisioning is outside this workflow.
+This guide defines iOS simulator, Android emulator, and Metro isolation for concurrent Conductor
+worktrees. Physical devices are outside this workflow.
 
 ## Workspace Resources
 
@@ -26,6 +26,25 @@ agent-device devices --platform ios
 agent-device device status --platform ios
 ```
 
+Each worktree also uses a dedicated Android emulator named:
+
+```text
+CherryStudio API 36 ($CONDUCTOR_WORKSPACE_NAME)
+```
+
+Provision it lazily for the workspace and never substitute a physical device or another
+workspace's emulator. After the emulator boots, record its expected name, current serial, and
+`kind: emulator` under that workspace's `.context`. An Android serial such as `emulator-5554` can
+change across boots, so refresh the ownership record before each app session. If the dedicated
+emulator cannot be provisioned, stop and report the blocker.
+
+Before opening the Android app, inspect devices and active sessions:
+
+```bash
+agent-device devices --platform android
+agent-device session list
+```
+
 ## Metro And App Session
 
 Start Metro on the allocated base port:
@@ -38,6 +57,16 @@ Use a workspace-unique session, explicit simulator, and explicit Metro hint:
 
 ```bash
 agent-device open com.cherry-ai.cherry-studio-app --session "$CONDUCTOR_WORKSPACE_NAME" --platform ios --device "iPhone 17 Pro ($CONDUCTOR_WORKSPACE_NAME)" --metro-host 127.0.0.1 --metro-port "$CONDUCTOR_PORT" --relaunch
+```
+
+For Android, relaunch the installed development client on the dedicated emulator, then open the
+exact development-client URL printed by this workspace's Metro process. Do not derive or reuse a
+URL from another workspace. Opening that URL through `agent-device` configures Android-to-host
+reachability for its Metro port.
+
+```bash
+agent-device open com.cherry_ai.cherry_studio_app --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL" --relaunch
+agent-device open "$DEV_CLIENT_URL" --session "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --serial "$ANDROID_SERIAL"
 ```
 
 Keep commands for one session serial. Different sessions may run concurrently only when their
@@ -54,5 +83,19 @@ After a PR or complete stack is created:
 4. Remove the workspace simulator metadata after deletion succeeds or the recorded device is
    already absent.
 
+Clean up Android with the same ownership guarantees:
+
+1. Reinspect Android devices and confirm the recorded serial still resolves to the expected
+   workspace-specific name and `kind: emulator`.
+2. Close the workspace session with `agent-device close --session
+   "${CONDUCTOR_WORKSPACE_NAME}-android" --platform android --shutdown`.
+3. Delete only the AVD whose recorded serial and expected workspace-specific name both match, using
+   the same provisioner that created it. Never delete an Android device by serial alone.
+4. Remove the workspace emulator metadata after deletion succeeds or the recorded device is
+   already absent.
+
 The local Conductor archive script repeats this cleanup as a fallback. Cleanup must be idempotent and
 must refuse to delete an unrecorded or name-mismatched simulator.
+
+The same fallback and idempotency requirements apply to Android cleanup, which must also refuse to
+delete a physical device.

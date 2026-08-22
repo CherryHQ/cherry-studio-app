@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Image as ExpoImage } from 'expo-image';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BackendProvider } from '@/frontend/data';
@@ -39,7 +39,17 @@ const painting: Painting = {
   updatedAt: '2026-08-11T00:01:00.000Z',
 };
 
-const resolveFiles = jest.fn(async () => ({
+const olderPainting: Painting = {
+  ...painting,
+  createdAt: '2026-08-10T00:00:00.000Z',
+  files: { input: [], output: ['output-2'] },
+  id: 'painting-2',
+  orderKey: 'painting-2',
+  prompt: 'draw an older miniature city',
+  updatedAt: '2026-08-10T00:01:00.000Z',
+};
+
+const resolveFiles = jest.fn(async (_painting: Painting) => ({
   inputs: [],
   outputs: [
     {
@@ -67,12 +77,20 @@ function Probe() {
 }
 
 let entries: ReturnType<typeof usePaintingGalleryEntries> | undefined;
+let appendOlderPainting: (() => void) | undefined;
 
 function GalleryProbe() {
-  const gallery = usePaintingGalleryEntries([painting]);
+  const [paintings, setPaintings] = useState([painting]);
+  const gallery = usePaintingGalleryEntries(paintings);
   useEffect(() => {
     entries = gallery;
   }, [gallery]);
+  useEffect(() => {
+    appendOlderPainting = () => setPaintings((current) => [...current, olderPainting]);
+    return () => {
+      appendOlderPainting = undefined;
+    };
+  }, []);
   return null;
 }
 
@@ -103,7 +121,7 @@ describe('useResolvedPaintingFiles', () => {
       );
     });
 
-    await waitForCondition(() => query?.data !== undefined);
+    await waitForCondition(() => query?.isLoading === false);
 
     expect(query?.data?.outputAspectRatio).toBeCloseTo(1664 / 928);
     expect(ExpoImage.loadAsync).toHaveBeenCalledWith('file:///generated.png');
@@ -116,6 +134,7 @@ describe('usePaintingGalleryEntries', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    appendOlderPainting = undefined;
     entries = undefined;
     queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
@@ -149,6 +168,49 @@ describe('usePaintingGalleryEntries', () => {
         resolution: '1664 × 928',
       }),
     ]);
+  });
+
+  it('resolves and measures only paintings added by the next page', async () => {
+    resolveFiles.mockImplementation(async (currentPainting) => ({
+      inputs: [],
+      outputs: [
+        {
+          entry: {
+            ext: 'png',
+            id: currentPainting.files.output[0] ?? 'missing-output',
+            name: 'generated',
+            origin: 'internal',
+            size: 1024,
+          },
+          uri: `file:///${currentPainting.id}.png`,
+        },
+      ],
+    }));
+    jest.mocked(ExpoImage.loadAsync).mockResolvedValue({ height: 928, width: 1664 } as never);
+
+    await act(async () => {
+      renderer = create(
+        <QueryClientProvider client={queryClient}>
+          <BackendProvider backend={backend}>
+            <GalleryProbe />
+          </BackendProvider>
+        </QueryClientProvider>,
+      );
+    });
+    await waitForCondition(() => entries?.items.length === 1);
+
+    expect(resolveFiles).toHaveBeenCalledTimes(1);
+    expect(ExpoImage.loadAsync).toHaveBeenCalledTimes(1);
+
+    await act(async () => appendOlderPainting?.());
+    await waitForCondition(() => entries?.items.length === 2);
+
+    expect(resolveFiles).toHaveBeenCalledTimes(2);
+    expect(resolveFiles.mock.calls.map(([currentPainting]) => currentPainting.id)).toEqual([
+      'painting-1',
+      'painting-2',
+    ]);
+    expect(ExpoImage.loadAsync).toHaveBeenCalledTimes(2);
   });
 });
 

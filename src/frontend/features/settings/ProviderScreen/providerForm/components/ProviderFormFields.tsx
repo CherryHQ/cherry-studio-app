@@ -1,4 +1,4 @@
-import { Input, SecureInput } from '@cherrystudio/ui/components';
+import { Input } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 
 import { normalizeApiKeySingleLine } from '../../apiService/utils/providerApiServiceApiKeys';
@@ -36,7 +36,7 @@ export function ProviderFormApiKey() {
 
   return (
     <ProviderFormField label={t('settings.provider.apiService.apiKey')}>
-      <SecureInput
+      <Input
         accessibilityLabel={t('settings.provider.apiService.apiKey')}
         lineBreakModeIOS="clip"
         numberOfLines={1}
@@ -44,6 +44,7 @@ export function ProviderFormApiKey() {
         placeholder={t('settings.provider.apiService.apiKeyPlaceholder')}
         returnKeyType="done"
         scrollEnabled={false}
+        type="password"
         value={state.apiKey}
         visibilityAccessibilityLabels={{
           hide: t('settings.provider.apiService.hideApiKeys'),
