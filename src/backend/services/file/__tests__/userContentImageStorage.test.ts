@@ -45,8 +45,15 @@ jest.mock('expo-file-system', () => {
       return files.get(this.uri) ?? null;
     }
 
-    copy(destination: MockFile) {
-      files.set(destination.uri, files.get(this.uri) ?? 0);
+    async copy(destination: MockFile) {
+      await Promise.resolve();
+
+      const sourceSize = files.get(this.uri);
+      if (sourceSize === undefined) {
+        throw new Error(`Source file does not exist: ${this.uri}`);
+      }
+
+      files.set(destination.uri, sourceSize);
     }
 
     delete() {
