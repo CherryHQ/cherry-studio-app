@@ -20,6 +20,7 @@ import {
 import { ChatInitialRenderCover } from './components/ChatInitialRenderCover';
 import { ChatMessage } from './components/ChatMessage';
 import { ChatOlderMessagesIndicator } from './components/ChatOlderMessagesIndicator';
+import { AssistantMessageActionsProvider } from './context/AssistantMessageActionsProvider';
 import {
   shouldWaitForInitialHistoryLayout,
   useMessageListInitialRenderGate,
@@ -34,6 +35,7 @@ function renderChatMessage(message: MessageListItem) {
 }
 
 type ChatWorkspaceProps = {
+  isAssistantToolbarEnabled: boolean;
   /** 输入框实测高度，用于定位悬浮按钮；预览态没有输入框，留空即可。 */
   bottomAccessoryHeight?: SharedValue<number>;
   contentBottomInset: number;
@@ -52,10 +54,12 @@ export function ChatWorkspace({
   keyboardOffset,
   messageWindow,
   renderGateKey,
+  isAssistantToolbarEnabled,
   topicId,
 }: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
   const chatTopic = useChatTopic(topicId);
+  const regenerateAssistantMessage = chatTopic.regenerate;
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { alert } = useAlert();
@@ -108,18 +112,25 @@ export function ChatWorkspace({
   return (
     <View className="flex-1 bg-background">
       <ChatOlderMessagesIndicator isLoading={isLoadingOlder} />
-      <MessageList
-        key={listRenderKey}
-        bottomAccessoryHeight={bottomAccessoryHeight}
-        contentBottomInset={contentBottomInset}
-        contentTopInset={contentTopInset}
-        enteringMessageId={chatTopic.pendingUserMessage?.id}
-        keyboardOffset={keyboardOffset}
-        messages={listMessages}
-        onLoadOlder={loadOlder}
-        onReady={markListLoaded}
-        renderMessage={renderChatMessage}
-      />
+      <AssistantMessageActionsProvider
+        key={topicId}
+        isAssistantToolbarEnabled={isAssistantToolbarEnabled}
+        isRegenerateDisabled={chatTopic.isBusy}
+        onRegenerate={regenerateAssistantMessage}
+      >
+        <MessageList
+          key={listRenderKey}
+          bottomAccessoryHeight={bottomAccessoryHeight}
+          contentBottomInset={contentBottomInset}
+          contentTopInset={contentTopInset}
+          enteringMessageId={chatTopic.pendingUserMessage?.id}
+          keyboardOffset={keyboardOffset}
+          messages={listMessages}
+          onLoadOlder={loadOlder}
+          onReady={markListLoaded}
+          renderMessage={renderChatMessage}
+        />
+      </AssistantMessageActionsProvider>
       <ChatInitialRenderCover isVisible={isCoverVisible} />
       <ToolApprovalSheet
         approvals={pendingApprovals}
