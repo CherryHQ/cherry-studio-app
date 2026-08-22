@@ -29,6 +29,12 @@ jest.mock('@/frontend/hooks/chat', () => ({
   }),
 }));
 
+jest.mock('../../components/HeaderAction/HeaderIconButton', () => {
+  const { Pressable: MockPressable } = jest.requireActual('react-native');
+
+  return { HeaderIconButton: MockPressable };
+});
+
 function Harness() {
   const { assistant, openAssistant } = useMainHeaderAssistant();
 

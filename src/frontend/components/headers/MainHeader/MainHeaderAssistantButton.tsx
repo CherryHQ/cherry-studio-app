@@ -5,7 +5,7 @@ import { Text } from 'react-native';
 import { useAssistantApiById, useTopic } from '@/frontend/hooks/chat';
 import type { Assistant } from '@/shared/data/types/assistant';
 
-import { HeaderIconButton } from '../components/HeaderAction';
+import { HeaderIconButton } from '../components/HeaderAction/HeaderIconButton';
 
 export function useMainHeaderAssistant() {
   const router = useRouter();

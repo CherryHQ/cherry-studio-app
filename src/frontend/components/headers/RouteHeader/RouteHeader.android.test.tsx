@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -32,14 +32,18 @@ jest.mock('@cherrystudio/app-icons', () => ({
   XIcon: () => null,
 }));
 
-jest.mock('@cherrystudio/ui/components', () => {
+jest.mock('../components/HeaderAction', () => {
   const React = jest.requireActual('react');
 
   return {
-    Menu: ({ children, items }: { children: ReactNode; items: readonly unknown[] }) =>
-      React.createElement('Menu', { items }, children),
+    HeaderAction: ({ action }: { action: unknown }) =>
+      React.createElement('HeaderAction', { action }),
   };
 });
+
+jest.mock('../components/HeaderChrome', () =>
+  jest.requireActual('../components/HeaderChrome/HeaderChrome.android'),
+);
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
