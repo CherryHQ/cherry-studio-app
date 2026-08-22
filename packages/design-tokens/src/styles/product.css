@@ -78,6 +78,20 @@
   /* Stable product domain: user-message surface (UserMessageItem) */
   --chat-user: var(--gray-alpha-100);
 
+  /* Stable product domain: categorical badge pairs (ModelPickerTagChip).
+   * 每个色相一对：`tag-*` 是 100 号浅底，`tag-*-foreground` 是画在其上的 900 号
+   * 记号，两档都随主题翻转，浅底上实测 4.8–7.7:1。这是分类用色而非状态用色 ——
+   * 名字带色相（类似 chart-1..5），因为四个色相只为彼此区分，不承载 success/
+   * warning 那样的语气；哪个能力标签用哪个色相由消费组件决定。 */
+  --tag-amber: var(--amber-100);
+  --tag-amber-foreground: var(--amber-900);
+  --tag-blue: var(--blue-100);
+  --tag-blue-foreground: var(--blue-900);
+  --tag-green: var(--green-100);
+  --tag-green-foreground: var(--green-900);
+  --tag-red: var(--red-100);
+  --tag-red-foreground: var(--red-900);
+
   /* 唯一一对「不随主题走」的颜色：`:root` 里写死，`.dark` 不覆盖。
    *
    * 别的角色都压在受主题控制的表面上，所以跟着主题翻；这两个是给压在**不受控**

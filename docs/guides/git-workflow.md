@@ -31,8 +31,8 @@ own bottom PR and the feature integration in the PR above it. See
 
 1. Run the local gates in [Testing And CI](./testing-and-ci.md).
 2. Create a normal PR as a draft, or submit an entire stack with `gh stack submit --auto`.
-3. After successful PR or stack creation, release the workspace simulator and its allocated port
-   range using [Parallel Device Testing](./parallel-device-testing.md).
+3. After successful PR or stack creation, release the workspace's simulators or emulators and
+   allocated port range using [Parallel Device Testing](./parallel-device-testing.md).
 4. Rerun local gates after later draft changes, then mark the final head ready for review.
 5. Treat the remote CI result as the complete-suite gate.
 

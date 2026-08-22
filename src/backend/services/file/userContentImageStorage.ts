@@ -36,7 +36,7 @@ export function createUserContentImageStorage(): UserContentImageStorage {
       try {
         normalizedUri = await normalizeAvatarImage(sourceUri);
         const storedName = `${randomUUID()}.webp`;
-        new File(normalizedUri).copy(new File(ensureAvatarDirectory(), storedName));
+        await new File(normalizedUri).copy(new File(ensureAvatarDirectory(), storedName));
         return storedName;
       } finally {
         if (normalizedUri) {

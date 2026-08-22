@@ -66,9 +66,7 @@ export default function AboutSettingsScreen() {
                 {t('common.cherryStudioDescription')}
               </Text>
               <View className="self-start rounded-full bg-secondary px-2 py-0.5">
-                <Text className="font-medium text-foreground-secondary text-sm">
-                  v{APP_VERSION}
-                </Text>
+                <Text className="font-medium text-muted-foreground text-sm">v{APP_VERSION}</Text>
               </View>
             </View>
           </View>

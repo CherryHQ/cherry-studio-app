@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import { useBackendModule } from '@/frontend/data';
 import { usePreference } from '@/frontend/data/hooks';
@@ -12,6 +12,7 @@ export function useAvatar(): string | number {
   const avatarUriQuery = useQuery({
     queryFn: async () => (await profile.resolveAvatar(avatar)) ?? null,
     queryKey: ['profile-avatar', avatar],
+    placeholderData: keepPreviousData,
     retry: false,
     staleTime: Infinity,
   });

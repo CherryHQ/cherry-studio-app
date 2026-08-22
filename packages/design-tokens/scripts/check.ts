@@ -14,7 +14,7 @@ import {
 import {
   CHERRY_PRODUCT_COLOR_TOKENS,
   CHERRY_PRODUCT_VARIABLE_TOKENS,
-  SHADCN_COLOR_TOKENS,
+  SHADCN_PUBLIC_COLOR_TOKENS,
   SHADCN_VARIABLE_TOKENS,
 } from './theme-contract';
 
@@ -79,7 +79,10 @@ export async function checkDesignTokens(): Promise<void> {
   // used to skip `var(--cs-*)` targets, back when the raw palettes were exposed
   // as utilities too; dropping that filter turns the assertion into the stronger
   // claim that no palette step can leak back into a className.
-  const expectedPublicColors = new Set([...SHADCN_COLOR_TOKENS, ...CHERRY_PRODUCT_COLOR_TOKENS]);
+  const expectedPublicColors = new Set([
+    ...SHADCN_PUBLIC_COLOR_TOKENS,
+    ...CHERRY_PRODUCT_COLOR_TOKENS,
+  ]);
   const semanticMappings = [
     ...nativeCss.matchAll(/^\s*--color-([a-z0-9-]+):\s*var\(--([a-z0-9-]+)\);$/gm),
   ].map((match) => match[1]);
