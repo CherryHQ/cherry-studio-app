@@ -308,9 +308,10 @@ that state locally and supplies `backAction` only while the nested level is visi
 
 Set `dismissible={false}` only for blocking flows such as a pending approval. The public API does
 not expose the underlying sheet library, detents, geometry, close reasons, or platform-specific
-styling. `size` is required and accepts the shared `compact`, `medium`, or `large` height spec,
-which resolves to 40%, 60%, or 80% of the available screen height. Features can switch the token
-at runtime without calculating native dimensions.
+styling. Pass exactly one height specification: `size` accepts the shared `compact`, `medium`, or
+`large` spec, resolving to 40%, 60%, or 80% of the available screen height; `height` accepts a fixed
+React Native logical-pixel value and is clamped to the available screen height. Features choose the
+appropriate semantic token or fixed height without calculating native detents.
 
 `Composer` is a shared input surface: a text field that grows with its content and, under it, a
 toolbar row. Nothing but the field is built in. It is fully controlled — the caller owns `value` —

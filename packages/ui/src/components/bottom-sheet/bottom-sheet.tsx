@@ -35,16 +35,27 @@ export type BottomSheetBackAction = {
   onPress: () => void;
 };
 
-export type BottomSheetProps = {
+type BottomSheetBaseProps = {
   backAction?: BottomSheetBackAction;
   children: ReactNode;
   dismissible?: boolean;
   onClose: () => void;
   open: boolean;
-  size: BottomSheetSize;
   testID?: string;
   title: string;
 };
+
+export type BottomSheetProps = BottomSheetBaseProps &
+  (
+    | {
+        height: number;
+        size?: never;
+      }
+    | {
+        height?: never;
+        size: BottomSheetSize;
+      }
+  );
 
 export function BottomSheetProvider({ children }: { children: ReactNode }) {
   return <NativeBottomSheetProvider>{children}</NativeBottomSheetProvider>;
@@ -55,23 +66,19 @@ export function BottomSheetProvider({ children }: { children: ReactNode }) {
  * owns presentation, dismissal, safe areas, and the same visual language on
  * iOS and Android.
  */
-export function BottomSheet({
-  backAction,
-  children,
-  dismissible = true,
-  onClose,
-  open,
-  size,
-  testID,
-  title,
-}: BottomSheetProps) {
+export function BottomSheet(props: BottomSheetProps) {
+  const { backAction, children, dismissible = true, onClose, open, testID, title } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const scrimStyle = useResolveClassNames('bg-scrim');
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
   const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET - OUTER_INSET);
-  const cardHeight = Math.round(availableCardHeight * HEIGHT_RATIOS[size]);
+  const requestedCardHeight =
+    props.height === undefined
+      ? Math.round(availableCardHeight * HEIGHT_RATIOS[props.size])
+      : props.height;
+  const cardHeight = Math.max(0, Math.min(requestedCardHeight, availableCardHeight));
   const sheetHeight = cardHeight + OUTER_INSET;
   const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
   const detents = useMemo<Detent[]>(() => [0, sheetHeight], [sheetHeight]);

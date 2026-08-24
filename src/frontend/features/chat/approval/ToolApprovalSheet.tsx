@@ -8,6 +8,7 @@ import { getBuiltInToolDisplay } from '@/frontend/components/messages';
 
 import type { PendingToolApproval } from '../runtime/chatRuntimeProjection';
 
+const TOOL_APPROVAL_SHEET_HEIGHT = 420;
 const ignoreClose = () => undefined;
 
 type ToolApprovalRespondInput = {
@@ -39,9 +40,9 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
   return (
     <BottomSheet
       dismissible={false}
+      height={TOOL_APPROVAL_SHEET_HEIGHT}
       onClose={ignoreClose}
       open={isOpen}
-      size="medium"
       title={t('chat.tool.approval.title')}
     >
       <ToolApprovalSheetBody

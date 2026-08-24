@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '..';
@@ -154,5 +154,18 @@ describe('BottomSheet', () => {
     const largeHeight = (mockBottomSheetProps.detents as number[])[1];
 
     expect(largeHeight).toBeGreaterThan(compactHeight);
+  });
+
+  test('uses a caller-provided fixed height', () => {
+    act(() => {
+      renderer = create(
+        <BottomSheet height={420} onClose={jest.fn()} open testID="fixed-height" title="Approval">
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const card = renderer?.root.findByProps({ testID: 'fixed-height' });
+    expect(StyleSheet.flatten(card?.props.style)).toMatchObject({ height: 420 });
   });
 });
