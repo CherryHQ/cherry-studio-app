@@ -72,6 +72,29 @@ agent-device open "$DEV_CLIENT_URL" --session "${CONDUCTOR_WORKSPACE_NAME}-andro
 Keep commands for one session serial. Different sessions may run concurrently only when their
 devices and port ranges differ.
 
+## Persistence Failures After Fast Refresh
+
+Fast Refresh and a Metro reload do not restart the native app process. During development, an old
+Expo SQLite connection can occasionally survive a refresh even though the current `DbService`
+connection reports no active transaction. The same app process may then hold two sets of
+`cherry.db` and WAL file descriptors, and SQLite-backed actions such as saving a preference fail at
+`BEGIN IMMEDIATE` with `SQLiteErrorException: database is locked`.
+
+Before changing UI or persistence code in response to this failure:
+
+1. Capture the app log and confirm that the failure occurs at `BEGIN IMMEDIATE`.
+2. Fully relaunch the app with the workspace-specific `agent-device open ... --relaunch` command
+   above. A Metro reload is not a valid control experiment for this failure.
+3. Repeat the exact save action. If it succeeds, classify the failure as a stale development
+   runtime connection and remove any temporary diagnostic logging before committing.
+4. If it still fails after the full relaunch, investigate transaction ownership and competing
+   processes. `lsof` on `cherry.db`, `cherry.db-wal`, and `cherry.db-shm` can distinguish duplicate
+   handles in the app process from an external lock holder.
+
+Always perform persistence acceptance from a fully relaunched app after using Fast Refresh. Do not
+delete the simulator database to clear this symptom; that destroys the state needed to reproduce a
+real transaction-lifecycle bug.
+
 ## Cleanup
 
 After a PR or complete stack is created:
