@@ -1,4 +1,5 @@
-import { BotIcon, RefreshCwIcon } from '@cherrystudio/app-icons';
+import BotIcon from '@cherrystudio/app-icons/icons/bot';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { ContentState } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { ScrollView, Text, View } from 'react-native';
