@@ -1,4 +1,4 @@
-import { ChevronDownIcon } from '@cherrystudio/app-icons';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import { Button, Section } from '@cherrystudio/ui/components';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

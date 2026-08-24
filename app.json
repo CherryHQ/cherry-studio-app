@@ -96,10 +96,7 @@
       [
         "expo-font",
         {
-          "fonts": ["./assets/fonts/GeistMono-Regular.ttf"],
-          "android": {
-            "fonts": ["./packages/app-icons/src/fonts/MaterialSymbols.ttf"]
-          }
+          "fonts": ["./assets/fonts/GeistMono-Regular.ttf"]
         }
       ],
       "expo-image",

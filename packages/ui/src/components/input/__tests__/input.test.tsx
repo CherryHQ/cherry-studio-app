@@ -6,10 +6,8 @@ import { Input } from '../input';
 
 const mockNativeInputNode = { blur: jest.fn() };
 
-jest.mock('@cherrystudio/app-icons', () => ({
-  EyeIcon: () => null,
-  EyeOffIcon: () => null,
-}));
+jest.mock('@cherrystudio/app-icons/icons/eye', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/eye-off', () => () => null);
 
 jest.mock('heroui-native/hooks', () => ({
   useIsOnSurface: () => false,

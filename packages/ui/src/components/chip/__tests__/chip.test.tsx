@@ -3,13 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { Chip } from '../chip';
 
-jest.mock('@cherrystudio/app-icons', () => {
-  function XIcon() {
-    return null;
-  }
-
-  return { XIcon };
-});
+jest.mock('@cherrystudio/app-icons/icons/x', () => () => null);
 
 jest.mock('heroui-native/utils', () => {
   return {

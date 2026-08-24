@@ -46,7 +46,6 @@ describe('ContextMenuLink.ios', () => {
               label: 'Delete',
               onPress: onDelete,
               destructive: true,
-              systemImage: 'trash',
             },
           ]}
         >
@@ -67,8 +66,8 @@ describe('ContextMenuLink.ios', () => {
     expect(preview.props.style.height).toBe(preview.props.style.width);
     expect(renderer!.root.findByProps({ testID: 'action-Delete' }).props).toMatchObject({
       destructive: true,
-      icon: 'trash',
     });
+    expect(renderer!.root.findByProps({ testID: 'action-Delete' }).props.icon).toBeUndefined();
 
     act(() => renderer!.root.findByProps({ testID: 'action-Delete' }).props.onPress());
     expect(onDelete).toHaveBeenCalledTimes(1);

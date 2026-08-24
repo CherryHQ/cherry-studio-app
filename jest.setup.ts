@@ -43,11 +43,6 @@ jest.mock('react-native-keyboard-controller', () =>
 // into a spy, which is what lets mention insertion be asserted at all.
 jest.mock('react-native-enriched-markdown', () => require('react-native-enriched-markdown/jest'));
 
-// expo-symbols' SymbolView is a native view (jest-expo runs as iOS, so every
-// @cherrystudio/app-icons icon reaches it). Icon behavior is asserted through
-// per-suite icon mocks, not the native symbol, so render nothing.
-jest.mock('expo-symbols', () => ({ SymbolView: () => null }));
-
 // Callstack bottom tabs is a Fabric native view and is unavailable in Jest.
 // Keep its layout context present so tab-owned screens can render normally.
 jest.mock('react-native-bottom-tabs', () => {

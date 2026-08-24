@@ -1,4 +1,4 @@
-import { CircleAlertIcon } from '@cherrystudio/app-icons';
+import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import { Image, ImageGenerationLoader } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useState } from 'react';

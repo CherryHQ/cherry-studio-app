@@ -1,4 +1,6 @@
-import { CameraIcon, FileIcon, ImagesIcon } from '@cherrystudio/app-icons';
+import CameraIcon from '@cherrystudio/app-icons/icons/camera';
+import FileIcon from '@cherrystudio/app-icons/icons/file';
+import ImagesIcon from '@cherrystudio/app-icons/icons/images';
 import { Composer } from '@cherrystudio/ui/components';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';

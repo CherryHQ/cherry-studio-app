@@ -1,4 +1,4 @@
-import { SettingsIcon } from '@cherrystudio/app-icons';
+import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
 import { Section } from '@cherrystudio/ui/components';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';

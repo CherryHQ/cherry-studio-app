@@ -1,10 +1,10 @@
-import type { AppIconProps } from '@cherrystudio/app-icons';
+import type { LucideIconProps } from '@cherrystudio/app-icons';
 import type { ComponentType } from 'react';
 import { Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 
 type SidebarNavRowProps = {
-  icon: ComponentType<AppIconProps>;
+  icon: ComponentType<LucideIconProps>;
   label: string;
   onPress: () => void;
 };

@@ -1,4 +1,6 @@
-import { CheckIcon, ImageIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import ImageIcon from '@cherrystudio/app-icons/icons/image';
+import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import {
   Button,
   Image,

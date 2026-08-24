@@ -37,11 +37,9 @@ jest.mock('expo-router/react-navigation', () => ({
   useHeaderHeight: () => 52,
 }));
 
-jest.mock('@cherrystudio/app-icons', () => ({
-  CheckIcon: () => null,
-  CopyIcon: () => null,
-  RefreshCwIcon: () => null,
-}));
+jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/refresh-cw', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');

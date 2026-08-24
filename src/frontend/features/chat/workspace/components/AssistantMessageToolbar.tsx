@@ -1,4 +1,6 @@
-import { CheckIcon, CopyIcon, RefreshCwIcon } from '@cherrystudio/app-icons';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import CopyIcon from '@cherrystudio/app-icons/icons/copy';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

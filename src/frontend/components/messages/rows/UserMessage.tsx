@@ -24,13 +24,11 @@ export const UserMessage = memo(function UserMessage({ message }: UserMessagePro
         id: 'copy-message',
         label: t('common.copy'),
         onPress: noopMessageAction,
-        systemImage: 'doc.on.doc',
       },
       {
         id: 'edit-message',
         label: t('common.edit'),
         onPress: noopMessageAction,
-        systemImage: 'pencil',
       },
     ],
     [t],

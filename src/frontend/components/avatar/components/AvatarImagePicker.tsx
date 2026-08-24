@@ -79,13 +79,11 @@ export function AvatarImagePicker({
         id: 'camera',
         label: t('chat.media.camera'),
         onPress: () => void selectImage('camera'),
-        systemImage: 'camera',
       },
       {
         id: 'photos',
         label: t('chat.media.photos'),
         onPress: () => void selectImage('photos'),
-        systemImage: 'photo',
       },
     ],
     [selectImage, t],

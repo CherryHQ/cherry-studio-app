@@ -8,13 +8,12 @@ const onEdit = fn();
 const onDelete = fn();
 const themes = ['light', 'dark'] as const;
 const menuItems = [
-  { id: 'edit', label: 'Edit', onPress: onEdit, systemImage: 'pencil' },
+  { id: 'edit', label: 'Edit', onPress: onEdit },
   {
     destructive: true,
     id: 'delete',
     label: 'Delete',
     onPress: onDelete,
-    systemImage: 'trash',
   },
 ] satisfies readonly MenuItem[];
 

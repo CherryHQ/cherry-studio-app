@@ -1,4 +1,5 @@
-import { EllipsisIcon, SettingsIcon } from '@cherrystudio/app-icons';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
 import { type MenuItem, Spinner, useAlert } from '@cherrystudio/ui/components';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -201,21 +202,18 @@ export default function ProviderDetailSettingsScreen() {
         id: 'add-model',
         label: t('settings.provider.models.addTitle'),
         onPress: openModelAddSettings,
-        systemImage: 'plus',
       },
       {
         disabled: !provider || isModelPullLoading,
         id: 'pull-models',
         label: t('settings.provider.models.pullPreviewTitle'),
         onPress: () => void openModelPullSettings(),
-        systemImage: 'arrow.trianglehead.2.clockwise.rotate.90',
       },
       {
         disabled: selectableIds.length === 0,
         id: 'select-models',
         label: t('settings.provider.models.selection.start'),
         onPress: modelSelection.enterEditing,
-        systemImage: 'checklist',
       },
     ],
     [

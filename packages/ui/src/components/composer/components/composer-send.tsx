@@ -1,4 +1,5 @@
-import { ArrowUpIcon, SquareIcon } from '@cherrystudio/app-icons';
+import ArrowUpIcon from '@cherrystudio/app-icons/icons/arrow-up';
+import SquareIcon from '@cherrystudio/app-icons/icons/square';
 
 import { cn } from '../../../utils';
 import type { ComposerSendProps } from '../composer.types';

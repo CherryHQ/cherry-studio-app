@@ -142,7 +142,7 @@ private final class CherryMenuContainerView: UIView, UIContextMenuInteractionDel
 
             return UIAction(
                 title: item.label,
-                image: item.systemImage.flatMap(UIImage.init(systemName:)),
+                image: nil,
                 identifier: UIAction.Identifier(item.id),
                 attributes: attributes,
                 state: state

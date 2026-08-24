@@ -160,9 +160,9 @@ Existing heavy animations (the image-generation prism sweep, the logo draw-on, t
 
 ## Icons
 
-Icons come from `@cherrystudio/app-icons` — real SF Symbols on iOS (via expo-symbols), Material Symbols glyphs on Android (bundled subset font). In `className`, `size-*` sets the dimensions and `text-*` sets the glyph color; explicit props win over `className`.
+General-purpose UI icons are Lucide SVG components adapted by `@cherrystudio/app-icons`. Import each icon from its deep path, for example `@cherrystudio/app-icons/icons/check`; the package root exports types only so Metro never traverses the complete Lucide icon set. In `className`, `size-*` sets the dimensions and `text-*` sets the stroke color; explicit `size`, `width`, `height`, and `color` props win over `className`.
 
-Every icon is one entry in `packages/app-icons/src/registry.ts` declaring both its SF and Material name (both compile-time checked). To add an icon: add the registry entry, run `pnpm generate:icons`, import the generated component. Per-platform weight is the platform default on purpose — do not tune one platform to imitate the other.
+To add an icon, add one small adapter under `packages/app-icons/src/icons/` that default-imports the matching `lucide-react-native/icons/*` module and exports `createIcon(...)`. Do not add icon barrels, native glyph registries, fonts, or generated PNG/WebP variants. Provider and model brands, avatars, logos, charts, and content images remain image assets rather than Lucide icons.
 
 Icons are not decoration. Do not place them in coloured tiles and do not add them to fill space. Prefer words where words are clearer.
 

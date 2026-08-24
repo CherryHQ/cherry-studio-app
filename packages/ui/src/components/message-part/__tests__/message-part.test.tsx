@@ -5,19 +5,28 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { MessagePart } from '..';
 import { formatMessagePartValue, hasMessagePartValue } from '../utils/message-part-value';
 
-jest.mock('@cherrystudio/app-icons', () => {
-  const { View } = jest.requireActual('react-native');
-
-  return {
-    ChevronRightIcon: View,
-    CircleAlertIcon: View,
-    GlobeIcon: (props: object) => <View {...props} testID="source-globe-icon" />,
-    LanguagesIcon: View,
-    SquareArrowOutUpRightIcon: (props: object) => <View {...props} testID="source-external-icon" />,
-    TriangleAlertIcon: (props: object) => <View {...props} testID="unknown-warning-icon" />,
-    WrenchIcon: View,
-  };
+jest.mock(
+  '@cherrystudio/app-icons/icons/chevron-right',
+  () => jest.requireActual('react-native').View,
+);
+jest.mock(
+  '@cherrystudio/app-icons/icons/circle-alert',
+  () => jest.requireActual('react-native').View,
+);
+jest.mock('@cherrystudio/app-icons/icons/globe', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return (props: object) => <MockView {...props} testID="source-globe-icon" />;
 });
+jest.mock('@cherrystudio/app-icons/icons/languages', () => jest.requireActual('react-native').View);
+jest.mock('@cherrystudio/app-icons/icons/square-arrow-out-up-right', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return (props: object) => <MockView {...props} testID="source-external-icon" />;
+});
+jest.mock('@cherrystudio/app-icons/icons/triangle-alert', () => {
+  const { View: MockView } = jest.requireActual('react-native');
+  return (props: object) => <MockView {...props} testID="unknown-warning-icon" />;
+});
+jest.mock('@cherrystudio/app-icons/icons/wrench', () => jest.requireActual('react-native').View);
 
 jest.mock('../../bottom-sheet', () => {
   const { Text: MockText, View } = jest.requireActual('react-native');

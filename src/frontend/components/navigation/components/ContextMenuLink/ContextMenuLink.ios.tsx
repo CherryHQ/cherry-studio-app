@@ -22,7 +22,6 @@ export function ContextMenuLink({ children, href, items, preview = true }: Conte
           <Link.MenuAction
             destructive={item.destructive}
             disabled={item.disabled}
-            icon={item.systemImage}
             isOn={item.checked}
             key={item.id}
             onPress={item.onPress}

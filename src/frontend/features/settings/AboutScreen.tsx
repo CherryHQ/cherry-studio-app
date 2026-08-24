@@ -1,11 +1,9 @@
-import {
-  CodeIcon,
-  CopyrightIcon,
-  GlobeIcon,
-  MailIcon,
-  RssIcon,
-  SquareArrowOutUpRightIcon,
-} from '@cherrystudio/app-icons';
+import CodeIcon from '@cherrystudio/app-icons/icons/code';
+import CopyrightIcon from '@cherrystudio/app-icons/icons/copyright';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
+import MailIcon from '@cherrystudio/app-icons/icons/mail';
+import RssIcon from '@cherrystudio/app-icons/icons/rss';
+import SquareArrowOutUpRightIcon from '@cherrystudio/app-icons/icons/square-arrow-out-up-right';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { PROVIDER_ICONS } from '@cherrystudio/ui/icons/providers';
 import Constants from 'expo-constants';

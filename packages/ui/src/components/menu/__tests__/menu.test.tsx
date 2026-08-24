@@ -48,7 +48,6 @@ describe('Menu', () => {
               id: 'delete',
               label: 'Delete',
               onPress: onDelete,
-              systemImage: 'trash',
             },
           ]}
           trigger="longPress"
@@ -68,7 +67,6 @@ describe('Menu', () => {
         disabled: false,
         id: 'edit',
         label: 'Edit',
-        systemImage: undefined,
       },
       {
         checked: 'on',
@@ -76,7 +74,6 @@ describe('Menu', () => {
         disabled: true,
         id: 'delete',
         label: 'Delete',
-        systemImage: 'trash',
       },
     ]);
 

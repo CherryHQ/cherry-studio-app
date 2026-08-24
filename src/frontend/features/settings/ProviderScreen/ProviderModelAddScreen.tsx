@@ -1,4 +1,6 @@
-import { ChevronDownIcon, ChevronUpIcon, SaveIcon } from '@cherrystudio/app-icons';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import ChevronUpIcon from '@cherrystudio/app-icons/icons/chevron-up';
+import SaveIcon from '@cherrystudio/app-icons/icons/save';
 import { FieldError, Input, Label, TextField } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';

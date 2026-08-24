@@ -26,11 +26,9 @@ jest.mock('expo-router/react-navigation', () => ({
     selector({ index: mockNavigationIndex }),
 }));
 
-jest.mock('@cherrystudio/app-icons', () => ({
-  ChevronLeftIcon: () => null,
-  MenuIcon: () => null,
-  XIcon: () => null,
-}));
+jest.mock('@cherrystudio/app-icons/icons/chevron-left', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/menu', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/x', () => () => null);
 
 jest.mock('../components/HeaderAction', () => {
   const React = jest.requireActual('react');

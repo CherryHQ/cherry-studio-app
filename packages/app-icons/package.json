@@ -11,22 +11,21 @@
       "react-native": "./src/index.ts",
       "import": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./icons/*": {
+      "types": "./src/icons/*.tsx",
+      "react-native": "./src/icons/*.tsx",
+      "import": "./src/icons/*.tsx",
+      "default": "./src/icons/*.tsx"
     }
   },
-  "scripts": {
-    "icons:generate": "tsx scripts/generate-icons.ts"
+  "dependencies": {
+    "lucide-react-native": "1.33.0"
   },
   "peerDependencies": {
-    "expo-symbols": "*",
     "react": "*",
     "react-native": "*",
+    "react-native-svg": "*",
     "uniwind": "*"
-  },
-  "devDependencies": {
-    "@expo-google-fonts/material-symbols": "^0.4.43",
-    "@material-symbols/svg-400": "^0.45.10",
-    "sf-symbols-typescript": "^2.2.0",
-    "sharp": "^0.34.5",
-    "subset-font": "^2.5.0"
   }
 }

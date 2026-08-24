@@ -34,7 +34,6 @@ export function Menu({ children, items, trigger }: MenuProps) {
         disabled: item.disabled ?? false,
         id: item.id,
         label: item.label,
-        systemImage: item.systemImage,
       })),
     [items],
   );

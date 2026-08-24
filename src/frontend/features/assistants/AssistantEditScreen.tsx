@@ -1,4 +1,5 @@
-import { ChevronDownIcon, ChevronRightIcon } from '@cherrystudio/app-icons';
+import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   BottomSheet,
   Description,

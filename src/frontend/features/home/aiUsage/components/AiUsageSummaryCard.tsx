@@ -1,4 +1,5 @@
-import { ChevronRightIcon, RefreshCwIcon } from '@cherrystudio/app-icons';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { Link } from 'expo-router';

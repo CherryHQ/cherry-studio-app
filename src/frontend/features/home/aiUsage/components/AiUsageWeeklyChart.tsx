@@ -1,4 +1,5 @@
-import { CircleArrowDownIcon, CircleArrowUpIcon } from '@cherrystudio/app-icons';
+import CircleArrowDownIcon from '@cherrystudio/app-icons/icons/circle-arrow-down';
+import CircleArrowUpIcon from '@cherrystudio/app-icons/icons/circle-arrow-up';
 import { type ReactNode, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';

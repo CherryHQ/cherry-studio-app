@@ -117,7 +117,6 @@
     "uniwind": "*"
   },
   "devDependencies": {
-    "nitrogen": "0.35.9",
-    "sf-symbols-typescript": "2.2.0"
+    "nitrogen": "0.35.9"
   }
 }

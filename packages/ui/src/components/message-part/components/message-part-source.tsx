@@ -1,4 +1,5 @@
-import { GlobeIcon, SquareArrowOutUpRightIcon } from '@cherrystudio/app-icons';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
+import SquareArrowOutUpRightIcon from '@cherrystudio/app-icons/icons/square-arrow-out-up-right';
 import { Pressable, Text, View } from 'react-native';
 
 import type { MessagePartSourceProps } from '../message-part.types';

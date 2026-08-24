@@ -12,7 +12,6 @@
 
 #include "JNativeMenuCheckedState.hpp"
 #include "NativeMenuCheckedState.hpp"
-#include <optional>
 #include <string>
 
 namespace margelo::nitro::cherrystudio::ui {
@@ -44,15 +43,12 @@ namespace margelo::nitro::cherrystudio::ui {
       jni::local_ref<jni::JString> id = this->getFieldValue(fieldId);
       static const auto fieldLabel = clazz->getField<jni::JString>("label");
       jni::local_ref<jni::JString> label = this->getFieldValue(fieldLabel);
-      static const auto fieldSystemImage = clazz->getField<jni::JString>("systemImage");
-      jni::local_ref<jni::JString> systemImage = this->getFieldValue(fieldSystemImage);
       return NativeMenuItem(
         checked->toCpp(),
         static_cast<bool>(destructive),
         static_cast<bool>(disabled),
         id->toStdString(),
-        label->toStdString(),
-        systemImage != nullptr ? std::make_optional(systemImage->toStdString()) : std::nullopt
+        label->toStdString()
       );
     }
 
@@ -62,7 +58,7 @@ namespace margelo::nitro::cherrystudio::ui {
      */
     [[maybe_unused]]
     static jni::local_ref<JNativeMenuItem::javaobject> fromCpp(const NativeMenuItem& value) {
-      using JSignature = JNativeMenuItem(jni::alias_ref<JNativeMenuCheckedState>, jboolean, jboolean, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
+      using JSignature = JNativeMenuItem(jni::alias_ref<JNativeMenuCheckedState>, jboolean, jboolean, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
@@ -71,8 +67,7 @@ namespace margelo::nitro::cherrystudio::ui {
         value.destructive,
         value.disabled,
         jni::make_jstring(value.id),
-        jni::make_jstring(value.label),
-        value.systemImage.has_value() ? jni::make_jstring(value.systemImage.value()) : nullptr
+        jni::make_jstring(value.label)
       );
     }
   };
