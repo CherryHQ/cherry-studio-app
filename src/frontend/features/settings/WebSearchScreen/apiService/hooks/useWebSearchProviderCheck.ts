@@ -1,5 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
-import { useToast } from 'heroui-native/toast';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

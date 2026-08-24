@@ -120,6 +120,10 @@ const tombstonePatterns = [
 
 const retiredImports = [
   {
+    name: 'heroui-native/toast',
+    message: 'Use Toast and useToast from @cherrystudio/ui/components.',
+  },
+  {
     name: '@/frontend/data',
     importNames: ['useDataModule'],
     message: 'Use the typed Data API hooks: useQuery, useMutation, or useInfiniteQuery.',

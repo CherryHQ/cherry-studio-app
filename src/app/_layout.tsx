@@ -2,7 +2,7 @@ import '../frontend/styles/global.css';
 import '@/bootstrap/preboot/abortSignal';
 import '@/bootstrap/preboot/blob';
 import '@/bootstrap/preboot/webCrypto';
-import { Alert } from '@cherrystudio/ui/components';
+import { Alert, Toast } from '@cherrystudio/ui/components';
 import { BottomSheetProvider } from '@swmansion/react-native-bottom-sheet';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -37,26 +37,28 @@ export default function RootLayout() {
   return (
     <RootGestureView className="flex-1">
       <KeyboardProvider>
-        <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false } }}>
-          <QueryProvider>
-            <AppBootstrapProvider>
-              <BootstrapStartupCoordinator>
-                <AppBootstrapGate>
-                  <StartupRouteReadyReporter>
-                    <NavigationThemeProvider>
-                      <AppAlertProvider>
-                        <BottomSheetProvider>
-                          <RouteHeaderProvider rootAction="back">
-                            <RootStack />
-                          </RouteHeaderProvider>
-                        </BottomSheetProvider>
-                      </AppAlertProvider>
-                    </NavigationThemeProvider>
-                  </StartupRouteReadyReporter>
-                </AppBootstrapGate>
-              </BootstrapStartupCoordinator>
-            </AppBootstrapProvider>
-          </QueryProvider>
+        <HeroUINativeProvider config={{ devInfo: { stylingPrinciples: false }, toast: 'disabled' }}>
+          <Toast.Provider>
+            <QueryProvider>
+              <AppBootstrapProvider>
+                <BootstrapStartupCoordinator>
+                  <AppBootstrapGate>
+                    <StartupRouteReadyReporter>
+                      <NavigationThemeProvider>
+                        <AppAlertProvider>
+                          <BottomSheetProvider>
+                            <RouteHeaderProvider rootAction="back">
+                              <RootStack />
+                            </RouteHeaderProvider>
+                          </BottomSheetProvider>
+                        </AppAlertProvider>
+                      </NavigationThemeProvider>
+                    </StartupRouteReadyReporter>
+                  </AppBootstrapGate>
+                </BootstrapStartupCoordinator>
+              </AppBootstrapProvider>
+            </QueryProvider>
+          </Toast.Provider>
         </HeroUINativeProvider>
       </KeyboardProvider>
     </RootGestureView>
