@@ -71,7 +71,6 @@ translations, file identifiers, or application navigation:
 
 ```tsx
 <MessagePart.Tool
-  closeAccessibilityLabel="Close"
   state="complete"
   statusText="3 results"
   title="Web search"
@@ -280,40 +279,39 @@ actions without taking over the child's normal tap. Expo Router page previews re
 The native implementation is adapted from MIT-licensed Nitro menu projects. See
 [third-party-notices.md](third-party-notices.md) for the complete attribution and license text.
 
-`BottomSheet` is the shared floating-card sheet over
-`@swmansion/react-native-bottom-sheet`. It owns card geometry, Liquid Glass fallback, scrim,
-safe-area information, and close reasons. The host app keeps one `BottomSheetProvider` at its root.
-Its compound components make fixed and scrolling regions explicit:
+`BottomSheet` is the shared height-regulated mobile sheet. It deliberately exposes one small API: the
+caller provides a localized title, controlled visibility, a close action, and its content. The
+sheet owns the drag handle, scrim, safe areas, rounded card geometry, swipe/scrim dismissal,
+Android back handling, and accessibility escape behavior with one implementation on iOS and
+Android. It has no close button; dismissal follows mobile sheet gestures:
 
 ```tsx
-<BottomSheet open={isOpen} onOpenChange={setIsOpen}>
-  <BottomSheet.Trigger>Open</BottomSheet.Trigger>
-  <BottomSheet.Content height={520} onClose={close}>
-    <BottomSheet.Header>
-      <BottomSheet.CloseButton accessibilityLabel="Close" />
-      <BottomSheet.Title>Models</BottomSheet.Title>
-      <BottomSheet.HeaderSpacer />
-    </BottomSheet.Header>
-    <BottomSheet.SearchField {...searchProps} />
-    <BottomSheet.Body>{list}</BottomSheet.Body>
-    <BottomSheet.Footer>{actions}</BottomSheet.Footer>
-  </BottomSheet.Content>
+<BottomSheet onClose={close} open={isOpen} size="large" title="Models">
+  <ModelList />
 </BottomSheet>
 ```
 
-`Trigger` is optional for sheets controlled by feature state. `Body` is a bounded viewport and does
-not scroll by itself, so virtualized lists can own scrolling without nesting. Use
-`BottomSheet.ScrollView` for ordinary scrolling content. `SearchField`, headers, and footers remain
-pinned because they are siblings of the scrolling region. `BottomSheet.Selection` is the explicit
-single-choice variant and remains under the same `BottomSheet` export.
+Feature components own their internal content and scrolling. A feature with a second level keeps
+that state locally and supplies `backAction` only while the nested level is visible:
 
-Multi-level flows keep their business stack in the feature and render it through
-`BottomSheet.PageTransition` inside `Content`.
+```tsx
+<BottomSheet
+  backAction={detail ? { accessibilityLabel: "Back", onPress: showRoot } : undefined}
+  onClose={close}
+  open={isOpen}
+  size={detail ? "compact" : "medium"}
+  title={detail ? "Theme" : "Settings"}
+>
+  {detail ? <ThemeOptions /> : <SettingsRows />}
+</BottomSheet>
+```
 
-Increasing depth uses the package's forward push motion, decreasing depth reverses it, and a
-same-depth key change cross-fades in place. The transition keeps the outgoing page mounted only for
-its exit, disables its pointer/accessibility interaction immediately, and honors Reduce Motion.
-Its viewport must have a bounded height, normally supplied by the sheet's `height`.
+Set `dismissible={false}` only for blocking flows such as a pending approval. The public API does
+not expose the underlying sheet library, detents, geometry, close reasons, or platform-specific
+styling. Pass exactly one height specification: `size` accepts the shared `compact`, `medium`, or
+`large` spec, resolving to 40%, 60%, or 80% of the available screen height; `height` accepts a fixed
+React Native logical-pixel value and is clamped to the available screen height. Features choose the
+appropriate semantic token or fixed height without calculating native detents.
 
 `Composer` is a shared input surface: a text field that grows with its content and, under it, a
 toolbar row. Nothing but the field is built in. It is fully controlled — the caller owns `value` —

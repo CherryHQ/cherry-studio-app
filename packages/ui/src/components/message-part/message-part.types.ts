@@ -16,7 +16,6 @@ export type MessagePartStatusProps = {
 
 export type MessagePartReasoningProps = {
   children: ReactNode;
-  closeAccessibilityLabel: string;
   detailTitle: string;
   state: 'complete' | 'running';
   statusText: string;
@@ -35,7 +34,6 @@ export type MessagePartUnknownProps = {
 
 export type MessagePartToolProps = {
   children: ReactNode;
-  closeAccessibilityLabel: string;
   icon?: ComponentType<LucideIconProps>;
   imageSource?: ImageSource | number;
   state: 'complete' | 'running';

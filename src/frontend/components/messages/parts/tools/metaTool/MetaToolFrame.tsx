@@ -16,7 +16,6 @@ export function MetaToolFrame({ children, part, toolName }: MetaToolFrameProps) 
 
   return (
     <MessagePart.Tool
-      closeAccessibilityLabel={t('common.close')}
       state={getToolDisplayState(part)}
       statusText={getMetaToolStatusText(part, toolName, t)}
       statusTone={getToolStatusTone(part)}

@@ -5,6 +5,7 @@ import {
   Description,
   Input,
   Label,
+  Section,
   Switch,
   TextField,
   useAlert,
@@ -13,7 +14,7 @@ import type { ReasoningEffortOption } from '@cherrystudio/universal/types/aiSdk'
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
@@ -193,6 +194,7 @@ function AssistantEditForm({
   }, []);
   const handleMcpModeSelect = useCallback((value: McpMode) => {
     setForm((current) => ({ ...current, mcpMode: value }));
+    setIsMcpModeSheetOpen(false);
   }, []);
   const handleSave = useCallback(async () => {
     const dto = buildAssistantDto(form, assistant?.settings);
@@ -426,18 +428,26 @@ function AssistantEditForm({
         onClose={closeEmojiPicker}
         onSelect={handleEmojiSelect}
       />
-      <BottomSheet.Selection
-        closeAccessibilityLabel={t('common.close')}
-        emptyText={t('settings.select.placeholder')}
-        heightFraction={0.6}
+      <BottomSheet
         onClose={closeMcpModeSheet}
-        onSelect={handleMcpModeSelect}
         open={isMcpModeSheetOpen}
-        options={mcpModeOptions}
-        selectedValue={form.mcpMode}
+        size="compact"
         testID="assistant-mcp-mode-selection"
         title={t('assistant.form.mcpMode.label')}
-      />
+      >
+        <ScrollView contentContainerClassName="px-6 pt-2" showsVerticalScrollIndicator={false}>
+          <Section>
+            {mcpModeOptions.map((option) => (
+              <Section.RadioItem
+                key={option.value}
+                label={option.label}
+                onPress={() => handleMcpModeSelect(option.value)}
+                selected={option.value === form.mcpMode}
+              />
+            ))}
+          </Section>
+        </ScrollView>
+      </BottomSheet>
     </>
   );
 }

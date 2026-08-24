@@ -22,7 +22,6 @@ export function GenericToolPart({ part }: GenericToolPartProps) {
 
   return (
     <MessagePart.Tool
-      closeAccessibilityLabel={t('common.close')}
       icon={toolDisplay?.icon}
       imageSource={toolDisplay?.imageSource}
       state={getToolDisplayState(part)}

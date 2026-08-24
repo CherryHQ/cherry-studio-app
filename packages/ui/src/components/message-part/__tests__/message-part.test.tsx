@@ -15,36 +15,32 @@ jest.mock(
 );
 jest.mock('@cherrystudio/app-icons/icons/globe', () => {
   const { View: MockView } = jest.requireActual('react-native');
-  return (props: object) => <MockView {...props} testID="source-globe-icon" />;
+  return function MockGlobeIcon(props: object) {
+    return <MockView {...props} testID="source-globe-icon" />;
+  };
 });
 jest.mock('@cherrystudio/app-icons/icons/languages', () => jest.requireActual('react-native').View);
 jest.mock('@cherrystudio/app-icons/icons/square-arrow-out-up-right', () => {
   const { View: MockView } = jest.requireActual('react-native');
-  return (props: object) => <MockView {...props} testID="source-external-icon" />;
+  return function MockExternalIcon(props: object) {
+    return <MockView {...props} testID="source-external-icon" />;
+  };
 });
 jest.mock('@cherrystudio/app-icons/icons/triangle-alert', () => {
   const { View: MockView } = jest.requireActual('react-native');
-  return (props: object) => <MockView {...props} testID="unknown-warning-icon" />;
+  return function MockWarningIcon(props: object) {
+    return <MockView {...props} testID="unknown-warning-icon" />;
+  };
 });
 jest.mock('@cherrystudio/app-icons/icons/wrench', () => jest.requireActual('react-native').View);
 
 jest.mock('../../bottom-sheet', () => {
-  const { Text: MockText, View } = jest.requireActual('react-native');
-  const Root = ({ children }: { children: ReactNode }) => <View>{children}</View>;
+  const { View } = jest.requireActual('react-native');
 
   return {
-    BottomSheet: Object.assign(Root, {
-      CloseButton: (props: object) => <View {...props} />,
-      Content: ({ children, ...props }: { children: ReactNode }) => (
-        <View {...props}>{children}</View>
-      ),
-      Header: View,
-      HeaderSpacer: View,
-      ScrollView: ({ children, ...props }: { children: ReactNode }) => (
-        <View {...props}>{children}</View>
-      ),
-      Title: ({ children }: { children: ReactNode }) => <MockText>{children}</MockText>,
-    }),
+    BottomSheet: ({ children, ...props }: { children: ReactNode }) => (
+      <View {...props}>{children}</View>
+    ),
   };
 });
 
@@ -102,7 +98,6 @@ describe('MessagePart', () => {
     act(() => {
       renderer = create(
         <MessagePart.Tool
-          closeAccessibilityLabel="Close"
           state="complete"
           statusText="3 results"
           testID="search"
@@ -127,7 +122,6 @@ describe('MessagePart', () => {
     act(() => {
       renderer = create(
         <MessagePart.Reasoning
-          closeAccessibilityLabel="Close"
           detailTitle="Reasoning"
           state="running"
           statusText="Thinking for 1.2s"
@@ -148,7 +142,6 @@ describe('MessagePart', () => {
     act(() => {
       renderer = create(
         <MessagePart.Tool
-          closeAccessibilityLabel="Close"
           state="running"
           statusText="Searching"
           testID="searching"

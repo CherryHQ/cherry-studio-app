@@ -9,7 +9,7 @@
 | Requirement | Result | Boundary |
 | --- | --- | --- |
 | Open one sheet and navigate through multiple page depths | **Supported by composition** | `BottomSheet` accepts arbitrary `children`, but it does not provide page history. The feature owns its stack. |
-| Animate consistently between sheet pages | **Supported** | Cherry's package-owned `BottomSheet.PageTransition` maps `pageKey` and stack `depth` to push, pop, or replace motion. |
+| Animate consistently between sheet pages | **Not part of the shared shell** | Cherry's reduced `BottomSheet` swaps feature-owned content directly and only standardizes the nested-page back action. |
 | Present a second physical sheet above an existing sheet | **Supported on iOS when nested** | Expo's current docs require the second `BottomSheet` to be nested inside the first sheet's content, not rendered beside it. |
 | Use a managed `stackBehavior`-style sheet stack | **Not supported by Expo UI** | There is no stack coordinator, `stackBehavior`, or `useBottomSheetModal` equivalent. The compatibility provider is a no-op. |
 
@@ -65,10 +65,10 @@ The application does not use Expo UI for its shared sheet frame. Its root instal
 `@cherrystudio/ui/components` `BottomSheet` wraps that library's `ModalBottomSheet`.[^root-layout]
 [^package-sheet]
 
-The shared component exposes `onBack`, `backAccessibilityLabel`, a nested-page header layout,
-optional fixed `height`, and `BottomSheet.PageTransition`. Features keep their page stack and pass
-the current `pageKey` plus stack `depth`; the package consistently applies forward, backward, or
-same-depth replacement motion.
+The shared component exposes controlled visibility, dismissal, title, children, an optional
+non-dismissible mode, and an optional nested-page `backAction`. It deliberately does not expose
+detents, geometry, close reasons, page-transition primitives, or types from the underlying library.
+Features keep their page state and replace content directly inside the same physical sheet.
 
 Use a nested second physical sheet only when the second level must have an independent detent, scrim, drag gesture, or dismissal lifecycle. Do not choose it merely to obtain a left/right content transition.
 

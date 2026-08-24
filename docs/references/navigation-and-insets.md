@@ -11,7 +11,8 @@ edge-to-edge layout, and safe-area/inset strategy. Terms follow
 - Edge-to-edge is a platform window layout capability. The app is responsible for fitting headers, chat input, message lists, sheets, and keyboard areas against insets.
 - System gesture zones belong to the system. Product horizontal gestures must not compete with Android screen edges.
 - Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation.
-- Route-level sheets are reserved for page-like flows; no current route uses one. Model selection uses a component-level BottomSheet.
+- Route-level sheets are reserved for page-like flows; no current route uses one. Model selection
+  uses a component-level `BottomSheet` through `ModelPickerDrawer`.
 
 ## Android Back Gesture
 
@@ -78,18 +79,24 @@ Before enabling it, verify:
 
 ## Picker Sheets
 
-Short local pickers, such as model setting selection, use the package-owned
-`@cherrystudio/ui/components` `BottomSheet` (a wrapper over
-`@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`). These
-sheets are plain overlays controlled by local state; their triggers should only pass open/close
-and selection state.
+Short, single-level local pickers use the package-owned
+`@cherrystudio/ui/components` `BottomSheet`, a focused wrapper over
+`@swmansion/react-native-bottom-sheet`'s `ModalBottomSheet`. It owns the drag handle, title,
+scrim, card geometry, safe areas, swipe/scrim dismissal, Android back, and accessibility escape.
+Feature-level picker components pass their content into this shell, while screen callers only pass
+open/close and selection state.
 
-Multi-level component sheets keep navigation history in their owning feature and render the current
-page through `BottomSheet.PageTransition`. A stable `pageKey` identifies the page and `depth`
-determines forward versus backward motion; the UI package owns the animation, interaction isolation,
-and Reduce Motion behavior.
+Component sheets use the shared `compact`, `medium`, and `large` height specs (40%, 60%, and 80%
+of available height). Features choose or dynamically switch the semantic size; they do not calculate
+screen height or pass native detents.
 
-Model selection is a reusable component-level `ModelPickerBottomSheet`. It is used by chat input and settings/model selection, includes search, tags, grouped model rows, pinning, and an 85% snap point.
+Multi-level component sheets keep their current page in the owning feature and replace their content
+inside the same physical sheet. They pass `backAction` only while a nested page is visible; the
+shared shell owns the consistent header placement but does not expose a navigation stack.
+
+Model selection is the reusable component-level `ModelPickerDrawer`. It is used by chat input,
+painting input, and provider model checks. It owns its search and grouped model rows, uses a
+`large` height sheet, and marks the current model with a trailing check.
 
 Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
 
@@ -141,6 +148,6 @@ Current horizontal gestures, such as topic-row swipe actions, start inside conte
 - Android system edge back works in normal screens, nested stacks, and modal/sheet flows.
 - Back targets, animations, and product confirmation states are predictable before and after enabling predictive back.
 - In edge-to-edge mode, headers, chat input, and message lists are not obscured by the status bar, navigation bar, or keyboard.
-- Opening model selection from chat input keeps keyboard, sheet detents, and bottom inset stable.
+- Opening model selection from chat input keeps keyboard, sheet height, and bottom inset stable.
 - Product horizontal gestures do not steal system edge back.
 - Only screens with explicit product reasons use local back interception.

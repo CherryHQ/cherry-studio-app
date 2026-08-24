@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
 
 import {
-  ModelPickerBottomSheet,
+  ModelPickerDrawer,
   ModelPickerIcon,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
@@ -89,8 +89,8 @@ export function ProviderModelCheckSection({
 
       {modelStatus?.status === 'success' ? <ModelCheckResult status={modelStatus} /> : null}
       {isModelPickerOpen ? (
-        <ModelPickerBottomSheet
-          isOpen
+        <ModelPickerDrawer
+          open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           providerId={providerId}

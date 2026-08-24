@@ -37,7 +37,6 @@ export function McpToolPart({ part }: McpToolPartProps) {
 
   return (
     <MessagePart.Tool
-      closeAccessibilityLabel={t('common.close')}
       state={getToolDisplayState(part)}
       statusText={statusText}
       statusTone={getToolStatusTone(
