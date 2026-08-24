@@ -178,8 +178,8 @@ describe('BottomSheet', () => {
   });
 
   test.each([
-    { expected: 47, screenCornerRadius: 55 },
-    { expected: 54, screenCornerRadius: 62 },
+    { expected: 51, screenCornerRadius: 55 },
+    { expected: 58, screenCornerRadius: 62 },
     { expected: 32, screenCornerRadius: 30 },
     { expected: 32, screenCornerRadius: 0 },
   ])(

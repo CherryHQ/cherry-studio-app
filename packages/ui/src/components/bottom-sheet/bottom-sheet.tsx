@@ -20,7 +20,7 @@ import { useResolveClassNames } from 'uniwind';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
-const OUTER_INSET = 8;
+const OUTER_INSET = 4;
 const TOP_INSET = 12;
 const CORNER_RADIUS = 32;
 const HEIGHT_RATIOS = {
