@@ -1,0 +1,137 @@
+diff --git a/dist/api/openai-responses-shared.js b/dist/api/openai-responses-shared.js
+index c35771dcc9b2173d0b459d13c6d86e622de45e9a..8e03a85b7fd678240b31bc62f1f1825a89c2b788 100644
+--- a/dist/api/openai-responses-shared.js
++++ b/dist/api/openai-responses-shared.js
+@@ -1,4 +1,4 @@
+-import { calculateCost } from "../models.js";
++import { calculateCost } from "../utils/model-runtime.js";
+ import { shortHash } from "../utils/hash.js";
+ import { parseStreamingJson } from "../utils/json-parse.js";
+ import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
+diff --git a/dist/api/openai-responses.js b/dist/api/openai-responses.js
+index 1023156b9c97e07d355914a641e39091a84bf229..9bc9b8102de3acbdb24a8b36982ef81d70af56a1 100644
+--- a/dist/api/openai-responses.js
++++ b/dist/api/openai-responses.js
+@@ -1,5 +1,5 @@
+ import OpenAI from "openai";
+-import { clampThinkingLevel } from "../models.js";
++import { clampThinkingLevel } from "../utils/model-runtime.js";
+ import { splitDeferredTools } from "../utils/deferred-tools.js";
+ import { formatProviderError, normalizeProviderError } from "../utils/error-body.js";
+ import { AssistantMessageEventStream } from "../utils/event-stream.js";
+diff --git a/dist/utils/model-runtime.js b/dist/utils/model-runtime.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4eb056d97de3c83db96ba38254159f3f5b299bb8
+--- /dev/null
++++ b/dist/utils/model-runtime.js
+@@ -0,0 +1,53 @@
++// Runtime-only helpers keep provider adapters independent from the Node-oriented
++// model catalog and authentication graph.
++export function calculateCost(model, usage) {
++    const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
++    let rates = model.cost;
++    let matchedThreshold = -1;
++    for (const tier of model.cost.tiers ?? []) {
++        if (inputTokens > tier.inputTokensAbove && tier.inputTokensAbove > matchedThreshold) {
++            rates = tier;
++            matchedThreshold = tier.inputTokensAbove;
++        }
++    }
++    const longWrite = usage.cacheWrite1h ?? 0;
++    const shortWrite = usage.cacheWrite - longWrite;
++    usage.cost.input = (rates.input / 1000000) * usage.input;
++    usage.cost.output = (rates.output / 1000000) * usage.output;
++    usage.cost.cacheRead = (rates.cacheRead / 1000000) * usage.cacheRead;
++    usage.cost.cacheWrite = (rates.cacheWrite * shortWrite + rates.input * 2 * longWrite) / 1000000;
++    usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
++    return usage.cost;
++}
++const EXTENDED_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
++function getSupportedThinkingLevels(model) {
++    if (!model.reasoning)
++        return ["off"];
++    return EXTENDED_THINKING_LEVELS.filter((level) => {
++        const mapped = model.thinkingLevelMap?.[level];
++        if (mapped === null)
++            return false;
++        if (level === "xhigh" || level === "max")
++            return mapped !== undefined;
++        return true;
++    });
++}
++export function clampThinkingLevel(model, level) {
++    const availableLevels = getSupportedThinkingLevels(model);
++    if (availableLevels.includes(level))
++        return level;
++    const requestedIndex = EXTENDED_THINKING_LEVELS.indexOf(level);
++    if (requestedIndex === -1)
++        return availableLevels[0] ?? "off";
++    for (let i = requestedIndex; i < EXTENDED_THINKING_LEVELS.length; i++) {
++        const candidate = EXTENDED_THINKING_LEVELS[i];
++        if (availableLevels.includes(candidate))
++            return candidate;
++    }
++    for (let i = requestedIndex - 1; i >= 0; i--) {
++        const candidate = EXTENDED_THINKING_LEVELS[i];
++        if (availableLevels.includes(candidate))
++            return candidate;
++    }
++    return availableLevels[0] ?? "off";
++}
+diff --git a/dist/utils/provider-env.js b/dist/utils/provider-env.js
+index c50f7d233be7a6470a9e98bf4c85fa062065bf12..3acac0a828b93e8ddaccd93bb7be19ca4a2bb717 100644
+--- a/dist/utils/provider-env.js
++++ b/dist/utils/provider-env.js
+@@ -1,35 +1,9 @@
+-let procEnvCache = null;
+ /**
+- * Fallback for https://github.com/oven-sh/bun/issues/27802.
+- * Bun compiled binaries can expose an empty process.env inside Linux sandboxes
+- * even though /proc/self/environ contains the environment.
+- *
+- * This intentionally duplicates restoreSandboxEnv() in
+- * packages/coding-agent/src/bun/restore-sandbox-env.ts. The ai package can be
+- * used directly, without going through that entrypoint, so provider env lookup
+- * must not depend on process.env having been patched.
++ * React Native receives provider credentials explicitly from Cherry Studio.
++ * Node-only Bun sandbox environment discovery is intentionally disabled.
+  */
+-function getBunSandboxEnvValue(name) {
+-    if (typeof process === "undefined" || !process.versions?.bun || Object.keys(process.env).length > 0) {
+-        return undefined;
+-    }
+-    if (procEnvCache === null) {
+-        procEnvCache = new Map();
+-        try {
+-            const { readFileSync } = require("node:fs");
+-            const data = readFileSync("/proc/self/environ", "utf-8");
+-            for (const entry of data.split("\0")) {
+-                const idx = entry.indexOf("=");
+-                if (idx > 0) {
+-                    procEnvCache.set(entry.slice(0, idx), entry.slice(idx + 1));
+-                }
+-            }
+-        }
+-        catch {
+-            // /proc/self/environ may not exist or may not be readable.
+-        }
+-    }
+-    return procEnvCache.get(name);
++function getBunSandboxEnvValue(_name) {
++    return undefined;
+ }
+ /**
+  * Resolve a provider env value from scoped overrides, normal process.env, then
+diff --git a/package.json b/package.json
+index fe1f336d89b4cdb500956b9431ed4306c3182d49..5a8e5b709c6b80cb888a9751a05219b63742a92c 100644
+--- a/package.json
++++ b/package.json
+@@ -30,0 +31,8 @@
++		"./utils/event-stream": {
++			"types": "./dist/utils/event-stream.d.ts",
++			"import": "./dist/utils/event-stream.js"
++		},
++		"./utils/validation": {
++			"types": "./dist/utils/validation.d.ts",
++			"import": "./dist/utils/validation.js"
++		},

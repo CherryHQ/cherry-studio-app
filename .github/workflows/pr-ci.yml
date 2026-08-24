@@ -23,11 +23,13 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
 
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.19.0
           cache: pnpm
 
       - name: Install Dependencies
@@ -48,11 +50,13 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
 
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.19.0
           cache: pnpm
 
       - name: Install Dependencies
@@ -73,11 +77,13 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
+        with:
+          version: 11.8.0
 
       - name: Install Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: 24.19.0
           cache: pnpm
 
       - name: Install Dependencies

@@ -7,7 +7,10 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "node": "24.19.0",
+      "pnpm": "11.8.0",
       "env": {
+        "EXPO_PUBLIC_CHAT_RUNTIME": "pi",
         "PROFILE": "development"
       },
       "android": {
@@ -18,7 +21,10 @@
     },
     "preview": {
       "distribution": "internal",
+      "node": "24.19.0",
+      "pnpm": "11.8.0",
       "env": {
+        "EXPO_PUBLIC_CHAT_RUNTIME": "pi",
         "PROFILE": "preview"
       },
       "android": {
@@ -30,7 +36,10 @@
     "production": {
       "autoIncrement": true,
       "channel": "production",
+      "node": "24.19.0",
+      "pnpm": "11.8.0",
       "env": {
+        "EXPO_PUBLIC_CHAT_RUNTIME": "ai-sdk",
         "PROFILE": "production"
       },
       "android": {
