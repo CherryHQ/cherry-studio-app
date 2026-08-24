@@ -45,10 +45,12 @@ describe('ContentState', () => {
 
   test('renders loading with the shared spinner and busy semantics', () => {
     const tree = render(<ContentState.Loading testID="state" title="Loading assistants" />);
-    const root = tree.root.findByProps({ testID: 'state' });
+    const root = tree.root
+      .findAllByProps({ testID: 'state' })
+      .find((node) => typeof node.type === 'string');
     const spinner = tree.root.findByProps({ testID: 'content-state-spinner' });
 
-    expect(root.props.accessibilityState).toEqual({ busy: true });
+    expect(root?.props.accessibilityState).toEqual({ busy: true });
     expect(spinner.props.accessibilityLabel).toBe('Loading assistants');
     expect(spinner.props.accessibilityRole).toBe('progressbar');
     expect(tree.root.findByProps({ children: 'Loading assistants' })).toBeDefined();
@@ -66,19 +68,26 @@ describe('ContentState', () => {
         title="No assistants"
       />,
     );
-    const buttons = tree.root.findAll((node) => node.props.accessibilityRole === 'button');
+    const buttonViews = tree.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.accessibilityRole === 'button',
+    );
+    const pressables = tree.root.findAll(
+      (node) =>
+        node.props.accessibilityRole === 'button' && typeof node.props.onPress === 'function',
+    );
 
     expect(tree.root.findByProps({ testID: 'empty-icon' })).toBeDefined();
     expect(tree.root.findByProps({ children: 'No assistants' })).toBeDefined();
     expect(
       tree.root.findByProps({ children: 'Create one or import an existing assistant.' }),
     ).toBeDefined();
-    expect(buttons).toHaveLength(2);
-    expect(buttons[0]?.props.className).toContain('bg-foreground');
-    expect(buttons[1]?.props.className).toContain('bg-field');
+    expect(buttonViews).toHaveLength(2);
+    expect(pressables).toHaveLength(2);
+    expect(buttonViews[0]?.props.className).toContain('bg-foreground');
+    expect(buttonViews[1]?.props.className).toContain('bg-field');
 
-    act(() => buttons[0]?.props.onPress());
-    act(() => buttons[1]?.props.onPress());
+    act(() => pressables[0]?.props.onPress());
+    act(() => pressables[1]?.props.onPress());
     expect(onCreate).toHaveBeenCalledTimes(1);
     expect(onImport).toHaveBeenCalledTimes(1);
   });
