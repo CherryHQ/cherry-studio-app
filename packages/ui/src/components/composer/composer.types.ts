@@ -103,6 +103,8 @@ export type ComposerInputProps = {
    * scheme is a tool mention and another is a web address.
    */
   markdownStyle?: MarkdownTextInputStyle;
+  onBlur?: () => void;
+  onFocus?: () => void;
   /**
    * Every paste, not just the ones the composer could use — text arrives here
    * too, already handled by the field. Callers filter for what they want.

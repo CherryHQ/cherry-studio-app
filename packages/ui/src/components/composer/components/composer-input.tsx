@@ -26,6 +26,8 @@ const inputStyle = { ...textInputBoxStyle, ...composerTextStyle };
 export function ComposerInput({
   autoFocus = false,
   markdownStyle,
+  onBlur,
+  onFocus,
   onPaste,
   placeholder,
   ref,
@@ -81,7 +83,9 @@ export function ComposerInput({
         linkRegex={null}
         markdownStyle={markdownStyle}
         multiline
+        onBlur={onBlur}
         onChangeMarkdown={handleChangeMarkdown}
+        onFocus={onFocus}
         placeholder={placeholder}
         placeholderTextColor={
           typeof placeholderStyle.color === 'string' ? placeholderStyle.color : undefined

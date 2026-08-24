@@ -81,9 +81,15 @@ export function useChatInputWebSearchToggle(
           } catch (error) {
             const latest: PendingWrite | null = pending.current;
 
+            // Switching assistants replaces the pending object. The old worker
+            // must not clear or roll back the newer assistant's write.
+            if (!latest || latest !== write) {
+              return;
+            }
+
             // A newer target arrived while this failed, so let the loop write
             // that one instead of rolling back to a value already superseded.
-            if (latest?.assistantId === assistantId && latest.enabled !== attempted) {
+            if (latest.enabled !== attempted) {
               latest.isUpdating = false;
               continue;
             }
@@ -96,7 +102,11 @@ export function useChatInputWebSearchToggle(
 
           const latest: PendingWrite | null = pending.current;
 
-          if (latest?.assistantId !== assistantId || latest.enabled === attempted) {
+          if (!latest || latest !== write) {
+            return;
+          }
+
+          if (latest.enabled === attempted) {
             // Landed. The override stays until the query reports the new value,
             // and the render-time check above clears it then.
             pending.current = null;

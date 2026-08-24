@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { ManagedComposerProvider } from '@/frontend/components/composer';
+import { ComposerSessionProvider } from '@/frontend/components/composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/messages';
 import { resolveHeaderContentInset } from '@/frontend/components/navigation';
@@ -169,7 +169,7 @@ export function PaintingComposer({
         messages={messages}
         renderMessage={renderMessage}
       />
-      <ManagedComposerProvider
+      <ComposerSessionProvider
         initialAttachments={composerInitialAttachments}
         initialDraft={composerInitialDraft}
         key={composerKey}
@@ -183,7 +183,7 @@ export function PaintingComposer({
             status={generation.status}
           />
         </Composer.Dock>
-      </ManagedComposerProvider>
+      </ComposerSessionProvider>
     </View>
   );
 }

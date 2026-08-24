@@ -38,7 +38,7 @@ import { type ToolMentionId, toolMentions, toolMentionUrl } from '@/frontend/uti
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
 
-import { useChatTopic } from '../runtime';
+import { useChatTopicControls } from '../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenuItems } from './components/ChatInputMenuItems';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
@@ -57,6 +57,11 @@ type ChatInputProps = {
   topicId?: string;
 };
 
+// This is a visual constraint, not an editor-mode switch. Android's enriched
+// input measures multiline content independently from its native `isSingleLine`
+// flag, so changing that flag on focus can leave its selectable frame stale.
+const restingInputStyle = { height: 32 } as const;
+
 // 诊断埋点：量化输入框「真实 model 名」解析耗时（pref 段 + model DB 段）。`[PERF]` 前缀。
 const perfLog = loggerService.withContext('ChatPerf');
 
@@ -65,7 +70,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const modelSettings = useModelSettingSelections();
   const rawDefaultModel = modelSettings.selections.default;
   const defaultModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
-  const chatTopic = useChatTopic(topicId);
+  const { abort, isBusy, sendText } = useChatTopicControls(topicId);
   const topicQuery = useTopic(topicId);
   const selectedAssistantId = topicId
     ? (topicQuery.data?.assistantId ?? null)
@@ -100,7 +105,10 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
     );
 
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [isInputActive, setIsInputActive] = useState(false);
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
+  const handleInputBlur = useCallback(() => setIsInputActive(false), []);
+  const handleInputFocus = useCallback(() => setIsInputActive(true), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
   const { inputRef } = useComposerMeta();
@@ -189,7 +197,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
       }
       const parts = createComposerMessageParts(payload.text, readyAttachments);
 
-      return chatTopic.sendText({
+      return sendText({
         assistantId: selectedAssistantId,
         parts,
         reasoningEffort: getChatInputReasoningEffortSnapshot(
@@ -203,63 +211,81 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
       });
     },
     [
-      chatTopic,
       isReasoningEffortSelected,
       reasoningEffort,
       reasoningEfforts,
       selectedAssistant?.settings.reasoning_effort,
       selectedAssistantId,
       selectedModelId,
+      sendText,
     ],
   );
 
   return (
     <>
       <ChatInputEffortOverlay
-        key={`${selectedModelId ?? 'no-model'}:${reasoningEfforts.join(',')}`}
         modelLabel={selectedModelLabel}
         onChange={handleReasoningEffortSelect}
         reasoningEffort={reasoningEffort}
         reasoningEfforts={reasoningEfforts}
       >
-        {(effortGauge) => (
-          <ComposerSurface
-            dismissKeyboardOnSend={dismissKeyboardOnSend}
-            onSend={handleSendPress}
-            onStop={chatTopic.abort}
-            streaming={chatTopic.isBusy}
-          >
-            <ComposerAttachments />
-            <ComposerField />
-            <Composer.Toolbar>
-              <ComposerMenu>
-                <ChatInputMenuItems
-                  isWebSearchEnabled={isWebSearchEnabled}
-                  onMentionPress={handleMentionPress}
-                  onWebSearchChange={setWebSearchEnabled}
-                />
-              </ComposerMenu>
-              <ComposerModelPill
-                icon={
-                  selectedModel ? (
-                    <ModelPickerIcon
-                      model={selectedModel}
-                      provider={selectedModelProvider}
-                      providerIconSize={18}
-                      size={20}
-                    />
-                  ) : undefined
-                }
-                label={selectedModelLabel}
-                onPress={openModelPicker}
+        {(effortGauge) => {
+          const menu = (
+            <ComposerMenu>
+              <ChatInputMenuItems
+                isWebSearchEnabled={isWebSearchEnabled}
+                onMentionPress={handleMentionPress}
+                onWebSearchChange={setWebSearchEnabled}
               />
-              <View className="ml-auto flex-row items-center gap-2">
-                {effortGauge}
-                <Composer.Send />
+            </ComposerMenu>
+          );
+
+          return (
+            <ComposerSurface
+              dismissKeyboardOnSend={dismissKeyboardOnSend}
+              onSend={handleSendPress}
+              onStop={abort}
+              streaming={isBusy}
+            >
+              <ComposerAttachments />
+              {/* Keep one native field in one slot; only the controls change around it. */}
+              <View className="flex-row items-center gap-2">
+                {isInputActive ? null : menu}
+                <View className="min-w-0 flex-1">
+                  <ComposerField
+                    onBlur={handleInputBlur}
+                    onFocus={handleInputFocus}
+                    style={isInputActive ? undefined : restingInputStyle}
+                  />
+                </View>
+                {isInputActive ? null : <Composer.Send />}
               </View>
-            </Composer.Toolbar>
-          </ComposerSurface>
-        )}
+              {isInputActive ? (
+                <Composer.Toolbar>
+                  {menu}
+                  <ComposerModelPill
+                    icon={
+                      selectedModel ? (
+                        <ModelPickerIcon
+                          model={selectedModel}
+                          provider={selectedModelProvider}
+                          providerIconSize={18}
+                          size={20}
+                        />
+                      ) : undefined
+                    }
+                    label={selectedModelLabel}
+                    onPress={openModelPicker}
+                  />
+                  <View className="ml-auto flex-row items-center gap-2">
+                    {effortGauge}
+                    <Composer.Send />
+                  </View>
+                </Composer.Toolbar>
+              ) : null}
+            </ComposerSurface>
+          );
+        }}
       </ChatInputEffortOverlay>
       {isModelPickerOpen ? (
         <ModelPickerDrawer

@@ -10,11 +10,10 @@ export { ComposerAttachments } from './components/ComposerAttachments';
 export { ComposerField } from './components/ComposerField';
 export { ComposerMenu } from './components/ComposerMenu';
 export { ComposerModelPill } from './components/ComposerModelPill';
+export { ComposerSessionProvider } from './components/ComposerSessionProvider';
 export { ComposerSurface, type ComposerSendPayload } from './components/ComposerSurface';
-export { ManagedComposerProvider } from './components/ManagedComposerProvider';
 export {
   type ComposerAttachmentStore,
-  ComposerProvider,
   useComposerActions,
   useComposerMeta,
   useComposerState,

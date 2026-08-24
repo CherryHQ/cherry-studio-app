@@ -36,6 +36,13 @@ Two consequences to take seriously:
 
 ### The field
 
+- [ ] The resting composer is one restrained row: ＋, a single-line field, and send/stop. The model
+      and reasoning controls are not duplicated into this state.
+- [ ] The native field remains multiline in both states. Resting constrains its real frame to one
+      line; focus removes that constraint and reveals the existing toolbar below it. Blurring returns
+      to the resting row without clearing the draft.
+- [ ] Attachments remain visible above either state. Collapsing the controls must never hide staged
+      content that will be sent.
 - [ ] The field is `EnrichedMarkdownTextInput`, not RN's `TextInput`, and it is **uncontrolled**: it
       owns its buffer, reports changes out, and only accepts a value pushed in when that value
       differs from what it last reported. Round-tripping every keystroke would fight it for the caret.
@@ -217,18 +224,18 @@ Walk these on device before shipping. They are the ones with no automated net:
    in the sent message.
 6. Backspacing a mention away in one press, and failing to put the caret inside it. Jest's stand-in
    for the field is a plain `TextInput`, so neither is reachable there.
-7. The field's height: one line when empty, growing to the 132pt cap, scrolling past it.
+7. The two presentation states: one row at rest with only ＋ and send around the field; focus reveals
+   the model/reasoning toolbar, keeps the same draft and caret, then grows to the 132pt text cap.
 
 ## Deliberately dropped
 
 Do not restore these; their absence is the design, not a regression.
 
-- **Grow-on-focus.** The surface used to rest 28px narrower and spring to full width on focus. It was
-  the only reason for the three-layer stack, the frozen content-column width, the send button's
-  `pr-16` compensation, and `isComposerExpanded`. All of it went with it.
-- **The focus-me placeholder.** Tapping send with nothing to send used to focus the field, because
-  there was a collapsed state to expand. With no collapsed state the gesture means nothing, so send
-  is simply disabled.
+- **The width morph.** Both states use the same full-width surface. The old version rested 28px
+  narrower and needed a three-layer stack, a frozen content width, and send-button compensation to
+  animate that width. Focus now changes only the field's height constraint and the controls shown.
+- **The focus-me placeholder.** An empty send button stays disabled. The active state is entered by
+  focusing the field, not by giving a disabled primary action a second meaning.
 - **The bottom sheet.** The ＋ menu is inline now, growing out of the button. There is no sheet, so
   no detents, no pan-down close, and no "restore the default detent on return".
 - **The self-drawn camera and photo grid.** A viewfinder with its own shutter, a paged photo grid
@@ -243,8 +250,9 @@ Do not restore these; their absence is the design, not a regression.
 
 ## Ownership
 
-- `@/frontend/components/composer` owns the draft, the attachments, the pickers, the send, and the
-  docking geometry. Whether the ＋ panel is open is `Composer.Menu`'s, not anyone else's.
+- `@/frontend/components/composer` owns the draft session, the attachments, the pickers, and the
+  send protocol. CherryUI owns docking geometry. Whether the ＋ panel is open is
+  `Composer.Menu`'s, not anyone else's.
 - `ChatInput.tsx` owns the web search switch, the reasoning effort, everything that talks to
   assistants and models, **and the arrangement** — it assembles the composer's parts rather than
   configuring a single component.

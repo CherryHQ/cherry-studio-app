@@ -20,6 +20,7 @@ import type {
   ChatSendNewTopicMultiModelTextInput,
   ChatSendNewTopicTextInput,
   ChatTopicSnapshot,
+  ChatTopicStatus,
 } from '@/shared/contracts';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import type { UniqueModelId } from '@/shared/data/types/model';
@@ -106,20 +107,7 @@ export function useChat() {
 export function useChatTopic(topicId?: string): ChatTopicValue {
   const chat = useChat();
   const runtimeTopicId = topicId ?? NEW_TOPIC_SNAPSHOT_KEY;
-  const subscribe = useCallback(
-    (listener: () => void) =>
-      chat.subscribe((event) => {
-        if (event.type === 'snapshot-changed' && event.topicId === runtimeTopicId) {
-          listener();
-        }
-      }),
-    [chat, runtimeTopicId],
-  );
-  const snapshot = useSyncExternalStore(
-    subscribe,
-    () => chat.getTopicSnapshot(runtimeTopicId),
-    () => chat.getTopicSnapshot(runtimeTopicId),
-  );
+  const snapshot = useChatTopicSelection(chat, runtimeTopicId, selectTopicSnapshot);
   const abort = useCallback(() => chat.abort(runtimeTopicId), [chat, runtimeTopicId]);
   const cancelExecution = useCallback(
     (executionId: UniqueModelId) => chat.cancelExecution({ executionId, topicId: runtimeTopicId }),
@@ -180,10 +168,7 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
     },
     [chat, topicId],
   );
-  const isBusy =
-    snapshot.status === 'aborting' ||
-    snapshot.status === 'reserving' ||
-    snapshot.status === 'streaming';
+  const isBusy = isBusyStatus(snapshot.status);
 
   return {
     ...snapshot,
@@ -198,4 +183,58 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
     setActiveBranch,
     steer,
   };
+}
+
+/** The narrow runtime surface needed by the composer while a reply streams. */
+export function useChatTopicControls(topicId?: string) {
+  const chat = useChat();
+  const runtimeTopicId = topicId ?? NEW_TOPIC_SNAPSHOT_KEY;
+  const status = useChatTopicSelection(chat, runtimeTopicId, selectTopicStatus);
+  const abort = useCallback(() => chat.abort(runtimeTopicId), [chat, runtimeTopicId]);
+  const sendText = useCallback(
+    (input: ChatSendNewTopicTextInput) => {
+      if (!topicId) {
+        return chat.sendNewTopicText(input);
+      }
+
+      return chat.sendText({ ...input, topicId });
+    },
+    [chat, topicId],
+  );
+
+  return { abort, isBusy: isBusyStatus(status), sendText };
+}
+
+function useChatTopicSelection<TValue>(
+  chat: ChatModule,
+  runtimeTopicId: string,
+  select: (snapshot: ChatTopicSnapshot) => TValue,
+): TValue {
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      chat.subscribe((event) => {
+        if (event.type === 'snapshot-changed' && event.topicId === runtimeTopicId) {
+          listener();
+        }
+      }),
+    [chat, runtimeTopicId],
+  );
+  const getSnapshot = useCallback(
+    () => select(chat.getTopicSnapshot(runtimeTopicId)),
+    [chat, runtimeTopicId, select],
+  );
+
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+function isBusyStatus(status: ChatTopicStatus): boolean {
+  return status === 'aborting' || status === 'reserving' || status === 'streaming';
+}
+
+function selectTopicSnapshot(snapshot: ChatTopicSnapshot): ChatTopicSnapshot {
+  return snapshot;
+}
+
+function selectTopicStatus(snapshot: ChatTopicSnapshot): ChatTopicStatus {
+  return snapshot.status;
 }

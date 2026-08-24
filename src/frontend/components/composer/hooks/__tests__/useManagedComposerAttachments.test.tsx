@@ -113,15 +113,45 @@ describe('useManagedComposerAttachments', () => {
     expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000003');
   });
 
-  it('safely deletes a ready attachment when the user removes it', async () => {
+  it('detaches a borrowed ready attachment without deleting its file entry', async () => {
     const ready = readyAttachment('00000000-0000-7000-8000-000000000004', 'ready.pdf');
     await renderHook([ready]);
 
     await act(async () => snapshot?.removeAttachment(ready.id));
 
     expect(snapshot?.attachments).toEqual([]);
-    expect(mockDeleteEntry).toHaveBeenCalledWith(ready.fileEntryId);
+    expect(mockDeleteEntry).not.toHaveBeenCalled();
     expect(mockCreateInternalEntry).not.toHaveBeenCalled();
+  });
+
+  it('deletes a composer-owned ready attachment when the user removes it', async () => {
+    mockCreateInternalEntry.mockResolvedValue(
+      resolvedFile('00000000-0000-7000-8000-000000000016', 'owned.pdf'),
+    );
+    await renderHook();
+
+    await act(async () => snapshot?.addAttachments([source('owned.pdf')]));
+    await act(flushPromises);
+    await act(async () => snapshot?.removeAttachment('source:owned.pdf'));
+
+    expect(snapshot?.attachments).toEqual([]);
+    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000016');
+  });
+
+  it('deletes an import that finishes after the composer unmounts', async () => {
+    const pending = deferred<ReturnType<typeof resolvedFile>>();
+    mockCreateInternalEntry.mockReturnValue(pending.promise);
+    await renderHook();
+
+    await act(async () => snapshot?.addAttachments([source('abandoned.pdf')]));
+    await act(async () => renderer?.unmount());
+    renderer = undefined;
+    await act(async () => {
+      pending.resolve(resolvedFile('00000000-0000-7000-8000-000000000017', 'abandoned.pdf'));
+      await pending.promise;
+    });
+
+    expect(mockDeleteEntry).toHaveBeenCalledWith('00000000-0000-7000-8000-000000000017');
   });
 
   it('hands attachments to the sender without deleting them when cleared', async () => {

@@ -131,7 +131,7 @@ export function useComposerState() {
   const context = use(ComposerStateContext);
 
   if (!context) {
-    throw new Error('useComposerState must be used within ComposerProvider');
+    throw new Error('useComposerState must be used within ComposerSessionProvider');
   }
 
   return context;
@@ -141,7 +141,7 @@ export function useComposerActions() {
   const context = use(ComposerActionsContext);
 
   if (!context) {
-    throw new Error('useComposerActions must be used within ComposerProvider');
+    throw new Error('useComposerActions must be used within ComposerSessionProvider');
   }
 
   return context;
@@ -151,7 +151,7 @@ export function useComposerMeta() {
   const context = use(ComposerMetaContext);
 
   if (!context) {
-    throw new Error('useComposerMeta must be used within ComposerProvider');
+    throw new Error('useComposerMeta must be used within ComposerSessionProvider');
   }
 
   return context;
