@@ -69,7 +69,7 @@ export function ChatScreen() {
   return (
     <>
       <MainHeader />
-      <View className="flex-1 bg-background-subtle">
+      <View className="flex-1 bg-background">
         {isTopicAvailable ? (
           <ChatWorkspace
             isAssistantToolbarEnabled={!isPreview}

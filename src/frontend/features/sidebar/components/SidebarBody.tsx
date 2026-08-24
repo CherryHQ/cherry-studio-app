@@ -24,7 +24,7 @@ import { SidebarTopicList } from './SidebarTopicList';
  */
 export function SidebarBody({ children }: PropsWithChildren) {
   const insets = useSafeAreaInsets();
-  const sidebarColor = useThemeColor('sidebar');
+  const backgroundColor = useThemeColor('background');
   const { bottomPadding: dockBottomPadding } = useDockMetrics();
   const headerInset = insets.top + appSidebar.headerRowHeight + appSidebar.headerGapY * 2;
 
@@ -32,7 +32,7 @@ export function SidebarBody({ children }: PropsWithChildren) {
     <View className="flex-1">
       <ScrollShadow
         className="flex-1"
-        color={sidebarColor}
+        color={backgroundColor}
         size={appSidebar.scrollShadowSize}
         visibility="top"
       >

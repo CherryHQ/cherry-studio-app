@@ -8,10 +8,7 @@ type ChatInitialRenderCoverProps = {
 };
 
 export function ChatInitialRenderCover({ isVisible }: ChatInitialRenderCoverProps) {
-  const [backgroundColor, indicatorColor] = useThemeColor([
-    'background-subtle',
-    'muted-foreground',
-  ]);
+  const [backgroundColor, indicatorColor] = useThemeColor(['background', 'muted-foreground']);
 
   if (!isVisible) {
     return null;
