@@ -9,6 +9,8 @@ This module owns reusable model selection state, model picker UI, and model sett
 - `ModelPickerScreen` renders the pushed model picker screen — search, model type tabs and the
   grouped list — for every caller that picks a model on a screen of its own.
 - `ModelPickerList` renders the selectable model list, for the sheet and for the pushed screen alike.
+  A long visible model list adds a right-side fast scroller with one distinct marker per provider.
+  Provider markers jump to their group headers without changing provider/order-key order.
 - `ModelPickerIcon` and `ModelPickerTagChip` render model metadata used by picker consumers.
 - `ModelSearchControls`, `ModelSearchField` and `ModelTypeFilterBar` render the search and model
   type chrome shared by the picker screen and the provider model screens.
