@@ -1,4 +1,5 @@
-import { SearchIcon, WrenchIcon } from '@cherrystudio/app-icons';
+import SearchIcon from '@cherrystudio/app-icons/icons/search';
+import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
 import { MessagePart } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { Text } from 'react-native';

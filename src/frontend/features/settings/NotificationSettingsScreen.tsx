@@ -1,4 +1,4 @@
-import { RadioIcon } from '@cherrystudio/app-icons';
+import RadioIcon from '@cherrystudio/app-icons/icons/radio';
 import { Section, Switch, useAlert } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { ScrollView } from 'react-native';

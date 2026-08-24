@@ -1,4 +1,4 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import { Switch } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Pressable, Text, View } from 'react-native';

@@ -1,72 +1,76 @@
-import { Text, View } from 'react-native';
+import type { LucideIcon as LucideNativeIcon, LucideProps } from 'lucide-react-native';
+import { createElement, forwardRef } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
+import { useResolveClassNames } from 'uniwind';
 
-import { createIcon } from '../createIcon';
-import { IconGlyph as AndroidIconGlyph } from '../icon-glyph/icon-glyph.android';
+import { createIcon } from '../create-icon';
 
-// The global stub renders nothing; here the SymbolView props are the behavior under test.
-jest.mock('expo-symbols', () => {
-  const react = jest.requireActual('react');
-  const { View: MockView } = jest.requireActual('react-native');
-  return {
-    SymbolView: (props: object) =>
-      react.createElement(MockView, { ...props, testID: 'symbol-view' }),
-  };
-});
+jest.mock('uniwind', () => ({
+  useResolveClassNames: jest.fn(),
+}));
 
-const iconConfig = { displayName: 'CheckIcon', sf: 'checkmark', glyph: '' } as const;
-const CheckIcon = createIcon(iconConfig);
+const MockBaseIcon = forwardRef(function MockBaseIcon(props: LucideProps, _ref) {
+  return createElement('lucide-icon', props);
+}) as LucideNativeIcon;
+const TestIcon = createIcon(MockBaseIcon, 'TestIcon');
+const mockUseResolveClassNames = jest.mocked(useResolveClassNames);
 
 describe('createIcon', () => {
   let renderer: ReactTestRenderer | undefined;
 
-  async function render(element: React.ReactElement) {
-    await act(async () => {
+  beforeEach(() => {
+    mockUseResolveClassNames.mockReturnValue({});
+  });
+
+  afterEach(() => {
+    act(() => renderer?.unmount());
+    renderer = undefined;
+    jest.clearAllMocks();
+  });
+
+  function render(element: React.ReactElement) {
+    act(() => {
       renderer = create(element);
     });
+    return renderer!.root.findByType('lucide-icon').props;
   }
 
-  afterEach(async () => {
-    await act(async () => renderer?.unmount());
-    renderer = undefined;
+  test('uses the shared defaults and hides decorative icons from accessibility', () => {
+    const props = render(<TestIcon />);
+
+    expect(props).toMatchObject({ accessible: false, height: 24, width: 24 });
+    expect(TestIcon.displayName).toBe('TestIcon');
   });
 
-  test('resolves explicit dimensions and color for the iOS glyph', async () => {
-    await render(<CheckIcon color="#ff0000" height={24} width={32} />);
+  test('resolves dimensions and color from className', () => {
+    mockUseResolveClassNames.mockReturnValue({ color: '#336699', height: 18, width: 20 });
+    const style = { opacity: 0.5 };
 
-    expect(renderer?.root.findByProps({ testID: 'symbol-view' }).props).toMatchObject({
-      size: 24,
-      style: { height: 24, width: 32 },
-      tintColor: '#ff0000',
-    });
+    const props = render(<TestIcon className="size-5 text-primary" style={style} />);
+
+    expect(mockUseResolveClassNames).toHaveBeenCalledWith('size-5 text-primary');
+    expect(props).toMatchObject({ color: '#336699', height: 18, style, width: 20 });
   });
 
-  test('falls back to the shared 24pt size', async () => {
-    await render(<CheckIcon />);
+  test('uses size for both dimensions when width and height are omitted', () => {
+    const props = render(<TestIcon size={30} />);
 
-    expect(renderer?.root.findByProps({ testID: 'symbol-view' }).props.size).toBe(24);
+    expect(props).toMatchObject({ height: 30, width: 30 });
   });
 
-  test('hides the native iOS symbol subtree', async () => {
-    await render(<CheckIcon />);
+  test('gives explicit props precedence over className values', () => {
+    mockUseResolveClassNames.mockReturnValue({ color: '#336699', height: 18, width: 20 });
 
-    expect(renderer?.root.findByType(View).props.accessibilityElementsHidden).toBe(true);
-  });
+    const props = render(
+      <TestIcon accessible color="#ff0000" height={28} size={26} strokeWidth={1.5} width={32} />,
+    );
 
-  test('renders the bundled Material glyph on Android', async () => {
-    await render(<AndroidIconGlyph color="#00ff00" config={iconConfig} height={28} width={28} />);
-
-    if (!renderer) {
-      throw new Error('Renderer was not created');
-    }
-    const text = renderer.root.findByType(Text);
-    expect(text.props.children).toBe('');
-    expect(text.props.allowFontScaling).toBe(false);
-    expect(text.props.style[0]).toMatchObject({
-      color: '#00ff00',
-      fontFamily: 'MaterialSymbols',
-      fontSize: 28,
-      lineHeight: 28,
+    expect(props).toMatchObject({
+      accessible: true,
+      color: '#ff0000',
+      height: 28,
+      strokeWidth: 1.5,
+      width: 32,
     });
   });
 });

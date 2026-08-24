@@ -1,4 +1,5 @@
-import { FolderOpenIcon, Trash2Icon } from '@cherrystudio/app-icons';
+import FolderOpenIcon from '@cherrystudio/app-icons/icons/folder-open';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { Section } from '@cherrystudio/ui/components';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ActivityAction, startActivityAsync } from 'expo-intent-launcher';

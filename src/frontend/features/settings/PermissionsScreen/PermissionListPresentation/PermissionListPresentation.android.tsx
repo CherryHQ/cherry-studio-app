@@ -1,9 +1,7 @@
-import {
-  CalendarIcon,
-  HeartPulseIcon,
-  MapPinIcon,
-  type AppIconProps,
-} from '@cherrystudio/app-icons';
+import type { LucideIconProps } from '@cherrystudio/app-icons';
+import CalendarIcon from '@cherrystudio/app-icons/icons/calendar';
+import HeartPulseIcon from '@cherrystudio/app-icons/icons/heart-pulse';
+import MapPinIcon from '@cherrystudio/app-icons/icons/map-pin';
 import type { ComponentType } from 'react';
 
 import type { PermissionKind } from '../permissionConfig';
@@ -14,7 +12,7 @@ export const visiblePermissionKinds = [
   'health',
 ] as const satisfies readonly PermissionKind[];
 
-const permissionIcons: Record<PermissionKind, ComponentType<AppIconProps> | undefined> = {
+const permissionIcons: Record<PermissionKind, ComponentType<LucideIconProps> | undefined> = {
   calendar: CalendarIcon,
   health: HeartPulseIcon,
   location: MapPinIcon,

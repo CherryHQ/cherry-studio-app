@@ -25,6 +25,7 @@
       "@cherrystudio/ui": ["./packages/ui/src/index.ts"],
       "@cherrystudio/ui/*": ["./packages/ui/src/*"],
       "@cherrystudio/app-icons": ["./packages/app-icons/src/index.ts"],
+      "@cherrystudio/app-icons/*": ["./packages/app-icons/src/*"],
       "@src/*": ["./src/*"],
       "@/*": ["./src/*"],
       "@/assets/*": ["./assets/*"],

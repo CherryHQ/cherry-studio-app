@@ -1,4 +1,5 @@
-import { CheckIcon, ChevronRightIcon } from '@cherrystudio/app-icons';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   Children,
   cloneElement,

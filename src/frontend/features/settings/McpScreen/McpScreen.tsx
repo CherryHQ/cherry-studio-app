@@ -1,4 +1,4 @@
-import { PlusIcon } from '@cherrystudio/app-icons';
+import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { Button } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';

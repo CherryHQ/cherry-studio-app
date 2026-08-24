@@ -1,4 +1,6 @@
-import { ALargeSmallIcon, ChevronRightIcon, GlobeIcon } from '@cherrystudio/app-icons';
+import ALargeSmallIcon from '@cherrystudio/app-icons/icons/a-large-small';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import { Section } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';

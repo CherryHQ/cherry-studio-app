@@ -1,4 +1,5 @@
-import { CameraIcon, PencilIcon } from '@cherrystudio/app-icons';
+import CameraIcon from '@cherrystudio/app-icons/icons/camera';
+import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
 import { Avatar } from '@cherrystudio/ui/components';
 import type { ReactNode } from 'react';
 

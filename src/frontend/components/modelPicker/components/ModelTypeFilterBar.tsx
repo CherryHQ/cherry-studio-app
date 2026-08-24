@@ -1,13 +1,11 @@
-import {
-  ArrowUpDownIcon,
-  AudioLinesIcon,
-  BoxesIcon,
-  ImageIcon,
-  MicIcon,
-  SpeechIcon,
-  TypeIcon,
-  VideoIcon,
-} from '@cherrystudio/app-icons';
+import ArrowUpDownIcon from '@cherrystudio/app-icons/icons/arrow-up-down';
+import AudioLinesIcon from '@cherrystudio/app-icons/icons/audio-lines';
+import BoxesIcon from '@cherrystudio/app-icons/icons/boxes';
+import ImageIcon from '@cherrystudio/app-icons/icons/image';
+import MicIcon from '@cherrystudio/app-icons/icons/mic';
+import SpeechIcon from '@cherrystudio/app-icons/icons/speech';
+import TypeIcon from '@cherrystudio/app-icons/icons/type';
+import VideoIcon from '@cherrystudio/app-icons/icons/video';
 import { Tabs } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import { useTranslation } from 'react-i18next';

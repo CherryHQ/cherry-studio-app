@@ -1,4 +1,4 @@
-import { CircleAlertIcon } from '@cherrystudio/app-icons';
+import CircleAlertIcon from '@cherrystudio/app-icons/icons/circle-alert';
 import { Text, View } from 'react-native';
 
 import type { MessagePartErrorProps } from '../message-part.types';

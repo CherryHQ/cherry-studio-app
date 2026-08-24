@@ -1,12 +1,10 @@
-import {
-  CameraIcon,
-  FileIcon,
-  GlobeIcon,
-  ImagesIcon,
-  SlidersHorizontalIcon,
-  SparklesIcon,
-  XIcon,
-} from '@cherrystudio/app-icons';
+import CameraIcon from '@cherrystudio/app-icons/icons/camera';
+import FileIcon from '@cherrystudio/app-icons/icons/file';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
+import ImagesIcon from '@cherrystudio/app-icons/icons/images';
+import SlidersHorizontalIcon from '@cherrystudio/app-icons/icons/sliders-horizontal';
+import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import {
   Composer,
   type ComposerInputHandle,

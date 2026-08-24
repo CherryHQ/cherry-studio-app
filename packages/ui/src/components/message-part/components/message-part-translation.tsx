@@ -1,4 +1,4 @@
-import { LanguagesIcon } from '@cherrystudio/app-icons';
+import LanguagesIcon from '@cherrystudio/app-icons/icons/languages';
 import { View } from 'react-native';
 
 import type { MessagePartTranslationProps } from '../message-part.types';

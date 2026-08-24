@@ -1,4 +1,4 @@
-import { TriangleAlertIcon } from '@cherrystudio/app-icons';
+import TriangleAlertIcon from '@cherrystudio/app-icons/icons/triangle-alert';
 import { Text, View } from 'react-native';
 
 import type { MessagePartUnknownProps } from '../message-part.types';

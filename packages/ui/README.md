@@ -9,7 +9,7 @@ Runtime imports use the component-only entry point so Metro does not traverse th
 
 ```tsx
 import { Button } from '@cherrystudio/ui/components';
-import { PlusIcon } from '@cherrystudio/app-icons';
+import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 
 <Button icon={<PlusIcon />} loading={isSaving} onPress={save} size="lg" variant="default">
   Save
@@ -244,8 +244,8 @@ array; the package owns Nitro wiring, native action dispatch, and platform gestu
 import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 
 const items = [
-  { id: 'rename', label: 'Rename', onPress: rename, systemImage: 'pencil' },
-  { destructive: true, id: 'delete', label: 'Delete', onPress: remove, systemImage: 'trash' },
+  { id: 'rename', label: 'Rename', onPress: rename },
+  { destructive: true, id: 'delete', label: 'Delete', onPress: remove },
 ] satisfies readonly MenuItem[];
 
 <Menu items={items} trigger="longPress">
@@ -255,9 +255,9 @@ const items = [
 
 Item IDs must be unique within a menu. `checked` is controlled; omitting it creates a regular
 action, while `false` and `true` create off and on check states. An empty array returns the child
-unchanged. iOS renders SF Symbols and destructive actions through `UIMenu` /
-`UIContextMenuInteraction`; Android v1 renders text actions through `PopupMenu` and keeps the system
-style for destructive items. `tap` is for button-like dropdowns, and `longPress` is for contextual
+unchanged. Both platforms render text actions; iOS uses `UIMenu` / `UIContextMenuInteraction`, while
+Android uses `PopupMenu`. Each keeps the system style for destructive items. `tap` is for
+button-like dropdowns, and `longPress` is for contextual
 actions without taking over the child's normal tap. Expo Router page previews remain owned by
 `Link.Preview` / `Link.Menu`, not this component.
 

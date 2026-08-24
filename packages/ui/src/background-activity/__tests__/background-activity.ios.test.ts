@@ -42,5 +42,6 @@ describe('background activity iOS layout', () => {
     expect(layout).not.toContain('truncationMode("head")');
     expect(layout).not.toContain('pauseTime');
     expect(layout).not.toContain('dateStyle:"timer"');
+    expect(layout).not.toContain('systemName');
   });
 });

@@ -1,4 +1,5 @@
-import { EyeIcon, EyeOffIcon } from '@cherrystudio/app-icons';
+import EyeIcon from '@cherrystudio/app-icons/icons/eye';
+import EyeOffIcon from '@cherrystudio/app-icons/icons/eye-off';
 import { useIsOnSurface } from 'heroui-native/hooks';
 import { Input as HeroInput } from 'heroui-native/input';
 import { useCallback, useRef, useState } from 'react';

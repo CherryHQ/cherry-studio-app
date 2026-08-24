@@ -1,4 +1,5 @@
-import { ListChecksIcon, RefreshCcwIcon } from '@cherrystudio/app-icons';
+import ListChecksIcon from '@cherrystudio/app-icons/icons/list-checks';
+import RefreshCcwIcon from '@cherrystudio/app-icons/icons/refresh-ccw';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

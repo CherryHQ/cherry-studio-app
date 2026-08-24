@@ -8,7 +8,6 @@ export interface NativeMenuItem {
   disabled: boolean;
   id: string;
   label: string;
-  systemImage?: string;
 }
 
 export type NativeMenuTrigger = 'tap' | 'longPress';

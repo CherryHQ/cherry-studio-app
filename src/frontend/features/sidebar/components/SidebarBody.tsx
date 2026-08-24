@@ -1,4 +1,6 @@
-import { FilterIcon, ImagesIcon, PersonaIcon } from '@cherrystudio/app-icons';
+import FilterIcon from '@cherrystudio/app-icons/icons/filter';
+import ImagesIcon from '@cherrystudio/app-icons/icons/images';
+import UsersRoundIcon from '@cherrystudio/app-icons/icons/users-round';
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -61,7 +63,7 @@ function SidebarBodyDefault() {
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
         <SidebarNavRow
-          icon={PersonaIcon}
+          icon={UsersRoundIcon}
           label={t('navigation.assistants')}
           onPress={navigateAssistants}
         />

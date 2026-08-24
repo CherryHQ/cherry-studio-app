@@ -1,4 +1,4 @@
-import { EllipsisIcon } from '@cherrystudio/app-icons';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { type MenuItem } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
@@ -38,14 +38,12 @@ function PaintingHistoryScreenBody() {
         id: 'create-painting',
         label: t('painting.history.createNew'),
         onPress: openNewPainting,
-        systemImage: 'plus',
       },
       {
         disabled: isDeletionPending,
         id: 'select-paintings',
         label: t('painting.selection.start'),
         onPress: enterEditing,
-        systemImage: 'checklist',
       },
     ],
     [enterEditing, isDeletionPending, openNewPainting, t],

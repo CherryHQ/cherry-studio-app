@@ -1,4 +1,4 @@
-import { RefreshCwIcon } from '@cherrystudio/app-icons';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 

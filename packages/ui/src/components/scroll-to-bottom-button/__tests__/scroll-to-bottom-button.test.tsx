@@ -17,12 +17,9 @@ jest.mock('../../surface', () => {
   };
 });
 
-jest.mock('@cherrystudio/app-icons', () => {
+jest.mock('@cherrystudio/app-icons/icons/arrow-down', () => {
   const React = jest.requireActual('react');
-
-  return {
-    ArrowDownIcon: (props: object) => React.createElement('ArrowDownIcon', props),
-  };
+  return (props: object) => React.createElement('ArrowDownIcon', props);
 });
 
 jest.mock('uniwind', () => ({

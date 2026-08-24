@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from '@cherrystudio/app-icons';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { cn } from '@cherrystudio/ui/utils';
 import type { ImageSource } from 'expo-image';

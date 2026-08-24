@@ -1,4 +1,4 @@
-import { Settings2Icon } from '@cherrystudio/app-icons';
+import Settings2Icon from '@cherrystudio/app-icons/icons/settings-2';
 import { type ImageGenerationMode, MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Composer } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';

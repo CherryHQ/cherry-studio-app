@@ -1,4 +1,6 @@
-import { GlobeIcon, PaintbrushIcon, type AppIconProps } from '@cherrystudio/app-icons';
+import type { LucideIconProps } from '@cherrystudio/app-icons';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
+import PaintbrushIcon from '@cherrystudio/app-icons/icons/paintbrush';
 import type { ComponentType } from 'react';
 
 import { type ToolMentionId, toolMentions } from '@/frontend/utils/toolMentions';
@@ -18,7 +20,7 @@ export const chatInputWebSearchAction = {
 // list highlights mentions without drawing any of them.
 const mentionIcons = {
   'create-image': PaintbrushIcon,
-} satisfies Record<ToolMentionId, ComponentType<AppIconProps>>;
+} satisfies Record<ToolMentionId, ComponentType<LucideIconProps>>;
 
 /**
  * Tools invoked for a single message by naming them in the draft. Picking one

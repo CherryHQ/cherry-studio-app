@@ -33,7 +33,6 @@ namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuCheckedState; 
 
 #include "NativeMenuCheckedState.hpp"
 #include <string>
-#include <optional>
 
 namespace margelo::nitro::cherrystudio::ui {
 
@@ -47,11 +46,10 @@ namespace margelo::nitro::cherrystudio::ui {
     bool disabled     SWIFT_PRIVATE;
     std::string id     SWIFT_PRIVATE;
     std::string label     SWIFT_PRIVATE;
-    std::optional<std::string> systemImage     SWIFT_PRIVATE;
 
   public:
     NativeMenuItem() = default;
-    explicit NativeMenuItem(NativeMenuCheckedState checked, bool destructive, bool disabled, std::string id, std::string label, std::optional<std::string> systemImage): checked(checked), destructive(destructive), disabled(disabled), id(id), label(label), systemImage(systemImage) {}
+    explicit NativeMenuItem(NativeMenuCheckedState checked, bool destructive, bool disabled, std::string id, std::string label): checked(checked), destructive(destructive), disabled(disabled), id(id), label(label) {}
 
   public:
     friend bool operator==(const NativeMenuItem& lhs, const NativeMenuItem& rhs) = default;
@@ -71,8 +69,7 @@ namespace margelo::nitro {
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "destructive"))),
         JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "disabled"))),
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "id"))),
-        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "label"))),
-        JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "systemImage")))
+        JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "label")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::cherrystudio::ui::NativeMenuItem& arg) {
@@ -82,7 +79,6 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "disabled"), JSIConverter<bool>::toJSI(runtime, arg.disabled));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "id"), JSIConverter<std::string>::toJSI(runtime, arg.id));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "label"), JSIConverter<std::string>::toJSI(runtime, arg.label));
-      obj.setProperty(runtime, PropNameIDCache::get(runtime, "systemImage"), JSIConverter<std::optional<std::string>>::toJSI(runtime, arg.systemImage));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -98,7 +94,6 @@ namespace margelo::nitro {
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "disabled")))) return false;
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "id")))) return false;
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "label")))) return false;
-      if (!JSIConverter<std::optional<std::string>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "systemImage")))) return false;
       return true;
     }
   };

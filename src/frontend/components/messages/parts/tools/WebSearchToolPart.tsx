@@ -1,4 +1,4 @@
-import { SearchIcon } from '@cherrystudio/app-icons';
+import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { MessagePart } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { Text } from 'react-native';

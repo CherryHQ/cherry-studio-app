@@ -1,4 +1,4 @@
-import { PlusIcon } from '@cherrystudio/app-icons';
+import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 import { Section } from '@cherrystudio/ui/components';
 import { SectionList } from '@legendapp/list/section-list';
 import { useFocusEffect, useRouter } from 'expo-router';
