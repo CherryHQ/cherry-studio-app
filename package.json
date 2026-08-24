@@ -78,6 +78,8 @@
     "@expo/ui": "~57.0.6",
     "@legendapp/list": "3.3.3",
     "@magrinj/expo-quick-look": "^0.3.1",
+    "@mariozechner/pi-agent-core": "0.73.1",
+    "@mariozechner/pi-ai": "0.73.1",
     "@openrouter/ai-sdk-provider": "^2.10.0",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@shopify/flash-list": "2.3.2",

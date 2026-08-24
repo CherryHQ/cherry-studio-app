@@ -49,6 +49,8 @@ allowBuilds:
   # 1.0.0 起把 tree-sitter 语法和 RaTeX XCFramework 挪到 postinstall 下载，
   # 不放行就装不出代码高亮和数学公式所需的原生产物。
   react-native-enriched-markdown: true
+  '@google/genai': false
+  protobufjs: false
 
 patchedDependencies:
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
@@ -72,6 +74,7 @@ patchedDependencies:
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
   react-native-bottom-tabs@1.4.0: patches/react-native-bottom-tabs@1.4.0.patch
   expo-router@57.0.6: patches/expo-router@57.0.6.patch
+  '@mariozechner/pi-ai@0.73.1': patches/@mariozechner__pi-ai@0.73.1.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'
