@@ -1,6 +1,6 @@
 # Agent Persistence
 
-Status: **design**. Version 1 is local-only.
+Status: **implemented** (rollout steps 1–4; step 5 follow-ups remain). Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout

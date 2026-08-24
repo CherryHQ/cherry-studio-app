@@ -86,12 +86,13 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 ## Current Implementation
 
 The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Agent Host, and V1
-Router are implemented as an architecture slice. The Host consumes the stable `AgentSessionStore`
-port; lifecycle composition currently selects a process-local in-memory reference adapter. That
-adapter validates Host orchestration and remains useful in tests, but it deliberately provides no
-restart durability. The durable schema and rollout plan are designed in
-[Agent Persistence](./agent-persistence.md), following the authority direction of
-[#568](https://github.com/CherryHQ/cherry-studio-app/issues/568); implementation has not started.
+Router are implemented as an architecture slice. The Host consumes the message-centric
+`AgentSessionStore` port and owns the Turn projection; lifecycle composition selects the durable
+`SqliteAgentSessionStore` over the `agent`/`agent_session`/`agent_session_message` tables, with
+agent rows seeded once from existing assistants. The process-local in-memory adapter remains the
+architecture-test seam. See [Agent Persistence](./agent-persistence.md) for the schema, delete
+semantics, and remaining follow-ups, per the authority direction of
+[#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
 No frontend currently consumes `Backend.agent`. This slice does not replace the current Topic,
 Chat Runtime, or desktop-aligned `agent_*` surfaces. Pi, attachments, durable persistence, and UI

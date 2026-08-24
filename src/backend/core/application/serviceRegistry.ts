@@ -1,5 +1,5 @@
-import { InMemoryAgentSessionStore } from '@/backend/ai/agentHost/InMemoryAgentSessionStore';
 import { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
+import { SqliteAgentSessionStore } from '@/backend/ai/agentHost/SqliteAgentSessionStore';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
@@ -45,8 +45,9 @@ export const services = {
   McpRuntimeService,
   AiService,
   ChatRuntime,
-  // Architecture-slice adapter; durable Mobile Agent persistence is tracked by #568.
-  AgentSessionStore: InMemoryAgentSessionStore,
+  // Durable adapter per docs/references/agent/agent-persistence.md; the
+  // in-memory reference adapter remains the architecture-test seam.
+  AgentSessionStore: SqliteAgentSessionStore,
   MobileAgentHost,
   JobHandlerRegistry,
   JobRuntime,
