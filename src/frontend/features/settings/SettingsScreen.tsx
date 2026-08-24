@@ -2,7 +2,6 @@ import BellIcon from '@cherrystudio/app-icons/icons/bell';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
 import ContactRoundIcon from '@cherrystudio/app-icons/icons/contact-round';
 import ContrastIcon from '@cherrystudio/app-icons/icons/contrast';
-import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
 import NetworkIcon from '@cherrystudio/app-icons/icons/network';
@@ -94,11 +93,6 @@ export default function SettingsScreen() {
                 onPress={() => router.push('/settings/notifications')}
               />
             ) : null}
-            <Section.Item
-              label={t('settings.items.dataBackup')}
-              leading={<DatabaseIcon className="size-5 text-foreground" />}
-              onPress={() => router.push('/settings/data')}
-            />
             <Section.Item
               label={t('settings.items.permissions')}
               leading={<LockIcon className="size-5 text-foreground" />}

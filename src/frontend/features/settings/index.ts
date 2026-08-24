@@ -1,6 +1,5 @@
 export { default as AboutScreen } from './AboutScreen';
 export { default as AppearanceSettingsScreen } from './AppearanceSettingsScreen';
-export { default as DataScreen } from './DataScreen';
 export { default as FontSizeSettingsScreen } from './FontSizeSettingsScreen';
 export { default as LanguageSettingsScreen } from './LanguageSettingsScreen';
 export { default as ModelSettingSelectScreen } from './ModelSettingSelectScreen';
