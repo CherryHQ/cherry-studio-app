@@ -28,12 +28,12 @@ export function MainHeader() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.View hidesSharedBackground>
+        <Stack.Toolbar.View>
           <HeaderAction action={leadingAction} />
         </Stack.Toolbar.View>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.View hidesSharedBackground>
+        <Stack.Toolbar.View>
           <HeaderAction
             action={{
               accessibilityLabel: t('navigation.newChat'),
@@ -45,7 +45,7 @@ export function MainHeader() {
           />
         </Stack.Toolbar.View>
         {assistant ? (
-          <Stack.Toolbar.View hidesSharedBackground>
+          <Stack.Toolbar.View>
             <MainHeaderAssistantButton assistant={assistant} onPress={openAssistant} />
           </Stack.Toolbar.View>
         ) : null}

@@ -28,7 +28,7 @@ export function HeaderAction({ action }: HeaderActionProps) {
             className={cn(HEADER_ICON_ACTION_CLASS_NAME, action.disabled && 'opacity-50')}
             pointerEvents={action.disabled ? 'none' : 'auto'}
           >
-            <Icon className="size-6 text-constant-black" />
+            <Icon className="size-6 text-foreground" />
           </View>
         </Menu>
       );
@@ -48,7 +48,7 @@ export function HeaderAction({ action }: HeaderActionProps) {
           disabled={action.disabled}
           onPress={action.onPress}
         >
-          <Text className="font-semibold text-base text-constant-black">{action.label}</Text>
+          <Text className="font-semibold text-base text-foreground">{action.label}</Text>
         </Pressable>
       );
 
@@ -61,7 +61,7 @@ export function HeaderAction({ action }: HeaderActionProps) {
           disabled={action.disabled}
           onPress={action.onPress}
         >
-          <Icon className="size-6 text-constant-black" />
+          <Icon className="size-6 text-foreground" />
         </HeaderIconButton>
       );
     }

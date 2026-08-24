@@ -129,8 +129,7 @@ toast.show({ label: 'Saved', variant: 'success' });
 ```
 
 The gateway preserves the current four-second default duration and exposes `default`, `success`,
-`warning`, and `danger` variants. `DynamicToast` remains a separate animated visual component; it is
-not the global notification gateway.
+`warning`, and `danger` variants.
 
 `Avatar` composes an image or fallback inside a clipped face while keeping badges outside that
 clipping boundary. It accepts numeric sizes so product avatars can follow their surrounding layout,

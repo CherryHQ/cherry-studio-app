@@ -2,13 +2,11 @@ import { usePathname, useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
 import { type ReactNode, useEffect, useMemo, useRef } from 'react';
 import { View } from 'react-native';
-import Animated from 'react-native-reanimated';
 
 import { SidebarBody } from './components/SidebarBody';
 import { SidebarFooter } from './components/SidebarFooter';
 import { SidebarHeader } from './components/SidebarHeader';
 import { type SidebarActions, SidebarActionsContext } from './context';
-import { useSidebarPlaneStyle } from './sidebarMotion';
 
 type SidebarProps = {
   children?: ReactNode;
@@ -28,7 +26,6 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
   // Actions read the pathname through a ref so their identity — and with it
   // every slot consuming the actions context — survives route changes.
   const pathnameRef = useRef(pathname);
-  const planeStyle = useSidebarPlaneStyle();
 
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -72,18 +69,13 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
   return (
     <SidebarActionsContext value={actions}>
       <View className="flex-1 bg-sidebar">
-        {/* One transform plane for every slot: the reveal scales the sidebar
-            as a single sheet around a single center. Fading is per-slot (the
-            footer deliberately opts out). */}
-        <Animated.View className="flex-1" style={planeStyle}>
-          {children ?? (
-            <>
-              <SidebarBody />
-              <SidebarHeader />
-              <SidebarFooter />
-            </>
-          )}
-        </Animated.View>
+        {children ?? (
+          <>
+            <SidebarBody />
+            <SidebarHeader />
+            <SidebarFooter />
+          </>
+        )}
       </View>
     </SidebarActionsContext>
   );

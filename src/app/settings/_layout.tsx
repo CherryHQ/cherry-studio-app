@@ -25,22 +25,7 @@ export default function SettingsStackLayout() {
         headerTintColor: foregroundColor,
       }}
     >
-      {/* The root keeps the native header so its back button uses the same
-          top-action surface as every sub-screen's back button, and so pushing a sub-screen
-          doesn't have to materialize a header that wasn't there — which is what
-          made the bar jump on entry. It is transparent and untitled because the
-          screen draws its own hero under it and its own title into the sticky
-          bar. Declared here at the layout level, not via a runtime
-          <Stack.Screen> inside the screen, so the header is correct on the
-          first frame. */}
-      <Stack.Screen
-        name="index"
-        options={{
-          headerStyle: { backgroundColor: 'transparent' },
-          headerTransparent: true,
-          title: '',
-        }}
-      />
+      <Stack.Screen name="index" options={{ title: '' }} />
     </Stack>
   );
 }

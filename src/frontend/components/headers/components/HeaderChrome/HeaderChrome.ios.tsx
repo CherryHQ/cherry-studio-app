@@ -35,7 +35,7 @@ export function HeaderChrome({
           so Stack.Toolbar.View must remain the direct child here. */}
       <Stack.Toolbar placement="left">
         {leftActions.map((action) => (
-          <Stack.Toolbar.View hidden={action.hidden} hidesSharedBackground key={action.key}>
+          <Stack.Toolbar.View hidden={action.hidden} key={action.key}>
             <HeaderAction action={action} />
           </Stack.Toolbar.View>
         ))}
@@ -43,7 +43,7 @@ export function HeaderChrome({
       {rightActions && rightActions.length > 0 ? (
         <Stack.Toolbar placement="right">
           {rightActions.map((action) => (
-            <Stack.Toolbar.View hidden={action.hidden} hidesSharedBackground key={action.key}>
+            <Stack.Toolbar.View hidden={action.hidden} key={action.key}>
               <HeaderAction action={action} />
             </Stack.Toolbar.View>
           ))}
