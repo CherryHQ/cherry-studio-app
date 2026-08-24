@@ -35,7 +35,6 @@ export function ReasoningPart({ isStreaming, part }: ReasoningPartProps) {
 
   return (
     <MessagePart.Reasoning
-      closeAccessibilityLabel={t('common.close')}
       detailTitle={t('chat.reasoningStatus.title')}
       state={isThinking ? 'running' : 'complete'}
       statusText={statusText}

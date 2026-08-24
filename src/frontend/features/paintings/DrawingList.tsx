@@ -3,6 +3,7 @@ import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import {
   Button,
+  ContentState,
   Image,
   ImageGenerationLoader,
   Section,
@@ -199,26 +200,20 @@ export function DrawingList() {
   const listEmpty = useMemo(
     () =>
       paintings.isLoading || gallery.isLoading ? (
-        <View className="h-32 items-center justify-center">
-          <ActivityIndicator />
-        </View>
+        <ContentState.Loading className="h-32" />
       ) : (
-        <View
-          className="min-h-48 flex-1 items-center justify-center gap-4 px-6 pb-24"
+        <ContentState.Empty
+          className="min-h-48 flex-1 px-6 pb-24"
+          primaryAction={{
+            accessibilityLabel: t('painting.history.createNew'),
+            children: t('painting.history.createNew'),
+            onPress: handleCreatePainting,
+            size: 'default',
+            testID: 'painting-history-create',
+          }}
           testID="painting-history-empty"
-        >
-          <Text className="text-center text-base text-foreground">
-            {t('painting.history.empty')}
-          </Text>
-          <Button
-            accessibilityLabel={t('painting.history.createNew')}
-            onPress={handleCreatePainting}
-            testID="painting-history-create"
-            variant="default"
-          >
-            <Button.Label>{t('painting.history.createNew')}</Button.Label>
-          </Button>
-        </View>
+          title={t('painting.history.empty')}
+        />
       ),
     [gallery.isLoading, handleCreatePainting, paintings.isLoading, t],
   );

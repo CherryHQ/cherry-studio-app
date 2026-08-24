@@ -82,6 +82,7 @@ describe('RouteHeader.android', () => {
 
     expect(getOptions().headerRight).toEqual(expect.any(Function));
     expect(getOptions().headerTitle).toEqual(expect.any(Function));
+    expect(getOptions().headerTitleAlign).toBe('center');
     expect(getOptions().title).toBe('');
 
     await renderRouteHeader(
@@ -93,6 +94,7 @@ describe('RouteHeader.android', () => {
 
     expect(getOptions().headerRight).toEqual(expect.any(Function));
     expect(getOptions().headerTitle).toBeUndefined();
+    expect(getOptions().headerTitleAlign).toBe('center');
     expect(getOptions().title).toBe('Config');
 
     await renderRouteHeader(<RouteHeader title="Config" />);

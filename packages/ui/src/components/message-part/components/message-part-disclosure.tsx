@@ -1,8 +1,7 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
-import type { Detent } from '@swmansion/react-native-bottom-sheet';
-import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { Text, useWindowDimensions, View } from 'react-native';
+import { type ReactNode, useEffect, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -11,7 +10,6 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '../../bottom-sheet';
 import { Image } from '../../image';
@@ -23,8 +21,6 @@ import type {
 } from '../message-part.types';
 import { MessagePartStatus } from './message-part-status';
 
-const sheetMediumFraction = 0.6;
-const sheetFullFraction = 0.94;
 const runningTriggerOpacity = 0.55;
 const runningTriggerPulseDurationMs = 700;
 
@@ -36,7 +32,6 @@ const toneClassName = {
 
 export function MessagePartReasoning({
   children,
-  closeAccessibilityLabel,
   detailTitle,
   state,
   statusText,
@@ -59,7 +54,6 @@ export function MessagePartReasoning({
       </MessagePartStatus>
       {isOpen ? (
         <MessagePartSheet
-          closeAccessibilityLabel={closeAccessibilityLabel}
           contentClassName="px-4 pb-4"
           onClose={() => setIsOpen(false)}
           testID={`${testID}-detail`}
@@ -74,7 +68,6 @@ export function MessagePartReasoning({
 
 export function MessagePartTool({
   children,
-  closeAccessibilityLabel,
   icon: Icon = WrenchIcon,
   imageSource,
   state,
@@ -125,7 +118,6 @@ export function MessagePartTool({
       )}
       {isOpen ? (
         <MessagePartSheet
-          closeAccessibilityLabel={closeAccessibilityLabel}
           contentClassName="gap-2.5 px-4 pb-4"
           onClose={() => setIsOpen(false)}
           testID={`${testID}-detail`}
@@ -170,48 +162,26 @@ function MessagePartRunningPulse({ children, testID }: { children: ReactNode; te
 
 function MessagePartSheet({
   children,
-  closeAccessibilityLabel,
   contentClassName,
   onClose,
   testID,
   title,
 }: {
   children: ReactNode;
-  closeAccessibilityLabel: string;
   contentClassName: string;
   onClose: () => void;
   testID: string;
   title: string;
 }) {
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
-  const availableHeight = windowHeight - insets.top - insets.bottom;
-  const detents = useMemo<Detent[]>(
-    () => [0, availableHeight * sheetMediumFraction, 'content'],
-    [availableHeight],
-  );
-
   return (
-    <BottomSheet defaultOpen>
-      <BottomSheet.Content
-        detents={detents}
-        height={availableHeight * sheetFullFraction}
-        onClose={onClose}
-        testID={testID}
+    <BottomSheet onClose={onClose} open size="large" testID={testID} title={title}>
+      <ScrollView
+        className="flex-1"
+        contentContainerClassName={contentClassName}
+        showsVerticalScrollIndicator={false}
       >
-        <BottomSheet.Header>
-          <BottomSheet.CloseButton accessibilityLabel={closeAccessibilityLabel} />
-          <BottomSheet.Title>{title}</BottomSheet.Title>
-          <BottomSheet.HeaderSpacer />
-        </BottomSheet.Header>
-        <BottomSheet.ScrollView
-          className="flex-1"
-          contentContainerClassName={contentClassName}
-          showsVerticalScrollIndicator={false}
-        >
-          {children}
-        </BottomSheet.ScrollView>
-      </BottomSheet.Content>
+        {children}
+      </ScrollView>
     </BottomSheet>
   );
 }

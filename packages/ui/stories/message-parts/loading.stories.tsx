@@ -34,7 +34,6 @@ export const Thinking: Story = {
       {() => (
         <MessagePart>
           <MessagePart.Reasoning
-            closeAccessibilityLabel="Close"
             detailTitle="Deep thinking"
             state="running"
             statusText="Thinking 1.2s"

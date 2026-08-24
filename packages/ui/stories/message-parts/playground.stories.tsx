@@ -118,7 +118,6 @@ export const AllStates: Story = {
           <StoryGroup title="Reasoning">
             <MessagePart>
               <MessagePart.Reasoning
-                closeAccessibilityLabel="Close"
                 detailTitle="Deep thinking"
                 state="running"
                 statusText="Thinking 1.2s"
@@ -132,7 +131,6 @@ export const AllStates: Story = {
                 />
               </MessagePart.Reasoning>
               <MessagePart.Reasoning
-                closeAccessibilityLabel="Close"
                 detailTitle="Deep thinking"
                 state="complete"
                 statusText="Thought for 4.8s"
@@ -178,7 +176,6 @@ export const AllStates: Story = {
           <StoryGroup title="Tools">
             <MessagePart>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 icon={SearchIcon}
                 state="running"
                 statusText="Searching"
@@ -188,7 +185,6 @@ export const AllStates: Story = {
                 <Text className="text-foreground text-base">Waiting for results...</Text>
               </MessagePart.Tool>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 icon={SearchIcon}
                 state="complete"
                 statusText="3 results"
@@ -209,7 +205,6 @@ export const AllStates: Story = {
                 />
               </MessagePart.Tool>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 icon={WrenchIcon}
                 state="running"
                 statusText="Running"
@@ -219,7 +214,6 @@ export const AllStates: Story = {
                 <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
               </MessagePart.Tool>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 icon={WrenchIcon}
                 state="complete"
                 statusText="Completed"
@@ -230,7 +224,6 @@ export const AllStates: Story = {
                 <MessagePart.TextSection title="Output" value="42" />
               </MessagePart.Tool>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 state="complete"
                 statusText="Completed"
                 testID="playground-mcp-tool"
@@ -246,7 +239,6 @@ export const AllStates: Story = {
                 />
               </MessagePart.Tool>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 state="complete"
                 statusText="2 tools"
                 testID="playground-meta-tool"
@@ -262,7 +254,6 @@ export const AllStates: Story = {
                 />
               </MessagePart.Tool>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 state="complete"
                 statusText="Run denied"
                 statusTone="warning"
@@ -272,7 +263,6 @@ export const AllStates: Story = {
                 <Text className="text-foreground text-base">The action was not approved.</Text>
               </MessagePart.Tool>
               <MessagePart.Tool
-                closeAccessibilityLabel="Close"
                 state="complete"
                 statusText="Call failed"
                 statusTone="danger"

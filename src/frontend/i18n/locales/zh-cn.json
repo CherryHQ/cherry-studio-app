@@ -334,6 +334,7 @@
   "settings.model.fast.title": "快速模型",
   "settings.model.title": "模型",
   "settings.model.translate.title": "翻译模型",
+  "modelPicker.searchPlaceholder": "搜索模型",
   "modelPicker.title": "选择模型",
   "models.all": "全部",
   "models.capability.audioRecognition": "音频",

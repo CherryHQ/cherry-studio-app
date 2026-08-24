@@ -1,6 +1,7 @@
+import { ContentState } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/components/headers';
 
@@ -51,9 +52,7 @@ export function PaintingScreen() {
     <View className="flex-1 bg-background">
       <RouteHeader />
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator />
-        </View>
+        <ContentState.Loading className="flex-1" />
       ) : (
         <PaintingComposer
           initialAttachments={initialAttachments}

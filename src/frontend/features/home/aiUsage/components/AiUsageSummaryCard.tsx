@@ -1,10 +1,10 @@
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
-import { Button, Section } from '@cherrystudio/ui/components';
+import { Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
 import { BrandAvatar, BrandAvatarIcon } from '@/frontend/components/avatar';
@@ -16,6 +16,7 @@ import type {
 import { useAiUsageOverview } from '../hooks/useAiUsageOverview';
 import { getFirstAiUsageDateKey } from '../utils/aiUsageOverview';
 import { AiUsageCalendar } from './AiUsageCalendar';
+import { AiUsageSectionStatus } from './AiUsageSectionState';
 
 const costSymbols = {
   CNY: '\u00a5',
@@ -48,25 +49,13 @@ export function AiUsageSummaryCard() {
             >
               {t('aiUsage.title')}
             </Text>
-            {isRefreshing ? (
-              <ActivityIndicator
-                accessibilityLabel={t('aiUsage.loading')}
-                size="small"
-                testID="ai-usage-summary-refreshing"
-              />
-            ) : isError && hasData ? (
-              <Pressable
-                accessibilityLabel={t('aiUsage.retry')}
-                accessibilityRole="button"
-                className="size-8 items-center justify-center rounded-full active:bg-secondary active:opacity-70"
-                hitSlop={6}
-                style={styles.continuousCorners}
-                testID="ai-usage-summary-refresh-retry"
-                onPress={() => void refetch()}
-              >
-                <RefreshCwIcon className="size-4 text-destructive" />
-              </Pressable>
-            ) : null}
+            <AiUsageSectionStatus
+              isError={isError && hasData}
+              isRefreshing={isRefreshing}
+              loadingTestID="ai-usage-summary-refreshing"
+              retryTestID="ai-usage-summary-refresh-retry"
+              onRetry={() => void refetch()}
+            />
           </View>
         }
       >
@@ -85,21 +74,16 @@ export function AiUsageSummaryCard() {
       </Section.Header>
 
       {showInitialError ? (
-        <View className="items-center justify-center gap-3" style={styles.stateContent}>
-          <Text selectable className="text-center text-destructive-foreground text-sm">
-            {t('aiUsage.loadError')}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            className="flex-row items-center gap-2 rounded-lg bg-secondary px-4 py-2 active:opacity-70"
-            style={styles.continuousCorners}
-            testID="ai-usage-summary-retry"
-            onPress={() => void refetch()}
-          >
-            <RefreshCwIcon className="size-4 text-foreground" />
-            <Text className="font-medium text-foreground text-sm">{t('aiUsage.retry')}</Text>
-          </Pressable>
-        </View>
+        <ContentState.Error
+          primaryAction={{
+            children: t('aiUsage.retry'),
+            icon: <RefreshCwIcon />,
+            onPress: () => void refetch(),
+            testID: 'ai-usage-summary-retry',
+          }}
+          style={styles.stateContent}
+          title={t('aiUsage.loadError')}
+        />
       ) : (
         <View className="mt-4">
           <AiUsageCalendar

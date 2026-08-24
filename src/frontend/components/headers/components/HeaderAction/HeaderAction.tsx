@@ -7,7 +7,9 @@ import { HEADER_ACTION_BASE_CLASS_NAME, HEADER_ICON_ACTION_CLASS_NAME } from './
 import { HeaderIconButton } from './HeaderIconButton';
 
 /** Owns the visual and interaction contract for every standard top-bar action. */
-export function HeaderAction({ action }: HeaderActionProps) {
+export function HeaderAction({ action, tone = 'default' }: HeaderActionProps) {
+  const contentClassName = tone === 'inverse' ? 'text-constant-white' : 'text-foreground';
+
   if (action.hidden) {
     return null;
   }
@@ -28,7 +30,7 @@ export function HeaderAction({ action }: HeaderActionProps) {
             className={cn(HEADER_ICON_ACTION_CLASS_NAME, action.disabled && 'opacity-50')}
             pointerEvents={action.disabled ? 'none' : 'auto'}
           >
-            <Icon className="size-6 text-foreground" />
+            <Icon className={cn('size-6', contentClassName)} />
           </View>
         </Menu>
       );
@@ -48,7 +50,7 @@ export function HeaderAction({ action }: HeaderActionProps) {
           disabled={action.disabled}
           onPress={action.onPress}
         >
-          <Text className="font-semibold text-base text-foreground">{action.label}</Text>
+          <Text className={cn('font-semibold text-base', contentClassName)}>{action.label}</Text>
         </Pressable>
       );
 
@@ -61,7 +63,7 @@ export function HeaderAction({ action }: HeaderActionProps) {
           disabled={action.disabled}
           onPress={action.onPress}
         >
-          <Icon className="size-6 text-foreground" />
+          <Icon className={cn('size-6', contentClassName)} />
         </HeaderIconButton>
       );
     }

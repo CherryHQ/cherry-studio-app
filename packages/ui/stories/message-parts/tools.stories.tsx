@@ -12,7 +12,6 @@ const meta = {
   component: MessagePart.Tool,
   args: {
     children: null,
-    closeAccessibilityLabel: 'Close',
     state: 'complete',
     title: 'Calculator',
   },
@@ -28,7 +27,6 @@ export const States: Story = {
       {() => (
         <MessagePart>
           <MessagePart.Tool
-            closeAccessibilityLabel="Close"
             icon={SearchIcon}
             state="running"
             statusText="Searching"
@@ -38,7 +36,6 @@ export const States: Story = {
             <Text className="text-foreground text-base">Waiting for results...</Text>
           </MessagePart.Tool>
           <MessagePart.Tool
-            closeAccessibilityLabel="Close"
             icon={SearchIcon}
             state="complete"
             statusText="3 results"
@@ -59,7 +56,6 @@ export const States: Story = {
             />
           </MessagePart.Tool>
           <MessagePart.Tool
-            closeAccessibilityLabel="Close"
             icon={WrenchIcon}
             state="running"
             statusText="Running"
@@ -69,7 +65,6 @@ export const States: Story = {
             <MessagePart.ValueSection title="Arguments" value={{ expression: '21 * 2' }} />
           </MessagePart.Tool>
           <MessagePart.Tool
-            closeAccessibilityLabel="Close"
             icon={WrenchIcon}
             state="complete"
             statusText="Completed"
@@ -80,7 +75,6 @@ export const States: Story = {
             <MessagePart.TextSection title="Output" value="42" />
           </MessagePart.Tool>
           <MessagePart.Tool
-            closeAccessibilityLabel="Close"
             state="complete"
             statusText="Call failed"
             statusTone="danger"

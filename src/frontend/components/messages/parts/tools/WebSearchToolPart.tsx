@@ -33,7 +33,6 @@ export function WebSearchToolPart({ part }: WebSearchToolPartProps) {
 
   return (
     <MessagePart.Tool
-      closeAccessibilityLabel={t('common.close')}
       icon={SearchIcon}
       state={isSearching ? 'running' : 'complete'}
       statusText={statusText}
