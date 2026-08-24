@@ -7,6 +7,7 @@ import type { HeaderChromeProps } from './HeaderChrome.types';
 
 /** Mounts the shared header contract through iOS native toolbar slots. */
 export function HeaderChrome({
+  actionTone,
   leftActions,
   rightActions,
   title = '',
@@ -36,7 +37,7 @@ export function HeaderChrome({
       <Stack.Toolbar placement="left">
         {leftActions.map((action) => (
           <Stack.Toolbar.View hidden={action.hidden} hidesSharedBackground key={action.key}>
-            <HeaderAction action={action} />
+            <HeaderAction action={action} tone={actionTone} />
           </Stack.Toolbar.View>
         ))}
       </Stack.Toolbar>
@@ -44,7 +45,7 @@ export function HeaderChrome({
         <Stack.Toolbar placement="right">
           {rightActions.map((action) => (
             <Stack.Toolbar.View hidden={action.hidden} hidesSharedBackground key={action.key}>
-              <HeaderAction action={action} />
+              <HeaderAction action={action} tone={actionTone} />
             </Stack.Toolbar.View>
           ))}
         </Stack.Toolbar>

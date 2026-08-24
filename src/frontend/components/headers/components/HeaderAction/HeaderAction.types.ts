@@ -5,6 +5,8 @@ export type HeaderActionIconProps = {
   className?: string;
 };
 
+export type HeaderActionTone = 'default' | 'inverse';
+
 type HeaderActionBase = {
   hidden?: boolean;
   key: string;
@@ -39,4 +41,5 @@ export type HeaderToolbarAction =
 
 export type HeaderActionProps = {
   action: HeaderToolbarAction;
+  tone?: HeaderActionTone;
 };

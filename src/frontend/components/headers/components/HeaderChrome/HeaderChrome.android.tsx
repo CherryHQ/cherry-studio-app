@@ -8,6 +8,7 @@ import type { HeaderChromeProps } from './HeaderChrome.types';
 
 /** Mounts the shared header contract through Android native-stack options. */
 export function HeaderChrome({
+  actionTone,
   leftActions,
   rightActions,
   title = '',
@@ -18,22 +19,22 @@ export function HeaderChrome({
     () => (
       <View className="flex-row items-center gap-2">
         {leftActions.map((action) => (
-          <HeaderAction action={action} key={action.key} />
+          <HeaderAction action={action} key={action.key} tone={actionTone} />
         ))}
       </View>
     ),
-    [leftActions],
+    [actionTone, leftActions],
   );
   const rightContent = useMemo(
     () =>
       rightActions && rightActions.length > 0 ? (
         <View className="flex-row items-center gap-2">
           {rightActions.map((action) => (
-            <HeaderAction action={action} key={action.key} />
+            <HeaderAction action={action} key={action.key} tone={actionTone} />
           ))}
         </View>
       ) : undefined,
-    [rightActions],
+    [actionTone, rightActions],
   );
   const options = useMemo(
     () => ({

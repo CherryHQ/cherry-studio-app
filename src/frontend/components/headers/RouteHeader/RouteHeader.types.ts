@@ -9,6 +9,8 @@ export type RouteHeaderProps = {
   leftActions?: readonly HeaderToolbarAction[];
   onBack?: () => void;
   rightActions?: readonly HeaderToolbarAction[];
+  /** Centered native text title used when `titleElement` is not provided. */
   title?: string;
+  /** Business-owned interactive content that replaces the native text title. */
   titleElement?: ReactElement;
 };

@@ -79,7 +79,7 @@ export function PaintingViewerChrome({
 
   return (
     <>
-      <HeaderChrome leftActions={leftActions} rightActions={rightActions} />
+      <HeaderChrome actionTone="inverse" leftActions={leftActions} rightActions={rightActions} />
       <View
         className="absolute inset-x-0 flex-row items-center justify-start gap-2 pl-2"
         pointerEvents="box-none"

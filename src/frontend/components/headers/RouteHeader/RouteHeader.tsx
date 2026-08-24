@@ -21,6 +21,7 @@ export function RouteHeader({
       leftActions={leftActions && leftActions.length > 0 ? leftActions : defaultLeftActions}
       rightActions={rightActions}
       title={title}
+      titleAlign="center"
       titleElement={titleElement}
     />
   );
