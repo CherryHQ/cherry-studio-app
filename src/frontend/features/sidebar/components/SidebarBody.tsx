@@ -1,6 +1,6 @@
 import FilterIcon from '@cherrystudio/app-icons/icons/filter';
-import ImagesIcon from '@cherrystudio/app-icons/icons/images';
-import UsersRoundIcon from '@cherrystudio/app-icons/icons/users-round';
+import ImageIcon from '@cherrystudio/app-icons/icons/image';
+import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -64,15 +64,11 @@ function SidebarBodyDefault() {
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
         <SidebarNavRow
-          icon={UsersRoundIcon}
+          icon={LibraryBigIcon}
           label={t('navigation.assistants')}
           onPress={navigateAssistants}
         />
-        <SidebarNavRow
-          icon={ImagesIcon}
-          label={t('navigation.paintings')}
-          onPress={openPaintings}
-        />
+        <SidebarNavRow icon={ImageIcon} label={t('navigation.paintings')} onPress={openPaintings} />
       </View>
 
       <View className="flex-row items-center justify-between px-5 pt-4 pb-1">
