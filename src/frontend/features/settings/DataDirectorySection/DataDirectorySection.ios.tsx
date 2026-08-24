@@ -1,4 +1,4 @@
-import { Trash2Icon } from '@cherrystudio/app-icons';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { Section } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 

@@ -1,4 +1,7 @@
-import { DownloadIcon, EllipsisIcon, PencilIcon, ProportionsIcon } from '@cherrystudio/app-icons';
+import DownloadIcon from '@cherrystudio/app-icons/icons/download';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import PencilIcon from '@cherrystudio/app-icons/icons/pencil';
+import ProportionsIcon from '@cherrystudio/app-icons/icons/proportions';
 import { Menu, type MenuItem } from '@cherrystudio/ui/components';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

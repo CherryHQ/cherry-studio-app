@@ -1,4 +1,5 @@
-import { ChevronLeftIcon, XIcon } from '@cherrystudio/app-icons';
+import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 

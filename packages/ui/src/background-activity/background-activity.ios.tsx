@@ -1,4 +1,3 @@
-import { BackgroundActivityIcon } from '@cherrystudio/ui/background-activity';
 import { HStack, Image, Spacer, Text, VStack } from '@expo/ui/swift-ui';
 import {
   activityBackgroundTint,
@@ -17,21 +16,8 @@ import {
   widgetAccentedRenderingMode,
 } from '@expo/ui/swift-ui/modifiers';
 import type { LiveActivityComponent } from 'expo-widgets';
-import type { SFSymbols7_0 } from 'sf-symbols-typescript';
 
 import type { BackgroundActivityNativePresentation } from './background-activity.types';
-
-const iconSymbolMap: Record<BackgroundActivityIcon, SFSymbols7_0> = {
-  brain: 'brain.head.profile',
-  'bubble-ellipsis': 'ellipsis.bubble.fill',
-  'bubble-exclamation': 'exclamationmark.bubble.fill',
-  'check-circle': 'checkmark.circle.fill',
-  hourglass: 'hourglass',
-  paintbrush: 'paintbrush.pointed.fill',
-  'warning-triangle': 'exclamationmark.triangle.fill',
-  wrench: 'wrench.and.screwdriver.fill',
-  'x-circle': 'xmark.circle.fill',
-} as const;
 
 export const renderBackgroundActivity: LiveActivityComponent<
   BackgroundActivityNativePresentation
@@ -48,9 +34,6 @@ export const renderBackgroundActivity: LiveActivityComponent<
     lower: new Date(props.startedAtEpochMs),
     upper: new Date(props.finishedAtEpochMs ?? props.startedAtEpochMs + 24 * 60 * 60 * 1000),
   };
-  const iconSymbol = iconSymbolMap[props.icon];
-  const compactIconSymbol = iconSymbolMap[props.compactIcon];
-
   return {
     banner: (
       <HStack
@@ -72,7 +55,15 @@ export const renderBackgroundActivity: LiveActivityComponent<
             ]}
           />
         ) : (
-          <Image color={brandColor} size={24} systemName={iconSymbol} />
+          <Text
+            modifiers={[
+              font({ size: 18, weight: 'bold' }),
+              foregroundStyle(brandColor),
+              frame({ height: 32, width: 32, alignment: 'center' }),
+            ]}
+          >
+            C
+          </Text>
         )}
         <VStack
           alignment="leading"
@@ -155,7 +146,15 @@ export const renderBackgroundActivity: LiveActivityComponent<
             ]}
           />
         ) : (
-          <Image color={brandColor} size={20} systemName={iconSymbol} />
+          <Text
+            modifiers={[
+              font({ size: 15, weight: 'bold' }),
+              foregroundStyle(brandColor),
+              frame({ height: 24, width: 24, alignment: 'center' }),
+            ]}
+          >
+            C
+          </Text>
         )}
         <Text
           modifiers={[
@@ -193,7 +192,18 @@ export const renderBackgroundActivity: LiveActivityComponent<
         )}
       </HStack>
     ),
-    compactLeading: <Image color={brandColor} size={16} systemName={compactIconSymbol} />,
+    compactLeading: props.logoUri ? (
+      <Image
+        uiImage={props.logoUri}
+        modifiers={[
+          resizable(),
+          frame({ height: 16, width: 16 }),
+          widgetAccentedRenderingMode('fullColor'),
+        ]}
+      />
+    ) : (
+      <Text modifiers={[font({ size: 13, weight: 'bold' }), foregroundStyle(brandColor)]}>C</Text>
+    ),
     compactTrailing: hasCompactLabel ? (
       <Text
         modifiers={[
@@ -218,7 +228,18 @@ export const renderBackgroundActivity: LiveActivityComponent<
         ]}
       />
     ),
-    minimal: <Image color={brandColor} size={16} systemName={iconSymbol} />,
+    minimal: props.logoUri ? (
+      <Image
+        uiImage={props.logoUri}
+        modifiers={[
+          resizable(),
+          frame({ height: 16, width: 16 }),
+          widgetAccentedRenderingMode('fullColor'),
+        ]}
+      />
+    ) : (
+      <Text modifiers={[font({ size: 13, weight: 'bold' }), foregroundStyle(brandColor)]}>C</Text>
+    ),
     expandedLeading: null,
     expandedTrailing: null,
     expandedCenter: null,
@@ -246,7 +267,15 @@ export const renderBackgroundActivity: LiveActivityComponent<
               ]}
             />
           ) : (
-            <Image color={brandColor} size={18} systemName={iconSymbol} />
+            <Text
+              modifiers={[
+                font({ size: 14, weight: 'bold' }),
+                foregroundStyle(brandColor),
+                frame({ height: 24, width: 24, alignment: 'center' }),
+              ]}
+            >
+              C
+            </Text>
           )}
           <Text
             modifiers={[

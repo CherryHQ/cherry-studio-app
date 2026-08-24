@@ -1,14 +1,12 @@
-import {
-  BellIcon,
-  CircleHalfIcon,
-  CloudIcon,
-  DatabaseIcon,
-  InfoIcon,
-  LockIcon,
-  NetworkIcon,
-  PersonCropSquareOnSquareAngledIcon,
-  SparklesIcon,
-} from '@cherrystudio/app-icons';
+import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
+import ContactRoundIcon from '@cherrystudio/app-icons/icons/contact-round';
+import ContrastIcon from '@cherrystudio/app-icons/icons/contrast';
+import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
+import InfoIcon from '@cherrystudio/app-icons/icons/info';
+import LockIcon from '@cherrystudio/app-icons/icons/lock';
+import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
@@ -68,7 +66,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.profile')}
-              leading={<PersonCropSquareOnSquareAngledIcon className="size-5 text-foreground" />}
+              leading={<ContactRoundIcon className="size-5 text-foreground" />}
               onPress={openProfileSettings}
             />
           </Section>
@@ -127,7 +125,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.appearance.title')}
-              leading={<CircleHalfIcon className="size-5 text-foreground" />}
+              leading={<ContrastIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
             />
           </Section>

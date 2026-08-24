@@ -1,14 +1,12 @@
-import {
-  AudioLinesIcon,
-  Code2Icon,
-  EyeIcon,
-  GiftIcon,
-  GlobeIcon,
-  LightbulbIcon,
-  RotateCwIcon,
-  SparklesIcon,
-  WrenchIcon,
-} from '@cherrystudio/app-icons';
+import AudioLinesIcon from '@cherrystudio/app-icons/icons/audio-lines';
+import Code2Icon from '@cherrystudio/app-icons/icons/code-2';
+import EyeIcon from '@cherrystudio/app-icons/icons/eye';
+import GiftIcon from '@cherrystudio/app-icons/icons/gift';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
+import LightbulbIcon from '@cherrystudio/app-icons/icons/lightbulb';
+import RotateCwIcon from '@cherrystudio/app-icons/icons/rotate-cw';
+import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
+import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
 import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';

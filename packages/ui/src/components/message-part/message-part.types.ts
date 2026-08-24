@@ -1,4 +1,4 @@
-import type { AppIconProps } from '@cherrystudio/app-icons';
+import type { LucideIconProps } from '@cherrystudio/app-icons';
 import type { ImageSource } from 'expo-image';
 import type { ComponentType, ReactNode } from 'react';
 import type { PressableProps, ViewProps } from 'react-native';
@@ -36,7 +36,7 @@ export type MessagePartUnknownProps = {
 export type MessagePartToolProps = {
   children: ReactNode;
   closeAccessibilityLabel: string;
-  icon?: ComponentType<AppIconProps>;
+  icon?: ComponentType<LucideIconProps>;
   imageSource?: ImageSource | number;
   state: 'complete' | 'running';
   statusText?: string;

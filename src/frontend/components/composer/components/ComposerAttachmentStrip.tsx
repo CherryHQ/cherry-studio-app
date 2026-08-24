@@ -1,4 +1,4 @@
-import { XIcon } from '@cherrystudio/app-icons';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,

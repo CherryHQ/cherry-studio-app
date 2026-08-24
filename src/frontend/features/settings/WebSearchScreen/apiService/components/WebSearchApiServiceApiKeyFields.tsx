@@ -1,4 +1,4 @@
-import { ActivityIcon } from '@cherrystudio/app-icons';
+import ActivityIcon from '@cherrystudio/app-icons/icons/activity';
 import {
   Button,
   Input,

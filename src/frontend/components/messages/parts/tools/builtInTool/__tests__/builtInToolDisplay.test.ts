@@ -1,4 +1,4 @@
-import { BellRingIcon } from '@cherrystudio/app-icons';
+import BellRingIcon from '@cherrystudio/app-icons/icons/bell-ring';
 
 import { getBuiltInToolDisplay } from '../builtInToolDisplay';
 import { getBuiltInToolIcon as getAndroidIcon } from '../builtInToolIcon/builtInToolIcon.android';

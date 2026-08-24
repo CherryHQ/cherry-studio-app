@@ -71,6 +71,7 @@ patchedDependencies:
   expo-widgets@57.0.8: patches/expo-widgets@57.0.8.patch
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
   react-native-bottom-tabs@1.4.0: patches/react-native-bottom-tabs@1.4.0.patch
+  expo-router@57.0.6: patches/expo-router@57.0.6.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'

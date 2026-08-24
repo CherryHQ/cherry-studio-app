@@ -1,4 +1,6 @@
-import { PauseIcon, PlayIcon, Trash2Icon } from '@cherrystudio/app-icons';
+import PauseIcon from '@cherrystudio/app-icons/icons/pause';
+import PlayIcon from '@cherrystudio/app-icons/icons/play';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

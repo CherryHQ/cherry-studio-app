@@ -1,4 +1,4 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import type { ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 

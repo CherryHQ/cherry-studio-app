@@ -1,4 +1,4 @@
-import { SquarePenIcon } from '@cherrystudio/app-icons';
+import SquarePenIcon from '@cherrystudio/app-icons/icons/square-pen';
 import { Stack, useIsPreview } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 

@@ -18,14 +18,8 @@ public extension NativeMenuItem {
   /**
    * Create a new instance of `NativeMenuItem`.
    */
-  init(checked: NativeMenuCheckedState, destructive: Bool, disabled: Bool, id: String, label: String, systemImage: String?) {
-    self.init(checked, destructive, disabled, std.string(id), std.string(label), { () -> bridge.std__optional_std__string_ in
-      if let __unwrappedValue = systemImage {
-        return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
-      } else {
-        return .init()
-      }
-    }())
+  init(checked: NativeMenuCheckedState, destructive: Bool, disabled: Bool, id: String, label: String) {
+    self.init(checked, destructive, disabled, std.string(id), std.string(label))
   }
 
   @inline(__always)
@@ -51,17 +45,5 @@ public extension NativeMenuItem {
   @inline(__always)
   var label: String {
     return String(self.__label)
-  }
-  
-  @inline(__always)
-  var systemImage: String? {
-    return { () -> String? in
-      if bridge.has_value_std__optional_std__string_(self.__systemImage) {
-        let __unwrapped = bridge.get_std__optional_std__string_(self.__systemImage)
-        return String(__unwrapped)
-      } else {
-        return nil
-      }
-    }()
   }
 }

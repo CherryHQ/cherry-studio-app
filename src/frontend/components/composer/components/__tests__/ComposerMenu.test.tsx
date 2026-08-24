@@ -28,11 +28,9 @@ const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
 >;
 let mockComposerState: ReturnType<typeof useComposerState> | undefined;
 
-jest.mock('@cherrystudio/app-icons', () => ({
-  CameraIcon: () => null,
-  FileIcon: () => null,
-  ImagesIcon: () => null,
-}));
+jest.mock('@cherrystudio/app-icons/icons/camera', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/file', () => () => null);
+jest.mock('@cherrystudio/app-icons/icons/images', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const React = jest.requireActual('react');

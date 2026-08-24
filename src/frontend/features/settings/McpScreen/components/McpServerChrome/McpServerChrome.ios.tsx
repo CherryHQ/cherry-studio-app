@@ -17,16 +17,18 @@ export function McpServerChrome({
       <Stack.Toolbar.Button
         accessibilityLabel={toggleLabel}
         disabled={isDisabled}
-        icon={isEnabled ? 'pause' : 'play'}
         onPress={onToggleEnabled}
-      />
+      >
+        {toggleLabel}
+      </Stack.Toolbar.Button>
       <Stack.Toolbar.Button
         accessibilityLabel={t('settings.mcp.deleteServer')}
         disabled={isDisabled}
-        icon="trash"
         onPress={onDelete}
         tintColor={Color.ios.systemRed}
-      />
+      >
+        {t('settings.mcp.deleteServer')}
+      </Stack.Toolbar.Button>
       <Stack.Toolbar.Spacer />
     </Stack.Toolbar>
   );

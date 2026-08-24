@@ -11,16 +11,15 @@ jest.mock('heroui-native/utils', () => {
   };
 });
 
-jest.mock('@cherrystudio/app-icons', () => {
+jest.mock('@cherrystudio/app-icons/icons/check', () => {
   const React = require('react');
   const { View } = require('react-native');
-
-  return {
-    CheckIcon: (props: object) =>
-      React.createElement(View, { ...props, testID: 'section-radio-check' }),
-    ChevronRightIcon: (props: object) =>
-      React.createElement(View, { ...props, testID: 'section-chevron' }),
-  };
+  return (props: object) => React.createElement(View, { ...props, testID: 'section-radio-check' });
+});
+jest.mock('@cherrystudio/app-icons/icons/chevron-right', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return (props: object) => React.createElement(View, { ...props, testID: 'section-chevron' });
 });
 
 describe('Section', () => {

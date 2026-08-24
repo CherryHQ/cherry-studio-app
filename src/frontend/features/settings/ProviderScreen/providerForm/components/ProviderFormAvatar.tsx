@@ -1,4 +1,5 @@
-import { ImageUpIcon, RotateCcwIcon } from '@cherrystudio/app-icons';
+import ImageUpIcon from '@cherrystudio/app-icons/icons/image-up';
+import RotateCcwIcon from '@cherrystudio/app-icons/icons/rotate-ccw';
 import { Button, Menu, type MenuItem } from '@cherrystudio/ui/components';
 import * as ImagePicker from 'expo-image-picker';
 import { type ReactNode, useCallback, useMemo } from 'react';
@@ -68,13 +69,11 @@ export function ProviderFormAvatar({ children }: { children?: ReactNode }) {
         id: 'camera',
         label: t('chat.media.camera'),
         onPress: () => void selectAvatarFromCamera(),
-        systemImage: 'camera',
       },
       {
         id: 'photos',
         label: t('chat.media.photos'),
         onPress: () => void selectAvatarFromPhotoLibrary(),
-        systemImage: 'photo',
       },
     ],
     [selectAvatarFromCamera, selectAvatarFromPhotoLibrary, t],

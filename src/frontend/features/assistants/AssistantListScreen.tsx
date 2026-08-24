@@ -1,4 +1,6 @@
-import { BotIcon, CheckIcon, EllipsisIcon } from '@cherrystudio/app-icons';
+import BotIcon from '@cherrystudio/app-icons/icons/bot';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { type MenuItem, useAlert } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -87,14 +89,12 @@ export default function AssistantListScreen() {
         id: 'create-assistant',
         label: t('assistant.actions.add'),
         onPress: openCreateAssistant,
-        systemImage: 'plus',
       },
       {
         disabled: visibleAssistants.length === 0 || isBatchDeleting,
         id: 'select-assistants',
         label: t('assistant.selection.start'),
         onPress: enterEditing,
-        systemImage: 'checklist',
       },
     ],
     [enterEditing, isBatchDeleting, openCreateAssistant, t, visibleAssistants.length],
@@ -298,14 +298,12 @@ function AssistantListRow({
         id: 'edit',
         label: t('common.edit'),
         onPress: handleEditPress,
-        systemImage: 'pencil',
       },
       {
         destructive: true,
         id: 'delete',
         label: t('common.delete'),
         onPress: handleDeletePress,
-        systemImage: 'trash',
       },
     ],
     [handleDeletePress, handleEditPress, t],

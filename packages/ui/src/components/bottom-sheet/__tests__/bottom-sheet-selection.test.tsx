@@ -67,9 +67,7 @@ jest.mock('@legendapp/list/react-native', () => ({
   },
 }));
 
-jest.mock('@cherrystudio/app-icons', () => ({
-  CheckIcon: () => null,
-}));
+jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),

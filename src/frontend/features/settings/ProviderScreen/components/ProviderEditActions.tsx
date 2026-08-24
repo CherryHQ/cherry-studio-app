@@ -1,4 +1,5 @@
-import { SaveIcon, Trash2Icon } from '@cherrystudio/app-icons';
+import SaveIcon from '@cherrystudio/app-icons/icons/save';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { Button } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';

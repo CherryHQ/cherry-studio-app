@@ -24,7 +24,6 @@ namespace margelo::nitro::cherrystudio::ui { enum class NativeMenuTrigger; }
 #include "NativeMenuTrigger.hpp"
 #include <functional>
 #include <memory>
-#include <optional>
 #include <string>
 #include <vector>
 

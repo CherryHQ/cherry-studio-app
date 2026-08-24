@@ -1,4 +1,4 @@
-import { ArrowDownIcon } from '@cherrystudio/app-icons';
+import ArrowDownIcon from '@cherrystudio/app-icons/icons/arrow-down';
 import { Pressable, StyleSheet } from 'react-native';
 import Animated, { type SharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { useResolveClassNames } from 'uniwind';

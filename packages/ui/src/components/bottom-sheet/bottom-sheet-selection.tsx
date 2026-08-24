@@ -1,4 +1,4 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';

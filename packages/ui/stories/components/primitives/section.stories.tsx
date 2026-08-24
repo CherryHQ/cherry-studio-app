@@ -1,10 +1,8 @@
-import {
-  BellIcon,
-  CircleUserRoundIcon,
-  InfoIcon,
-  PaletteIcon,
-  Trash2Icon,
-} from '@cherrystudio/app-icons';
+import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
+import InfoIcon from '@cherrystudio/app-icons/icons/info';
+import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
+import Trash2Icon from '@cherrystudio/app-icons/icons/trash-2';
 import { Button, Section, Switch } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { useState } from 'react';

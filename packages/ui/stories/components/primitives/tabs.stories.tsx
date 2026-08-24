@@ -1,4 +1,5 @@
-import { MessageCircleIcon, SettingsIcon } from '@cherrystudio/app-icons';
+import MessageCircleIcon from '@cherrystudio/app-icons/icons/message-circle';
+import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
 import { Tabs, type TabsItemState, type TabsProps } from '@cherrystudio/ui/components';
 import type { Meta, StoryObj } from '@storybook/react-native';
 import { useEffect, useState } from 'react';

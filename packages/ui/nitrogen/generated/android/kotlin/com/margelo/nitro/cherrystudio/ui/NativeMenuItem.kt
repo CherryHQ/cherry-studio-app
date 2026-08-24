@@ -32,10 +32,7 @@ data class NativeMenuItem(
   val id: String,
   @DoNotStrip
   @Keep
-  val label: String,
-  @DoNotStrip
-  @Keep
-  val systemImage: String?
+  val label: String
 ) {
   /* primary constructor */
 
@@ -47,7 +44,6 @@ data class NativeMenuItem(
       && Objects.deepEquals(this.disabled, other.disabled)
       && Objects.deepEquals(this.id, other.id)
       && Objects.deepEquals(this.label, other.label)
-      && Objects.deepEquals(this.systemImage, other.systemImage)
   }
 
   override fun hashCode(): Int {
@@ -56,8 +52,7 @@ data class NativeMenuItem(
       destructive,
       disabled,
       id,
-      label,
-      systemImage
+      label
     ).contentDeepHashCode()
   }
 
@@ -69,8 +64,8 @@ data class NativeMenuItem(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(checked: NativeMenuCheckedState, destructive: Boolean, disabled: Boolean, id: String, label: String, systemImage: String?): NativeMenuItem {
-      return NativeMenuItem(checked, destructive, disabled, id, label, systemImage)
+    private fun fromCpp(checked: NativeMenuCheckedState, destructive: Boolean, disabled: Boolean, id: String, label: String): NativeMenuItem {
+      return NativeMenuItem(checked, destructive, disabled, id, label)
     }
   }
 }

@@ -1,4 +1,4 @@
-import { CheckIcon } from '@cherrystudio/app-icons';
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -255,14 +255,12 @@ const TopicRow = memo(function TopicRow({
         id: 'rename',
         label: t('common.rename'),
         onPress: handleRenamePress,
-        systemImage: 'pencil',
       },
       {
         id: 'delete',
         label: t('common.delete'),
         onPress: handleDeletePress,
         destructive: true,
-        systemImage: 'trash',
       },
     ],
     [handleDeletePress, handleRenamePress, t],

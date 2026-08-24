@@ -1,4 +1,7 @@
-import { DownloadIcon, MonitorCloudIcon, RefreshCwIcon, UploadIcon } from '@cherrystudio/app-icons';
+import DownloadIcon from '@cherrystudio/app-icons/icons/download';
+import MonitorCloudIcon from '@cherrystudio/app-icons/icons/monitor-cloud';
+import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
+import UploadIcon from '@cherrystudio/app-icons/icons/upload';
 import { Section } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

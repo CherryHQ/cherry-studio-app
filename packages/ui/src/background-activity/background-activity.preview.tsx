@@ -1,15 +1,13 @@
-import {
-  BrainIcon,
-  CircleCheckIcon,
-  CircleXIcon,
-  HourglassIcon,
-  MessageCircleMoreIcon,
-  MessageCircleWarningIcon,
-  PaintbrushIcon,
-  TriangleAlertIcon,
-  WrenchIcon,
-  type AppIconProps,
-} from '@cherrystudio/app-icons';
+import type { LucideIconProps } from '@cherrystudio/app-icons';
+import BrainIcon from '@cherrystudio/app-icons/icons/brain';
+import CircleCheckIcon from '@cherrystudio/app-icons/icons/circle-check';
+import CircleXIcon from '@cherrystudio/app-icons/icons/circle-x';
+import HourglassIcon from '@cherrystudio/app-icons/icons/hourglass';
+import MessageCircleMoreIcon from '@cherrystudio/app-icons/icons/message-circle-more';
+import MessageCircleWarningIcon from '@cherrystudio/app-icons/icons/message-circle-warning';
+import PaintbrushIcon from '@cherrystudio/app-icons/icons/paintbrush';
+import TriangleAlertIcon from '@cherrystudio/app-icons/icons/triangle-alert';
+import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
 import { Image } from 'expo-image';
 import type { ComponentType } from 'react';
 import { useEffect, useState } from 'react';
@@ -34,7 +32,7 @@ export type BackgroundActivityPreviewProps = Omit<
   theme: 'dark' | 'light';
 };
 
-const ICONS: Record<BackgroundActivityIcon, ComponentType<AppIconProps>> = {
+const ICONS: Record<BackgroundActivityIcon, ComponentType<LucideIconProps>> = {
   brain: BrainIcon,
   'bubble-ellipsis': MessageCircleMoreIcon,
   'bubble-exclamation': MessageCircleWarningIcon,

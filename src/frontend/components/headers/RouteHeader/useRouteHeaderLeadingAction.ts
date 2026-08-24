@@ -1,4 +1,6 @@
-import { ChevronLeftIcon, MenuIcon, XIcon } from '@cherrystudio/app-icons';
+import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import MenuIcon from '@cherrystudio/app-icons/icons/menu';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import { useRouter } from 'expo-router';
 import { useNavigationState } from 'expo-router/react-navigation';
 import { useCallback, useMemo } from 'react';

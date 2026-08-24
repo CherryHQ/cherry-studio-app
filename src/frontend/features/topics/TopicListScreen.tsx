@@ -1,4 +1,4 @@
-import { EllipsisIcon } from '@cherrystudio/app-icons';
+import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
 import { type MenuItem, SearchField } from '@cherrystudio/ui/components';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -46,14 +46,12 @@ function TopicListScreenBody() {
         id: 'create-chat',
         label: t('navigation.newChat'),
         onPress: openNewChat,
-        systemImage: 'square.and.pencil',
       },
       {
         disabled: isDeletionPending,
         id: 'select-messages',
         label: t('topic.selection.start'),
         onPress: handleEnterEditing,
-        systemImage: 'checklist',
       },
     ],
     [handleEnterEditing, isDeletionPending, openNewChat, t],

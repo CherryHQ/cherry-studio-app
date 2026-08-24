@@ -1,4 +1,5 @@
-import { ChevronRightIcon, WrenchIcon } from '@cherrystudio/app-icons';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
+import WrenchIcon from '@cherrystudio/app-icons/icons/wrench';
 import type { Detent } from '@swmansion/react-native-bottom-sheet';
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Text, useWindowDimensions, View } from 'react-native';

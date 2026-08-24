@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from '@cherrystudio/app-icons';
+import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';

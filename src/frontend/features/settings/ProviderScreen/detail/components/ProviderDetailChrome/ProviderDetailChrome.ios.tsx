@@ -55,18 +55,20 @@ export function ProviderDetailChrome({
           <Stack.Toolbar.Button
             accessibilityLabel={t('settings.provider.models.pull')}
             disabled={pullAction.isDisabled}
-            icon="arrow.trianglehead.2.clockwise.rotate.90"
             onPress={pullAction.onPress}
-          />
+          >
+            {t('settings.provider.models.pull')}
+          </Stack.Toolbar.Button>
         )
       ) : null}
       {editAction ? (
         <Stack.Toolbar.Button
           accessibilityLabel={t('settings.provider.models.selection.start')}
           disabled={editAction.isDisabled}
-          icon="checklist"
           onPress={editAction.onPress}
-        />
+        >
+          {t('settings.provider.models.selection.start')}
+        </Stack.Toolbar.Button>
       ) : null}
       {/* Holds the actions against the leading edge. Without it a lone toggle
           button gets centred by the native toolbar. */}

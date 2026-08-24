@@ -76,7 +76,9 @@ Runtime component imports use that entry point so Metro does not traverse icon r
 import { Button, Section, TextField } from '@cherrystudio/ui/components';
 ```
 
-`@cherrystudio/app-icons` owns the cross-platform icon registry. Feature code owns business state,
+`@cherrystudio/app-icons` owns the Lucide SVG/Uniwind adapter. Runtime icons use default deep
+imports such as `@cherrystudio/app-icons/icons/check`; its package root exports icon types only so
+Metro does not traverse the full Lucide set. Feature code owns business state,
 translations, query behavior, and workflow-specific composition. A local `Pressable` wrapper is
 appropriate only while its interaction remains specific to that feature; repeated product
 interaction behavior moves into CherryUI through the workflow in
@@ -122,8 +124,8 @@ back contract.
 
 Color, typography, spacing, radius, elevation, opacity, and animation semantics come from the same
 Cherry design system on both platforms. [Design Spec](../../DESIGN.md) owns the token pipeline and
-the rules for consuming tokens. General-purpose icons come from the shared Cherry icon registry;
-only platform brands and truly system-semantic artwork require an adapter.
+the rules for consuming tokens. General-purpose icons come from deep `@cherrystudio/app-icons/icons/*`
+imports. Provider and model brands, avatars, logos, charts, and content images remain image assets.
 
 Platform features enhance the common interaction contract without establishing a second product
 visual language. On iOS, system-rendered controls and navigation inherit the current platform

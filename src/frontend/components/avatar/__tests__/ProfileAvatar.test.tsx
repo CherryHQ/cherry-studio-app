@@ -9,10 +9,8 @@ const mockCameraIcon = jest.fn((_props: unknown) => null);
 const mockPencilIcon = jest.fn((_props: unknown) => null);
 const mockUseAvatar = jest.fn(() => 'profile-avatar-source');
 
-jest.mock('@cherrystudio/app-icons', () => ({
-  CameraIcon: (props: unknown) => mockCameraIcon(props),
-  PencilIcon: (props: unknown) => mockPencilIcon(props),
-}));
+jest.mock('@cherrystudio/app-icons/icons/camera', () => (props: unknown) => mockCameraIcon(props));
+jest.mock('@cherrystudio/app-icons/icons/pencil', () => (props: unknown) => mockPencilIcon(props));
 
 jest.mock('@cherrystudio/ui/components', () => {
   const Avatar = Object.assign((props: { children?: React.ReactNode }) => mockAvatar(props), {

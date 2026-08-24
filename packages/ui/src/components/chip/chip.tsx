@@ -1,4 +1,4 @@
-import { XIcon } from '@cherrystudio/app-icons';
+import XIcon from '@cherrystudio/app-icons/icons/x';
 import type { ComponentPropsWithRef, ReactNode } from 'react';
 import { Pressable, Text, View } from 'react-native';
 

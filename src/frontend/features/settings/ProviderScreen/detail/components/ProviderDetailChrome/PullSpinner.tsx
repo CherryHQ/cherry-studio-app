@@ -1,4 +1,4 @@
-import { RefreshCcwIcon } from '@cherrystudio/app-icons';
+import RefreshCcwIcon from '@cherrystudio/app-icons/icons/refresh-ccw';
 import { useEffect } from 'react';
 import Animated, {
   Easing,
