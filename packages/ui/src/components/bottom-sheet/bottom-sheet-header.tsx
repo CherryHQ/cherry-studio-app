@@ -1,4 +1,4 @@
-import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import type { ComponentProps, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -71,7 +71,7 @@ export function BottomSheetBackButton({
         onPress={onPress}
         testID={testID ?? (sheet.testID ? `${sheet.testID}-back` : undefined)}
       >
-        <ChevronLeftIcon className="size-6 text-foreground" />
+        <ArrowLeftIcon className="size-6 text-foreground" />
       </BottomSheetIconButton>
     </BottomSheetHeaderControl>
   );

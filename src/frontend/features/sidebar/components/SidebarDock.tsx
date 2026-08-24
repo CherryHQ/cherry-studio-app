@@ -87,7 +87,7 @@ export function SidebarDock({ onNewChatPress, onSettingsPress }: SidebarDockProp
             width: '100%',
           })}
         >
-          <SettingsIcon color={foregroundColor} size={20} />
+          <SettingsIcon color={foregroundColor} size={24} />
         </Pressable>
       </Surface>
     </View>

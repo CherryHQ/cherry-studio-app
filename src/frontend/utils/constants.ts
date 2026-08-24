@@ -70,9 +70,8 @@ export const paintingViewer = {
 } as const;
 
 export const appSidebar = {
-  widthRatio: 0.8, // sidebar width as a fraction of the screen width
   fallbackCornerRadius: 55, // surface radius when the device is missing from expo-screen-corner-radius' table
-  dockHeight: 46, // floating bottom dock's button height, shared by both buttons
+  dockHeight: 48, // floating bottom dock's button height, shared by both buttons
   dockMinInset: 16, // floor for the dock's concentric inset (see SidebarDock)
   headerRowHeight: 40, // brand row's height below the status bar; the body scrolls under it
   headerGapY: 8, // header's breathing room above and below the brand row

@@ -36,7 +36,7 @@ jest.mock('expo-glass-effect', () => {
   };
 });
 
-jest.mock('@cherrystudio/app-icons/icons/chevron-left', () => {
+jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
   return View;
 });
