@@ -1,10 +1,11 @@
 import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
+import { Button, ContentState, Spinner } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type AiUsageSectionStatusProps = {
   isError: boolean;
   isRefreshing: boolean;
+  loadingTestID?: string;
   onRetry?: () => void;
   retryTestID?: string;
 };
@@ -12,28 +13,28 @@ type AiUsageSectionStatusProps = {
 export function AiUsageSectionStatus({
   isError,
   isRefreshing,
+  loadingTestID,
   onRetry,
   retryTestID,
 }: AiUsageSectionStatusProps) {
   const { t } = useTranslation();
 
   if (isRefreshing) {
-    return <ActivityIndicator accessibilityLabel={t('aiUsage.loading')} size="small" />;
+    return <Spinner accessibilityLabel={t('aiUsage.loading')} size="sm" testID={loadingTestID} />;
   }
   if (!isError || !onRetry) return null;
 
   return (
-    <Pressable
+    <Button
       accessibilityLabel={t('aiUsage.retry')}
-      accessibilityRole="button"
-      className="size-8 items-center justify-center rounded-full active:bg-secondary active:opacity-70"
+      className="rounded-full p-2 active:bg-secondary active:opacity-70"
       hitSlop={6}
-      style={styles.continuousCorners}
-      testID={retryTestID}
+      icon={<RefreshCwIcon className="text-destructive" />}
       onPress={onRetry}
-    >
-      <RefreshCwIcon className="size-4 text-destructive" />
-    </Pressable>
+      size="xs"
+      testID={retryTestID}
+      variant="ghost"
+    />
   );
 }
 
@@ -49,26 +50,15 @@ export function AiUsageSectionError({
   const { t } = useTranslation();
 
   return (
-    <View className="min-h-40 items-center justify-center gap-4 px-6">
-      <Text selectable className="text-center text-destructive-foreground text-sm">
-        {message}
-      </Text>
-      <Pressable
-        accessibilityRole="button"
-        className="flex-row items-center gap-2 rounded-lg bg-secondary px-4 py-2 active:opacity-70"
-        style={styles.continuousCorners}
-        testID={testID}
-        onPress={onRetry}
-      >
-        <RefreshCwIcon className="size-4 text-foreground" />
-        <Text className="font-medium text-foreground text-sm">{t('aiUsage.retry')}</Text>
-      </Pressable>
-    </View>
+    <ContentState.Error
+      className="min-h-40 px-6"
+      primaryAction={{
+        children: t('aiUsage.retry'),
+        icon: <RefreshCwIcon />,
+        onPress: onRetry,
+        testID,
+      }}
+      title={message}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  continuousCorners: {
-    borderCurve: 'continuous',
-  },
-});

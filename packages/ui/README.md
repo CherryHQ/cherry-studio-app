@@ -200,6 +200,22 @@ whole chip is pressed, and `Chip.Tag` is non-interactive. Selection and removal 
 the caller. Removal labels are required so the icon-only action can be localized and announced by
 assistive technology.
 
+`ContentState` is the platform-neutral Loading, Empty, and Error family for content surfaces. Its
+explicit variants avoid boolean state combinations while sharing the content hierarchy, optional
+icon, and up to two actions. Loading uses CherryUI `Spinner`; actions use CherryUI `Button`.
+Product code keeps query state, retry behavior, list mounting, and localized copy:
+
+```tsx
+<ContentState.Error
+  description={error.message}
+  primaryAction={{ children: t('common.retry'), onPress: () => void refetch() }}
+  title={t('common.loadFailed')}
+/>;
+```
+
+Keep screen, list, composer, and card insets in the consuming feature and compose the state inside
+that layout. `ContentState` deliberately has no query, retry, inset, card, or compact-mode props.
+
 Shared components with text must be content-driven: avoid fixed width or height, keep React Native's
 system font scaling enabled, and allow constrained labels to wrap. `Button` follows this rule by
 using padding for its touch target and letting its label shrink and grow the container.

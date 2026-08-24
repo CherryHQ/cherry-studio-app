@@ -1,4 +1,4 @@
-import { Button, Spinner, Switch } from '@cherrystudio/ui/components';
+import { ContentState, Spinner, Switch } from '@cherrystudio/ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,34 +40,32 @@ export function McpToolsSection({
 
   if (toolsQuery.isLoading) {
     return (
-      <View className="flex-row items-center gap-2">
-        <Spinner size="sm" />
-        <Text className="text-foreground text-sm">{t('settings.mcp.tools.loading')}</Text>
-      </View>
+      <ContentState.Loading
+        className="flex-row items-center justify-start gap-2"
+        icon={<Spinner size="sm" />}
+        title={t('settings.mcp.tools.loading')}
+      />
     );
   }
 
   if (toolsQuery.isError) {
     return (
-      <View className="gap-2">
-        <Text className="text-destructive-foreground text-sm">
-          {t('settings.mcp.tools.loadFailed')}
-        </Text>
-        {/* The reason is the whole point here — an expired token and a typo'd
-            URL are the same generic failure without it. */}
-        <Text className="text-foreground text-xs" selectable>
-          {toolsQuery.error instanceof Error ? toolsQuery.error.message : String(toolsQuery.error)}
-        </Text>
-        <Button size="sm" variant="secondary" onPress={refetch}>
-          {t('settings.mcp.tools.retry')}
-        </Button>
-      </View>
+      <ContentState.Error
+        className="items-start"
+        // The reason is the whole point here — an expired token and a typo'd
+        // URL are the same generic failure without it.
+        description={
+          toolsQuery.error instanceof Error ? toolsQuery.error.message : String(toolsQuery.error)
+        }
+        primaryAction={{ children: t('settings.mcp.tools.retry'), onPress: refetch }}
+        title={t('settings.mcp.tools.loadFailed')}
+      />
     );
   }
 
   const tools = toolsQuery.data ?? [];
   if (tools.length === 0) {
-    return <Text className="text-foreground text-sm">{t('settings.mcp.tools.empty')}</Text>;
+    return <ContentState.Empty className="items-start" title={t('settings.mcp.tools.empty')} />;
   }
 
   return (

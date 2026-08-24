@@ -1,4 +1,4 @@
-import { Button, Section } from '@cherrystudio/ui/components';
+import { Button, ContentState, Section } from '@cherrystudio/ui/components';
 import { type ReactElement, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
@@ -81,11 +81,7 @@ export function AiUsageRankingSection({
   ) : isInitialLoading ? (
     <AiUsageRankingListSkeleton />
   ) : (
-    <View className="min-h-32 items-center justify-center px-6">
-      <Text selectable className="text-center text-muted-foreground text-sm">
-        {t('aiUsage.noUsageForDay')}
-      </Text>
-    </View>
+    <ContentState.Empty className="min-h-32 px-6" description={t('aiUsage.noUsageForDay')} />
   );
 
   return (
