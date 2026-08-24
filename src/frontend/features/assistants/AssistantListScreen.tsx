@@ -1,11 +1,11 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
-import { type MenuItem, useAlert } from '@cherrystudio/ui/components';
+import { ContentState, type MenuItem, useAlert } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type AccessibilityActionEvent, Pressable, ScrollView, Text, View } from 'react-native';
+import { type AccessibilityActionEvent, ScrollView, Text, View } from 'react-native';
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
@@ -211,11 +211,29 @@ export default function AssistantListScreen() {
             ))}
           </View>
         ) : visibleAssistants.length === 0 ? (
-          <AssistantEmptyState isLoading={isLoading} onCreate={openCreateAssistant} />
+          isLoading ? (
+            <ContentState.Loading className="px-8 py-16" title={t('assistant.list.loading')} />
+          ) : (
+            <ContentState.Empty
+              className="px-8 py-16"
+              description={t('assistant.list.emptyDescription')}
+              icon={
+                <View className="size-14 items-center justify-center rounded-full bg-secondary">
+                  <BotIcon className="size-7 text-foreground" />
+                </View>
+              }
+              primaryAction={{
+                accessibilityLabel: t('assistant.actions.create'),
+                children: t('assistant.actions.create'),
+                className: 'rounded-full',
+                onPress: openCreateAssistant,
+                size: 'default',
+              }}
+              title={t('assistant.list.emptyTitle')}
+            />
+          )
         ) : (
-          <View className="items-center px-4 py-12">
-            <Text className="text-sm text-muted-foreground">{t('assistant.list.noResults')}</Text>
-          </View>
+          <ContentState.Empty className="px-4 py-12" description={t('assistant.list.noResults')} />
         )}
       </ScrollView>
       {isEditing ? (
@@ -354,45 +372,5 @@ function AssistantListRow({
     <ContextMenuLink href={href} items={menuItems} preview={false}>
       {row}
     </ContextMenuLink>
-  );
-}
-
-function AssistantEmptyState({
-  isLoading,
-  onCreate,
-}: {
-  isLoading: boolean;
-  onCreate: () => void;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <View className="items-center justify-center gap-4 px-8 py-16">
-      <View className="size-14 items-center justify-center rounded-full bg-secondary">
-        <BotIcon className="size-7 text-foreground" />
-      </View>
-      <View className="items-center gap-1">
-        <Text className="text-center font-semibold text-foreground text-lg">
-          {isLoading ? t('assistant.list.loading') : t('assistant.list.emptyTitle')}
-        </Text>
-        {!isLoading ? (
-          <Text className="text-center text-foreground text-sm">
-            {t('assistant.list.emptyDescription')}
-          </Text>
-        ) : null}
-      </View>
-      {!isLoading ? (
-        <Pressable
-          accessibilityLabel={t('assistant.actions.create')}
-          accessibilityRole="button"
-          className="rounded-full bg-foreground px-5 py-2 active:opacity-80"
-          onPress={onCreate}
-        >
-          <Text className="font-semibold text-background text-base">
-            {t('assistant.actions.create')}
-          </Text>
-        </Pressable>
-      ) : null}
-    </View>
   );
 }

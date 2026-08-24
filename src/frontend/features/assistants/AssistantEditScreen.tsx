@@ -2,6 +2,7 @@ import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   BottomSheet,
+  ContentState,
   Description,
   Input,
   Label,
@@ -76,9 +77,7 @@ export default function AssistantEditScreen() {
     return (
       <>
         <RouteHeader title={t('assistant.edit.title')} />
-        <View className="p-4">
-          <Text className="text-center text-foreground text-sm">{t('assistant.form.loading')}</Text>
-        </View>
+        <ContentState.Loading className="p-4" title={t('assistant.form.loading')} />
       </>
     );
   }

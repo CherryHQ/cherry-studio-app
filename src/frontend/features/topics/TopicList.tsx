@@ -1,8 +1,9 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
+import { ContentState } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, type AccessibilityActionEvent, Text, View } from 'react-native';
+import { type AccessibilityActionEvent, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
@@ -15,7 +16,6 @@ import {
   useSelectionState,
 } from '@/frontend/components/selection';
 import { useAssistantsApi } from '@/frontend/hooks/chat';
-import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import type { TopicListItem } from '@/shared/data/api/schemas/topics';
 import type { Assistant } from '@/shared/data/types/assistant';
 import type { Topic } from '@/shared/data/types/topic';
@@ -89,7 +89,6 @@ const TopicListView = memo(function TopicListView() {
     error: assistantsQueryError,
     isLoading: isAssistantsLoading,
   } = useAssistantsApi();
-  const primaryColor = useThemeColor('primary');
   const isInitialDataSettled = useTopicListInitialData({
     assistants: { error: assistantsQueryError, isLoading: isAssistantsLoading },
     topics: { error: topicQueryError, isLoading: isTopicListLoading },
@@ -142,17 +141,15 @@ const TopicListView = memo(function TopicListView() {
   const listEmptyComponent = useCallback(
     () =>
       isInitialDataSettled ? (
-        <View className="items-center justify-center px-6 py-8">
-          <Text className="text-center text-foreground text-sm">
-            {t(initialLoadError ? 'navigation.chatsLoadFailed' : 'navigation.noMatchingChats')}
-          </Text>
-        </View>
+        initialLoadError ? (
+          <ContentState.Error className="px-6 py-8" title={t('navigation.chatsLoadFailed')} />
+        ) : (
+          <ContentState.Empty className="px-6 py-8" description={t('navigation.noMatchingChats')} />
+        )
       ) : (
-        <View className="items-center justify-center px-6 py-8">
-          <ActivityIndicator color={primaryColor} />
-        </View>
+        <ContentState.Loading className="px-6 py-8" />
       ),
-    [initialLoadError, isInitialDataSettled, primaryColor, t],
+    [initialLoadError, isInitialDataSettled, t],
   );
 
   return (

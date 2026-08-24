@@ -4,6 +4,7 @@ export * from './bottom-sheet';
 export * from './button';
 export * from './chip';
 export * from './composer';
+export * from './content-state';
 export * from './file-preview';
 export * from './image';
 export * from './input';

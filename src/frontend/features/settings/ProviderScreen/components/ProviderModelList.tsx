@@ -1,7 +1,7 @@
-import { Button } from '@cherrystudio/ui/components';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { ContentState } from '@cherrystudio/ui/components';
+import { type ReactNode, useDeferredValue, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Keyboard, Text, View } from 'react-native';
+import { Keyboard, View } from 'react-native';
 
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -54,17 +54,42 @@ export function ProviderModelList({
         isDefaultModel={isDefaultModel}
         ListEmptyComponent={
           hasNoModels && pullAction && addAction ? (
-            <ProviderModelEmptyActions addAction={addAction} pullAction={pullAction} />
-          ) : (
-            <ProviderModelEmptyState
-              title={
-                isLoading
-                  ? t('settings.provider.models.loading')
-                  : isSearching
-                    ? t('settings.provider.models.search.empty')
-                    : t('settings.provider.models.empty')
-              }
+            <ContentState.Empty
+              className="flex-1 px-6 pb-24"
+              primaryAction={{
+                children: t('settings.provider.models.emptyAction'),
+                disabled: pullAction.isDisabled,
+                loading: pullAction.isLoading,
+                onPress: pullAction.onPress,
+                size: 'default',
+              }}
+              secondaryAction={{
+                children: t('settings.provider.models.addSubmit'),
+                disabled: addAction.isDisabled,
+                loading: addAction.isLoading,
+                onPress: addAction.onPress,
+                size: 'default',
+              }}
+              title={t('settings.provider.models.empty')}
             />
+          ) : (
+            <ProviderModelStateCard>
+              {isLoading ? (
+                <ContentState.Loading
+                  className="flex-row justify-start gap-3"
+                  title={t('settings.provider.models.loading')}
+                />
+              ) : (
+                <ContentState.Empty
+                  className="items-start"
+                  title={
+                    isSearching
+                      ? t('settings.provider.models.search.empty')
+                      : t('settings.provider.models.empty')
+                  }
+                />
+              )}
+            </ProviderModelStateCard>
           )
         }
         models={displayedModels}
@@ -81,46 +106,10 @@ export function ProviderModelList({
   );
 }
 
-function ProviderModelEmptyActions({
-  addAction,
-  pullAction,
-}: {
-  addAction: ProviderModelAction;
-  pullAction: ProviderModelAction;
-}) {
-  const { t } = useTranslation();
-
-  return (
-    <View className="flex-1 items-center justify-center gap-4 px-6 pb-24">
-      <Text className="text-center text-base text-foreground">
-        {t('settings.provider.models.empty')}
-      </Text>
-      <View className="flex-row gap-3">
-        <Button
-          disabled={pullAction.isDisabled}
-          loading={pullAction.isLoading}
-          onPress={pullAction.onPress}
-          variant="default"
-        >
-          <Button.Label>{t('settings.provider.models.emptyAction')}</Button.Label>
-        </Button>
-        <Button
-          disabled={addAction.isDisabled}
-          loading={addAction.isLoading}
-          onPress={addAction.onPress}
-          variant="secondary"
-        >
-          <Button.Label>{t('settings.provider.models.addSubmit')}</Button.Label>
-        </Button>
-      </View>
-    </View>
-  );
-}
-
-function ProviderModelEmptyState({ title }: { title: string }) {
+function ProviderModelStateCard({ children }: { children: ReactNode }) {
   return (
     <View className="mx-4 min-h-12 justify-center rounded-2xl bg-grouped-surface px-4 py-4">
-      <Text className="text-base text-foreground">{title}</Text>
+      {children}
     </View>
   );
 }

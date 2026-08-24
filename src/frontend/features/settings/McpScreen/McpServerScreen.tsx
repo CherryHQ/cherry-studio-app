@@ -1,6 +1,13 @@
-import { Button, Input, Label, TextField, useAlert, useToast } from '@cherrystudio/ui/components';
+import {
+  ContentState,
+  Input,
+  Label,
+  TextField,
+  useAlert,
+  useToast,
+} from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
@@ -36,22 +43,39 @@ export function McpServerScreen() {
   const { error, isLoading, refetch, server } = useMcpServerApiById(serverId);
 
   if (!isCreating && isLoading) {
-    return <McpServerLoadState isLoading message={t('settings.mcp.detail.loading')} />;
+    return (
+      <McpServerStateScreen>
+        <ContentState.Loading title={t('settings.mcp.detail.loading')} />
+      </McpServerStateScreen>
+    );
   }
 
   if (!isCreating && error) {
     const isNotFound = error instanceof DataApiError && error.code === ErrorCode.NOT_FOUND;
     return (
-      <McpServerLoadState
-        detail={isNotFound ? undefined : error instanceof Error ? error.message : String(error)}
-        message={t(isNotFound ? 'settings.mcp.detail.notFound' : 'settings.mcp.detail.loadFailed')}
-        onRetry={isNotFound ? undefined : () => void refetch()}
-      />
+      <McpServerStateScreen>
+        {isNotFound ? (
+          <ContentState.Empty title={t('settings.mcp.detail.notFound')} />
+        ) : (
+          <ContentState.Error
+            description={error instanceof Error ? error.message : String(error)}
+            primaryAction={{
+              children: t('settings.mcp.retry'),
+              onPress: () => void refetch(),
+            }}
+            title={t('settings.mcp.detail.loadFailed')}
+          />
+        )}
+      </McpServerStateScreen>
     );
   }
 
   if (!isCreating && !server) {
-    return <McpServerLoadState message={t('settings.mcp.detail.notFound')} />;
+    return (
+      <McpServerStateScreen>
+        <ContentState.Empty title={t('settings.mcp.detail.notFound')} />
+      </McpServerStateScreen>
+    );
   }
 
   return (
@@ -59,44 +83,13 @@ export function McpServerScreen() {
   );
 }
 
-function McpServerLoadState({
-  detail,
-  isLoading = false,
-  message,
-  onRetry,
-}: {
-  detail?: string;
-  isLoading?: boolean;
-  message: string;
-  onRetry?: () => void;
-}) {
+function McpServerStateScreen({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
 
   return (
     <>
       <RouteHeader title={t('settings.mcp.tabs.configuration')} />
-      <View className="flex-1 items-center justify-center gap-3 px-6">
-        {isLoading ? <ActivityIndicator size="small" /> : null}
-        <Text
-          className={
-            onRetry
-              ? 'text-center text-destructive-foreground text-sm'
-              : 'text-center text-foreground text-sm'
-          }
-        >
-          {message}
-        </Text>
-        {detail ? (
-          <Text className="text-center text-foreground text-xs" selectable>
-            {detail}
-          </Text>
-        ) : null}
-        {onRetry ? (
-          <Button size="sm" variant="secondary" onPress={onRetry}>
-            {t('settings.mcp.retry')}
-          </Button>
-        ) : null}
-      </View>
+      <View className="flex-1 justify-center px-6">{children}</View>
     </>
   );
 }

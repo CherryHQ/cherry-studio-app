@@ -1,4 +1,4 @@
-import { Button } from '@cherrystudio/ui/components';
+import { Button, ContentState } from '@cherrystudio/ui/components';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -71,10 +71,10 @@ export default function AssistantDetailScreen() {
       >
         {assistant ? (
           <AssistantSummary assistant={assistant} />
+        ) : isLoading ? (
+          <ContentState.Loading title={t('assistant.form.loading')} />
         ) : (
-          <Text className="text-center text-foreground text-sm">
-            {isLoading ? t('assistant.form.loading') : t('assistant.list.emptyTitle')}
-          </Text>
+          <ContentState.Empty title={t('assistant.list.emptyTitle')} />
         )}
       </ScrollView>
       {assistant ? (
