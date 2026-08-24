@@ -25,12 +25,12 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
+import { ArtifactPreviewLink } from '@/frontend/components/artifactPreview';
 import {
   COMPOSER_PHOTO_SELECTION_LIMIT,
   type ComposerInitialAttachment,
   createPhotoAttachmentDraft,
 } from '@/frontend/components/composer/utils/composerAttachments';
-import { PaintingZoomLink } from '@/frontend/components/navigation';
 import {
   useListBottomInset,
   usePendingDeletionIds,
@@ -480,9 +480,14 @@ function DrawingGridItem({
   // it goes back to the composer, which is where its progress — or its retry —
   // lives.
   return item.kind === 'output' ? (
-    <PaintingZoomLink fileEntryId={item.fileEntryId} paintingId={item.painting.id}>
+    <ArtifactPreviewLink
+      href={{
+        pathname: '/paintings/[paintingId]',
+        params: { fileEntryId: item.fileEntryId, paintingId: item.painting.id },
+      }}
+    >
       {tile}
-    </PaintingZoomLink>
+    </ArtifactPreviewLink>
   ) : (
     <Link asChild href={{ pathname: '/paintings', params: { paintingId: item.painting.id } }}>
       {tile}

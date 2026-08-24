@@ -12,11 +12,9 @@ const mockToastShow = jest.fn();
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
-}));
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 jest.mock('@/frontend/data', () => ({
   useBackendModule: () => ({ checkProvider: mockCheckProvider }),

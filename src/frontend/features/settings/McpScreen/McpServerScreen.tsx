@@ -1,6 +1,5 @@
-import { Button, Input, Label, TextField, useAlert } from '@cherrystudio/ui/components';
+import { Button, Input, Label, TextField, useAlert, useToast } from '@cherrystudio/ui/components';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';

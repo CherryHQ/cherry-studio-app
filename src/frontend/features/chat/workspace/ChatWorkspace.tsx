@@ -6,7 +6,7 @@ import { View } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 
 import { MessageList, type MessageListItem } from '@/frontend/components/messages';
-import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
+import { resolveHeaderContentInset } from '@/frontend/components/navigation';
 import type { MessagesViewModel } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import type { Message } from '@/shared/data/types/message';

@@ -1,16 +1,21 @@
 import { Stack } from 'expo-router';
 import { useState } from 'react';
 
-import type { PaintingViewerImageProps } from './PaintingViewerImage.types';
-import { ViewerImage } from './ViewerImage';
+import { ArtifactImageViewer } from '@/frontend/components/artifactPreview';
 
-export function PaintingViewerImage({ uri }: PaintingViewerImageProps) {
+import type { PaintingViewerImageProps } from './PaintingViewerImage.types';
+
+export function PaintingViewerImage({ accessibilityLabel, uri }: PaintingViewerImageProps) {
   const [isImageZoomed, setIsImageZoomed] = useState(false);
 
   return (
     <>
       <Stack.Screen options={{ gestureEnabled: !isImageZoomed }} />
-      <ViewerImage onZoomChange={setIsImageZoomed} uri={uri} />
+      <ArtifactImageViewer
+        accessibilityLabel={accessibilityLabel}
+        onZoomChange={setIsImageZoomed}
+        uri={uri}
+      />
     </>
   );
 }

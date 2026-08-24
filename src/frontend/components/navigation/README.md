@@ -1,12 +1,18 @@
 # Navigation
 
-This module owns React Navigation integration for the app shell and shared native transitions.
+This module owns Expo Router and React Navigation integration shared by the app shell and feature
+domains.
 
 ## Public Interface
 
-- `NavigationThemeProvider` is exported from `index.ts`.
-- `PaintingZoomLink` and `PaintingZoomTarget` connect a painting gallery item to its viewer image.
+- `NavigationThemeProvider` supplies the app-wide navigation theme.
+- `ContextMenuLink` and `ContextMenuLinkItem` define the shared link-with-context-menu adapter.
+- `resolveHeaderContentInset` normalizes platform header insets for full-screen content.
+- `getRootHeaderStyle`, `getTransparentHeaderStyle`, and `paintingViewerHeaderShown` expose the
+  platform policy consumed by root stack configuration.
 
 ## Organization
 
-- `components/` contains providers and native navigation adapters.
+- `components/` contains app-wide providers and shared link adapters.
+- `headerContentInset/` and `rootStackPlatform/` contain platform families kept private behind
+  `index.ts`.

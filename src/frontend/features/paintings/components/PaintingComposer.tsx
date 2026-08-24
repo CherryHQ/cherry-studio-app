@@ -8,7 +8,7 @@ import { View } from 'react-native';
 import { ManagedComposerProvider } from '@/frontend/components/composer';
 import type { ComposerInitialAttachment } from '@/frontend/components/composer/utils/composerAttachments';
 import { MessageList, type MessageListItem } from '@/frontend/components/messages';
-import { resolveHeaderContentInset } from '@/frontend/components/navigation/headerContentInset/headerContentInset';
+import { resolveHeaderContentInset } from '@/frontend/components/navigation';
 import type { Painting } from '@/shared/data/types/painting';
 
 import {

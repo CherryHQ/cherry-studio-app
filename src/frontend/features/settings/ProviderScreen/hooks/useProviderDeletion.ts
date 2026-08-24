@@ -1,7 +1,6 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 

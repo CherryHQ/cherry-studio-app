@@ -13,10 +13,10 @@ import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/hea
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {
   areAllSelected,
+  SelectionToolbar,
   toggleSelection,
   useListBottomInset,
 } from '@/frontend/components/selection';
-import { SelectionToolbar } from '@/frontend/components/selection/SelectionToolbar/SelectionToolbar';
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
 import type { Assistant } from '@/shared/data/types/assistant';
 

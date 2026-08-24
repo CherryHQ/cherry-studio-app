@@ -16,16 +16,13 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: jest.fn() }),
 }));
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
-}));
-
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { show: mockAlertShow } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('@/frontend/data', () => ({

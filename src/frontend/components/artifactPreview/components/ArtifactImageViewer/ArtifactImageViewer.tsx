@@ -1,16 +1,15 @@
 import { useState } from 'react';
 import { useWindowDimensions, View } from 'react-native';
 
-import { PaintingZoomTarget } from '@/frontend/components/navigation';
-
+import { ArtifactPreviewTarget } from '../ArtifactPreviewTransition/ArtifactPreviewTransition';
 import { ZoomableImage } from './ZoomableImage';
 
-// Use the measured container height because `100%` is not reliable through the
-// shared-element transition wrapper.
-export function ViewerImage({
+export function ArtifactImageViewer({
+  accessibilityLabel,
   onZoomChange,
   uri,
 }: {
+  accessibilityLabel: string;
   onZoomChange?: (isZoomed: boolean) => void;
   uri: string;
 }) {
@@ -18,12 +17,18 @@ export function ViewerImage({
   const [height, setHeight] = useState(0);
 
   return (
-    <PaintingZoomTarget>
+    <ArtifactPreviewTarget>
       <View className="flex-1" onLayout={({ nativeEvent }) => setHeight(nativeEvent.layout.height)}>
         {height > 0 ? (
-          <ZoomableImage height={height} onZoomChange={onZoomChange} uri={uri} width={width} />
+          <ZoomableImage
+            accessibilityLabel={accessibilityLabel}
+            height={height}
+            onZoomChange={onZoomChange}
+            uri={uri}
+            width={width}
+          />
         ) : null}
       </View>
-    </PaintingZoomTarget>
+    </ArtifactPreviewTarget>
   );
 }

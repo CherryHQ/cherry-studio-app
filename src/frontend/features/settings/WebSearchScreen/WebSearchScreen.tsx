@@ -2,11 +2,10 @@ import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useUniwind } from 'uniwind';
 
-import { RouteHeader } from '@/frontend/components/headers';
-
+import { SettingsScrollPage } from '../components/SettingsScrollPage';
 import { useWebSearchProviderPreferences } from '../hooks/useWebSearchProviderPreferences';
 import { WebSearchApiManagementSection } from './components/WebSearchApiManagementSection';
 import { resolveWebSearchProviderIcon } from './utils/providerIcons';
@@ -22,49 +21,43 @@ export default function WebSearchSettingsScreen() {
   const iconTheme = theme === 'dark' ? 'dark' : 'light';
 
   return (
-    <>
-      <RouteHeader title={t('settings.pages.websearch.title')} />
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentContainerClassName="gap-6 px-4 py-5"
-        contentInsetAdjustmentBehavior="automatic"
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
+    <SettingsScrollPage
+      contentClassName="gap-6"
+      headerProps={{ title: t('settings.pages.websearch.title') }}
+      keyboardShouldPersistTaps="handled"
+    >
+      <WebSearchApiManagementSection
+        afterItems={
+          <Section.Item
+            label={t('settings.websearch.advanced.title')}
+            onPress={() => router.push('/settings/websearch/advanced')}
+          />
+        }
+        capability="searchKeywords"
+        provider={searchProvider}
+        providerOverrides={webSearchProviders.providerOverrides.value}
+        onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
       >
-        <WebSearchApiManagementSection
-          afterItems={
-            <Section.Item
-              label={t('settings.websearch.advanced.title')}
-              onPress={() => router.push('/settings/websearch/advanced')}
-            />
-          }
-          capability="searchKeywords"
-          provider={searchProvider}
-          providerOverrides={webSearchProviders.providerOverrides.value}
-          onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
-        >
-          <Section.Item
-            label={t('settings.websearch.provider.selection')}
-            onPress={() => router.push('/settings/websearch/default-provider')}
-            trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={searchProvider} />}
-          />
-        </WebSearchApiManagementSection>
+        <Section.Item
+          label={t('settings.websearch.provider.selection')}
+          onPress={() => router.push('/settings/websearch/default-provider')}
+          trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={searchProvider} />}
+        />
+      </WebSearchApiManagementSection>
 
-        <WebSearchApiManagementSection
-          capability="fetchUrls"
-          provider={fetchProvider}
-          providerOverrides={webSearchProviders.providerOverrides.value}
-          onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
-        >
-          <Section.Item
-            label={t('settings.websearch.fetchUrlsProvider')}
-            onPress={() => router.push('/settings/websearch/fetch-provider')}
-            trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={fetchProvider} />}
-          />
-        </WebSearchApiManagementSection>
-      </ScrollView>
-    </>
+      <WebSearchApiManagementSection
+        capability="fetchUrls"
+        provider={fetchProvider}
+        providerOverrides={webSearchProviders.providerOverrides.value}
+        onProviderOverrideChange={webSearchProviders.providerOverrides.onProviderOverrideChange}
+      >
+        <Section.Item
+          label={t('settings.websearch.fetchUrlsProvider')}
+          onPress={() => router.push('/settings/websearch/fetch-provider')}
+          trailing={<ProviderSelectionValue iconTheme={iconTheme} provider={fetchProvider} />}
+        />
+      </WebSearchApiManagementSection>
+    </SettingsScrollPage>
   );
 }
 
