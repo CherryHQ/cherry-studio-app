@@ -1,10 +1,10 @@
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
-import ContactRoundIcon from '@cherrystudio/app-icons/icons/contact-round';
-import ContrastIcon from '@cherrystudio/app-icons/icons/contrast';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
@@ -48,7 +48,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.profile')}
-              leading={<ContactRoundIcon className="size-5 text-foreground" />}
+              leading={<CircleUserRoundIcon className="size-5 text-foreground" />}
               onPress={openProfileSettings}
             />
           </Section>
@@ -67,7 +67,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.webSearch')}
-              leading={<NetworkIcon className="size-5 text-foreground" />}
+              leading={<GlobeIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/websearch')}
             />
             <Section.Item
@@ -102,7 +102,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.appearance.title')}
-              leading={<ContrastIcon className="size-5 text-foreground" />}
+              leading={<PaletteIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
             />
           </Section>
