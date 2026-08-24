@@ -246,23 +246,20 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
-  test('reconciliation marks preloaded unfinished turns and messages interrupted', async () => {
+  test('reconciliation marks preloaded unfinished messages interrupted', async () => {
     // Preload the reference adapter with the state a durable adapter would
     // restore after a process death.
     const session = await store.createSession({ agentId: AGENT_ID });
-    const reserved = await store.reserveTurn({
+    const reserved = await store.reserveSubmission({
       sessionId: session.id,
       userParts: [{ id: 'input-0', type: 'text', text: 'Hello.', state: 'done' }],
     });
+    expect(reserved.assistantMessage.turnId).toBe(reserved.turnId);
+    expect(reserved.userMessage.turnId).toBe(reserved.turnId);
 
     const host = hostWithModel(new MockLanguageModelV3());
     const count = await host.reconcileInterruptedTurns();
     expect(count).toBe(1);
-
-    const turn = await store.getTurn(reserved.turn.id);
-    expect(turn?.status).toBe('interrupted');
-    expect(turn?.error?.code).toBe('INTERRUPTED');
-    expect(turn?.endedAt).not.toBeNull();
 
     const transcript = await store.listMessages(session.id);
     expect(transcript.map((message) => message.status)).toEqual(['success', 'interrupted']);

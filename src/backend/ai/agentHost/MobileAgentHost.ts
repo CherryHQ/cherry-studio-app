@@ -10,11 +10,12 @@
  *
  * Protocol invariants implemented here (agent-protocol.md):
  * 1.  one active turn per Session (synchronous admission guard);
- * 2.  reservation of user message + assistant placeholder + turn commits
- *     atomically before execution;
+ * 2.  reservation of user message + assistant placeholder commits atomically
+ *     before execution;
  * 3/4. the Runtime contract guarantees exactly one terminal event and silence
  *     after it; the run loop stops at the first terminal;
- * 5.  terminal message and turn state commit before terminal events publish;
+ * 5.  terminal message state commits before terminal events publish; the
+ *     terminal turn is a projection of that committed message;
  * 6.  cancellation settles as `cancelled` (or `interrupted` at startup);
  * 7.  approval responses correlate to the active Session/turn/approval and
  *     fail closed;
@@ -99,6 +100,11 @@ type MobileAgentHostOverrides = {
   router: AgentRuntimeRouter;
 };
 
+/**
+ * The Host owns the Turn projection (agent-persistence.md): the store persists
+ * messages only, live turn state exists here, and the terminal turn view is
+ * derived from the settled assistant message.
+ */
 type ActiveTurnState = {
   turn: AgentTurnView;
   assistantMessage: AgentMessageView;
@@ -269,11 +275,21 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
 
       // Invariant 2: reservation commits before execution starts.
-      const reserved = await this.store.reserveTurn({ sessionId, userParts });
+      const reserved = await this.store.reserveSubmission({ sessionId, userParts });
       const runtimeSession = await this.getRuntimeSession(sessionId, runtime);
 
+      // The Turn projection starts here: reservation time is the turn start.
+      const turn: AgentTurnView = {
+        id: reserved.turnId,
+        sessionId,
+        status: 'running',
+        assistantMessageId: reserved.assistantMessage.id,
+        error: null,
+        startedAt: reserved.assistantMessage.createdAt,
+        endedAt: null,
+      };
       const state: ActiveTurnState = {
-        turn: reserved.turn,
+        turn,
         assistantMessage: reserved.assistantMessage,
         pendingApprovals: new Map(),
         usage: null,
@@ -283,7 +299,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
       this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
       this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
-      this.publish(sessionId, { type: 'turn.updated', turn: reserved.turn });
+      this.publish(sessionId, { type: 'turn.updated', turn });
 
       const run = this.runTurn(
         sessionId,
@@ -296,7 +312,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       void run.finally(() => this.runningTurns.delete(run));
 
       return {
-        turnId: reserved.turn.id,
+        turnId: reserved.turnId,
         userMessageId: reserved.userMessage.id,
         assistantMessageId: reserved.assistantMessage.id,
       };
@@ -312,11 +328,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       return; // invariant 6: idempotent, including after the turn settled
     }
     if (active.turn.status !== 'cancelling') {
-      const turn = await this.store.setTurnStatus(parsed.turnId, 'cancelling');
-      if (turn && this.activeTurns.get(parsed.sessionId) === active) {
-        active.turn = turn;
-        this.publish(parsed.sessionId, { type: 'turn.updated', turn });
-      }
+      active.turn = { ...active.turn, status: 'cancelling' };
+      this.publish(parsed.sessionId, { type: 'turn.updated', turn: active.turn });
     }
     await active.runtimeSession.cancel(parsed.turnId);
   }
@@ -467,30 +480,24 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         return false;
       }
       case 'approval.requested': {
+        // Approvals and live turn status are Host state by design: they never
+        // survive a restart (agent-persistence.md).
         const approval = toAgentApprovalView(event.approval, sessionId);
         state.pendingApprovals.set(approval.id, approval);
-        await this.store.upsertApproval(approval);
-        const turn = await this.store.setTurnStatus(state.turn.id, 'awaiting-approval');
-        if (turn) {
-          state.turn = turn;
-          this.publish(sessionId, { type: 'turn.updated', turn });
-        }
+        state.turn = { ...state.turn, status: 'awaiting-approval' };
+        this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         this.publish(sessionId, { type: 'approval.requested', approval });
         return false;
       }
       case 'approval.resolved': {
         const approval = toAgentApprovalView(event.approval, sessionId);
         state.pendingApprovals.set(approval.id, approval);
-        await this.store.upsertApproval(approval);
         const hasPending = [...state.pendingApprovals.values()].some(
           (entry) => entry.status === 'pending',
         );
         if (!hasPending && state.turn.status === 'awaiting-approval') {
-          const turn = await this.store.setTurnStatus(state.turn.id, 'running');
-          if (turn) {
-            state.turn = turn;
-            this.publish(sessionId, { type: 'turn.updated', turn });
-          }
+          state.turn = { ...state.turn, status: 'running' };
+          this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         }
         this.publish(sessionId, { type: 'approval.resolved', approval });
         return false;
@@ -531,23 +538,28 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const messageStatus =
       outcome === 'completed' ? 'success' : outcome === 'failed' ? 'error' : 'cancelled';
 
-    // Invariant 5: terminal message and turn state commit before the terminal
-    // events publish.
-    const finalized = await this.store.finalizeTurn({
-      turnId: state.turn.id,
-      turnStatus: outcome,
-      turnError: error,
+    // Invariant 5: the terminal message state (including the turn-level error)
+    // commits before the terminal events publish. The terminal turn view is a
+    // projection of that committed message.
+    const finalized = await this.store.finalizeAssistantMessage({
       assistantMessageId: state.assistantMessage.id,
-      messageStatus,
+      status: messageStatus,
       parts,
       usage: state.usage ? toAgentUsageView(state.usage) : null,
+      error,
     });
+    const turn: AgentTurnView = {
+      ...state.turn,
+      status: outcome,
+      error,
+      endedAt: finalized.updatedAt,
+    };
 
     if (this.activeTurns.get(sessionId) === state) {
       this.activeTurns.delete(sessionId);
     }
-    this.publish(sessionId, { type: 'message.finalized', message: finalized.assistantMessage });
-    this.publish(sessionId, { type: 'turn.updated', turn: finalized.turn });
+    this.publish(sessionId, { type: 'message.finalized', message: finalized });
+    this.publish(sessionId, { type: 'turn.updated', turn });
   }
 
   // ── Helpers ──
