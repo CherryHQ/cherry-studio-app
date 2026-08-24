@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 export type LogLevel = 'error' | 'warn' | 'info' | 'debug' | 'verbose' | 'silly' | 'none';
 
 type LogContext = Record<string, unknown>;
@@ -25,6 +27,7 @@ const LEVEL_MAP: Record<LogLevel, number> = {
 };
 
 const isDevelopment = () => typeof __DEV__ !== 'undefined' && __DEV__;
+const isNativeDevelopment = () => isDevelopment() && Platform.OS !== 'web';
 const DEFAULT_LEVEL: LogLevel = isDevelopment() ? LEVEL.SILLY : LEVEL.INFO;
 
 export class LoggerService {
@@ -79,7 +82,7 @@ export class LoggerService {
   }
 
   private processLog(level: LogLevel, message: string, data: LogContextData): void {
-    if (LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
+    if (!isDevelopment() || LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
       return;
     }
 
@@ -90,11 +93,11 @@ export class LoggerService {
 
     switch (level) {
       case LEVEL.ERROR:
-        if (isDevelopment()) console.info(formattedMessage, ...logData);
+        if (isNativeDevelopment()) console.info(formattedMessage, ...logData);
         else console.error(formattedMessage, ...logData);
         break;
       case LEVEL.WARN:
-        if (isDevelopment()) console.info(formattedMessage, ...logData);
+        if (isNativeDevelopment()) console.info(formattedMessage, ...logData);
         else console.warn(formattedMessage, ...logData);
         break;
       case LEVEL.INFO:
