@@ -32,11 +32,13 @@ export const paintingTable = sqliteTable(
     ...orderKeyColumns,
     ...createUpdateTimestamps,
     // Declared last to match the physical column order: SQLite's ADD COLUMN
-    // appends, and this column arrived that way in 0002.
+    // appends, and this column arrived that way in 0002 — with this DB DEFAULT,
+    // which migrations.test.ts guards. A `$defaultFn` here instead would drift
+    // the schema from the deployed table and make drizzle-kit queue a rebuild.
     files: text({ mode: 'json' })
       .$type<PaintingFiles>()
       .notNull()
-      .$defaultFn(() => ({ input: [], output: [] })),
+      .default({ input: [], output: [] }),
   },
   (t) => [orderKeyIndex('painting')(t)],
 );
