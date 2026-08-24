@@ -16,12 +16,12 @@ import { withUniwind } from 'uniwind';
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/components/headers';
-import { NavigationThemeProvider } from '@/frontend/components/navigation';
 import {
   getRootHeaderStyle,
   getTransparentHeaderStyle,
+  NavigationThemeProvider,
   paintingViewerHeaderShown,
-} from '@/frontend/components/navigation/rootStackPlatform/rootStackPlatform';
+} from '@/frontend/components/navigation';
 import { StartupCoordinator, StartupRouteReadyReporter } from '@/frontend/components/startup';
 import { QueryProvider } from '@/frontend/data';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';

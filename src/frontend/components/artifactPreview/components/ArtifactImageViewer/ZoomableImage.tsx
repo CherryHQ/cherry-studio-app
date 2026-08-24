@@ -1,6 +1,5 @@
 import { Image } from '@cherrystudio/ui/components';
 import { useState } from 'react';
-import { useTranslation } from 'react-i18next';
 import { StyleSheet } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -16,17 +15,18 @@ const DOUBLE_TAP_SCALE = 2.5;
 // A single pannable, pinch- and double-tap-zoomable image. Pan stays disabled at
 // rest so it does not compete with the navigation gesture.
 export function ZoomableImage({
+  accessibilityLabel,
   height,
   onZoomChange,
   uri,
   width,
 }: {
+  accessibilityLabel: string;
   height: number;
   onZoomChange?: (isZoomed: boolean) => void;
   uri: string;
   width: number;
 }) {
-  const { t } = useTranslation();
   const [isZoomed, setIsZoomed] = useState(false);
 
   const scale = useSharedValue(1);
@@ -133,7 +133,7 @@ export function ZoomableImage({
     <GestureDetector gesture={gesture}>
       <Animated.View style={[{ height, width }, animatedStyle]}>
         <Image
-          accessibilityLabel={t('painting.output')}
+          accessibilityLabel={accessibilityLabel}
           cachePolicy="memory-disk"
           contentFit="contain"
           source={uri}

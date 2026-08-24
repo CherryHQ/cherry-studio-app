@@ -1,7 +1,9 @@
 export { ContextMenuLink } from './components/ContextMenuLink';
-export type { ContextMenuLinkItem, ContextMenuLinkProps } from './components/ContextMenuLink';
+export type { ContextMenuLinkItem } from './components/ContextMenuLink';
 export { NavigationThemeProvider } from './components/NavigationThemeProvider';
+export { resolveHeaderContentInset } from './headerContentInset/headerContentInset';
 export {
-  PaintingZoomLink,
-  PaintingZoomTarget,
-} from './components/PaintingZoomTransition/PaintingZoomTransition';
+  getRootHeaderStyle,
+  getTransparentHeaderStyle,
+  paintingViewerHeaderShown,
+} from './rootStackPlatform/rootStackPlatform';

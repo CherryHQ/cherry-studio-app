@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 
 import { headerScreenOptions } from '@/frontend/components/headers';
-import { getTransparentHeaderStyle } from '@/frontend/components/navigation/rootStackPlatform/rootStackPlatform';
+import { getTransparentHeaderStyle } from '@/frontend/components/navigation';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { isLiquidGlassAvailable } from '@/frontend/utils/constants';
 

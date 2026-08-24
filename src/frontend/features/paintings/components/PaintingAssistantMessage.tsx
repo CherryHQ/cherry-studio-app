@@ -14,7 +14,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { PaintingZoomLink } from '@/frontend/components/navigation';
+import { ArtifactPreviewLink } from '@/frontend/components/artifactPreview';
 
 import type {
   PaintingGenerationStatus,
@@ -147,9 +147,14 @@ export function PaintingAssistantMessage({
     return (
       <View className="w-full" key={output.fileEntryId} style={{ aspectRatio }}>
         {paintingId ? (
-          <PaintingZoomLink fileEntryId={output.fileEntryId} paintingId={paintingId}>
+          <ArtifactPreviewLink
+            href={{
+              pathname: '/paintings/[paintingId]',
+              params: { fileEntryId: output.fileEntryId, paintingId },
+            }}
+          >
             {result}
-          </PaintingZoomLink>
+          </ArtifactPreviewLink>
         ) : (
           result
         )}
