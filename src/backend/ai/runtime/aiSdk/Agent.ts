@@ -145,7 +145,6 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
         await safeCall('onAbort', hooks.onAbort);
         throw error;
       }
-      logger.error('agent generate error', error as Error);
       if (hooks.onError) {
         try {
           await hooks.onError({ error: toError(error) });
@@ -333,8 +332,6 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
         const action = await invokeOnError(error);
         if (action === 'retry') {
           logger.warn('agentLoop onError returned retry; retry not implemented - aborting', error);
-        } else {
-          logger.error('agentLoop error', error as Error);
         }
         await settleWriter({ error });
       });

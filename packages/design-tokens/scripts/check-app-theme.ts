@@ -44,8 +44,6 @@ const colorLiteralAllowlist: Record<string, string> = {
     'outside the theme runtime: paints before the CSS variable tree exists',
   'src/frontend/features/onboarding/logoDraw/utils/logoPalette.ts':
     'artwork: the logo colours encode relationships with each other, not roles',
-  'src/shared/core/logger/LoggerService.ts':
-    'outside the render tree: `%c` console styles never pass through uniwind',
 };
 
 const forbiddenPatterns = [

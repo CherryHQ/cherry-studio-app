@@ -21,7 +21,7 @@ const LEVEL_MAP: Record<LogLevel, number> = {
   debug: 4,
   verbose: 2,
   silly: 0,
-  none: -1,
+  none: Number.POSITIVE_INFINITY,
 };
 
 const isDevelopment = () => typeof __DEV__ !== 'undefined' && __DEV__;
@@ -79,32 +79,35 @@ export class LoggerService {
   }
 
   private processLog(level: LogLevel, message: string, data: LogContextData): void {
-    if (!isDevelopment() || LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
+    if (LEVEL_MAP[level] < LEVEL_MAP[this.level]) {
       return;
     }
 
     const logMessage = this.module ? `[${this.module}] ${message}` : message;
     const contextData = Object.keys(this.context).length > 0 ? [this.context] : [];
     const logData = [...contextData, ...data];
+    const formattedMessage = `<${level}> ${logMessage}`;
 
     switch (level) {
       case LEVEL.ERROR:
-        console.error('%c<error>', 'color: red; font-weight: bold', logMessage, ...logData);
+        if (isDevelopment()) console.info(formattedMessage, ...logData);
+        else console.error(formattedMessage, ...logData);
         break;
       case LEVEL.WARN:
-        console.warn('%c<warn>', 'color: #FFA500; font-weight: bold', logMessage, ...logData);
+        if (isDevelopment()) console.info(formattedMessage, ...logData);
+        else console.warn(formattedMessage, ...logData);
         break;
       case LEVEL.INFO:
-        console.info('%c<info>', 'color: #32CD32; font-weight: bold', logMessage, ...logData);
+        console.info(formattedMessage, ...logData);
         break;
       case LEVEL.DEBUG:
-        console.debug('%c<debug>', 'color: #7B68EE', logMessage, ...logData);
+        console.debug(formattedMessage, ...logData);
         break;
       case LEVEL.VERBOSE:
-        console.debug('%c<verbose>', 'color: #808080', logMessage, ...logData);
+        console.debug(formattedMessage, ...logData);
         break;
       case LEVEL.SILLY:
-        console.debug('%c<silly>', 'color: #808080', logMessage, ...logData);
+        console.debug(formattedMessage, ...logData);
         break;
     }
   }
