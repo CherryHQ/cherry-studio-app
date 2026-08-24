@@ -11,8 +11,9 @@ edge-to-edge layout, and safe-area/inset strategy. Terms follow
 - Edge-to-edge is a platform window layout capability. The app is responsible for fitting headers, chat input, message lists, sheets, and keyboard areas against insets.
 - System gesture zones belong to the system. Product horizontal gestures must not compete with Android screen edges.
 - Back interception is limited to explicit product states such as unsaved edits, active generation confirmation, or dangerous action confirmation.
-- Route-level sheets are reserved for page-like flows; no current route uses one. Model selection
-  uses a component-level `BottomSheet` through `ModelPickerDrawer`.
+- Route-level sheets are reserved for page-like flows; no current route uses one. Every model
+  selection entry uses `ModelPickerDrawer`, whose search action uses the root native-stack
+  `/search` route.
 
 ## Android Back Gesture
 
@@ -57,8 +58,8 @@ Before enabling it, verify:
 - `src/app/_layout.tsx` owns the app root wrappers: gesture handler root, keyboard provider, HeroUI
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
-- The root Stack hosts the `(drawer)` group (header hidden) plus root-level `onboarding`, `topics`
-  (topic management), `settings`, and `paintings` screens.
+- The root Stack hosts the `(drawer)` group (header hidden) plus root-level `onboarding`, `search`,
+  `topics` (topic management), `settings`, and `paintings` screens.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) with four
   scenes: `(chat)` (the initial route), home, assistants, and drawings. The sidebar is the
   `features/sidebar` compound; every scene's header leads with a hamburger that opens it.
@@ -72,9 +73,8 @@ Before enabling it, verify:
   have to appear out of nothing when a sub-screen is pushed, which is what made the bar jump on
   entry. Use `modal` and not `formSheet` for this shape — see below.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
-  nested native Stack (for `Stack.Toolbar`/`Stack.SearchBar` APIs) and wraps `ChatScreen` in
-  `ChatProvider`. The provider subscribes to the app-owned Chat Runtime; route unmount does not
-  dispose it.
+  nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
+  provider subscribes to the app-owned Chat Runtime; route unmount does not dispose it.
 - Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
 ## Picker Sheets
@@ -94,9 +94,19 @@ Multi-level component sheets keep their current page in the owning feature and r
 inside the same physical sheet. They pass `backAction` only while a nested page is visible; the
 shared shell owns the consistent header placement but does not expose a navigation stack.
 
-Model selection is the reusable component-level `ModelPickerDrawer`. It is used by chat input,
-painting input, and provider model checks. It owns its search and grouped model rows, uses a
-`large` height sheet, and marks the current model with a trailing check.
+Model selection and model search are separate interactions. Chat input, painting input, provider
+connectivity checks, model settings, and assistant editing all open `ModelPickerDrawer`, the one
+model-selection view. Its compact trailing search action opens `/search`; the drawer temporarily
+hides while that route is active so its portal and Android back handler cannot compete with the root
+route.
+
+Single-selection model search, model-service search, assistant search, and provider model search use
+the root `/search` route. It is one fixed view: callers adapt data, matching, optional filters, and
+result content rather than supplying business-specific search screens. Native back or an interactive
+pop cancels without calling business logic; selection resolves only after the route's exit transition
+completes. The route title is always Search, and it does not query or render a full result set until
+the user enters non-whitespace text. Topic management and provider model pull keep persistent local
+search because their matching rows retain management or multi-selection actions.
 
 Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
 
@@ -116,7 +126,8 @@ Recommended shape:
 />
 ```
 
-Do not migrate model selection to a route-level `formSheet` just to reuse page navigation. Reconsider only if the picker becomes a page-like flow with nested navigation, deep linking, or system-back semantics that cannot be handled cleanly as a local sheet.
+Do not present app search as a route-level `formSheet`; it is a normal root stack card so entry,
+selection dismissal, and platform back gestures share one transition contract.
 
 ## Component Sheet Boundary
 
@@ -148,6 +159,7 @@ Current horizontal gestures, such as topic-row swipe actions, start inside conte
 - Android system edge back works in normal screens, nested stacks, and modal/sheet flows.
 - Back targets, animations, and product confirmation states are predictable before and after enabling predictive back.
 - In edge-to-edge mode, headers, chat input, and message lists are not obscured by the status bar, navigation bar, or keyboard.
-- Opening model selection from chat input keeps keyboard, sheet height, and bottom inset stable.
+- Opening model selection from chat input keeps the picker sheet stable; its search action hands off
+  to app search without competing back handlers or an inset jump.
 - Product horizontal gestures do not steal system edge back.
 - Only screens with explicit product reasons use local back interception.

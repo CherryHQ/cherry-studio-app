@@ -1,13 +1,11 @@
 export { ModelPickerDrawer } from './components/ModelPickerDrawer';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
 export { ModelPickerList } from './components/ModelPickerList';
-export { ModelPickerScreen } from './components/ModelPickerScreen';
 export { ModelPickerTagChip } from './components/ModelPickerTagChip';
 export { ModelSearchControls } from './components/ModelSearchControls/ModelSearchControls';
-export { ModelSearchField } from './components/ModelSearchField/ModelSearchField';
-export type { ModelSearchFieldProps } from './components/ModelSearchField/ModelSearchField.types';
 export { ModelTypeFilterBar } from './components/ModelTypeFilterBar';
 export { useModelPickerData } from './hooks/useModelPickerData';
+export { useModelSearch } from './hooks/useModelSearch';
 export { useModelSettingSelections } from './hooks/useModelSettingSelections';
 export {
   filterModelsByModelPickerTags,

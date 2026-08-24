@@ -19,9 +19,8 @@ const topicSelectionScope = 'conversations';
 
 /**
  * Full topic management page (`/topics`), reached from the sidebar's
- * "view all" row: searchable list plus multi-select batch deletion. iOS search
- * lives in the native header search bar; Android uses an inline field below
- * the header.
+ * "view all" row: searchable list plus multi-select batch deletion. Search stays
+ * in this management workflow so matching rows retain rename and delete actions.
  */
 function TopicListScreenBody() {
   const { t } = useTranslation();

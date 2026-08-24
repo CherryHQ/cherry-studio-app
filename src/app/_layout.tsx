@@ -14,6 +14,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
+import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/components/appSearch';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/components/headers';
 import {
   getRootHeaderStyle,
@@ -106,6 +107,14 @@ function RootStack() {
     >
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="search"
+        options={{
+          animation: 'fade_from_bottom',
+          animationDuration: APP_SEARCH_TRANSITION_DURATION_MS,
+          headerTransparent: false,
+        }}
+      />
       <Stack.Screen name="topics" />
       {/* Settings owns a nested stack and draws its headers there, so the root
           stack only needs to push the page without adding another header. */}

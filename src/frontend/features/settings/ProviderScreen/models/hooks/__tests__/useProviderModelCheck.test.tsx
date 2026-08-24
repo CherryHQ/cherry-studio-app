@@ -119,8 +119,8 @@ describe('useProviderModelCheck', () => {
     await act(async () => modelCheck?.startCheck());
     expect(modelCheck?.modelStatus).toMatchObject({ status: 'success' });
 
-    // The selection arrives as a route param from the pushed picker, so this is
-    // the only way the section learns the answer on screen is stale.
+    // The picker updates the controlled selection, which makes the result for
+    // the previous model stale.
     act(() => {
       renderer?.update(<Probe selectedModelId={otherModel.id} />);
     });

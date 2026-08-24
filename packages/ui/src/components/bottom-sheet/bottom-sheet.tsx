@@ -4,7 +4,6 @@ import {
   type Detent,
   ModalBottomSheet,
 } from '@swmansion/react-native-bottom-sheet';
-import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -20,9 +19,8 @@ import { useResolveClassNames } from 'uniwind';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
-const OUTER_INSET = 4;
 const TOP_INSET = 12;
-const CORNER_RADIUS = 32;
+const TOP_CORNER_RADIUS = 32;
 const HEIGHT_RATIOS = {
   compact: 0.4,
   large: 0.8,
@@ -40,6 +38,7 @@ type BottomSheetBaseProps = {
   backAction?: BottomSheetBackAction;
   children: ReactNode;
   dismissible?: boolean;
+  headerAction?: ReactNode;
   onClose: () => void;
   open: boolean;
   testID?: string;
@@ -68,29 +67,28 @@ export function BottomSheetProvider({ children }: { children: ReactNode }) {
  * iOS and Android.
  */
 export function BottomSheet(props: BottomSheetProps) {
-  const { backAction, children, dismissible = true, onClose, open, testID, title } = props;
+  const {
+    backAction,
+    children,
+    dismissible = true,
+    headerAction,
+    onClose,
+    open,
+    testID,
+    title,
+  } = props;
   const insets = useSafeAreaInsets();
-  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { height: windowHeight } = useWindowDimensions();
   const scrimStyle = useResolveClassNames('bg-scrim');
   const scrimColor =
     typeof scrimStyle.backgroundColor === 'string' ? scrimStyle.backgroundColor : undefined;
-  const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET - OUTER_INSET);
+  const availableCardHeight = Math.max(0, windowHeight - insets.top - TOP_INSET);
   const requestedCardHeight =
     props.height === undefined
       ? Math.round(availableCardHeight * HEIGHT_RATIOS[props.size])
       : props.height;
   const cardHeight = Math.max(0, Math.min(requestedCardHeight, availableCardHeight));
-  const sheetHeight = cardHeight + OUTER_INSET;
-  const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
-  const screenCornerRadius = getCornerRadiusSync() ?? 0;
-  const bottomCornerRadius = Math.max(CORNER_RADIUS, screenCornerRadius - OUTER_INSET);
-  const cornerStyle = {
-    borderBottomLeftRadius: bottomCornerRadius,
-    borderBottomRightRadius: bottomCornerRadius,
-    borderTopLeftRadius: CORNER_RADIUS,
-    borderTopRightRadius: CORNER_RADIUS,
-  };
-  const detents = useMemo<Detent[]>(() => [0, sheetHeight], [sheetHeight]);
+  const detents = useMemo<Detent[]>(() => [0, cardHeight], [cardHeight]);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
   const hasNotifiedCloseRef = useRef(false);
@@ -155,14 +153,14 @@ export function BottomSheet(props: BottomSheetProps) {
       onSettle={handleSettle}
       scrimColor={scrimColor}
     >
-      <View style={{ height: sheetHeight, width: windowWidth }}>
+      <View style={{ height: cardHeight, width: '100%' }}>
         <View
           accessibilityElementsHidden={!open}
           accessibilityViewIsModal
-          className="self-center overflow-hidden border-continuous bg-background"
+          className="overflow-hidden border-continuous bg-background"
           importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}
           onAccessibilityEscape={dismissible ? requestClose : undefined}
-          style={[styles.card, cornerStyle, { height: cardHeight, width: cardWidth }]}
+          style={[styles.card, { height: cardHeight, width: '100%' }]}
           testID={testID}
         >
           <View accessibilityElementsHidden className="items-center pt-3" pointerEvents="none">
@@ -187,6 +185,7 @@ export function BottomSheet(props: BottomSheetProps) {
             >
               {title}
             </Text>
+            {headerAction ? <View className="ml-2">{headerAction}</View> : null}
           </View>
           <View className="min-h-0 flex-1" style={{ paddingBottom: insets.bottom }}>
             {children}
@@ -199,6 +198,10 @@ export function BottomSheet(props: BottomSheetProps) {
 
 const styles = StyleSheet.create({
   card: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
     borderCurve: 'continuous',
+    borderTopLeftRadius: TOP_CORNER_RADIUS,
+    borderTopRightRadius: TOP_CORNER_RADIUS,
   },
 });

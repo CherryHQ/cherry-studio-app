@@ -1,5 +1,9 @@
-import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
-import { memo, type ReactElement, useCallback, useMemo } from 'react';
+import {
+  LegendList,
+  type LegendListRef,
+  type LegendListRenderItemProps,
+} from '@legendapp/list/react-native';
+import { memo, type ReactElement, useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
@@ -16,7 +20,12 @@ export type ProviderModelListSelection = {
   selectedIds: ReadonlySet<UniqueModelId>;
 };
 
+export type ProviderModelListFocusRequest = {
+  modelId: UniqueModelId;
+};
+
 export type ProviderModelListContentProps = {
+  focusRequest?: ProviderModelListFocusRequest;
   isDefaultModel: (model: Model) => boolean;
   ListEmptyComponent?: ReactElement;
   ListHeaderComponent?: ReactElement;
@@ -27,6 +36,7 @@ export type ProviderModelListContentProps = {
 };
 
 type ProviderModelListExtraData = {
+  focusedModelId?: UniqueModelId;
   isDefaultModel: (model: Model) => boolean;
   provider: Provider | undefined;
   selection: ProviderModelListSelection | undefined;
@@ -37,6 +47,7 @@ type ProviderModelListExtraData = {
  * is a label until the screen starts selecting, and a checkbox after.
  */
 export function ProviderModelListContent({
+  focusRequest,
   isDefaultModel,
   ListEmptyComponent,
   ListHeaderComponent,
@@ -45,18 +56,37 @@ export function ProviderModelListContent({
   provider,
   selection,
 }: ProviderModelListContentProps) {
+  const listRef = useRef<LegendListRef>(null);
+  useEffect(() => {
+    if (!focusRequest) {
+      return;
+    }
+
+    const index = models.findIndex((model) => model.id === focusRequest.modelId);
+    if (index < 0) {
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ animated: true, index, viewPosition: 0.35 });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [focusRequest, models]);
   const extraData = useMemo<ProviderModelListExtraData>(
     () => ({
+      focusedModelId: focusRequest?.modelId,
       isDefaultModel,
       provider,
       selection,
     }),
-    [isDefaultModel, provider, selection],
+    [focusRequest, isDefaultModel, provider, selection],
   );
   const renderItem = useCallback(
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<Model>) => (
       <ModelRow
         canRemove={!itemExtraData.isDefaultModel(item)}
+        isFocused={item.id === itemExtraData.focusedModelId}
         isSelected={itemExtraData.selection?.selectedIds.has(item.id) ?? false}
         model={item}
         provider={itemExtraData.provider}
@@ -69,6 +99,7 @@ export function ProviderModelListContent({
 
   return (
     <LegendList
+      ref={listRef}
       automaticallyAdjustsScrollIndicatorInsets
       contentContainerStyle={styles.contentContainer}
       contentInsetAdjustmentBehavior="automatic"
@@ -92,12 +123,14 @@ export function ProviderModelListContent({
 
 const ModelRow = memo(function ModelRow({
   canRemove,
+  isFocused,
   isSelected,
   model,
   onToggleSelected,
   provider,
 }: {
   canRemove: boolean;
+  isFocused: boolean;
   isSelected: boolean;
   model: Model;
   /** Given only while selecting; its absence is what leaves the row a plain label. */
@@ -110,6 +143,7 @@ const ModelRow = memo(function ModelRow({
 
   return (
     <ProviderModelRow
+      className={isFocused ? 'bg-foreground/5' : undefined}
       model={model}
       provider={provider}
       selection={

@@ -177,11 +177,7 @@ const TopicListView = memo(function TopicListView() {
 
 // The list owns its data provider so hosts (the topic management screen, or
 // anything else embedding the list) never touch topic state directly.
-type TopicListProps = {
-  searchText?: string;
-};
-
-export function TopicList({ searchText = '' }: TopicListProps) {
+export function TopicList({ searchText = '' }: { searchText?: string }) {
   return (
     <TopicListProvider searchText={searchText}>
       <TopicListView />

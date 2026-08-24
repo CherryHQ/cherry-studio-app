@@ -158,9 +158,9 @@ function ProviderModelPullPreviewPage({
     }),
     [searchedPreview, typeFilter],
   );
-  // Counted over what the search left behind but before the type filter, so a
-  // tab's number says how many models picking it would show.
   const typeCounts = useMemo(
+    // Counted over what the search left behind but before the type filter, so a
+    // tab's number says how many models picking it would show.
     () => getModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
     [searchedPreview],
   );
@@ -190,8 +190,8 @@ function ProviderModelPullPreviewPage({
     [displayedPreview, isApplying, provider, selectedIds, t, toggleAll, toggleModel],
   );
   const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
-  // Everything on screen, which is what the search and the type filter left of
-  // the pull — selecting all of a filtered list should not reach past it.
+  // Everything the active search and type filter leave on screen. Selection
+  // actions stay in this persistent workflow so they can operate on the query.
   const displayedIds = useMemo(
     () => [...displayedPreview.added, ...displayedPreview.missing].map((model) => model.id),
     [displayedPreview],
@@ -203,7 +203,6 @@ function ProviderModelPullPreviewPage({
       }
     });
   }, [applySelection, onApplied]);
-
   return (
     <>
       <LegendList

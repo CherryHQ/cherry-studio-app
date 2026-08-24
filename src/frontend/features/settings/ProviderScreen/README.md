@@ -37,9 +37,13 @@ endpoint slots render nothing.
 
 ## Connectivity Check
 
-The check section names a model and a key; both are picked on pushed screens
-(`ProviderModelCheckModelScreen`, `ProviderModelCheckApiKeyScreen`) rather than in sheets. Neither
-choice is stored — a check is something you run — so each screen carries its choice back to the
-detail screen as a route param with `dismissTo`, and `useProviderModelCheck` reads the params rather
-than owning selection state. A result is tagged with the model and key it ran with, so picking
-another one stops showing it.
+The check section selects one provider-scoped model through `ModelPickerDrawer`, whose header search
+button can open app search, and uses the first enabled API key. Neither choice is stored — a check is
+something you run — so the section keeps the model in local state. A result is tagged with the model
+and key it ran with, so picking another one stops showing it.
+
+## Model Pull
+
+The pull preview keeps search inside its multi-selection screen. Query and model-type filters scope
+the visible rows plus section and toolbar select-all actions, so this workflow does not use the
+single-selection app-search route.
