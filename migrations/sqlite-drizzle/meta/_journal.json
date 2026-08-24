@@ -29,6 +29,13 @@
       "when": 1787229930835,
       "tag": "0003_retire-oauth-provider-auth",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1787569041503,
+      "tag": "0004_agent-sessions",
+      "breakpoints": true
     }
   ]
 }
