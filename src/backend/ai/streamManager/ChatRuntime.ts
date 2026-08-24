@@ -1642,6 +1642,9 @@ export class ChatRuntime extends BaseService implements ChatModule {
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantId: input.assistantId,
       assistantText,
+      onFailure: () => {
+        this.emit({ topicId: input.topicId, type: 'topic-rename-failed' });
+      },
       services: this.dependencies.services,
       topicId: input.topicId,
       userText,

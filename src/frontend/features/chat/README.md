@@ -19,5 +19,5 @@ behavior. Structured message rendering is shared with painting through
 - `workspace/` adapts visible Chat runtime messages into the shared `MessageList`, and owns loading
   indicators, initial-render gating, and tool approvals.
 - `runtime/` subscribes to the app-owned `ChatModule`, projects one Topic snapshot through
-  `useChatTopic()`, and owns frontend navigation and query invalidation effects. It does not create
-  or dispose `ChatRuntime`.
+  `useChatTopic()`, and owns frontend navigation, query invalidation, and the localized topic-rename
+  failure Toast. It does not create or dispose `ChatRuntime`.

@@ -311,20 +311,23 @@ describe('maybeRenameTopicFromConversationSummary', () => {
     expect(services.topic.update).not.toHaveBeenCalled();
   });
 
-  it('returns false and logs instead of throwing when the LLM call fails', async () => {
+  it('reports the failure and returns false when the LLM call fails', async () => {
     const services = createServices({
       generateText: jest.fn(async () => {
         throw new Error('network error');
       }),
     });
+    const onFailure = jest.fn();
 
     const renamed = await maybeRenameTopicFromConversationSummary({
       assistantText: 'reply',
+      onFailure,
       services,
       topicId: 'topic-1',
       userText: 'question',
     });
 
     expect(renamed).toBe(false);
+    expect(onFailure).toHaveBeenCalledTimes(1);
   });
 });

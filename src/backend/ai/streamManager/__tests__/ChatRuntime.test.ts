@@ -8,7 +8,7 @@ import type {
   BackgroundReplyLifecycle,
   BackgroundReplyTurn,
 } from '@/backend/services/backgroundReply';
-import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
+import { type ChatEvent, NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import { type FileEntry, FileEntrySchema } from '@/shared/data/types/file';
@@ -1228,6 +1228,47 @@ describe('ChatRuntime', () => {
       name: 'Generated Topic Title',
     });
     expect(invalidateTopics).toHaveBeenCalled();
+  });
+
+  test('reports an automatic topic naming failure without failing the completed turn', async () => {
+    const services = createServices();
+    services.topic.getById = jest.fn(async () => createTopic({ name: 'hi' }));
+    const preferences: Record<string, unknown> = {
+      'app.language': 'en-US',
+      'topic.naming.enabled': true,
+      'topic.naming.model_id': null,
+      'topic.naming_prompt': '',
+    };
+    services.preference.get = jest.fn(
+      async (key: string) => preferences[key],
+    ) as typeof services.preference.get;
+    services.ai.generateText = jest.fn(async () => {
+      throw new Error('naming failed');
+    });
+    const runtime = createRuntime({ services });
+    const events: ChatEvent[] = [];
+    runtime.subscribe((event) => events.push(event));
+    mockReadUIMessageStream.mockReturnValue(
+      asyncIterable([createUiMessage('assistant-1', 'hello')]),
+    );
+
+    await runtime.sendText({
+      selectedModelId: 'provider::model' as UniqueModelId,
+      text: 'hi',
+      topicId: 'topic-1',
+    });
+
+    await waitUntil(() => events.some((event) => event.type === 'topic-rename-failed'));
+
+    expect(events).toContainEqual({
+      topicId: 'topic-1',
+      type: 'topic-rename-failed',
+    });
+    expect(services.message.finalizeAssistantMessage).toHaveBeenLastCalledWith(
+      'assistant-1',
+      expect.objectContaining({ status: 'success' }),
+    );
+    expect(services.topic.update).not.toHaveBeenCalled();
   });
 
   test('does not auto-name a topic that already has history', async () => {
@@ -2943,6 +2984,8 @@ function createRuntime(input: {
         break;
       case 'open-topic':
         input.openTopic?.(event.topicId);
+        break;
+      case 'topic-rename-failed':
         break;
       case 'snapshot-changed':
         break;

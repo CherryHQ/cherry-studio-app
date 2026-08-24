@@ -86,7 +86,8 @@ export type ChatEvent =
   | { topicId: string; type: 'invalidate-topic-messages' }
   | { type: 'invalidate-topics' }
   | { topicId: string; type: 'open-topic' }
-  | { topicId: string; type: 'snapshot-changed' };
+  | { topicId: string; type: 'snapshot-changed' }
+  | { topicId: string; type: 'topic-rename-failed' };
 
 export type ChatListener = (event: ChatEvent) => Promise<void> | void;
 

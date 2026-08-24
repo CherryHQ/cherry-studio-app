@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +15,7 @@ export function useTopicActionAlerts(): TopicActionAlerts {
   const { t } = useTranslation();
   const { deleteTopic, renameTopic } = useTopicListActions();
   const { alert } = useAlert();
+  const { toast } = useToast();
 
   const requestRename = useCallback(
     (topic: Topic) => {
@@ -34,13 +35,13 @@ export function useTopicActionAlerts(): TopicActionAlerts {
           }
 
           void renameTopic(topic.id, trimmedName).catch(() => {
-            alert.show({ title: t('topic.rename.failed') });
+            toast.show({ label: t('topic.rename.failed'), variant: 'danger' });
           });
         },
         title: t('topic.renameTitle'),
       });
     },
-    [alert, renameTopic, t],
+    [alert, renameTopic, t, toast],
   );
 
   const requestDelete = useCallback(

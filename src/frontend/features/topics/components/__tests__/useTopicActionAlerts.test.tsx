@@ -1,4 +1,4 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import { useEffect } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -13,6 +13,7 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: jest.fn(),
+  useToast: jest.fn(),
 }));
 
 jest.mock('../../context/TopicListProvider', () => ({
@@ -22,9 +23,11 @@ jest.mock('../../context/TopicListProvider', () => ({
 const mockAlertConfirm = jest.fn();
 const mockAlertShow = jest.fn();
 const mockAlertPrompt = jest.fn();
+const mockToastShow = jest.fn();
 const mockDeleteTopic = jest.fn(async () => undefined);
 const mockRenameTopic = jest.fn(async () => undefined);
 const useAlertMock = useAlert as jest.MockedFunction<typeof useAlert>;
+const useToastMock = useToast as jest.MockedFunction<typeof useToast>;
 const useTopicListActionsMock = useTopicListActions as jest.MockedFunction<
   typeof useTopicListActions
 >;
@@ -58,6 +61,7 @@ describe('useTopicActionAlerts', () => {
         show: mockAlertShow,
       },
     });
+    useToastMock.mockReturnValue({ toast: { show: mockToastShow } });
     useTopicListActionsMock.mockReturnValue({
       deleteTopic: mockDeleteTopic,
       deleteTopics: jest.fn(),
@@ -98,7 +102,7 @@ describe('useTopicActionAlerts', () => {
     expect(mockRenameTopic).toHaveBeenCalledWith('topic-1', 'Renamed topic');
   });
 
-  test('shows an Alert after a failed optimistic rename', async () => {
+  test('shows a danger Toast after a failed optimistic rename', async () => {
     mockRenameTopic.mockRejectedValueOnce(new Error('rename failed'));
     act(() => actions?.requestRename(topic));
 
@@ -106,6 +110,10 @@ describe('useTopicActionAlerts', () => {
     act(() => prompt.onConfirm('Renamed topic'));
     await act(async () => Promise.resolve());
 
-    expect(mockAlertShow).toHaveBeenCalledWith({ title: 'topic.rename.failed' });
+    expect(mockToastShow).toHaveBeenCalledWith({
+      label: 'topic.rename.failed',
+      variant: 'danger',
+    });
+    expect(mockAlertShow).not.toHaveBeenCalled();
   });
 });

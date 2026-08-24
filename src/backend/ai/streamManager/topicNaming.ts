@@ -66,12 +66,14 @@ export function inFlightTopicNamingWrites(): ReadonlyMap<string, Promise<boolean
 /**
  * Generates a topic title from the first user/assistant exchange and
  * applies it if the topic still has its auto-assigned name. Returns whether
- * the topic was renamed; never throws — naming is best-effort and must not
- * affect the chat turn it rides along with.
+ * the topic was renamed. Naming failures call `onFailure`, but skipped attempts
+ * do not. Never throws — naming is best-effort and must not affect the chat turn
+ * it rides along with.
  */
 export function maybeRenameTopicFromConversationSummary(input: {
   assistantId?: string;
   assistantText: string;
+  onFailure?: () => void;
   services: TopicNamingServices;
   topicId: string;
   userText: string;
@@ -86,6 +88,7 @@ export function maybeRenameTopicFromConversationSummary(input: {
 async function doMaybeRenameTopicFromConversationSummary(input: {
   assistantId?: string;
   assistantText: string;
+  onFailure?: () => void;
   services: TopicNamingServices;
   topicId: string;
   userText: string;
@@ -127,6 +130,11 @@ async function doMaybeRenameTopicFromConversationSummary(input: {
     return true;
   } catch (error) {
     logger.warn('Failed to auto-rename topic from conversation summary', error as Error);
+    try {
+      input.onFailure?.();
+    } catch (notificationError) {
+      logger.warn('Failed to report topic auto-rename failure', notificationError as Error);
+    }
     return false;
   } finally {
     summaryLocks.delete(topicId);

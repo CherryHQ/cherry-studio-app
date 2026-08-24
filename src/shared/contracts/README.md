@@ -112,10 +112,12 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
   architecture decision.
 
 Chat's public state vocabulary is `ChatTopicStatus`, `ChatTopicSnapshot`, `ChatEvent`, and
-`ChatListener`; the temporary new-Topic projection uses `NEW_TOPIC_SNAPSHOT_KEY`. `ChatModule`
-exposes send, branch selection, regeneration, edit-and-resend, multi-model execution, steering,
-follow-up queuing, approval, cancellation, reconnectable streams, snapshots, and subscriptions
-directly. Do not reintroduce `createSession()` or a public Chat session object.
+`ChatListener`; auxiliary failures such as topic renaming use semantic `ChatEvent` variants so the
+frontend can localize them without exposing provider messages. The temporary new-Topic projection
+uses `NEW_TOPIC_SNAPSHOT_KEY`. `ChatModule` exposes send, branch selection, regeneration,
+edit-and-resend, multi-model execution, steering, follow-up queuing, approval, cancellation,
+reconnectable streams, snapshots, and subscriptions directly. Do not reintroduce `createSession()`
+or a public Chat session object.
 
 ## Current Modules
 

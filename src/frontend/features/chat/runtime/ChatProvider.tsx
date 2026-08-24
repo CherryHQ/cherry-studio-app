@@ -1,3 +1,4 @@
+import { useToast } from '@cherrystudio/ui/components';
 import type { ComposerQueuedMessagePayload } from '@cherrystudio/universal/ai/transport';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'expo-router';
@@ -10,6 +11,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
@@ -40,6 +42,8 @@ type ChatTopicValue = ChatTopicSnapshot & {
 const ChatContext = createContext<ChatModule | null>(null);
 
 export function ChatProvider({ children }: PropsWithChildren) {
+  const { t } = useTranslation();
+  const { toast } = useToast();
   const chat = useBackendModule('chat');
   const queryClient = useQueryClient();
   const pathname = usePathname();
@@ -53,6 +57,12 @@ export function ChatProvider({ children }: PropsWithChildren) {
     () =>
       chat.subscribe(async (event) => {
         switch (event.type) {
+          case 'topic-rename-failed':
+            toast.show({
+              label: t('topic.rename.failed'),
+              variant: 'danger',
+            });
+            break;
           case 'invalidate-topic-messages':
             await queryClient.invalidateQueries({ queryKey: getMessagesQueryKey(event.topicId) });
             break;
@@ -66,7 +76,7 @@ export function ChatProvider({ children }: PropsWithChildren) {
             break;
         }
       }),
-    [chat, navigation, queryClient],
+    [chat, navigation, queryClient, t, toast],
   );
 
   return <ChatContext value={chat}>{children}</ChatContext>;
