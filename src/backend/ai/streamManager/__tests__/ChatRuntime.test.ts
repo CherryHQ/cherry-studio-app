@@ -1247,7 +1247,9 @@ describe('ChatRuntime', () => {
     });
     const runtime = createRuntime({ services });
     const events: ChatEvent[] = [];
-    runtime.subscribe((event) => events.push(event));
+    runtime.subscribe((event) => {
+      events.push(event);
+    });
     mockReadUIMessageStream.mockReturnValue(
       asyncIterable([createUiMessage('assistant-1', 'hello')]),
     );
