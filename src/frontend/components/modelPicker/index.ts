@@ -1,4 +1,4 @@
-export { ModelPickerBottomSheet } from './components/ModelPickerBottomSheet';
+export { ModelPickerDrawer } from './components/ModelPickerDrawer';
 export { ModelPickerIcon } from './components/ModelPickerIcon';
 export { ModelPickerList } from './components/ModelPickerList';
 export { ModelPickerScreen } from './components/ModelPickerScreen';

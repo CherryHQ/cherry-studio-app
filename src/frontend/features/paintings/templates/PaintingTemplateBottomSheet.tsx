@@ -1,13 +1,6 @@
-import {
-  BottomSheet,
-  type BottomSheetCloseReason,
-  Button,
-  Image,
-  useBottomSheet,
-} from '@cherrystudio/ui/components';
-import { useCallback } from 'react';
+import { BottomSheet, Button, Image } from '@cherrystudio/ui/components';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import type { PaintingTemplate } from './paintingTemplates';
 
@@ -24,61 +17,34 @@ export function PaintingTemplateBottomSheet({
   onUse,
   template,
 }: PaintingTemplateBottomSheetProps) {
-  const { t } = useTranslation();
-  // The "try" button closes with a `'use'` reason so the template is applied
-  // only once the closing animation has settled; every other close dismisses.
-  const handleClose = useCallback(
-    (reason: BottomSheetCloseReason) => {
-      if (reason === 'use') {
-        onUse(template);
-        return;
-      }
-      onDismiss();
-    },
-    [onDismiss, onUse, template],
-  );
-
   return (
-    <BottomSheet defaultOpen>
-      <BottomSheet.Content onClose={handleClose} testID="painting-template">
-        <BottomSheet.Header>
-          <BottomSheet.CloseButton accessibilityLabel={t('painting.templates.close')} />
-          <BottomSheet.Title
-            className="flex-1 px-3 text-center font-semibold text-foreground text-base"
-            numberOfLines={1}
-            testID="painting-template-author"
-          >
-            {template.author ?? ''}
-          </BottomSheet.Title>
-          <BottomSheet.HeaderSpacer />
-        </BottomSheet.Header>
-        <BottomSheet.Body>
-          <PaintingTemplateSheetBody template={template} />
-        </BottomSheet.Body>
-      </BottomSheet.Content>
+    <BottomSheet
+      onClose={onDismiss}
+      open
+      size="medium"
+      testID="painting-template"
+      title={template.author ?? ''}
+    >
+      <PaintingTemplateSheetBody onUse={onUse} template={template} />
     </BottomSheet>
   );
 }
 
-function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate }) {
+function PaintingTemplateSheetBody({
+  onUse,
+  template,
+}: {
+  onUse: (template: PaintingTemplate) => void;
+  template: PaintingTemplate;
+}) {
   const { t } = useTranslation();
-  const { geometry, isClosing, requestClose } = useBottomSheet();
   const { width: windowWidth } = useWindowDimensions();
-  const previewWidth = Math.max(
-    0,
-    Math.min(windowWidth * 0.5, geometry.sheetWidth - SHEET_CONTENT_INSET * 2, 220),
-  );
-  // The button is the last thing in the card, so this padding is what keeps it
-  // clear of the home indicator: `insets.bottom` measured from the screen's
-  // bottom, minus the gap the card already leaves there.
-  const bodyBottomPadding = Math.max(
-    SHEET_CONTENT_INSET,
-    geometry.insets.bottom - geometry.outerInset,
-  );
+  const previewWidth = Math.max(0, Math.min(windowWidth * 0.5, windowWidth - 32, 220));
 
   return (
-    <View
-      style={[styles.bodyContent, { paddingBottom: bodyBottomPadding }]}
+    <ScrollView
+      contentContainerStyle={styles.bodyContent}
+      showsVerticalScrollIndicator={false}
       testID="painting-template-sheet-body"
     >
       <View style={[styles.preview, { height: (previewWidth * 4) / 3, width: previewWidth }]}>
@@ -119,8 +85,7 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
       <Button
         accessibilityLabel={t('painting.templates.try')}
         className="mx-4 self-stretch rounded-full"
-        disabled={isClosing}
-        onPress={() => requestClose('use')}
+        onPress={() => onUse(template)}
         size="sm"
         testID="painting-template-try"
       >
@@ -128,7 +93,7 @@ function PaintingTemplateSheetBody({ template }: { template: PaintingTemplate })
           {t('painting.templates.try')}
         </Button.Label>
       </Button>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -136,6 +101,7 @@ const styles = StyleSheet.create({
   bodyContent: {
     alignItems: 'center',
     gap: 24,
+    paddingBottom: 24,
     paddingHorizontal: SHEET_CONTENT_INSET,
     paddingTop: 12,
   },

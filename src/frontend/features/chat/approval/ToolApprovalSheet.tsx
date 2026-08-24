@@ -1,4 +1,4 @@
-import { BottomSheet, Button, useBottomSheet } from '@cherrystudio/ui/components';
+import { BottomSheet, Button } from '@cherrystudio/ui/components';
 import { parseFunctionCallToolName } from '@cherrystudio/universal/ai/tools/mcpToolName';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,19 +37,18 @@ export function ToolApprovalSheet({ approvals, isOpen, onRespond }: ToolApproval
   }
 
   return (
-    <BottomSheet open={isOpen}>
-      <BottomSheet.Content isCloseDisabled onClose={ignoreClose}>
-        <BottomSheet.Header>
-          <BottomSheet.CloseButton accessibilityLabel={t('common.close')} />
-          <BottomSheet.Title>{t('chat.tool.approval.title')}</BottomSheet.Title>
-          <BottomSheet.HeaderSpacer />
-        </BottomSheet.Header>
-        <ToolApprovalSheetBody
-          approval={approval}
-          onRespond={onRespond}
-          pendingCount={approvals.length}
-        />
-      </BottomSheet.Content>
+    <BottomSheet
+      dismissible={false}
+      onClose={ignoreClose}
+      open={isOpen}
+      size="medium"
+      title={t('chat.tool.approval.title')}
+    >
+      <ToolApprovalSheetBody
+        approval={approval}
+        onRespond={onRespond}
+        pendingCount={approvals.length}
+      />
     </BottomSheet>
   );
 }
@@ -64,12 +63,7 @@ function ToolApprovalSheetBody({
   pendingCount: number;
 }) {
   const { t } = useTranslation();
-  const { geometry } = useBottomSheet();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // The buttons are the last thing in a card that measures to its content, so
-  // this padding is what keeps them clear of the home indicator: `insets.bottom`
-  // measured from the screen's bottom, minus the gap the card already leaves.
-  const bottomPadding = Math.max(16, geometry.insets.bottom - geometry.outerInset);
 
   const submit = async (approved: boolean) => {
     if (isSubmitting) {
@@ -89,7 +83,7 @@ function ToolApprovalSheetBody({
   };
 
   return (
-    <BottomSheet.Body className="gap-4 px-4" style={{ paddingBottom: bottomPadding }}>
+    <View className="gap-4 px-6 pt-2">
       <View className="gap-1">
         <Text className="text-foreground-tertiary text-sm">
           {t('chat.tool.approval.description')}
@@ -122,7 +116,7 @@ function ToolApprovalSheetBody({
           <Button.Label>{t('chat.tool.approval.allow')}</Button.Label>
         </Button>
       </View>
-    </BottomSheet.Body>
+    </View>
   );
 }
 

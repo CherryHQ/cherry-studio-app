@@ -1,60 +1,35 @@
 # Bottom Sheet
 
-`BottomSheet` is Cherry Studio's only exported sheet. The root owns open state; its compound
-components explicitly compose the native modal card, fixed chrome, scrolling viewport, and footer.
+`BottomSheet` is Cherry Studio's only mobile sheet shell. It uses the same regulated card heights,
+drag handle, scrim, safe-area handling, gestures, Android back behavior, and accessibility behavior
+on iOS and Android.
 
 ```tsx
-<BottomSheet open={isOpen} onOpenChange={setIsOpen}>
-  <BottomSheet.Trigger>Open</BottomSheet.Trigger>
-  <BottomSheet.Content height={520} onClose={handleClose}>
-    <BottomSheet.Header>
-      <BottomSheet.CloseButton accessibilityLabel="Close" />
-      <BottomSheet.Title>Settings</BottomSheet.Title>
-      <BottomSheet.HeaderSpacer />
-    </BottomSheet.Header>
-    <BottomSheet.SearchField {...searchProps} />
-    <BottomSheet.Body>{virtualizedList}</BottomSheet.Body>
-    <BottomSheet.Footer>{actions}</BottomSheet.Footer>
-  </BottomSheet.Content>
+<BottomSheet onClose={close} open={isOpen} size="large" title="Models">
+  <ModelList />
 </BottomSheet>
 ```
 
-`Trigger` is optional. Use `defaultOpen` when a sheet is mounted only while open, or `open` and
-`onOpenChange` when feature state controls it. `Content` owns detents, card geometry, native close
-gestures, and the close-settle callback.
+The API is intentionally small: `open`, `onClose`, `title`, `children`, required `size`, optional
+`testID`, and optional `dismissible`. `size` accepts `compact`, `medium`, or `large`, resolving to
+40%, 60%, or 80% of the available screen height. Product components can change this token at
+runtime, but do not receive detents, geometry, close reasons, or types from the underlying UI
+library.
 
-`Body` provides a viewport but does not scroll. This lets `LegendList` and other virtualized
-controls own scrolling directly. Use `BottomSheet.ScrollView` instead for ordinary scrolling
-content. `Header`, `SearchField`, and `Footer` stay pinned as siblings of that viewport.
-
-Give `Content` a `height` and the viewport is bounded: it takes whatever the pinned chrome leaves,
-so a virtualized list or a `ScrollView` inside it scrolls. Omit `height` and the card measures to
-its content instead, so the viewport does too and nothing inside it scrolls — pick the mode from
-whether the content has a natural end. Content-sized cards reach the bottom of the screen, so
-whatever sits last in them owns its own home-indicator clearance; read it off
-`useBottomSheet().geometry`.
-
-`BottomSheet.Selection` is the explicit single-choice variant. It commits its selection only after
-the close animation settles. Callers pass translated labels; CherryUI owns no product language.
-
-Body descendants can call `useBottomSheet()` to request a close with a reason or read card geometry.
-
-## Page Transitions
-
-`BottomSheet.PageTransition` gives every in-sheet navigation depth the same motion without owning
-business navigation state:
+For a second level, keep the page state in the feature and pass `backAction` while that level is
+visible:
 
 ```tsx
-<BottomSheet.PageTransition depth={stack.length - 1} pageKey={currentPage.key}>
-  {currentPage.content}
-</BottomSheet.PageTransition>
+<BottomSheet
+  backAction={detail ? { accessibilityLabel: "Back", onPress: showRoot } : undefined}
+  onClose={close}
+  open={isOpen}
+  size={detail ? "compact" : "medium"}
+  title={detail ? "Theme" : "Settings"}
+>
+  {detail ? <ThemeOptions /> : <SettingsRows />}
+</BottomSheet>
 ```
 
-- Increasing `depth` pushes from the right.
-- Decreasing `depth` pops from the left.
-- Changing `pageKey` at the same depth performs a stationary replacement.
-- The previous page remains mounted only until its exit completes and is immediately removed from
-  pointer and accessibility interaction.
-- Reduce Motion switches pages immediately.
-
-The transition viewport needs a bounded height, normally supplied by `BottomSheet.Content`.
+Root sheets intentionally have no close button. Users dismiss them with a downward gesture, the
+scrim, Android back, or the accessibility escape action.

@@ -335,6 +335,7 @@
   "settings.model.fast.title": "Fast model",
   "settings.model.title": "Model",
   "settings.model.translate.title": "Translation model",
+  "modelPicker.searchPlaceholder": "Search models",
   "modelPicker.title": "Select model",
   "models.all": "All",
   "models.capability.audioRecognition": "Audio",

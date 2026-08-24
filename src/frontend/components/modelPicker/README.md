@@ -4,7 +4,8 @@ This module owns reusable model selection state, model picker UI, and model sett
 
 ## Public Interface
 
-- `ModelPickerBottomSheet` renders the reusable model picker bottom sheet.
+- `ModelPickerDrawer` renders the complete model picker drawer. Callers provide business state and
+  actions without composing CherryUI primitives.
 - `ModelPickerScreen` renders the pushed model picker screen — search, model type tabs and the
   grouped list — for every caller that picks a model on a screen of its own.
 - `ModelPickerList` renders the selectable model list, for the sheet and for the pushed screen alike.

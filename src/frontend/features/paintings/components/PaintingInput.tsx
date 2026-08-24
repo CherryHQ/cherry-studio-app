@@ -15,7 +15,7 @@ import {
   useComposerState,
 } from '@/frontend/components/composer';
 import {
-  ModelPickerBottomSheet,
+  ModelPickerDrawer,
   ModelPickerIcon,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
@@ -281,8 +281,8 @@ export function PaintingInput({
         />
       ) : null}
       {isModelPickerOpen ? (
-        <ModelPickerBottomSheet
-          isOpen
+        <ModelPickerDrawer
+          open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}

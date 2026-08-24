@@ -19,7 +19,7 @@ import {
 import {
   getNextModelSelection,
   ModelPickerIcon,
-  ModelPickerBottomSheet,
+  ModelPickerDrawer,
   type ModelPickerModelItem,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
@@ -262,8 +262,8 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
         )}
       </ChatInputEffortOverlay>
       {isModelPickerOpen ? (
-        <ModelPickerBottomSheet
-          isOpen
+        <ModelPickerDrawer
+          open
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}

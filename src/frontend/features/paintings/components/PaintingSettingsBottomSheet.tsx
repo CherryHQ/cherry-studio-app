@@ -11,13 +11,11 @@ import {
   Switch,
   TextAnimation,
   TextField,
-  useBottomSheet,
 } from '@cherrystudio/ui/components';
 import type { TFunction } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { imageParamLabel, imageParamOptionLabel } from '../utils/imageGenerationLabels';
 import type {
@@ -52,64 +50,43 @@ export function PaintingSettingsBottomSheet({
   values,
 }: PaintingSettingsBottomSheetProps) {
   const { t } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
   const [activeEnumKey, setActiveEnumKey] = useState<CanonicalParamKey | null>(null);
   const fields = getImageParamFields(resolvedMode);
   const activeEnumField = fields.find(
     (field): field is EnumImageParamField =>
       field.key === activeEnumKey && field.spec.type === 'enum' && field.spec.render !== 'chips',
   );
-  const availableHeight = windowHeight - insets.top - insets.bottom;
-  const sheetHeight = Math.min(680, Math.max(360, availableHeight * 0.78));
-  const pageKey = activeEnumField ? `enum-${activeEnumField.key}` : 'settings';
 
   return (
-    <BottomSheet defaultOpen>
-      <BottomSheet.Content height={sheetHeight} onClose={onDismiss} testID="painting-settings">
-        <BottomSheet.Header>
-          {activeEnumField ? (
-            <BottomSheet.BackButton
-              accessibilityLabel={t('common.back')}
-              onPress={() => setActiveEnumKey(null)}
-            />
-          ) : (
-            <BottomSheet.CloseButton accessibilityLabel={t('painting.settings.close')} />
-          )}
-          <BottomSheet.Title>
-            {activeEnumField
-              ? imageParamLabel(t, activeEnumField.key)
-              : t('painting.settings.title')}
-          </BottomSheet.Title>
-          {activeEnumField ? (
-            <BottomSheet.CloseButton accessibilityLabel={t('painting.settings.close')} />
-          ) : (
-            <BottomSheet.HeaderSpacer />
-          )}
-        </BottomSheet.Header>
-        <BottomSheet.PageTransition
-          depth={activeEnumField ? 1 : 0}
-          pageKey={pageKey}
-          testID="painting-settings-pages"
-        >
-          {activeEnumField ? (
-            <EnumSelectionPage
-              field={activeEnumField}
-              fields={fields}
-              onValueChange={onValueChange}
-              values={values}
-            />
-          ) : (
-            <PaintingSettingsRootPage
-              fields={fields}
-              onValueChange={onValueChange}
-              onEnumPress={setActiveEnumKey}
-              values={values}
-              safeAreaBottom={insets.bottom}
-            />
-          )}
-        </BottomSheet.PageTransition>
-      </BottomSheet.Content>
+    <BottomSheet
+      backAction={
+        activeEnumField
+          ? { accessibilityLabel: t('common.back'), onPress: () => setActiveEnumKey(null) }
+          : undefined
+      }
+      onClose={onDismiss}
+      open
+      size={activeEnumField ? 'medium' : 'large'}
+      testID="painting-settings"
+      title={
+        activeEnumField ? imageParamLabel(t, activeEnumField.key) : t('painting.settings.title')
+      }
+    >
+      {activeEnumField ? (
+        <EnumSelectionPage
+          field={activeEnumField}
+          fields={fields}
+          onValueChange={onValueChange}
+          values={values}
+        />
+      ) : (
+        <PaintingSettingsRootPage
+          fields={fields}
+          onValueChange={onValueChange}
+          onEnumPress={setActiveEnumKey}
+          values={values}
+        />
+      )}
     </BottomSheet>
   );
 }
@@ -118,21 +95,19 @@ function PaintingSettingsRootPage({
   fields,
   onEnumPress,
   onValueChange,
-  safeAreaBottom,
   values,
 }: {
   fields: readonly ImageParamField[];
   onEnumPress: (key: CanonicalParamKey) => void;
   onValueChange: (key: string, value: unknown) => void;
-  safeAreaBottom: number;
   values: ImageParamDraft;
 }) {
-  const { geometry } = useBottomSheet();
-  const fieldWidth = Math.max(0, geometry.sheetWidth - 48);
+  const { width: windowWidth } = useWindowDimensions();
+  const fieldWidth = Math.max(0, windowWidth - 64);
 
   return (
-    <BottomSheet.ScrollView
-      contentContainerStyle={[styles.content, { paddingBottom: Math.max(24, safeAreaBottom + 12) }]}
+    <ScrollView
+      contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
       style={styles.page}
@@ -148,7 +123,7 @@ function PaintingSettingsRootPage({
           values={values}
         />
       ))}
-    </BottomSheet.ScrollView>
+    </ScrollView>
   );
 }
 
@@ -665,6 +640,7 @@ const styles = StyleSheet.create({
   chipGrid: { gap: FIELD_GAP },
   content: {
     gap: 22,
+    paddingBottom: 24,
     paddingHorizontal: 24,
     paddingTop: 12,
   },
