@@ -39,7 +39,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   }
 
   return (
-    <View className="-ml-3.5 flex-row items-center" testID="assistant-message-toolbar">
+    <View className="-ml-3.5 flex-row items-center gap-4" testID="assistant-message-toolbar">
       {copyText ? (
         <Button
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}

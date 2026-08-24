@@ -76,8 +76,10 @@ describe('AssistantMessageToolbar', () => {
 
   test('copies projected text and exposes copied feedback for only this message', async () => {
     renderToolbar(createMessage('success', ' Answer '));
+    const toolbar = renderer?.root.findByProps({ testID: 'assistant-message-toolbar' });
     const copyButton = renderer?.root.findByProps({ testID: 'assistant-message-copy' });
 
+    expect(toolbar?.props.className).toContain('gap-4');
     expect(copyButton?.props.accessibilityLabel).toBe('common.copy');
     await act(async () => {
       copyButton?.props.onPress();
