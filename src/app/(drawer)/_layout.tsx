@@ -27,7 +27,7 @@ export default function DrawerLayout() {
       <Drawer
         drawerContent={renderSidebar}
         screenOptions={{
-          drawerStyle: { width: width * appSidebar.widthRatio },
+          drawerStyle: { width },
           drawerType: 'slide',
           headerShown: false,
           // Dim the exposed scene while preserving the drawer's native progress

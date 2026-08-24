@@ -13,7 +13,38 @@ jest.mock('@cherrystudio/ui/components', () => {
     return React.createElement('ButtonLabel', null, children);
   };
 
-  return { Button };
+  const ContentState = {
+    Empty: ({
+      className,
+      primaryAction,
+      secondaryAction,
+      title,
+    }: {
+      className?: string;
+      primaryAction?: { children?: React.ReactNode; onPress?: () => void };
+      secondaryAction?: { children?: React.ReactNode; onPress?: () => void };
+      title: React.ReactNode;
+    }) =>
+      React.createElement(
+        'View',
+        { className },
+        React.createElement('Text', null, title),
+        primaryAction &&
+          React.createElement(
+            Button,
+            { ...primaryAction, variant: 'default' },
+            React.createElement(Button.Label, null, primaryAction.children),
+          ),
+        secondaryAction &&
+          React.createElement(
+            Button,
+            { ...secondaryAction, variant: 'secondary' },
+            React.createElement(Button.Label, null, secondaryAction.children),
+          ),
+      ),
+  };
+
+  return { Button, ContentState };
 });
 
 jest.mock('../../models/components/ProviderModelListContent', () => ({
@@ -55,7 +86,7 @@ describe('ProviderModelList empty state', () => {
     });
 
     const emptyLayout = renderer?.root.findByProps({
-      className: 'flex-1 items-center justify-center gap-4 px-6 pb-24',
+      className: 'flex-1 px-6 pb-24',
     });
     const buttons = renderer?.root.findAllByType('Button') ?? [];
 

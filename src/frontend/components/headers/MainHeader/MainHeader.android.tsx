@@ -17,7 +17,7 @@ export function MainHeader() {
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
-      <View className="bg-background-subtle">
+      <View className="bg-background">
         <View style={{ height: insets.top }} />
         <View className="h-11 flex-row items-center justify-between px-4">
           {/* The chat route is currently a drawer root, so the route policy

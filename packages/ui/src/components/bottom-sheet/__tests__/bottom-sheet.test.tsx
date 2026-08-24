@@ -5,8 +5,9 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { BottomSheet } from '..';
 
 let mockBottomSheetProps: Record<string, unknown> = {};
+let mockScreenCornerRadius = 0;
 
-jest.mock('@cherrystudio/app-icons/icons/chevron-left', () => {
+jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
   return View;
 });
@@ -22,6 +23,10 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
   };
 });
 
+jest.mock('expo-screen-corner-radius', () => ({
+  getCornerRadiusSync: () => mockScreenCornerRadius,
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
 }));
@@ -35,6 +40,7 @@ describe('BottomSheet', () => {
 
   beforeEach(() => {
     mockBottomSheetProps = {};
+    mockScreenCornerRadius = 0;
   });
 
   afterEach(() => {
@@ -165,7 +171,39 @@ describe('BottomSheet', () => {
       );
     });
 
-    const card = renderer?.root.findByProps({ testID: 'fixed-height' });
+    const card = renderer?.root
+      .findAllByProps({ testID: 'fixed-height' })
+      .find((node) => typeof node.type === 'string');
     expect(StyleSheet.flatten(card?.props.style)).toMatchObject({ height: 420 });
   });
+
+  test.each([
+    { expected: 51, screenCornerRadius: 55 },
+    { expected: 58, screenCornerRadius: 62 },
+    { expected: 32, screenCornerRadius: 30 },
+    { expected: 32, screenCornerRadius: 0 },
+  ])(
+    'keeps the card concentric at a $screenCornerRadius point display radius',
+    ({ expected, screenCornerRadius }) => {
+      mockScreenCornerRadius = screenCornerRadius;
+
+      act(() => {
+        renderer = create(
+          <BottomSheet onClose={jest.fn()} open size="medium" testID="test-sheet" title="Models">
+            <Text>Content</Text>
+          </BottomSheet>,
+        );
+      });
+
+      const card = renderer?.root
+        .findAllByProps({ testID: 'test-sheet' })
+        .find((node) => typeof node.type === 'string');
+      expect(StyleSheet.flatten(card?.props.style)).toMatchObject({
+        borderBottomLeftRadius: expected,
+        borderBottomRightRadius: expected,
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+      });
+    },
+  );
 });

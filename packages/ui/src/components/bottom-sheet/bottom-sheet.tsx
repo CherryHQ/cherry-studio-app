@@ -1,9 +1,10 @@
-import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import {
   BottomSheetProvider as NativeBottomSheetProvider,
   type Detent,
   ModalBottomSheet,
 } from '@swmansion/react-native-bottom-sheet';
+import { getCornerRadiusSync } from 'expo-screen-corner-radius';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BackHandler,
@@ -19,7 +20,7 @@ import { useResolveClassNames } from 'uniwind';
 
 const CLOSED_INDEX = 0;
 const OPEN_INDEX = 1;
-const OUTER_INSET = 8;
+const OUTER_INSET = 4;
 const TOP_INSET = 12;
 const CORNER_RADIUS = 32;
 const HEIGHT_RATIOS = {
@@ -81,6 +82,14 @@ export function BottomSheet(props: BottomSheetProps) {
   const cardHeight = Math.max(0, Math.min(requestedCardHeight, availableCardHeight));
   const sheetHeight = cardHeight + OUTER_INSET;
   const cardWidth = Math.max(0, windowWidth - OUTER_INSET * 2);
+  const screenCornerRadius = getCornerRadiusSync() ?? 0;
+  const bottomCornerRadius = Math.max(CORNER_RADIUS, screenCornerRadius - OUTER_INSET);
+  const cornerStyle = {
+    borderBottomLeftRadius: bottomCornerRadius,
+    borderBottomRightRadius: bottomCornerRadius,
+    borderTopLeftRadius: CORNER_RADIUS,
+    borderTopRightRadius: CORNER_RADIUS,
+  };
   const detents = useMemo<Detent[]>(() => [0, sheetHeight], [sheetHeight]);
   const [index, setIndex] = useState(open ? OPEN_INDEX : CLOSED_INDEX);
   const [previousOpen, setPreviousOpen] = useState(open);
@@ -153,7 +162,7 @@ export function BottomSheet(props: BottomSheetProps) {
           className="self-center overflow-hidden border-continuous bg-background"
           importantForAccessibility={open ? 'yes' : 'no-hide-descendants'}
           onAccessibilityEscape={dismissible ? requestClose : undefined}
-          style={[styles.card, { height: cardHeight, width: cardWidth }]}
+          style={[styles.card, cornerStyle, { height: cardHeight, width: cardWidth }]}
           testID={testID}
         >
           <View accessibilityElementsHidden className="items-center pt-3" pointerEvents="none">
@@ -168,7 +177,7 @@ export function BottomSheet(props: BottomSheetProps) {
                 hitSlop={4}
                 onPress={backAction.onPress}
               >
-                <ChevronLeftIcon className="size-6 text-foreground" />
+                <ArrowLeftIcon className="size-6 text-foreground" />
               </Pressable>
             ) : null}
             <Text
@@ -191,6 +200,5 @@ export function BottomSheet(props: BottomSheetProps) {
 const styles = StyleSheet.create({
   card: {
     borderCurve: 'continuous',
-    borderRadius: CORNER_RADIUS,
   },
 });

@@ -39,11 +39,11 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   }
 
   return (
-    <View className="-ml-3.5 flex-row items-center" testID="assistant-message-toolbar">
+    <View className="flex-row items-center gap-4" testID="assistant-message-toolbar">
       {copyText ? (
         <Button
           accessibilityLabel={t(isCopied ? 'chat.messageActions.copied' : 'common.copy')}
-          className="size-11 p-0"
+          className="size-4 overflow-visible p-0"
           icon={isCopied ? <CheckIcon /> : <CopyIcon />}
           onPress={() => copyAssistantMessage({ messageId: message.id, text: copyText })}
           size="sm"
@@ -53,7 +53,7 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
       ) : null}
       <Button
         accessibilityLabel={t('chat.messageActions.regenerate')}
-        className="size-11 p-0"
+        className="size-4 overflow-visible p-0"
         disabled={isRegenerateDisabled}
         icon={<RefreshCwIcon />}
         onPress={() => regenerateAssistantMessage(message.id)}

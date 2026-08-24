@@ -1,4 +1,4 @@
-import ChevronLeftIcon from '@cherrystudio/app-icons/icons/chevron-left';
+import ArrowLeftIcon from '@cherrystudio/app-icons/icons/arrow-left';
 import MenuIcon from '@cherrystudio/app-icons/icons/menu';
 import XIcon from '@cherrystudio/app-icons/icons/x';
 import { useRouter } from 'expo-router';
@@ -47,7 +47,7 @@ export function useRouteHeaderLeadingAction(onBack?: () => void): HeaderToolbarA
             }
           : {
               accessibilityLabel: t('navigation.back'),
-              icon: ChevronLeftIcon,
+              icon: ArrowLeftIcon,
               key: 'route-leading',
               onPress: goBack,
               type: 'icon',
