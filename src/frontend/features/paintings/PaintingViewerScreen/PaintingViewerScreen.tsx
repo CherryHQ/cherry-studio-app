@@ -1,6 +1,7 @@
 /* oxlint-disable react/style-prop-object -- Expo StatusBar style is a string union. */
 import { useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, View } from 'react-native';
 
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
@@ -56,6 +57,7 @@ function PaintingViewerContent({
   current: ResolvedPaintingAttachment;
   painting: Painting;
 }) {
+  const { t } = useTranslation();
   const actions = usePaintingViewerActions({
     currentOutput: current,
     painting,
@@ -72,7 +74,7 @@ function PaintingViewerContent({
         onViewConversation={actions.viewConversation}
       />
       <View className="flex-1">
-        <PaintingViewerImage uri={current.uri} />
+        <PaintingViewerImage accessibilityLabel={t('painting.output')} uri={current.uri} />
       </View>
     </>
   );

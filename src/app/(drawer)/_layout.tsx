@@ -7,11 +7,8 @@ import { Sidebar } from '@/frontend/features/sidebar';
 import { useThemeColor } from '@/frontend/hooks/useThemeColor';
 import { appSidebar } from '@/frontend/utils/constants';
 
-// Must return an element, NOT be `Sidebar` itself: `DrawerView` *calls*
-// `drawerContent(props)` rather than rendering it, so passing the component
-// directly runs its hooks in the caller's context — outside the drawer's
-// progress provider — and `useDrawerProgress()` throws "Couldn't find a
-// drawer". Defined at module scope so it is also a stable reference.
+// Keep a stable render callback and render Sidebar as a component so React owns
+// its hook lifecycle.
 function renderSidebar(props: DrawerContentComponentProps) {
   return <Sidebar navigation={props.navigation} />;
 }
@@ -31,9 +28,7 @@ export default function DrawerLayout() {
         drawerContent={renderSidebar}
         screenOptions={{
           drawerStyle: { width: width * appSidebar.widthRatio },
-          // Keep the routed screen in place and slide the sidebar over it. The
-          // sidebar is a temporary surface and must not occupy scene layout space.
-          drawerType: 'front',
+          drawerType: 'slide',
           headerShown: false,
           // Dim the exposed scene while preserving the drawer's native progress
           // animation and tap-to-close interaction.

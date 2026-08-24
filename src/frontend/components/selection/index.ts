@@ -7,7 +7,6 @@ export {
   usePendingDeletionIds,
   useRegisterSelectionSource,
   useSelectionActions,
-  useSelectionSource,
   useSelectionState,
 } from './SelectionProvider';
-export { selectionToolbarGap, selectionToolbarHeight } from './selectionToolbarLayout';
+export { SelectionToolbar } from './SelectionToolbar/SelectionToolbar';

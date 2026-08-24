@@ -31,8 +31,6 @@ const colorLiteralAllowlist: Record<string, string> = {
     'outside the render tree: Live Activity UI never passes through uniwind',
   'packages/ui/src/background-activity/background-activity.preview.tsx':
     'outside the render tree: on-device preview of the Live Activity, mirrors its literals',
-  'packages/ui/src/components/dynamic-toast/toast.tsx':
-    'chrome over uncontrolled content: Dynamic-Island-style pill, one black in both themes',
   'packages/ui/src/components/loading/image-generation-loader.tsx':
     'Skia fallback inks for the frame where CSS variables are not yet resolved',
   'packages/ui/src/components/markdown-text/utils/syntax-colors.ts':

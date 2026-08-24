@@ -1,26 +1,24 @@
 import BellIcon from '@cherrystudio/app-icons/icons/bell';
+import CircleUserRoundIcon from '@cherrystudio/app-icons/icons/circle-user-round';
 import CloudIcon from '@cherrystudio/app-icons/icons/cloud';
-import ContactRoundIcon from '@cherrystudio/app-icons/icons/contact-round';
-import ContrastIcon from '@cherrystudio/app-icons/icons/contrast';
-import DatabaseIcon from '@cherrystudio/app-icons/icons/database';
+import GlobeIcon from '@cherrystudio/app-icons/icons/globe';
 import InfoIcon from '@cherrystudio/app-icons/icons/info';
 import LockIcon from '@cherrystudio/app-icons/icons/lock';
-import NetworkIcon from '@cherrystudio/app-icons/icons/network';
+import PaletteIcon from '@cherrystudio/app-icons/icons/palette';
 import SparklesIcon from '@cherrystudio/app-icons/icons/sparkles';
 import { Image, Section } from '@cherrystudio/ui/components';
 import { resolveProviderIcon } from '@cherrystudio/ui/icons';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Platform, View } from 'react-native';
-import Animated from 'react-native-reanimated';
+import { Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUniwind } from 'uniwind';
 
 import { RouteHeader } from '@/frontend/components/headers';
 import { usePreference } from '@/frontend/data/hooks';
 
-import { ProfileHero, ProfileStickyBar, useProfileHeaderAnimation } from './profileHero';
+import { ProfileHero } from './profileHero';
 
 export default function SettingsScreen() {
   const { t } = useTranslation();
@@ -28,45 +26,29 @@ export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const { theme } = useUniwind();
   const [userName] = usePreference('app.user.name');
-  const { lockProgress, onScroll, scrollY, toggleHeroLock } = useProfileHeaderAnimation();
   const mcpIcon = resolveProviderIcon('mcp')?.[theme === 'dark' ? 'dark' : 'light'];
 
   const openProfileSettings = useCallback(() => {
     router.push('/settings/profile');
   }, [router]);
 
-  // With no name set yet, the hero is a call to action: tapping it (avatar or the
-  // prompt) opens profile settings instead of toggling the expand/collapse lock.
-  const hasUserName = userName.trim().length > 0;
-  const onHeroPress = hasUserName ? toggleHeroLock : openProfileSettings;
-
-  // Own the insets explicitly: `never` keeps the scroll-offset zero point stable
-  // (so scrollY reads 0 at rest and negative on iOS overscroll), which the hero
-  // animation depends on. No top padding: the hero box is pinned to content y=0
-  // and runs to the page's own top edge.
   const contentContainerStyle = useMemo(() => ({ paddingBottom: insets.bottom }), [insets.bottom]);
 
   return (
     <View className="flex-1 bg-grouped-background">
-      <Animated.ScrollView
-        alwaysBounceVertical
+      <RouteHeader />
+      <ScrollView
+        alwaysBounceVertical={false}
         contentContainerStyle={contentContainerStyle}
-        contentInsetAdjustmentBehavior="never"
-        onScroll={onScroll}
-        scrollEventThrottle={16}
+        contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        <ProfileHero
-          lockProgress={lockProgress}
-          onPress={onHeroPress}
-          scrollY={scrollY}
-          userName={userName}
-        />
-        <View className="gap-6 px-2 pt-6">
+        <ProfileHero onPress={openProfileSettings} userName={userName} />
+        <View className="gap-6 px-2 pt-2">
           <Section>
             <Section.Item
               label={t('settings.items.profile')}
-              leading={<ContactRoundIcon className="size-5 text-foreground" />}
+              leading={<CircleUserRoundIcon className="size-5 text-foreground" />}
               onPress={openProfileSettings}
             />
           </Section>
@@ -85,7 +67,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.items.webSearch')}
-              leading={<NetworkIcon className="size-5 text-foreground" />}
+              leading={<GlobeIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/websearch')}
             />
             <Section.Item
@@ -112,11 +94,6 @@ export default function SettingsScreen() {
               />
             ) : null}
             <Section.Item
-              label={t('settings.items.dataBackup')}
-              leading={<DatabaseIcon className="size-5 text-foreground" />}
-              onPress={() => router.push('/settings/data')}
-            />
-            <Section.Item
               label={t('settings.items.permissions')}
               leading={<LockIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/permissions')}
@@ -125,7 +102,7 @@ export default function SettingsScreen() {
           <Section>
             <Section.Item
               label={t('settings.appearance.title')}
-              leading={<ContrastIcon className="size-5 text-foreground" />}
+              leading={<PaletteIcon className="size-5 text-foreground" />}
               onPress={() => router.push('/settings/appearance')}
             />
           </Section>
@@ -137,11 +114,7 @@ export default function SettingsScreen() {
             />
           </Section>
         </View>
-      </Animated.ScrollView>
-      {/* The transparent native header owns the top inset, so adding the safe
-          area again here would push the sticky bar down twice. */}
-      <ProfileStickyBar scrollY={scrollY} topInset={0} userName={userName} />
-      <RouteHeader />
+      </ScrollView>
     </View>
   );
 }

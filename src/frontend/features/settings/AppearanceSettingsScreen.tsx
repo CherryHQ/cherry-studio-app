@@ -6,10 +6,8 @@ import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { Text, View } from 'react-native';
-import { useUniwind } from 'uniwind';
 
 import { usePreference } from '@/frontend/data/hooks';
-import { ThemeMode } from '@/shared/data/preference';
 
 import { SettingsScrollPage } from './components/SettingsScrollPage';
 import { ThemePreviewSelector } from './components/ThemePreviewSelector';
@@ -19,24 +17,12 @@ import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 export default function AppearanceSettingsScreen() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { theme: resolvedTheme } = useUniwind();
   const [fontSizeStep] = usePreference('ui.font_size_step');
   const normalizedFontSizeStep = normalizeFontSizeStep(fontSizeStep);
   const settingPreferences = useSettingPreferences();
   const languageLabel = settingPreferences.language.options.find(
     (option) => option.value === settingPreferences.language.value,
   )?.label;
-  const isAutomaticTheme = settingPreferences.theme.value === ThemeMode.system;
-  const resolvedThemeMode = resolvedTheme === 'dark' ? ThemeMode.dark : ThemeMode.light;
-  const selectedTheme = isAutomaticTheme
-    ? resolvedThemeMode
-    : settingPreferences.theme.value === ThemeMode.dark
-      ? ThemeMode.dark
-      : ThemeMode.light;
-  const handleAutomaticThemeChange = (isAutomatic: boolean) => {
-    settingPreferences.theme.onValueChange(isAutomatic ? ThemeMode.system : resolvedThemeMode);
-  };
-
   return (
     <SettingsScrollPage
       contentClassName="gap-6"
@@ -45,10 +31,8 @@ export default function AppearanceSettingsScreen() {
       <Section title={t('settings.items.theme')}>
         <Section.Item testID="theme-preview-section-item">
           <ThemePreviewSelector
-            isAutomatic={isAutomaticTheme}
-            onAutomaticChange={handleAutomaticThemeChange}
             onThemeChange={settingPreferences.theme.onValueChange}
-            selectedTheme={selectedTheme}
+            selectedTheme={settingPreferences.theme.value}
           />
         </Section.Item>
       </Section>

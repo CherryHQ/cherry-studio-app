@@ -19,7 +19,7 @@ import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 
 // Android has no native bottom-header slot. The top row uses the shared
 // HeaderChrome, while the bottom actions remain a custom overlay bar matching
-// SelectionToolbar.android.
+// SelectionToolbar.
 export function PaintingViewerChrome({
   aspectRatios,
   onDelete,
