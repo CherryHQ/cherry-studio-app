@@ -13,7 +13,7 @@ import {
 
 import type { PaintingViewerChromeProps } from './PaintingViewerChrome.types';
 
-// The top actions use the app-wide white HeaderAction surface. The editing
+// The top actions use the app-wide HeaderAction contract with an inverse tint. The editing
 // actions stay in the native iOS bottom toolbar, which is a different control
 // region. Rendered from the screen so placement="bottom" is allowed.
 export function PaintingViewerChrome({
@@ -65,7 +65,7 @@ export function PaintingViewerChrome({
 
   return (
     <>
-      <HeaderChrome leftActions={leftActions} rightActions={rightActions} />
+      <HeaderChrome actionTone="inverse" leftActions={leftActions} rightActions={rightActions} />
       <Stack.Toolbar placement="bottom">
         <Stack.Toolbar.Button accessibilityLabel={t('painting.viewer.edit')} onPress={onEdit}>
           {t('painting.viewer.edit')}

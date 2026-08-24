@@ -1,3 +1,3 @@
 export { HeaderAction } from './HeaderAction';
 export { HeaderIconButton } from './HeaderIconButton';
-export type { HeaderToolbarAction } from './HeaderAction.types';
+export type { HeaderActionTone, HeaderToolbarAction } from './HeaderAction.types';
