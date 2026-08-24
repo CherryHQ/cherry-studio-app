@@ -41,7 +41,7 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock('@/frontend/components/selection/SelectionToolbar/SelectionToolbar', () => {
+jest.mock('../SelectionToolbar/SelectionToolbar', () => {
   const { Pressable: MockPressable } = jest.requireActual('react-native');
 
   return {

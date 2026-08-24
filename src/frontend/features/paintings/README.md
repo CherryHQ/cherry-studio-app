@@ -21,6 +21,8 @@ painting history screen, plus the nested viewer.
 - `templates/` holds the bundled image-generation prompt templates and their preview row/sheet.
 - `DrawingList.tsx` is the virtualized masonry history list body; `usePaintingSelectionSource.ts` wraps
   `hooks/usePaintings` into the `selection` source shape the history screen consumes.
-- `PaintingViewerScreen/` is the nested full-screen image area.
+- `PaintingViewerScreen/` is the nested full-screen image area. It supplies the painting-specific
+  route, file resolution, chrome, and capability actions while the shared `artifactPreview` module
+  owns the source-to-target navigation transition and zoomable image surface.
 - Painting data state lives in `hooks/usePaintings` (queries, delete,
   gallery items) and is consumed here.
