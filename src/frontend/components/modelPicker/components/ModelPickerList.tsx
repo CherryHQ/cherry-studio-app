@@ -5,13 +5,18 @@ import {
   type LegendListRef,
   type LegendListRenderItemProps,
 } from '@legendapp/list/react-native';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { ModelAvatar } from '@/frontend/components/avatar';
 
 import type { ModelPickerModelItem } from '../utils/modelPickerData';
+import {
+  buildModelPickerFastScrollNavigation,
+  MIN_MODEL_PICKER_FAST_SCROLL_MODEL_COUNT,
+} from '../utils/modelPickerFastScroll';
 import type { ModelPickerListItem } from '../utils/modelPickerListItems';
+import { ModelPickerFastScroller } from './ModelPickerFastScroller';
 
 const modelPickerEstimatedItemSize = 48;
 
@@ -45,7 +50,21 @@ export function ModelPickerList({
   selectedModelId,
 }: ModelPickerListProps) {
   const listRef = useRef<LegendListRef>(null);
+  const navigationFrameRef = useRef<number | null>(null);
+  const pendingNavigationIndexRef = useRef<number | null>(null);
   const hasScrolledToSelectedRef = useRef(false);
+  const [activeAnchorKey, setActiveAnchorKey] = useState<string | null>(null);
+  const fastScrollNavigation = useMemo(
+    () => buildModelPickerFastScrollNavigation(listItems),
+    [listItems],
+  );
+  const { anchorIndexByListIndex, anchors: fastScrollAnchors, modelCount } = fastScrollNavigation;
+  const isFastScrollerVisible =
+    modelCount >= MIN_MODEL_PICKER_FAST_SCROLL_MODEL_COUNT && fastScrollAnchors.length > 1;
+  const storedActiveAnchorIndex = fastScrollAnchors.findIndex(
+    (anchor) => anchor.key === activeAnchorKey,
+  );
+  const activeAnchorIndex = storedActiveAnchorIndex >= 0 ? storedActiveAnchorIndex : 0;
   const selectedRowIndex = useMemo(() => {
     if (!selectedModelId) {
       return -1;
@@ -79,6 +98,14 @@ export function ModelPickerList({
 
     return () => cancelAnimationFrame(frame);
   }, [isOpen, selectedRowIndex]);
+  useEffect(
+    () => () => {
+      if (navigationFrameRef.current !== null) {
+        cancelAnimationFrame(navigationFrameRef.current);
+      }
+    },
+    [],
+  );
   const listExtraData = useMemo<ModelPickerListExtraData>(
     () => ({ selectedModelId }),
     [selectedModelId],
@@ -101,6 +128,46 @@ export function ModelPickerList({
   );
   const keyExtractor = useCallback((item: ModelPickerListItem) => item.key, []);
   const getItemType = useCallback((item: ModelPickerListItem) => item.type, []);
+  const handleFirstVisibleItemChanged = useCallback(
+    ({ index }: { index: number }) => {
+      const anchorIndex = listRef.current?.getState().isAtEnd
+        ? anchorIndexByListIndex[anchorIndexByListIndex.length - 1]
+        : anchorIndexByListIndex[index];
+      const anchor = anchorIndex === undefined ? undefined : fastScrollAnchors[anchorIndex];
+      if (anchor) {
+        setActiveAnchorKey((current) => (current === anchor.key ? current : anchor.key));
+      }
+    },
+    [anchorIndexByListIndex, fastScrollAnchors],
+  );
+  const handleFastScrollNavigate = useCallback(
+    (anchorIndex: number) => {
+      const anchor = fastScrollAnchors[anchorIndex];
+      if (!anchor) {
+        return;
+      }
+
+      setActiveAnchorKey(anchor.key);
+      pendingNavigationIndexRef.current = anchor.listIndex;
+      if (navigationFrameRef.current !== null) {
+        return;
+      }
+
+      navigationFrameRef.current = requestAnimationFrame(() => {
+        navigationFrameRef.current = null;
+        const listIndex = pendingNavigationIndexRef.current;
+        pendingNavigationIndexRef.current = null;
+        if (listIndex !== null) {
+          void listRef.current?.scrollToIndex({
+            animated: false,
+            index: listIndex,
+            viewPosition: 0,
+          });
+        }
+      });
+    },
+    [fastScrollAnchors],
+  );
   if (listItems.length === 0) {
     return (
       <View className="flex-1 items-center justify-center px-6 py-8">
@@ -112,24 +179,39 @@ export function ModelPickerList({
   }
 
   return (
-    <LegendList
-      ref={listRef}
-      contentContainerStyle={styles.listContentContainer}
-      data={listItems}
-      drawDistance={320}
-      estimatedItemSize={modelPickerEstimatedItemSize}
-      extraData={listExtraData}
-      getItemType={getItemType}
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
-      keyExtractor={keyExtractor}
-      maintainVisibleContentPosition={false}
-      nestedScrollEnabled
-      recycleItems
-      renderItem={renderItem}
-      showsVerticalScrollIndicator={false}
-      style={styles.list}
-    />
+    <View style={styles.list}>
+      <LegendList
+        ref={listRef}
+        contentContainerStyle={[
+          styles.listContentContainer,
+          isFastScrollerVisible ? styles.listContentContainerWithFastScroller : undefined,
+        ]}
+        data={listItems}
+        drawDistance={320}
+        estimatedItemSize={modelPickerEstimatedItemSize}
+        extraData={listExtraData}
+        getItemType={getItemType}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        keyExtractor={keyExtractor}
+        maintainVisibleContentPosition={false}
+        nestedScrollEnabled
+        onFirstVisibleItemChanged={
+          isFastScrollerVisible ? handleFirstVisibleItemChanged : undefined
+        }
+        recycleItems
+        renderItem={renderItem}
+        showsVerticalScrollIndicator={false}
+        style={styles.list}
+      />
+      {isFastScrollerVisible ? (
+        <ModelPickerFastScroller
+          activeIndex={activeAnchorIndex}
+          anchors={fastScrollAnchors}
+          onNavigate={handleFastScrollNavigate}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -179,5 +261,8 @@ const styles = StyleSheet.create({
   listContentContainer: {
     gap: 4,
     paddingBottom: 24,
+  },
+  listContentContainerWithFastScroller: {
+    paddingRight: 32,
   },
 });
