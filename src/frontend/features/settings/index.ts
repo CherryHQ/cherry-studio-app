@@ -2,7 +2,6 @@ export { default as AboutScreen } from './AboutScreen';
 export { default as AppearanceSettingsScreen } from './AppearanceSettingsScreen';
 export { default as FontSizeSettingsScreen } from './FontSizeSettingsScreen';
 export { default as LanguageSettingsScreen } from './LanguageSettingsScreen';
-export { default as ModelSettingSelectScreen } from './ModelSettingSelectScreen';
 export { default as ModelSettingsScreen } from './ModelSettingsScreen';
 export { default as NotificationSettingsScreen } from './NotificationSettingsScreen';
 export { default as ProfileSettingsScreen } from './ProfileSettingsScreen';

@@ -1,6 +1,7 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { ContentState, type MenuItem, useAlert } from '@cherrystudio/ui/components';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
@@ -9,6 +10,7 @@ import { type AccessibilityActionEvent, ScrollView, Text, View } from 'react-nat
 import { Pressable as GesturePressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
+import { useAppSearch } from '@/frontend/components/appSearch';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {
@@ -20,11 +22,10 @@ import {
 import { useAssistantMutations, useAssistantsApi } from '@/frontend/hooks/chat';
 import type { Assistant } from '@/shared/data/types/assistant';
 
-import { AssistantListSearchBar } from './AssistantListSearchBar/AssistantListSearchBar';
-
 export default function AssistantListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
+  const { open: openAppSearch } = useAppSearch();
   const { assistants, isLoading } = useAssistantsApi();
   const { deleteAssistant, deleteAssistants } = useAssistantMutations();
   const { alert } = useAlert();
@@ -33,7 +34,6 @@ export default function AssistantListScreen() {
   const [pendingDeletionIds, setPendingDeletionIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
-  const [searchText, setSearchText] = useState('');
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
   const isBatchDeleting = pendingDeletionIds.size > 0;
 
@@ -45,25 +45,11 @@ export default function AssistantListScreen() {
     [assistants, pendingDeletionIds],
   );
 
-  const filteredAssistants = useMemo(() => {
-    const query = searchText.trim().toLocaleLowerCase();
-    if (!query) {
-      return visibleAssistants;
-    }
-
-    return visibleAssistants.filter((assistant) =>
-      [assistant.name, assistant.modelName].some((value) =>
-        value?.toLocaleLowerCase().includes(query),
-      ),
-    );
-  }, [searchText, visibleAssistants]);
-
   const enterEditing = useCallback(() => {
     if (isBatchDeleting) {
       return;
     }
 
-    setSearchText('');
     setIsEditing(true);
   }, [isBatchDeleting]);
   const exitEditing = useCallback(() => {
@@ -83,6 +69,40 @@ export default function AssistantListScreen() {
   const openCreateAssistant = useCallback(() => {
     router.push('/assistants/new');
   }, [router]);
+  const openAssistant = useCallback(
+    (assistant: Assistant) => {
+      router.push({
+        pathname: '/assistants/[assistantId]',
+        params: { assistantId: assistant.id },
+      });
+    },
+    [router],
+  );
+  const openAssistantSearch = useCallback(() => {
+    void openAppSearch<Assistant>({
+      emptyText: t('assistant.list.noResults'),
+      getAccessibilityLabel: (assistant) => assistant.name,
+      keyExtractor: (assistant) => assistant.id,
+      placeholder: t('navigation.search'),
+      renderItem: (assistant) => <AssistantSearchResult assistant={assistant} />,
+      search: ({ query }) => {
+        const normalizedQuery = query.trim().toLocaleLowerCase();
+        const items = normalizedQuery
+          ? visibleAssistants.filter((assistant) =>
+              [assistant.name, assistant.modelName].some((value) =>
+                value?.toLocaleLowerCase().includes(normalizedQuery),
+              ),
+            )
+          : visibleAssistants;
+
+        return { groups: [{ items, key: 'assistants' }] };
+      },
+    }).then((outcome) => {
+      if (outcome.type === 'selected') {
+        openAssistant(outcome.item);
+      }
+    });
+  }, [openAppSearch, openAssistant, t, visibleAssistants]);
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
@@ -102,6 +122,14 @@ export default function AssistantListScreen() {
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
+        accessibilityLabel: t('navigation.search'),
+        disabled: visibleAssistants.length === 0 || isBatchDeleting,
+        icon: SearchIcon,
+        key: 'search-assistants',
+        onPress: openAssistantSearch,
+        type: 'icon',
+      },
+      {
         accessibilityLabel: t('common.more'),
         icon: EllipsisIcon,
         items: menuItems,
@@ -109,7 +137,7 @@ export default function AssistantListScreen() {
         type: 'menu',
       },
     ],
-    [menuItems, t],
+    [isBatchDeleting, menuItems, openAssistantSearch, t, visibleAssistants.length],
   );
   const doneActions = useMemo<HeaderToolbarAction[]>(
     () => [
@@ -188,7 +216,6 @@ export default function AssistantListScreen() {
         rightActions={isEditing ? doneActions : rightActions}
         title={t('assistant.list.title')}
       />
-      <AssistantListSearchBar isEditing={isEditing} setSearchText={setSearchText} />
       <ScrollView
         alwaysBounceVertical={false}
         className="flex-1"
@@ -196,9 +223,9 @@ export default function AssistantListScreen() {
         contentInsetAdjustmentBehavior="automatic"
         showsVerticalScrollIndicator={false}
       >
-        {filteredAssistants.length > 0 ? (
+        {visibleAssistants.length > 0 ? (
           <View>
-            {filteredAssistants.map((assistant) => (
+            {visibleAssistants.map((assistant) => (
               <AssistantListRow
                 key={assistant.id}
                 assistant={assistant}
@@ -210,30 +237,26 @@ export default function AssistantListScreen() {
               />
             ))}
           </View>
-        ) : visibleAssistants.length === 0 ? (
-          isLoading ? (
-            <ContentState.Loading className="px-8 py-16" title={t('assistant.list.loading')} />
-          ) : (
-            <ContentState.Empty
-              className="px-8 py-16"
-              description={t('assistant.list.emptyDescription')}
-              icon={
-                <View className="size-14 items-center justify-center rounded-full bg-secondary">
-                  <BotIcon className="size-7 text-foreground" />
-                </View>
-              }
-              primaryAction={{
-                accessibilityLabel: t('assistant.actions.create'),
-                children: t('assistant.actions.create'),
-                className: 'rounded-full',
-                onPress: openCreateAssistant,
-                size: 'default',
-              }}
-              title={t('assistant.list.emptyTitle')}
-            />
-          )
+        ) : isLoading ? (
+          <ContentState.Loading className="px-8 py-16" title={t('assistant.list.loading')} />
         ) : (
-          <ContentState.Empty className="px-4 py-12" description={t('assistant.list.noResults')} />
+          <ContentState.Empty
+            className="px-8 py-16"
+            description={t('assistant.list.emptyDescription')}
+            icon={
+              <View className="size-14 items-center justify-center rounded-full bg-secondary">
+                <BotIcon className="size-7 text-foreground" />
+              </View>
+            }
+            primaryAction={{
+              accessibilityLabel: t('assistant.actions.create'),
+              children: t('assistant.actions.create'),
+              className: 'rounded-full',
+              onPress: openCreateAssistant,
+              size: 'default',
+            }}
+            title={t('assistant.list.emptyTitle')}
+          />
         )}
       </ScrollView>
       {isEditing ? (
@@ -245,6 +268,24 @@ export default function AssistantListScreen() {
         />
       ) : null}
     </>
+  );
+}
+
+function AssistantSearchResult({ assistant }: { assistant: Assistant }) {
+  const { t } = useTranslation();
+
+  return (
+    <View className="min-h-12 flex-row items-center gap-3">
+      <Text className="min-w-10 text-center text-emoji-3xl">{assistant.emoji}</Text>
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="font-semibold text-base text-foreground" numberOfLines={1}>
+          {assistant.name}
+        </Text>
+        <Text className="text-foreground-tertiary text-xs" numberOfLines={1}>
+          {assistant.modelName ?? t('assistant.model.none')}
+        </Text>
+      </View>
+    </View>
   );
 }
 

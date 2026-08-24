@@ -1,5 +1,4 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
-import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
 import {
   BottomSheet,
   ContentState,
@@ -19,7 +18,11 @@ import { Keyboard, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
-import { useModelPickerData } from '@/frontend/components/modelPicker';
+import {
+  ModelPickerDrawer,
+  type ModelPickerModelItem,
+  useModelPickerData,
+} from '@/frontend/components/modelPicker';
 import { usePreference } from '@/frontend/data/hooks';
 import { useAssistantApiById, useAssistantMutations } from '@/frontend/hooks/chat';
 import { useMcpServersApi } from '@/frontend/hooks/mcp/useMcpServers';
@@ -61,13 +64,8 @@ const defaultEmoji = '🌟';
 
 export default function AssistantEditScreen() {
   const { t } = useTranslation();
-  const params = useLocalSearchParams<{
-    assistantId?: string | string[];
-    modelId?: string | string[];
-  }>();
+  const params = useLocalSearchParams<{ assistantId?: string | string[] }>();
   const assistantId = getSingleParamValue(params.assistantId);
-  // Set by the model picker screen on its way out — see `AssistantModelSelectScreen`.
-  const pickedModelId = getSingleParamValue(params.modelId);
   const { assistant, isLoading } = useAssistantApiById(assistantId);
 
   // The form seeds its fields from the record when it mounts, so it must not mount
@@ -82,23 +80,15 @@ export default function AssistantEditScreen() {
     );
   }
 
-  return (
-    <AssistantEditForm
-      assistant={assistant}
-      assistantId={assistantId}
-      pickedModelId={pickedModelId}
-    />
-  );
+  return <AssistantEditForm assistant={assistant} assistantId={assistantId} />;
 }
 
 function AssistantEditForm({
   assistant,
   assistantId,
-  pickedModelId,
 }: {
   assistant: Assistant | undefined;
   assistantId: string | undefined;
-  pickedModelId: string | undefined;
 }) {
   const { t } = useTranslation();
   const router = useRouter();
@@ -109,10 +99,10 @@ function AssistantEditForm({
   const { servers: mcpServers } = useMcpServersApi();
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [isMcpModeSheetOpen, setIsMcpModeSheetOpen] = useState(false);
+  const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [defaultModelPreference] = usePreference('chat.default_model_id');
   const [form, setForm] = useState<AssistantFormState>(() => createFormState(assistant));
   const [hasPickedModel, setHasPickedModel] = useState(false);
-  const [appliedPickedModelId, setAppliedPickedModelId] = useState<string | undefined>(undefined);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);
   const selectedModel = modelPickerData.getModelItem(form.modelId);
   // Resolving through the picker catalog keeps a stale preference (a model the
@@ -120,19 +110,6 @@ function AssistantEditForm({
   // reject as an unregistered model.
   const defaultModelId = modelPickerData.getModelItem(defaultModelPreference)?.modelId ?? null;
   const isSaving = isCreating || isUpdating;
-
-  // The picker is a pushed screen, so its choice comes back as a route param:
-  // this form is unsaved state and nothing else can write into it. Resolved
-  // through the catalog for the same reason the default is below, and because
-  // an unresolved id here means the catalog has not loaded yet — leaving the
-  // param unapplied lets a later render pick it up.
-  const pickedModel = modelPickerData.getModelItem(pickedModelId ?? null);
-
-  if (pickedModel && pickedModelId !== appliedPickedModelId) {
-    setAppliedPickedModelId(pickedModelId);
-    setHasPickedModel(true);
-    setForm((current) => ({ ...current, modelId: pickedModel.modelId }));
-  }
 
   // New assistants start on the global default model, like the desktop create
   // wizard. Both the preference and the model catalog load asynchronously, so
@@ -152,11 +129,14 @@ function AssistantEditForm({
   );
   const openModelSelect = useCallback(() => {
     Keyboard.dismiss();
-    router.push({
-      params: { assistantId, modelId: form.modelId ?? undefined },
-      pathname: '/assistants/model-select',
-    });
-  }, [assistantId, form.modelId, router]);
+    setIsModelPickerOpen(true);
+  }, []);
+  const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
+  const handleModelSelect = useCallback((item: ModelPickerModelItem) => {
+    setHasPickedModel(true);
+    setForm((current) => ({ ...current, modelId: item.modelId }));
+    setIsModelPickerOpen(false);
+  }, []);
   const openEmojiPicker = useCallback(() => {
     Keyboard.dismiss();
     setIsEmojiPickerOpen(true);
@@ -290,10 +270,6 @@ function AssistantEditForm({
           </FormField>
         </FormSection>
         <FormSection title={t('assistant.form.generationSection')}>
-          {/* A pushed screen rather than a sheet, and drawn as the settings'
-              default-model row is: the label on the left, the model on the
-              right, a chevron for the push. Picking a model is a search through
-              every model on the device, which wants a screen of its own. */}
           <Pressable
             accessibilityLabel={t('assistant.form.modelSelect')}
             accessibilityRole="button"
@@ -310,7 +286,7 @@ function AssistantEditForm({
               >
                 {selectedModel?.model.name ?? t('assistant.model.none')}
               </Text>
-              <ChevronRightIcon className="size-5 shrink-0 text-muted-foreground" />
+              <ChevronDownIcon className="size-5 shrink-0 text-muted-foreground" />
             </View>
           </Pressable>
           <SwitchRow
@@ -422,6 +398,15 @@ function AssistantEditForm({
           ) : null}
         </FormSection>
       </KeyboardAwareScrollView>
+      {isModelPickerOpen ? (
+        <ModelPickerDrawer
+          open
+          onClose={closeModelPicker}
+          onSelect={handleModelSelect}
+          selectedModelId={form.modelId}
+          title={t('assistant.form.modelSelect')}
+        />
+      ) : null}
       <EmojiPickerBottomSheet
         isOpen={isEmojiPickerOpen}
         onClose={closeEmojiPicker}

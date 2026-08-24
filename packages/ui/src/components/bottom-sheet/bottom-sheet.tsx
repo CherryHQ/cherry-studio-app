@@ -40,6 +40,7 @@ type BottomSheetBaseProps = {
   backAction?: BottomSheetBackAction;
   children: ReactNode;
   dismissible?: boolean;
+  headerAction?: ReactNode;
   onClose: () => void;
   open: boolean;
   testID?: string;
@@ -68,7 +69,16 @@ export function BottomSheetProvider({ children }: { children: ReactNode }) {
  * iOS and Android.
  */
 export function BottomSheet(props: BottomSheetProps) {
-  const { backAction, children, dismissible = true, onClose, open, testID, title } = props;
+  const {
+    backAction,
+    children,
+    dismissible = true,
+    headerAction,
+    onClose,
+    open,
+    testID,
+    title,
+  } = props;
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const scrimStyle = useResolveClassNames('bg-scrim');
@@ -187,6 +197,7 @@ export function BottomSheet(props: BottomSheetProps) {
             >
               {title}
             </Text>
+            {headerAction ? <View className="ml-2">{headerAction}</View> : null}
           </View>
           <View className="min-h-0 flex-1" style={{ paddingBottom: insets.bottom }}>
             {children}

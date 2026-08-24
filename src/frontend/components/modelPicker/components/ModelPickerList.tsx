@@ -35,11 +35,7 @@ type ModelPickerListExtraData = {
   selectedModelId: string | null;
 };
 
-/**
- * Every model on the device, grouped by provider. Drawn for both surfaces that
- * pick one — the drawer the composer opens and the pushed screen the model
- * settings use — so the two cannot drift apart.
- */
+/** Every selectable model on the device, grouped by provider in the shared picker sheet. */
 export function ModelPickerList({
   emptyText,
   isLoading = false,

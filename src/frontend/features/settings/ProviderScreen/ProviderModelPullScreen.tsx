@@ -1,17 +1,20 @@
 import { Section, Spinner } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { AppSearchButton, useAppSearch } from '@/frontend/components/appSearch';
+import { ModelAvatar } from '@/frontend/components/avatar';
 import { RouteHeader } from '@/frontend/components/headers';
 import {
   filterModelsByType,
   getModelTypeCounts,
-  ModelSearchControls,
   ModelTypeFilterBar,
+  type ModelTypeCounts,
   type ModelTypeFilter,
+  ModelTypeSearchFilter,
 } from '@/frontend/components/modelPicker';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -37,6 +40,12 @@ import {
 import { consumeProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
 
 type PullTranslator = ReturnType<typeof useTranslation>['t'];
+
+type ProviderModelPullSearchItem = {
+  key: string;
+  model: Model;
+  section: ProviderModelPullSectionKey;
+};
 
 type PullListExtraData = {
   displayedPreview: ProviderModelPullPreview;
@@ -143,26 +152,19 @@ function ProviderModelPullPreviewPage({
   provider: Provider | undefined;
 }) {
   const { t } = useTranslation();
-  const [searchText, setSearchText] = useState('');
-  const deferredSearchText = useDeferredValue(searchText);
+  const { open: openAppSearch } = useAppSearch();
   const [typeFilter, setTypeFilter] = useState<ModelTypeFilter>('all');
   const missingCount = preview.missing.length;
-  const searchedPreview = useMemo(
-    () => filterProviderModelPullPreview(preview, deferredSearchText),
-    [deferredSearchText, preview],
-  );
   const displayedPreview = useMemo(
     () => ({
-      added: filterModelsByType(searchedPreview.added, typeFilter),
-      missing: filterModelsByType(searchedPreview.missing, typeFilter),
+      added: filterModelsByType(preview.added, typeFilter),
+      missing: filterModelsByType(preview.missing, typeFilter),
     }),
-    [searchedPreview, typeFilter],
+    [preview, typeFilter],
   );
-  // Counted over what the search left behind but before the type filter, so a
-  // tab's number says how many models picking it would show.
   const typeCounts = useMemo(
-    () => getModelTypeCounts([...searchedPreview.added, ...searchedPreview.missing]),
-    [searchedPreview],
+    () => getModelTypeCounts([...preview.added, ...preview.missing]),
+    [preview],
   );
   const { applySelection, isApplying, selectedIds, toggleAll, toggleModel } =
     useProviderModelPullSelection({
@@ -189,9 +191,8 @@ function ProviderModelPullPreviewPage({
     }),
     [displayedPreview, isApplying, provider, selectedIds, t, toggleAll, toggleModel],
   );
-  const isSearchEmpty = displayedPreview.added.length + displayedPreview.missing.length === 0;
-  // Everything on screen, which is what the search and the type filter left of
-  // the pull — selecting all of a filtered list should not reach past it.
+  // Everything the type filter leaves on screen; search selects and returns one
+  // item, so it no longer changes the scope of this screen's select-all action.
   const displayedIds = useMemo(
     () => [...displayedPreview.added, ...displayedPreview.missing].map((model) => model.id),
     [displayedPreview],
@@ -203,6 +204,60 @@ function ProviderModelPullPreviewPage({
       }
     });
   }, [applySelection, onApplied]);
+  const openModelSearch = useCallback(() => {
+    void openAppSearch<ProviderModelPullSearchItem, ModelTypeFilter, ModelTypeCounts>({
+      emptyText: t('settings.provider.models.search.empty'),
+      filter: {
+        component: ModelTypeSearchFilter,
+        context: typeCounts,
+        initialValue: typeFilter,
+      },
+      getAccessibilityLabel: (item) => item.model.name,
+      keyExtractor: (item) => item.key,
+      placeholder: t('modelPicker.searchPlaceholder'),
+      renderItem: (item) => <ProviderModelPullSearchResult item={item} provider={provider} />,
+      search: ({ filters, query }) => {
+        const searchedPreview = filterProviderModelPullPreview(preview, query);
+        const added = filterModelsByType(searchedPreview.added, filters).map((model) => ({
+          key: `added:${model.id}`,
+          model,
+          section: 'added' as const,
+        }));
+        const missing = filterModelsByType(searchedPreview.missing, filters).map((model) => ({
+          key: `missing:${model.id}`,
+          model,
+          section: 'missing' as const,
+        }));
+
+        return {
+          groups: [
+            ...(added.length > 0
+              ? [
+                  {
+                    items: added,
+                    key: 'added',
+                    title: t('settings.provider.models.pullAddedSection'),
+                  },
+                ]
+              : []),
+            ...(missing.length > 0
+              ? [
+                  {
+                    items: missing,
+                    key: 'missing',
+                    title: t('settings.provider.models.pullMissingSection'),
+                  },
+                ]
+              : []),
+          ],
+        };
+      },
+    }).then((outcome) => {
+      if (outcome.type === 'selected') {
+        toggleModel(outcome.item.model.id);
+      }
+    });
+  }, [openAppSearch, preview, provider, t, toggleModel, typeCounts, typeFilter]);
 
   return (
     <>
@@ -218,25 +273,21 @@ function ProviderModelPullPreviewPage({
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         keyExtractor={pullListKeyExtractor}
-        ListFooterComponent={
-          isSearchEmpty ? (
-            <View className="items-center justify-center px-4 py-10">
-              <Text className="text-center text-base text-foreground">
-                {t('settings.provider.models.search.empty')}
-              </Text>
-            </View>
-          ) : null
-        }
         ListHeaderComponent={
-          // The platform controls put native iOS search in the navigation bar
-          // and Android search in the list header while keeping the filter here.
-          <ModelSearchControls searchText={searchText} setSearchText={setSearchText}>
-            <ModelTypeFilterBar
-              counts={typeCounts}
-              selectedFilter={typeFilter}
-              onSelect={setTypeFilter}
+          <View className="flex-row items-center gap-3 px-4 py-3">
+            <View className="min-w-0 flex-1">
+              <ModelTypeFilterBar
+                counts={typeCounts}
+                selectedFilter={typeFilter}
+                onSelect={setTypeFilter}
+              />
+            </View>
+            <AppSearchButton
+              accessibilityLabel={t('navigation.search')}
+              disabled={isApplying}
+              onPress={openModelSearch}
             />
-          </ModelSearchControls>
+          </View>
         }
         maintainVisibleContentPosition={false}
         recycleItems
@@ -252,6 +303,30 @@ function ProviderModelPullPreviewPage({
         onToggleAll={() => toggleAll(displayedIds)}
       />
     </>
+  );
+}
+
+function ProviderModelPullSearchResult({
+  item,
+  provider,
+}: {
+  item: ProviderModelPullSearchItem;
+  provider: Provider | undefined;
+}) {
+  return (
+    <View className="min-h-12 flex-row items-center gap-3">
+      <ModelAvatar model={item.model} provider={provider} />
+      <Text
+        className={
+          item.section === 'missing'
+            ? 'min-w-0 flex-1 text-base text-foreground line-through'
+            : 'min-w-0 flex-1 text-base text-foreground'
+        }
+        numberOfLines={1}
+      >
+        {item.model.name}
+      </Text>
+    </View>
   );
 }
 

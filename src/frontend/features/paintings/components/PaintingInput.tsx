@@ -212,8 +212,7 @@ export function PaintingInput({
       onGenerate,
       onGenerated,
       paramValues,
-      selectedModel?.imageGeneration,
-      selectedModel?.name,
+      selectedModel,
       selectedModelId,
     ],
   );

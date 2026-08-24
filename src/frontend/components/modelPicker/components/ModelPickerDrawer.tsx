@@ -1,10 +1,11 @@
-import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import { BottomSheet } from '@cherrystudio/ui/components';
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, TextInput, View } from 'react-native';
+
+import { AppSearchButton } from '@/frontend/components/appSearch';
 
 import { useModelPickerData } from '../hooks/useModelPickerData';
+import { useModelSearch } from '../hooks/useModelSearch';
 import { type ModelPickerModelItem, type ModelPickerTag } from '../utils/modelPickerData';
 import { buildModelPickerListItems } from '../utils/modelPickerListItems';
 import { ModelPickerList } from './ModelPickerList';
@@ -32,18 +33,50 @@ export function ModelPickerDrawer({
   title,
 }: ModelPickerDrawerProps) {
   const { t } = useTranslation();
+  const openModelSearch = useModelSearch();
+  const [isSearching, setIsSearching] = useState(false);
+  const resolvedTitle = title ?? t('modelPicker.title');
+  const isSheetOpen = open && !isSearching;
+  const handleOpenSearch = useCallback(() => {
+    if (isSearching) {
+      return;
+    }
+
+    // Remove the sheet's portal and Android back handler before pushing the
+    // root search route. Cancellation restores the same picker state.
+    setIsSearching(true);
+    requestAnimationFrame(() => {
+      void openModelSearch({
+        providerId,
+        selectedModelId,
+        selectedTags,
+      }).then((outcome) => {
+        setIsSearching(false);
+        if (outcome.type === 'selected') {
+          onSelect(outcome.item);
+        }
+      });
+    });
+  }, [isSearching, onSelect, openModelSearch, providerId, selectedModelId, selectedTags]);
 
   return (
     <BottomSheet
+      headerAction={
+        <AppSearchButton
+          accessibilityLabel={t('navigation.search')}
+          disabled={isSearching}
+          onPress={handleOpenSearch}
+        />
+      }
       onClose={onClose}
-      open={open}
+      open={isSheetOpen}
       size="large"
       testID="model-picker"
-      title={title ?? t('modelPicker.title')}
+      title={resolvedTitle}
     >
       <ModelPickerDrawerContent
         onSelect={onSelect}
-        open={open}
+        open={isSheetOpen}
         providerId={providerId}
         selectedModelId={selectedModelId}
         selectedTags={selectedTags}
@@ -63,55 +96,21 @@ function ModelPickerDrawerContent({
   'onSelect' | 'open' | 'providerId' | 'selectedModelId' | 'selectedTags'
 >) {
   const { t } = useTranslation();
-  const [searchText, setSearchText] = useState('');
-  const deferredSearchText = useDeferredValue(searchText);
   const { groups, isLoading } = useModelPickerData({
     providerId,
-    searchText: deferredSearchText,
     selectedTags,
   });
   const listItems = useMemo(() => buildModelPickerListItems(groups), [groups]);
 
   return (
-    <View className="min-h-0 flex-1">
-      <View className="px-5 pb-2">
-        <View className="min-h-11 flex-row items-center gap-2 rounded-full bg-secondary px-3">
-          <SearchIcon className="size-5 text-muted-foreground" />
-          <TextInput
-            accessibilityLabel={t('modelPicker.searchPlaceholder')}
-            autoCapitalize="none"
-            autoCorrect={false}
-            className="min-h-11 min-w-0 flex-1 py-0 text-base text-foreground"
-            cursorColorClassName="accent-primary"
-            onChangeText={setSearchText}
-            placeholder={t('modelPicker.searchPlaceholder')}
-            placeholderTextColorClassName="accent-muted-foreground"
-            returnKeyType="search"
-            selectionColorClassName="accent-primary"
-            style={styles.searchInput}
-            underlineColorAndroidClassName="accent-transparent"
-            value={searchText}
-          />
-        </View>
-      </View>
-      <View className="min-h-0 flex-1">
-        <ModelPickerList
-          emptyText={t('settings.provider.models.search.empty')}
-          isLoading={isLoading}
-          isOpen={open}
-          listItems={listItems}
-          loadingText={t('settings.provider.models.loading')}
-          onSelect={onSelect}
-          selectedModelId={selectedModelId}
-        />
-      </View>
-    </View>
+    <ModelPickerList
+      emptyText={t('modelPicker.empty')}
+      isLoading={isLoading}
+      isOpen={open}
+      listItems={listItems}
+      loadingText={t('settings.provider.models.loading')}
+      onSelect={onSelect}
+      selectedModelId={selectedModelId}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  searchInput: {
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-  },
-});

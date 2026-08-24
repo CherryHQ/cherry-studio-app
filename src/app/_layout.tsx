@@ -106,6 +106,14 @@ function RootStack() {
     >
       <Stack.Screen name="(drawer)" options={{ headerShown: false }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+      <Stack.Screen
+        name="search"
+        options={{
+          animation: 'fade_from_bottom',
+          animationDuration: 250,
+          headerTransparent: false,
+        }}
+      />
       <Stack.Screen name="topics" />
       {/* Settings owns a nested stack and draws its headers there, so the root
           stack only needs to push the page without adding another header. */}

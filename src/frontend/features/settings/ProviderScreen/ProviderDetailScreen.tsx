@@ -1,12 +1,24 @@
 import EllipsisIcon from '@cherrystudio/app-icons/icons/ellipsis';
+import SearchIcon from '@cherrystudio/app-icons/icons/search';
 import SettingsIcon from '@cherrystudio/app-icons/icons/settings';
 import { type MenuItem, Spinner, useAlert } from '@cherrystudio/ui/components';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { useAppSearch } from '@/frontend/components/appSearch';
+import { ModelAvatar } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
+import {
+  filterModelsByType,
+  getModelTypeCounts,
+  type ModelTypeCounts,
+  type ModelTypeFilter,
+  ModelTypeSearchFilter,
+} from '@/frontend/components/modelPicker';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Provider } from '@/shared/data/types/provider';
 
 import {
   buildApiKeyEntriesFromInput,
@@ -33,6 +45,7 @@ import { useProviderModelPull } from './models/hooks/useProviderModelPull';
 import { useProviderModelRemove } from './models/hooks/useProviderModelRemove';
 import { useProviderModelSelection } from './models/hooks/useProviderModelSelection';
 import { stashProviderModelPullPreview } from './models/utils/providerModelPullPreviewStore';
+import { filterModelsByKeywords } from './models/utils/providerModelSearch';
 
 export default function ProviderDetailSettingsScreen() {
   const { providerId, providerName } = useLocalSearchParams<{
@@ -41,8 +54,10 @@ export default function ProviderDetailSettingsScreen() {
   }>();
   const { t } = useTranslation();
   const router = useRouter();
+  const { open: openAppSearch } = useAppSearch();
   const { alert } = useAlert();
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
+  const [focusedModelId, setFocusedModelId] = useState<UniqueModelId>();
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
   const { isDefaultModel, removeModels } = useProviderModelRemove();
@@ -189,6 +204,37 @@ export default function ProviderDetailSettingsScreen() {
     }),
     [isModelPullLoading, openModelPullSettings, provider],
   );
+  const modelTypeCounts = useMemo(() => getModelTypeCounts(models), [models]);
+  const openModelSearch = useCallback(() => {
+    if (!provider) {
+      return;
+    }
+
+    void openAppSearch<Model, ModelTypeFilter, ModelTypeCounts>({
+      emptyText: t('settings.provider.models.search.empty'),
+      filter: {
+        component: ModelTypeSearchFilter,
+        context: modelTypeCounts,
+        initialValue: 'all',
+      },
+      getAccessibilityLabel: (model) => model.name,
+      keyExtractor: (model) => model.id,
+      placeholder: t('modelPicker.searchPlaceholder'),
+      renderItem: (model) => <ProviderModelSearchResult model={model} provider={provider} />,
+      search: ({ filters, query }) => ({
+        groups: [
+          {
+            items: filterModelsByType(filterModelsByKeywords(query, models), filters),
+            key: 'models',
+          },
+        ],
+      }),
+    }).then((outcome) => {
+      if (outcome.type === 'selected') {
+        setFocusedModelId(outcome.item.id);
+      }
+    });
+  }, [modelTypeCounts, models, openAppSearch, provider, t]);
   // The chat default is the one model the service refuses to delete, so it is
   // also the one row a selection leaves alone — including "select all".
   const selectableIds = useMemo(
@@ -229,6 +275,14 @@ export default function ProviderDetailSettingsScreen() {
   const modelActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
+        accessibilityLabel: t('navigation.search'),
+        disabled: !provider || models.length === 0,
+        icon: SearchIcon,
+        key: 'search-models',
+        onPress: openModelSearch,
+        type: 'icon',
+      },
+      {
         accessibilityLabel: t('common.more'),
         disabled: !provider,
         icon: EllipsisIcon,
@@ -237,7 +291,7 @@ export default function ProviderDetailSettingsScreen() {
         type: 'menu',
       },
     ],
-    [modelMenuItems, provider, t],
+    [modelMenuItems, models.length, openModelSearch, provider, t],
   );
   const { exitEditing: exitModelSelection, selectedIds: selectedModelIds } = modelSelection;
   const selectedModels = useMemo(
@@ -408,6 +462,7 @@ export default function ProviderDetailSettingsScreen() {
           addAction={addAction}
           isDefaultModel={isDefaultModel}
           isLoading={modelsQuery.isPending}
+          focusedModelId={focusedModelId}
           models={models}
           provider={provider}
           pullAction={modelPullAction}
@@ -428,6 +483,17 @@ export default function ProviderDetailSettingsScreen() {
         }
       />
     </>
+  );
+}
+
+function ProviderModelSearchResult({ model, provider }: { model: Model; provider: Provider }) {
+  return (
+    <View className="min-h-12 flex-row items-center gap-3">
+      <ModelAvatar model={model} provider={provider} />
+      <Text className="min-w-0 flex-1 text-base text-foreground" numberOfLines={1}>
+        {model.name}
+      </Text>
+    </View>
   );
 }
 
