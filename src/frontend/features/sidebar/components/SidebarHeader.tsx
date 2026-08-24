@@ -1,10 +1,8 @@
 import { Text, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { appSidebar } from '@/frontend/utils/constants';
 
-import { useSidebarFadeStyle } from '../sidebarMotion';
 import { SidebarFade } from './SidebarFade/SidebarFade';
 
 /**
@@ -17,14 +15,9 @@ import { SidebarFade } from './SidebarFade/SidebarFade';
  */
 export function SidebarHeader() {
   const insets = useSafeAreaInsets();
-  const fadeStyle = useSidebarFadeStyle();
 
   return (
-    <Animated.View
-      className="absolute top-0 right-0 left-0"
-      pointerEvents="box-none"
-      style={fadeStyle}
-    >
+    <View className="absolute top-0 right-0 left-0" pointerEvents="box-none">
       <SidebarFade edge="top" size={appSidebar.headerBlurSize} />
       <View
         className="absolute right-0 left-0 flex-row items-center gap-2 px-5"
@@ -34,7 +27,7 @@ export function SidebarHeader() {
           Cherry Studio
         </Text>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
