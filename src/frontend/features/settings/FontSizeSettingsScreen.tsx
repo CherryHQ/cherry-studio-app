@@ -2,13 +2,13 @@ import { Slider, useAlert } from '@cherrystudio/ui/components';
 import { normalizeFontSizeStep } from '@cherrystudio/ui/utils';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
-import { RouteHeader } from '@/frontend/components/headers';
 import { MarkdownText } from '@/frontend/components/markdown';
 import { usePreference } from '@/frontend/data/hooks';
 import { applyFontSizeStepPreference } from '@/frontend/utils/theme';
 
+import { SettingsScrollPage } from './components/SettingsScrollPage';
 import { FONT_SIZE_STEP_LABEL_KEYS } from './utils/fontSizeOptions';
 
 export default function FontSizeSettingsScreen() {
@@ -38,48 +38,40 @@ export default function FontSizeSettingsScreen() {
   };
 
   return (
-    <>
-      <RouteHeader title={t('settings.fontSize.title')} />
-      <ScrollView
-        alwaysBounceVertical={false}
-        className="flex-1"
-        contentContainerClassName="gap-6 px-4 py-5"
-        contentInsetAdjustmentBehavior="automatic"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="gap-4 rounded-xl bg-grouped-surface px-4 py-5">
-          <View className="flex-row items-center justify-between gap-3">
-            <Text className="font-medium text-foreground text-base">
-              {t('settings.fontSize.title')}
-            </Text>
-            <Text className="text-foreground text-sm">
-              {t(FONT_SIZE_STEP_LABEL_KEYS[draftStep])}
-            </Text>
-          </View>
-          <Slider
-            accessibilityLabel={t('settings.fontSize.sliderLabel')}
-            max={2}
-            maximumValueLabel={t(FONT_SIZE_STEP_LABEL_KEYS[2])}
-            min={0}
-            minimumValueLabel={t(FONT_SIZE_STEP_LABEL_KEYS[0])}
-            onValueChange={handleChange}
-            step={1}
-            value={draftStep}
+    <SettingsScrollPage
+      contentClassName="gap-6"
+      headerProps={{ title: t('settings.fontSize.title') }}
+    >
+      <View className="gap-4 rounded-xl bg-grouped-surface px-4 py-5">
+        <View className="flex-row items-center justify-between gap-3">
+          <Text className="font-medium text-foreground text-base">
+            {t('settings.fontSize.title')}
+          </Text>
+          <Text className="text-foreground text-sm">{t(FONT_SIZE_STEP_LABEL_KEYS[draftStep])}</Text>
+        </View>
+        <Slider
+          accessibilityLabel={t('settings.fontSize.sliderLabel')}
+          max={2}
+          maximumValueLabel={t(FONT_SIZE_STEP_LABEL_KEYS[2])}
+          min={0}
+          minimumValueLabel={t(FONT_SIZE_STEP_LABEL_KEYS[0])}
+          onValueChange={handleChange}
+          step={1}
+          value={draftStep}
+        />
+      </View>
+
+      <View className="gap-2">
+        <Text className="px-1 font-medium text-foreground text-sm">
+          {t('settings.fontSize.previewTitle')}
+        </Text>
+        <View className="rounded-xl bg-grouped-surface px-4 py-5">
+          <MarkdownText
+            fontSizeStep={draftStep}
+            markdown={t('settings.fontSize.previewMarkdown')}
           />
         </View>
-
-        <View className="gap-2">
-          <Text className="px-1 font-medium text-foreground text-sm">
-            {t('settings.fontSize.previewTitle')}
-          </Text>
-          <View className="rounded-xl bg-grouped-surface px-4 py-5">
-            <MarkdownText
-              fontSizeStep={draftStep}
-              markdown={t('settings.fontSize.previewMarkdown')}
-            />
-          </View>
-        </View>
-      </ScrollView>
-    </>
+      </View>
+    </SettingsScrollPage>
   );
 }
