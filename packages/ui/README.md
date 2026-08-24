@@ -115,6 +115,23 @@ The provider presents queued dialogs in request order. Confirmation and prompt a
 without waiting for asynchronous business work, so failures can enqueue their own follow-up alert.
 The standalone `<Alert>` primitive remains available for controlled dialog composition.
 
+`Toast` is the shared gateway for temporary global notifications. Mount one provider at the
+application root; feature code then shows notifications through `useToast()` without importing the
+underlying toast library or mounting another host:
+
+```tsx
+<Toast.Provider>
+  <App />
+</Toast.Provider>
+
+const { toast } = useToast();
+toast.show({ label: 'Saved', variant: 'success' });
+```
+
+The gateway preserves the current four-second default duration and exposes `default`, `success`,
+`warning`, and `danger` variants. `DynamicToast` remains a separate animated visual component; it is
+not the global notification gateway.
+
 `Avatar` composes an image or fallback inside a clipped face while keeping badges outside that
 clipping boundary. It accepts numeric sizes so product avatars can follow their surrounding layout,
 and supports circular and rounded-square faces:

@@ -41,14 +41,13 @@ jest.mock('@cherrystudio/ui/components', () => {
     return React.createElement(View, { ...props, testID: 'mock-collapsible' }, children);
   }
 
-  return { Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }) };
+  return {
+    Composer: Object.assign(MockComposer, { Collapsible: MockCollapsible }),
+    useToast: () => ({ toast: { show: mockToastShow } }),
+  };
 });
 
 jest.mock('@/frontend/components/FileEntryPreview', () => ({ FileEntryPreview: () => null }));
-
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
-}));
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

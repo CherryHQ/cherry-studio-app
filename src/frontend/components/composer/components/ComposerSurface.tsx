@@ -1,5 +1,4 @@
-import { Composer } from '@cherrystudio/ui/components';
-import { useToast } from 'heroui-native/toast';
+import { Composer, useToast } from '@cherrystudio/ui/components';
 import { type PropsWithChildren, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { KeyboardController } from 'react-native-keyboard-controller';

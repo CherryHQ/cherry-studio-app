@@ -36,12 +36,9 @@ jest.mock('expo-media-library', () => ({
   requestPermissionsAsync: (...args: unknown[]) => mockRequestPermissions(...args),
 }));
 
-jest.mock('heroui-native/toast', () => ({
-  useToast: () => ({ toast: { show: mockToastShow } }),
-}));
-
 jest.mock('@cherrystudio/ui/components', () => ({
   useAlert: () => ({ alert: { confirm: mockAlertConfirm, show: mockAlertShow } }),
+  useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
 jest.mock('react-i18next', () => ({

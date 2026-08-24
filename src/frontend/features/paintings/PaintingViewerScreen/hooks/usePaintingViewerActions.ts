@@ -1,7 +1,6 @@
-import { useAlert } from '@cherrystudio/ui/components';
+import { useAlert, useToast } from '@cherrystudio/ui/components';
 import * as MediaLibrary from 'expo-media-library';
 import { useRouter } from 'expo-router';
-import { useToast } from 'heroui-native/toast';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Linking } from 'react-native';
