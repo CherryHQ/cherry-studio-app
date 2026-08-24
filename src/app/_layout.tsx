@@ -14,6 +14,7 @@ import { withUniwind } from 'uniwind';
 
 import { AppBootstrapGate, AppBootstrapProvider, useAppBootstrapState } from '@/bootstrap';
 import { reportStartupCoverPresented } from '@/bootstrap/runtime/startupCoverHandoff';
+import { APP_SEARCH_TRANSITION_DURATION_MS } from '@/frontend/components/appSearch';
 import { headerScreenOptions, RouteHeaderProvider } from '@/frontend/components/headers';
 import {
   getRootHeaderStyle,
@@ -110,7 +111,7 @@ function RootStack() {
         name="search"
         options={{
           animation: 'fade_from_bottom',
-          animationDuration: 250,
+          animationDuration: APP_SEARCH_TRANSITION_DURATION_MS,
           headerTransparent: false,
         }}
       />

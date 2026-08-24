@@ -15,8 +15,9 @@ setting helpers.
   one selected model or cancellation. Its request supplies the shared search view's model-type
   filter while callers retain every business action.
 - `ModelPickerIcon` and `ModelPickerTagChip` render model metadata used by picker consumers.
-- `ModelTypeFilterBar` renders the model-type control, and `ModelTypeSearchFilter` adapts static
-  model counts to app search's controlled filter contract.
+- `ModelSearchControls` keeps persistent workflow search native in the iOS header and inline on
+  Android. `ModelTypeFilterBar` renders the model-type control. Search adapters derive its counts
+  from the current query so a type's displayed count matches the results it can reveal.
 - `useModelSettingSelections` reads and updates model selection preferences.
 - Model setting and model type helpers are exported from `index.ts`.
 

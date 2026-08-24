@@ -13,7 +13,8 @@ entries.
 - The route owns the fixed Search title, query input, request cancellation, pagination, result
   presses, filter placement, native-stack entry and exit, and the empty/loading/error states.
 - A request that supplies `filter` gives the route one initial value and a controlled component. The
-  route owns that value, resets results when it changes, and passes it into every search call.
+  route owns that value, resets results when it changes, and passes it into every search call. The
+  filter component also receives the current query so derived counts stay aligned with its results.
 - An empty or whitespace-only query stays in the waiting state: it does not call the request and does
   not render the request's full data set. Results begin only after the user enters a query.
 - A result press always closes the route. Back, Android system back, and the iOS pop gesture always

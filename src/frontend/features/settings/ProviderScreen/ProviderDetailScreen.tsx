@@ -7,15 +7,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useAppSearch } from '@/frontend/components/appSearch';
+import { type AppSearchFilterProps, useAppSearch } from '@/frontend/components/appSearch';
 import { ModelAvatar } from '@/frontend/components/avatar';
 import { RouteHeader, type HeaderToolbarAction } from '@/frontend/components/headers';
 import {
   filterModelsByType,
   getModelTypeCounts,
-  type ModelTypeCounts,
   type ModelTypeFilter,
-  ModelTypeSearchFilter,
+  ModelTypeFilterBar,
 } from '@/frontend/components/modelPicker';
 import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
@@ -57,7 +56,7 @@ export default function ProviderDetailSettingsScreen() {
   const { open: openAppSearch } = useAppSearch();
   const { alert } = useAlert();
   const [activeTab, setActiveTab] = useState<ProviderDetailTab>('configuration');
-  const [focusedModelId, setFocusedModelId] = useState<UniqueModelId>();
+  const [modelFocusRequest, setModelFocusRequest] = useState<{ modelId: UniqueModelId }>();
   const { models, modelsQuery, provider, providerQuery, updateProviderEnabledMutation } =
     useProviderDetailSettings(providerId ?? '');
   const { isDefaultModel, removeModels } = useProviderModelRemove();
@@ -204,17 +203,16 @@ export default function ProviderDetailSettingsScreen() {
     }),
     [isModelPullLoading, openModelPullSettings, provider],
   );
-  const modelTypeCounts = useMemo(() => getModelTypeCounts(models), [models]);
   const openModelSearch = useCallback(() => {
     if (!provider) {
       return;
     }
 
-    void openAppSearch<Model, ModelTypeFilter, ModelTypeCounts>({
+    void openAppSearch<Model, ModelTypeFilter, Model[]>({
       emptyText: t('settings.provider.models.search.empty'),
       filter: {
-        component: ModelTypeSearchFilter,
-        context: modelTypeCounts,
+        component: ProviderModelTypeSearchFilter,
+        context: models,
         initialValue: 'all',
       },
       getAccessibilityLabel: (model) => model.name,
@@ -231,10 +229,10 @@ export default function ProviderDetailSettingsScreen() {
       }),
     }).then((outcome) => {
       if (outcome.type === 'selected') {
-        setFocusedModelId(outcome.item.id);
+        setModelFocusRequest({ modelId: outcome.item.id });
       }
     });
-  }, [modelTypeCounts, models, openAppSearch, provider, t]);
+  }, [models, openAppSearch, provider, t]);
   // The chat default is the one model the service refuses to delete, so it is
   // also the one row a selection leaves alone — including "select all".
   const selectableIds = useMemo(
@@ -462,7 +460,7 @@ export default function ProviderDetailSettingsScreen() {
           addAction={addAction}
           isDefaultModel={isDefaultModel}
           isLoading={modelsQuery.isPending}
-          focusedModelId={focusedModelId}
+          focusRequest={modelFocusRequest}
           models={models}
           provider={provider}
           pullAction={modelPullAction}
@@ -484,6 +482,17 @@ export default function ProviderDetailSettingsScreen() {
       />
     </>
   );
+}
+
+function ProviderModelTypeSearchFilter({
+  context: models,
+  onChange,
+  query,
+  value,
+}: AppSearchFilterProps<ModelTypeFilter, Model[]>) {
+  const counts = getModelTypeCounts(filterModelsByKeywords(query, models));
+
+  return <ModelTypeFilterBar counts={counts} onSelect={onChange} selectedFilter={value} />;
 }
 
 function ProviderModelSearchResult({ model, provider }: { model: Model; provider: Provider }) {

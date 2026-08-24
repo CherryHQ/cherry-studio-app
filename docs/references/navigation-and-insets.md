@@ -100,12 +100,13 @@ model-selection view. Its compact trailing search action opens `/search`; the dr
 hides while that route is active so its portal and Android back handler cannot compete with the root
 route.
 
-Model search, model-service search, assistant search, topic search, and provider model search use the
-root `/search` route. It is one fixed view: callers adapt data, matching, optional filters, and result
-content rather than supplying business-specific search screens. Native back or an interactive pop
-cancels without calling business logic; selection resolves only after the route's exit transition
+Single-selection model search, model-service search, assistant search, and provider model search use
+the root `/search` route. It is one fixed view: callers adapt data, matching, optional filters, and
+result content rather than supplying business-specific search screens. Native back or an interactive
+pop cancels without calling business logic; selection resolves only after the route's exit transition
 completes. The route title is always Search, and it does not query or render a full result set until
-the user enters non-whitespace text.
+the user enters non-whitespace text. Topic management and provider model pull keep persistent local
+search because their matching rows retain management or multi-selection actions.
 
 Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
 

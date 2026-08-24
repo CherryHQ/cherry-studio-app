@@ -32,11 +32,13 @@ type TopicListActionsContextValue = {
 const TopicListTopicsContext = createContext<TopicListTopicsContextValue | null>(null);
 const TopicListActionsContext = createContext<TopicListActionsContextValue | null>(null);
 
-type TopicListProviderProps = PropsWithChildren;
+type TopicListProviderProps = PropsWithChildren<{
+  searchText?: string;
+}>;
 
-export function TopicListProvider({ children }: TopicListProviderProps) {
+export function TopicListProvider({ children, searchText = '' }: TopicListProviderProps) {
   const queryClient = useQueryClient();
-  const topicList = useTopics({ q: '' });
+  const topicList = useTopics({ q: searchText });
 
   const renameTopicMutation = useMutation('PATCH', '/topics/:id', {
     onMutate: async (variables) => {

@@ -1,4 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
+import type { AccessibilityState } from 'react-native';
 
 export type AppSearchOutcome<TItem> = { item: TItem; type: 'selected' } | { type: 'cancelled' };
 
@@ -16,6 +17,7 @@ export type AppSearchPage<TItem> = {
 export type AppSearchFilterProps<TFilters, TContext> = {
   context: TContext;
   onChange: (value: TFilters) => void;
+  query: string;
   value: TFilters;
 };
 
@@ -40,6 +42,7 @@ export type AppSearchRequest<TItem, TFilters = undefined, TFilterContext = undef
   emptyText: string;
   filter?: AppSearchFilter<TFilters, TFilterContext>;
   getAccessibilityLabel: (item: TItem) => string;
+  getAccessibilityState?: (item: TItem) => AccessibilityState;
   keyExtractor: (item: TItem) => string;
   placeholder: string;
   renderItem: (item: TItem) => ReactNode;

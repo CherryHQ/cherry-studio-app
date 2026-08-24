@@ -20,8 +20,12 @@ export type ProviderModelListSelection = {
   selectedIds: ReadonlySet<UniqueModelId>;
 };
 
+export type ProviderModelListFocusRequest = {
+  modelId: UniqueModelId;
+};
+
 export type ProviderModelListContentProps = {
-  focusedModelId?: UniqueModelId;
+  focusRequest?: ProviderModelListFocusRequest;
   isDefaultModel: (model: Model) => boolean;
   ListEmptyComponent?: ReactElement;
   ListHeaderComponent?: ReactElement;
@@ -43,7 +47,7 @@ type ProviderModelListExtraData = {
  * is a label until the screen starts selecting, and a checkbox after.
  */
 export function ProviderModelListContent({
-  focusedModelId,
+  focusRequest,
   isDefaultModel,
   ListEmptyComponent,
   ListHeaderComponent,
@@ -54,11 +58,11 @@ export function ProviderModelListContent({
 }: ProviderModelListContentProps) {
   const listRef = useRef<LegendListRef>(null);
   useEffect(() => {
-    if (!focusedModelId) {
+    if (!focusRequest) {
       return;
     }
 
-    const index = models.findIndex((model) => model.id === focusedModelId);
+    const index = models.findIndex((model) => model.id === focusRequest.modelId);
     if (index < 0) {
       return;
     }
@@ -68,15 +72,15 @@ export function ProviderModelListContent({
     });
 
     return () => cancelAnimationFrame(frame);
-  }, [focusedModelId, models]);
+  }, [focusRequest, models]);
   const extraData = useMemo<ProviderModelListExtraData>(
     () => ({
-      focusedModelId,
+      focusedModelId: focusRequest?.modelId,
       isDefaultModel,
       provider,
       selection,
     }),
-    [focusedModelId, isDefaultModel, provider, selection],
+    [focusRequest, isDefaultModel, provider, selection],
   );
   const renderItem = useCallback(
     ({ extraData: itemExtraData, item }: LegendListRenderItemProps<Model>) => (

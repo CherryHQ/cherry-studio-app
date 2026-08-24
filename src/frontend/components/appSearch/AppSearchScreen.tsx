@@ -9,8 +9,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { RouteHeader } from '@/frontend/components/headers';
 
 import {
+  cancelScheduledAppSearchFinish,
   finishAppSearchSession,
   getAppSearchSession,
+  scheduleAppSearchFinish,
   selectAppSearchItem,
 } from './appSearchSession';
 import type { AppSearchGroup, AppSearchPage, AppSearchRequest } from './types';
@@ -19,6 +21,12 @@ const SEARCH_RESULT_ESTIMATED_HEIGHT = 52;
 
 type SearchPhase = 'idle' | 'loading' | 'ready' | 'error';
 type StoredSearchRequest = AppSearchRequest<unknown, unknown, unknown>;
+type AppSearchNavigation = {
+  addListener: (
+    event: 'transitionEnd',
+    listener: (event: { data: { closing: boolean } }) => void,
+  ) => () => void;
+};
 
 type AppSearchListItem =
   | { key: string; title: string; type: 'header' }
@@ -29,7 +37,7 @@ export default function AppSearchScreen() {
   const sessionId = getSingleParam(params.sessionId);
   const session = getAppSearchSession(sessionId);
   const router = useRouter();
-  const navigation = useNavigation();
+  const navigation = useNavigation<AppSearchNavigation>();
 
   useEffect(() => {
     if (!sessionId || !session) {
@@ -41,6 +49,7 @@ export default function AppSearchScreen() {
       return;
     }
 
+    cancelScheduledAppSearchFinish(sessionId);
     const unsubscribe = navigation.addListener('transitionEnd', (event) => {
       if (event.data.closing) {
         finishAppSearchSession(sessionId);
@@ -49,7 +58,7 @@ export default function AppSearchScreen() {
 
     return () => {
       unsubscribe();
-      finishAppSearchSession(sessionId);
+      scheduleAppSearchFinish(sessionId);
     };
   }, [navigation, router, session, sessionId]);
 
@@ -179,6 +188,7 @@ function AppSearchRoutePage({
         <Pressable
           accessibilityLabel={request.getAccessibilityLabel(item.item)}
           accessibilityRole="button"
+          accessibilityState={request.getAccessibilityState?.(item.item)}
           className="min-h-12 justify-center px-4 active:bg-foreground/5"
           onPress={() => handleSelect(item.item)}
         >
@@ -253,6 +263,7 @@ function AppSearchRoutePage({
             <FilterComponent
               context={request.filter.context}
               onChange={handleFiltersChange}
+              query={query.trim()}
               value={filters}
             />
           </View>

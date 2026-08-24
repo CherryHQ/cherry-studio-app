@@ -84,6 +84,7 @@ export function useModelSearch() {
           initialValue: initialTypeFilter,
         },
         getAccessibilityLabel: (item) => item.model.name,
+        getAccessibilityState: (item) => ({ selected: item.modelId === selectedModelId }),
         keyExtractor: (item) => item.key,
         placeholder: t('modelPicker.searchPlaceholder'),
         renderItem: (item) => (
@@ -113,9 +114,10 @@ export function useModelSearch() {
 function ModelSearchTypeFilter({
   context: { providerId, selectedTags },
   onChange,
+  query,
   value,
 }: AppSearchFilterProps<ModelTypeFilter, ModelSearchFilterContext>) {
-  const { groups } = useModelPickerData({ providerId, selectedTags });
+  const { groups } = useModelPickerData({ providerId, searchText: query, selectedTags });
   const counts = getModelTypeCounts(
     groups.flatMap((group) => group.items.map((item) => item.model)),
   );

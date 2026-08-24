@@ -3,18 +3,19 @@ import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import type { Model, UniqueModelId } from '@/shared/data/types/model';
+import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import {
   ProviderModelListContent,
+  type ProviderModelListFocusRequest,
   type ProviderModelListSelection,
 } from '../models/components/ProviderModelListContent';
 import type { ProviderModelAction } from '../models/types';
 
 type ProviderModelListProps = {
   addAction?: ProviderModelAction;
-  focusedModelId?: UniqueModelId;
+  focusRequest?: ProviderModelListFocusRequest;
   isDefaultModel: (model: Model) => boolean;
   isLoading: boolean;
   models: Model[];
@@ -27,7 +28,7 @@ type ProviderModelListProps = {
 
 export function ProviderModelList({
   addAction,
-  focusedModelId,
+  focusRequest,
   isDefaultModel,
   isLoading,
   models,
@@ -40,7 +41,7 @@ export function ProviderModelList({
 
   return (
     <ProviderModelListContent
-      focusedModelId={focusedModelId}
+      focusRequest={focusRequest}
       isDefaultModel={isDefaultModel}
       ListEmptyComponent={
         hasNoModels && pullAction && addAction ? (
