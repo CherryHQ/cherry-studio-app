@@ -1,6 +1,7 @@
 # Agent Persistence
 
-Status: **implemented** (rollout steps 1–4; step 5 follow-ups remain). Version 1 is local-only.
+Status: **implemented as inactive foundation code** (production activation and step 5 follow-ups
+remain). Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
@@ -17,9 +18,10 @@ record for mobile-originated Agent Sessions only.
   projection over the assistant message plus Host-held live state. The Agent Protocol itself does
   not change. Nothing consumes `Backend.agent` yet, so this reshape is contained in
   `src/backend/ai/agentHost` and its tests.
-- A `SqliteAgentSessionStore` adapter that replaces `InMemoryAgentSessionStore` in production
-  composition. The in-memory adapter remains the architecture-test reference.
-- An Agent-table-backed `AgentDefinitionSource` seeded from existing assistants.
+- A `SqliteAgentSessionStore` adapter ready to replace `InMemoryAgentSessionStore` when Agent/Pi
+  business integration begins. Production composition deliberately remains in-memory for now.
+- An Agent-table-backed `AgentDefinitionSource` and Agent rows seeded from existing assistants;
+  the production Host deliberately remains assistant-backed for now.
 
 Out of scope: Agent UI, the Pi Runtime, chat-table (`assistant`/`topic`/`message`) migration or
 removal, branching columns, background turns, and remote execution targets. Everything here is
@@ -207,12 +209,13 @@ storage boundary moves.
    lands first so the schema implements the settled port.
 2. **Schema + migration.** Add the three schema modules, run `pnpm db:generate`, register the SQL
    in `migrations.ts`, add the agent FTS statements to `customSql.ts`.
-3. **`SqliteAgentSessionStore`.** Implement against the port, pass the shared conformance suite,
-   switch the `serviceRegistry` binding. In-memory adapter stays for tests.
-4. **Agent rows.** Replace the assistant-projection `AgentDefinitionSource` with an
-   `agent`-table-backed source. One-time additive copy of existing assistants into `agent`
-   reusing assistant ids (the current projection already treats assistant ids as Agent ids);
-   assistants remain untouched and authoritative for Chat.
+3. **`SqliteAgentSessionStore`.** Implement against the port and pass the shared conformance suite.
+   Keep the production `serviceRegistry` binding on the in-memory adapter until Agent/Pi business
+   integration begins.
+4. **Agent rows.** Add an `agent`-table-backed `AgentDefinitionSource` and a one-time additive copy
+   of existing assistants into `agent`, reusing assistant ids (the current projection already
+   treats assistant ids as Agent ids). Keep the production Host on the assistant-backed source
+   until integration; assistants remain untouched and authoritative for Chat.
 5. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
    (generalizing `userAvatarStorage`); Pi Runtime; fork columns; the eventual chat-table
    decision.

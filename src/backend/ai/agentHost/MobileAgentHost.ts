@@ -67,7 +67,7 @@ import {
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import {
-  createAgentTableDefinitionSource,
+  createAssistantAgentDefinitionSource,
   type AgentDefinition,
   type AgentDefinitionSource,
 } from './agentDefinitions';
@@ -151,7 +151,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private get services(): MobileAgentHostOverrides {
     const { overrides } = this;
     return {
-      agents: overrides.agents ?? (this.lazyAgents ??= createAgentTableDefinitionSource()),
+      agents: overrides.agents ?? (this.lazyAgents ??= createAssistantAgentDefinitionSource()),
       router: overrides.router ?? this.getDefaultRouter(),
     };
   }
