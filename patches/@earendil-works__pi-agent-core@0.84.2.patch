@@ -1,0 +1,23 @@
+diff --git a/dist/agent-loop.js b/dist/agent-loop.js
+index 569149f9328920cda8c637ef4cdd0b11cac1a9eb..fcae4320867278fcc60d77131ee3905300c290f7 100644
+--- a/dist/agent-loop.js
++++ b/dist/agent-loop.js
+@@ -2,7 +2,8 @@
+  * Agent loop that works with AgentMessage throughout.
+  * Transforms to Message[] only at the LLM call boundary.
+  */
+-import { EventStream, validateToolArguments, } from "@earendil-works/pi-ai";
++import { EventStream } from "@earendil-works/pi-ai/utils/event-stream";
++import { validateToolArguments } from "@earendil-works/pi-ai/utils/validation";
+ import { getDefaultStreamFn } from "./stream-fn.js";
+ /**
+  * Start an agent loop with a new prompt message.
+diff --git a/package.json b/package.json
+index f204dcfe70457f58769ce2e55112a9cf5baec80d..e8f378acd06c84ccae80790a488ce9f9f21854b3 100644
+--- a/package.json
++++ b/package.json
+@@ -13,0 +14,4 @@
++		"./agent": {
++			"types": "./dist/agent.d.ts",
++			"import": "./dist/agent.js"
++		},

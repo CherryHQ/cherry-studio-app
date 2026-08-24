@@ -1,6 +1,7 @@
 import { randomUUID as mockRandomUUID } from 'node:crypto';
 
 global.__DEV__ = true;
+process.env.EXPO_PUBLIC_CHAT_RUNTIME ??= 'ai-sdk';
 
 // Some tests replace react-native wholesale. Keep Expo's lazy fetch setup from
 // falling through to the then-missing TurboModuleRegistry during teardown.

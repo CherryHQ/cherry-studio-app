@@ -2,6 +2,9 @@
   "name": "cherry-studio-app",
   "main": "index.ts",
   "version": "1.0.0",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "packages:build": "pnpm --filter @cherrystudio/ai-sdk-provider build && pnpm --filter @cherrystudio/ai-core build",
     "eas-build-post-install": "pnpm packages:build",
@@ -78,8 +81,8 @@
     "@expo/ui": "~57.0.6",
     "@legendapp/list": "3.3.3",
     "@magrinj/expo-quick-look": "^0.3.1",
-    "@mariozechner/pi-agent-core": "0.73.1",
-    "@mariozechner/pi-ai": "0.73.1",
+    "@earendil-works/pi-agent-core": "0.84.2",
+    "@earendil-works/pi-ai": "0.84.2",
     "@openrouter/ai-sdk-provider": "^2.10.0",
     "@react-native-masked-view/masked-view": "0.3.2",
     "@shopify/flash-list": "2.3.2",

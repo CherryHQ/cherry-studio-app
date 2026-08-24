@@ -23,15 +23,15 @@ jobs:
 
       # Step 2: Setup Node.js
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20.x
+          node-version: 24.19.0
 
       # Step 3: Install pnpm
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 10.26.2
+          version: 11.8.0
 
       # Step 4: Setup Expo and EAS
       - name: Setup Expo and EAS

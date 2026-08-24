@@ -53,6 +53,8 @@ allowBuilds:
   protobufjs: false
 
 patchedDependencies:
+  '@earendil-works/pi-agent-core@0.84.2': patches/@earendil-works__pi-agent-core@0.84.2.patch
+  '@earendil-works/pi-ai@0.84.2': patches/@earendil-works__pi-ai@0.84.2.patch
   '@opeoginni/github-copilot-openai-compatible@1.0.0': patches/@opeoginni__github-copilot-openai-compatible@1.0.0.patch
   "@magrinj/expo-quick-look@0.3.1": patches/@magrinj__expo-quick-look@0.3.1.patch
   metro@0.84.4: patches/metro@0.84.4.patch
@@ -74,7 +76,6 @@ patchedDependencies:
   react-native-keyboard-controller@1.21.13: patches/react-native-keyboard-controller@1.21.13.patch
   react-native-bottom-tabs@1.4.0: patches/react-native-bottom-tabs@1.4.0.patch
   expo-router@57.0.6: patches/expo-router@57.0.6.patch
-  '@mariozechner/pi-ai@0.73.1': patches/@mariozechner__pi-ai@0.73.1.patch
 
 minimumReleaseAgeExclude:
   - '@expo/cli@57.0.3'

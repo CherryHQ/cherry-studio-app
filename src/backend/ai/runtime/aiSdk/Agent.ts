@@ -31,12 +31,9 @@ import type {
 import * as Crypto from 'expo-crypto';
 
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
-import { getPiAgentExperimentConfig, piDiagnostic } from '@/shared/config/piAgentExperiment';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import type { RequestContext } from '../../tools';
-
-const loadPiAgent = () => import('../pi/PiAgent');
 
 type AppProviderKey = StringKeys<AppProviderSettingsMap>;
 
@@ -78,8 +75,8 @@ export interface AgentParams<Key extends AppProviderKey = AppProviderKey> {
 export class Agent<Key extends AppProviderKey = AppProviderKey> {
   constructor(public readonly params: AgentParams<Key>) {}
 
-  private composedHooks(extraParts: readonly Partial<AgentLoopHooks>[] = []): AgentLoopHooks {
-    const parts: Partial<AgentLoopHooks>[] = [];
+  private composedHooks(extraParts: ReadonlyArray<Partial<AgentLoopHooks>> = []): AgentLoopHooks {
+    const parts: Array<Partial<AgentLoopHooks>> = [];
     if (this.params.toolExecutionHooks) parts.push(this.params.toolExecutionHooks);
     parts.push(...extraParts);
     return composeHooks(parts);
@@ -90,7 +87,7 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
     const tools = wrapToolsWithExecutionHooks(params.tools, hooks);
     return createAgent<AppProviderSettingsMap, Key, ToolSet>({
       agentSettings: {
-        activeTools: options.activeTools as (keyof ToolSet)[] | undefined,
+        activeTools: options.activeTools as Array<keyof ToolSet> | undefined,
         experimental_context: params.context,
         experimental_repairToolCall: params.repairToolCall,
         frequencyPenalty: options.frequencyPenalty,
@@ -127,24 +124,6 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
     try {
       await safeCall('onStart', hooks.onStart);
       signal?.throwIfAborted();
-      const piConfig = getPiAgentExperimentConfig();
-      if (piConfig) {
-        logger.info(
-          piDiagnostic('generate-start', {
-            modelId: piConfig.modelId,
-            provider: piConfig.providerName,
-          }),
-        );
-        const { PiAgent } = await loadPiAgent();
-        const result = await new PiAgent(piConfig, {
-          maxOutputTokens: this.params.options?.maxOutputTokens,
-          sessionId: this.params.context?.requestId,
-          system: this.params.system,
-        }).run(input, signal);
-        await safeCall('onFinish', hooks.onFinish);
-        logger.info(piDiagnostic('generate-finish', { modelId: piConfig.modelId }));
-        return { text: result.text, usage: result.usage };
-      }
       const aiAgent = await this.buildAiSdkAgent(hooks);
       const generateInput =
         'prompt' in input
@@ -179,9 +158,6 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
   }
 
   stream(initialMessages: UIMessage[], signal: AbortSignal): ReadableStream<UIMessageChunk> {
-    const piConfig = getPiAgentExperimentConfig();
-    if (piConfig) return this.streamWithPi(initialMessages, signal, piConfig);
-
     let outputController!: TransformStreamDefaultController<UIMessageChunk>;
     let terminalOutcome: 'abort' | 'running' | 'success' = 'running';
     let committingFinish = false;
@@ -275,7 +251,7 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
       );
       let hasUsedProvidedMessageId = false;
       const result = await aiAgent.stream({ messages: modelMessages, abortSignal: signal });
-      const capturedUiErrors: { error: unknown }[] = [];
+      const capturedUiErrors: Array<{ error: unknown }> = [];
       const uiStream = result.toUIMessageStream({
         generateMessageId: () => {
           if (!hasUsedProvidedMessageId && this.params.messageId) {
@@ -364,66 +340,6 @@ export class Agent<Key extends AppProviderKey = AppProviderKey> {
       });
 
     return readable;
-  }
-
-  private streamWithPi(
-    initialMessages: UIMessage[],
-    signal: AbortSignal,
-    config: NonNullable<ReturnType<typeof getPiAgentExperimentConfig>>,
-  ): ReadableStream<UIMessageChunk> {
-    const hooks = this.composedHooks();
-    const rawStream = new ReadableStream<UIMessageChunk>({
-      start: (controller) => {
-        void (async () => {
-          try {
-            await safeCall('onStart', hooks.onStart);
-            signal.throwIfAborted();
-            logger.info(
-              piDiagnostic('stream-start', {
-                modelId: config.modelId,
-                provider: config.providerName,
-              }),
-            );
-            controller.enqueue({
-              messageId: this.params.messageId ?? Crypto.randomUUID(),
-              type: 'start',
-            });
-            const modelMessages = await toModelMessages(
-              initialMessages,
-              this.params.mediaCapabilities,
-              this.params.tools,
-            );
-            const { PiAgent } = await loadPiAgent();
-            const result = await new PiAgent(config, {
-              maxOutputTokens: this.params.options?.maxOutputTokens,
-              sessionId: this.params.context?.requestId,
-              system: this.params.system,
-            }).run({ messages: modelMessages }, signal, (chunk) => controller.enqueue(chunk));
-            signal.throwIfAborted();
-            controller.enqueue({
-              messageMetadata: toMessageMetadataPatch(result.usage),
-              type: 'message-metadata',
-            });
-            controller.enqueue({ finishReason: result.finishReason, type: 'finish' });
-            await safeCall('onFinish', hooks.onFinish);
-            logger.info(piDiagnostic('stream-finish', { modelId: config.modelId }));
-            controller.close();
-          } catch (error) {
-            if (signal.aborted && (error === signal.reason || isAbortError(error))) {
-              logger.info(piDiagnostic('stream-abort', { modelId: config.modelId }));
-              await safeCall('onAbort', hooks.onAbort);
-              controller.close();
-              return;
-            }
-            logger.error(piDiagnostic('stream-error', { modelId: config.modelId }), toError(error));
-            if (hooks.onError) await hooks.onError({ error: toError(error) });
-            controller.error(error);
-          }
-        })();
-      },
-    });
-
-    return withReasoningTimingMetadata(rawStream);
   }
 }
 
