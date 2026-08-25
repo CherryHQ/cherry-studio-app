@@ -81,19 +81,24 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 | --- | --- |
 | [Agent Protocol](./agent-protocol.md) | Mobile application entities, operations, events, snapshots, errors, and invariants |
 | [Agent Runtime](./agent-runtime.md) | Independent local execution contract, Host boundary, lifecycle, and implementation conformance |
+| [Agent Persistence](./agent-persistence.md) | Durable SQLite schema behind `AgentSessionStore`, the Turn projection, delete semantics, and the rollout plan |
 
 ## Current Implementation
 
 The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Agent Host, and V1
-Router are implemented as an architecture slice. The Host consumes the stable `AgentSessionStore`
-port; lifecycle composition currently selects a process-local in-memory reference adapter. That
-adapter validates Host orchestration and remains useful in tests, but it deliberately provides no
-restart durability. Durable Mobile Agent persistence is pending the authority and schema work
-tracked by [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
+Router are implemented as an architecture slice. The Host consumes the message-centric
+`AgentSessionStore` port and owns the Turn projection. The durable `SqliteAgentSessionStore`,
+`agent`/`agent_session`/`agent_session_message` tables, and agent-table definition source are
+implemented as inactive foundation code. The `agent` table intentionally starts empty: this phase
+does not migrate or copy assistant data. Production composition deliberately continues to use the
+process-local store and assistant-backed definition source until Agent/Pi integration. See
+[Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
+follow-ups, per the authority direction of
+[#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
 No frontend currently consumes `Backend.agent`. This slice does not replace the current Topic,
-Chat Runtime, or desktop-aligned `agent_*` surfaces. Pi, attachments, durable persistence, and UI
-integration remain follow-up work.
+Chat Runtime, or desktop-aligned `agent_*` surfaces. Pi, attachments, production activation of
+durable Agent persistence, and UI integration remain follow-up work.
 
 ## Related
 
