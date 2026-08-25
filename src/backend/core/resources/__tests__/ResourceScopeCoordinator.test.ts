@@ -362,7 +362,7 @@ describe('ResourceScopeCoordinator', () => {
         ScopeFencedError,
       );
       expect(mockLoggerError).toHaveBeenCalledWith(
-        expect.stringContaining('topic:t1'),
+        expect.stringContaining('painting:t1'),
         expect.any(Error),
       );
     });

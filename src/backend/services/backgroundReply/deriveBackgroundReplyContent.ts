@@ -73,7 +73,7 @@ export function getTerminalBackgroundReplyContent(
 
 export function extractReplyPreview(parts: readonly AgentMessagePart[]): string | undefined {
   const text = parts
-    .filter((part): part is Extract<AgentMessagePart, { type: 'text' }> => part.type === 'text')
+    .filter((part): part is AgentMessagePart & { type: 'text' } => part.type === 'text')
     .map((part) => part.text)
     .join('\n');
   const plainText = stripMarkdown(text);

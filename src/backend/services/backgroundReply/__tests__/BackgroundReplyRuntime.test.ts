@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
+import type { AgentMessagePart } from '@/shared/contracts/agent';
 
 import { BackgroundReplyRuntime } from '../BackgroundReplyRuntime';
 
@@ -179,7 +180,7 @@ describe('BackgroundReplyRuntime', () => {
     });
     const session = mockSessions[0];
 
-    turn.update({ parts: [{ type: 'text', text: 'hello' }] });
+    turn.update({ parts: [textPart('hello')] });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         icon: 'bubble-ellipsis',
@@ -191,7 +192,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(session?.update.mock.calls.at(-1)?.[0]).not.toHaveProperty('compactLabel');
 
     turn.update({
-      parts: [{ type: 'text', text: 'hello more' }],
+      parts: [textPart('hello more')],
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
@@ -209,7 +210,7 @@ describe('BackgroundReplyRuntime', () => {
     );
 
     turn.update({
-      parts: [{ type: 'text', text: 'approved and continuing' }],
+      parts: [textPart('approved and continuing')],
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
@@ -297,7 +298,7 @@ describe('BackgroundReplyRuntime', () => {
     runtime.clearSession('session-1');
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
-    turn.update({ parts: [{ type: 'text', text: 'late' }] });
+    turn.update({ parts: [textPart('late')] });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
     await runtime._doStop();
   });
@@ -316,7 +317,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(runtime.isActivated).toBe(false);
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
-    turn.update({ parts: [{ type: 'text', text: 'hi' }] });
+    turn.update({ parts: [textPart('hi')] });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
 
     enabled = true;
@@ -418,7 +419,7 @@ describe('BackgroundReplyRuntime', () => {
     });
     expect(() =>
       turn.update({
-        parts: [{ type: 'text', text: 'hello' }],
+        parts: [textPart('hello')],
       }),
     ).not.toThrow();
     expect(() => turn.awaitApproval()).not.toThrow();
@@ -471,4 +472,8 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
     resolve = settle;
   });
   return { promise, resolve };
+}
+
+function textPart(text: string): AgentMessagePart {
+  return { id: `text-${text}`, state: 'done', text, type: 'text' };
 }

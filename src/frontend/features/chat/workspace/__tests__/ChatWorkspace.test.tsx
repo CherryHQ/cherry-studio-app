@@ -2,9 +2,8 @@ import type { ReactNode } from 'react';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
-import type { MessageListProps } from '@/frontend/components/messages';
+import type { MessageListItem, MessageListProps } from '@/frontend/components/messages';
 import type { AgentMessageView } from '@/shared/contracts/agent';
-import type { Message } from '@/shared/data/types/message';
 
 import { ChatWorkspace } from '../ChatWorkspace';
 
@@ -57,7 +56,7 @@ jest.mock('react-i18next', () => ({
 }));
 
 jest.mock('@/frontend/components/messages', () => ({
-  AssistantMessage: ({ children, message }: { children: ReactNode; message: Message }) => {
+  AssistantMessage: ({ children, message }: { children: ReactNode; message: MessageListItem }) => {
     const { createElement } = jest.requireActual('react');
     return createElement('AssistantMessage', { message }, children);
   },
@@ -66,7 +65,7 @@ jest.mock('@/frontend/components/messages', () => ({
     const assistant = props.messages.find((message) => message.role === 'assistant');
     return assistant ? props.renderMessage(assistant) : null;
   },
-  UserMessage: ({ message }: { message: Message }) => {
+  UserMessage: ({ message }: { message: MessageListItem }) => {
     const { createElement } = jest.requireActual('react');
     return createElement('UserMessage', { message });
   },

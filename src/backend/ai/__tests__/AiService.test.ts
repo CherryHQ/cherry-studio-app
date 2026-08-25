@@ -179,7 +179,7 @@ function createServices({
   return {
     aiUsageRecord: { recordInvocation: jest.fn(async () => undefined) },
     model: {
-      getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id)),
+      getById: jest.fn(async (id: UniqueModelId) => modelsById.get(id) ?? null),
     },
     provider: {
       getAuthConfig: jest.fn(async () => authConfig),
