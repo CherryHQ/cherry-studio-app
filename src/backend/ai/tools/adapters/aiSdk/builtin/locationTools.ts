@@ -20,7 +20,7 @@ export function createLocationToolEntry(deps: DeviceToolDependencies) {
     description,
     name: DEVICE_TOOL_NAMES.locationGetCurrent,
     namespace: 'location',
-    preferenceKeys: ['permissions.location_read'],
+    permissionScopes: ['location.read'],
     tool: tool({
       description,
       inputSchema: z.object({ includeAddress: z.boolean() }).strict(),

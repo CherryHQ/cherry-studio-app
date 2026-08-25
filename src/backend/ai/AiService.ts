@@ -249,7 +249,6 @@ export class AiService extends BaseService {
     this.toolResolver ??= new ToolResolver({
       devicePermissions,
       mcpRuntime: application.get('McpRuntimeService'),
-      preference: application.get('PreferenceService'),
       webSearch: application.get('WebSearchService'),
     });
     return this.toolResolver;

@@ -12,52 +12,32 @@ function createSubject() {
       openSystemSettings: jest.fn(async () => undefined),
       request: jest.fn(async () => 'granted'),
     },
-    preferences: {
-      readCached: jest.fn(() => 'never'),
-      set: jest.fn(async () => undefined),
-    },
   };
   const backend: PermissionsModule = createPermissionsModule(dependencies);
   return { backend, dependencies };
 }
 
 describe('createPermissionsModule', () => {
-  it('requests system access before persisting an enabled policy', async () => {
+  it('reads each requested system permission scope once', async () => {
     const { backend, dependencies } = createSubject();
 
-    await expect(backend.setPolicy('permissions.location_read', 'ask')).resolves.toEqual({
-      policy: 'ask',
-      status: 'granted',
+    await expect(backend.getStatuses(['calendar.read', 'calendar.read'])).resolves.toEqual({
+      'calendar.read': 'undetermined',
     });
-    expect(dependencies.device.request).toHaveBeenCalledWith('permissions.location_read');
-    expect(dependencies.preferences.set).toHaveBeenCalledWith('permissions.location_read', 'ask');
+    expect(dependencies.device.getStatus).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the current policy when system access is denied', async () => {
+  it('delegates an in-context system permission request', async () => {
     const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.device.request).mockResolvedValue('denied');
 
-    await expect(backend.setPolicy('permissions.location_read', 'always')).resolves.toEqual({
-      policy: 'never',
-      status: 'denied',
-    });
-    expect(dependencies.preferences.set).not.toHaveBeenCalled();
+    await expect(backend.request('location.read')).resolves.toBe('granted');
+    expect(dependencies.device.request).toHaveBeenCalledWith('location.read');
   });
 
-  it('requests undetermined permissions during recovery', async () => {
+  it('opens the app system settings for the requested permission kind', async () => {
     const { backend, dependencies } = createSubject();
 
-    await expect(backend.recover(['permissions.calendar_read'])).resolves.toEqual({
-      'permissions.calendar_read': 'granted',
-    });
-    expect(dependencies.device.openSystemSettings).not.toHaveBeenCalled();
-  });
-
-  it('opens settings for a previously denied permission', async () => {
-    const { backend, dependencies } = createSubject();
-    jest.mocked(dependencies.device.getStatus).mockResolvedValue('denied');
-
-    await backend.recover(['permissions.health_read']);
+    await backend.openSystemSettings('health');
 
     expect(dependencies.device.openSystemSettings).toHaveBeenCalledWith('health');
   });

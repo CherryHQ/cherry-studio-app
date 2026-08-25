@@ -57,12 +57,12 @@ describe('usePermissionSystemStatuses', () => {
     });
     expect(mockGetStatuses).toHaveBeenCalledTimes(1);
     expect(mockGetStatuses).toHaveBeenCalledWith([
-      'permissions.location_read',
-      'permissions.calendar_read',
-      'permissions.calendar_write',
-      'permissions.reminders_read',
-      'permissions.reminders_write',
-      'permissions.health_read',
+      'location.read',
+      'calendar.read',
+      'calendar.write',
+      'reminders.read',
+      'reminders.write',
+      'health.read',
     ]);
 
     await act(async () => appStateListener?.('background'));

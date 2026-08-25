@@ -1,14 +1,16 @@
+import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import ChevronRightIcon from '@cherrystudio/app-icons/icons/chevron-right';
-import { Section } from '@cherrystudio/ui/components';
-import { useRouter } from 'expo-router';
+import { Section, Spinner, useAlert } from '@cherrystudio/ui/components';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, Text, View } from 'react-native';
 
 import { RouteHeader } from '@/frontend/components/headers';
+import { useBackendModule } from '@/frontend/data';
+import type { SystemPermissionState } from '@/shared/contracts';
 
-import { usePermissionPolicies } from './hooks/usePermissionPolicies';
 import { usePermissionSystemStatuses } from './hooks/usePermissionSystemStatuses';
-import { getPermissionSummaryKey, permissionConfig } from './permissionConfig';
+import { getPermissionStatus, type PermissionKind, permissionConfig } from './permissionConfig';
 import {
   PermissionListLeading,
   visiblePermissionKinds,
@@ -16,42 +18,63 @@ import {
 
 export default function PermissionsSettingsScreen() {
   const { t } = useTranslation();
-  const router = useRouter();
-  const policies = usePermissionPolicies();
-  const { statuses } = usePermissionSystemStatuses();
+  const { alert } = useAlert();
+  const permissions = useBackendModule('permissions');
+  const [activePermissionKind, setActivePermissionKind] = useState<PermissionKind | null>(null);
+  const { refresh, statuses } = usePermissionSystemStatuses();
+
+  const handlePermissionPress = async (kind: PermissionKind, status: SystemPermissionState) => {
+    if (activePermissionKind) return;
+
+    setActivePermissionKind(kind);
+    let hasFailed = false;
+    try {
+      const config = permissionConfig[kind];
+      if (status === 'undetermined') {
+        await permissions.request(config.requestScope);
+      } else if (status === 'denied') {
+        await permissions.openSystemSettings(config.permission);
+      }
+    } catch {
+      hasFailed = true;
+    } finally {
+      try {
+        await refresh();
+      } catch {
+        hasFailed = true;
+      }
+      setActivePermissionKind(null);
+      if (hasFailed) {
+        alert.show({ title: t('settings.permissions.actionFailed') });
+      }
+    }
+  };
 
   const items = visiblePermissionKinds.map((kind) => {
-    const config = permissionConfig[kind];
-    const hasConfiguredPolicy =
-      policies[config.readKey] !== 'never' ||
-      (config.writeKey ? policies[config.writeKey] !== 'never' : false);
-    const configuredKeys = [config.readKey, config.writeKey].filter(
-      (key): key is NonNullable<typeof key> => Boolean(key && policies[key] !== 'never'),
-    );
-    const summaryKey =
-      hasConfiguredPolicy &&
-      configuredKeys.some((key) => statuses[key] !== undefined && statuses[key] !== 'granted')
-        ? 'settings.permissions.accessRequired'
-        : getPermissionSummaryKey(kind, policies);
+    const status = getPermissionStatus(kind, statuses);
+    const isUpdating = activePermissionKind === kind;
+    const isActionable = status === 'denied' || status === 'undetermined';
+    const accessibilityHint =
+      status === 'denied'
+        ? t('settings.permissions.openSystemSettingsHint')
+        : status === 'undetermined'
+          ? t('settings.permissions.requestHint')
+          : undefined;
 
     return {
+      accessibilityHint,
+      accessibilityState: { busy: isUpdating },
+      disabled: isActionable && activePermissionKind !== null,
       id: kind,
       label: t(`settings.permissions.type.${kind}`),
       leading: <PermissionListLeading kind={kind} />,
-      onPress: () => router.push(`/settings/permissions/${kind}`),
-      trailing: (
-        <View className="flex-row items-center gap-2">
-          <Text className="text-base text-foreground" numberOfLines={1}>
-            {t(summaryKey)}
-          </Text>
-          <ChevronRightIcon className="size-5 text-foreground" />
-        </View>
-      ),
+      onPress: status && isActionable ? () => void handlePermissionPress(kind, status) : undefined,
+      trailing: <PermissionStatus isUpdating={isUpdating} status={status} />,
     };
   });
 
   return (
-    <>
+    <View className="flex-1">
       <RouteHeader title={t('settings.permissions.title')} />
       <ScrollView
         alwaysBounceVertical={false}
@@ -67,6 +90,37 @@ export default function PermissionsSettingsScreen() {
           </Section>
         </View>
       </ScrollView>
-    </>
+    </View>
+  );
+}
+
+function PermissionStatus({
+  isUpdating,
+  status,
+}: {
+  isUpdating: boolean;
+  status: SystemPermissionState | undefined;
+}) {
+  const { t } = useTranslation();
+
+  if (isUpdating || status === undefined) {
+    return <Spinner accessibilityLabel={t('settings.permissions.checking')} size="sm" />;
+  }
+
+  return (
+    <View className="flex-row items-center gap-2">
+      <Text
+        className={
+          status === 'unavailable' ? 'text-base text-muted-foreground' : 'text-base text-foreground'
+        }
+        numberOfLines={1}
+      >
+        {t(`settings.permissions.status.${status}`)}
+      </Text>
+      {status === 'granted' ? <CheckIcon className="size-5 text-foreground" /> : null}
+      {status === 'denied' || status === 'undetermined' ? (
+        <ChevronRightIcon className="size-5 text-muted-foreground" />
+      ) : null}
+    </View>
   );
 }

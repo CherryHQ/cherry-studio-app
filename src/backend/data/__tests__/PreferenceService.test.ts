@@ -1,6 +1,5 @@
 import type { DbService } from '@/backend/data/db/DbService';
 import { PreferenceService } from '@/backend/data/PreferenceService';
-import type { PreferenceKeyType } from '@/shared/data/preference';
 import { PreferenceDefaults } from '@/shared/data/preference';
 
 jest.mock('@/backend/data/db/schemas', () => ({
@@ -11,7 +10,7 @@ jest.mock('@/backend/data/db/schemas', () => ({
 }));
 
 type PreferenceRow = {
-  key: PreferenceKeyType;
+  key: string;
   value: unknown;
 };
 
@@ -48,8 +47,8 @@ describe('PreferenceService', () => {
           },
         },
       },
+      { key: 'app.user.name', value: 42 },
       { key: 'permissions.location_read', value: 'always' },
-      { key: 'permissions.health_read', value: 'invalid' },
     ]);
     const service = new PreferenceService(dbService);
 
@@ -60,24 +59,24 @@ describe('PreferenceService', () => {
         capabilities: { searchKeywords: { apiHost: 42 } },
       },
     });
-    await expect(service.get('permissions.location_read')).resolves.toBe('always');
-    await expect(service.get('permissions.health_read')).resolves.toBe('invalid');
+    await expect(service.get('app.user.name')).resolves.toBe(42);
+    expect(service.getAll()).not.toHaveProperty('permissions.location_read');
   });
 
-  test('writes permission preferences straight to their key', async () => {
+  test('writes preferences straight to their key', async () => {
     const dbService = createFakeDbService();
     const service = new PreferenceService(dbService);
     const listener = jest.fn();
 
     await service._doInit();
-    service.subscribeChange('permissions.calendar_write')(listener);
+    service.subscribeChange('ui.font_size_step')(listener);
 
-    await service.set('permissions.calendar_write', 'ask');
+    await service.set('ui.font_size_step', 1);
 
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(dbService.rows.get('permissions.calendar_write')).toMatchObject({
-      key: 'permissions.calendar_write',
-      value: 'ask',
+    expect(dbService.rows.get('ui.font_size_step')).toMatchObject({
+      key: 'ui.font_size_step',
+      value: 1,
     });
   });
 
