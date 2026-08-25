@@ -20,12 +20,12 @@ export function useMainHeaderAgent() {
   const { agent } = useAgentApiById(currentAgentId);
 
   const openNewSession = useCallback(() => {
-    if (!currentAgentId) {
+    if (!agent) {
       router.push('/agents');
       return;
     }
-    router.setParams({ agentId: currentAgentId, sessionId: undefined });
-  }, [currentAgentId, router]);
+    router.setParams({ agentId: agent.id, sessionId: undefined });
+  }, [agent, router]);
   const openAgent = useCallback(() => {
     if (!agent) {
       return;

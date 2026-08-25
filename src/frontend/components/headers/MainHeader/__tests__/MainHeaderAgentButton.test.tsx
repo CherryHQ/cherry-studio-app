@@ -124,4 +124,18 @@ describe('MainHeaderAgentButton', () => {
       sessionId: undefined,
     });
   });
+
+  it('opens Agent selection when the Session Agent was deleted', async () => {
+    mockAgent = undefined;
+
+    await act(async () => {
+      renderer = create(<NewSessionHarness />);
+    });
+
+    const button = renderer?.root.findByProps({ testID: 'new-session-button' });
+    await act(async () => button?.props.onPress());
+
+    expect(mockPush).toHaveBeenCalledWith('/agents');
+    expect(mockSetParams).not.toHaveBeenCalled();
+  });
 });
