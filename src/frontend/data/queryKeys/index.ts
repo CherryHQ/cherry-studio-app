@@ -1,3 +1,5 @@
+import { agentQueryKeys } from './agents';
+import { agentSessionQueryKeys } from './agentSessions';
 import { aiUsageRecordQueryKeys } from './aiUsageRecords';
 import { assistantQueryKeys } from './assistants';
 import { fileQueryKeys } from './files';
@@ -10,6 +12,8 @@ import { providerQueryKeys } from './providers';
 import { topicQueryKeys } from './topics';
 
 export const queryKeys = {
+  agentSessions: agentSessionQueryKeys,
+  agents: agentQueryKeys,
   aiUsageRecords: aiUsageRecordQueryKeys,
   assistants: assistantQueryKeys,
   files: fileQueryKeys,
