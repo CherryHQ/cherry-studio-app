@@ -5,7 +5,7 @@ import { buildAgentDto, createAgentFormState } from '../agentForm';
 const baseForm = createAgentFormState();
 
 describe('createAgentFormState', () => {
-  it('enables exactly the settings the stored agent carries', () => {
+  it('hydrates only the editable agent definition fields', () => {
     const state = createAgentFormState({
       description: 'desc',
       instructions: 'sys',
@@ -14,10 +14,12 @@ describe('createAgentFormState', () => {
       settings: { temperature: 0.4 },
     } as unknown as Agent);
 
-    expect(state.enableTemperature).toBe(true);
-    expect(state.temperature).toBe('0.4');
-    expect(state.enableMaxOutputTokens).toBe(false);
-    expect(state.enableReasoningEffort).toBe(false);
+    expect(state).toEqual({
+      description: 'desc',
+      instructions: 'sys',
+      modelId: 'openai::gpt-5',
+      name: 'Researcher',
+    });
   });
 });
 
@@ -27,26 +29,6 @@ describe('buildAgentDto', () => {
       errorKey: 'agent.form.nameRequired',
       ok: false,
     });
-  });
-
-  it('rejects out-of-range temperature and non-integer max output tokens', () => {
-    expect(
-      buildAgentDto({ ...baseForm, enableTemperature: true, name: 'A', temperature: '2.5' }),
-    ).toEqual({ errorKey: 'agent.form.temperatureInvalid', ok: false });
-    expect(
-      buildAgentDto({
-        ...baseForm,
-        enableMaxOutputTokens: true,
-        maxOutputTokens: '1.5',
-        name: 'A',
-      }),
-    ).toEqual({ errorKey: 'agent.form.maxOutputTokensInvalid', ok: false });
-  });
-
-  it('rejects a blank enabled temperature instead of coercing it to zero', () => {
-    expect(
-      buildAgentDto({ ...baseForm, enableTemperature: true, name: 'A', temperature: '  ' }),
-    ).toEqual({ errorKey: 'agent.form.temperatureInvalid', ok: false });
   });
 
   it('omits modelId when creation delegates default-model resolution to the backend', () => {
@@ -62,29 +44,24 @@ describe('buildAgentDto', () => {
     expect(dto.value).not.toHaveProperty('modelId');
   });
 
-  it('emits disabled settings as physically present explicit-undefined keys', () => {
+  it('builds only the editable agent definition fields', () => {
     const dto = buildAgentDto({
       ...baseForm,
-      enableTemperature: true,
-      name: 'A',
-      temperature: '0.7',
+      description: '  desc  ',
+      instructions: 'system prompt',
+      modelId: 'openai::gpt-5',
+      name: '  Researcher  ',
     });
 
     if (!dto.ok) {
       throw new Error('expected ok');
     }
 
-    expect(dto.value.settings).toEqual({
-      maxOutputTokens: undefined,
-      reasoningEffort: undefined,
-      temperature: 0.7,
+    expect(dto.value).toEqual({
+      description: 'desc',
+      instructions: 'system prompt',
+      modelId: 'openai::gpt-5',
+      name: 'Researcher',
     });
-    // The update endpoint clears a stored setting only when the key is present
-    // in the patch, so omission here would silently keep stale values.
-    expect(Object.keys(dto.value.settings ?? {})).toEqual([
-      'maxOutputTokens',
-      'reasoningEffort',
-      'temperature',
-    ]);
   });
 });

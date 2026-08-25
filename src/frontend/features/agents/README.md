@@ -12,9 +12,8 @@ surfaces.
 - The row context menu opens the editor or deletes the Agent — agents have no detail screen.
 - The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
   default Agent model; an agent saved without a model cannot start a session until one is assigned.
-- Inference settings (`temperature`, `maxOutputTokens`, `reasoningEffort`) follow the sparse
-  `AgentSettings` contract: a disabled control saves as an explicit-undefined key so the
-  shallow-merging update endpoint clears the stored value (`agentForm.ts`).
+- The editor exposes only the Agent definition fields: name, description, default model, and
+  instructions. Inference parameters are not part of the Agent editor surface.
 - Agent avatars are managed file references owned by the future avatar workflow; until it exists
   every agent renders the default badge and the editor offers no avatar control.
 
