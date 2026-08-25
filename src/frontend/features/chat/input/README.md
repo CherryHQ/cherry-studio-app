@@ -49,9 +49,10 @@ Two consequences to take seriously:
       shared 250ms settle curve releases the field's horizontal inset, moves the same control row to
       its toolbar position, fades in the model/reasoning controls, and grows the surface. It reverses
       on blur and lands immediately when the system requests reduced motion.
-- [ ] As soon as the software keyboard begins hiding, the field gives up focus and the composer
-      returns to its resting presentation alongside it; a focused editor is never left behind in the
-      expanded UI.
+- [ ] Once a software keyboard that was actually visible begins hiding, the field gives up focus and
+      the composer returns to its resting presentation alongside it. An unmatched hide event is
+      ignored: iOS can emit one while the rich editor is becoming first responder, and hardware-
+      keyboard focus must not be cancelled just because no software keyboard appeared.
 - [ ] Attachments remain visible above either state. Collapsing the controls must never hide staged
       content that will be sent.
 - [ ] The field is `EnrichedMarkdownTextInput`, not RN's `TextInput`, and it is **uncontrolled**: it
