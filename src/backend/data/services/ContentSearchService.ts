@@ -8,30 +8,30 @@ import {
   CONTENT_SEARCH_MAX_LIMIT,
   type ContentSearchQuery,
   type ContentSearchResponse,
-  type TopicMessageContentSearchItem,
+  type SessionMessageContentSearchItem,
+  SESSION_MESSAGE_SEARCH_ROLES,
 } from '@/shared/data/api/schemas/search';
-import { coerceSearchRole, TOPIC_MESSAGE_SEARCH_ROLES } from '@/shared/data/types/message';
+import { coerceSearchRole } from '@/shared/data/types/message';
 
 import { type SearchFetchContext, searchWithCursor } from './utils/ftsSearch';
 import { timestampToISO } from './utils/rowMappers';
 import { buildSearchSnippet } from './utils/searchSnippet';
 
 const logger = loggerService.withContext('ContentSearchService');
-const topicMessageCursorConfig = {
+const sessionMessageCursorConfig = {
   errorMessage: 'Invalid message search cursor',
   fieldMessage: 'must be a valid search cursor',
 };
 
-type TopicMessageSearchRow = {
+type SessionMessageSearchRow = {
+  agentId: string;
+  agentName: null | string;
   createdAt: number;
   id: string;
   role: string;
   searchableText: string;
-  topicAssistantId: null | string;
-  topicCreatedAt: number;
-  topicId: string;
-  topicName: string;
-  topicUpdatedAt: number;
+  sessionId: string;
+  sessionTitle: string;
 };
 
 export class ContentSearchService {
@@ -51,12 +51,12 @@ export class ContentSearchService {
   async search(query: ContentSearchQuery): Promise<ContentSearchResponse> {
     const limit = Math.min(query.limit ?? CONTENT_SEARCH_DEFAULT_LIMIT, CONTENT_SEARCH_MAX_LIMIT);
     try {
-      const result = await this.searchTopicMessages({
+      const result = await this.searchSessionMessages({
         createdAtFrom: query.createdAtFrom,
         cursor: query.cursor,
         limit,
         q: query.q,
-        topicId: query.topicId,
+        sessionId: query.sessionId,
       });
       return { ...result, query: query.q };
     } catch (error) {
@@ -65,19 +65,21 @@ export class ContentSearchService {
     }
   }
 
-  private searchTopicMessages(query: {
+  private searchSessionMessages(query: {
     createdAtFrom?: string;
     cursor?: string;
     limit: number;
     q: string;
-    topicId?: string;
+    sessionId?: string;
   }) {
-    const topicCondition = query.topicId ? sql`message.topic_id = ${query.topicId}` : sql`1 = 1`;
-    return searchWithCursor<TopicMessageSearchRow, TopicMessageContentSearchItem>({
+    const sessionCondition = query.sessionId
+      ? sql`message.session_id = ${query.sessionId}`
+      : sql`1 = 1`;
+    return searchWithCursor<SessionMessageSearchRow, SessionMessageContentSearchItem>({
       buildSnippet: buildSearchSnippet,
       createdAtFrom: query.createdAtFrom,
       cursor: query.cursor,
-      cursorConfig: topicMessageCursorConfig,
+      cursorConfig: sessionMessageCursorConfig,
       fetchRows: async ({
         chunkSize,
         createdAtFromMs,
@@ -89,24 +91,22 @@ export class ContentSearchService {
           createdAtFromMs !== undefined
             ? sql`message.created_at >= ${createdAtFromMs}`
             : sql`1 = 1`;
-        return await this.db.all<TopicMessageSearchRow>(sql`
+        return await this.db.all<SessionMessageSearchRow>(sql`
           SELECT
             message.id,
-            message.topic_id AS "topicId",
-            t.name AS "topicName",
-            t.assistant_id AS "topicAssistantId",
+            message.session_id AS "sessionId",
+            session.title AS "sessionTitle",
+            session.agent_id AS "agentId",
+            agent.name AS "agentName",
             message.role,
-            t.created_at AS "topicCreatedAt",
-            t.updated_at AS "topicUpdatedAt",
             message.searchable_text AS "searchableText",
             message.created_at AS "createdAt"
-          FROM message
-          JOIN message_fts fts ON message.fts_rowid = fts.rowid
-          JOIN topic t ON t.id = message.topic_id
-          WHERE message.deleted_at IS NULL
-            AND t.deleted_at IS NULL
-            AND message.searchable_text != ''
-            AND ${topicCondition}
+          FROM agent_session_message message
+          JOIN agent_session_message_fts fts ON message.fts_rowid = fts.rowid
+          JOIN agent_session session ON session.id = message.session_id
+          LEFT JOIN agent ON agent.id = session.agent_id AND agent.deleted_at IS NULL
+          WHERE message.searchable_text != ''
+            AND ${sessionCondition}
             AND ${createdAtCondition}
             AND ${sql.join(ftsConditions, sql` AND `)}
             AND ${
@@ -124,14 +124,13 @@ export class ContentSearchService {
       mapRow: (row, { snippet }) => ({
         item: {
           createdAt: timestampToISO(Number(row.createdAt)),
+          agentId: row.agentId,
+          agentName: row.agentName ?? undefined,
           messageId: row.id,
-          role: coerceSearchRole(row.role, TOPIC_MESSAGE_SEARCH_ROLES),
+          role: coerceSearchRole(row.role, SESSION_MESSAGE_SEARCH_ROLES),
+          sessionId: row.sessionId,
+          sessionTitle: row.sessionTitle,
           snippet,
-          topicAssistantId: row.topicAssistantId ?? undefined,
-          topicCreatedAt: timestampToISO(Number(row.topicCreatedAt)),
-          topicId: row.topicId,
-          topicName: row.topicName,
-          topicUpdatedAt: timestampToISO(Number(row.topicUpdatedAt)),
         },
         sort: { createdAt: Number(row.createdAt), id: row.id },
       }),
