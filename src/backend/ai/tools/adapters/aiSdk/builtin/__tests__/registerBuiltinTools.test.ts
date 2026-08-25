@@ -6,6 +6,7 @@ import { registerBuiltinTools } from '../registerBuiltinTools';
 import { DEVICE_TOOL_NAMES } from '../toolNames';
 
 const deviceToolNames = Object.values(DEVICE_TOOL_NAMES).sort();
+const deviceToolNameSet = new Set<string>(deviceToolNames);
 const preferenceKeys = [
   'permissions.calendar_read',
   'permissions.calendar_write',
@@ -16,10 +17,10 @@ const preferenceKeys = [
 ] as const;
 
 describe('registerBuiltinTools', () => {
-  test('registers the exact domain-first device catalog and web tools', () => {
+  test('registers the exact device, web, and media catalog', () => {
     const registry = createRegistry();
     expect(registry.getAll().map((entry) => entry.name)).toEqual(
-      [...deviceToolNames, 'web_fetch', 'web_search'].sort(),
+      [...deviceToolNames, 'generate_image', 'web_fetch', 'web_search'].sort(),
     );
 
     for (const entry of deviceEntries(registry)) {
@@ -30,6 +31,10 @@ describe('registerBuiltinTools', () => {
     }
     expect(registry.getByName('web_fetch')).toMatchObject({ defer: 'auto', namespace: 'web' });
     expect(registry.getByName('web_search')).toMatchObject({ defer: 'auto', namespace: 'web' });
+    expect(registry.getByName('generate_image')).toMatchObject({
+      defer: 'auto',
+      namespace: 'media',
+    });
     expect(registry.getByName('tool_exec')).toBeUndefined();
   });
 
@@ -69,6 +74,35 @@ describe('registerBuiltinTools', () => {
     expect(entry).toBeDefined();
     await expect(resolveApproval(entry?.tool)).resolves.toBe(true);
   });
+
+  test('materializes generate_image only for a configured drawing model', async () => {
+    const registry = createRegistry();
+    expect(registry.selectActive(scope()).map((entry) => entry.name)).not.toContain(
+      'generate_image',
+    );
+
+    const configured = registry.selectActive(
+      scope({
+        paintingModel: {
+          support: {
+            modes: {
+              generate: {
+                supports: { size: { options: ['1024x1024'], type: 'enum' } },
+              },
+            },
+          },
+          uniqueModelId: 'openai::gpt-image-1',
+        },
+      }),
+    );
+    const imageTool = configured.find((entry) => entry.name === 'generate_image');
+    expect(imageTool).toBeDefined();
+    const schema = (await asSchema(imageTool?.tool.inputSchema).jsonSchema) as {
+      properties?: Record<string, unknown>;
+    };
+    expect(schema.properties).toHaveProperty('size');
+    expect(schema.properties).not.toHaveProperty('image_ids');
+  });
 });
 
 function createRegistry() {
@@ -79,14 +113,22 @@ function createRegistry() {
 
 function dependencies(mode: 'ask' | 'always') {
   return {
+    ai: { generateImage: jest.fn(async () => ({ images: [] })) },
     devicePermissions: { getStatusForPreference: jest.fn(async () => 'granted' as const) },
+    files: {
+      createInternalEntry: jest.fn(),
+      discard: jest.fn(),
+      readDataUrl: jest.fn(),
+      resolve: jest.fn(),
+    },
     preference: { get: jest.fn(async () => mode) },
+    providerRegistry: { getImageGenerationSupport: jest.fn() },
     webSearch: { searchKeywords: jest.fn() },
   } as never;
 }
 
 function deviceEntries(registry: ToolRegistry<ToolApplyScope>): ToolEntry[] {
-  return registry.getAll().filter((entry) => entry.namespace !== 'web');
+  return registry.getAll().filter((entry) => deviceToolNameSet.has(entry.name));
 }
 
 function access(
@@ -101,6 +143,7 @@ function access(
 function scope(overrides: Partial<ToolApplyScope> = {}): ToolApplyScope {
   return {
     deviceAccess: access(),
+    paintingModel: null,
     platform: 'ios',
     ...overrides,
   };

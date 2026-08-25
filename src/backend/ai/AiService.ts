@@ -45,6 +45,7 @@ import {
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import { fileContent } from '@/backend/services/file/fileContent';
+import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
 import { devicePermissions } from '@/backend/services/permissions';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
 import type { Assistant } from '@/shared/data/types/assistant';
@@ -247,9 +248,17 @@ export class AiService extends BaseService {
   /** Owns a built tool registry, so it is created once per service instance. */
   private getToolResolver(): ToolResolver {
     this.toolResolver ??= new ToolResolver({
+      ai: { generateImage: (request) => this.generateImage(request) },
       devicePermissions,
+      files: {
+        createInternalEntry: paintingFileStorage.createInternalEntry,
+        discard: paintingFileStorage.discard,
+        readDataUrl: paintingFileStorage.readDataUrl,
+        resolve: fileContent.resolve,
+      },
       mcpRuntime: application.get('McpRuntimeService'),
       preference: application.get('PreferenceService'),
+      providerRegistry: providerRegistryService,
       webSearch: application.get('WebSearchService'),
     });
     return this.toolResolver;
