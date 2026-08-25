@@ -1,5 +1,5 @@
-import { InMemoryAgentSessionStore } from '@/backend/ai/agentHost/InMemoryAgentSessionStore';
 import { MobileAgentHost } from '@/backend/ai/agentHost/MobileAgentHost';
+import { SqliteAgentSessionStore } from '@/backend/ai/agentHost/SqliteAgentSessionStore';
 import { AiService } from '@/backend/ai/AiService';
 import { McpRuntimeService } from '@/backend/ai/mcp';
 import { ChatRuntime } from '@/backend/ai/streamManager/ChatRuntime';
@@ -45,9 +45,7 @@ export const services = {
   McpRuntimeService,
   AiService,
   ChatRuntime,
-  // Keep Agent persistence inactive until the Agent/Pi business integration.
-  // The SQLite adapter and schema remain available as foundation code.
-  AgentSessionStore: InMemoryAgentSessionStore,
+  AgentSessionStore: SqliteAgentSessionStore,
   MobileAgentHost,
   JobHandlerRegistry,
   JobRuntime,
