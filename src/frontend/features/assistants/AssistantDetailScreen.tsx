@@ -27,8 +27,7 @@ export default function AssistantDetailScreen() {
     }
 
     router.dismissTo({
-      params: { topicId: returnTopicId },
-      pathname: '/',
+      pathname: '/topics',
     });
   }, [returnTopicId, router]);
   const openEditAssistant = useCallback(() => {
@@ -37,11 +36,9 @@ export default function AssistantDetailScreen() {
       pathname: '/assistants/[assistantId]/edit',
     });
   }, [assistantId, router]);
-  // Lands on the new-topic screen with the assistant carried along, so the
-  // first message creates a topic already bound to it.
-  const startChat = useCallback(() => {
-    router.push({ params: { assistantId }, pathname: '/' });
-  }, [assistantId, router]);
+  const chooseAgent = useCallback(() => {
+    router.push('/agents');
+  }, [router]);
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
       {
@@ -85,11 +82,11 @@ export default function AssistantDetailScreen() {
           style={{ paddingBottom: Math.max(insets.bottom, screenBottomActionInset) }}
         >
           <Button
-            accessibilityLabel={t('assistant.actions.startChat')}
+            accessibilityLabel={t('assistant.actions.chooseAgent')}
             className="rounded-2xl"
-            onPress={startChat}
+            onPress={chooseAgent}
           >
-            {t('assistant.actions.startChat')}
+            {t('assistant.actions.chooseAgent')}
           </Button>
         </View>
       ) : null}

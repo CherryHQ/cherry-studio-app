@@ -102,16 +102,14 @@ onto the Runtime contract. Agent tool configuration is still deferred, so the Ho
 supplies `tools: []`; file attachments are rejected before provider execution until the Host-side
 file resolver lands.
 
-No frontend currently consumes the Agent Data API or `Backend.agent`. These additive data slices do
-not replace the current Topic or Chat Runtime surfaces. The current Topic Chat path has a
-transitional Pi adapter selected by `EXPO_PUBLIC_CHAT_RUNTIME`; development defaults to Pi and other
-builds default to AI SDK. That adapter currently handles text/reasoning only and rejects
-tool-bearing requests. It is not the final Pi Agent Runtime described here.
+The primary chat frontend consumes the Agent Data API and observes `Backend.agent`; Agent Sessions
+now own its route identity, transcript, streaming, cancellation, and approvals. The legacy Topic
+tables, management screens, and Chat Runtime remain only for staged removal and no longer feed the
+primary chat route.
 
-The next integration is the Agent frontend over `Backend.agent`, followed by the application-owned
-tool configuration/resolution model and broader Pi provider coverage. Attachments, the avatar
-workflow, context compaction, and removal of the transitional Chat path remain separate follow-up
-work.
+Application-owned tool configuration/resolution and broader Pi provider coverage remain follow-up
+work. Attachments, the avatar workflow, context compaction, and removal of the transitional Chat
+path are also separate follow-ups.
 
 ## Related
 

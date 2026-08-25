@@ -128,18 +128,21 @@ See [Storage Engine](./storage-engine.md) for the current engine constraints and
 
 ## Schema And Message Persistence
 
-The schema includes app state/preferences, chat, provider/model, MCP, file, painting, organization,
-and assistant relation tables. `message` stores a parent-linked tree; `topic.activeNodeId` selects
-the active branch. Message content is `data.parts`, and FTS derives searchable text from text parts.
+The schema includes app state/preferences, Agent and Agent Session data, legacy chat,
+provider/model, MCP, file, painting, organization, and assistant relation tables. Agent Session
+messages are linear and use stable protocol message ids. The legacy `message` table stores a
+parent-linked tree selected by `topic.activeNodeId` until that schema is removed.
 
-`MessageService` persists user messages and reserves stable assistant placeholders before
-`ChatRuntime` streams. `AiService` currently normalizes either the transitional Pi path or the AI
-SDK fallback into that runtime. The runtime publishes an in-memory per-Topic overlay during
-generation and writes the terminal, paused, or error state to the placeholder.
+`MobileAgentHost` persists Agent Session reservations and terminal messages through
+`AgentSessionStore`; `/agent-sessions/:sessionId/messages` exposes newest-first cursor pagination to
+the frontend. Live deltas are protocol events and do not write every token to SQLite.
+
+The legacy `MessageService` and `ChatRuntime` persistence path remains registered until the old
+Topic schema/runtime removal stage.
 
 ## Service Graph
 
-`createBackendServices()` constructs concrete backend classes such as `CacheService`,
+`createBackendServices()` constructs concrete backend classes such as `MobileAgentHost`, `CacheService`,
 `PreferenceService`, `ProviderService`, `MessageService`, `McpRuntimeService`, `WebSearchService`,
 `ToolResolver`, and `AiService`. The graph is private to bootstrap. `createBackend()` builds the
 factory-shaped workflow modules and returns the workflow-only `Backend` plus the MCP mutation
@@ -149,8 +152,9 @@ coordinator needed by Data API handlers.
 never exposed to frontend code.
 
 Lifecycle-owned services are declared once in `src/backend/core/application/serviceRegistry.ts` and
-instantiated per `ApplicationHost` generation; `ChatRuntime` is one of them, and `createBackend()`
-exposes the instance rather than constructing it. See [Lifecycle](../lifecycle/README.md).
+instantiated per `ApplicationHost` generation; `MobileAgentHost` and the legacy `ChatRuntime` are
+among them, and `createBackend()` exposes the instances rather than constructing them. See
+[Lifecycle](../lifecycle/README.md).
 
 There is no IPC handler layer or frontend DI container for these concrete classes. Mobile does have
 an application singleton and a lifecycle service registry — they are backend-private, and frontend

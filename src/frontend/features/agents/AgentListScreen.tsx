@@ -81,6 +81,12 @@ export default function AgentListScreen() {
     },
     [router],
   );
+  const openAgentChat = useCallback(
+    (agentId: string) => {
+      router.push({ pathname: '/', params: { agentId } });
+    },
+    [router],
+  );
   const openAgentSearch = useCallback(() => {
     void openAppSearch<Agent>({
       emptyText: t('agent.list.noResults'),
@@ -102,10 +108,10 @@ export default function AgentListScreen() {
       },
     }).then((outcome) => {
       if (outcome.type === 'selected') {
-        openAgentEditor(outcome.item.id);
+        openAgentChat(outcome.item.id);
       }
     });
-  }, [openAgentEditor, openAppSearch, t, visibleAgents]);
+  }, [openAgentChat, openAppSearch, t, visibleAgents]);
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
@@ -231,6 +237,7 @@ export default function AgentListScreen() {
                 isEditing={isEditing}
                 isSelected={selectedIds.has(agent.id)}
                 onDelete={requestDeleteAgent}
+                onEdit={openAgentEditor}
                 onToggle={toggleAgent}
               />
             ))}
@@ -313,12 +320,23 @@ type AgentListRowProps = {
   isEditing: boolean;
   isSelected: boolean;
   onDelete: (agent: Agent) => void;
+  onEdit: (agentId: string) => void;
   onToggle: (agentId: string) => void;
 };
 
-function AgentListRow({ agent, isEditing, isSelected, onDelete, onToggle }: AgentListRowProps) {
+function AgentListRow({
+  agent,
+  isEditing,
+  isSelected,
+  onDelete,
+  onEdit,
+  onToggle,
+}: AgentListRowProps) {
   const { t } = useTranslation();
 
+  const handleEditPress = useCallback(() => {
+    onEdit(agent.id);
+  }, [agent.id, onEdit]);
   const handleDeletePress = useCallback(() => {
     onDelete(agent);
   }, [agent, onDelete]);
@@ -326,7 +344,10 @@ function AgentListRow({ agent, isEditing, isSelected, onDelete, onToggle }: Agen
     () =>
       isEditing
         ? [{ name: 'activate' as const }]
-        : [{ label: t('common.delete'), name: 'delete' as const }],
+        : [
+            { label: t('common.edit'), name: 'edit' as const },
+            { label: t('common.delete'), name: 'delete' as const },
+          ],
     [isEditing, t],
   );
   const handleAccessibilityAction = useCallback(
@@ -336,15 +357,22 @@ function AgentListRow({ agent, isEditing, isSelected, onDelete, onToggle }: Agen
         return;
       }
 
-      if (event.nativeEvent.actionName === 'delete') {
-        handleDeletePress();
+      switch (event.nativeEvent.actionName) {
+        case 'edit':
+          handleEditPress();
+          break;
+        case 'delete':
+          handleDeletePress();
+          break;
+        default:
+          break;
       }
     },
-    [agent.id, handleDeletePress, isEditing, onToggle],
+    [agent.id, handleDeletePress, handleEditPress, isEditing, onToggle],
   );
   const href = useMemo(
     () => ({
-      pathname: '/agents/[agentId]/edit' as const,
+      pathname: '/' as const,
       params: { agentId: agent.id },
     }),
     [agent.id],
@@ -352,13 +380,18 @@ function AgentListRow({ agent, isEditing, isSelected, onDelete, onToggle }: Agen
   const menuItems = useMemo<readonly ContextMenuLinkItem[]>(
     () => [
       {
+        id: 'edit',
+        label: t('common.edit'),
+        onPress: handleEditPress,
+      },
+      {
         destructive: true,
         id: 'delete',
         label: t('common.delete'),
         onPress: handleDeletePress,
       },
     ],
-    [handleDeletePress, t],
+    [handleDeletePress, handleEditPress, t],
   );
 
   const row = (

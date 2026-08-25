@@ -13,6 +13,7 @@ export type AgentMessageHistoryWindow = {
   isLoadingOlder: boolean;
   loadOlder: () => Promise<void>;
   messages: readonly AgentMessageView[];
+  retry: () => Promise<void>;
 };
 
 type OlderFetchOptions = {
@@ -44,7 +45,7 @@ export function useAgentMessageHistoryWindow(
     params: { sessionId: sessionId ?? '__missing_session__' },
     staleTime: messageWindowPolicy.staleTimeMs,
   });
-  const { error, hasNext, isLoading, isLoadingMore, loadNext, pages } = query;
+  const { error, hasNext, isLoading, isLoadingMore, loadNext, pages, refresh } = query;
   const allMessages = useMemo(() => flattenMessagePages(pages), [pages]);
   const { hasHiddenMessages, hiddenMessageCount, revealMore, visibleMessages } =
     useMessageRenderWindow(allMessages);
@@ -92,6 +93,9 @@ export function useAgentMessageHistoryWindow(
     }
     await fetchOlderIfNeeded({ showLoading: true });
   }, [fetchOlderIfNeeded, hasHiddenMessages, hiddenMessageCount, revealMore]);
+  const retry = useCallback(async () => {
+    await refresh();
+  }, [refresh]);
 
   return {
     error,
@@ -99,6 +103,7 @@ export function useAgentMessageHistoryWindow(
     isLoadingOlder,
     loadOlder,
     messages: visibleMessages,
+    retry,
   };
 }
 

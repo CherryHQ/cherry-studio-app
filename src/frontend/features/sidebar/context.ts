@@ -6,7 +6,7 @@ export type SidebarActions = {
   navigateAssistants: () => void;
   openPaintings: () => void;
   openSettings: () => void;
-  openTopicList: () => void;
+  openSessionList: () => void;
   startNewChat: () => void;
 };
 

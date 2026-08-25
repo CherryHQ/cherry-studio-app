@@ -78,6 +78,10 @@ const TOOL_EXECUTION_ERROR: RuntimeError = {
   retryable: false,
 };
 
+const DEFAULT_EXECUTION_ERROR_MESSAGE = 'The model provider call failed.';
+const MAX_EXECUTION_ERROR_MESSAGE_CHARS = 4_000;
+const REDACTED_SECRET = '[REDACTED]';
+
 const TERMINAL_TYPES = new Set<RuntimeEvent['type']>(['completed', 'failed', 'cancelled']);
 
 type ApprovalWaiter = {
@@ -128,12 +132,42 @@ function validateRequest(request: RuntimeExecutionRequest): RuntimeError | null 
   return null;
 }
 
-function normalizeExecutionError(): RuntimeError {
+function normalizeExecutionError(error: unknown, secrets: readonly string[] = []): RuntimeError {
+  const rawMessage =
+    typeof error === 'string'
+      ? error
+      : error instanceof Error
+        ? error.message
+        : typeof error === 'object' &&
+            error !== null &&
+            'message' in error &&
+            typeof error.message === 'string'
+          ? error.message
+          : '';
+  const stackStart = rawMessage.search(/\n\s+at\s+/);
+  let message = (stackStart >= 0 ? rawMessage.slice(0, stackStart) : rawMessage).trim();
+
+  for (const secret of [...new Set(secrets)].sort((left, right) => right.length - left.length)) {
+    if (secret) message = message.replaceAll(secret, REDACTED_SECRET);
+  }
+
+  if (message.length > MAX_EXECUTION_ERROR_MESSAGE_CHARS) {
+    message = `${message.slice(0, MAX_EXECUTION_ERROR_MESSAGE_CHARS)}…`;
+  }
+
   return {
     code: 'runtime_error',
-    message: 'The model provider call failed.',
+    message: message || DEFAULT_EXECUTION_ERROR_MESSAGE,
     retryable: false,
   };
+}
+
+function sensitiveValues(resolution: PiModelResolution): string[] {
+  const values = [resolution.apiKey];
+  for (const [name, value] of Object.entries(resolution.headers ?? {})) {
+    if (/authorization|api[-_]key|token|secret/i.test(name)) values.push(value);
+  }
+  return values;
 }
 
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
@@ -247,8 +281,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
 
   private async run(request: RuntimeExecutionRequest, turn: ActiveTurn): Promise<void> {
     let unsubscribe: (() => void) | undefined;
+    let secrets: readonly string[] = [];
     try {
       const resolution = await this.dependencies.resolveModel(request.model, request.options);
+      secrets = sensitiveValues(resolution);
       if (turn.terminated) return;
       if (request.tools.length > 0 && !resolution.supportsTools) {
         this.emit(turn, {
@@ -324,7 +360,10 @@ class PiRuntimeSession implements AgentRuntimeSession {
           this.emit(turn, { type: 'cancelled' });
           break;
         case 'error':
-          this.emit(turn, { type: 'failed', error: normalizeExecutionError() });
+          this.emit(turn, {
+            type: 'failed',
+            error: normalizeExecutionError(terminal.errorMessage, secrets),
+          });
           break;
         case 'toolUse':
         case 'deferred':
@@ -339,13 +378,13 @@ class PiRuntimeSession implements AgentRuntimeSession {
           });
           break;
       }
-    } catch {
+    } catch (error) {
       if (!turn.terminated) {
         this.emit(
           turn,
           turn.cancelRequested
             ? { type: 'cancelled' }
-            : { type: 'failed', error: normalizeExecutionError() },
+            : { type: 'failed', error: normalizeExecutionError(error, secrets) },
         );
       }
     } finally {

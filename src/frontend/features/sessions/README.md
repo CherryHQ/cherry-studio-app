@@ -1,16 +1,14 @@
 # Agent Session Screens
 
 This module owns the Agent Session list surfaces backed by the `/agent-sessions` Data API. It is
-the agent-session successor to the topic list feature, which remains in place until the chat
-surface switches to Agent Sessions.
+the agent-session successor to the topic list feature.
 
 ## Public Interface
 
 - `SessionListScreen` (`/sessions`) is the management page: recency-ordered infinite list with
   rename, delete, and multi-select batch deletion under the `agent-sessions` selection scope.
 - `SessionList` embeds the list with its own `SessionListProvider`, mirroring `TopicList`.
-- Rows link to the chat surface with a `sessionId` param — the post-switch contract the chat
-  screen ignores until it consumes Agent Sessions.
+- Rows link to the Agent chat surface with a `sessionId` param.
 - There is no search: the session list API has no query filter yet; content search arrives with
   the desktop-shaped search work.
 - Batch deletion issues per-id deletes (`useAgentSessionMutations`); the backend cancels and

@@ -18,6 +18,40 @@ function message(id: string, overrides: Partial<AgentMessageView> = {}): AgentMe
 }
 
 describe('agentMessageProjection', () => {
+  test('projects the provider error message into the shared error renderer', () => {
+    const item = toAgentMessageListItem(
+      message('assistant-error', {
+        parts: [
+          {
+            error: {
+              code: 'EXECUTION_FAILED',
+              message: 'OpenAI API error (403): access denied',
+              retryable: false,
+            },
+            id: 'error-1',
+            type: 'error',
+          },
+        ],
+        status: 'error',
+      }),
+    );
+
+    expect(item).toMatchObject({
+      data: {
+        parts: [
+          {
+            data: {
+              code: 'EXECUTION_FAILED',
+              message: 'OpenAI API error (403): access denied',
+            },
+            type: 'data-error',
+          },
+        ],
+      },
+      status: 'error',
+    });
+  });
+
   test('maps protocol parts and streaming state onto the shared message renderer shape', () => {
     const item = toAgentMessageListItem(
       message('assistant-1', {

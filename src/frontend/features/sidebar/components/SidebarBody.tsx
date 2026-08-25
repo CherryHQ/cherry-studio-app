@@ -14,7 +14,7 @@ import { appSidebar } from '@/frontend/utils/constants';
 import { useSidebarActions } from '../context';
 import { useDockMetrics } from '../useDockMetrics';
 import { SidebarNavRow } from './SidebarNavRow';
-import { SidebarTopicList } from './SidebarTopicList';
+import { SidebarSessionList } from './SidebarSessionList';
 
 /**
  * The sidebar's only scroller: nav rows and the recent topics scroll together
@@ -87,7 +87,7 @@ function SidebarBodyDefault() {
           <FilterIcon className="size-4 text-muted-foreground" />
         </Pressable>
       </View>
-      <SidebarTopicList />
+      <SidebarSessionList />
     </>
   );
 }

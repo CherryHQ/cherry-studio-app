@@ -1,5 +1,3 @@
-// The chat input: what chat wires around the shared composer
-// (`@/frontend/components/composer`) — its tools, its reasoning effort, and the
-// assistant/model bookkeeping behind both. Callers outside chat want the
-// composer itself, not this.
+// Agent chat's narrow wrapper around the shared composer. Callers outside chat
+// want the composer primitives rather than this protocol-bound surface.
 export { ChatInput } from './ChatInput';

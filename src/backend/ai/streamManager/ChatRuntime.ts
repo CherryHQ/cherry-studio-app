@@ -1919,8 +1919,8 @@ function resolveTurnOutcome(
  *
  * Ids come from the caller instead of the column default so the turn can be
  * published before it is persisted: the optimistic row and the row that lands
- * carry one identity, and `mergeMessagesWithOverlay` replaces in place instead
- * of appending a duplicate. Only DB-owned fields are guessed — the timestamps
+ * carry one identity, so a consumer can replace its transient projection in
+ * place instead of appending a duplicate. Only DB-owned fields are guessed — the timestamps
  * (the real ones land milliseconds later, and nothing orders a turn by them)
  * and `searchableText`, which is a trigger's output no chat surface reads.
  */

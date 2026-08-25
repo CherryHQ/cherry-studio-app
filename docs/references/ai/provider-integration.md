@@ -1,13 +1,22 @@
 # AI Provider Integration
 
-Status: **as-built transitional chat routing**.
+Status: **as-built Agent and legacy provider paths**.
 
 This reference defines the mobile AI provider/model request architecture. Terms follow
 [Domain Language](../domain-language.md).
 
 ## Runtime Path
 
-The current streaming request path is:
+The primary Agent chat request path is:
+
+```text
+MobileAgentHost -> PiRuntime -> piModelResolver -> provider/model services
+```
+
+Pi is the only local Agent Runtime. It receives a complete normalized Agent transcript and resolves
+the selected Agent model through the Host-owned provider adapter.
+
+The registered legacy Topic path remains during staged removal:
 
 ```text
 ChatRuntime -> AiService -> providerToAiSdkConfig()
@@ -15,7 +24,7 @@ ChatRuntime -> AiService -> providerToAiSdkConfig()
   └─ ai-sdk -> Agent -> @cherrystudio/ai-core / AI SDK
 ```
 
-`EXPO_PUBLIC_CHAT_RUNTIME` selects the transitional path. Development defaults to Pi; other builds
+`EXPO_PUBLIC_CHAT_RUNTIME` selects only that legacy path. Development defaults to Pi; other builds
 default to AI SDK. The Pi bridge temporarily reuses AI SDK provider-configuration shapes, but that
 does not make AI SDK an Agent Runtime. The target Agent architecture has Pi as the sole local
 conversation engine; AI SDK remains only where a non-Agent service or provider capability still
@@ -104,8 +113,8 @@ options; executes Pi; and maps Pi text, reasoning, usage, and terminal state int
 
 The bridge currently supports API-key OpenAI Responses endpoints only. It rejects tools, MCP,
 knowledge-base input, web search, custom endpoint paths, custom transports, and multi-step tool
-loops. Final integration belongs behind the Host-private Agent Runtime contract and receives
-structured history plus a neutral per-turn tool snapshot.
+loops. This adapter remains behind the legacy `ChatRuntime`; Agent chat instead uses the active
+`PiRuntime` described in [Agent Runtime](../agent/agent-runtime.md).
 
 ## Provider Options
 

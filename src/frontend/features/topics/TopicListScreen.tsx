@@ -37,7 +37,7 @@ function TopicListScreenBody() {
     enterEditing();
   }, [enterEditing, isDeletionPending]);
   const openNewChat = useCallback(() => {
-    router.navigate({ params: {}, pathname: '/' });
+    router.navigate('/agents');
   }, [router]);
   const menuItems = useMemo<readonly MenuItem[]>(
     () => [

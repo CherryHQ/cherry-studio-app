@@ -1,5 +1,5 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
-import { ContentState } from '@cherrystudio/ui/components';
+import { ContentState, Menu, type MenuItem, useAlert } from '@cherrystudio/ui/components';
 import { LegendList, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,6 @@ import { type AccessibilityActionEvent, Text, View } from 'react-native';
 import { Pressable } from 'react-native-gesture-handler';
 import Animated, { FadeInLeft, FadeOutLeft } from 'react-native-reanimated';
 
-import { ContextMenuLink, type ContextMenuLinkItem } from '@/frontend/components/navigation';
 import {
   useListBottomInset,
   usePendingDeletionIds,
@@ -195,6 +194,7 @@ const TopicRow = memo(function TopicRow({
   topic,
 }: TopicRowProps) {
   const { i18n, t } = useTranslation();
+  const { alert } = useAlert();
   const updatedAtLabel = formatTopicUpdatedAt(
     topic.updatedAt,
     i18n.resolvedLanguage,
@@ -238,11 +238,13 @@ const TopicRow = memo(function TopicRow({
     },
     [handleDeletePress, handleRenamePress, isEditing, onToggle, topic.id],
   );
-  const href = useMemo(
-    () => ({ pathname: '/' as const, params: { topicId: topic.id } }),
-    [topic.id],
-  );
-  const menuItems = useMemo<readonly ContextMenuLinkItem[]>(
+  const handleOpenUnavailable = useCallback(() => {
+    alert.show({
+      description: t('topic.legacyOpenUnavailable.description'),
+      title: t('topic.legacyOpenUnavailable.title'),
+    });
+  }, [alert, t]);
+  const menuItems = useMemo<readonly MenuItem[]>(
     () => [
       {
         id: 'rename',
@@ -263,11 +265,11 @@ const TopicRow = memo(function TopicRow({
     <Pressable
       accessibilityActions={accessibilityActions}
       accessibilityLabel={topic.name || t('navigation.newChat')}
-      accessibilityRole={isEditing ? 'checkbox' : 'link'}
+      accessibilityRole={isEditing ? 'checkbox' : 'button'}
       accessibilityState={isEditing ? { checked: isSelected } : undefined}
       className="w-full active:bg-secondary"
       onAccessibilityAction={handleAccessibilityAction}
-      onPress={isEditing ? () => onToggle(topic.id) : undefined}
+      onPress={isEditing ? () => onToggle(topic.id) : handleOpenUnavailable}
     >
       <View className="relative min-w-0 flex-1 flex-row items-center gap-2 border-border border-b bg-transparent py-2 pl-2">
         {isEditing ? (
@@ -311,8 +313,8 @@ const TopicRow = memo(function TopicRow({
   return isEditing ? (
     row
   ) : (
-    <ContextMenuLink href={href} items={menuItems}>
+    <Menu items={menuItems} trigger="longPress">
       {row}
-    </ContextMenuLink>
+    </Menu>
   );
 });
