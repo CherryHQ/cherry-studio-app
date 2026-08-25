@@ -59,10 +59,10 @@ describe('DataApiService', () => {
 
   it('distinguishes an unsupported method from an unknown route', async () => {
     const service = createService({
-      '/topics': { GET: jest.fn(async () => ({ items: [] })) },
+      '/agents': { GET: jest.fn(async () => ({ items: [] })) },
     });
 
-    await expect(service.delete('/topics')).rejects.toMatchObject({
+    await expect(service.delete('/agents')).rejects.toMatchObject({
       code: ErrorCode.METHOD_NOT_ALLOWED,
     });
     await expect(service.get('/unknown-route' as never)).rejects.toMatchObject({

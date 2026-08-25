@@ -1,7 +1,6 @@
 import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import FilterIcon from '@cherrystudio/app-icons/icons/filter';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
-import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
 import { ScrollShadow } from '@cherrystudio/ui/components';
 import type { PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,18 +57,13 @@ SidebarBody.displayName = 'Sidebar.Body';
 
 function SidebarBodyDefault() {
   const { t } = useTranslation();
-  const { navigateAgents, navigateAssistants, openPaintings } = useSidebarActions('Sidebar.Body');
+  const { navigateAgents, openPaintings } = useSidebarActions('Sidebar.Body');
 
   return (
     <>
       {/* No home row: that surface moves under settings. */}
       <View className="pb-1">
         <SidebarNavRow icon={BotIcon} label={t('navigation.agents')} onPress={navigateAgents} />
-        <SidebarNavRow
-          icon={LibraryBigIcon}
-          label={t('navigation.assistants')}
-          onPress={navigateAssistants}
-        />
         <SidebarNavRow icon={ImageIcon} label={t('navigation.paintings')} onPress={openPaintings} />
       </View>
 

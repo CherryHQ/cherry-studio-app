@@ -83,18 +83,15 @@ export function createAppBootstrapRuntime(
       agentSessionMutations: services.agent,
       agentSessions: services.agentSession,
       aiUsageRecords: services.aiUsageRecord,
-      assistants: services.assistant,
       contentSearch: services.contentSearch,
       entitySearch: services.entitySearch,
       files: services.fileEntry,
       jobs: services.job,
       mcpServerMutations: dataApiDependencies.mcpServerMutations,
       mcpServers: services.mcpServer,
-      messages: services.message,
       models: services.model,
       paintings: services.painting,
       providers: services.provider,
-      topics: services.topic,
     }),
   );
 

@@ -131,7 +131,7 @@ describe('useMcpServerMutations', () => {
     await expect(deletion).resolves.toBeUndefined();
     expect(mockDelete).toHaveBeenCalledWith('/mcp-servers/server-1', { query: undefined });
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
-      queryKey: queryKeys.assistants.all(),
+      queryKey: queryKeys.mcpServers.all(),
     });
 
     pendingInvalidation.resolve();

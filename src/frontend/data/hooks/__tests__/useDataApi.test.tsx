@@ -100,7 +100,7 @@ describe('Data API hooks', () => {
 
   it('holds the previous key on screen while the next one loads', async () => {
     let resolveSecondPage: ((value: unknown) => void) | undefined;
-    dataApi.get.mockResolvedValueOnce({ id: 'assistant-1' } as never);
+    dataApi.get.mockResolvedValueOnce({ id: 'agent-1' } as never);
     dataApi.get.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveSecondPage = resolve;
@@ -109,7 +109,7 @@ describe('Data API hooks', () => {
     let latest: ReturnType<typeof useQuery> | undefined;
 
     function Probe({ id }: { id: string }) {
-      const result = useQuery('/assistants/:id', {
+      const result = useQuery('/agents/:id', {
         keepPreviousData: true,
         params: { id },
       });
@@ -138,29 +138,29 @@ describe('Data API hooks', () => {
       });
     }
 
-    await renderProbe('assistant-1');
-    expect(latest?.data).toEqual({ id: 'assistant-1' });
+    await renderProbe('agent-1');
+    expect(latest?.data).toEqual({ id: 'agent-1' });
 
-    await renderProbe('assistant-2');
+    await renderProbe('agent-2');
     expect(latest?.isLoading).toBe(false);
-    expect(latest?.data).toEqual({ id: 'assistant-1' });
+    expect(latest?.data).toEqual({ id: 'agent-1' });
 
-    await act(async () => resolveSecondPage?.({ id: 'assistant-2' }));
+    await act(async () => resolveSecondPage?.({ id: 'agent-2' }));
     await flushQueryNotifications();
-    expect(latest?.data).toEqual({ id: 'assistant-2' });
+    expect(latest?.data).toEqual({ id: 'agent-2' });
   });
 
   it('dispatches a mutation and invalidates matching endpoint keys', async () => {
-    dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
-    queryClient.setQueryData(['/assistants'], { items: [] });
+    dataApi.patch.mockResolvedValueOnce({ id: 'agent-1', name: 'Updated' } as never);
+    queryClient.setQueryData(['/agents'], { items: [] });
     const invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
     let trigger:
       | ((args: { body: { name: string }; params: { id: string } }) => Promise<unknown>)
       | undefined;
 
     function Probe() {
-      const mutation = useMutation('PATCH', '/assistants/:id', {
-        refresh: ['/assistants'],
+      const mutation = useMutation('PATCH', '/agents/:id', {
+        refresh: ['/agents'],
       });
       useEffect(() => {
         trigger = mutation.trigger;
@@ -176,10 +176,10 @@ describe('Data API hooks', () => {
       );
     });
     await act(async () => {
-      await trigger?.({ body: { name: 'Updated' }, params: { id: 'assistant-1' } });
+      await trigger?.({ body: { name: 'Updated' }, params: { id: 'agent-1' } });
     });
 
-    expect(dataApi.patch).toHaveBeenCalledWith('/assistants/assistant-1', {
+    expect(dataApi.patch).toHaveBeenCalledWith('/agents/agent-1', {
       body: { name: 'Updated' },
       query: undefined,
     });
@@ -187,7 +187,7 @@ describe('Data API hooks', () => {
   });
 
   describe('useMutation optimistic lifecycle', () => {
-    const variables = { body: { name: 'Updated' }, params: { id: 'assistant-1' } };
+    const variables = { body: { name: 'Updated' }, params: { id: 'agent-1' } };
     let trigger: ((args: typeof variables) => Promise<unknown>) | undefined;
 
     beforeEach(() => {
@@ -202,7 +202,7 @@ describe('Data API hooks', () => {
 
     it('runs the lifecycle callbacks and refresh in order around the request', async () => {
       const calls: string[] = [];
-      const response = { id: 'assistant-1', name: 'Updated' };
+      const response = { id: 'agent-1', name: 'Updated' };
       dataApi.patch.mockImplementationOnce(async () => {
         calls.push('mutationFn');
         return response as never;
@@ -210,10 +210,10 @@ describe('Data API hooks', () => {
       jest.spyOn(queryClient, 'invalidateQueries').mockImplementation(async () => {
         calls.push('invalidate');
       });
-      const refresh = jest.fn(() => ['/assistants']);
+      const refresh = jest.fn(() => ['/agents']);
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onError: () => {
             calls.push('onError');
           },
@@ -246,14 +246,14 @@ describe('Data API hooks', () => {
     });
 
     it('passes the trigger variables and onMutate context to onSuccess and onSettled', async () => {
-      const response = { id: 'assistant-1', name: 'Updated' };
+      const response = { id: 'agent-1', name: 'Updated' };
       dataApi.patch.mockResolvedValueOnce(response as never);
       const context = { previousName: 'Original' };
       const onSettled = jest.fn();
       const onSuccess = jest.fn();
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onMutate: () => context,
           onSettled,
           onSuccess,
@@ -274,12 +274,12 @@ describe('Data API hooks', () => {
     });
 
     it('waits for an async onMutate before the request and forwards its resolved context', async () => {
-      dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
+      dataApi.patch.mockResolvedValueOnce({ id: 'agent-1', name: 'Updated' } as never);
       const onSuccess = jest.fn();
       let resolveContext: ((context: { snapshot: string }) => void) | undefined;
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onMutate: () =>
             new Promise<{ snapshot: string }>((resolve) => {
               resolveContext = resolve;
@@ -301,13 +301,13 @@ describe('Data API hooks', () => {
       expect(dataApi.patch).not.toHaveBeenCalled();
 
       await act(async () => {
-        resolveContext?.({ snapshot: 'assistants' });
+        resolveContext?.({ snapshot: 'agents' });
         await pending;
       });
 
       expect(dataApi.patch).toHaveBeenCalledTimes(1);
-      expect(onSuccess).toHaveBeenCalledWith({ id: 'assistant-1', name: 'Updated' }, variables, {
-        snapshot: 'assistants',
+      expect(onSuccess).toHaveBeenCalledWith({ id: 'agent-1', name: 'Updated' }, variables, {
+        snapshot: 'agents',
       });
     });
 
@@ -321,12 +321,12 @@ describe('Data API hooks', () => {
       let latest: { error?: Error } | undefined;
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onError,
           onMutate: () => ({ previousName: 'Original' }),
           onSettled,
           onSuccess,
-          refresh: ['/assistants'],
+          refresh: ['/agents'],
         });
         useEffect(() => {
           trigger = mutation.trigger;
@@ -353,23 +353,23 @@ describe('Data API hooks', () => {
     });
 
     it('lets onError roll back an optimistic cache update from the onMutate context', async () => {
-      const original = { items: [{ id: 'assistant-1', name: 'Original' }] };
-      queryClient.setQueryData(['/assistants'], original);
+      const original = { items: [{ id: 'agent-1', name: 'Original' }] };
+      queryClient.setQueryData(['/agents'], original);
       let cacheDuringRequest: unknown;
       dataApi.patch.mockImplementationOnce(async () => {
-        cacheDuringRequest = queryClient.getQueryData(['/assistants']);
+        cacheDuringRequest = queryClient.getQueryData(['/agents']);
         throw new Error('patch failed');
       });
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onError: (_error, _variables, context) => {
-            queryClient.setQueryData(['/assistants'], context?.previous);
+            queryClient.setQueryData(['/agents'], context?.previous);
           },
           onMutate: () => {
-            const previous = queryClient.getQueryData(['/assistants']);
-            queryClient.setQueryData(['/assistants'], {
-              items: [{ id: 'assistant-1', name: 'Updated' }],
+            const previous = queryClient.getQueryData(['/agents']);
+            queryClient.setQueryData(['/agents'], {
+              items: [{ id: 'agent-1', name: 'Updated' }],
             });
             return { previous };
           },
@@ -385,8 +385,8 @@ describe('Data API hooks', () => {
         await expect(trigger?.(variables)).rejects.toThrow('patch failed');
       });
 
-      expect(cacheDuringRequest).toEqual({ items: [{ id: 'assistant-1', name: 'Updated' }] });
-      expect(queryClient.getQueryData(['/assistants'])).toEqual(original);
+      expect(cacheDuringRequest).toEqual({ items: [{ id: 'agent-1', name: 'Updated' }] });
+      expect(queryClient.getQueryData(['/agents'])).toEqual(original);
     });
 
     it('skips the request but still reports the failure when onMutate throws', async () => {
@@ -395,7 +395,7 @@ describe('Data API hooks', () => {
       const onSettled = jest.fn();
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onError,
           onMutate: () => {
             throw mutateError;
@@ -419,13 +419,13 @@ describe('Data API hooks', () => {
     });
 
     it('still runs onError and onSettled when the success callback throws', async () => {
-      dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
+      dataApi.patch.mockResolvedValueOnce({ id: 'agent-1', name: 'Updated' } as never);
       const successError = new Error('onSuccess failed');
       const onError = jest.fn();
       const onSettled = jest.fn();
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onError,
           onMutate: () => ({ stage: 'before-request' }),
           onSettled,
@@ -451,20 +451,20 @@ describe('Data API hooks', () => {
     });
 
     it('keeps the legacy single-argument callbacks working unchanged', async () => {
-      const response = { id: 'assistant-1', name: 'Updated' };
+      const response = { id: 'agent-1', name: 'Updated' };
       dataApi.patch.mockResolvedValueOnce(response as never);
       const invalidateQueries = jest.spyOn(queryClient, 'invalidateQueries');
       const seen: unknown[] = [];
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onError: (error) => {
             seen.push(error);
           },
           onSuccess: (data) => {
             seen.push(data.id);
           },
-          refresh: ['/assistants'],
+          refresh: ['/agents'],
         });
         useEffect(() => {
           trigger = mutation.trigger;
@@ -477,16 +477,16 @@ describe('Data API hooks', () => {
         await trigger?.(variables);
       });
 
-      expect(seen).toEqual(['assistant-1']);
+      expect(seen).toEqual(['agent-1']);
       expect(invalidateQueries).toHaveBeenCalledTimes(1);
     });
 
     it('keeps path, variables, response and context statically typed', async () => {
-      dataApi.patch.mockResolvedValueOnce({ id: 'assistant-1', name: 'Updated' } as never);
+      dataApi.patch.mockResolvedValueOnce({ id: 'agent-1', name: 'Updated' } as never);
       const seen: string[] = [];
 
       function Probe() {
-        const mutation = useMutation('PATCH', '/assistants/:id', {
+        const mutation = useMutation('PATCH', '/agents/:id', {
           onMutate: () => ({ previous: 'Original' }),
           onSuccess: (data, args, context) => {
             seen.push(data.id, args?.params.id ?? '', context.previous);
@@ -495,8 +495,8 @@ describe('Data API hooks', () => {
           },
         });
         const invalidBody = () =>
-          // @ts-expect-error the body must match the PATCH /assistants/:id schema
-          mutation.trigger({ body: { bogus: true }, params: { id: 'assistant-1' } });
+          // @ts-expect-error the body must match the PATCH /agents/:id schema
+          mutation.trigger({ body: { bogus: true }, params: { id: 'agent-1' } });
         void invalidBody;
         useEffect(() => {
           trigger = mutation.trigger;
@@ -509,7 +509,7 @@ describe('Data API hooks', () => {
         await trigger?.(variables);
       });
 
-      expect(seen).toEqual(['assistant-1', 'assistant-1', 'Original']);
+      expect(seen).toEqual(['agent-1', 'agent-1', 'Original']);
     });
   });
 });
@@ -518,8 +518,11 @@ describe('Data API key utilities', () => {
   it('keeps template and concrete query keys equivalent', () => {
     const query = { limit: 20 };
     expect(
-      __testing.buildQueryKey(__testing.resolveTemplate('/topics/:id', { id: 'topic-1' }), query),
-    ).toEqual(__testing.buildQueryKey('/topics/topic-1', query));
+      __testing.buildQueryKey(
+        __testing.resolveTemplate('/agent-sessions/:id', { id: 'session-1' }),
+        query,
+      ),
+    ).toEqual(__testing.buildQueryKey('/agent-sessions/session-1', query));
   });
 
   it('matches exact paths and explicit resource wildcards', () => {
