@@ -24,7 +24,7 @@ export function ChatScreen() {
   const agentId = getSingleParamValue(params.agentId);
   const sessionId = getSingleParamValue(params.sessionId);
   const session = useAgentSession(sessionId);
-  const resolvedAgentId = sessionId ? session.data?.agentId : agentId;
+  const resolvedAgentId = session.data?.agentId ?? agentId;
   const agent = useAgentApiById(resolvedAgentId);
   const messageWindow = useAgentMessageHistoryWindow(sessionId);
   const isSessionAvailable =

@@ -7,6 +7,8 @@ const mockInputHeightShared = { value: 122 };
 let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
 let dockProps: Record<string, unknown> | undefined;
+let mockSessionData: { agentId: string; id: string } | undefined;
+let mockSessionIsLoading: boolean;
 
 jest.mock('@cherrystudio/ui/components', () => ({
   Composer: {
@@ -36,7 +38,10 @@ jest.mock('expo-router', () => ({
 jest.mock('@/frontend/components/headers', () => ({ MainHeader: () => null }));
 
 jest.mock('@/frontend/hooks/agent', () => ({
-  useAgentApiById: () => ({ agent: { id: 'agent-1' }, isLoading: false }),
+  useAgentApiById: (agentId: string | undefined) => ({
+    agent: agentId === 'agent-1' ? { id: 'agent-1' } : undefined,
+    isLoading: false,
+  }),
   useAgentMessageHistoryWindow: () => ({
     isLoadingInitial: false,
     isLoadingOlder: false,
@@ -45,8 +50,8 @@ jest.mock('@/frontend/hooks/agent', () => ({
     retry: jest.fn(),
   }),
   useAgentSession: () => ({
-    data: { agentId: 'agent-1', id: 'session-1' },
-    isLoading: false,
+    data: mockSessionData,
+    isLoading: mockSessionIsLoading,
   }),
 }));
 
@@ -72,6 +77,8 @@ describe('ChatScreen composer dock wiring', () => {
     chatInputProps = undefined;
     chatWorkspaceProps = undefined;
     dockProps = undefined;
+    mockSessionData = { agentId: 'agent-1', id: 'session-1' };
+    mockSessionIsLoading = false;
   });
 
   afterEach(() => {
@@ -95,6 +102,20 @@ describe('ChatScreen composer dock wiring', () => {
     expect(chatInputProps).toMatchObject({
       agentId: 'agent-1',
       dismissKeyboardOnSend: false,
+      sessionId: 'session-1',
+    });
+  });
+
+  it('keeps the route Agent while a newly created Session is loading', () => {
+    mockSessionData = undefined;
+    mockSessionIsLoading = true;
+
+    act(() => {
+      renderer = create(<ChatScreen />);
+    });
+
+    expect(chatInputProps).toMatchObject({
+      agentId: 'agent-1',
       sessionId: 'session-1',
     });
   });
