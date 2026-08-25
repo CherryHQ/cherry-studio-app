@@ -69,6 +69,9 @@ export default function AgentListScreen() {
   const openCreateAgent = useCallback(() => {
     router.push('/agents/new');
   }, [router]);
+  const openSessionList = useCallback(() => {
+    router.push('/sessions');
+  }, [router]);
   const openAgentEditor = useCallback(
     (agentId: string) => {
       router.push({
@@ -111,13 +114,18 @@ export default function AgentListScreen() {
         onPress: openCreateAgent,
       },
       {
+        id: 'view-sessions',
+        label: t('agent.actions.viewSessions'),
+        onPress: openSessionList,
+      },
+      {
         disabled: visibleAgents.length === 0 || isBatchDeleting,
         id: 'select-agents',
         label: t('agent.selection.start'),
         onPress: enterEditing,
       },
     ],
-    [enterEditing, isBatchDeleting, openCreateAgent, t, visibleAgents.length],
+    [enterEditing, isBatchDeleting, openCreateAgent, openSessionList, t, visibleAgents.length],
   );
   const rightActions = useMemo<HeaderToolbarAction[]>(
     () => [
