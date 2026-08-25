@@ -27,6 +27,25 @@ Out of scope: Agent UI, the Pi Runtime, chat-table (`assistant`/`topic`/`message
 removal, branching columns, background turns, and remote execution targets. Everything here is
 additive; no existing table changes.
 
+## V0.2 transitional limitations
+
+V0.2 is an intentional integration transition. The Agent Data API and `Backend.agent` establish
+the storage and Host boundaries, but no frontend consumes them yet. The following limitations are
+accepted for V0.2 and must be resolved before an Agent UI or the Chat frontend switches to these
+surfaces:
+
+- Session observation currently resolves the live Agent definition first. Soft-deleting an Agent
+  or clearing its model can therefore make its existing Sessions unavailable through the public
+  Host API even though their rows remain durable. Historical Session reads need a path that does
+  not require an executable Agent definition.
+- Agent inference settings are persisted by CRUD, but the production Host currently sends empty
+  Runtime options. `temperature`, `maxOutputTokens`, and `reasoningEffort` are stored configuration,
+  not effective execution settings, until the definition and Runtime-option mapping is connected.
+- Concurrent partial updates to one Agent's settings are last-writer-wins and can lose independently
+  updated fields because the read/merge happens before the serialized write transaction.
+- Batch reorder callers must provide unique Agent ids. Duplicate ids can currently be reported as
+  `NOT_FOUND`, despite the underlying ordering helper otherwise using the last move for an id.
+
 ## Decisions
 
 **Parallel tables, not a rename.** Chat's `message` is a parent-linked tree with sibling groups
