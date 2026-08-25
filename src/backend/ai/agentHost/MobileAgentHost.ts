@@ -122,6 +122,14 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+function createCompletionSignal(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 @Injectable('MobileAgentHost')
 @ServicePhase(Phase.PostReady)
 @DependsOn(['AgentSessionStore'])
@@ -129,7 +137,8 @@ function cloneJson<T>(value: T): T {
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
-  private readonly admittingSessions = new Set<string>();
+  private readonly admittingSessions = new Map<string, Promise<void>>();
+  private readonly deletingSessions = new Set<string>();
   private readonly runningTurnsBySession = new Map<string, Promise<void>>();
   private readonly runtimeSessions = new Map<
     string,
@@ -221,24 +230,40 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
 
   async deleteSession(input: { sessionId: string }): Promise<void> {
     const parsed = AgentDeleteSessionInputSchema.parse(input);
-    const active = this.activeTurns.get(parsed.sessionId);
-    if (active) {
-      await this.cancelTurn({ sessionId: parsed.sessionId, turnId: active.turn.id });
+    const { sessionId } = parsed;
+    if (this.deletingSessions.has(sessionId)) {
+      fail('SESSION_BUSY', 'The session is already being deleted.');
     }
-    const runningTurn = this.runningTurnsBySession.get(parsed.sessionId);
-    if (runningTurn) {
-      await runningTurn;
+    // Install the barrier before the first await: submissions that begin after
+    // this point fail closed, while an already-admitted submission may finish
+    // installing its active/running state for us to cancel and drain below.
+    this.deletingSessions.add(sessionId);
+    try {
+      const admission = this.admittingSessions.get(sessionId);
+      if (admission) {
+        await admission;
+      }
+      const active = this.activeTurns.get(sessionId);
+      if (active) {
+        await this.cancelTurn({ sessionId, turnId: active.turn.id });
+      }
+      const runningTurn = this.runningTurnsBySession.get(sessionId);
+      if (runningTurn) {
+        await runningTurn;
+      }
+      const cached = this.runtimeSessions.get(sessionId);
+      if (cached) {
+        this.runtimeSessions.delete(sessionId);
+        await cached.session.close();
+      }
+      const deleted = await this.store.deleteSession(sessionId);
+      if (!deleted) {
+        fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
+      }
+      this.listeners.delete(sessionId);
+    } finally {
+      this.deletingSessions.delete(sessionId);
     }
-    const cached = this.runtimeSessions.get(parsed.sessionId);
-    if (cached) {
-      this.runtimeSessions.delete(parsed.sessionId);
-      await cached.session.close();
-    }
-    const deleted = await this.store.deleteSession(parsed.sessionId);
-    if (!deleted) {
-      fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
-    }
-    this.listeners.delete(parsed.sessionId);
   }
 
   async submitMessage(input: {
@@ -250,7 +275,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.assertIdle(sessionId);
     // Synchronous admission guard: a second submit that interleaves at any
     // await below still fails SESSION_BUSY (invariant 1).
-    this.admittingSessions.add(sessionId);
+    const admission = createCompletionSignal();
+    this.admittingSessions.set(sessionId, admission.promise);
     try {
       const session = await this.store.getSession(sessionId);
       if (!session) {
@@ -330,6 +356,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       };
     } finally {
       this.admittingSessions.delete(sessionId);
+      admission.resolve();
     }
   }
 
@@ -577,6 +604,9 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   // ── Helpers ──
 
   private assertIdle(sessionId: string): void {
+    if (this.deletingSessions.has(sessionId)) {
+      fail('SESSION_BUSY', 'The session is being deleted.');
+    }
     if (this.activeTurns.has(sessionId) || this.admittingSessions.has(sessionId)) {
       fail('SESSION_BUSY', 'The session already has an active turn.');
     }

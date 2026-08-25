@@ -61,6 +61,14 @@ function hostWithModel(model: MockLanguageModelV3): MobileAgentHost {
   return new MobileAgentHost(store, { agents, router: createAgentRuntimeRouter(registry) });
 }
 
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 async function waitFor(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 5000;
   while (!predicate()) {
@@ -310,6 +318,124 @@ describe('MobileAgentHost', () => {
     expect(remove).toHaveBeenCalledTimes(1);
     expect(finalize.mock.invocationCallOrder[0]).toBeLessThan(remove.mock.invocationCallOrder[0]);
     await expect(store.getSession(session.id)).resolves.toBeNull();
+  });
+
+  test('waits for an admitted submission before deleting its Session rows', async () => {
+    const admissionStarted = createDeferred();
+    const releaseAdmission = createDeferred();
+    const sequence: string[] = [];
+    const fake = new FakeRuntime({
+      descriptor: {
+        id: 'ai-sdk',
+        name: 'Scripted Runtime',
+        capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
+      },
+    }).scriptEvents([{ type: 'completed' }]);
+    const registry = new AgentRuntimeRegistry().register(fake);
+    const host = new MobileAgentHost(store, {
+      agents,
+      router: createAgentRuntimeRouter(registry),
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const getSession = store.getSession.bind(store);
+    jest.spyOn(store, 'getSession').mockImplementationOnce(async (sessionId) => {
+      const result = await getSession(sessionId);
+      sequence.push('admission.started');
+      admissionStarted.resolve();
+      await releaseAdmission.promise;
+      sequence.push('admission.resumed');
+      return result;
+    });
+    const removeSession = store.deleteSession.bind(store);
+    jest.spyOn(store, 'deleteSession').mockImplementation(async (sessionId) => {
+      sequence.push('delete.rows');
+      return removeSession(sessionId);
+    });
+
+    const submission = host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Admit before deleting.' }],
+    });
+    await admissionStarted.promise;
+    const deletion = host.deleteSession({ sessionId: session.id });
+    const deletedDuringAdmission = sequence.includes('delete.rows');
+
+    releaseAdmission.resolve();
+    const [submissionResult, deletionResult] = await Promise.allSettled([submission, deletion]);
+
+    expect(deletedDuringAdmission).toBe(false);
+    expect(sequence).toEqual(['admission.started', 'admission.resumed', 'delete.rows']);
+    expect(submissionResult.status).toBe('fulfilled');
+    expect(deletionResult.status).toBe('fulfilled');
+  });
+
+  test('rejects a new submission after an old turn drains while deletion is pending', async () => {
+    const firstExecutionStarted = createDeferred();
+    const deleteRowsStarted = createDeferred();
+    const releaseDeleteRows = createDeferred();
+    let executionCount = 0;
+    const fake = new FakeRuntime({
+      descriptor: {
+        id: 'ai-sdk',
+        name: 'Scripted Runtime',
+        capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
+      },
+    })
+      .script(async (controller) => {
+        executionCount += 1;
+        firstExecutionStarted.resolve();
+        await new Promise<void>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve(), { once: true });
+        });
+      })
+      .script((controller) => {
+        executionCount += 1;
+        controller.emit({ type: 'completed' });
+      });
+    const registry = new AgentRuntimeRegistry().register(fake);
+    const host = new MobileAgentHost(store, {
+      agents,
+      router: createAgentRuntimeRouter(registry),
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const removeSession = store.deleteSession.bind(store);
+    jest.spyOn(store, 'deleteSession').mockImplementationOnce(async (sessionId) => {
+      deleteRowsStarted.resolve();
+      await releaseDeleteRows.promise;
+      return removeSession(sessionId);
+    });
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Start the old turn.' }],
+    });
+    await firstExecutionStarted.promise;
+    const deletion = host.deleteSession({ sessionId: session.id });
+    await deleteRowsStarted.promise;
+
+    const resubmission = await host
+      .submitMessage({
+        sessionId: session.id,
+        parts: [{ type: 'text', text: 'Must not start during deletion.' }],
+      })
+      .then(
+        () => ({ status: 'accepted' as const }),
+        (error: unknown) => ({ status: 'rejected' as const, error }),
+      );
+    releaseDeleteRows.resolve();
+    await deletion;
+
+    expect(resubmission).toMatchObject({
+      status: 'rejected',
+      error: { view: { code: 'SESSION_BUSY' } },
+    });
+    expect(executionCount).toBe(1);
   });
 
   test('maps runtime approvals onto protocol approvals and correlates responses', async () => {

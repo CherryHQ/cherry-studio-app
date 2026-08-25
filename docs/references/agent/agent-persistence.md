@@ -101,8 +101,10 @@ with the Agent.
 
 **Delete semantics.** `agent` soft-deletes (`deletedAt`), so Sessions never orphan; hard cleanup of
 an Agent is refused while Sessions exist (`RESTRICT`). `agent_session` hard-deletes and cascades
-messages — matching the store port's `deleteSession` contract. Messages are never deleted
-individually in V1.
+messages — matching the store port's `deleteSession` contract. Before deleting rows, the Host
+installs a per-Session barrier, waits any already-admitted submission to install its turn state,
+then cancels and drains that turn. New submissions fail closed until deletion finishes. Messages
+are never deleted individually in V1.
 
 **Deferred tool configuration.** The current foundation schema has no tool configuration and must
 not be described as tool-capable persistence. The direction is settled: tool references and
