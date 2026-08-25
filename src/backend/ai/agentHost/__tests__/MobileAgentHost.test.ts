@@ -270,6 +270,48 @@ describe('MobileAgentHost', () => {
     expect(observation.snapshot.activeTurn).toBeNull();
   });
 
+  test('settles an active turn before deleting its Session rows', async () => {
+    let executionStarted: (() => void) | undefined;
+    const started = new Promise<void>((resolve) => {
+      executionStarted = resolve;
+    });
+    const fake = new FakeRuntime({
+      descriptor: {
+        id: 'ai-sdk',
+        name: 'Scripted Runtime',
+        capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
+      },
+    }).script(async (controller) => {
+      executionStarted?.();
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    const registry = new AgentRuntimeRegistry().register(fake);
+    const host = new MobileAgentHost(store, {
+      agents,
+      router: createAgentRuntimeRouter(registry),
+    });
+    const finalize = jest.spyOn(store, 'finalizeAssistantMessage');
+    const remove = jest.spyOn(store, 'deleteSession');
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Delete this Session.' }],
+    });
+    await started;
+    await host.deleteSession({ sessionId: session.id });
+
+    expect(finalize).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(finalize.mock.invocationCallOrder[0]).toBeLessThan(remove.mock.invocationCallOrder[0]);
+    await expect(store.getSession(session.id)).resolves.toBeNull();
+  });
+
   test('maps runtime approvals onto protocol approvals and correlates responses', async () => {
     const fake = new FakeRuntime({
       descriptor: {

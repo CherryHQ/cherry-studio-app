@@ -1,6 +1,8 @@
 import type { ApiImplementation } from '@/shared/data/api/types';
 
 import type { AgentService } from '../../services/AgentService';
+import type { AgentSessionMessageService } from '../../services/AgentSessionMessageService';
+import type { AgentSessionService } from '../../services/AgentSessionService';
 import type { AiUsageRecordService } from '../../services/AiUsageRecordService';
 import type { AssistantService } from '../../services/AssistantService';
 import type { ContentSearchService } from '../../services/ContentSearchService';
@@ -13,6 +15,8 @@ import type { PaintingService } from '../../services/PaintingService';
 import type { ProviderService } from '../../services/ProviderService';
 import type { TopicService } from '../../services/TopicService';
 import { createAgentHandlers } from './agents';
+import { createAgentSessionMessageHandlers } from './agentSessionMessages';
+import { createAgentSessionHandlers, type AgentSessionMutations } from './agentSessions';
 import { createAiUsageRecordHandlers } from './aiUsageRecords';
 import { createAssistantHandlers } from './assistants';
 import { createFileHandlers } from './files';
@@ -27,6 +31,9 @@ import { createTopicHandlers } from './topics';
 
 export type DataApiDependencies = {
   agents: AgentService;
+  agentSessionMessages: AgentSessionMessageService;
+  agentSessionMutations: AgentSessionMutations;
+  agentSessions: AgentSessionService;
   aiUsageRecords: AiUsageRecordService;
   assistants: AssistantService;
   contentSearch: ContentSearchService;
@@ -45,6 +52,8 @@ export type DataApiDependencies = {
 export function createDataApiHandlers(dependencies: DataApiDependencies): ApiImplementation {
   return {
     ...createAgentHandlers(dependencies.agents),
+    ...createAgentSessionHandlers(dependencies.agentSessions, dependencies.agentSessionMutations),
+    ...createAgentSessionMessageHandlers(dependencies.agentSessionMessages),
     ...createAiUsageRecordHandlers(dependencies.aiUsageRecords),
     ...createAssistantHandlers(dependencies.assistants),
     ...createFileHandlers(dependencies.files),

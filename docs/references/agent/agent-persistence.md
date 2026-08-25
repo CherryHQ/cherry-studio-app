@@ -1,7 +1,8 @@
 # Agent Persistence
 
-Status: **schema, durable store, and Agent CRUD active in production** (`serviceRegistry` binds
-`SqliteAgentSessionStore`; step 5 follow-ups remain). Version 1 is local-only.
+Status: **schema, durable store, Agent CRUD, and static Session reads active in production**
+(`serviceRegistry` binds `SqliteAgentSessionStore`; step 6 follow-ups remain). Version 1 is
+local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
@@ -19,9 +20,10 @@ record for mobile-originated Agent Sessions only.
   not change.
 - A `SqliteAgentSessionStore` adapter that is the production `AgentSessionStore` binding;
   `InMemoryAgentSessionStore` remains as the conformance-suite reference adapter.
-- Agent CRUD through the Data API and an Agent-table-backed `AgentDefinitionSource` used by the
-  production Host. The `agent` table intentionally starts empty; no assistant data is migrated or
-  copied.
+- Agent CRUD plus cursor-paginated Session and transcript reads through the Data API, and an
+  Agent-table-backed `AgentDefinitionSource` used by the production Host. Session renames and
+  deletes delegate to the Host so an active turn is cancelled and drained before rows disappear.
+  The `agent` table intentionally starts empty; no assistant data is migrated or copied.
 
 Out of scope: Agent UI, formal Pi Agent Runtime activation, chat-table
 (`assistant`/`topic`/`message`) migration or removal, branching columns, background turns, tool
@@ -36,8 +38,8 @@ surfaces:
 
 - Session observation currently resolves the live Agent definition first. Soft-deleting an Agent
   or clearing its model can therefore make its existing Sessions unavailable through the public
-  Host API even though their rows remain durable. Historical Session reads need a path that does
-  not require an executable Agent definition.
+  Host API even though their rows remain durable. The Data API's static Session and transcript
+  reads remain available without resolving an executable Agent definition.
 - Agent inference settings are persisted by CRUD, but the production Host currently sends empty
   Runtime options. `temperature`, `maxOutputTokens`, and `reasoningEffort` are stored configuration,
   not effective execution settings, until the definition and Runtime-option mapping is connected.
@@ -233,7 +235,10 @@ storage boundary moves.
    `AgentDefinitionSource` in the production Host (done). The table starts empty and assistant data
    is not copied; assistants remain authoritative only for the current Chat surface until its
    replacement lands.
-5. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
+5. **Session reads.** Expose recency-ordered Session lists and cursor-paginated linear transcript
+   history through the Data API. Keep these historical reads independent of executable Agent
+   lookup, and route Session rename/delete through the Host lifecycle boundary (done).
+6. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
    (generalizing `userAvatarStorage`); formal Pi Runtime activation and tool configuration; fork
    columns; the eventual chat-table decision.
 

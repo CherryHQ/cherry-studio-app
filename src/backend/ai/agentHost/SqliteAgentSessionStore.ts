@@ -9,16 +9,13 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type { DbService, Database } from '@/backend/data/db/DbService';
-import {
-  agentSessionMessageTable,
-  agentSessionTable,
-  type AgentSessionMessageRow,
-  type AgentSessionRow,
-} from '@/backend/data/db/schemas';
+import { agentSessionMessageTable, agentSessionTable } from '@/backend/data/db/schemas';
 import { createOrderedUuid } from '@/backend/data/db/schemas/_columnHelpers';
 import {
-  AgentMessageViewSchema,
-  AgentSessionViewSchema,
+  toAgentMessageView,
+  toAgentSessionView,
+} from '@/backend/data/services/utils/agentSessionRows';
+import {
   type AgentErrorView,
   type AgentMessagePart,
   type AgentMessageView,
@@ -32,44 +29,6 @@ import type {
 } from './AgentSessionStore';
 
 const UNSETTLED_MESSAGE_STATUSES = ['pending', 'streaming'] as const;
-
-function toIso(epochMillis: number): string {
-  return new Date(epochMillis).toISOString();
-}
-
-/**
- * Rows leave the store as validated protocol views (invariant 9): epoch millis
- * become ISO strings and `data` re-validates against the protocol schema, so a
- * drifted or hand-edited row fails loudly instead of leaking a bad shape.
- */
-function toSessionView(row: AgentSessionRow): AgentSessionView {
-  return AgentSessionViewSchema.parse({
-    id: row.id,
-    agentId: row.agentId,
-    executionTarget: row.executionTarget,
-    title: row.title,
-    titleIsManual: row.titleIsManual,
-    createdAt: toIso(row.createdAt),
-    updatedAt: toIso(row.updatedAt),
-  } satisfies AgentSessionView);
-}
-
-function toMessageView(row: AgentSessionMessageRow): AgentMessageView {
-  if (row.data.version !== 1) {
-    throw new Error(`Unknown agent message data version: ${String(row.data.version)}`);
-  }
-  return AgentMessageViewSchema.parse({
-    id: row.id,
-    sessionId: row.sessionId,
-    turnId: row.turnId,
-    role: row.role,
-    status: row.status,
-    parts: row.data.parts,
-    usage: row.usage ?? null,
-    createdAt: toIso(row.createdAt),
-    updatedAt: toIso(row.updatedAt),
-  });
-}
 
 /**
  * Durable SQLite adapter for {@link AgentSessionStore}
@@ -99,7 +58,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
           titleIsManual: input.title !== undefined,
         })
         .returning();
-      return toSessionView(row);
+      return toAgentSessionView(row);
     });
   }
 
@@ -110,7 +69,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .from(agentSessionTable)
       .where(eq(agentSessionTable.id, sessionId))
       .limit(1);
-    return row ? toSessionView(row) : null;
+    return row ? toAgentSessionView(row) : null;
   }
 
   async renameSession(sessionId: string, title: string): Promise<AgentSessionView | null> {
@@ -121,7 +80,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .set({ title, titleIsManual: true })
         .where(eq(agentSessionTable.id, sessionId))
         .returning();
-      return row ? toSessionView(row) : null;
+      return row ? toAgentSessionView(row) : null;
     });
   }
 
@@ -173,8 +132,8 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .returning();
       return {
         turnId,
-        userMessage: toMessageView(userRow),
-        assistantMessage: toMessageView(assistantRow),
+        userMessage: toAgentMessageView(userRow),
+        assistantMessage: toAgentMessageView(assistantRow),
       };
     });
   }
@@ -186,7 +145,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
       .from(agentSessionMessageTable)
       .where(eq(agentSessionMessageTable.sessionId, sessionId))
       .orderBy(agentSessionMessageTable.createdAt, agentSessionMessageTable.id);
-    return rows.map(toMessageView);
+    return rows.map(toAgentMessageView);
   }
 
   async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
@@ -208,7 +167,7 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
         .update(agentSessionTable)
         .set({ lastActivityAt: Date.now() })
         .where(eq(agentSessionTable.id, row.sessionId));
-      return toMessageView(row);
+      return toAgentMessageView(row);
     });
   }
 

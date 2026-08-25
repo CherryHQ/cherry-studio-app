@@ -130,6 +130,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
   private readonly activeTurns = new Map<string, ActiveTurnState>();
   private readonly admittingSessions = new Set<string>();
+  private readonly runningTurnsBySession = new Map<string, Promise<void>>();
   private readonly runtimeSessions = new Map<
     string,
     { runtimeId: string; session: AgentRuntimeSession }
@@ -183,6 +184,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     this.runtimeSessions.clear();
     await Promise.allSettled([...this.runningTurns]);
+    this.runningTurnsBySession.clear();
     this.listeners.clear();
   }
 
@@ -222,6 +224,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const active = this.activeTurns.get(parsed.sessionId);
     if (active) {
       await this.cancelTurn({ sessionId: parsed.sessionId, turnId: active.turn.id });
+    }
+    const runningTurn = this.runningTurnsBySession.get(parsed.sessionId);
+    if (runningTurn) {
+      await runningTurn;
     }
     const cached = this.runtimeSessions.get(parsed.sessionId);
     if (cached) {
@@ -309,7 +315,13 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         parsed.parts,
       );
       this.runningTurns.add(run);
-      void run.finally(() => this.runningTurns.delete(run));
+      this.runningTurnsBySession.set(sessionId, run);
+      void run.finally(() => {
+        this.runningTurns.delete(run);
+        if (this.runningTurnsBySession.get(sessionId) === run) {
+          this.runningTurnsBySession.delete(sessionId);
+        }
+      });
 
       return {
         turnId: reserved.turnId,
