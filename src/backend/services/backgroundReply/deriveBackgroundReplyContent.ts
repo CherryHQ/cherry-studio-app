@@ -2,9 +2,10 @@ import type {
   BackgroundReplyContent,
   BackgroundReplyPhase,
 } from '@/shared/backgroundActivity/chatReply';
-import type { CherryMessagePart, CherryUIMessage } from '@/shared/data/types/message';
+import type { AgentMessagePart } from '@/shared/contracts/agent';
+import type { CherryMessagePart } from '@/shared/data/types/message';
 
-import type { BackgroundReplyOutcome } from './backgroundReplyTypes';
+import type { BackgroundReplyMessage, BackgroundReplyOutcome } from './backgroundReplyTypes';
 
 const PREVIEW_CHARACTER_LIMIT = 160;
 const PREVIEW_MIN_COMPLETE_SUFFIX_LENGTH = 24;
@@ -31,16 +32,22 @@ const BUILT_IN_TOOL_TITLE_KEYS: Record<string, string> = {
   reminder_update_item: 'chat.builtinTool.reminders.update',
 };
 
-type ToolPart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
+type BackgroundReplyPart = AgentMessagePart | CherryMessagePart;
+type LegacyToolPart = Extract<CherryMessagePart, { type: 'dynamic-tool' | `tool-${string}` }>;
+type AgentToolPart = Extract<AgentMessagePart, { type: 'tool' }>;
+type ToolPart = AgentToolPart | LegacyToolPart;
 export type BackgroundReplyTranslate = (key: string) => string;
 
 export function deriveBackgroundReplyContent(
-  message: CherryUIMessage | undefined,
+  message: BackgroundReplyMessage | undefined,
   t: BackgroundReplyTranslate,
 ): BackgroundReplyContent {
   const parts = message?.parts ?? [];
   const preview = extractReplyPreview(parts);
-  const approval = findLastToolPart(parts, (part) => part.state === 'approval-requested');
+  const approval = findLastToolPart(
+    parts,
+    (part) => part.state === 'approval-requested' || part.state === 'awaiting-approval',
+  );
 
   if (approval) {
     return createContent('awaiting-approval', t('chat.backgroundReply.awaitingApproval'), preview);
@@ -71,9 +78,9 @@ export function getTerminalBackgroundReplyContent(
   return createContent(outcome, t(key), outcome === 'completed' ? preview : undefined);
 }
 
-export function extractReplyPreview(parts: readonly CherryMessagePart[]): string | undefined {
+export function extractReplyPreview(parts: readonly BackgroundReplyPart[]): string | undefined {
   const text = parts
-    .filter((part): part is Extract<CherryMessagePart, { type: 'text' }> => part.type === 'text')
+    .filter((part): part is Extract<BackgroundReplyPart, { type: 'text' }> => part.type === 'text')
     .map((part) => part.text)
     .join('\n');
   const plainText = stripMarkdown(text);
@@ -106,7 +113,7 @@ function createContent(
 }
 
 function findLastToolPart(
-  parts: readonly CherryMessagePart[],
+  parts: readonly BackgroundReplyPart[],
   predicate: (part: ToolPart) => boolean,
 ): ToolPart | undefined {
   return parts.findLast((part): part is ToolPart => isToolPart(part) && predicate(part));
@@ -123,19 +130,21 @@ function getToolActivityLabel(part: ToolPart, t: BackgroundReplyTranslate): stri
 }
 
 function getToolName(part: ToolPart): string {
-  return part.type === 'dynamic-tool' ? part.toolName : part.type.slice('tool-'.length);
+  if (part.type === 'dynamic-tool' || part.type === 'tool') return part.toolName;
+  return part.type.slice('tool-'.length);
 }
 
 function isActiveToolPart(part: ToolPart): boolean {
   return (
     part.state === 'input-streaming' ||
     part.state === 'input-available' ||
+    part.state === 'running' ||
     (part.state === 'approval-responded' && part.approval?.approved === true)
   );
 }
 
-function isToolPart(part: CherryMessagePart): part is ToolPart {
-  return part.type === 'dynamic-tool' || part.type.startsWith('tool-');
+function isToolPart(part: BackgroundReplyPart): part is ToolPart {
+  return part.type === 'tool' || part.type === 'dynamic-tool' || part.type.startsWith('tool-');
 }
 
 function stripMarkdown(value: string): string {

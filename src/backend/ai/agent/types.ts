@@ -15,6 +15,8 @@
  * fields without updating the spec first.
  */
 
+import type { AiUsageCaptureContext } from '@cherrystudio/ai-runtime/utils';
+
 /** A JSON-safe value. Tool schemas, tool input/output, and history payloads use it. */
 export type RuntimeJsonValue =
   | null
@@ -155,6 +157,19 @@ export type RuntimeUsage = {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
+  reasoningTokens?: number;
+  noCacheTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+};
+
+/** Provider-resolution snapshot captured before execution starts. */
+export type RuntimeUsageContext = Omit<AiUsageCaptureContext, 'source' | 'messageRef'>;
+
+export type RuntimeUsageReport = {
+  usage: RuntimeUsage;
+  context: RuntimeUsageContext;
+  completedAt: number;
 };
 
 export type RuntimeError = {
@@ -169,7 +184,7 @@ export type RuntimeEvent =
   | { type: 'part.replace'; part: RuntimeOutputPart }
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
-  | { type: 'usage'; usage: RuntimeUsage }
+  | ({ type: 'usage' } & RuntimeUsageReport)
   | { type: 'completed' }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' };

@@ -1,3 +1,4 @@
+import type { AgentMessagePart } from '@/shared/contracts/agent';
 import type { CherryMessagePart, CherryUIMessage } from '@/shared/data/types/message';
 
 import {
@@ -86,6 +87,27 @@ describe('deriveBackgroundReplyContent', () => {
       phase: 'awaiting-approval',
       preview: 'Partial answer',
     });
+  });
+
+  test('derives tool and approval phases from Agent message parts', () => {
+    const tool = {
+      id: 'tool-1',
+      input: {},
+      state: 'running',
+      toolCallId: 'call-1',
+      toolName: 'web_search',
+      type: 'tool',
+    } as const satisfies AgentMessagePart;
+    expect(deriveBackgroundReplyContent({ parts: [tool] }, t)).toEqual({
+      detail: 'Searching the web',
+      phase: 'using-tool',
+    });
+    expect(
+      deriveBackgroundReplyContent(
+        { parts: [{ ...tool, approvalId: 'approval-1', state: 'awaiting-approval' }] },
+        t,
+      ),
+    ).toEqual({ detail: 'Awaiting approval', phase: 'awaiting-approval' });
   });
 
   test('truncates from the end without splitting unicode characters', () => {

@@ -4,16 +4,37 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
-import { FakeRuntime, type RuntimeExecutionRequest } from '@/backend/ai/agent';
+import {
+  FakeRuntime,
+  type RuntimeExecutionRequest,
+  type RuntimeUsageContext,
+} from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
-import { AgentEventSchema, AgentProtocolError, type AgentEvent } from '@/shared/contracts/agent';
+import {
+  AgentEventSchema,
+  AgentProtocolError,
+  type AgentEvent,
+  type AgentSessionView,
+} from '@/shared/contracts/agent';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
+import type { AgentSessionNaming } from '../AgentSessionNaming';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { MobileAgentHost } from '../MobileAgentHost';
 
 const AGENT_ID = 'agent-under-test';
+
+const USAGE_CONTEXT: RuntimeUsageContext = {
+  credentialReceipt: { attribution: 'unknown' },
+  modelId: 'mock-model',
+  modelName: 'Mock Model',
+  pricingSnapshot: null,
+  providerId: 'mock-provider',
+  providerName: 'Mock Provider',
+  reportedCostCurrency: null,
+  trustProviderReportedCost: false,
+};
 
 const agents: AgentDefinitionSource = {
   async getAgent(agentId) {
@@ -38,17 +59,45 @@ const FAKE_DESCRIPTOR = {
 
 const unusedAiService = {} as AiService;
 const unusedPreferenceService = {} as PreferenceService;
-const noOpNaming = {
+type NamingOverride = Pick<
+  AgentSessionNaming,
+  'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
+>;
+
+const noOpNaming: NamingOverride = {
   drain: async () => undefined,
   maybeRenameFromConversationSummary: async () => null,
   maybeRenameFromFirstUserMessage: async () => null,
 };
+const backgroundReplyTurn = {
+  awaitApproval: jest.fn(),
+  finish: jest.fn(),
+  update: jest.fn(),
+};
+const backgroundReply = {
+  clearSession: jest.fn(),
+  clearTopic: jest.fn(),
+  startTurn: jest.fn(() => backgroundReplyTurn),
+  updateSessionTitle: jest.fn(),
+};
+const usage = {
+  drain: jest.fn(async () => undefined),
+  record: jest.fn(),
+};
 
-function createHost(runtime: FakeRuntime): MobileAgentHost {
-  return new MobileAgentHost(store, unusedAiService, unusedPreferenceService, runtime, {
-    agents,
-    naming: noOpNaming,
-  });
+function createHost(runtime: FakeRuntime, naming: NamingOverride = noOpNaming): MobileAgentHost {
+  return new MobileAgentHost(
+    store,
+    unusedAiService,
+    unusedPreferenceService,
+    backgroundReply,
+    runtime,
+    {
+      agents,
+      naming,
+      usage,
+    },
+  );
 }
 
 function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
@@ -70,6 +119,8 @@ function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = [])
       });
       controller.emit({
         type: 'usage',
+        completedAt: 1_500,
+        context: USAGE_CONTEXT,
         usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
       });
       controller.emit({ type: 'completed' });
@@ -117,6 +168,7 @@ let store: InMemoryAgentSessionStore;
 
 describe('MobileAgentHost', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
   });
 
@@ -169,6 +221,28 @@ describe('MobileAgentHost', () => {
       { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
     ]);
     expect(finalized.message.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      agentId: AGENT_ID,
+      agentName: 'Test Agent',
+      sessionId: session.id,
+      sessionTitle: '',
+    });
+    expect(backgroundReplyTurn.update).toHaveBeenCalled();
+    expect(backgroundReplyTurn.finish).toHaveBeenCalledWith('completed', {
+      waitFor: expect.any(Promise),
+    });
+    expect(usage.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: expect.objectContaining({ id: AGENT_ID }),
+        assistantMessageId: submitted.assistantMessageId,
+        report: {
+          completedAt: 1_500,
+          context: USAGE_CONTEXT,
+          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+        },
+        turnId: submitted.turnId,
+      }),
+    );
 
     const terminal = terminalTurnEvent(events);
     expect(terminal?.turn.status).toBe('completed');
@@ -261,6 +335,93 @@ describe('MobileAgentHost', () => {
     // The session is idle again.
     const observation = await host.observeSession(session.id, () => {});
     expect(observation.snapshot.activeTurn).toBeNull();
+  });
+
+  test('updates an active background reply when its Session is renamed', async () => {
+    const started = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    const host = createHost(runtime);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const submitted = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await started.promise;
+
+    await host.renameSession({ sessionId: session.id, title: 'Renamed Session' });
+
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Renamed Session');
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
+  });
+
+  test('applies summary naming after the turn leaves active Host state', async () => {
+    let resolveSummary!: (session: AgentSessionView | null) => void;
+    const summaryName = new Promise<AgentSessionView | null>((resolve) => {
+      resolveSummary = resolve;
+    });
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed' },
+    ]);
+    const host = createHost(runtime, {
+      drain: async () => undefined,
+      maybeRenameFromConversationSummary: () => summaryName,
+      maybeRenameFromFirstUserMessage: async () => null,
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
+    const renamed = await store.autoRenameSession(session.id, '', 'Summary title');
+    resolveSummary(renamed);
+    await waitFor(
+      () => backgroundReply.updateSessionTitle.mock.calls.length > 0,
+      'the background title to update',
+    );
+
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Summary title');
+  });
+
+  test('applies a manual rename while terminal background content awaits naming', async () => {
+    let resolveSummary!: (session: AgentSessionView | null) => void;
+    const summaryName = new Promise<AgentSessionView | null>((resolve) => {
+      resolveSummary = resolve;
+    });
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed' },
+    ]);
+    const host = createHost(runtime, {
+      drain: async () => undefined,
+      maybeRenameFromConversationSummary: () => summaryName,
+      maybeRenameFromFirstUserMessage: async () => null,
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
+
+    await host.renameSession({ sessionId: session.id, title: 'Manual title' });
+
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Manual title');
+    resolveSummary(null);
   });
 
   test('reconciliation marks preloaded unfinished messages interrupted', async () => {

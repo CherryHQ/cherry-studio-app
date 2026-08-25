@@ -6,6 +6,7 @@ import type {
   AssistantMessage,
   Message as PiMessage,
   ToolResultMessage,
+  Usage as PiUsage,
 } from '@earendil-works/pi-ai';
 
 import {
@@ -101,6 +102,20 @@ function createResolution(): PiModelResolution {
     },
     supportsTools: true,
     timeoutMs: 60_000,
+    usageContext: {
+      credentialReceipt: {
+        attribution: 'explicit',
+        id: 'credential-1',
+        masked: 'sk-…test',
+      },
+      modelId: 'mock-model',
+      modelName: 'Mock Model',
+      pricingSnapshot: null,
+      providerId: 'mock-provider',
+      providerName: 'Mock Provider',
+      reportedCostCurrency: null,
+      trustProviderReportedCost: false,
+    },
   };
 }
 
@@ -123,14 +138,21 @@ function arrange(runtime: AgentRuntime, program: TestAgentProgram): RuntimeHolde
   return holder;
 }
 
-function usage(input: number, output: number) {
+function usage(
+  input: number,
+  output: number,
+  details: { cacheRead?: number; cacheWrite?: number; reasoning?: number } = {},
+): PiUsage {
+  const cacheRead = details.cacheRead ?? 0;
+  const cacheWrite = details.cacheWrite ?? 0;
   return {
-    cacheRead: 0,
-    cacheWrite: 0,
+    cacheRead,
+    cacheWrite,
     cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
     input,
     output,
-    totalTokens: input + output,
+    ...(details.reasoning !== undefined ? { reasoning: details.reasoning } : {}),
+    totalTokens: input + cacheRead + cacheWrite + output,
   };
 }
 
@@ -378,7 +400,7 @@ describe('PiRuntime mapping', () => {
         message: assistantMessage({
           content: [],
           stopReason: 'toolUse',
-          usage: usage(2, 1),
+          usage: usage(2, 1, { cacheRead: 3, cacheWrite: 1, reasoning: 1 }),
         }),
         toolResults: [],
       });
@@ -423,7 +445,17 @@ describe('PiRuntime mapping', () => {
     ]);
     expect(events.at(-2)).toEqual({
       type: 'usage',
-      usage: { inputTokens: 5, outputTokens: 3, totalTokens: 8 },
+      completedAt: expect.any(Number),
+      context: holder.resolution.usageContext,
+      usage: {
+        cacheReadTokens: 3,
+        cacheWriteTokens: 1,
+        inputTokens: 9,
+        noCacheTokens: 5,
+        outputTokens: 3,
+        reasoningTokens: 1,
+        totalTokens: 12,
+      },
     });
     expect(holder.lastOptions?.initialState).toMatchObject({
       messages: [

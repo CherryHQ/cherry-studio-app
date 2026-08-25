@@ -221,7 +221,12 @@ type RuntimeEvent =
   | { type: 'part.replace'; part: RuntimeOutputPart }
   | { type: 'approval.requested'; approval: RuntimeApproval }
   | { type: 'approval.resolved'; approval: RuntimeApproval }
-  | { type: 'usage'; usage: RuntimeUsage }
+  | {
+      type: 'usage'
+      usage: RuntimeUsage
+      context: RuntimeUsageContext
+      completedAt: number
+    }
   | { type: 'completed' }
   | { type: 'failed'; error: RuntimeError }
   | { type: 'cancelled' }
@@ -271,7 +276,13 @@ type RuntimeUsage = {
   inputTokens?: number
   outputTokens?: number
   totalTokens?: number
+  reasoningTokens?: number
+  noCacheTokens?: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
 }
+
+type RuntimeUsageContext = Omit<AiUsageCaptureContext, 'source' | 'messageRef'>
 
 type RuntimeError = {
   code: string
@@ -284,8 +295,14 @@ Every execution emits exactly one terminal event: `completed`, `failed`, or `can
 may follow it. Runtime-native errors are normalized and must not expose credentials or stack traces.
 
 `usage` values are cumulative for the execution; the last report before the terminal event is
-authoritative. A Runtime that cannot report usage emits no `usage` event, and the assistant
-message's protocol `usage` stays `null`.
+authoritative. Detailed cache and reasoning counts remain available for pricing even though the
+Agent Protocol message projects only the input, output, and total counts. `context` is the immutable
+provider, served-model, pricing, and credential-attribution snapshot captured when the provider is
+resolved, before execution starts. `completedAt` is recorded at the Runtime provider boundary. The
+Host adds the Agent source and Session message reference without re-reading mutable provider/model
+configuration. It does not synthesize provider timing from the broader Host turn lifetime. A
+Runtime that cannot report usage emits no `usage` event, and the assistant message's protocol
+`usage` stays `null`.
 
 ## Host execution flow
 
