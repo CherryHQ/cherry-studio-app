@@ -45,8 +45,8 @@ describe('ToolResolver', () => {
     expect(result.hasMcpTools).toBe(true);
   });
 
-  test('fails closed when a preference lookup fails', async () => {
-    const resolver = createResolver({ failingKey: 'permissions.location_read' });
+  test('fails closed when a system permission lookup fails', async () => {
+    const resolver = createResolver({ failingScope: 'location.read' });
     const result = await resolver.resolveForRequest({
       assistant: assistant(),
     });
@@ -63,39 +63,34 @@ describe('ToolResolver', () => {
     expect(result.hasMcpTools).toBe(false);
   });
 
-  test('does not query native permission status for disabled scopes', async () => {
+  test('queries every native permission scope once', async () => {
     const getStatus = jest.fn(async () => 'granted');
-    const resolver = createResolver({
-      getStatus,
-      neverKey: 'permissions.health_read',
-    });
+    const resolver = createResolver({ getStatus });
 
     await resolver.resolveForRequest({
       assistant: assistant(),
     });
 
-    expect(getStatus).not.toHaveBeenCalledWith('permissions.health_read');
+    expect(getStatus).toHaveBeenCalledTimes(6);
+    expect(getStatus).toHaveBeenCalledWith('health.read');
   });
 });
 
 function createResolver(options: {
-  failingKey?: string;
+  failingScope?: string;
   getStatus?: jest.Mock;
   mcpEntries?: ToolEntry[];
-  neverKey?: string;
 }) {
   return new ToolResolver({
     devicePermissions: {
-      getStatusForPreference: options.getStatus ?? jest.fn(async () => 'granted'),
+      getStatusForScope:
+        options.getStatus ??
+        jest.fn(async (scope: string) => {
+          if (scope === options.failingScope) throw new Error('native unavailable');
+          return 'granted';
+        }),
     },
     mcpRuntime: { getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []) },
-    preference: {
-      get: jest.fn(async (key: string) => {
-        if (key === options.failingKey) throw new Error('db unavailable');
-        if (key === options.neverKey) return 'never';
-        return 'always';
-      }),
-    },
     webSearch: { searchKeywords: jest.fn() },
   } as never);
 }

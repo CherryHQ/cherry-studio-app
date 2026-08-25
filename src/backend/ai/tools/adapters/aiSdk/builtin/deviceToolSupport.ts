@@ -3,19 +3,17 @@ import { getRequestContext } from '@cherrystudio/ai-runtime/tools';
 import type { JSONValue, Tool, ToolExecutionOptions } from 'ai';
 import * as z from 'zod';
 
-import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { DevicePermissions } from '@/backend/services/permissions';
 import { isAbortError } from '@/backend/services/webSearch/utils/errors';
+import type { DevicePermissionScope } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 import type { ToolEntry } from '../../../types';
 
 const logger = loggerService.withContext('DeviceTool');
 
 export type DeviceToolDependencies = {
-  devicePermissions: Pick<DevicePermissions, 'getStatusForPreference'>;
-  preference: Pick<PreferenceService, 'get'>;
+  devicePermissions: Pick<DevicePermissions, 'getStatusForScope'>;
 };
 
 export const deviceToolErrorSchema = z
@@ -28,8 +26,9 @@ export function createDeviceToolEntry(input: {
   description: string;
   name: string;
   namespace: string;
+  permissionScopes: readonly DevicePermissionScope[];
   platforms?: readonly string[];
-  preferenceKeys: readonly PermissionPreferenceKey[];
+  requiresApproval?: boolean;
   tool: Tool;
 }): ToolEntry {
   return {
@@ -40,10 +39,9 @@ export function createDeviceToolEntry(input: {
     tool: guardDeviceTool(input),
     applies: (scope) =>
       (input.platforms?.includes(scope.platform) ?? true) &&
-      input.preferenceKeys.every((key) => {
-        const access = scope.deviceAccess[key];
-        return access.mode !== 'never' && access.status === 'granted';
-      }),
+      input.permissionScopes.every(
+        (permissionScope) => scope.deviceAccess[permissionScope] === 'granted',
+      ),
   };
 }
 
@@ -83,7 +81,8 @@ export function deviceToolModelOutput(output: unknown): ToolResultOutput {
 function guardDeviceTool(input: {
   deps: DeviceToolDependencies;
   name: string;
-  preferenceKeys: readonly PermissionPreferenceKey[];
+  permissionScopes: readonly DevicePermissionScope[];
+  requiresApproval?: boolean;
   tool: Tool;
 }): Tool {
   if (!input.tool.execute) return input.tool;
@@ -91,27 +90,12 @@ function guardDeviceTool(input: {
   return {
     ...input.tool,
     metadata: { cherry: { tool: { name: input.name, type: 'builtin' } } },
-    needsApproval: async () => {
-      try {
-        const modes = await Promise.all(
-          input.preferenceKeys.map((key) => input.deps.preference.get(key)),
-        );
-        if (modes.some((mode) => mode === 'never')) return false;
-        return modes.some((mode) => mode === 'ask');
-      } catch (error) {
-        logger.warn('Device tool approval policy lookup failed', { error, toolName: input.name });
-        return true;
-      }
-    },
+    needsApproval: input.requiresApproval === true,
     execute: async (...args: Parameters<typeof execute>) => {
-      const modes = await Promise.all(
-        input.preferenceKeys.map((key) => input.deps.preference.get(key)),
-      );
-      if (modes.some((mode) => mode === 'never')) {
-        throw new Error(`Device tool is disabled: ${input.name}`);
-      }
       const statuses = await Promise.all(
-        input.preferenceKeys.map((key) => input.deps.devicePermissions.getStatusForPreference(key)),
+        input.permissionScopes.map((permissionScope) =>
+          input.deps.devicePermissions.getStatusForScope(permissionScope),
+        ),
       );
       if (statuses.some((status) => status !== 'granted')) {
         throw new Error(`Device tool requires system permission: ${input.name}`);

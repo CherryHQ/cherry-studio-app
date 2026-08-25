@@ -1,7 +1,7 @@
 import * as z from 'zod';
 
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import { type Topic, TopicNameSchema, TopicSchema } from '@/shared/data/types/topic';
+import { type Topic, TopicSchema } from '@/shared/data/types/topic';
 
 import type { OrderEndpoints } from './endpointHelpers';
 
@@ -32,21 +32,6 @@ export const TopicListItemSchema = TopicSchema.extend({
   latestMessageText: z.string(),
 });
 export type TopicListItem = z.infer<typeof TopicListItemSchema>;
-
-export const SetActiveNodeSchema = z.strictObject({
-  nodeId: z.string().min(1),
-});
-export type SetActiveNodeDto = z.infer<typeof SetActiveNodeSchema>;
-
-export const DuplicateTopicSchema = z.strictObject({
-  name: z.string().trim().pipe(TopicNameSchema).optional(),
-  nodeId: z.string().min(1),
-});
-export type DuplicateTopicDto = z.infer<typeof DuplicateTopicSchema>;
-
-export interface ActiveNodeResponse {
-  activeNodeId: string;
-}
 
 export interface DeleteTopicsResult {
   deletedCount: number;
@@ -116,20 +101,6 @@ export type TopicSchemas = {
     };
     PATCH: {
       body: UpdateTopicDto;
-      params: { id: string };
-      response: Topic;
-    };
-  };
-  '/topics/:id/active-node': {
-    PUT: {
-      body: SetActiveNodeDto;
-      params: { id: string };
-      response: ActiveNodeResponse;
-    };
-  };
-  '/topics/:id/duplicate': {
-    POST: {
-      body: DuplicateTopicDto;
       params: { id: string };
       response: Topic;
     };

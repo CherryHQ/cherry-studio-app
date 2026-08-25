@@ -500,61 +500,6 @@ describe('MessageService', () => {
     expect(topicService.setActiveNodeTx).not.toHaveBeenCalled();
   });
 
-  test.each([
-    ['user', 'success'],
-    ['assistant', 'pending'],
-  ] as const)('createSibling inserts a %s sibling with status %s', async (role, expectedStatus) => {
-    const topicId = '750e8400-e29b-41d4-a716-446655440000';
-    const sourceRow = {
-      createdAt: 1747267200000,
-      data: { parts: [] },
-      deletedAt: null,
-      ftsRowid: 1,
-      id: 'source-1',
-      modelId: null,
-      messageSnapshot: null,
-      parentId: 'parent-1',
-      role,
-      searchableText: '',
-      siblingsGroupId: 42,
-      stats: null,
-      status: 'success',
-      topicId,
-      updatedAt: 1747267200000,
-    };
-    const insertedValues: Record<string, unknown>[] = [];
-    const tx = {
-      delete: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
-      insert: jest.fn(() => ({
-        values: jest.fn((values: Record<string, unknown>) => {
-          insertedValues.push(values);
-          return { returning: jest.fn(async () => [{ ...sourceRow, ...values, id: 'sibling-1' }]) };
-        }),
-      })),
-      select: jest.fn(() => ({
-        from: jest.fn(() => ({
-          where: jest.fn(() => ({ limit: jest.fn(async () => [sourceRow]) })),
-        })),
-      })),
-    };
-    const dbService = {
-      withWriteTx: jest.fn(async (callback: (transaction: typeof tx) => Promise<unknown>) =>
-        callback(tx),
-      ),
-    } as unknown as DbService;
-    await installTestHost({ DbService: dbService });
-    const topicService = { setActiveNodeTx: jest.fn() };
-    registerDataService('TopicService', topicService as never);
-
-    const sibling = await messageService.createSibling('source-1', { parts: [] });
-
-    expect(insertedValues).toEqual([expect.objectContaining({ status: expectedStatus })]);
-    expect(sibling.status).toBe(expectedStatus);
-    expect(topicService.setActiveNodeTx).toHaveBeenCalledWith(tx, topicId, 'sibling-1', {
-      assumeValid: true,
-    });
-  });
-
   test('writes the ids the caller allocated for the reserved turn', async () => {
     const userMessageId = '00000000-0000-7000-8000-0000000000a1';
     const placeholderId = '00000000-0000-7000-8000-0000000000a2';

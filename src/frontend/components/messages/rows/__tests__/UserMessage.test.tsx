@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -6,23 +6,6 @@ import type { CherryMessagePart } from '@/shared/data/types/message';
 
 import type { MessageListItem } from '../../types';
 import { UserMessage } from '../UserMessage';
-
-jest.mock('@cherrystudio/ui/components', () => {
-  const { createElement } = jest.requireActual('react');
-
-  const component =
-    (type: string) =>
-    ({ children, ...props }: { children?: ReactNode }) =>
-      createElement(type, props, children);
-
-  return {
-    Menu: component('Menu'),
-  };
-});
-
-jest.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
 
 jest.mock('react-native-reanimated', () => {
   const { View: MockView } = jest.requireActual('react-native');
@@ -89,16 +72,12 @@ describe('UserMessage', () => {
     ]);
   });
 
-  test('keeps attachment-only messages in the menu without an empty bubble', () => {
+  test('keeps attachment-only messages without an empty bubble', () => {
     const message = createMessage([
       managedFilePart('photo.png', '00000000-0000-7000-8000-000000000003'),
     ]);
     const renderer = render(<UserMessage message={message} />);
 
-    expect(renderer.root.findByType('Menu').props.trigger).toBe('longPress');
-    expect(
-      renderer.root.findByType('Menu').props.items.map((item: { id: string }) => item.id),
-    ).toEqual(['copy-message', 'edit-message']);
     expect(renderer.root.findAllByType('FilePart')).toHaveLength(1);
     expect(renderer.root.findAllByType('MessageParts')).toHaveLength(0);
     expect(

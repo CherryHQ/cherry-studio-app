@@ -43,15 +43,9 @@ import type {
 } from '@/backend/services/backgroundReply';
 import { createMessageParts, discardInternalEntries } from '@/backend/services/file/fileStorage';
 import type {
-  ChatCancelExecutionInput,
-  ChatEditAndResendInput,
   ChatFollowUpInput,
-  ChatRegenerateInput,
-  ChatSendMultiModelTextInput,
-  ChatSendNewTopicMultiModelTextInput,
   ChatSendNewTopicTextInput,
   ChatSendTextInput,
-  ChatSetActiveBranchInput,
   ChatListener,
   ChatModule,
   ChatTopicSnapshot,
@@ -278,23 +272,8 @@ export class ChatRuntime extends BaseService implements ChatModule {
     });
   }
 
-  cancelExecution(input: ChatCancelExecutionInput): void {
-    const activeTurn = this.activeTurns.get(this.resolveRuntimeTopicId(input.topicId));
-    const execution = activeTurn?.executions.get(input.executionId);
-    if (!execution || execution.status !== 'streaming') {
-      return;
-    }
-
-    execution.status = 'aborted';
-    execution.abortController.abort(new Error('Chat execution aborted'));
-  }
-
   sendText(input: ChatSendTextInput): Promise<void> {
     return this.startTask(input.topicId, () => this.sendTextTask(input));
-  }
-
-  sendMultiModelText(input: ChatSendMultiModelTextInput): Promise<void> {
-    return this.startTask(input.topicId, () => this.sendMultiModelTextTask(input));
   }
 
   steer(input: ChatFollowUpInput): Promise<void> {
@@ -305,24 +284,8 @@ export class ChatRuntime extends BaseService implements ChatModule {
     return this.startTask(input.topicId, () => this.queueFollowUpTask(input));
   }
 
-  regenerate(input: ChatRegenerateInput): Promise<void> {
-    return this.startTask(input.topicId, () => this.regenerateTask(input));
-  }
-
-  editAndResend(input: ChatEditAndResendInput): Promise<void> {
-    return this.startTask(input.topicId, () => this.editAndResendTask(input));
-  }
-
-  setActiveBranch(input: ChatSetActiveBranchInput): Promise<void> {
-    return this.startTask(input.topicId, () => this.setActiveBranchTask(input));
-  }
-
   sendNewTopicText(input: ChatSendNewTopicTextInput): Promise<void> {
     return this.startTask(NEW_TOPIC_SNAPSHOT_KEY, () => this.sendNewTopicTextTask(input));
-  }
-
-  sendNewTopicMultiModelText(input: ChatSendNewTopicMultiModelTextInput): Promise<void> {
-    return this.startTask(NEW_TOPIC_SNAPSHOT_KEY, () => this.sendNewTopicMultiModelTextTask(input));
   }
 
   respondToolApproval(input: ChatToolApprovalInput): Promise<void> {
@@ -471,231 +434,18 @@ export class ChatRuntime extends BaseService implements ChatModule {
     payload: ChatFollowUpInput['payload'],
   ): Promise<void> {
     const modelIds = uniqueModelIds(payload.mentionedModels ?? []);
-    const input = {
+    await this.sendTextTask({
       fastMode: payload.fastMode,
       parts: payload.userMessageParts,
       reasoningEffort: payload.reasoningEffort,
+      selectedModelId: modelIds[0],
       text: payload.text,
       topicId,
-    };
-    if (modelIds.length > 1) {
-      await this.sendMultiModelTextTask({ ...input, selectedModelIds: modelIds });
-      return;
-    }
-
-    await this.sendTextTask({ ...input, selectedModelId: modelIds[0] });
-  }
-
-  private async sendMultiModelTextTask(input: ChatSendMultiModelTextInput): Promise<void> {
-    const text = input.text.trim();
-    const parts = getTurnParts({ parts: input.parts, text });
-
-    if (parts.length === 0) {
-      return;
-    }
-    if (input.selectedModelIds.length < 2) {
-      throw new Error('Multi-model sends require at least two models.');
-    }
-    if (this.isTopicBusy(input.topicId)) {
-      throw new Error('A response is already streaming for this topic.');
-    }
-
-    const activeTurn = createActiveTurn();
-    this.activateTurn(input.topicId, activeTurn);
-    this.setTopicSnapshot(input.topicId, { status: 'reserving' });
-
-    try {
-      const topic = await this.resolveTopicForTurn(input);
-      const models = await this.resolveModels(input.selectedModelIds, topic);
-      throwIfAborted(activeTurn.abortController.signal);
-
-      await this.runTopicTurn({
-        activeTurn,
-        fastMode: input.fastMode,
-        models,
-        parts,
-        reasoningEffort: input.reasoningEffort,
-        siblingsGroupId: nextSiblingsGroupId(),
-        topic,
-      });
-    } catch (error) {
-      this.activeTurns.delete(input.topicId);
-      await this.invalidateTopicMessagesSafely(input.topicId);
-      this.setTopicSnapshot(input.topicId, idleTopicSnapshot);
-
-      if (!activeTurn.abortController.signal.aborted) {
-        logger.warn('Multi-model chat stream failed before reservation', toError(error));
-        throw toError(error);
-      }
-    }
-  }
-
-  private async regenerateTask(input: ChatRegenerateInput): Promise<void> {
-    if (this.isTopicBusy(input.topicId)) {
-      throw new Error('A response is already streaming for this topic.');
-    }
-
-    const activeTurn = createActiveTurn();
-    this.activateTurn(input.topicId, activeTurn);
-    this.setTopicSnapshot(input.topicId, { status: 'reserving' });
-
-    try {
-      const topic = await this.dependencies.services.topic.getById(input.topicId);
-      const target = await this.dependencies.services.message.getById(input.messageId);
-      assertMessageBelongsToTopic(target, topic.id);
-      const userMessage = await this.resolveRegenerateUserMessage(target);
-      assertMessageBelongsToTopic(userMessage, topic.id);
-      const children = await this.dependencies.services.message.getChildrenByParentId(
-        userMessage.id,
-      );
-      const inheritedAssistant =
-        target.role === 'assistant'
-          ? target
-          : await this.resolveActiveAssistantChild(topic, children);
-      const selectedModelIds =
-        input.selectedModelIds?.length || !inheritedAssistant?.modelId
-          ? input.selectedModelIds
-          : [inheritedAssistant.modelId as UniqueModelId];
-      const models = await this.resolveModels(selectedModelIds, topic);
-      const siblingsGroupId = await this.resolveAssistantSiblingsGroupId({
-        isRegenerate: true,
-        models,
-        userMessageId: userMessage.id,
-      });
-      throwIfAborted(activeTurn.abortController.signal);
-
-      await this.runExistingUserTurn({
-        activeTurn,
-        fastMode: input.fastMode ?? inheritedAssistant?.data.turnOptions?.fastMode,
-        models,
-        reasoningEffort:
-          input.reasoningEffort ?? inheritedAssistant?.data.turnOptions?.reasoningEffort,
-        siblingsGroupId,
-        topic,
-        userMessage,
-      });
-    } catch (error) {
-      this.activeTurns.delete(input.topicId);
-      await this.invalidateTopicMessagesSafely(input.topicId);
-      this.setTopicSnapshot(input.topicId, idleTopicSnapshot);
-
-      if (!activeTurn.abortController.signal.aborted) {
-        logger.warn('Regenerate chat stream failed before reservation', toError(error));
-        throw toError(error);
-      }
-    }
-  }
-
-  private async editAndResendTask(input: ChatEditAndResendInput): Promise<void> {
-    const text = input.text.trim();
-    const parts = getTurnParts({ parts: input.parts, text });
-    if (parts.length === 0) {
-      return;
-    }
-    if (this.isTopicBusy(input.topicId)) {
-      throw new Error('A response is already streaming for this topic.');
-    }
-
-    const activeTurn = createActiveTurn();
-    this.activateTurn(input.topicId, activeTurn);
-    this.setTopicSnapshot(input.topicId, { status: 'reserving' });
-
-    try {
-      const topic = await this.dependencies.services.topic.getById(input.topicId);
-      const source = await this.dependencies.services.message.getById(input.messageId);
-      assertMessageBelongsToTopic(source, topic.id);
-      if (source.role !== 'user') {
-        throw new Error('Only user messages can be edited and resent.');
-      }
-      const children = await this.dependencies.services.message.getChildrenByParentId(source.id);
-      const inheritedAssistant = await this.resolveActiveAssistantChild(topic, children);
-      const inheritedModelIds = uniqueModelIds(
-        children.flatMap((message) =>
-          message.role === 'assistant' && message.modelId ? [message.modelId as UniqueModelId] : [],
-        ),
-      );
-      const selectedModelIds =
-        input.selectedModelIds?.length ||
-        inheritedModelIds.length > 1 ||
-        (!topic.assistantId && inheritedModelIds.length === 1)
-          ? (input.selectedModelIds ?? inheritedModelIds)
-          : undefined;
-      const models = await this.resolveModels(selectedModelIds, topic);
-      const assistantSiblingsGroupId = await this.resolveAssistantSiblingsGroupId({
-        isRegenerate: false,
-        models,
-        userMessageId: source.id,
-      });
-      const userSiblingsGroupId = source.siblingsGroupId || nextSiblingsGroupId();
-      if (source.siblingsGroupId === 0) {
-        await this.dependencies.services.message.updateSiblingsGroupId(
-          source.id,
-          userSiblingsGroupId,
-        );
-      }
-      throwIfAborted(activeTurn.abortController.signal);
-
-      await this.runTopicTurn({
-        activeTurn,
-        allowAutoName: false,
-        fastMode: input.fastMode ?? inheritedAssistant?.data.turnOptions?.fastMode,
-        hasHistoryBeforePendingTurn: true,
-        models,
-        parentId: source.parentId,
-        parts,
-        reasoningEffort:
-          input.reasoningEffort ?? inheritedAssistant?.data.turnOptions?.reasoningEffort,
-        siblingsGroupId: assistantSiblingsGroupId,
-        topic,
-        userSiblingsGroupId,
-      });
-    } catch (error) {
-      this.activeTurns.delete(input.topicId);
-      await this.invalidateTopicMessagesSafely(input.topicId);
-      this.setTopicSnapshot(input.topicId, idleTopicSnapshot);
-
-      if (!activeTurn.abortController.signal.aborted) {
-        logger.warn('Edit-and-resend chat stream failed before reservation', toError(error));
-        throw toError(error);
-      }
-    }
-  }
-
-  private async setActiveBranchTask(input: ChatSetActiveBranchInput): Promise<void> {
-    const path = await this.dependencies.services.message.getPathThrough(
-      input.topicId,
-      input.throughNodeId,
-    );
-    const leaf = path.at(-1);
-    if (!leaf) {
-      throw new Error(`Cannot resolve branch through message: ${input.throughNodeId}`);
-    }
-
-    await this.dependencies.services.topic.setActiveNode(input.topicId, leaf.id);
-    await this.emitAndWait({ topicId: input.topicId, type: 'invalidate-topic-messages' });
-    await this.emitAndWait({ type: 'invalidate-topics' });
+    });
   }
 
   private async sendNewTopicTextTask(input: ChatSendNewTopicTextInput): Promise<void> {
-    await this.sendNewTopicTurnTask(
-      input,
-      input.selectedModelId ? [input.selectedModelId] : undefined,
-    );
-  }
-
-  private async sendNewTopicMultiModelTextTask(
-    input: ChatSendNewTopicMultiModelTextInput,
-  ): Promise<void> {
-    if (input.selectedModelIds.length < 2) {
-      throw new Error('Multi-model sends require at least two models.');
-    }
-    await this.sendNewTopicTurnTask(input, input.selectedModelIds);
-  }
-
-  private async sendNewTopicTurnTask(
-    input: ChatSendNewTopicTextInput,
-    selectedModelIds: readonly UniqueModelId[] | undefined,
-  ): Promise<void> {
+    const selectedModelIds = input.selectedModelId ? [input.selectedModelId] : undefined;
     const text = input.text.trim();
     const parts = getTurnParts({ parts: input.parts, text });
 
@@ -761,7 +511,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
         },
         parts,
         reasoningEffort: input.reasoningEffort,
-        ...(models.length > 1 ? { siblingsGroupId: nextSiblingsGroupId() } : {}),
         topic,
       });
     } catch (error) {
@@ -985,9 +734,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
     parentId?: string | null;
     parts: readonly CherryMessagePart[];
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
-    siblingsGroupId?: number;
     topic: Topic;
-    userSiblingsGroupId?: number;
   }): Promise<void> {
     const { activeTurn, models, parts, topic } = input;
     const topicId = topic.id;
@@ -1016,13 +763,11 @@ export class ChatRuntime extends BaseService implements ChatModule {
         newMessageId: () => this.dependencies.services.message.newMessageId(),
         parentId: input.parentId === undefined ? (topic.activeNodeId ?? null) : input.parentId,
         parts: turnParts,
-        siblingsGroupId: input.siblingsGroupId ?? 0,
         topicId,
         turnOptions: {
           fastMode: input.fastMode === true,
           reasoningEffort: input.reasoningEffort,
         },
-        userSiblingsGroupId: input.userSiblingsGroupId ?? 0,
       });
 
       // 先把这一轮发布出去，再让调用方导航。这样目的地挂载时它要展示的东西已经在快照里，
@@ -1039,9 +784,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
 
       const reservedTurn =
         await this.dependencies.services.message.createUserMessageWithPlaceholders({
-          ...(input.siblingsGroupId !== undefined
-            ? { siblingsGroupId: input.siblingsGroupId }
-            : {}),
           topicId,
           userMessage: {
             mode: 'create',
@@ -1051,9 +793,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
               modelId: models[0]?.id,
               parentId: pendingTurn.userMessage.parentId,
               role: 'user',
-              ...(input.userSiblingsGroupId !== undefined
-                ? { siblingsGroupId: input.userSiblingsGroupId }
-                : {}),
               status: 'success',
             },
           },
@@ -1149,7 +888,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
     isSteer?: boolean;
     models: readonly Model[];
     reasoningEffort?: ChatSendTextInput['reasoningEffort'];
-    siblingsGroupId?: number;
     topic: Topic;
     userMessage: Message;
   }): Promise<void> {
@@ -1160,7 +898,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
     throwIfAborted(activeTurn.abortController.signal);
     const reservedTurn = await this.dependencies.services.message.createUserMessageWithPlaceholders(
       {
-        ...(input.siblingsGroupId !== undefined ? { siblingsGroupId: input.siblingsGroupId } : {}),
         topicId: topic.id,
         userMessage: { id: userMessage.id, mode: 'existing' },
         placeholders: models.map((model, index) => {
@@ -1816,58 +1553,6 @@ export class ChatRuntime extends BaseService implements ChatModule {
     );
   }
 
-  private async resolveAssistantSiblingsGroupId(input: {
-    isRegenerate: boolean;
-    models: readonly Model[];
-    userMessageId: string;
-  }): Promise<number | undefined> {
-    if (input.models.length > 1) {
-      return nextSiblingsGroupId();
-    }
-    if (!input.isRegenerate) {
-      return undefined;
-    }
-
-    const children = await this.dependencies.services.message.getChildrenByParentId(
-      input.userMessageId,
-    );
-    return (
-      children.find((message) => message.siblingsGroupId > 0)?.siblingsGroupId ??
-      nextSiblingsGroupId()
-    );
-  }
-
-  private async resolveRegenerateUserMessage(target: Message): Promise<Message> {
-    if (target.role === 'user') {
-      return target;
-    }
-    if (target.role !== 'assistant' || !target.parentId) {
-      throw new Error('Regenerate requires a user or assistant message.');
-    }
-
-    const parent = await this.dependencies.services.message.getById(target.parentId);
-    if (parent.role !== 'user') {
-      throw new Error('The assistant message is not attached to a user message.');
-    }
-    return parent;
-  }
-
-  private async resolveActiveAssistantChild(
-    topic: Pick<Topic, 'activeNodeId'>,
-    children: readonly Message[],
-  ): Promise<Message | undefined> {
-    const assistantChildren = children.filter((message) => message.role === 'assistant');
-    if (!topic.activeNodeId || assistantChildren.length < 2) {
-      return assistantChildren.at(-1);
-    }
-
-    const activePath = await this.dependencies.services.message.getPathToNode(topic.activeNodeId);
-    const activeIds = new Set(activePath.map((message) => message.id));
-    return (
-      assistantChildren.find((message) => activeIds.has(message.id)) ?? assistantChildren.at(-1)
-    );
-  }
-
   private resolveRuntimeTopicId(topicId: string): string {
     if (topicId === NEW_TOPIC_SNAPSHOT_KEY && this.newTopicHandoffTopicId) {
       return this.newTopicHandoffTopicId;
@@ -2175,13 +1860,7 @@ export class ChatRuntime extends BaseService implements ChatModule {
   }
 }
 
-let siblingsGroupCounter = 0;
 let streamTurnSequence = 0;
-
-function nextSiblingsGroupId(): number {
-  siblingsGroupCounter = (siblingsGroupCounter + 1) % 1000;
-  return Date.now() * 1000 + siblingsGroupCounter;
-}
 
 function createActiveTurn(): ActiveTurn {
   return {
@@ -2251,10 +1930,8 @@ function buildPendingTurnMessages(input: {
   newMessageId: () => string;
   parentId: string | null;
   parts: readonly CherryMessagePart[];
-  siblingsGroupId: number;
   topicId: string;
   turnOptions: MessageData['turnOptions'];
-  userSiblingsGroupId: number;
 }): { placeholders: Message[]; userMessage: Message } {
   const now = new Date().toISOString();
   const dbOwnedFields = {
@@ -2270,7 +1947,7 @@ function buildPendingTurnMessages(input: {
     modelId: input.models[0]?.id ?? null,
     parentId: input.parentId,
     role: 'user',
-    siblingsGroupId: input.userSiblingsGroupId,
+    siblingsGroupId: 0,
     status: 'success',
   };
   const placeholders = input.models.map(
@@ -2282,7 +1959,7 @@ function buildPendingTurnMessages(input: {
       modelId: model.id,
       parentId: userMessage.id,
       role: 'assistant',
-      siblingsGroupId: input.siblingsGroupId,
+      siblingsGroupId: 0,
       status: 'pending',
     }),
   );

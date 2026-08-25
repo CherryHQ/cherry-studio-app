@@ -5,25 +5,16 @@ import { application } from '@/backend/core/application/Application';
 import { DataApiErrorFactory } from '@/shared/data/api/errors';
 import type { OrderRequest } from '@/shared/data/api/schemas/endpointHelpers';
 import type {
-  ActiveNodeResponse,
   CreateTopicDto,
   DeleteTopicsResult,
-  DuplicateTopicDto,
   ListTopicsQuery,
   TopicListItem,
   UpdateTopicDto,
 } from '@/shared/data/api/schemas/topics';
 import type { CursorPaginationResponse } from '@/shared/data/api/types';
-import type { MessageStats } from '@/shared/data/types/message';
 import type { Topic } from '@/shared/data/types/topic';
 
-import {
-  assistantTable,
-  type MessageRow,
-  messageTable,
-  type TopicRow,
-  topicTable,
-} from '../db/schemas';
+import { assistantTable, messageTable, type TopicRow, topicTable } from '../db/schemas';
 import { registerDataService } from './dataServiceRegistry';
 import { createRootMessageTx } from './MessageService';
 import { asStringKey, decodeListCursor, encodeCursor, keysetOrdering } from './utils/keysetCursor';
@@ -116,45 +107,6 @@ export class TopicService {
       return topicRow;
     })) as TopicRow;
     return rowToTopic(row);
-  }
-
-  async duplicate(sourceTopicId: string, dto: DuplicateTopicDto): Promise<Topic> {
-    return this.dbService.withWriteTx(async (tx) => {
-      const [sourceTopic] = await tx
-        .select()
-        .from(topicTable)
-        .where(and(eq(topicTable.id, sourceTopicId), isNull(topicTable.deletedAt)))
-        .limit(1);
-      if (!sourceTopic) {
-        throw DataApiErrorFactory.notFound('Topic', sourceTopicId);
-      }
-
-      const sourcePath = await getPathRowsToNodeTx(tx, dto.nodeId, sourceTopicId);
-      const newTopic = (await insertWithOrderKey(
-        tx,
-        topicTable,
-        {
-          activeNodeId: null,
-          assistantId: sourceTopic.assistantId,
-          isNameManuallyEdited: dto.name !== undefined ? true : sourceTopic.isNameManuallyEdited,
-          name: dto.name ?? sourceTopic.name,
-        },
-        {
-          pkColumn: topicTable.id,
-          position: 'first',
-          scope: isNull(topicTable.deletedAt),
-        },
-      )) as TopicRow;
-      const destinationRootId = await createRootMessageTx(tx, newTopic.id);
-      const activeNodeId = await copyPathRowsTx(tx, sourcePath, newTopic.id, destinationRootId);
-
-      const [updated] = await tx
-        .update(topicTable)
-        .set({ activeNodeId })
-        .where(eq(topicTable.id, newTopic.id))
-        .returning();
-      return rowToTopic(updated);
-    });
   }
 
   async update(id: string, dto: UpdateTopicDto): Promise<Topic> {
@@ -259,11 +211,6 @@ export class TopicService {
       rows.map((row: { id: string }) => row.id),
       false,
     );
-  }
-
-  async setActiveNode(topicId: string, nodeId: string): Promise<ActiveNodeResponse> {
-    await this.dbService.withWriteTx((tx) => this.setActiveNodeTx(tx, topicId, nodeId));
-    return { activeNodeId: nodeId };
   }
 
   async setActiveNodeTx(
@@ -437,94 +384,6 @@ async function assertActiveAssistantTx(tx: DbOrTx, assistantId: string): Promise
   if (!assistant) {
     throw DataApiErrorFactory.notFound('Assistant', assistantId);
   }
-}
-
-async function getPathRowsToNodeTx(
-  tx: DbOrTx,
-  nodeId: string,
-  topicId: string,
-): Promise<MessageRow[]> {
-  const idRows = (await tx.all(sql`
-    WITH RECURSIVE ancestors AS (
-      SELECT id, parent_id FROM message
-      WHERE id = ${nodeId} AND topic_id = ${topicId} AND deleted_at IS NULL
-      UNION ALL
-      SELECT m.id, m.parent_id FROM message m
-      INNER JOIN ancestors a ON m.id = a.parent_id
-      WHERE m.topic_id = ${topicId} AND m.deleted_at IS NULL
-    )
-    SELECT id FROM ancestors
-  `)) as { id: string }[];
-  if (idRows.length === 0) {
-    throw DataApiErrorFactory.notFound('Message', nodeId);
-  }
-  const ids = idRows.map((row) => row.id);
-  const rows = (await tx
-    .select()
-    .from(messageTable)
-    .where(and(inArray(messageTable.id, ids), eq(messageTable.topicId, topicId)))) as MessageRow[];
-  const positions = new Map(ids.map((id, index) => [id, index]));
-  const chain = rows
-    .sort(
-      (left, right) =>
-        (positions.get(left.id) ?? Number.MAX_SAFE_INTEGER) -
-        (positions.get(right.id) ?? Number.MAX_SAFE_INTEGER),
-    )
-    .reverse();
-  const contentRows = chain.filter((row) => row.role !== 'root');
-  if (contentRows.length === 0) {
-    throw DataApiErrorFactory.invalidOperation('copy message path', 'Source path is empty');
-  }
-  return contentRows;
-}
-
-async function copyPathRowsTx(
-  tx: DbOrTx,
-  rows: MessageRow[],
-  topicId: string,
-  destinationRootId: string,
-): Promise<string> {
-  // Source-to-copy ids, so a copied message reparents onto its copied parent
-  // rather than the source one.
-  const sourceIdMap = new Map<string, string>();
-  let activeNodeId = '';
-  for (const source of rows) {
-    const parentId =
-      source.parentId && sourceIdMap.has(source.parentId)
-        ? (sourceIdMap.get(source.parentId) as string)
-        : destinationRootId;
-    // react-doctor-disable-next-line async-await-in-loop -- each copied parent depends on the previous inserted id
-    const [copy] = await tx
-      .insert(messageTable)
-      .values({
-        data: source.data,
-        messageSnapshot: source.messageSnapshot,
-        modelId: source.modelId,
-        parentId,
-        role: source.role,
-        siblingsGroupId: 0,
-        stats: copyTimingStats(source.stats),
-        status: source.status === 'pending' ? 'error' : source.status,
-        topicId,
-      })
-      .returning({ id: messageTable.id });
-    sourceIdMap.set(source.id, copy.id);
-    activeNodeId = copy.id;
-  }
-  return activeNodeId;
-}
-
-function copyTimingStats(stats: MessageStats | null): MessageStats | null {
-  if (!stats) {
-    return null;
-  }
-  const copy: MessageStats = {
-    ...(stats.runtimeTiming ? { runtimeTiming: stats.runtimeTiming } : {}),
-    ...(stats.timeCompletionMs !== undefined ? { timeCompletionMs: stats.timeCompletionMs } : {}),
-    ...(stats.timeFirstTokenMs !== undefined ? { timeFirstTokenMs: stats.timeFirstTokenMs } : {}),
-    ...(stats.timeThinkingMs !== undefined ? { timeThinkingMs: stats.timeThinkingMs } : {}),
-  };
-  return Object.keys(copy).length > 0 ? copy : null;
 }
 
 function buildSearchPredicate(query: string | undefined): SQL | undefined {

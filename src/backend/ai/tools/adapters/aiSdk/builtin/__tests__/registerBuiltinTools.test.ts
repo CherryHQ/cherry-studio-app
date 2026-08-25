@@ -6,13 +6,21 @@ import { registerBuiltinTools } from '../registerBuiltinTools';
 import { DEVICE_TOOL_NAMES } from '../toolNames';
 
 const deviceToolNames = Object.values(DEVICE_TOOL_NAMES).sort();
-const preferenceKeys = [
-  'permissions.calendar_read',
-  'permissions.calendar_write',
-  'permissions.health_read',
-  'permissions.location_read',
-  'permissions.reminders_read',
-  'permissions.reminders_write',
+const WRITE_TOOL_NAMES = new Set<string>([
+  DEVICE_TOOL_NAMES.calendarCreateEvent,
+  DEVICE_TOOL_NAMES.calendarDeleteEvent,
+  DEVICE_TOOL_NAMES.calendarUpdateEvent,
+  DEVICE_TOOL_NAMES.reminderCreateItem,
+  DEVICE_TOOL_NAMES.reminderDeleteItem,
+  DEVICE_TOOL_NAMES.reminderUpdateItem,
+]);
+const permissionScopes = [
+  'calendar.read',
+  'calendar.write',
+  'health.read',
+  'location.read',
+  'reminders.read',
+  'reminders.write',
 ] as const;
 
 describe('registerBuiltinTools', () => {
@@ -52,35 +60,29 @@ describe('registerBuiltinTools', () => {
     const deniedLocation = registry.selectActive(
       scope({
         deviceAccess: access({
-          'permissions.location_read': { mode: 'always', status: 'denied' },
+          'location.read': 'denied',
         }),
       }),
     );
     expect(deniedLocation.some((entry) => entry.name === 'location_get_current')).toBe(false);
   });
 
-  test('exposes ask-mode tools inline and resolves approval dynamically', async () => {
-    const deps = dependencies('ask');
-    const registry = new ToolRegistry<ToolApplyScope>();
-    registerBuiltinTools(registry, deps);
-    const entry = registry
-      .selectActive(scope({ deviceAccess: access({}, 'ask') }))
-      .find((item) => item.name === 'location_get_current');
-    expect(entry).toBeDefined();
-    await expect(resolveApproval(entry?.tool)).resolves.toBe(true);
+  test('always requires approval for writes and not for reads', async () => {
+    for (const entry of deviceEntries(createRegistry())) {
+      await expect(resolveApproval(entry.tool)).resolves.toBe(WRITE_TOOL_NAMES.has(entry.name));
+    }
   });
 });
 
 function createRegistry() {
   const registry = new ToolRegistry<ToolApplyScope>();
-  registerBuiltinTools(registry, dependencies('always'));
+  registerBuiltinTools(registry, dependencies());
   return registry;
 }
 
-function dependencies(mode: 'ask' | 'always') {
+function dependencies() {
   return {
-    devicePermissions: { getStatusForPreference: jest.fn(async () => 'granted' as const) },
-    preference: { get: jest.fn(async () => mode) },
+    devicePermissions: { getStatusForScope: jest.fn(async () => 'granted' as const) },
     webSearch: { searchKeywords: jest.fn() },
   } as never;
 }
@@ -89,12 +91,9 @@ function deviceEntries(registry: ToolRegistry<ToolApplyScope>): ToolEntry[] {
   return registry.getAll().filter((entry) => entry.namespace !== 'web');
 }
 
-function access(
-  overrides: Partial<DeviceToolAccess> = {},
-  mode: 'ask' | 'always' = 'always',
-): DeviceToolAccess {
+function access(overrides: Partial<DeviceToolAccess> = {}): DeviceToolAccess {
   return Object.fromEntries(
-    preferenceKeys.map((key) => [key, overrides[key] ?? { mode, status: 'granted' }]),
+    permissionScopes.map((scope) => [scope, overrides[scope] ?? 'granted']),
   ) as DeviceToolAccess;
 }
 
