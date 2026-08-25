@@ -277,6 +277,20 @@ export class AgentSessionChatClient {
 
   private applyEvent(entry: SessionEntry, event: AgentEvent): void {
     switch (event.type) {
+      case 'session.updated':
+        this.updateState(entry, {
+          ...entry.state,
+          ...(entry.state.snapshot
+            ? {
+                snapshot: {
+                  ...entry.state.snapshot,
+                  session: event.session,
+                },
+              }
+            : {}),
+        });
+        this.options.onSessionChanged?.(event.session.id);
+        return;
       case 'turn.updated':
         this.updateState(entry, {
           ...entry.state,

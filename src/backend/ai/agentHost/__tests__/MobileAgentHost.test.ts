@@ -5,6 +5,8 @@
  */
 
 import { FakeRuntime, type RuntimeExecutionRequest } from '@/backend/ai/agent';
+import type { AiService } from '@/backend/ai/AiService';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { AgentEventSchema, AgentProtocolError, type AgentEvent } from '@/shared/contracts/agent';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
@@ -34,6 +36,21 @@ const FAKE_DESCRIPTOR = {
   capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
 } as const;
 
+const unusedAiService = {} as AiService;
+const unusedPreferenceService = {} as PreferenceService;
+const noOpNaming = {
+  drain: async () => undefined,
+  maybeRenameFromConversationSummary: async () => null,
+  maybeRenameFromFirstUserMessage: async () => null,
+};
+
+function createHost(runtime: FakeRuntime): MobileAgentHost {
+  return new MobileAgentHost(store, unusedAiService, unusedPreferenceService, runtime, {
+    agents,
+    naming: noOpNaming,
+  });
+}
+
 function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
   const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
   for (const text of texts) {
@@ -58,7 +75,7 @@ function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = [])
       controller.emit({ type: 'completed' });
     });
   }
-  return new MobileAgentHost(store, runtime, { agents });
+  return createHost(runtime);
 }
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
@@ -197,7 +214,7 @@ describe('MobileAgentHost', () => {
         controller.signal.addEventListener('abort', () => resolve(), { once: true });
       });
     });
-    const host = new MobileAgentHost(store, runtime, { agents });
+    const host = createHost(runtime);
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -281,7 +298,7 @@ describe('MobileAgentHost', () => {
         controller.signal.addEventListener('abort', () => resolve(), { once: true });
       });
     });
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
     const finalize = jest.spyOn(store, 'finalizeAssistantMessage');
     const remove = jest.spyOn(store, 'deleteSession');
     const session = await host.createSession({
@@ -309,7 +326,7 @@ describe('MobileAgentHost', () => {
     const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
       { type: 'completed' },
     ]);
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -363,7 +380,7 @@ describe('MobileAgentHost', () => {
         executionCount += 1;
         controller.emit({ type: 'completed' });
       });
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -456,7 +473,7 @@ describe('MobileAgentHost', () => {
       });
       controller.emit({ type: 'completed' });
     });
-    const host = new MobileAgentHost(store, fake, { agents });
+    const host = createHost(fake);
 
     const session = await host.createSession({
       agentId: AGENT_ID,

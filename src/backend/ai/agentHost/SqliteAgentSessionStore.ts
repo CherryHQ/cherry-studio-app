@@ -84,6 +84,27 @@ export class SqliteAgentSessionStore extends BaseService implements AgentSession
     });
   }
 
+  async autoRenameSession(
+    sessionId: string,
+    expectedTitle: string,
+    title: string,
+  ): Promise<AgentSessionView | null> {
+    return this.dbService.withWriteTx(async (tx) => {
+      const [row] = await tx
+        .update(agentSessionTable)
+        .set({ title, titleIsManual: false })
+        .where(
+          and(
+            eq(agentSessionTable.id, sessionId),
+            eq(agentSessionTable.title, expectedTitle),
+            eq(agentSessionTable.titleIsManual, false),
+          ),
+        )
+        .returning();
+      return row ? toAgentSessionView(row) : null;
+    });
+  }
+
   async deleteSession(sessionId: string): Promise<boolean> {
     return this.dbService.withWriteTx(async (tx) => {
       // Messages go with the session via the ON DELETE CASCADE foreign key.
