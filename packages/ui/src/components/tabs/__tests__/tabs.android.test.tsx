@@ -117,6 +117,41 @@ describe('Tabs.android', () => {
     expect(renderer.root.findByProps({ testID: 'hero-tabs-list' })).toBeDefined();
   });
 
+  it('sizes to its labels and aligns to the start when hugging', () => {
+    act(() => {
+      renderer = create(
+        <Tabs
+          items={items}
+          layout="hug"
+          onValueChange={jest.fn()}
+          testID="hug-tabs"
+          value="messages"
+        />,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('Tabs test renderer was not created.');
+    }
+
+    const list = renderer.root.findByProps({ testID: 'hero-tabs-list' });
+    const triggers = renderer.root.findAllByProps({ testID: 'hero-tabs-trigger' });
+
+    // Last match is the innermost host view, the one the mock renamed
+    // `className` on.
+    expect(renderer.root.findAllByProps({ testID: 'hug-tabs' }).at(-1)?.props.sourceClassName).toBe(
+      'gap-0 self-start',
+    );
+    expect(list.props.sourceClassName).toBe('h-[34px] self-start rounded-[17px]');
+    // No `flex-1`: a hugging trigger is as wide as its own label.
+    expect(
+      items.map(
+        (item) =>
+          triggers.find((trigger) => trigger.props.value === item.value)?.props.sourceClassName,
+      ),
+    ).toEqual(['h-7 px-4 py-0', 'h-7 px-4 py-0']);
+  });
+
   it('renders custom children with the current item state', () => {
     const customItems = [
       {

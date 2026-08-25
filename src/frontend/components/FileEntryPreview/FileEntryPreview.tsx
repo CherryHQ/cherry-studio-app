@@ -1,34 +1,55 @@
-import {
-  FilePreview,
-  type FilePreviewFile,
-  type FilePreviewOperation,
-  useAlert,
-} from '@cherrystudio/ui/components';
+import { FilePreview, type FilePreviewOperation, useAlert } from '@cherrystudio/ui/components';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { FileEntryId } from '@/shared/data/types/file';
+import type { FileEntry, FileEntryId } from '@/shared/data/types/file';
 
-import { useResolvedFile } from './hooks/useResolvedFile';
-import { fileEntryDisplayName, fileEntryExtensionLabel } from './utils/fileEntryPresentation';
+import { FileEntrySkeleton } from './FileEntrySkeleton';
+import { useFileUri, useResolvedFile } from './hooks/useResolvedFile';
+import { toFilePreviewFile } from './utils/fileEntryPresentation';
 
 const logger = loggerService.withContext('FileEntryPreview');
 
+/** Reads the entry by id, then its URI. */
 export function FileEntryPreview({ entryId, size }: { entryId: FileEntryId; size?: number }) {
+  const { data, isLoading } = useResolvedFile(entryId);
+
+  if (isLoading) {
+    return <FileEntrySkeleton size={size} />;
+  }
+
+  return <EntryPreview entry={data?.entry} entryId={entryId} size={size} uri={data?.uri} />;
+}
+
+/**
+ * Same preview for a caller that already holds the entry — a list page, say —
+ * so rendering a page of files costs one URI resolution each and no re-read of
+ * rows the list just returned.
+ */
+export function LoadedFileEntryPreview({ entry, size }: { entry: FileEntry; size?: number }) {
+  const uriQuery = useFileUri(entry.id);
+
+  if (uriQuery.isLoading) {
+    return <FileEntrySkeleton size={size} />;
+  }
+
+  return <EntryPreview entry={entry} entryId={entry.id} size={size} uri={uriQuery.data} />;
+}
+
+function EntryPreview({
+  entry,
+  entryId,
+  size,
+  uri,
+}: {
+  entry: FileEntry | undefined;
+  entryId: FileEntryId;
+  size?: number;
+  uri: string | undefined;
+}) {
   const { t } = useTranslation();
   const { alert } = useAlert();
-  const { data, isLoading } = useResolvedFile(entryId);
-  const file: FilePreviewFile | null = data
-    ? {
-        displayName: fileEntryDisplayName(data.entry),
-        extensionLabel: fileEntryExtensionLabel(data.entry),
-        id: data.entry.id,
-        kind: data.entry.mediaType.startsWith('image/') ? 'image' : 'document',
-        revision: data.entry.updatedAt,
-        uri: data.uri,
-      }
-    : null;
   const handleError = useCallback(
     (error: Error, operation: FilePreviewOperation) => {
       logger.warn('File preview operation failed', error, { entryId, operation });
@@ -41,10 +62,8 @@ export function FileEntryPreview({ entryId, size }: { entryId: FileEntryId; size
 
   return (
     <FilePreview
-      file={file}
-      isLoading={isLoading}
+      file={entry && uri ? toFilePreviewFile(entry, uri) : null}
       labels={{
-        loading: t('filePreview.loading'),
         openWith: t('filePreview.openWith'),
         unavailable: t('filePreview.unavailable'),
       }}

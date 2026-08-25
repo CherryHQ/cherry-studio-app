@@ -14,9 +14,18 @@ export type TabsItem<TValue extends string> = {
   value: TValue;
 };
 
+/**
+ * `fill` spans the parent and splits it into equal segments — the default, and
+ * what a control sized by its container wants. `hug` sizes the control to its
+ * labels and aligns it to the start, for a filter row that should not stretch
+ * across the page.
+ */
+export type TabsLayout = 'fill' | 'hug';
+
 export type TabsProps<TValue extends string> = {
   accessibilityLabel?: string;
   items: readonly TabsItem<TValue>[];
+  layout?: TabsLayout;
   onValueChange: (value: TValue) => void;
   style?: StyleProp<ViewStyle>;
   testID?: string;

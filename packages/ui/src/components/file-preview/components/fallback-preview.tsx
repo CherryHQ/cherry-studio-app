@@ -1,4 +1,4 @@
-import { ActivityIndicator, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 
 import type { FilePreviewFile } from '../file-preview.types';
 
@@ -19,19 +19,6 @@ export function FallbackPreview({ file, size }: { file: FilePreviewFile; size: n
       {showFilename ? (
         <Text className="text-base text-foreground" numberOfLines={2}>
           {file.displayName}
-        </Text>
-      ) : null}
-    </View>
-  );
-}
-
-export function FilePreviewLoading({ label, size }: { label: string; size: number }) {
-  return (
-    <View className="flex-1 items-center justify-center gap-2 border border-border bg-secondary p-2">
-      <ActivityIndicator size="small" />
-      {size >= 96 ? (
-        <Text className="text-base text-muted-foreground" numberOfLines={2}>
-          {label}
         </Text>
       ) : null}
     </View>

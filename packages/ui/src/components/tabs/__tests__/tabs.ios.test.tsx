@@ -122,6 +122,51 @@ describe('Tabs.ios', () => {
     ).toMatchObject({ width: 144 });
   });
 
+  it('tracks each measured tab instead of an even split when hugging', () => {
+    const { withTiming } = jest.requireMock('react-native-reanimated') as {
+      withTiming: jest.Mock;
+    };
+
+    act(() => {
+      renderer = create(
+        <Tabs
+          items={items}
+          layout="hug"
+          onValueChange={jest.fn()}
+          testID="hug-tabs"
+          value="settings"
+        />,
+      );
+    });
+
+    if (!renderer) {
+      throw new Error('Tabs test renderer was not created.');
+    }
+
+    const glass = renderer.root.findByProps({ testID: 'glass-view' });
+    const settings = renderer.root.findByProps({ testID: 'settings-tab' });
+
+    // The glass surface takes its width from the row of tabs inside it.
+    expect(glass.props.style).not.toMatchObject({ width: '100%' });
+    // A container measurement alone leaves the indicator unplaced.
+    act(() =>
+      glass.props.onLayout({ nativeEvent: { layout: { height: 34, width: 170, x: 0, y: 0 } } }),
+    );
+    expect(renderer.root.findAllByProps({ testID: 'hug-tabs-indicator' })).toHaveLength(0);
+
+    act(() =>
+      settings.props.onLayout({ nativeEvent: { layout: { height: 34, width: 80, x: 90, y: 0 } } }),
+    );
+
+    expect(withTiming).toHaveBeenLastCalledWith(93, {
+      duration: duration.base,
+      easing: expect.anything(),
+    });
+    expect(
+      StyleSheet.flatten(renderer.root.findByProps({ testID: 'hug-tabs-indicator' }).props.style),
+    ).toMatchObject({ width: 74 });
+  });
+
   it('renders custom children with the current item state', () => {
     const customItems = [
       {

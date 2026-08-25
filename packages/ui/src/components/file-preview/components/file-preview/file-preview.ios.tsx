@@ -1,20 +1,14 @@
 import ExpoQuickLook from '@magrinj/expo-quick-look';
 
 import type { FilePreviewProps } from '../../file-preview.types';
-import { FilePreviewLoading, FilePreviewUnavailable } from '../fallback-preview';
+import { FilePreviewUnavailable } from '../fallback-preview';
 import { FilePreviewFrame } from '../file-preview-frame';
 import { ImagePreview } from '../image-preview';
 import { QuickLookPreview } from '../quick-look-preview.ios';
 
 const defaultSize = 112;
 
-export function FilePreview({
-  file,
-  isLoading = false,
-  labels,
-  onError,
-  size = defaultSize,
-}: FilePreviewProps) {
+export function FilePreview({ file, labels, onError, size = defaultSize }: FilePreviewProps) {
   const resolvedSize = Math.max(1, size);
   const handlePress = () => {
     if (!file) {
@@ -32,9 +26,7 @@ export function FilePreview({
       onPress={handlePress}
       size={resolvedSize}
     >
-      {isLoading ? (
-        <FilePreviewLoading label={labels.loading} size={resolvedSize} />
-      ) : !file ? (
+      {!file ? (
         <FilePreviewUnavailable label={labels.unavailable} size={resolvedSize} />
       ) : file.kind === 'image' ? (
         <ImagePreview file={file} />

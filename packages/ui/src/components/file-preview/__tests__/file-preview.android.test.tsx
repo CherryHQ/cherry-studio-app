@@ -21,12 +21,11 @@ jest.mock('../components/fallback-preview', () => {
   const React = jest.requireActual('react');
   return {
     FallbackPreview: (props: object) => React.createElement('FallbackPreview', props),
-    FilePreviewLoading: (props: object) => React.createElement('FilePreviewLoading', props),
     FilePreviewUnavailable: (props: object) => React.createElement('FilePreviewUnavailable', props),
   };
 });
 
-const labels = { loading: 'Loading', openWith: 'Open with', unavailable: 'Unavailable' };
+const labels = { openWith: 'Open with', unavailable: 'Unavailable' };
 
 describe('FilePreview.android', () => {
   beforeEach(() => {
@@ -53,10 +52,7 @@ describe('FilePreview.android', () => {
     });
   });
 
-  it('distinguishes loading from unavailable files', () => {
-    const loadingRenderer = render(<FilePreview isLoading labels={labels} />);
-    expect(loadingRenderer.root.findAllByType('FilePreviewLoading')).toHaveLength(1);
-
+  it('disables unavailable files', () => {
     const unavailableRenderer = render(<FilePreview labels={labels} />);
     expect(unavailableRenderer.root.findAllByType('FilePreviewUnavailable')).toHaveLength(1);
     expect(unavailableRenderer.root.findByType('FilePreviewFrame').props.disabled).toBe(true);

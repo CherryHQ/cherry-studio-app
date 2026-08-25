@@ -3,6 +3,7 @@ import { createContext, use } from 'react';
 export type SidebarActions = {
   closeDrawer: () => void;
   navigateAssistants: () => void;
+  openLibrary: () => void;
   openPaintings: () => void;
   openSettings: () => void;
   openTopicList: () => void;

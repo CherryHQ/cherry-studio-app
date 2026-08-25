@@ -11,14 +11,12 @@ export type FilePreviewFile = {
 };
 
 export type FilePreviewLabels = {
-  loading: string;
   openWith: string;
   unavailable: string;
 };
 
 export type FilePreviewProps = {
   file?: FilePreviewFile | null;
-  isLoading?: boolean;
   labels: FilePreviewLabels;
   onError?: (error: Error, operation: FilePreviewOperation) => void;
   size?: number;

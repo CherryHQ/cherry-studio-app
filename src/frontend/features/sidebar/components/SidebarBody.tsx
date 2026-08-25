@@ -1,3 +1,4 @@
+import BotIcon from '@cherrystudio/app-icons/icons/bot';
 import FilterIcon from '@cherrystudio/app-icons/icons/filter';
 import ImageIcon from '@cherrystudio/app-icons/icons/image';
 import LibraryBigIcon from '@cherrystudio/app-icons/icons/library-big';
@@ -57,7 +58,7 @@ SidebarBody.displayName = 'Sidebar.Body';
 
 function SidebarBodyDefault() {
   const { t } = useTranslation();
-  const { navigateAssistants, openPaintings } = useSidebarActions('Sidebar.Body');
+  const { navigateAssistants, openLibrary, openPaintings } = useSidebarActions('Sidebar.Body');
 
   return (
     <>
@@ -65,6 +66,11 @@ function SidebarBodyDefault() {
       <View className="pb-1">
         <SidebarNavRow
           icon={LibraryBigIcon}
+          label={t('navigation.library')}
+          onPress={openLibrary}
+        />
+        <SidebarNavRow
+          icon={BotIcon}
           label={t('navigation.assistants')}
           onPress={navigateAssistants}
         />

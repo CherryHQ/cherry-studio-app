@@ -23,11 +23,10 @@ jest.mock('../components/quick-look-preview.ios', () => {
 });
 jest.mock('../components/fallback-preview', () => ({
   FallbackPreview: () => null,
-  FilePreviewLoading: () => null,
   FilePreviewUnavailable: () => null,
 }));
 
-const labels = { loading: 'Loading', openWith: 'Open with', unavailable: 'Unavailable' };
+const labels = { openWith: 'Open with', unavailable: 'Unavailable' };
 
 describe('FilePreview.ios', () => {
   beforeEach(() => {
