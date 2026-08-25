@@ -19,7 +19,7 @@
         "source": "src/main/ai/__tests__/AiService.test.ts",
         "sourceSha256": "262f5b7d4091f4dd0ebbec61e6ce5030eb184274521ef456dd52c5c324363cab",
         "target": "src/backend/ai/__tests__/AiService.test.ts",
-        "targetSha256": "75acaa3f21ba719835e8db7fa86bce0a780464c0404bdfdfe87df7e52ba715e0"
+        "targetSha256": "c46d3c75c02d4e668abb881a30bc4d2b15c3535e246bbdc1dcf1193cba50b6ad"
       },
       {
         "classification": "blocked",
