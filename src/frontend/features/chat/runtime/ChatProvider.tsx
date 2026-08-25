@@ -14,27 +14,18 @@ import {
 import { queryKeys, useBackendModule } from '@/frontend/data';
 import { getMessagesQueryKey } from '@/frontend/hooks/chat/utils/messageQueryOptions';
 import type {
-  ChatEditAndResendInput,
   ChatModule,
-  ChatRegenerateInput,
-  ChatSendNewTopicMultiModelTextInput,
   ChatSendNewTopicTextInput,
   ChatTopicSnapshot,
   ChatTopicStatus,
 } from '@/shared/contracts';
 import { NEW_TOPIC_SNAPSHOT_KEY } from '@/shared/contracts';
-import type { UniqueModelId } from '@/shared/data/types/model';
 
 type ChatTopicValue = ChatTopicSnapshot & {
   abort: () => void;
-  cancelExecution: (executionId: UniqueModelId) => void;
-  editAndResend: (input: Omit<ChatEditAndResendInput, 'topicId'>) => Promise<void>;
   isBusy: boolean;
   queueFollowUp: (payload: ComposerQueuedMessagePayload) => Promise<void>;
-  regenerate: (input: Omit<ChatRegenerateInput, 'topicId'>) => Promise<void>;
-  sendMultiModelText: (input: ChatSendNewTopicMultiModelTextInput) => Promise<void>;
   sendText: (input: ChatSendNewTopicTextInput) => Promise<void>;
-  setActiveBranch: (throughNodeId: string) => Promise<void>;
   steer: (payload: ComposerQueuedMessagePayload) => Promise<void>;
 };
 
@@ -109,10 +100,6 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
   const runtimeTopicId = topicId ?? NEW_TOPIC_SNAPSHOT_KEY;
   const snapshot = useChatTopicSelection(chat, runtimeTopicId, selectTopicSnapshot);
   const abort = useCallback(() => chat.abort(runtimeTopicId), [chat, runtimeTopicId]);
-  const cancelExecution = useCallback(
-    (executionId: UniqueModelId) => chat.cancelExecution({ executionId, topicId: runtimeTopicId }),
-    [chat, runtimeTopicId],
-  );
   const sendText = useCallback(
     (input: ChatSendNewTopicTextInput) => {
       if (!topicId) {
@@ -120,37 +107,6 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
       }
 
       return chat.sendText({ ...input, topicId });
-    },
-    [chat, topicId],
-  );
-  const sendMultiModelText = useCallback(
-    (input: ChatSendNewTopicMultiModelTextInput) => {
-      if (!topicId) {
-        return chat.sendNewTopicMultiModelText(input);
-      }
-      return chat.sendMultiModelText({ ...input, topicId });
-    },
-    [chat, topicId],
-  );
-  const regenerate = useCallback(
-    (input: Omit<ChatRegenerateInput, 'topicId'>) => {
-      if (!topicId) return Promise.reject(new Error('Regenerate requires an existing topic.'));
-      return chat.regenerate({ ...input, topicId });
-    },
-    [chat, topicId],
-  );
-  const editAndResend = useCallback(
-    (input: Omit<ChatEditAndResendInput, 'topicId'>) => {
-      if (!topicId) return Promise.reject(new Error('Edit-and-resend requires an existing topic.'));
-      return chat.editAndResend({ ...input, topicId });
-    },
-    [chat, topicId],
-  );
-  const setActiveBranch = useCallback(
-    (throughNodeId: string) => {
-      if (!topicId)
-        return Promise.reject(new Error('Branch selection requires an existing topic.'));
-      return chat.setActiveBranch({ throughNodeId, topicId });
     },
     [chat, topicId],
   );
@@ -173,14 +129,9 @@ export function useChatTopic(topicId?: string): ChatTopicValue {
   return {
     ...snapshot,
     abort,
-    cancelExecution,
-    editAndResend,
     isBusy,
     queueFollowUp,
-    regenerate,
-    sendMultiModelText,
     sendText,
-    setActiveBranch,
     steer,
   };
 }
