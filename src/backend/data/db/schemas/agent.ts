@@ -1,5 +1,7 @@
 import { index, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import type { AgentSettings } from '@/shared/data/types/agent';
+
 import {
   createUpdateDeleteTimestamps,
   orderKeyColumns,
@@ -7,16 +9,6 @@ import {
   uuidPrimaryKey,
 } from './_columnHelpers';
 import { userModelTable } from './userModel';
-
-/**
- * Inference parameters for an Agent. Backend-local until an Agent API needs a
- * shared DTO (docs/references/agent/agent-persistence.md).
- */
-export type AgentSettings = {
-  temperature?: number;
-  maxOutputTokens?: number;
-  reasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
-};
 
 /**
  * Agent table - stores user-configured Agent definitions

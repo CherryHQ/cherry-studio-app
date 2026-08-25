@@ -1,6 +1,6 @@
 # Agent Persistence
 
-Status: **schema and durable store active in production** (`serviceRegistry` binds
+Status: **schema, durable store, and Agent CRUD active in production** (`serviceRegistry` binds
 `SqliteAgentSessionStore`; step 5 follow-ups remain). Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
@@ -16,17 +16,35 @@ record for mobile-originated Agent Sessions only.
   message search.
 - A message-centric reshape of the `AgentSessionStore` port: the protocol's Turn becomes a Host
   projection over the assistant message plus Host-held live state. The Agent Protocol itself does
-  not change. Nothing consumes `Backend.agent` yet, so this reshape is contained in
-  `src/backend/ai/agentHost` and its tests.
+  not change.
 - A `SqliteAgentSessionStore` adapter that is the production `AgentSessionStore` binding;
   `InMemoryAgentSessionStore` remains as the conformance-suite reference adapter.
-- An Agent-table-backed `AgentDefinitionSource` ready for later integration. The `agent` table
-  intentionally starts empty; this phase does not migrate or copy assistant data, and the
-  production Host deliberately remains assistant-backed for now.
+- Agent CRUD through the Data API and an Agent-table-backed `AgentDefinitionSource` used by the
+  production Host. The `agent` table intentionally starts empty; no assistant data is migrated or
+  copied.
 
 Out of scope: Agent UI, formal Pi Agent Runtime activation, chat-table
 (`assistant`/`topic`/`message`) migration or removal, branching columns, background turns, tool
 configuration storage. Everything here is additive; no existing table changes.
+
+## V0.2 transitional limitations
+
+V0.2 is an intentional integration transition. The Agent Data API and `Backend.agent` establish
+the storage and Host boundaries, but no frontend consumes them yet. The following limitations are
+accepted for V0.2 and must be resolved before an Agent UI or the Chat frontend switches to these
+surfaces:
+
+- Session observation currently resolves the live Agent definition first. Soft-deleting an Agent
+  or clearing its model can therefore make its existing Sessions unavailable through the public
+  Host API even though their rows remain durable. Historical Session reads need a path that does
+  not require an executable Agent definition.
+- Agent inference settings are persisted by CRUD, but the production Host currently sends empty
+  Runtime options. `temperature`, `maxOutputTokens`, and `reasoningEffort` are stored configuration,
+  not effective execution settings, until the definition and Runtime-option mapping is connected.
+- Concurrent partial updates to one Agent's settings are last-writer-wins and can lose independently
+  updated fields because the read/merge happens before the serialized write transaction.
+- Batch reorder callers must provide unique Agent ids. Duplicate ids can currently be reported as
+  `NOT_FOUND`, despite the underlying ordering helper otherwise using the last move for an id.
 
 ## Decisions
 
@@ -211,10 +229,10 @@ storage boundary moves.
 3. **`SqliteAgentSessionStore`.** Implement against the port, pass the shared conformance suite,
    and bind it as the production `AgentSessionStore` in `serviceRegistry` (done — the in-memory
    adapter remains the conformance reference).
-4. **Agent rows.** Add an `agent`-table-backed `AgentDefinitionSource`, but leave `agent` empty in
-   this foundation phase. Agent/Pi business integration owns the later Agent creation or import
-   rules. Keep the production Host on the assistant-backed source until then; assistants remain
-   untouched and authoritative for Chat.
+4. **Agent rows.** Expose Agent CRUD through the Data API and use the `agent`-table-backed
+   `AgentDefinitionSource` in the production Host (done). The table starts empty and assistant data
+   is not copied; assistants remain authoritative only for the current Chat surface until its
+   replacement lands.
 5. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
    (generalizing `userAvatarStorage`); formal Pi Runtime activation and tool configuration; fork
    columns; the eventual chat-table decision.

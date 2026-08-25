@@ -89,14 +89,15 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Agent Host, and V1
 Router exist as an earlier architecture slice. The Host consumes the message-centric
 `AgentSessionStore` port and owns the Turn projection. The durable `SqliteAgentSessionStore` is
-the production store binding over the `agent`/`agent_session`/`agent_session_message` tables. The
-`agent` table intentionally starts empty: no assistant data is migrated or copied. Production
-composition deliberately keeps the assistant-backed definition source until Agent business
-integration lands Agent CRUD. See [Agent Persistence](./agent-persistence.md) for the schema,
-delete semantics, and remaining follow-ups, per the authority direction of
+the production store binding over the `agent`/`agent_session`/`agent_session_message` tables.
+Agent CRUD is exposed through the Data API, and the Host resolves definitions from the `agent`
+table. The table intentionally starts empty: no assistant data is migrated or copied. See
+[Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
+follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
-No frontend currently consumes `Backend.agent`. The current Topic Chat path has a transitional Pi
+No frontend currently consumes the Agent Data API or `Backend.agent`. This Agent CRUD slice does not
+replace the current Topic or Chat Runtime surfaces. The current Topic Chat path has a transitional Pi
 adapter selected by `EXPO_PUBLIC_CHAT_RUNTIME`; development defaults to Pi and other builds default
 to AI SDK. That adapter currently handles text/reasoning only and rejects tool-bearing requests.
 It is not the final Pi Agent Runtime described here.
@@ -104,8 +105,8 @@ It is not the final Pi Agent Runtime described here.
 The next integration replaces the Host's AI SDK Runtime registration and Router with a directly
 composed Pi Runtime, resolves neutral `RuntimeTool` snapshots for each turn, maps Pi tool events into
 the Agent Protocol, and uses the active durable store as the Session authority. Attachments and
-Agent UI remain separate follow-up work. The transitional AI SDK Chat path is removed only after
-required provider coverage is available through Pi.
+the avatar workflow, and Agent UI remain separate follow-up work. The transitional AI SDK Chat path
+is removed only after required provider coverage is available through Pi.
 
 ## Related
 
