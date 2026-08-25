@@ -1,5 +1,4 @@
 import type { DbService } from '../DbService';
-import { AgentFromAssistantSeeder } from './seeders/AgentFromAssistantSeeder';
 import { CherryAiDefaultModelSeeder } from './seeders/CherryAiDefaultModelSeeder';
 import { DefaultAssistantSeeder } from './seeders/DefaultAssistantSeeder';
 import { LayoutBenchSeeder } from './seeders/LayoutBenchSeeder';
@@ -17,9 +16,6 @@ async function createSeeders(): Promise<DatabaseSeeder[]> {
   const seeders: DatabaseSeeder[] = [
     new CherryAiDefaultModelSeeder(),
     new DefaultAssistantSeeder(),
-    // After DefaultAssistantSeeder, so a fresh install's default assistant is
-    // copied into the agent table in the same pass.
-    new AgentFromAssistantSeeder(),
     new PreferenceSeeder(),
     new PresetProviderSeeder(),
   ];

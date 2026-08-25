@@ -20,8 +20,9 @@ record for mobile-originated Agent Sessions only.
   `src/backend/ai/agentHost` and its tests.
 - A `SqliteAgentSessionStore` adapter ready to replace `InMemoryAgentSessionStore` when Agent/Pi
   business integration begins. Production composition deliberately remains in-memory for now.
-- An Agent-table-backed `AgentDefinitionSource` and Agent rows seeded from existing assistants;
-  the production Host deliberately remains assistant-backed for now.
+- An Agent-table-backed `AgentDefinitionSource` ready for later integration. The `agent` table
+  intentionally starts empty; this phase does not migrate or copy assistant data, and the
+  production Host deliberately remains assistant-backed for now.
 
 Out of scope: Agent UI, the Pi Runtime, chat-table (`assistant`/`topic`/`message`) migration or
 removal, branching columns, background turns, and remote execution targets. Everything here is
@@ -212,10 +213,10 @@ storage boundary moves.
 3. **`SqliteAgentSessionStore`.** Implement against the port and pass the shared conformance suite.
    Keep the production `serviceRegistry` binding on the in-memory adapter until Agent/Pi business
    integration begins.
-4. **Agent rows.** Add an `agent`-table-backed `AgentDefinitionSource` and a one-time additive copy
-   of existing assistants into `agent`, reusing assistant ids (the current projection already
-   treats assistant ids as Agent ids). Keep the production Host on the assistant-backed source
-   until integration; assistants remain untouched and authoritative for Chat.
+4. **Agent rows.** Add an `agent`-table-backed `AgentDefinitionSource`, but leave `agent` empty in
+   this foundation phase. Agent/Pi business integration owns the later Agent creation or import
+   rules. Keep the production Host on the assistant-backed source until then; assistants remain
+   untouched and authoritative for Chat.
 5. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
    (generalizing `userAvatarStorage`); Pi Runtime; fork columns; the eventual chat-table
    decision.
