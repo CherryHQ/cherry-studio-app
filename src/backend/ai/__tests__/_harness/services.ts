@@ -71,10 +71,19 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
   };
   const webSearch = { fetchUrls, searchKeywords };
   const tools = new ToolResolver({
+    ai: { generateImage: jest.fn(async () => ({ images: [] })) },
     devicePermissions: {
       getStatusForScope: jest.fn(async () => 'unavailable' as const),
     },
+    files: {
+      createInternalEntry: jest.fn(),
+      discard: jest.fn(),
+      readDataUrl: jest.fn(),
+      resolve: jest.fn(),
+    },
     mcpRuntime: { getToolEntriesForAssistant },
+    preference: preference as never,
+    providerRegistry: { getImageGenerationSupport: jest.fn() },
     webSearch: webSearch as never,
   });
   const resolveApiKey = jest.fn(async (_providerId: string, override?: string) => ({

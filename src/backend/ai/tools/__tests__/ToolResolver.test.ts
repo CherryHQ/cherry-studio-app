@@ -1,4 +1,4 @@
-import { tool } from 'ai';
+import { asSchema, tool } from 'ai';
 import * as z from 'zod';
 
 import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
@@ -63,6 +63,30 @@ describe('ToolResolver', () => {
     expect(result.hasMcpTools).toBe(false);
   });
 
+  test('exposes generate_image only when a drawing model is configured', async () => {
+    const withoutModel = await createResolver({}).resolveForRequest({ assistant: assistant() });
+    expect(withoutModel.tools).not.toHaveProperty('generate_image');
+
+    const withModel = await createResolver({
+      paintingModelId: 'openai::gpt-image-1',
+    }).resolveForRequest({ assistant: assistant() });
+    expect(withModel.tools).toHaveProperty('generate_image');
+
+    const schema = (await asSchema(withModel.tools?.generate_image.inputSchema).jsonSchema) as {
+      properties?: Record<string, unknown>;
+    };
+    expect(schema.properties).toHaveProperty('size');
+    expect(schema.properties).not.toHaveProperty('image_ids');
+  });
+
+  test('fails closed when drawing model lookup fails', async () => {
+    const result = await createResolver({
+      failingKey: 'feature.paintings.default_model_id',
+    }).resolveForRequest({ assistant: assistant() });
+    expect(result.tools).not.toHaveProperty('generate_image');
+    expect(result.tools).toHaveProperty('calendar_list_events');
+  });
+
   test('queries every native permission scope once', async () => {
     const getStatus = jest.fn(async () => 'granted');
     const resolver = createResolver({ getStatus });
@@ -78,10 +102,13 @@ describe('ToolResolver', () => {
 
 function createResolver(options: {
   failingScope?: string;
+  failingKey?: string;
   getStatus?: jest.Mock;
   mcpEntries?: ToolEntry[];
+  paintingModelId?: string;
 }) {
   return new ToolResolver({
+    ai: { generateImage: jest.fn(async () => ({ images: [] })) },
     devicePermissions: {
       getStatusForScope:
         options.getStatus ??
@@ -90,7 +117,29 @@ function createResolver(options: {
           return 'granted';
         }),
     },
+    files: {
+      createInternalEntry: jest.fn(),
+      discard: jest.fn(),
+      readDataUrl: jest.fn(),
+      resolve: jest.fn(),
+    },
     mcpRuntime: { getToolEntriesForAssistant: jest.fn(async () => options.mcpEntries ?? []) },
+    preference: {
+      get: jest.fn(async (key: string) => {
+        if (key === options.failingKey) throw new Error('db unavailable');
+        if (key === 'feature.paintings.default_model_id') return options.paintingModelId ?? null;
+        return null;
+      }),
+    },
+    providerRegistry: {
+      getImageGenerationSupport: jest.fn(() => ({
+        modes: {
+          generate: {
+            supports: { size: { options: ['1024x1024'], type: 'enum' } },
+          },
+        },
+      })),
+    },
     webSearch: { searchKeywords: jest.fn() },
   } as never);
 }

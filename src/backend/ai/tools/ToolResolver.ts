@@ -10,6 +10,11 @@ import type { Assistant } from '@/shared/data/types/assistant';
 
 import type { McpRuntimeService } from '../mcp';
 import { registerBuiltinTools } from './adapters/aiSdk/builtin/registerBuiltinTools';
+import {
+  type ConfiguredPaintingModel,
+  type PaintingToolDependencies,
+  resolveConfiguredPaintingModel,
+} from './painting';
 import { reportToolRuntimeDiagnostic } from './toolRuntimeDiagnostics';
 import type { DeviceToolAccess, ToolApplyScope, ToolEntry } from './types';
 
@@ -23,7 +28,7 @@ const DEVICE_PERMISSION_SCOPES = [
   'reminders.write',
 ] as const satisfies readonly DevicePermissionScope[];
 
-export type ToolResolverDependencies = {
+export type ToolResolverDependencies = PaintingToolDependencies & {
   devicePermissions: Pick<DevicePermissions, 'getStatusForScope'>;
   mcpRuntime: Pick<McpRuntimeService, 'getToolEntriesForAssistant'>;
   webSearch: WebSearchService;
@@ -41,13 +46,15 @@ export class ToolResolver {
     contextWindow?: number;
     mcpToolIds?: readonly string[];
   }): Promise<{ deferredEntries: ToolEntry[]; hasMcpTools: boolean; tools: ToolSet | undefined }> {
-    const [deviceAccess, mcpEntries] = await Promise.all([
+    const [deviceAccess, mcpEntries, paintingModel] = await Promise.all([
       this.getDeviceAccess(),
       this.deps.mcpRuntime.getToolEntriesForAssistant(input.assistant, input.mcpToolIds),
+      this.getConfiguredPaintingModel(),
     ]);
     const activeBuiltins = this.builtinRegistry.selectActive({
       assistant: input.assistant,
       deviceAccess,
+      paintingModel,
       platform: Platform.OS,
     });
 
@@ -60,6 +67,15 @@ export class ToolResolver {
       // materialized entries so a missing or filtered tool cannot change the model prompt.
       hasMcpTools: mcpEntries.length > 0,
     };
+  }
+
+  private async getConfiguredPaintingModel(): Promise<ConfiguredPaintingModel | null> {
+    try {
+      return await resolveConfiguredPaintingModel(this.deps);
+    } catch (error) {
+      logger.warn('Drawing model lookup failed; disabling generate_image', { error });
+      return null;
+    }
   }
 
   private async getDeviceAccess(): Promise<DeviceToolAccess> {

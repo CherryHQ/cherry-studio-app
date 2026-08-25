@@ -38,6 +38,7 @@ export interface PreferenceSchema {
   'chat.web_search.max_results': number;
   'chat.web_search.provider_overrides': WebSearchProviderOverrides;
 
+  'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
 
@@ -63,6 +64,7 @@ export const PreferenceDefaults = {
   'chat.web_search.max_results': 5,
   'chat.web_search.provider_overrides': {},
 
+  'feature.paintings.default_model_id': null,
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
 
