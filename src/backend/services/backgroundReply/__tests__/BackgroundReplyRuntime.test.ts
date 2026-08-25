@@ -178,7 +178,7 @@ describe('BackgroundReplyRuntime', () => {
     });
     const session = mockSessions[0];
 
-    turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'hello' }], role: 'assistant' });
+    turn.update({ parts: [{ type: 'text', text: 'hello' }] });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         icon: 'bubble-ellipsis',
@@ -190,16 +190,14 @@ describe('BackgroundReplyRuntime', () => {
     expect(session?.update.mock.calls.at(-1)?.[0]).not.toHaveProperty('compactLabel');
 
     turn.update({
-      id: 'assistant-1',
       parts: [{ type: 'text', text: 'hello more' }],
-      role: 'assistant',
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
       { keepAlive: true, urgent: false },
     );
 
-    turn.awaitApproval({ id: 'assistant-1', parts: [], role: 'assistant' });
+    turn.awaitApproval({ parts: [] });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         compactLabel: '等待审批',
@@ -210,9 +208,7 @@ describe('BackgroundReplyRuntime', () => {
     );
 
     turn.update({
-      id: 'assistant-1',
       parts: [{ type: 'text', text: 'approved and continuing' }],
-      role: 'assistant',
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
@@ -297,7 +293,7 @@ describe('BackgroundReplyRuntime', () => {
     runtime.clearSession('session-1');
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
-    turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'late' }], role: 'assistant' });
+    turn.update({ parts: [{ type: 'text', text: 'late' }] });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
     await runtime._doStop();
   });
@@ -315,7 +311,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(runtime.isActivated).toBe(false);
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
-    turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'hi' }], role: 'assistant' });
+    turn.update({ parts: [{ type: 'text', text: 'hi' }] });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
 
     enabled = true;
@@ -403,9 +399,7 @@ describe('BackgroundReplyRuntime', () => {
     });
     expect(() =>
       turn.update({
-        id: 'assistant-1',
         parts: [{ type: 'text', text: 'hello' }],
-        role: 'assistant',
       }),
     ).not.toThrow();
     expect(() => turn.awaitApproval()).not.toThrow();
