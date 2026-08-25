@@ -135,6 +135,25 @@ describe('AgentSessionChatClient', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
+  test('applies Session title events and invalidates Session queries', async () => {
+    let listener: ((event: AgentEvent) => void) | undefined;
+    const protocol = protocolWithObservation(async (_sessionId, nextListener) => {
+      listener = nextListener;
+      return { snapshot: snapshot(), unsubscribe: jest.fn() };
+    });
+    const onSessionChanged = jest.fn();
+    const client = new AgentSessionChatClient(protocol, { onSessionChanged });
+    await client.observe('session-1');
+
+    listener?.({
+      type: 'session.updated',
+      session: { ...snapshot().session, title: 'Lunar eclipses' },
+    });
+
+    expect(client.getState('session-1').snapshot?.session.title).toBe('Lunar eclipses');
+    expect(onSessionChanged).toHaveBeenCalledWith('session-1');
+  });
+
   test('rejects an explicit observation after exposing its error state', async () => {
     const protocol = protocolWithObservation(async () => {
       throw new Error('observation failed');

@@ -147,6 +147,15 @@ describe.each([
     expect(renamed?.titleIsManual).toBe(true);
     expect(await store.renameSession('missing', 'x')).toBeNull();
 
+    const autoNamed = await store.autoRenameSession(titled.id, 'Named', 'Summary');
+    expect(autoNamed).toBeNull();
+
+    const autoTitle = await store.createSession({ agentId });
+    const firstTitle = await store.autoRenameSession(autoTitle.id, '', 'First message');
+    expect(firstTitle?.title).toBe('First message');
+    expect(firstTitle?.titleIsManual).toBe(false);
+    expect(await store.autoRenameSession(autoTitle.id, '', 'Stale write')).toBeNull();
+
     expect(await store.deleteSession(created.id)).toBe(true);
     expect(await store.deleteSession(created.id)).toBe(false);
     expect(await store.getSession(created.id)).toBeNull();

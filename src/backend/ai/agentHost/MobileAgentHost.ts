@@ -34,6 +34,7 @@ import type {
   RuntimeUsage,
 } from '@/backend/ai/agent';
 import { PiRuntime } from '@/backend/ai/agent';
+import type { AiService } from '@/backend/ai/AiService';
 import {
   AppStatePolicy,
   BaseService,
@@ -42,6 +43,9 @@ import {
   Phase,
   ServicePhase,
 } from '@/backend/core/lifecycle';
+import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { modelService } from '@/backend/data/services/ModelService';
+import { providerService } from '@/backend/data/services/ProviderService';
 import {
   AgentCancelTurnInputSchema,
   AgentCreateSessionInputSchema,
@@ -71,6 +75,7 @@ import {
   type AgentDefinition,
   type AgentDefinitionSource,
 } from './agentDefinitions';
+import { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionStore } from './AgentSessionStore';
 import {
   toAgentApprovalView,
@@ -92,6 +97,10 @@ const INTERRUPTED_ERROR: AgentErrorView = {
 
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
+  naming: Pick<
+    AgentSessionNaming,
+    'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
+  >;
 };
 
 /**
@@ -102,6 +111,7 @@ type MobileAgentHostOverrides = {
 type ActiveTurnState = {
   turn: AgentTurnView;
   assistantMessage: AgentMessageView;
+  autoNameUserParts: AgentInputPart[] | null;
   pendingApprovals: Map<string, AgentApprovalView>;
   usage: RuntimeUsage | null;
   runtimeSession: AgentRuntimeSession;
@@ -126,7 +136,7 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
 
 @Injectable('MobileAgentHost')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['AgentSessionStore'])
+@DependsOn(['AgentSessionStore', 'AiService', 'PreferenceService'])
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
@@ -139,6 +149,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     { runtimeId: string; session: AgentRuntimeSession }
   >();
   private readonly runningTurns = new Set<Promise<void>>();
+  private readonly naming: MobileAgentHostOverrides['naming'];
 
   /**
    * Lifecycle composition supplies the selected store adapter. Production
@@ -146,17 +157,25 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
    */
   constructor(
     private readonly store: AgentSessionStore,
+    aiService: AiService,
+    preferenceService: PreferenceService,
     private readonly runtime: AgentRuntime = new PiRuntime(createPiModelResolver()),
     private readonly overrides: Partial<MobileAgentHostOverrides> = {},
   ) {
     super();
+    this.naming =
+      overrides.naming ??
+      new AgentSessionNaming({
+        ai: aiService,
+        model: modelService,
+        preference: preferenceService,
+        provider: providerService,
+        store,
+      });
   }
 
-  private get services(): MobileAgentHostOverrides {
-    const { overrides } = this;
-    return {
-      agents: overrides.agents ?? (this.lazyAgents ??= createAgentTableDefinitionSource()),
-    };
+  private get agents(): AgentDefinitionSource {
+    return this.overrides.agents ?? (this.lazyAgents ??= createAgentTableDefinitionSource());
   }
 
   private lazyAgents: AgentDefinitionSource | undefined;
@@ -176,6 +195,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     this.runtimeSessions.clear();
     await Promise.allSettled([...this.runningTurns]);
+    await this.naming.drain();
     this.runningTurnsBySession.clear();
     this.listeners.clear();
   }
@@ -192,7 +212,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     title?: string;
   }): Promise<AgentSessionView> {
     const parsed = AgentCreateSessionInputSchema.parse(input);
-    const agent = await this.services.agents.getAgent(parsed.agentId);
+    const agent = await this.agents.getAgent(parsed.agentId);
     if (!agent) {
       fail('AGENT_NOT_FOUND', `Agent does not exist: ${parsed.agentId}`);
     }
@@ -208,6 +228,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (!session) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
     }
+    this.publish(parsed.sessionId, { type: 'session.updated', session });
     return session;
   }
 
@@ -306,6 +327,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       const state: ActiveTurnState = {
         turn,
         assistantMessage: reserved.assistantMessage,
+        autoNameUserParts: priorMessages.length === 0 ? parsed.parts : null,
         pendingApprovals: new Map(),
         usage: null,
         runtimeSession,
@@ -315,6 +337,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.publish(sessionId, { type: 'message.created', message: reserved.userMessage });
       this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
       this.publish(sessionId, { type: 'turn.updated', turn });
+      if (state.autoNameUserParts) {
+        this.publishSessionRename(
+          this.naming.maybeRenameFromFirstUserMessage(sessionId, state.autoNameUserParts),
+        );
+      }
 
       const run = this.runTurn(
         sessionId,
@@ -582,6 +609,15 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     this.publish(sessionId, { type: 'message.finalized', message: finalized });
     this.publish(sessionId, { type: 'turn.updated', turn });
+    if (outcome === 'completed' && state.autoNameUserParts) {
+      this.publishSessionRename(
+        this.naming.maybeRenameFromConversationSummary({
+          assistantParts: finalized.parts,
+          sessionId,
+          userParts: state.autoNameUserParts,
+        }),
+      );
+    }
   }
 
   // ── Helpers ──
@@ -596,7 +632,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private async requireAgent(agentId: string): Promise<AgentDefinition> {
-    const agent = await this.services.agents.getAgent(agentId);
+    const agent = await this.agents.getAgent(agentId);
     if (!agent) {
       fail('AGENT_NOT_FOUND', `Agent does not exist: ${agentId}`);
     }
@@ -650,5 +686,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         logger.warn('Agent event listener threw', error as Error);
       }
     }
+  }
+
+  private publishSessionRename(promise: Promise<AgentSessionView | null>): void {
+    void promise
+      .then((session) => {
+        if (session) {
+          this.publish(session.id, { type: 'session.updated', session });
+        }
+      })
+      .catch((error: unknown) => {
+        logger.warn('Agent Session auto-naming failed', error as Error);
+      });
   }
 }

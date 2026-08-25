@@ -212,6 +212,7 @@ export const AgentMessageDeltaSchema = z.union([
 export type AgentMessageDelta = z.infer<typeof AgentMessageDeltaSchema>;
 
 export const AgentEventSchema = z.union([
+  z.strictObject({ type: z.literal('session.updated'), session: AgentSessionViewSchema }),
   z.strictObject({ type: z.literal('turn.updated'), turn: AgentTurnViewSchema }),
   z.strictObject({ type: z.literal('message.created'), message: AgentMessageViewSchema }),
   z.strictObject({
