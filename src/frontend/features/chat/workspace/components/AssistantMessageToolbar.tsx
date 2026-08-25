@@ -1,6 +1,5 @@
 import CheckIcon from '@cherrystudio/app-icons/icons/check';
 import CopyIcon from '@cherrystudio/app-icons/icons/copy';
-import RefreshCwIcon from '@cherrystudio/app-icons/icons/refresh-cw';
 import { Button } from '@cherrystudio/ui/components';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,9 +21,8 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
   message,
 }: AssistantMessageToolbarProps) {
   const { t } = useTranslation();
-  const { copiedMessageId, isAssistantToolbarEnabled, isRegenerateDisabled } =
-    useAssistantMessageActionsState();
-  const { copyAssistantMessage, regenerateAssistantMessage } = useAssistantMessageActions();
+  const { copiedMessageId, isAssistantToolbarEnabled } = useAssistantMessageActionsState();
+  const { copyAssistantMessage } = useAssistantMessageActions();
   const copyText = useMemo(
     () =>
       !isAssistantToolbarEnabled || message.status === 'pending'
@@ -51,16 +49,6 @@ export const AssistantMessageToolbar = memo(function AssistantMessageToolbar({
           variant="ghost"
         />
       ) : null}
-      <Button
-        accessibilityLabel={t('chat.messageActions.regenerate')}
-        className="size-4 overflow-visible p-0"
-        disabled={isRegenerateDisabled}
-        icon={<RefreshCwIcon />}
-        onPress={() => regenerateAssistantMessage(message.id)}
-        size="sm"
-        testID="assistant-message-regenerate"
-        variant="ghost"
-      />
     </View>
   );
 });

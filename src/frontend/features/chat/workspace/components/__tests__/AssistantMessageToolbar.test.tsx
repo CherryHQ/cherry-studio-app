@@ -15,7 +15,6 @@ jest.mock('expo-clipboard', () => ({
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
-jest.mock('@cherrystudio/app-icons/icons/refresh-cw', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
@@ -42,7 +41,6 @@ jest.mock('../../utils/copyAssistantMessageText', () => {
 
 describe('AssistantMessageToolbar', () => {
   let renderer: ReactTestRenderer | undefined;
-  const onRegenerate = jest.fn(async (_input: { messageId: string }) => undefined);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -77,12 +75,9 @@ describe('AssistantMessageToolbar', () => {
   test('copies projected text and exposes copied feedback for only this message', async () => {
     renderToolbar(createMessage('success', ' Answer '));
     const copyButton = renderer?.root.findByProps({ testID: 'assistant-message-copy' });
-    const regenerateButton = renderer?.root.findByProps({ testID: 'assistant-message-regenerate' });
 
     expect(copyButton?.props.className).toContain('size-4');
     expect(copyButton?.props.className).toContain('overflow-visible');
-    expect(regenerateButton?.props.className).toContain('size-4');
-    expect(regenerateButton?.props.className).toContain('overflow-visible');
     expect(copyButton?.props.accessibilityLabel).toBe('common.copy');
     await act(async () => {
       copyButton?.props.onPress();
@@ -95,35 +90,16 @@ describe('AssistantMessageToolbar', () => {
     ).toBe('chat.messageActions.copied');
   });
 
-  test('keeps regenerate available without copyable text and reflects busy state', () => {
-    renderToolbar(createMessage('success', '   '), true);
+  test('hides the copy button without copyable text', () => {
+    renderToolbar(createMessage('success', '   '));
 
     expect(renderer?.root.findAllByProps({ testID: 'assistant-message-copy' })).toHaveLength(0);
-    expect(
-      renderer?.root.findByProps({ testID: 'assistant-message-regenerate' }).props.disabled,
-    ).toBe(true);
   });
 
-  test('regenerates this message with an accessible action', () => {
-    renderToolbar(createMessage('success', 'Answer'));
-    const regenerateButton = renderer?.root.findByProps({
-      testID: 'assistant-message-regenerate',
-    });
-
-    expect(regenerateButton?.props.accessibilityLabel).toBe('chat.messageActions.regenerate');
-    act(() => regenerateButton?.props.onPress());
-
-    expect(onRegenerate).toHaveBeenCalledWith({ messageId: 'assistant-1' });
-  });
-
-  function renderToolbar(message: MessageListItem, isRegenerateDisabled = false) {
+  function renderToolbar(message: MessageListItem) {
     act(() => {
       renderer = create(
-        <AssistantMessageActionsProvider
-          isAssistantToolbarEnabled
-          isRegenerateDisabled={isRegenerateDisabled}
-          onRegenerate={onRegenerate}
-        >
+        <AssistantMessageActionsProvider isAssistantToolbarEnabled>
           <AssistantMessageToolbar message={message} />
         </AssistantMessageActionsProvider>,
       );

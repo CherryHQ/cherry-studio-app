@@ -6,15 +6,7 @@ import type { HandlersFor } from '@/shared/data/api/types';
 
 type MessageData = Pick<
   MessageService,
-  | 'create'
-  | 'createSibling'
-  | 'clearTopicMessages'
-  | 'delete'
-  | 'getBranchMessages'
-  | 'getById'
-  | 'getPathThrough'
-  | 'getTree'
-  | 'update'
+  'create' | 'clearTopicMessages' | 'getBranchMessages' | 'getById' | 'update'
 >;
 
 /**
@@ -30,19 +22,8 @@ export function createMessageHandlers(service: MessageData): HandlersFor<Message
 
   return {
     '/messages/:id': {
-      DELETE: async ({ params, query }) => {
-        // Only the row knows which topic it belongs to, and the scope is needed
-        // before the mutation.
-        const { topicId } = await service.getById(params.id);
-        return scopes().invalidate(topicScope(topicId), () =>
-          service.delete(params.id, query?.cascade, query?.activeNodeStrategy),
-        );
-      },
       GET: ({ params }) => service.getById(params.id),
       PATCH: ({ body, params }) => service.update(params.id, body),
-    },
-    '/messages/:id/siblings': {
-      POST: ({ body, params }) => service.createSibling(params.id, body),
     },
     '/topics/:topicId/messages': {
       DELETE: ({ params }) =>
@@ -51,12 +32,6 @@ export function createMessageHandlers(service: MessageData): HandlersFor<Message
         ),
       GET: ({ params, query }) => service.getBranchMessages(params.topicId, query),
       POST: ({ body, params }) => service.create(params.topicId, body),
-    },
-    '/topics/:topicId/path': {
-      GET: ({ params, query }) => service.getPathThrough(params.topicId, query.nodeId),
-    },
-    '/topics/:topicId/tree': {
-      GET: ({ params, query }) => service.getTree(params.topicId, query),
     },
   };
 }

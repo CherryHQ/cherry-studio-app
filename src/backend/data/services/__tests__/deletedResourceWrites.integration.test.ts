@@ -123,29 +123,10 @@ describe('writes against a deleted resource', () => {
       expect(await countMessages()).toBe(0);
     });
 
-    it('refuses to branch a new sibling off a deleted message', async () => {
-      const { assistant, topic } = await seedTurn();
-      await topicService.delete(topic.id);
-
-      await expect(
-        messageService.createSibling(assistant.id, { parts: [{ text: 'x', type: 'text' }] }),
-      ).rejects.toThrow();
-
-      expect(await countMessages()).toBe(0);
-    });
-
-    // These two write by id without re-reading anything, so they cannot fail —
-    // they match zero rows instead. That is the other half of the contract, and
-    // it only holds while the delete stays a hard one: a tombstoned message row
-    // would make both of them silently write into a deleted topic.
-    it('no-ops the sibling-group backfill without resurrecting the row', async () => {
-      const { assistant, topic } = await seedTurn();
-      await topicService.delete(topic.id);
-
-      await expect(messageService.updateSiblingsGroupId(assistant.id, 42)).resolves.toBeUndefined();
-      expect(await countMessages()).toBe(0);
-    });
-
+    // Writes by id without re-reading anything, so it cannot fail — it matches
+    // zero rows instead. That is the other half of the contract, and it only
+    // holds while the delete stays a hard one: a tombstoned message row would
+    // make it silently write into a deleted topic.
     it('no-ops the cold-start crash sweep without resurrecting the row', async () => {
       const { assistant, topic } = await seedTurn();
       await topicService.delete(topic.id);
