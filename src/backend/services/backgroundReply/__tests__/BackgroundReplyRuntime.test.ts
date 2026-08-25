@@ -100,14 +100,14 @@ describe('BackgroundReplyRuntime', () => {
 
   test('updates the visible title while an Agent Session turn is active', async () => {
     const runtime = await createRuntime();
-    const turn = runtime.startTurn({
+    runtime.startTurn({
       agentId: 'agent-1',
       agentName: 'Alpha',
       sessionId: 'session-1',
       sessionTitle: '',
     });
 
-    turn.updateConversationTitle('  Renamed session  ');
+    runtime.updateSessionTitle('session-1', '  Renamed session  ');
 
     expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ attribution: 'Alpha', title: 'Renamed session' }),
@@ -136,7 +136,7 @@ describe('BackgroundReplyRuntime', () => {
     await flushOperations();
     expect(session?.finish).not.toHaveBeenCalled();
 
-    turn.updateConversationTitle('Summary title');
+    runtime.updateSessionTitle('session-1', 'Summary title');
     finishDependency.resolve();
     await flushOperations();
     expect(session?.finish).toHaveBeenCalledWith(

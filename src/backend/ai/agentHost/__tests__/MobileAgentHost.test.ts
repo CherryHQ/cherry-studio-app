@@ -73,12 +73,12 @@ const backgroundReplyTurn = {
   awaitApproval: jest.fn(),
   finish: jest.fn(),
   update: jest.fn(),
-  updateConversationTitle: jest.fn(),
 };
 const backgroundReply = {
   clearSession: jest.fn(),
   clearTopic: jest.fn(),
   startTurn: jest.fn(() => backgroundReplyTurn),
+  updateSessionTitle: jest.fn(),
 };
 const usage = {
   drain: jest.fn(async () => undefined),
@@ -358,7 +358,7 @@ describe('MobileAgentHost', () => {
 
     await host.renameSession({ sessionId: session.id, title: 'Renamed Session' });
 
-    expect(backgroundReplyTurn.updateConversationTitle).toHaveBeenCalledWith('Renamed Session');
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Renamed Session');
     await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
   });
 
@@ -388,11 +388,40 @@ describe('MobileAgentHost', () => {
     const renamed = await store.autoRenameSession(session.id, '', 'Summary title');
     resolveSummary(renamed);
     await waitFor(
-      () => backgroundReplyTurn.updateConversationTitle.mock.calls.length > 0,
+      () => backgroundReply.updateSessionTitle.mock.calls.length > 0,
       'the background title to update',
     );
 
-    expect(backgroundReplyTurn.updateConversationTitle).toHaveBeenCalledWith('Summary title');
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Summary title');
+  });
+
+  test('applies a manual rename while terminal background content awaits naming', async () => {
+    let resolveSummary!: (session: AgentSessionView | null) => void;
+    const summaryName = new Promise<AgentSessionView | null>((resolve) => {
+      resolveSummary = resolve;
+    });
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed' },
+    ]);
+    const host = createHost(runtime, {
+      drain: async () => undefined,
+      maybeRenameFromConversationSummary: () => summaryName,
+      maybeRenameFromFirstUserMessage: async () => null,
+    });
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await waitFor(() => backgroundReplyTurn.finish.mock.calls.length > 0, 'the turn to finish');
+
+    await host.renameSession({ sessionId: session.id, title: 'Manual title' });
+
+    expect(backgroundReply.updateSessionTitle).toHaveBeenCalledWith(session.id, 'Manual title');
+    resolveSummary(null);
   });
 
   test('reconciliation marks preloaded unfinished messages interrupted', async () => {

@@ -104,7 +104,6 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
   awaitApproval: () => {},
   finish: () => {},
   update: () => {},
-  updateConversationTitle: () => {},
 };
 
 type MobileAgentHostOverrides = {
@@ -248,7 +247,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (!session) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
     }
-    this.activeTurns.get(session.id)?.backgroundReply.updateConversationTitle(session.title);
+    this.updateBackgroundReplyTitle(session.id, session.title);
     this.publish(parsed.sessionId, { type: 'session.updated', session });
     return session;
   }
@@ -372,7 +371,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           sessionId,
           state.autoNameUserParts,
         );
-        this.publishSessionRename(state.autoNamePromise, state.backgroundReply);
+        this.publishSessionRename(state.autoNamePromise);
       }
 
       const run = this.runTurn(
@@ -666,7 +665,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         userParts: state.autoNameUserParts,
       });
       namingPromises.push(summaryNamePromise);
-      this.publishSessionRename(summaryNamePromise, state.backgroundReply);
+      this.publishSessionRename(summaryNamePromise);
     }
     state.backgroundReply.finish(
       outcome,
@@ -759,18 +758,21 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
-  private publishSessionRename(
-    promise: Promise<AgentSessionView | null>,
-    originatingBackgroundReply?: BackgroundReplyTurn,
-  ): void {
+  private updateBackgroundReplyTitle(sessionId: string, title: string): void {
+    try {
+      this.backgroundReply.updateSessionTitle(sessionId, title);
+    } catch (error) {
+      logger.warn('Failed to update Agent Session background reply title', error as Error, {
+        sessionId,
+      });
+    }
+  }
+
+  private publishSessionRename(promise: Promise<AgentSessionView | null>): void {
     void promise
       .then((session) => {
         if (session) {
-          const activeBackgroundReply = this.activeTurns.get(session.id)?.backgroundReply;
-          activeBackgroundReply?.updateConversationTitle(session.title);
-          if (originatingBackgroundReply !== activeBackgroundReply) {
-            originatingBackgroundReply?.updateConversationTitle(session.title);
-          }
+          this.updateBackgroundReplyTitle(session.id, session.title);
           this.publish(session.id, { type: 'session.updated', session });
         }
       })

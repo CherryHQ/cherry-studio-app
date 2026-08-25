@@ -29,7 +29,6 @@ export type BackgroundReplyTurn = {
   /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
   finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
   update: (message: BackgroundReplyMessage) => void;
-  updateConversationTitle: (title: string) => void;
 };
 
 export type AgentSessionBackgroundReplyTurnInput = {
@@ -55,4 +54,5 @@ export type BackgroundReplyLifecycle = {
   /** Transitional compatibility entry retained until D removes ChatRuntime. */
   clearTopic: (topicId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
+  updateSessionTitle: (sessionId: string, title: string) => void;
 };

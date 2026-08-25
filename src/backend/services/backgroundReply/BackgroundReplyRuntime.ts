@@ -181,17 +181,6 @@ export class BackgroundReplyRuntime
         this.runTurnCallback(record.key, 'update turn', () => {
           this.updateTurn(record.key, generation, message);
         }),
-      updateConversationTitle: (title) =>
-        this.runTurnCallback(record.key, 'update conversation title', () => {
-          if (!this.isCurrent(record.key, generation)) return;
-          const current = this.turns.get(record.key);
-          if (!current) return;
-          current.conversationTitle = title.trim();
-          current.session?.update(this.toActivityProps(current), {
-            keepAlive: isGeneratingPhase(current.content.phase),
-            urgent: true,
-          });
-        }),
     };
   };
 
@@ -202,6 +191,18 @@ export class BackgroundReplyRuntime
   /** Transitional compatibility entry retained until D removes ChatRuntime. */
   clearTopic = (topicId: string): void => {
     this.clearTurn(legacyTopicKey(topicId));
+  };
+
+  updateSessionTitle = (sessionId: string, title: string): void => {
+    this.runTurnCallback(sessionId, 'update Agent Session title', () => {
+      const record = this.turns.get(sessionId);
+      if (!record) return;
+      record.conversationTitle = title.trim();
+      record.session?.update(this.toActivityProps(record), {
+        keepAlive: isGeneratingPhase(record.content.phase),
+        urgent: true,
+      });
+    });
   };
 
   private clearTurn(key: string): void {
@@ -379,7 +380,6 @@ const noOpTurn: BackgroundReplyTurn = {
   awaitApproval: () => {},
   finish: () => {},
   update: () => {},
-  updateConversationTitle: () => {},
 };
 
 function isGeneratingPhase(phase: BackgroundReplyPhase): boolean {

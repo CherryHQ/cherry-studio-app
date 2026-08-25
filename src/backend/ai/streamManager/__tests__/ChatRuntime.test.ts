@@ -157,6 +157,7 @@ describe('ChatRuntime', () => {
       startTurn: jest.fn(() => {
         throw new Error('native start failed');
       }),
+      updateSessionTitle: jest.fn(),
     };
     const throwingRuntime = createRuntime({
       backgroundReply: throwingLifecycle,
@@ -2616,6 +2617,7 @@ function createBackgroundReplyLifecycle(
     clearSession: jest.fn(),
     clearTopic: jest.fn(),
     startTurn: jest.fn(() => turn),
+    updateSessionTitle: jest.fn(),
   };
 }
 
@@ -2624,7 +2626,6 @@ function createBackgroundReplyTurn(): BackgroundReplyTurn {
     awaitApproval: jest.fn(),
     finish: jest.fn(),
     update: jest.fn(),
-    updateConversationTitle: jest.fn(),
   };
 }
 
