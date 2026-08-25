@@ -162,8 +162,9 @@ code reaches this graph only through `Backend`, `ApiClient`, and `PreferenceClie
 
 ## Seeding And Compatibility
 
-Seeders always apply default preferences and preset providers; development builds also add mock chat
-data. Seeder versions are journaled under `app_state` keys prefixed with `seed:`.
+Seeders apply default preferences, preset providers, and the managed CherryAI default model. They do
+not create Agents, Sessions, or chat messages; first-run Agent creation remains user-driven. Seeder
+versions are journaled under `app_state` keys prefixed with `seed:`.
 
 Mobile keeps shared entity and service semantics aligned with Cherry Desktop where practical, but it
 does not share the physical SQLite file or Drizzle migration timeline. Breaking schema changes may
