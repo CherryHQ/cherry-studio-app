@@ -3,6 +3,7 @@ import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
+import { KeyboardEvents } from 'react-native-keyboard-controller';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -70,6 +71,7 @@ type ChatInputProps = {
 // so the active multiline field and its selectable region share one geometry.
 const restingInputHeight = 32;
 const restingActionSlotWidth = restingInputHeight + 8;
+const activeToolbarGap = 12;
 const focusTransitionMotion = {
   duration: duration.base,
   easing: easing.settle,
@@ -120,26 +122,51 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
 
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isInputActive, setIsInputActive] = useState(false);
+  const isInputActiveRef = useRef(false);
+  const { inputRef } = useComposerMeta();
   const focusProgress = useSharedValue(0);
   const fieldFrameHeight = useSharedValue(restingInputHeight);
   const naturalFieldHeight = useRef(restingInputHeight);
-  const fieldFrameStyle = useAnimatedStyle(() => ({ height: fieldFrameHeight.value }));
-  const restingActionSlotStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(focusProgress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
-    transform: [
-      {
-        scale: interpolate(focusProgress.value, [0, 1], [1, 0.88], Extrapolation.CLAMP),
-      },
-      {
-        translateY: interpolate(focusProgress.value, [0, 1], [0, 4], Extrapolation.CLAMP),
-      },
-    ],
-    width: interpolate(
+  const morphFrameStyle = useAnimatedStyle(() => ({
+    height: fieldFrameHeight.value + focusProgress.value * (activeToolbarGap + restingInputHeight),
+  }));
+  const fieldFrameStyle = useAnimatedStyle(() => ({
+    height: fieldFrameHeight.value,
+    left: interpolate(
       focusProgress.value,
       [0, 1],
       [restingActionSlotWidth, 0],
       Extrapolation.CLAMP,
     ),
+    right: interpolate(
+      focusProgress.value,
+      [0, 1],
+      [restingActionSlotWidth, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  const controlsRowStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: focusProgress.value * (fieldFrameHeight.value + activeToolbarGap),
+      },
+    ],
+  }));
+  const modelControlStyle = useAnimatedStyle(() => ({
+    opacity: focusProgress.value,
+    transform: [
+      {
+        scale: interpolate(focusProgress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+  const effortControlStyle = useAnimatedStyle(() => ({
+    opacity: focusProgress.value,
+    transform: [
+      {
+        scale: interpolate(focusProgress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
+      },
+    ],
   }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const handleFieldLayout = useCallback(
@@ -160,20 +187,32 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
     [fieldFrameHeight, isInputActive],
   );
   const handleInputBlur = useCallback(() => {
+    if (!isInputActiveRef.current) {
+      return;
+    }
+
+    isInputActiveRef.current = false;
     setIsInputActive(false);
+    focusProgress.set(withTiming(0, focusTransitionMotion));
     fieldFrameHeight.set(withTiming(restingInputHeight, focusTransitionMotion));
-  }, [fieldFrameHeight]);
+  }, [fieldFrameHeight, focusProgress]);
   const handleInputFocus = useCallback(() => {
+    isInputActiveRef.current = true;
     setIsInputActive(true);
+    focusProgress.set(withTiming(1, focusTransitionMotion));
     fieldFrameHeight.set(withTiming(naturalFieldHeight.current, focusTransitionMotion));
-  }, [fieldFrameHeight]);
+  }, [fieldFrameHeight, focusProgress]);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
-  const { inputRef } = useComposerMeta();
 
   useEffect(() => {
-    focusProgress.set(withTiming(isInputActive ? 1 : 0, focusTransitionMotion));
-  }, [focusProgress, isInputActive]);
+    const subscription = KeyboardEvents.addListener('keyboardWillHide', () => {
+      handleInputBlur();
+      inputRef.current?.blur();
+    });
+
+    return () => subscription.remove();
+  }, [handleInputBlur, inputRef]);
 
   const persistWebSearch = useCallback(
     (targetAssistantId: string, enabled: boolean) =>
@@ -310,36 +349,26 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
               streaming={isBusy}
             >
               <ComposerAttachments />
-              {/* Keep one native field in one slot; only the controls change around it. */}
-              <View className="flex-row items-center">
-                <Animated.View
-                  accessibilityElementsHidden={isInputActive}
-                  className="items-start"
-                  importantForAccessibility={isInputActive ? 'no-hide-descendants' : 'auto'}
-                  pointerEvents={isInputActive ? 'none' : 'auto'}
-                  style={restingActionSlotStyle}
-                >
-                  {menu}
-                </Animated.View>
-                <Animated.View className="min-w-0 flex-1 overflow-hidden" style={fieldFrameStyle}>
+              {/* One field and one control row morph between the resting and focused layouts. */}
+              <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
+                <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
                   <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
                     <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
                   </View>
                 </Animated.View>
                 <Animated.View
-                  accessibilityElementsHidden={isInputActive}
-                  className="items-end"
-                  importantForAccessibility={isInputActive ? 'no-hide-descendants' : 'auto'}
-                  pointerEvents={isInputActive ? 'none' : 'auto'}
-                  style={restingActionSlotStyle}
+                  className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
+                  pointerEvents="box-none"
+                  style={controlsRowStyle}
                 >
-                  <Composer.Send />
-                </Animated.View>
-              </View>
-              <Composer.Collapsible>
-                {isInputActive ? (
-                  <Composer.Toolbar>
-                    {menu}
+                  {menu}
+                  <Animated.View
+                    accessibilityElementsHidden={!isInputActive}
+                    className="min-w-0 shrink"
+                    importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                    pointerEvents={isInputActive ? 'auto' : 'none'}
+                    style={modelControlStyle}
+                  >
                     <ComposerModelPill
                       icon={
                         selectedModel ? (
@@ -354,13 +383,22 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
                       label={selectedModelLabel}
                       onPress={openModelPicker}
                     />
-                    <View className="ml-auto flex-row items-center gap-2">
-                      {effortGauge}
-                      <Composer.Send />
-                    </View>
-                  </Composer.Toolbar>
-                ) : null}
-              </Composer.Collapsible>
+                  </Animated.View>
+                  <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+                    {effortGauge ? (
+                      <Animated.View
+                        accessibilityElementsHidden={!isInputActive}
+                        importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                        pointerEvents={isInputActive ? 'auto' : 'none'}
+                        style={effortControlStyle}
+                      >
+                        {effortGauge}
+                      </Animated.View>
+                    ) : null}
+                    <Composer.Send />
+                  </View>
+                </Animated.View>
+              </Animated.View>
             </ComposerSurface>
           );
         }}

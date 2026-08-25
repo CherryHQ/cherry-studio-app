@@ -45,9 +45,13 @@ Two consequences to take seriously:
 - [ ] The rich editor receives the current base font size and foreground color as resolved native
       styles. Android deliberately does not receive the base `lineHeight` until the upstream
       editor's dp/px line-height bug is fixed; passing it now collapses the native line box and caret.
-- [ ] The state change uses the shared 250ms settle curve: the resting actions fade, shrink, and
-      release their width while the toolbar fades in and grows the surface. It reverses on blur and
-      lands immediately when the system requests reduced motion.
+- [ ] The field, ＋ menu, and send control each stay mounted as one instance across both states. The
+      shared 250ms settle curve releases the field's horizontal inset, moves the same control row to
+      its toolbar position, fades in the model/reasoning controls, and grows the surface. It reverses
+      on blur and lands immediately when the system requests reduced motion.
+- [ ] As soon as the software keyboard begins hiding, the field gives up focus and the composer
+      returns to its resting presentation alongside it; a focused editor is never left behind in the
+      expanded UI.
 - [ ] Attachments remain visible above either state. Collapsing the controls must never hide staged
       content that will be sent.
 - [ ] The field is `EnrichedMarkdownTextInput`, not RN's `TextInput`, and it is **uncontrolled**: it
