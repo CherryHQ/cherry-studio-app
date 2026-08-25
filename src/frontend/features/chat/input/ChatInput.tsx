@@ -3,7 +3,6 @@ import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type LayoutChangeEvent, View } from 'react-native';
-import { KeyboardEvents } from 'react-native-keyboard-controller';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -51,6 +50,7 @@ import { isUniqueModelId } from '@/shared/data/types/model';
 import { useChatTopicControls } from '../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenuItems } from './components/ChatInputMenuItems';
+import { useBlurComposerOnVisibleKeyboardHide } from './hooks/useBlurComposerOnVisibleKeyboardHide';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
 import { useChatInputReasoningEffortSelection } from './hooks/useChatInputReasoningEffortSelection';
 import { useChatInputWebSearchToggle } from './hooks/useChatInputWebSearchToggle';
@@ -124,6 +124,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const [isInputActive, setIsInputActive] = useState(false);
   const isInputActiveRef = useRef(false);
   const { inputRef } = useComposerMeta();
+  useBlurComposerOnVisibleKeyboardHide(inputRef);
   const focusProgress = useSharedValue(0);
   const fieldFrameHeight = useSharedValue(restingInputHeight);
   const naturalFieldHeight = useRef(restingInputHeight);
@@ -204,15 +205,6 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   }, [fieldFrameHeight, focusProgress]);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
-
-  useEffect(() => {
-    const subscription = KeyboardEvents.addListener('keyboardWillHide', () => {
-      handleInputBlur();
-      inputRef.current?.blur();
-    });
-
-    return () => subscription.remove();
-  }, [handleInputBlur, inputRef]);
 
   const persistWebSearch = useCallback(
     (targetAssistantId: string, enabled: boolean) =>
