@@ -1,8 +1,8 @@
 # Chat Layout Bench
 
 > Retired after the Agent Session migration removed the legacy Assistant/Topic/Message development
-> seeders. Keep this document and its tooling as historical reference until an Agent Session-native
-> benchmark replaces it.
+> seeders. This document and the source under `scripts/layout-bench/` are historical reference only;
+> there is no supported command until an Agent Session-native benchmark replaces it.
 
 聊天布局基准是一套本地设备回归工具，用固定回复、固定交互和应用内探针验证消息列表的定位、
 流式布局、按钮显隐与用户手势。它用于复现和量化真机上的跳动，不是 CI 门禁。
@@ -90,56 +90,8 @@ bench:mixed@40+2000+2000
 `stream-position-stability` 排除用户交互窗口及其惯性余波，也排除一次性动画命令的落位窗口。
 这样判据量到的是生成内容是否自行改变位置，而不是把合法手势或钉顶动画报成缺陷。
 
-## 运行
+## 归档状态
 
-先准备已经连接 Metro 的 dev build，并使用当前 Conductor workspace 专属模拟器。不要复用其他
-workspace 正在使用的设备。Conductor 中要把 Metro 地址指向当前 workspace 的保留端口：
-
-```bash
-LAYOUT_BENCH_METRO_URL="http://127.0.0.1:${CONDUCTOR_PORT}" \
-  pnpm bench:layout --udid <SIMULATOR_UDID>
-LAYOUT_BENCH_METRO_URL="http://127.0.0.1:${CONDUCTOR_PORT}" \
-  pnpm bench:layout --scenario send-anchor,stream-scroll --udid <SIMULATOR_UDID>
-pnpm bench:layout --replay artifacts/layout-bench/<run>/stream-scroll/probe.jsonl
-```
-
-在非 Conductor 环境中，也可以通过环境变量显式指定设备与 Metro：
-
-```bash
-LAYOUT_BENCH_UDID=<SIMULATOR_UDID> \
-LAYOUT_BENCH_METRO_URL=http://localhost:8081 \
-pnpm bench:layout
-```
-
-## 产物
-
-每轮写入 `artifacts/layout-bench/<timestamp>/`：
-
-- `results.json`：结构化判据、指标和违规。
-- `summary.md`：人读摘要。
-- `<scenario>/probe.jsonl`：可重放的原始探针。
-- `<scenario>/trace.svg`：offset、交互窗口、程序化命令、内容高度与预留空间时间线。
-- `<scenario>/*.png`：关键交互检查点。
-
-图中的 offset 在没有灰色手势窗口和顶边命令短线时应保持水平。内容高度可以继续上升；预留空间
-降到零后，按钮应出现，但 offset 不应随内容继续移动。
-
-## 修改与校准
-
-阈值集中在 `scripts/layout-bench/judges.ts`。调整阈值前必须保留同一设备、同一 fixture、同一
-chunk 长度和同一场景，至少重复三轮并比较原始轨迹。不要用阈值掩盖稳定复现的位移。
-
-修改列表行为时至少运行：
-
-```bash
-pnpm test:app -- scripts/__tests__/layoutBenchJudges.test.ts --runInBand
-pnpm test:app -- \
-  src/frontend/components/messages/list/__tests__/MessageList.test.tsx \
-  packages/ui/src/components/scroll-to-bottom-button/__tests__/scroll-to-bottom-button.test.tsx \
-  --runInBand
-pnpm typecheck
-```
-
-设备验收需覆盖 iOS 26 明暗主题：长回复触及 composer 后列表保持静止，按钮有可见材质和按压
-反馈；点击后只滚动一次，后续内容增长会让按钮重新出现。旧 iOS 与 Android 应显示普通圆形回退
-表面，并保持相同的滚动语义。
+旧场景仍依赖 `layout-bench-assistant` 与 legacy Topic 路由，新开发数据库不再创建这些前置数据。
+因此 `package.json` 不再暴露运行入口，也不应直接执行归档脚本。后续基准需要先改用 Agent、
+Session、Agent Message 数据模型，再重新提供命令、设备校准与产物约定。
