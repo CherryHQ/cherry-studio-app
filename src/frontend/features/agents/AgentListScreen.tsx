@@ -26,7 +26,7 @@ export default function AgentListScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   const { open: openAppSearch } = useAppSearch();
-  const { agents, isLoading } = useAgentsApi();
+  const { agents, error, isLoading, refetch } = useAgentsApi();
   const { deleteAgent, deleteAgents } = useAgentMutations();
   const { alert } = useAlert();
   const bottomInset = useListBottomInset();
@@ -229,6 +229,15 @@ export default function AgentListScreen() {
           </View>
         ) : isLoading ? (
           <ContentState.Loading className="px-8 py-16" title={t('agent.list.loading')} />
+        ) : error ? (
+          <ContentState.Error
+            className="px-8 py-16"
+            primaryAction={{
+              children: t('agent.actions.retry'),
+              onPress: () => void refetch(),
+            }}
+            title={t('agent.list.loadFailed')}
+          />
         ) : (
           <ContentState.Empty
             className="px-8 py-16"

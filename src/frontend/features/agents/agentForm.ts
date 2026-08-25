@@ -28,6 +28,11 @@ const defaultTemperature = 1;
 const defaultMaxOutputTokens = 4096;
 const defaultReasoningEffort: AgentReasoningEffort = 'medium';
 
+type BuildAgentDtoOptions = {
+  /** Omit modelId on create so AgentService resolves the current default model. */
+  inheritDefaultModel?: boolean;
+};
+
 export function createAgentFormState(agent?: Agent): AgentFormState {
   const settings = agent?.settings ?? {};
 
@@ -53,6 +58,7 @@ export function createAgentFormState(agent?: Agent): AgentFormState {
  */
 export function buildAgentDto(
   form: AgentFormState,
+  options: BuildAgentDtoOptions = {},
 ): { ok: true; value: CreateAgentDto } | { errorKey: string; ok: false } {
   const name = form.name.trim();
 
@@ -62,7 +68,12 @@ export function buildAgentDto(
 
   let temperature: number | undefined;
   if (form.enableTemperature) {
-    temperature = Number(form.temperature);
+    const temperatureText = form.temperature.trim();
+    if (!temperatureText) {
+      return { ok: false, errorKey: 'agent.form.temperatureInvalid' };
+    }
+
+    temperature = Number(temperatureText);
     if (!Number.isFinite(temperature) || temperature < 0 || temperature > 2) {
       return { ok: false, errorKey: 'agent.form.temperatureInvalid' };
     }
@@ -81,7 +92,7 @@ export function buildAgentDto(
     value: {
       description: form.description.trim(),
       instructions: form.instructions,
-      modelId: form.modelId,
+      ...(options.inheritDefaultModel ? {} : { modelId: form.modelId }),
       name,
       settings: {
         maxOutputTokens,

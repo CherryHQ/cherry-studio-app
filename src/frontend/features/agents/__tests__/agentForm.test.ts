@@ -43,6 +43,25 @@ describe('buildAgentDto', () => {
     ).toEqual({ errorKey: 'agent.form.maxOutputTokensInvalid', ok: false });
   });
 
+  it('rejects a blank enabled temperature instead of coercing it to zero', () => {
+    expect(
+      buildAgentDto({ ...baseForm, enableTemperature: true, name: 'A', temperature: '  ' }),
+    ).toEqual({ errorKey: 'agent.form.temperatureInvalid', ok: false });
+  });
+
+  it('omits modelId when creation delegates default-model resolution to the backend', () => {
+    const dto = buildAgentDto(
+      { ...baseForm, modelId: 'openai::gpt-5', name: 'A' },
+      { inheritDefaultModel: true },
+    );
+
+    if (!dto.ok) {
+      throw new Error('expected ok');
+    }
+
+    expect(dto.value).not.toHaveProperty('modelId');
+  });
+
   it('emits disabled settings as physically present explicit-undefined keys', () => {
     const dto = buildAgentDto({
       ...baseForm,

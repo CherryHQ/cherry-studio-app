@@ -40,7 +40,7 @@ export default function AgentEditScreen() {
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ agentId?: string | string[] }>();
   const agentId = getSingleParamValue(params.agentId);
-  const { agent, isLoading } = useAgentApiById(agentId);
+  const { agent, isLoading, refetch } = useAgentApiById(agentId);
 
   // The form seeds its fields from the record when it mounts, so it must not mount
   // before the record is there — an empty form that reseeds a commit later would throw
@@ -50,6 +50,22 @@ export default function AgentEditScreen() {
       <>
         <RouteHeader title={t('agent.edit.title')} />
         <ContentState.Loading className="p-4" title={t('agent.form.loading')} />
+      </>
+    );
+  }
+
+  if (agentId && !agent) {
+    return (
+      <>
+        <RouteHeader title={t('agent.edit.title')} />
+        <ContentState.Error
+          className="p-4"
+          primaryAction={{
+            children: t('agent.actions.retry'),
+            onPress: () => void refetch(),
+          }}
+          title={t('agent.form.loadFailed')}
+        />
       </>
     );
   }
@@ -127,7 +143,9 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
     setIsReasoningEffortSheetOpen(false);
   }, []);
   const handleSave = useCallback(async () => {
-    const dto = buildAgentDto(form);
+    const dto = buildAgentDto(form, {
+      inheritDefaultModel: !agentId && !hasPickedModel,
+    });
 
     if (!dto.ok) {
       alert.show({ title: t(dto.errorKey) });
@@ -145,7 +163,7 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
     } catch {
       alert.show({ title: t('agent.toast.saveFailed') });
     }
-  }, [agentId, alert, createAgent, form, router, t, updateAgent]);
+  }, [agentId, alert, createAgent, form, hasPickedModel, router, t, updateAgent]);
   const title = isEditing ? t('agent.edit.title') : t('agent.create.title');
   const saveActions = useMemo<HeaderToolbarAction[]>(
     () => [
