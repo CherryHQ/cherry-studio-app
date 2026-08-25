@@ -34,6 +34,10 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
   const actions = useMemo<SidebarActions>(
     () => ({
       closeDrawer: () => navigation.closeDrawer(),
+      navigateAgents: () => {
+        navigation.navigate('agents');
+        navigation.closeDrawer();
+      },
       navigateAssistants: () => {
         navigation.navigate('assistants');
         navigation.closeDrawer();
