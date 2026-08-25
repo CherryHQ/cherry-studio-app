@@ -90,17 +90,18 @@ The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Ag
 Router exist as an earlier architecture slice. The Host consumes the message-centric
 `AgentSessionStore` port and owns the Turn projection. The durable `SqliteAgentSessionStore` is
 the production store binding over the `agent`/`agent_session`/`agent_session_message` tables.
-Agent CRUD is exposed through the Data API, and the Host resolves definitions from the `agent`
-table. The table intentionally starts empty: no assistant data is migrated or copied. See
+Agent CRUD and static Session/transcript reads are exposed through the Data API, and the Host
+resolves definitions from the `agent` table. The table intentionally starts empty: no assistant
+data is migrated or copied. See
 [Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
 follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
-No frontend currently consumes the Agent Data API or `Backend.agent`. This Agent CRUD slice does not
-replace the current Topic or Chat Runtime surfaces. The current Topic Chat path has a transitional Pi
-adapter selected by `EXPO_PUBLIC_CHAT_RUNTIME`; development defaults to Pi and other builds default
-to AI SDK. That adapter currently handles text/reasoning only and rejects tool-bearing requests.
-It is not the final Pi Agent Runtime described here.
+No frontend currently consumes the Agent Data API or `Backend.agent`. These additive data slices do
+not replace the current Topic or Chat Runtime surfaces. The current Topic Chat path has a
+transitional Pi adapter selected by `EXPO_PUBLIC_CHAT_RUNTIME`; development defaults to Pi and other
+builds default to AI SDK. That adapter currently handles text/reasoning only and rejects
+tool-bearing requests. It is not the final Pi Agent Runtime described here.
 
 The next integration replaces the Host's AI SDK Runtime registration and Router with a directly
 composed Pi Runtime, resolves neutral `RuntimeTool` snapshots for each turn, maps Pi tool events into
