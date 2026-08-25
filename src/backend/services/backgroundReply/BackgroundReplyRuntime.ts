@@ -41,13 +41,14 @@ const logger = loggerService.withContext('BackgroundReply');
 type ChatActivitySession = BackgroundActivitySession<BackgroundReplyActivityProps>;
 
 type TurnRecord = {
-  assistantName: string;
+  actorName: string;
   content: BackgroundReplyContent;
+  conversationTitle: string;
+  deepLinkUrl: string;
   generation: number;
+  key: string;
   session?: ChatActivitySession;
   startedAtEpochMs: number;
-  topicId: string;
-  topicTitle: string;
 };
 
 type BackgroundActivityPort = {
@@ -68,7 +69,7 @@ type EnvironmentPort = {
 
 /**
  * Chat's domain adapter over the background-activity mechanism: it owns the
- * per-topic turn state machine, derives presentable content from chat
+ * per-session turn state machine, derives presentable content from chat
  * messages, and maps generating phases onto the session's keepAlive bit.
  * Throttling, AppState handling, orphan sweeps, and keep-alive audio all live
  * behind the injected session manager.
@@ -131,28 +132,30 @@ export class BackgroundReplyRuntime
   startTurn = (input: BackgroundReplyTurnInput): BackgroundReplyTurn => {
     if (Platform.OS !== 'ios' || this.disposed) return noOpTurn;
 
-    const existing = this.turns.get(input.topicId);
+    const normalized = normalizeTurnInput(input);
+    const existing = this.turns.get(normalized.key);
     const generation = ++this.generation;
     const content = deriveBackgroundReplyContent(undefined, this.environment.translate);
-    const assistantName =
-      input.assistantName.trim() || this.environment.translate('chat.backgroundReply.assistant');
+    const actorName =
+      normalized.actorName.trim() || this.environment.translate('chat.backgroundReply.assistant');
     const record: TurnRecord = {
-      assistantName,
+      actorName,
       content,
+      conversationTitle: normalized.conversationTitle.trim(),
+      deepLinkUrl: normalized.deepLinkUrl,
       generation,
+      key: normalized.key,
       startedAtEpochMs: existing?.startedAtEpochMs ?? Date.now(),
-      topicId: input.topicId,
-      topicTitle: input.topicTitle.trim(),
       ...(existing?.session ? { session: existing.session } : {}),
     };
-    this.turns.set(input.topicId, record);
+    this.turns.set(record.key, record);
     this.ensureSession(record);
 
     return {
       awaitApproval: (message) =>
-        this.runTurnCallback(input.topicId, 'mark approval pending', () => {
-          if (!this.isCurrent(input.topicId, generation)) return;
-          const current = this.turns.get(input.topicId);
+        this.runTurnCallback(record.key, 'mark approval pending', () => {
+          if (!this.isCurrent(record.key, generation)) return;
+          const current = this.turns.get(record.key);
           if (!current) return;
           const latest = deriveBackgroundReplyContent(message, this.environment.translate);
           current.content = {
@@ -166,24 +169,33 @@ export class BackgroundReplyRuntime
           });
         }),
       finish: (outcome) =>
-        this.runTurnCallback(input.topicId, 'finish turn', () => {
-          this.finishTurn(input.topicId, generation, outcome);
+        this.runTurnCallback(record.key, 'finish turn', () => {
+          this.finishTurn(record.key, generation, outcome);
         }),
       update: (message) =>
-        this.runTurnCallback(input.topicId, 'update turn', () => {
-          this.updateTurn(input.topicId, generation, message);
+        this.runTurnCallback(record.key, 'update turn', () => {
+          this.updateTurn(record.key, generation, message);
         }),
     };
   };
 
+  clearSession = (sessionId: string): void => {
+    this.clearTurn(sessionId);
+  };
+
+  /** Transitional compatibility entry retained until D removes ChatRuntime. */
   clearTopic = (topicId: string): void => {
-    const record = this.turns.get(topicId);
+    this.clearTurn(legacyTopicKey(topicId));
+  };
+
+  private clearTurn(key: string): void {
+    const record = this.turns.get(key);
     if (!record) return;
 
-    this.turns.delete(topicId);
+    this.turns.delete(key);
     record.session?.cancel();
     record.session = undefined;
-  };
+  }
 
   protected async onStop(): Promise<void> {
     if (this.disposed) return;
@@ -208,12 +220,12 @@ export class BackgroundReplyRuntime
   }
 
   private updateTurn(
-    topicId: string,
+    key: string,
     generation: number,
     message: Parameters<BackgroundReplyTurn['update']>[0],
   ) {
-    if (!this.isCurrent(topicId, generation)) return;
-    const record = this.turns.get(topicId);
+    if (!this.isCurrent(key, generation)) return;
+    const record = this.turns.get(key);
     if (!record) return;
 
     const nextContent = deriveBackgroundReplyContent(message, this.environment.translate);
@@ -225,9 +237,9 @@ export class BackgroundReplyRuntime
     });
   }
 
-  private finishTurn(topicId: string, generation: number, outcome: BackgroundReplyOutcome): void {
-    if (!this.isCurrent(topicId, generation)) return;
-    const record = this.turns.get(topicId);
+  private finishTurn(key: string, generation: number, outcome: BackgroundReplyOutcome): void {
+    if (!this.isCurrent(key, generation)) return;
+    const record = this.turns.get(key);
     if (!record) return;
 
     record.content = getTerminalBackgroundReplyContent(
@@ -242,11 +254,11 @@ export class BackgroundReplyRuntime
       if (!this.isRecordCurrent(record)) return;
       record.session?.finish(this.toActivityProps(record));
       record.session = undefined;
-      if (this.turns.get(topicId) === record) this.turns.delete(topicId);
+      if (this.turns.get(key) === record) this.turns.delete(key);
     });
   }
 
-  /** Starts the topic's session, or re-syncs an inherited one, when enabled. */
+  /** Starts the conversation's activity, or re-syncs an inherited one, when enabled. */
   private ensureSession(record: TurnRecord, activating = false): void {
     // `onActivate` runs before BaseService flips `isActivated`; callers during
     // normal operation use the public state as the preference gate.
@@ -258,7 +270,7 @@ export class BackgroundReplyRuntime
       return;
     }
     record.session = this.activities.startSession({
-      deepLinkUrl: `cherrystudio://topics?topicId=${encodeURIComponent(record.topicId)}`,
+      deepLinkUrl: record.deepLinkUrl,
       keepAlive,
       presenter: this.environment.assistantPresenter,
       props: this.toActivityProps(record),
@@ -269,7 +281,7 @@ export class BackgroundReplyRuntime
   private toActivityProps(record: TurnRecord): BackgroundReplyActivityProps {
     return {
       ...record.content,
-      ...(record.topicTitle ? { attribution: record.assistantName } : {}),
+      ...(record.conversationTitle ? { attribution: record.actorName } : {}),
       compactIcon: 'bubble-ellipsis',
       ...(record.content.phase === 'awaiting-approval'
         ? { compactLabel: this.environment.translate('backgroundActivity.awaitingApproval') }
@@ -283,23 +295,23 @@ export class BackgroundReplyRuntime
       detail: record.content.detail,
       icon: backgroundReplyIcon(record.content.phase),
       startedAtEpochMs: record.startedAtEpochMs,
-      title: record.topicTitle || record.assistantName,
+      title: record.conversationTitle || record.actorName,
     };
   }
 
-  private isCurrent(topicId: string, generation: number): boolean {
-    return !this.disposed && this.turns.get(topicId)?.generation === generation;
+  private isCurrent(key: string, generation: number): boolean {
+    return !this.disposed && this.turns.get(key)?.generation === generation;
   }
 
   private isRecordCurrent(record: TurnRecord): boolean {
-    return !this.disposed && this.turns.get(record.topicId) === record;
+    return !this.disposed && this.turns.get(record.key) === record;
   }
 
-  private runTurnCallback(topicId: string, operation: string, callback: () => void): void {
+  private runTurnCallback(key: string, operation: string, callback: () => void): void {
     try {
       callback();
     } catch (error) {
-      logger.error(`Background reply failed to ${operation}`, error as Error, { topicId });
+      logger.error(`Background reply failed to ${operation}`, error as Error, { key });
     }
   }
 
@@ -308,6 +320,33 @@ export class BackgroundReplyRuntime
     this.operationTail = run.catch(() => {});
     return run;
   }
+}
+
+function normalizeTurnInput(input: BackgroundReplyTurnInput): {
+  actorName: string;
+  conversationTitle: string;
+  deepLinkUrl: string;
+  key: string;
+} {
+  if ('sessionId' in input) {
+    return {
+      actorName: input.agentName,
+      conversationTitle: input.sessionTitle,
+      deepLinkUrl: `cherrystudio:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+      key: input.sessionId,
+    };
+  }
+
+  return {
+    actorName: input.assistantName,
+    conversationTitle: input.topicTitle,
+    deepLinkUrl: `cherrystudio://topics?topicId=${encodeURIComponent(input.topicId)}`,
+    key: legacyTopicKey(input.topicId),
+  };
+}
+
+function legacyTopicKey(topicId: string): string {
+  return `legacy-topic:${topicId}`;
 }
 
 const noOpTurn: BackgroundReplyTurn = {

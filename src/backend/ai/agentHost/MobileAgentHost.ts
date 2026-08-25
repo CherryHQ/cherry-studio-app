@@ -46,6 +46,10 @@ import {
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { modelService } from '@/backend/data/services/ModelService';
 import { providerService } from '@/backend/data/services/ProviderService';
+import type {
+  BackgroundReplyLifecycle,
+  BackgroundReplyTurn,
+} from '@/backend/services/backgroundReply';
 import {
   AgentCancelTurnInputSchema,
   AgentCreateSessionInputSchema,
@@ -77,6 +81,7 @@ import {
 } from './agentDefinitions';
 import { AgentSessionNaming } from './AgentSessionNaming';
 import type { AgentSessionStore } from './AgentSessionStore';
+import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import {
   toAgentApprovalView,
   toAgentErrorView,
@@ -95,12 +100,19 @@ const INTERRUPTED_ERROR: AgentErrorView = {
   retryable: true,
 };
 
+const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
+  awaitApproval: () => {},
+  finish: () => {},
+  update: () => {},
+};
+
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
   naming: Pick<
     AgentSessionNaming,
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
   >;
+  usage: Pick<AgentSessionUsageRecorder, 'drain' | 'record'>;
 };
 
 /**
@@ -109,9 +121,11 @@ type MobileAgentHostOverrides = {
  * derived from the settled assistant message.
  */
 type ActiveTurnState = {
+  agent: AgentDefinition;
   turn: AgentTurnView;
   assistantMessage: AgentMessageView;
   autoNameUserParts: AgentInputPart[] | null;
+  backgroundReply: BackgroundReplyTurn;
   pendingApprovals: Map<string, AgentApprovalView>;
   usage: RuntimeUsage | null;
   runtimeSession: AgentRuntimeSession;
@@ -136,7 +150,7 @@ function createCompletionSignal(): { promise: Promise<void>; resolve: () => void
 
 @Injectable('MobileAgentHost')
 @ServicePhase(Phase.PostReady)
-@DependsOn(['AgentSessionStore', 'AiService', 'PreferenceService'])
+@DependsOn(['AgentSessionStore', 'AiService', 'PreferenceService', 'BackgroundReplyRuntime'])
 @AppStatePolicy('continue')
 export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly listeners = new Map<string, Set<(event: AgentEvent) => void>>();
@@ -150,6 +164,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   >();
   private readonly runningTurns = new Set<Promise<void>>();
   private readonly naming: MobileAgentHostOverrides['naming'];
+  private readonly usage: MobileAgentHostOverrides['usage'];
 
   /**
    * Lifecycle composition supplies the selected store adapter. Production
@@ -159,6 +174,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     private readonly store: AgentSessionStore,
     aiService: AiService,
     preferenceService: PreferenceService,
+    private readonly backgroundReply: BackgroundReplyLifecycle,
     private readonly runtime: AgentRuntime = new PiRuntime(createPiModelResolver()),
     private readonly overrides: Partial<MobileAgentHostOverrides> = {},
   ) {
@@ -172,6 +188,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         provider: providerService,
         store,
       });
+    this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
   }
 
   private get agents(): AgentDefinitionSource {
@@ -196,6 +213,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     this.runtimeSessions.clear();
     await Promise.allSettled([...this.runningTurns]);
     await this.naming.drain();
+    await this.usage.drain();
     this.runningTurnsBySession.clear();
     this.listeners.clear();
   }
@@ -260,6 +278,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         this.runtimeSessions.delete(sessionId);
         await cached.session.close();
       }
+      this.backgroundReply.clearSession(sessionId);
       const deleted = await this.store.deleteSession(sessionId);
       if (!deleted) {
         fail('SESSION_NOT_FOUND', `Session does not exist: ${sessionId}`);
@@ -325,9 +344,16 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         endedAt: null,
       };
       const state: ActiveTurnState = {
+        agent,
         turn,
         assistantMessage: reserved.assistantMessage,
         autoNameUserParts: priorMessages.length === 0 ? parsed.parts : null,
+        backgroundReply: this.startBackgroundReply({
+          agentId: agent.id,
+          agentName: agent.name,
+          sessionId,
+          sessionTitle: session.title,
+        }),
         pendingApprovals: new Map(),
         usage: null,
         runtimeSession,
@@ -501,6 +527,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: state.assistantMessage.id,
           delta: { op: 'part.add', index: event.index, part },
         });
+        state.backgroundReply.update(state.assistantMessage);
         return false;
       }
       case 'text.delta': {
@@ -513,6 +540,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: state.assistantMessage.id,
           delta: { op: 'text.append', partId: event.partId, text: event.text },
         });
+        state.backgroundReply.update(state.assistantMessage);
         return false;
       }
       case 'part.replace': {
@@ -526,6 +554,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           messageId: state.assistantMessage.id,
           delta: { op: 'part.replace', part },
         });
+        state.backgroundReply.update(state.assistantMessage);
         return false;
       }
       case 'approval.requested': {
@@ -534,6 +563,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         const approval = toAgentApprovalView(event.approval, sessionId);
         state.pendingApprovals.set(approval.id, approval);
         state.turn = { ...state.turn, status: 'awaiting-approval' };
+        state.backgroundReply.awaitApproval(state.assistantMessage);
         this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         this.publish(sessionId, { type: 'approval.requested', approval });
         return false;
@@ -548,6 +578,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
           state.turn = { ...state.turn, status: 'running' };
           this.publish(sessionId, { type: 'turn.updated', turn: state.turn });
         }
+        state.backgroundReply.update(state.assistantMessage);
         this.publish(sessionId, { type: 'approval.resolved', approval });
         return false;
       }
@@ -607,6 +638,17 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (this.activeTurns.get(sessionId) === state) {
       this.activeTurns.delete(sessionId);
     }
+    state.backgroundReply.finish(outcome);
+    if (state.usage) {
+      this.usage.record({
+        agent: state.agent,
+        assistantMessageId: finalized.id,
+        completedAt: Date.parse(finalized.updatedAt),
+        startedAt: Date.parse(state.turn.startedAt),
+        turnId: state.turn.id,
+        usage: state.usage,
+      });
+    }
     this.publish(sessionId, { type: 'message.finalized', message: finalized });
     this.publish(sessionId, { type: 'turn.updated', turn });
     if (outcome === 'completed' && state.autoNameUserParts) {
@@ -649,6 +691,23 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private projectCapabilities(target: AgentExecutionTarget): AgentCapabilities {
     const runtime = this.routeExecutionTarget(target);
     return { ...runtime.descriptor.capabilities };
+  }
+
+  private startBackgroundReply(input: {
+    agentId: string;
+    agentName: string;
+    sessionId: string;
+    sessionTitle: string;
+  }): BackgroundReplyTurn {
+    try {
+      return this.backgroundReply.startTurn(input);
+    } catch (error) {
+      logger.warn('Failed to start Agent Session background reply', error as Error, {
+        sessionId: input.sessionId,
+      });
+      this.backgroundReply.clearSession(input.sessionId);
+      return NOOP_BACKGROUND_REPLY_TURN;
+    }
   }
 
   /**

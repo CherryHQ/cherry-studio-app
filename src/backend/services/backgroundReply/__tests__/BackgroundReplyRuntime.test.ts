@@ -43,23 +43,25 @@ describe('BackgroundReplyRuntime', () => {
     jest.restoreAllMocks();
   });
 
-  test('opens one keep-alive session per topic with derived initial content', async () => {
+  test('opens one keep-alive activity per Agent Session with a chat deeplink', async () => {
     const runtime = await createRuntime();
     expect(runtime.isActivated).toBe(true);
     const first = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     const second = runtime.startTurn({
-      assistantName: 'Beta',
-      topicId: 'topic-2',
-      topicTitle: 'Second topic',
+      agentId: 'agent-2',
+      agentName: 'Beta',
+      sessionId: 'session-2',
+      sessionTitle: 'Second session',
     });
     expect(first).not.toBe(second);
     expect(mockStartSession).toHaveBeenCalledTimes(2);
     expect(mockSessions[0]?.input).toMatchObject({
-      deepLinkUrl: 'cherrystudio://topics?topicId=topic-1',
+      deepLinkUrl: 'cherrystudio:///?agentId=agent-1&sessionId=session-1',
       keepAlive: true,
       props: expect.objectContaining({
         attribution: 'Alpha',
@@ -67,16 +69,16 @@ describe('BackgroundReplyRuntime', () => {
         detail: 'chat.backgroundReply.preparing',
         icon: 'hourglass',
         phase: 'preparing',
-        title: 'First topic',
+        title: 'First session',
       }),
       tag: 'chat.backgroundReply',
     });
     expect(mockSessions[1]?.input).toMatchObject({
-      deepLinkUrl: 'cherrystudio://topics?topicId=topic-2',
+      deepLinkUrl: 'cherrystudio:///?agentId=agent-2&sessionId=session-2',
       props: expect.objectContaining({
         attribution: 'Beta',
         detail: 'chat.backgroundReply.preparing',
-        title: 'Second topic',
+        title: 'Second session',
       }),
     });
 
@@ -85,7 +87,12 @@ describe('BackgroundReplyRuntime', () => {
 
   test('uses the localized assistant fallback when no assistant or model name is available', async () => {
     const runtime = await createRuntime();
-    runtime.startTurn({ assistantName: ' ', topicId: 'topic-1', topicTitle: ' ' });
+    runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: ' ',
+      sessionId: 'session-1',
+      sessionTitle: ' ',
+    });
     expect(mockSessions[0]?.input.props).toMatchObject({ title: 'Localized assistant' });
 
     await runtime._doStop();
@@ -207,15 +214,16 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
-  test('clearTopic cancels the session so approval records cannot recreate it later', async () => {
+  test('clearSession cancels the activity so approval records cannot recreate it later', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     turn.awaitApproval();
-    runtime.clearTopic('topic-1');
+    runtime.clearSession('session-1');
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
     turn.update({ id: 'assistant-1', parts: [{ type: 'text', text: 'late' }], role: 'assistant' });

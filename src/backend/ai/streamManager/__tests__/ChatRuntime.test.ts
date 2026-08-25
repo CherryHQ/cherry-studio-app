@@ -152,6 +152,7 @@ describe('ChatRuntime', () => {
   test('keeps streaming when the background reply lifecycle throws', async () => {
     const throwingServices = createServices();
     const throwingLifecycle: BackgroundReplyLifecycle = {
+      clearSession: jest.fn(),
       clearTopic: jest.fn(),
       startTurn: jest.fn(() => {
         throw new Error('native start failed');
@@ -2612,6 +2613,7 @@ function createBackgroundReplyLifecycle(
   turn: BackgroundReplyTurn = createBackgroundReplyTurn(),
 ): BackgroundReplyLifecycle {
   return {
+    clearSession: jest.fn(),
     clearTopic: jest.fn(),
     startTurn: jest.fn(() => turn),
   };

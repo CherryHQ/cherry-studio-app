@@ -43,12 +43,34 @@ const noOpNaming = {
   maybeRenameFromConversationSummary: async () => null,
   maybeRenameFromFirstUserMessage: async () => null,
 };
+const backgroundReplyTurn = {
+  awaitApproval: jest.fn(),
+  finish: jest.fn(),
+  update: jest.fn(),
+};
+const backgroundReply = {
+  clearSession: jest.fn(),
+  clearTopic: jest.fn(),
+  startTurn: jest.fn(() => backgroundReplyTurn),
+};
+const usage = {
+  drain: jest.fn(async () => undefined),
+  record: jest.fn(),
+};
 
 function createHost(runtime: FakeRuntime): MobileAgentHost {
-  return new MobileAgentHost(store, unusedAiService, unusedPreferenceService, runtime, {
-    agents,
-    naming: noOpNaming,
-  });
+  return new MobileAgentHost(
+    store,
+    unusedAiService,
+    unusedPreferenceService,
+    backgroundReply,
+    runtime,
+    {
+      agents,
+      naming: noOpNaming,
+      usage,
+    },
+  );
 }
 
 function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
@@ -117,6 +139,7 @@ let store: InMemoryAgentSessionStore;
 
 describe('MobileAgentHost', () => {
   beforeEach(() => {
+    jest.clearAllMocks();
     store = new InMemoryAgentSessionStore();
   });
 
@@ -169,6 +192,22 @@ describe('MobileAgentHost', () => {
       { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
     ]);
     expect(finalized.message.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
+    expect(backgroundReply.startTurn).toHaveBeenCalledWith({
+      agentId: AGENT_ID,
+      agentName: 'Test Agent',
+      sessionId: session.id,
+      sessionTitle: '',
+    });
+    expect(backgroundReplyTurn.update).toHaveBeenCalled();
+    expect(backgroundReplyTurn.finish).toHaveBeenCalledWith('completed');
+    expect(usage.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: expect.objectContaining({ id: AGENT_ID }),
+        assistantMessageId: submitted.assistantMessageId,
+        turnId: submitted.turnId,
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      }),
+    );
 
     const terminal = terminalTurnEvent(events);
     expect(terminal?.turn.status).toBe('completed');
