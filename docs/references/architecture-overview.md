@@ -24,7 +24,7 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/bootstrap/composition` | Concrete backend graph and workflow wiring |
 | `src/bootstrap/runtime` | Initialization, startup gate, splash, post-ready work, and disposal |
 | `src/frontend` | Features, components, React Query, hooks, i18n, styles, UI utils and types |
-| `src/backend/ai` | AI SDK, provider adapters, MCP runtime, tools, and message conversion |
+| `src/backend/ai` | Pi conversation integration, transitional AI SDK adapters, MCP runtime, tools, and message conversion |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Workflow module factories, device adapters, external clients, avatars, and web search |
 | `src/shared/contracts` | Workflow-only `Backend` modules, runtime projections, sessions, events, and results |
@@ -94,6 +94,9 @@ compatibility adapter or generic frontend selector for persistence services.
 - `backend/data` owns an independent backend `CacheService` used by the private service graph.
 - `shared/data` owns frontend/backend data vocabulary; database rows remain under `backend/data`.
 - Chat uses one app-owned `ChatRuntime`; route providers only subscribe and project Topic state.
+- `AiService` currently offers transitional Pi and AI SDK streaming paths. Pi is the target sole
+  local conversation engine; the current AI SDK fallback remains until Pi provider and tool coverage
+  is complete.
 - Painting generation uses caller-owned sessions with explicit `cancel()` and `dispose()` behavior.
 - App shutdown aborts and awaits Chat before disposing MCP, web search, cache, and SQLite.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.

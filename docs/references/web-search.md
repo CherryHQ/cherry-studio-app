@@ -42,7 +42,8 @@ Abort errors are propagated when the caller's signal is aborted.
 
 ## Web Search In AI Requests
 
-External web search reaches the model as an AI-SDK tool, not as provider options.
+On the current AI SDK Chat path, external web search reaches the model as an AI SDK tool, not as
+provider options.
 `src/backend/ai/tools/adapters/aiSdk/builtin/WebSearchTool.ts` wraps
 `WebSearchService.searchKeywords` in a `web_search` tool (id `WEB_SEARCH_TOOL_NAME`) with a `2..200`
 self-contained query schema. Its `execute` classifies failures: permanent configuration errors
@@ -60,6 +61,11 @@ exclusive within one request:
 - When the tool is attached, the request also sets `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20).
 
 This means a request carries at most one web-search mechanism. Enabling web search without a configured external provider still attaches the tool so calls fail with an explicit unsupported/not-configured error rather than silently doing nothing.
+
+The transitional Pi Chat bridge rejects web search. In the Pi-first Agent design, external web
+search becomes an application-owned `RuntimeTool` resolved by the Host and adapted into the Pi tool
+snapshot. Provider-native search remains a model/provider option. Arbitration still guarantees at
+most one mechanism per turn, but it no longer belongs to an AI SDK Agent Runtime.
 
 ## Provider Registry
 

@@ -39,8 +39,8 @@ They are the source of truth for how the repository works today.
 
 | Document | Description |
 | --- | --- |
-| [Agent Architecture](./references/agent/README.md) | Local-only Agent Protocol, Runtime Router, and independent Pi/AI SDK contract for v1 (design, not yet implemented) |
-| [AI Provider Integration](./references/ai/provider-integration.md) | Provider/model resolution, AI SDK adapters, options, and transport behavior |
+| [Agent Architecture](./references/agent/README.md) | Implemented Agent Host foundation and Pi-first local execution target design |
+| [AI Provider Integration](./references/ai/provider-integration.md) | Provider/model resolution, transitional Pi/AI SDK chat paths, options, and transport behavior |
 | [Chat Streaming And Rendering](./references/chat/streaming-and-rendering.md) | Chat Runtime streaming, message windows, persistence, and rendering boundaries |
 | [Data Layer](./references/data/README.md) | Data API, preferences, caches, SQLite ownership, and service composition |
 | [File Model](./references/data/file-model.md) | Sandbox file ownership, immutability, references, lifecycle, and user-triggered deletion |

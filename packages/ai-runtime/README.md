@@ -2,6 +2,10 @@
 
 Portable, behavior-preserving ports of Cherry Studio desktop AI runtime logic.
 
+Despite the package name, this package is not Cherry Mobile's Agent Runtime. Pi is the sole target
+local conversation engine. These exports remain portable desktop-aligned helpers for provider,
+message, tool, and auxiliary AI behavior while that migration proceeds.
+
 ## Interface
 
 Consumers use only the declared `messages`, `provider`, `runtime`, `tools`, and `utils` subpaths.
