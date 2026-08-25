@@ -6,8 +6,8 @@ local-only.
 Cherry Mobile owns Agents and Sessions. Pi is the sole local conversation and Agent engine. The
 Host-private Agent Runtime contract keeps Pi isolated from application protocol and persistence;
 it is not a strategy interface for choosing between Pi and the AI SDK. AI SDK may remain behind
-non-Agent provider or generation services, but it does not own Agent transcripts, tool loops, or
-local Runtime selection.
+non-conversation model-capability services, including image generation invoked by a Runtime tool,
+but it does not own Agent transcripts, tool loops, or local Runtime selection.
 
 ## Boundaries
 
@@ -17,6 +17,8 @@ Agent Client
 Mobile Agent Host
     ↕ Agent Runtime contract
 Pi Runtime
+    ↕ immutable RuntimeTool snapshot
+Application capability adapters
 ```
 
 - The **Agent Protocol** is the application contract between the frontend Agent Client and the
@@ -29,6 +31,8 @@ Pi Runtime
 - **Pi** is the only Host-private local Runtime implementation. The Agent Client sees only the Agent
   Protocol and protocol-level capabilities; Pi and provider-SDK identities never cross that
   boundary.
+- **Application capability adapters** own HTTP MCP, device APIs, model-capability SDKs, Office
+  generation, and managed files. Pi sees only the Runtime tool contract and stable artifact refs.
 
 The Agent Client must not import the Agent Runtime contract. Only the Mobile Agent Host depends on
 both contracts and maps between them.
@@ -54,16 +58,36 @@ app and move to a package when a real independent consumer exists.
 - Before each turn, the Host resolves an immutable tool snapshot from the current Agent
   configuration, platform availability, permissions, and approval policy. An empty snapshot is
   normal conversation; a non-empty snapshot enables Pi's tool loop.
+- The Host also initializes a controlled resource ledger from managed files already visible to the
+  turn. Application capabilities may add validated managed outputs during execution; arbitrary tool
+  JSON and paths cannot expand it.
+- Before each turn, the Host also resolves enabled description-only Skills into immutable prompt
+  context. Skills are not tools and cannot expand the tool snapshot or resource ledger.
 
 Branching is also a future direction with its model already decided: Sessions never branch in
 place via a message tree; a branch is a fork into a new Session that copies the transcript up to a
 clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
+## Settled Tool And Skill Direction
+
+- Built-in tools and Streamable HTTP MCP use one application-owned binding model with per-tool
+  approval policy and stable built-in/MCP `ToolRef` identities. Provider-safe aliases and display
+  names are not persistence authority. The current database does not yet persist those bindings;
+  the logical model and resolution rules are settled in
+  [Agent Tools And Controlled Resources](./agent-tools-and-resources.md).
+- AI SDK and `@cherrystudio/ai-core` may implement non-conversation model capabilities behind
+  application-owned tools. They never become a parallel Agent or Chat Runtime.
+- Calendar, Office generation/inspection/patching, image generation, and file operations are
+  capability adapters. Office tools use versioned Cherry-owned specs and edit operations rather
+  than exposing renderer APIs or OOXML. File access is limited to managed `file_entry` ids visible
+  to the turn, edits are copy-on-write, and generated artifact parts are not implicit model
+  attachments.
+- Skills are controlled Markdown instruction resources stored and enabled by Cherry. They have no
+  executable files, callbacks, hooks, scripts, network access, or permission authority; see
+  [Agent Skills](./agent-skills.md).
+
 ## Open Questions
 
-- **Tool configuration storage** is not yet settled. Built-in, MCP, and future tool references need
-  one application-owned configuration model with per-tool approval policy. Pi must receive only the
-  resolved per-turn snapshot and must not read that storage directly.
 - **Provider coverage** for the Pi model layer must be completed before the transitional AI SDK chat
   path can be removed. Provider coverage is an adapter concern, not a reason to retain a second
   Agent Runtime.
@@ -83,6 +107,8 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 | [Agent Protocol](./agent-protocol.md) | Mobile application entities, operations, events, snapshots, errors, and invariants |
 | [Agent Runtime](./agent-runtime.md) | Independent local execution contract, Host boundary, lifecycle, and implementation conformance |
 | [Agent Persistence](./agent-persistence.md) | Durable SQLite schema behind `AgentSessionStore`, the Turn projection, delete semantics, and the rollout plan |
+| [Agent Tools And Controlled Resources](./agent-tools-and-resources.md) | Tool bindings, capability adapters, approvals, HTTP MCP, managed files, and artifacts |
+| [Agent Skills](./agent-skills.md) | Controlled description-only Skill storage, trust, resolution, and prompt precedence |
 
 ## Current Implementation
 
@@ -105,9 +131,10 @@ tool-bearing requests. It is not the final Pi Agent Runtime described here.
 
 The next integration replaces the Host's AI SDK Runtime registration and Router with a directly
 composed Pi Runtime, resolves neutral `RuntimeTool` snapshots for each turn, maps Pi tool events into
-the Agent Protocol, and uses the active durable store as the Session authority. Attachments and
-the avatar workflow, and Agent UI remain separate follow-up work. The transitional AI SDK Chat path
-is removed only after required provider coverage is available through Pi.
+the Agent Protocol, resolves enabled Skill text, and uses the active durable store as the Session
+authority. Tool/Skill persistence, managed attachments and artifacts, the avatar workflow, and Agent
+UI remain separate implementation slices. The transitional AI SDK Chat path is removed only after
+required provider coverage is available through Pi.
 
 ## Related
 

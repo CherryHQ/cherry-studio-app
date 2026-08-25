@@ -37,6 +37,10 @@ type AgentView = {
 
 type AgentExecutionTarget = { kind: 'local' }
 
+type AgentToolRef =
+  | { source: 'builtin'; capabilityId: string }
+  | { source: 'mcp'; serverId: string; rawToolName: string }
+
 type AgentSessionView = {
   id: string
   agentId: string
@@ -110,15 +114,18 @@ type AgentMessagePart =
   | {
       id: string
       type: 'file'
+      fileEntryId: string
       mediaType: string
       name?: string
-      uri: string
+      purpose: 'input-attachment' | 'artifact'
     }
   | {
       id: string
       type: 'tool'
       toolCallId: string
-      toolName: string
+      toolRef: AgentToolRef
+      providerName: string
+      displayName: string
       state:
         | 'input-available'
         | 'awaiting-approval'
@@ -126,6 +133,7 @@ type AgentMessagePart =
         | 'output-available'
         | 'denied'
         | 'error'
+        | 'interrupted'
       input?: JsonValue
       output?: JsonValue
       approvalId?: string
@@ -148,6 +156,22 @@ Part ids are stable within a message. The protocol owns these normalized parts; 
 provider SDK shape leaks through the boundary. Text parts may contain Markdown, but tool calls and
 results remain structured protocol parts and are not flattened into display Markdown.
 
+Every file part names an existing managed `file_entry`; protocol values never use absolute device
+paths or transient import URIs as authority. User input is imported before submission and persisted
+with `purpose: 'input-attachment'`. A tool that produces an Office document, image, or edited file
+keeps its structured tool result and also emits a part with `purpose: 'artifact'` so the assistant
+message durably owns the output. Artifact file parts and content remain UI- and tool-visible but are
+not automatically projected as model attachments in later history; the originating bounded artifact
+refs remain inside the paired structured tool result so same-turn and later controlled tool calls can
+address them. See
+[Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
+
+`toolRef` is the stable application identity used by configuration, approval, persistence, and
+audit. `providerName` is the deterministic function alias used in model history; `displayName` is a
+snapshot for historical UI. For every persisted tool call, `output-available`, `denied`, `error`, and
+`interrupted` are terminal states with a paired normalized `RuntimeToolResult` JSON projection. No
+finalized message contains a tool left in `input-available`, `awaiting-approval`, or `running`.
+
 `usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
 the turn and commits the final value together with the terminal message state, so
 `message.finalized` and later transcript reads both carry it. While the message is streaming,
@@ -158,14 +182,15 @@ the turn and commits the final value together with the terminal message state, s
 ```ts
 type AgentInputPart =
   | { type: 'text'; text: string }
-  | { type: 'file'; mediaType: string; name?: string; uri: string }
+  | { type: 'file'; fileEntryId: string; mediaType: string; name?: string }
 
 type AgentApprovalView = {
   id: string
   sessionId: string
   turnId: string
   toolCallId: string
-  toolName: string
+  toolRef: AgentToolRef
+  displayName: string
   input: JsonValue
   status: 'pending' | 'approved' | 'denied'
 }
@@ -271,7 +296,8 @@ snapshot. The snapshot contains only live state that must be composed over persi
 
 On route remount or foreground transition, the client creates a new observation and replaces its
 live projection with the returned snapshot. On process restart, the Host reconciles unfinished
-local turns to `interrupted`; version 1 does not resume execution.
+local turns to `interrupted`, replaces their non-terminal tool parts with `interrupted` parts carrying
+normalized results, and removes live approvals; version 1 does not resume execution.
 
 ## Errors
 
@@ -306,6 +332,10 @@ Native errors and stack traces stay behind the Host boundary.
 8. A new observation is sufficient to reconstruct all live UI state.
 9. Every protocol value survives a JSON round trip and re-validates against its schema.
 10. The client supplies an execution target and Agent identity, never a Runtime identity.
+11. Tool identity is a stable `AgentToolRef`; provider aliases and display names are not authority.
+12. Every finalized tool call is terminal and reconstructs as a paired model tool call/result.
+13. Every file part references an existing managed entry; artifact parts are not implicit model
+    attachments.
 
 ## Branching
 

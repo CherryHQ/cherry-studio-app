@@ -39,7 +39,12 @@ Pi is the sole target owner of local conversation state and the model/tool loop.
 Host owns Agent configuration, structured transcript persistence, permissions, approval policy, and
 the immutable tool snapshot injected for each turn. `tools: []` is ordinary conversation;
 configured tools are adapted from an application-owned contract into Pi tools. AI SDK may continue
-to serve non-Agent generation and provider utilities, but it must not become a parallel Chat Runtime.
+to serve non-conversation model capabilities behind those application-owned tools, but it must not
+become a parallel Chat Runtime. Pi never imports AI SDK or application services directly: a
+`RuntimeTool` callback closes over the narrow capability adapter, and generated output returns as a
+managed artifact. See
+`docs/references/agent/agent-tools-and-resources.md` and
+`docs/references/agent/agent-skills.md`.
 
 ## Sync Trust
 

@@ -18,8 +18,23 @@ ChatRuntime -> AiService -> providerToAiSdkConfig()
 `EXPO_PUBLIC_CHAT_RUNTIME` selects the transitional path. Development defaults to Pi; other builds
 default to AI SDK. The Pi bridge temporarily reuses AI SDK provider-configuration shapes, but that
 does not make AI SDK an Agent Runtime. The target Agent architecture has Pi as the sole local
-conversation engine; AI SDK remains only where a non-Agent service or provider capability still
-needs it.
+conversation engine; AI SDK remains only behind non-conversation model-capability services.
+
+The target capability path is:
+
+```text
+Mobile Agent Host → Pi Runtime → application-owned RuntimeTool
+                                      ↓
+                              capability service
+                                      ↓
+                         AiService / ai-core / AI SDK
+```
+
+Image generation is the first intended use of this path. Office generation and managed-file edits
+use the same tool boundary but do not need AI SDK unless their application capability chooses it.
+Pi owns tool selection and iteration; the capability service owns provider configuration,
+credentials, request execution, usage, cancellation, output import, and cleanup. See
+[Agent Tools And Controlled Resources](../agent/agent-tools-and-resources.md).
 
 `AiService` is a private, desktop-aligned backend AI implementation composed into workflow modules,
 runtimes, and Data API handlers by bootstrap. It is not exposed through `Backend` or frontend
@@ -137,7 +152,8 @@ carries both.
 
 This AI SDK tool attachment is transitional. New Agent tool behavior must resolve through an
 application-owned `RuntimeTool` contract and a Pi adapter rather than making AI SDK `ToolSet` the
-canonical tool model.
+canonical tool model. Existing calendar/device tool implementations may be adapted behind that
+contract; their AI SDK `ToolSet` wrappers are not the target ownership boundary.
 
 ## Special Providers
 
@@ -186,3 +202,5 @@ Current state:
 - Desktop Provider/Model semantics change.
 - Mobile adds currently excluded agent-session or desktop-only stream-manager behavior.
 - Pi provider coverage replaces the transitional AI SDK chat fallback.
+- A new model-capability tool needs provider configuration, usage, or artifact semantics not covered
+  by the application capability boundary.

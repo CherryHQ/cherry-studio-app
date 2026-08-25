@@ -138,6 +138,19 @@ FTS state.
 
 `message.stats` exists and follows the desktop `MessageStats` concept for token usage, cost, and timing metadata. Current mobile chat streaming does not yet extract usage or timing from the AI SDK stream into that field. Treat this as a desktop-alignment gap to fill when stream result metadata is available reliably, not as a completed persistence behavior.
 
+## Target Pi Cutover
+
+The sections above remain the as-built contract until the migration lands. The target removes
+runtime selection from ordinary conversation: Pi becomes the sole local conversation and tool-loop
+engine, and application-owned tools provide HTTP MCP, device capabilities, generated artifacts, and
+controlled file access. AI SDK remains available only behind non-conversation capability adapters
+such as image generation; it no longer streams a parallel Chat path.
+
+The cutover must preserve `ChatRuntime` ownership of Topic admission, overlay identity,
+cancellation, and terminal persistence while replacing the transitional `UIMessageChunk` adapter
+with Pi text, reasoning, tool, approval, file, usage, and terminal events. Tool and artifact rules are
+defined in [Agent Tools And Controlled Resources](../agent/agent-tools-and-resources.md).
+
 ## Reopen When
 
 - Pi becomes the sole Chat engine and tool events replace the transitional UI-message adapter.

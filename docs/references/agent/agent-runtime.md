@@ -3,8 +3,9 @@
 Status: **Pi-first target design; integration not yet complete**. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
-only local implementation. AI SDK may remain an implementation detail of non-Agent services, but
-it is not an Agent Runtime and does not own conversation or tool-loop state.
+only local implementation. AI SDK may remain an implementation detail of non-conversation
+model-capability services called through application-owned tools, but it is not an Agent Runtime and
+does not own conversation or tool-loop state.
 
 ## Dependency rule
 
@@ -12,6 +13,8 @@ it is not an Agent Runtime and does not own conversation or tool-loop state.
 Mobile Agent Host
     ↕ Agent Runtime contract
 Pi Runtime
+    ↕ RuntimeTool callback
+Application capability adapter → device / MCP / AI SDK / managed files
 ```
 
 The Runtime knows prepared prompts, models, history, tools, input, and normalized execution events.
@@ -33,7 +36,8 @@ persisted Runtime binding. Agent configuration, Session configuration, model sel
 availability never select another local engine.
 
 The Agent's application-owned instructions, model, and tools are resolved afresh for every turn.
-The injected Pi Runtime remains stable for the Host lifetime.
+Enabled description-only Skills are resolved into instructions at the same boundary but are not
+tools. The injected Pi Runtime remains stable for the Host lifetime.
 
 ## Descriptor and lifecycle
 
@@ -91,6 +95,22 @@ type RuntimeJsonValue =
   | RuntimeJsonValue[]
   | { [key: string]: RuntimeJsonValue }
 
+type RuntimeToolRef =
+  | { source: 'builtin'; capabilityId: string }
+  | { source: 'mcp'; serverId: string; rawToolName: string }
+
+type RuntimeArtifact = {
+  ref: { kind: 'managed-file'; fileEntryId: string }
+  mediaType: string
+  name: string
+  kind: 'created' | 'derived'
+}
+
+type RuntimeToolResult = {
+  value: RuntimeJsonValue
+  artifacts: RuntimeArtifact[]
+}
+
 type RuntimeExecutionRequest = {
   turnId: string
   instructions: string
@@ -121,10 +141,12 @@ Runtime implementations receive model/provider dependencies from application com
 not query Cherry provider or model tables.
 
 File input is resolved by the Host before it reaches a Runtime: attachments enter the application's
-file storage first, and the Host converts stored `file://` references into a directly consumable
-`uri` (such as a data URL). A Runtime never reads the device filesystem; until the Host-side
-resolution step lands (owned separately), local Runtimes declare `attachments: false` and reject
-file parts before partial execution.
+file storage first, `AgentInputPart` carries the resulting `fileEntryId`, and the Host validates and
+converts that entry into a directly consumable `uri` (such as a data URL). A Runtime never reads the
+device filesystem; until the Host-side resolution step lands (owned separately), local Runtimes
+declare `attachments: false` and reject file parts before partial execution. Tool-side access
+follows the stricter managed-id ledger in
+[Agent Tools And Controlled Resources](./agent-tools-and-resources.md#controlled-file-ledger).
 
 ### History
 
@@ -140,19 +162,23 @@ type RuntimeMessagePart =
   | {
       type: 'tool-call'
       toolCallId: string
-      toolName: string
+      toolRef: RuntimeToolRef
+      providerName: string
       input: RuntimeJsonValue
     }
   | {
       type: 'tool-result'
       toolCallId: string
-      output: RuntimeJsonValue
+      output: RuntimeToolResult
       isError: boolean
     }
 ```
 
 The Host converts persisted Cherry messages into this normalized history. Runtime-native messages
-never become the application source of truth.
+never become the application source of truth. User attachment parts may become Runtime file parts;
+assistant artifact parts remain application-visible managed references and are not automatically
+inlined into model history. Pi accesses their content only through a controlled read/inspect tool or
+after the user explicitly attaches the managed entry again.
 
 Text parts may contain Markdown, but the history is never flattened into one Markdown document.
 Tool calls and results remain structured and paired by `toolCallId`; Pi needs those records to
@@ -162,18 +188,23 @@ continue a tool loop and to reconstruct later turns correctly.
 
 ```ts
 type RuntimeTool = {
-  name: string
+  ref: RuntimeToolRef
+  providerName: string
+  displayName: string
   description: string
   inputSchema: RuntimeJsonValue
   approval: 'auto' | 'ask' | 'deny'
   execute(
     input: RuntimeJsonValue,
     context: { signal: AbortSignal; toolCallId: string },
-  ): Promise<RuntimeJsonValue>
+  ): Promise<RuntimeToolResult>
 }
 ```
 
-`inputSchema` is portable JSON Schema, not a provider-native schema object.
+`ref` is the stable application identity used by binding, approval, persistence, and audit.
+`providerName` is only the deterministic function alias exposed to the model for this contract;
+`displayName` is a historical UI snapshot. `inputSchema` is portable JSON Schema, not a
+provider-native schema object.
 
 The Host supplies an immutable tool snapshot after applying current Agent configuration, platform
 availability, system permissions, and Agent policy. Configuration changes during execution apply to
@@ -191,12 +222,39 @@ the Host rejects the turn with `CAPABILITY_UNSUPPORTED` before partial execution
 degrading to prompt-encoded pseudo calls.
 
 When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
-Runtime never invokes `execute`. It reports the tool part as `denied` and returns
-`{ "status": "denied", "reason": "..." }` to the model as that call's result, so the loop
-continues without the tool running. This feedback shape is a cross-implementation rule.
+Runtime never invokes `execute`. It reports the tool part as `denied`, persists
+`{ "value": { "status": "denied", "reason": "..." }, "artifacts": [] }` as its output, and
+returns that envelope to the model as the call's result, so the loop continues without the tool
+running. This feedback shape is a cross-implementation rule.
+
+Runtime-generated failures use the same outer envelope. An `error` result uses
+`value: { status: 'error', error: { code, message, retryable } }`; an `interrupted` result uses
+`value: { status: 'interrupted', reason: '...' }`; both use `artifacts: []`. Startup reconciliation
+uses that interrupted shape as well. Native errors, stack traces, and late callback results never
+enter these envelopes.
 
 Tool callbacks and `AbortSignal` are allowed here because the Runtime contract is process-local.
 They never cross the JSON-safe application protocol.
+
+A callback may close over a narrow application capability service. This is how Streamable HTTP MCP,
+calendar, Office generation, image generation, and managed-file operations reach Pi without Pi
+importing application or provider SDK modules. Image generation may use `AiService`,
+`@cherrystudio/ai-core`, or AI SDK behind that callback; those dependencies still do not own the
+conversation or tool loop.
+
+Every callback returns `RuntimeToolResult`. A non-artifact tool returns `artifacts: []`; an MCP
+adapter wraps the remote payload in `value` and never interprets its shape as an artifact envelope.
+A file-producing application capability creates and validates each managed entry before returning
+its artifact ref. The Pi adapter gives the model the typed outer envelope, including bounded managed
+refs but never artifact bytes, and also emits the artifacts as Runtime file parts for Host
+projection. This preserves same-turn follow-up access without treating assistant artifact parts as
+later model attachments. See
+[Agent Tools And Controlled Resources](./agent-tools-and-resources.md#tool-results-and-artifacts).
+Absolute paths and large base64 payloads are never tool results.
+
+Description-only Skills are resolved into the `instructions` string before execution. They never
+appear in `tools`, never receive callbacks, and cannot change the tool snapshot, approval policy, OS
+permission, or turn resource ledger. See [Agent Skills](./agent-skills.md).
 
 ## Execution output
 
@@ -222,15 +280,18 @@ type RuntimeOutputPart =
   | {
       id: string
       type: 'file'
+      ref: { kind: 'managed-file'; fileEntryId: string }
       mediaType: string
-      name?: string
-      uri: string
+      name: string
+      purpose: 'artifact'
     }
   | {
       id: string
       type: 'tool'
       toolCallId: string
-      toolName: string
+      toolRef: RuntimeToolRef
+      providerName: string
+      displayName: string
       state:
         | 'input-available'
         | 'awaiting-approval'
@@ -238,8 +299,9 @@ type RuntimeOutputPart =
         | 'output-available'
         | 'denied'
         | 'error'
+        | 'interrupted'
       input?: RuntimeJsonValue
-      output?: RuntimeJsonValue
+      output?: RuntimeToolResult
       approvalId?: string
       error?: RuntimeError
     }
@@ -248,7 +310,8 @@ type RuntimeApproval = {
   id: string
   turnId: string
   toolCallId: string
-  toolName: string
+  toolRef: RuntimeToolRef
+  displayName: string
   input: RuntimeJsonValue
   status: 'pending' | 'approved' | 'denied'
 }
@@ -266,8 +329,12 @@ type RuntimeError = {
 }
 ```
 
-Every execution emits exactly one terminal event: `completed`, `failed`, or `cancelled`. No event
-may follow it. Runtime-native errors are normalized and must not expose credentials or stack traces.
+Every execution emits exactly one terminal event: `completed`, `failed`, or `cancelled`. Before a
+terminal event, the Runtime settles every live tool part: denial includes the canonical denial
+output envelope, tool failure includes a normalized error result envelope, and cancellation replaces
+unfinished tool parts with `interrupted` and a normalized result envelope. No event may follow the
+terminal event. Runtime-native errors are normalized and must not expose credentials or stack
+traces.
 
 `usage` values are cumulative for the execution; the last report before the terminal event is
 authoritative. A Runtime that cannot report usage emits no `usage` event, and the assistant
@@ -279,8 +346,8 @@ message's protocol `usage` stays `null`.
 2. It persists the user message and assistant placeholder.
 3. It validates that the Session target is `local` and resolves the current Agent configuration.
 4. The Host uses its injected Pi Runtime.
-5. The Host normalizes instructions, model, structured history, the immutable tool snapshot, input,
-   and options.
+5. The Host resolves enabled Skills, creates the turn resource ledger, and normalizes instructions,
+   model, structured history, the immutable tool snapshot, input, and options.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
 8. Terminal message and turn state commit before the Host publishes terminal protocol events.
@@ -295,7 +362,13 @@ foreground transition creates a fresh protocol observation from the Host snapsho
 
 Local execution depends on the Mobile JavaScript process. If the process is suspended or killed and
 the turn cannot reach a terminal event, startup reconciliation marks the persisted placeholder and
-turn as interrupted. Version 1 has no resume API or background-execution guarantee.
+turn as interrupted and terminalizes every non-terminal persisted tool part as `interrupted`.
+Version 1 has no resume API or background-execution guarantee.
+
+History projection never sends an unanswered approval or another dangling tool call to Pi. A
+persisted `denied`, `error`, or `interrupted` tool part contributes its paired normalized tool result;
+an abandoned incomplete call without a durable result is omitted as a whole. This follows the PC
+Agent invariant while keeping Mobile Version 1 non-resumable.
 
 ## Conformance
 
@@ -308,10 +381,14 @@ Every Runtime implementation passes the same suite:
 5. Unsupported input or tools fail before partial execution.
 6. `cancel` is idempotent and causes the active turn to settle as cancelled.
 7. Approval is requested only for an `ask` tool and correlates to the active turn and tool call.
-8. Denied tools are never executed.
+8. Denied tools are never executed and still produce a paired canonical result.
 9. `close` is idempotent and releases provider, iterator, and tool resources.
 10. Native errors are normalized without secrets or stack traces.
 11. The implementation imports no application protocol, persistence, React, or Expo module.
+12. Tool refs remain stable when display names or provider aliases change.
+13. Artifact output contains validated managed refs, never absolute paths or unbounded inline bytes.
+14. Cancellation and startup recovery leave no non-terminal tool part or dangling model-history call.
+15. Skills cannot appear as executable tools or expand a turn's tool snapshot or resource ledger.
 
 The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without
 Pi or a provider connection.

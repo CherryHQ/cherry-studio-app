@@ -24,7 +24,7 @@ fault isolation or protection from blocking the JavaScript thread. Contract valu
 | `src/bootstrap/composition` | Concrete backend graph and workflow wiring |
 | `src/bootstrap/runtime` | Initialization, startup gate, splash, post-ready work, and disposal |
 | `src/frontend` | Features, components, React Query, hooks, i18n, styles, UI utils and types |
-| `src/backend/ai` | Pi conversation integration, transitional AI SDK adapters, MCP runtime, tools, and message conversion |
+| `src/backend/ai` | Pi conversation integration, Agent Host/Runtime boundaries, transitional AI SDK adapters, MCP runtime, tools, and message conversion |
 | `src/backend/data` | Backend cache, preferences, SQLite, schemas, seeders, fixtures, and persistence services |
 | `src/backend/services` | Workflow module factories, device adapters, external clients, avatars, and web search |
 | `src/shared/contracts` | Workflow-only `Backend` modules, runtime projections, sessions, events, and results |
@@ -76,6 +76,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, runtimes, sessions, cleanup, and startup gates.
 - [Lifecycle](./lifecycle/README.md): service container, hosts, phases, and resource-scope coordination (designed; landing in stages).
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
+- [Agent Architecture](./agent/README.md): Pi-only conversation Runtime, Agent Protocol, tools,
+  controlled resources, Skills, and persistence.
 - [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): `ChatRuntime`, overlay, and persistence.
 - [Web Search](./web-search.md): external providers versus provider-native web search.
 - [Navigation And Insets](./navigation-and-insets.md): Expo Router, tabs, stacks, sheets, and insets.
@@ -97,6 +99,11 @@ compatibility adapter or generic frontend selector for persistence services.
 - `AiService` currently offers transitional Pi and AI SDK streaming paths. Pi is the target sole
   local conversation engine; the current AI SDK fallback remains until Pi provider and tool coverage
   is complete.
+- In the target Agent path, application-owned `RuntimeTool` adapters expose Streamable HTTP MCP,
+  device APIs, Office/image generation, and controlled managed-file operations to Pi. AI SDK may
+  implement a model capability behind a tool, but never owns the conversation or tool loop.
+- Controlled Skills are persisted description-only prompt resources. They are not executable tools
+  and cannot expand permission or the turn resource ledger.
 - Painting generation uses caller-owned sessions with explicit `cancel()` and `dispose()` behavior.
 - App shutdown aborts and awaits Chat before disposing MCP, web search, cache, and SQLite.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.

@@ -99,6 +99,30 @@ shutdown marks the runtime disposed, rejects new tasks, aborts all active turns,
 tracked task to settle before MCP, web search, cache, or SQLite is closed. An active stream is still
 not guaranteed to continue, checkpoint, or resume after OS suspension or termination.
 
+## Agent Runtime And Tool Capabilities
+
+`ApplicationHost` owns one Mobile Agent Host and one injected Pi Runtime generation. The Agent Host
+owns Runtime sessions, per-Session turn admission, cancellation, approval state, transcript
+persistence, enabled Skill resolution, the monotonic turn resource ledger, immutable tool snapshots,
+tool terminalization, and artifact projection. Route components only observe Agent Protocol
+snapshots and issue commands; unmounting one does not dispose Pi or cancel a turn.
+
+Pi owns model context construction and the model → tool → result loop. It does not own system
+permissions, provider credentials, managed files, MCP clients, or side-effect policy. Each
+application capability adapter owns one narrow operation and its validation, timeout, cancellation,
+cleanup, and error redaction:
+
+- `McpRuntimeService` retains ownership of Streamable HTTP clients and discovery caches;
+- device adapters retain ownership of calendar permission and native calls;
+- Office and file adapters retain ownership of temporary bytes and copy-on-write `file_entry`
+  creation; and
+- the image capability retains ownership of `AiService`/AI SDK execution, usage, downloads, and
+  managed output import.
+
+An Agent tool may delegate to `JobRuntime`, but Version 1 still waits for terminal job state inside
+the active turn. The durable job ledger does not make the Agent turn resumable after process death.
+See [Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md).
+
 ## Painting Generation
 
 `PaintingsModule.startGeneration()` atomically creates the receipt and enqueues a
@@ -140,6 +164,8 @@ the bootstrap gate.
 - App bootstrap unmount closes SQLite and disposes long-lived backend resources.
 - Route unmount only unsubscribes from Chat; app disposal aborts and awaits all Chat turns before
   closing infrastructure.
+- Agent route unmount only unsubscribes; app disposal cancels and awaits Pi turns before disposing
+  their MCP, device, provider, and file capability dependencies.
 - Painting route unmount does not stop generation; explicit cancel or resource deletion reaches the
   host-owned job runtime.
 - Cold start does not wait for non-current history, provider/model refresh, or diagnostics.
