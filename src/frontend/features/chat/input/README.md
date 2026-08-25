@@ -40,9 +40,11 @@ Two consequences to take seriously:
       and reasoning controls are not duplicated into this state.
 - [ ] The native field remains multiline and at its natural measured height in both states. Resting
       constrains a surrounding clip to one line; focus expands that clip and reveals the existing
-      toolbar below it. Blurring returns to the resting row without clearing the draft. Do not put
-      the resting height on the Android native editor itself: its suppressed internal relayout can
-      leave the caret and selectable frame using stale geometry.
+      toolbar below it. Blurring returns to the resting row without clearing the draft. The resting
+      height stays off the native editor so its active frame and selectable region cannot diverge.
+- [ ] The rich editor receives the current base font size and foreground color as resolved native
+      styles. Android deliberately does not receive the base `lineHeight` until the upstream
+      editor's dp/px line-height bug is fixed; passing it now collapses the native line box and caret.
 - [ ] The state change uses the shared 250ms settle curve: the resting actions fade, shrink, and
       release their width while the toolbar fades in and grows the surface. It reverses on blur and
       lands immediately when the system requests reduced motion.

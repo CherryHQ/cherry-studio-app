@@ -36,6 +36,12 @@ export function ComposerInput({
 }: ComposerInputProps) {
   const { value } = useComposerState('Composer.Input');
   const { changeText } = useComposerActions('Composer.Input');
+  // The rich editor is a Fabric host rather than RN's TextInput, so Uniwind
+  // cannot resolve a className on it. Resolve the two base text properties here
+  // instead. Use the font-size-only utility deliberately: the upstream Android
+  // editor currently mixes dp and px when applying `lineHeight`, collapsing its
+  // native line box and caret.
+  const baseTextStyle = useResolveClassNames('text-(length:--text-base) text-foreground');
   const placeholderStyle = useResolveClassNames('text-muted-foreground');
   const fallbackRef = useRef<ComposerInputHandle | null>(null);
   const inputRef = ref ?? fallbackRef;
@@ -45,7 +51,10 @@ export function ComposerInput({
   const emitted = useRef(value);
   // Flattened rather than passed as an array: this input takes a single style
   // object, not RN's `StyleProp`.
-  const resolvedStyle = useMemo(() => StyleSheet.flatten([inputStyle, style]), [style]);
+  const resolvedStyle = useMemo(
+    () => StyleSheet.flatten([baseTextStyle, inputStyle, style]),
+    [baseTextStyle, style],
+  );
 
   const handleChangeMarkdown = useCallback(
     (markdown: string) => {

@@ -14,7 +14,11 @@ jest.mock('heroui-native/utils', () => {
 });
 
 jest.mock('uniwind', () => ({
-  useResolveClassNames: jest.fn(() => ({ color: '#8e8e93' })),
+  useResolveClassNames: jest.fn((className: string) =>
+    className.includes('text-foreground')
+      ? { color: '#111827', fontSize: 16 }
+      : { color: '#8e8e93' },
+  ),
 }));
 
 // `Composer.Menu` reaches for the portal, and heroui ships ESM that jest's
@@ -233,6 +237,15 @@ describe('Composer', () => {
       uris: ['file:///pasted.jpg'],
     });
     expect(onPaste).toHaveBeenNthCalledWith(2, { type: 'unsupported' });
+  });
+
+  it('resolves the base typography for the native rich-text field', () => {
+    const tree = render({
+      children: <Composer.Input testID="composer-input" />,
+    });
+    const input = tree.root.findByType(TextInput);
+
+    expect(input.props.style).toEqual(expect.objectContaining({ color: '#111827', fontSize: 16 }));
   });
 
   // The field owns its own buffer, so a caller-side value has to be pushed into

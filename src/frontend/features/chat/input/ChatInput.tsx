@@ -66,10 +66,8 @@ type ChatInputProps = {
   topicId?: string;
 };
 
-// This constrains the clip around the editor, never the native editor itself.
-// Android's enriched input owns its multiline measurement and intentionally
-// suppresses an internal requestLayout pass; changing its own height on focus
-// can therefore leave the cursor drawable and selectable frame stale.
+// This constrains the clip around the editor, never the native editor itself,
+// so the active multiline field and its selectable region share one geometry.
 const restingInputHeight = 32;
 const restingActionSlotWidth = restingInputHeight + 8;
 const focusTransitionMotion = {
