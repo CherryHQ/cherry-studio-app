@@ -1,7 +1,7 @@
 # Agent Persistence
 
-Status: **implemented as inactive foundation code** (production activation and step 5 follow-ups
-remain). Version 1 is local-only.
+Status: **schema and durable store active in production** (`serviceRegistry` binds
+`SqliteAgentSessionStore`; step 5 follow-ups remain). Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
@@ -18,8 +18,8 @@ record for mobile-originated Agent Sessions only.
   projection over the assistant message plus Host-held live state. The Agent Protocol itself does
   not change. Nothing consumes `Backend.agent` yet, so this reshape is contained in
   `src/backend/ai/agentHost` and its tests.
-- A `SqliteAgentSessionStore` adapter ready to replace `InMemoryAgentSessionStore` when Agent/Pi
-  business integration begins. Production composition deliberately remains in-memory for now.
+- A `SqliteAgentSessionStore` adapter that is the production `AgentSessionStore` binding;
+  `InMemoryAgentSessionStore` remains as the conformance-suite reference adapter.
 - An Agent-table-backed `AgentDefinitionSource` ready for later integration. The `agent` table
   intentionally starts empty; this phase does not migrate or copy assistant data, and the
   production Host deliberately remains assistant-backed for now.
@@ -210,9 +210,9 @@ storage boundary moves.
    lands first so the schema implements the settled port.
 2. **Schema + migration.** Add the three schema modules, run `pnpm db:generate`, register the SQL
    in `migrations.ts`, add the agent FTS statements to `customSql.ts`.
-3. **`SqliteAgentSessionStore`.** Implement against the port and pass the shared conformance suite.
-   Keep the production `serviceRegistry` binding on the in-memory adapter until Agent/Pi business
-   integration begins.
+3. **`SqliteAgentSessionStore`.** Implement against the port, pass the shared conformance suite,
+   and bind it as the production `AgentSessionStore` in `serviceRegistry` (done — the in-memory
+   adapter remains the conformance reference).
 4. **Agent rows.** Add an `agent`-table-backed `AgentDefinitionSource`, but leave `agent` empty in
    this foundation phase. Agent/Pi business integration owns the later Agent creation or import
    rules. Keep the production Host on the assistant-backed source until then; assistants remain
