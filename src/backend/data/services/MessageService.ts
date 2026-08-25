@@ -17,9 +17,6 @@ import type {
   BranchMessagesResponse,
   CreateMessageDto,
   DeleteMessageResponse,
-  SiblingsGroup,
-  TreeNode,
-  TreeResponse,
   UpdateMessageDto,
 } from '@/shared/data/api/schemas/messages';
 import type {
@@ -37,7 +34,6 @@ import { getDataService } from './dataServiceRegistry';
 import { mergeMessageRuntimeStats } from './utils/messageStats';
 import { timestampToISO } from './utils/rowMappers';
 
-const previewLength = 50;
 const defaultLimit = 20;
 const logger = loggerService.withContext('MessageService');
 
@@ -99,199 +95,6 @@ export class MessageService {
 
   private get db() {
     return this.dbService.getDb();
-  }
-
-  async getTree(
-    topicId: string,
-    options: { depth?: number; nodeId?: string; rootId?: string } = {},
-  ): Promise<TreeResponse> {
-    const { depth = 1 } = options;
-    const [topic] = await this.db
-      .select()
-      .from(topicTable)
-      .where(and(eq(topicTable.id, topicId), isNull(topicTable.deletedAt)))
-      .limit(1);
-
-    if (!topic) {
-      throw DataApiErrorFactory.notFound('Topic', topicId);
-    }
-
-    const activeNodeId = options.nodeId ?? topic.activeNodeId;
-    let rootId = options.rootId;
-
-    if (!rootId) {
-      const [root] = await this.db
-        .select({ id: messageTable.id })
-        .from(messageTable)
-        .where(
-          and(
-            eq(messageTable.topicId, topicId),
-            eq(messageTable.role, 'root'),
-            isNull(messageTable.deletedAt),
-          ),
-        )
-        .limit(1);
-      rootId = root?.id;
-    }
-
-    if (!rootId) {
-      return { activeNodeId: null, nodes: [], rootId: null, siblingsGroups: [] };
-    }
-
-    // Ancestor walk naturally includes the virtual root itself (its null parentId ends the
-    // recursion); the root is never a user-visible node, so it's excluded here.
-    const activePath = new Set<string>();
-    if (activeNodeId) {
-      const pathRows = await this.db.all<{ id: string }>(sql`
-        WITH RECURSIVE path AS (
-          SELECT id, parent_id FROM message WHERE id = ${activeNodeId} AND deleted_at IS NULL
-          UNION ALL
-          SELECT m.id, m.parent_id FROM message m
-          INNER JOIN path p ON m.id = p.parent_id
-          WHERE m.deleted_at IS NULL
-        )
-        SELECT id FROM path
-      `);
-      for (const row of pathRows) {
-        activePath.add(row.id);
-      }
-      activePath.delete(rootId);
-    }
-
-    // Starts at the root's children (depth 0), not the root itself, so the content-less
-    // virtual root is never part of the returned tree.
-    const maxDepth = depth === -1 ? 999 : depth;
-    const treeDepthRows = await this.db.all<{ id: string; tree_depth: number }>(sql`
-      WITH RECURSIVE tree AS (
-        SELECT id, 0 as tree_depth FROM message WHERE parent_id = ${rootId} AND deleted_at IS NULL
-        UNION ALL
-        SELECT m.id, t.tree_depth + 1 FROM message m
-        INNER JOIN tree t ON m.parent_id = t.id
-        WHERE t.tree_depth < ${maxDepth} AND m.deleted_at IS NULL
-      )
-      SELECT id, tree_depth FROM tree
-    `);
-
-    const depthById = new Map(treeDepthRows.map((row) => [row.id, row.tree_depth]));
-    const baseRows =
-      treeDepthRows.length === 0
-        ? []
-        : await this.db
-            .select()
-            .from(messageTable)
-            .where(
-              inArray(
-                messageTable.id,
-                treeDepthRows.map((row) => row.id),
-              ),
-            );
-
-    const treeRows: (MessageRow & { treeDepth: number })[] = baseRows.map((row) => ({
-      ...row,
-      treeDepth: depthById.get(row.id) ?? 0,
-    }));
-    const loadedIds = new Set(treeRows.map((row) => row.id));
-    const missingActivePathIds = [...activePath].filter((id) => !loadedIds.has(id));
-
-    if (missingActivePathIds.length > 0) {
-      const additionalRows = await this.db
-        .select()
-        .from(messageTable)
-        .where(and(inArray(messageTable.id, missingActivePathIds), isNull(messageTable.deletedAt)));
-      for (const row of additionalRows) {
-        treeRows.push({ ...row, treeDepth: maxDepth + 1 });
-        loadedIds.add(row.id);
-      }
-    }
-
-    const activePathArray = [...activePath];
-    if (activePathArray.length > 0) {
-      const childrenRows = await this.db
-        .select()
-        .from(messageTable)
-        .where(
-          and(inArray(messageTable.parentId, activePathArray), isNull(messageTable.deletedAt)),
-        );
-
-      for (const row of childrenRows) {
-        if (!loadedIds.has(row.id)) {
-          treeRows.push({ ...row, treeDepth: maxDepth + 1 });
-          loadedIds.add(row.id);
-        }
-      }
-    }
-
-    if (treeRows.length === 0) {
-      return { activeNodeId: null, nodes: [], rootId, siblingsGroups: [] };
-    }
-
-    const messagesById = new Map<string, Message>();
-    const childrenMap = new Map<string, string[]>();
-    const depthMap = new Map<string, number>();
-
-    for (const row of treeRows) {
-      const message = rowToMessage(row);
-      messagesById.set(message.id, message);
-      depthMap.set(message.id, row.treeDepth);
-
-      const parentId = message.parentId ?? 'root';
-      const children = childrenMap.get(parentId) ?? [];
-      children.push(message.id);
-      childrenMap.set(parentId, children);
-    }
-
-    const resultNodes: TreeNode[] = [];
-    const siblingsGroups: SiblingsGroup[] = [];
-    const visitedGroups = new Set<string>();
-
-    for (const message of messagesById.values()) {
-      const currentDepth = depthMap.get(message.id) ?? 0;
-      const shouldInclude =
-        depth === -1 ||
-        currentDepth <= depth ||
-        activePath.has(message.id) ||
-        message.id === activeNodeId;
-
-      if (!shouldInclude) {
-        continue;
-      }
-
-      resultNodes.push(messageToTreeNode(message, (childrenMap.get(message.id) ?? []).length > 0));
-
-      if (message.siblingsGroupId !== 0) {
-        const groupKey = groupKeyFor(message.parentId, message.siblingsGroupId);
-        if (!visitedGroups.has(groupKey)) {
-          visitedGroups.add(groupKey);
-          const groupMessages = [...messagesById.values()].filter(
-            (candidate) =>
-              candidate.parentId === message.parentId &&
-              candidate.siblingsGroupId === message.siblingsGroupId,
-          );
-
-          if (groupMessages.length > 1) {
-            siblingsGroups.push({
-              nodes: groupMessages.map((candidate) => {
-                const node = messageToTreeNode(
-                  candidate,
-                  (childrenMap.get(candidate.id) ?? []).length > 0,
-                );
-                const { parentId: _parentId, ...nodeWithoutParent } = node;
-                return nodeWithoutParent;
-              }),
-              parentId: message.parentId ?? 'root',
-              siblingsGroupId: message.siblingsGroupId,
-            });
-          }
-        }
-      }
-    }
-
-    return {
-      activeNodeId: topic.activeNodeId,
-      nodes: resultNodes,
-      rootId,
-      siblingsGroups,
-    };
   }
 
   async getBranchMessages(
@@ -390,64 +193,6 @@ export class MessageService {
     }
 
     return rowToMessage(row);
-  }
-
-  async getChildrenByParentId(parentId: string): Promise<Message[]> {
-    const rows = await this.db
-      .select()
-      .from(messageTable)
-      .where(and(eq(messageTable.parentId, parentId), isNull(messageTable.deletedAt)));
-    return rows.map(rowToMessage);
-  }
-
-  async updateSiblingsGroupId(id: string, siblingsGroupId: number): Promise<void> {
-    await this.dbService.withWriteTx((tx) =>
-      tx.update(messageTable).set({ siblingsGroupId }).where(eq(messageTable.id, id)),
-    );
-  }
-
-  async createSibling(sourceId: string, data: MessageData): Promise<Message> {
-    return await this.dbService.withWriteTx(async (tx) => {
-      const [source] = await tx
-        .select()
-        .from(messageTable)
-        .where(eq(messageTable.id, sourceId))
-        .limit(1);
-      if (!source) {
-        throw DataApiErrorFactory.notFound('Message', sourceId);
-      }
-
-      if (source.role === 'root') {
-        throw DataApiErrorFactory.invalidOperation(
-          'create sibling',
-          'cannot create a sibling of the virtual root',
-        );
-      }
-
-      let siblingsGroupId = source.siblingsGroupId;
-      if (siblingsGroupId === 0) {
-        siblingsGroupId = Date.now();
-        await tx.update(messageTable).set({ siblingsGroupId }).where(eq(messageTable.id, sourceId));
-      }
-
-      const [row] = await tx
-        .insert(messageTable)
-        .values({
-          data,
-          parentId: source.parentId,
-          role: source.role,
-          siblingsGroupId,
-          // A user sibling (edit-and-resend) already carries its final content; only
-          // assistant turns stream. Boot reconcile repairs assistant `pending` rows only,
-          // so a user row left `pending` would never be repaired.
-          status: source.role === 'user' ? 'success' : 'pending',
-          topicId: source.topicId,
-        })
-        .returning();
-
-      await this.topicService.setActiveNodeTx(tx, source.topicId, row.id, { assumeValid: true });
-      return rowToMessage(row);
-    });
   }
 
   async create(topicId: string, dto: CreateMessageDto): Promise<Message> {
@@ -880,44 +625,6 @@ export class MessageService {
       .map(rowToMessage);
   }
 
-  async getPathThrough(topicId: string, nodeId: string): Promise<Message[]> {
-    const [node] = await this.db
-      .select({ id: messageTable.id })
-      .from(messageTable)
-      .where(
-        and(
-          eq(messageTable.id, nodeId),
-          eq(messageTable.topicId, topicId),
-          isNull(messageTable.deletedAt),
-        ),
-      )
-      .limit(1);
-
-    if (!node) {
-      throw DataApiErrorFactory.notFound('Message', nodeId);
-    }
-
-    const [leaf] = await this.db.all<{ id: string }>(sql`
-      WITH RECURSIVE subtree AS (
-        SELECT id, created_at FROM message
-          WHERE id = ${nodeId} AND topic_id = ${topicId} AND deleted_at IS NULL
-        UNION ALL
-        SELECT m.id, m.created_at FROM message m
-          INNER JOIN subtree s ON m.parent_id = s.id
-          WHERE m.deleted_at IS NULL
-      )
-      SELECT s.id FROM subtree s
-      WHERE NOT EXISTS (
-        SELECT 1 FROM message c
-        WHERE c.parent_id = s.id AND c.deleted_at IS NULL
-      )
-      ORDER BY s.created_at DESC
-      LIMIT 1
-    `);
-
-    return await this.getPathToNode(leaf?.id ?? nodeId);
-  }
-
   private async buildBranchMessagesWithSiblings(pathRows: MessageRow[]): Promise<BranchMessage[]> {
     const uniqueGroups = new Set<string>();
     const groupsToQuery: { parentId: null | string; siblingsGroupId: number }[] = [];
@@ -1169,33 +876,6 @@ function completeApprovalWait(
       spans,
     },
   });
-}
-
-function messageToTreeNode(message: Message, hasChildren: boolean): TreeNode {
-  return {
-    createdAt: message.createdAt,
-    hasChildren,
-    id: message.id,
-    modelId: message.modelId,
-    parentId: message.parentId,
-    preview: extractPreview(message),
-    role: message.role === 'system' ? 'assistant' : message.role,
-    status: message.status,
-  };
-}
-
-function extractPreview(message: Message): string {
-  const parts = message.data.parts ?? [];
-  for (const part of parts) {
-    if (part.type === 'text' && typeof part.text === 'string') {
-      const text = part.text.trim();
-      if (text.length > 0) {
-        return text.length > previewLength ? `${text.slice(0, previewLength)}...` : text;
-      }
-    }
-  }
-
-  return '';
 }
 
 async function resolveParentId(

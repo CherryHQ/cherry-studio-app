@@ -8,9 +8,7 @@ import {
 import {
   CreateTopicSchema,
   DeleteTopicsQuerySchema,
-  DuplicateTopicSchema,
   ListTopicsQuerySchema,
-  SetActiveNodeSchema,
   type TopicSchemas,
   UpdateTopicSchema,
 } from '@/shared/data/api/schemas/topics';
@@ -55,14 +53,6 @@ export function createTopicHandlers(service: TopicService): HandlersFor<TopicSch
         scopes().delete(topicScopes([params.id]), () => service.delete(params.id)),
       GET: async ({ params }) => service.getById(params.id),
       PATCH: async ({ body, params }) => service.update(params.id, UpdateTopicSchema.parse(body)),
-    },
-    '/topics/:id/active-node': {
-      PUT: async ({ body, params }) =>
-        service.setActiveNode(params.id, SetActiveNodeSchema.parse(body).nodeId),
-    },
-    '/topics/:id/duplicate': {
-      POST: async ({ body, params }) =>
-        service.duplicate(params.id, DuplicateTopicSchema.parse(body)),
     },
     '/topics/:id/order': {
       PATCH: async ({ body, params }) => service.reorder(params.id, OrderRequestSchema.parse(body)),
