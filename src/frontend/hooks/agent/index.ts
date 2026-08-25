@@ -6,3 +6,7 @@ export {
   useAgentSessionMutations,
   useAgentSessions,
 } from './useAgentSessions';
+export {
+  type AgentMessageHistoryWindow,
+  useAgentMessageHistoryWindow,
+} from './useAgentMessageHistoryWindow';
