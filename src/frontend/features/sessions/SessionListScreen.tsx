@@ -84,9 +84,8 @@ function SessionListScreenBody() {
         return;
       }
 
-      const { item } = outcome.item;
       router.push({
-        params: { agentId: item.agentId, sessionId: getSearchResultSessionId(outcome.item) },
+        params: getSearchResultTarget(outcome.item),
         pathname: '/',
       });
     });
@@ -154,8 +153,13 @@ type SessionSearchResult =
   | { item: Extract<EntitySearchItem, { type: 'session' }>; kind: 'session' }
   | { item: SessionMessageContentSearchItem; kind: 'message' };
 
-function getSearchResultSessionId(result: SessionSearchResult): string {
-  return result.kind === 'session' ? result.item.id : result.item.sessionId;
+function getSearchResultTarget(result: SessionSearchResult): {
+  agentId: string;
+  sessionId: string;
+} {
+  return result.kind === 'session'
+    ? result.item.target
+    : { agentId: result.item.agentId, sessionId: result.item.sessionId };
 }
 
 function SessionSearchResultRow({ result }: { result: SessionSearchResult }) {
