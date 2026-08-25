@@ -41,15 +41,17 @@ plus `allowEmptySend` and `isSendEnabled` — see `canSend` below.
     boolean when the screen has its own conditions, as painting does.
   - `getSendErrorLabel` — a message for a failure the caller recognises.
   - `dismissKeyboardOnSend` — for screens whose list dismisses it already.
-- `ComposerField` — the text field, plus pasting images into attachments.
+- `ComposerField` — the text field, plus pasting images into attachments. It forwards the narrow
+  presentation controls (`style`, `onFocus`, `onBlur`) so a screen can arrange resting and active
+  states without replacing the native field or changing its editor mode.
 - `ComposerAttachments` — the staged attachments, in a row that swells and
   shrinks with them.
 - `ComposerMenu` — the ＋ menu. `children` are extra `Composer.Menu.Item`s
   appended below a separator.
 - `ComposerModelPill` — the model button. Its `icon` is a composed `ModelPickerIcon`, and
   `children` trail the label inside the pill.
-- `ComposerProvider` / `useComposerState` / `useComposerActions` — the draft and
-  its attachments.
+- `ComposerSessionProvider` / `useComposerState` / `useComposerActions` — one
+  draft and its managed attachments.
 - `useComposerFieldDismiss` — take the keyboard down and blur before opening a
   picker or settings surface that replaces the input context. The model pill
   does this itself; caller-owned buttons decide whether their overlay should
@@ -82,11 +84,13 @@ walk to verify it.
   than drawing anything in-app.
 - `components/ComposerAttachmentStrip.tsx`: internal to `ComposerAttachments`;
   shows import progress, then delegates ready files to `FileEntryPreview`.
-- `components/ManagedComposerProvider.tsx` and
-  `hooks/useManagedComposerAttachments.ts`: import transient picker results into
-  managed file entries before exposing them to Chat or Painting.
-- `context/ComposerProvider.tsx`: draft, attachments, field ref — split into
-  three contexts so dispatch-only components skip keystroke re-renders.
+- `components/ComposerSessionProvider.tsx` and
+  `hooks/useManagedComposerAttachments.ts`: own one composer session and import
+  transient picker results into managed file entries before exposing them to
+  Chat or Painting. Existing managed entries passed into a session are borrowed;
+  removing them detaches them without deleting their source file.
+- `context/ComposerProvider.tsx`: the session's private draft, attachments, and
+  field-ref contexts, split so dispatch-only components skip keystroke re-renders.
 - `utils/composerAttachments.ts`: attachment drafts and the message parts they
   turn into, with tests.
 

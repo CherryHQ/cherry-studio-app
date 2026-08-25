@@ -4,10 +4,17 @@ import { ChatScreen } from '../ChatScreen';
 
 const mockHandleInputHeightChange = jest.fn();
 const mockInputHeightShared = { value: 122 };
-let chatComposerProps: Record<string, unknown> | undefined;
+let chatInputProps: Record<string, unknown> | undefined;
 let chatWorkspaceProps: Record<string, unknown> | undefined;
+let dockProps: Record<string, unknown> | undefined;
 
 jest.mock('@cherrystudio/ui/components', () => ({
+  Composer: {
+    Dock: ({ children, ...props }: { children?: React.ReactNode }) => {
+      dockProps = props;
+      return children;
+    },
+  },
   useComposerDockLayout: () => ({
     contentBottomInset: 130,
     handleInputHeightChange: mockHandleInputHeightChange,
@@ -15,6 +22,10 @@ jest.mock('@cherrystudio/ui/components', () => ({
     inputHeightShared: mockInputHeightShared,
     keyboardOffset: 26,
   }),
+}));
+
+jest.mock('@/frontend/components/composer', () => ({
+  ComposerSessionProvider: ({ children }: { children?: React.ReactNode }) => children,
 }));
 
 jest.mock('expo-router', () => ({
@@ -38,11 +49,14 @@ jest.mock('@/shared/devBench/layoutBenchProbe', () => ({
   LAYOUT_BENCH_ASSISTANT_ID: 'benchmark-assistant',
 }));
 
-jest.mock('../workspace', () => ({
-  ChatComposer: (props: Record<string, unknown>) => {
-    chatComposerProps = props;
+jest.mock('../input', () => ({
+  ChatInput: (props: Record<string, unknown>) => {
+    chatInputProps = props;
     return null;
   },
+}));
+
+jest.mock('../workspace', () => ({
   ChatEmptyState: () => null,
   ChatWorkspace: (props: Record<string, unknown>) => {
     chatWorkspaceProps = props;
@@ -54,8 +68,9 @@ describe('ChatScreen composer dock wiring', () => {
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
-    chatComposerProps = undefined;
+    chatInputProps = undefined;
     chatWorkspaceProps = undefined;
+    dockProps = undefined;
   });
 
   afterEach(() => {
@@ -73,9 +88,12 @@ describe('ChatScreen composer dock wiring', () => {
       contentBottomInset: 130,
       keyboardOffset: 26,
     });
-    expect(chatComposerProps).toMatchObject({
-      assistantId: 'assistant-1',
+    expect(dockProps).toMatchObject({
       onHeightChange: mockHandleInputHeightChange,
+    });
+    expect(chatInputProps).toMatchObject({
+      assistantId: 'assistant-1',
+      dismissKeyboardOnSend: false,
       topicId: 'topic-1',
     });
   });

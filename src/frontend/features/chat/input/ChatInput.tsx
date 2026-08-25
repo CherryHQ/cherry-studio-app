@@ -1,7 +1,17 @@
 import { Composer } from '@cherrystudio/ui/components';
-import { useCallback, useEffect, useState } from 'react';
+import { duration, easing } from '@cherrystudio/ui/motion';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { type LayoutChangeEvent, View } from 'react-native';
+import { KeyboardEvents } from 'react-native-keyboard-controller';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import {
   ComposerAttachments,
@@ -38,7 +48,7 @@ import { type ToolMentionId, toolMentions, toolMentionUrl } from '@/frontend/uti
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { isUniqueModelId } from '@/shared/data/types/model';
 
-import { useChatTopic } from '../runtime';
+import { useChatTopicControls } from '../runtime';
 import { ChatInputEffortOverlay } from './components/ChatInputEffortOverlay';
 import { ChatInputMenuItems } from './components/ChatInputMenuItems';
 import { useChatInputReasoningEfforts } from './hooks/useChatInputReasoningEfforts';
@@ -57,6 +67,17 @@ type ChatInputProps = {
   topicId?: string;
 };
 
+// This constrains the clip around the editor, never the native editor itself,
+// so the active multiline field and its selectable region share one geometry.
+const restingInputHeight = 32;
+const restingActionSlotWidth = restingInputHeight + 8;
+const activeToolbarGap = 12;
+const focusTransitionMotion = {
+  duration: duration.base,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
+
 // 诊断埋点：量化输入框「真实 model 名」解析耗时（pref 段 + model DB 段）。`[PERF]` 前缀。
 const perfLog = loggerService.withContext('ChatPerf');
 
@@ -65,7 +86,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const modelSettings = useModelSettingSelections();
   const rawDefaultModel = modelSettings.selections.default;
   const defaultModelId = isUniqueModelId(rawDefaultModel) ? rawDefaultModel : null;
-  const chatTopic = useChatTopic(topicId);
+  const { abort, isBusy, sendText } = useChatTopicControls(topicId);
   const topicQuery = useTopic(topicId);
   const selectedAssistantId = topicId
     ? (topicQuery.data?.assistantId ?? null)
@@ -100,10 +121,98 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
     );
 
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
+  const [isInputActive, setIsInputActive] = useState(false);
+  const isInputActiveRef = useRef(false);
+  const { inputRef } = useComposerMeta();
+  const focusProgress = useSharedValue(0);
+  const fieldFrameHeight = useSharedValue(restingInputHeight);
+  const naturalFieldHeight = useRef(restingInputHeight);
+  const morphFrameStyle = useAnimatedStyle(() => ({
+    height: fieldFrameHeight.value + focusProgress.value * (activeToolbarGap + restingInputHeight),
+  }));
+  const fieldFrameStyle = useAnimatedStyle(() => ({
+    height: fieldFrameHeight.value,
+    left: interpolate(
+      focusProgress.value,
+      [0, 1],
+      [restingActionSlotWidth, 0],
+      Extrapolation.CLAMP,
+    ),
+    right: interpolate(
+      focusProgress.value,
+      [0, 1],
+      [restingActionSlotWidth, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
+  const controlsRowStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: focusProgress.value * (fieldFrameHeight.value + activeToolbarGap),
+      },
+    ],
+  }));
+  const modelControlStyle = useAnimatedStyle(() => ({
+    opacity: focusProgress.value,
+    transform: [
+      {
+        scale: interpolate(focusProgress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
+      },
+    ],
+  }));
+  const effortControlStyle = useAnimatedStyle(() => ({
+    opacity: focusProgress.value,
+    transform: [
+      {
+        scale: interpolate(focusProgress.value, [0, 1], [0.92, 1], Extrapolation.CLAMP),
+      },
+    ],
+  }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
+  const handleFieldLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextHeight = Math.max(restingInputHeight, Math.ceil(event.nativeEvent.layout.height));
+
+      if (naturalFieldHeight.current === nextHeight) {
+        return;
+      }
+
+      naturalFieldHeight.current = nextHeight;
+      if (isInputActive) {
+        // Content growth while editing must expose the caret immediately. The
+        // focus transition is animated; typing-induced measurement is not.
+        fieldFrameHeight.set(nextHeight);
+      }
+    },
+    [fieldFrameHeight, isInputActive],
+  );
+  const handleInputBlur = useCallback(() => {
+    if (!isInputActiveRef.current) {
+      return;
+    }
+
+    isInputActiveRef.current = false;
+    setIsInputActive(false);
+    focusProgress.set(withTiming(0, focusTransitionMotion));
+    fieldFrameHeight.set(withTiming(restingInputHeight, focusTransitionMotion));
+  }, [fieldFrameHeight, focusProgress]);
+  const handleInputFocus = useCallback(() => {
+    isInputActiveRef.current = true;
+    setIsInputActive(true);
+    focusProgress.set(withTiming(1, focusTransitionMotion));
+    fieldFrameHeight.set(withTiming(naturalFieldHeight.current, focusTransitionMotion));
+  }, [fieldFrameHeight, focusProgress]);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
-  const { inputRef } = useComposerMeta();
+
+  useEffect(() => {
+    const subscription = KeyboardEvents.addListener('keyboardWillHide', () => {
+      handleInputBlur();
+      inputRef.current?.blur();
+    });
+
+    return () => subscription.remove();
+  }, [handleInputBlur, inputRef]);
 
   const persistWebSearch = useCallback(
     (targetAssistantId: string, enabled: boolean) =>
@@ -189,7 +298,7 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
       }
       const parts = createComposerMessageParts(payload.text, readyAttachments);
 
-      return chatTopic.sendText({
+      return sendText({
         assistantId: selectedAssistantId,
         parts,
         reasoningEffort: getChatInputReasoningEffortSnapshot(
@@ -203,63 +312,96 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
       });
     },
     [
-      chatTopic,
       isReasoningEffortSelected,
       reasoningEffort,
       reasoningEfforts,
       selectedAssistant?.settings.reasoning_effort,
       selectedAssistantId,
       selectedModelId,
+      sendText,
     ],
   );
 
   return (
     <>
       <ChatInputEffortOverlay
-        key={`${selectedModelId ?? 'no-model'}:${reasoningEfforts.join(',')}`}
         modelLabel={selectedModelLabel}
         onChange={handleReasoningEffortSelect}
         reasoningEffort={reasoningEffort}
         reasoningEfforts={reasoningEfforts}
       >
-        {(effortGauge) => (
-          <ComposerSurface
-            dismissKeyboardOnSend={dismissKeyboardOnSend}
-            onSend={handleSendPress}
-            onStop={chatTopic.abort}
-            streaming={chatTopic.isBusy}
-          >
-            <ComposerAttachments />
-            <ComposerField />
-            <Composer.Toolbar>
-              <ComposerMenu>
-                <ChatInputMenuItems
-                  isWebSearchEnabled={isWebSearchEnabled}
-                  onMentionPress={handleMentionPress}
-                  onWebSearchChange={setWebSearchEnabled}
-                />
-              </ComposerMenu>
-              <ComposerModelPill
-                icon={
-                  selectedModel ? (
-                    <ModelPickerIcon
-                      model={selectedModel}
-                      provider={selectedModelProvider}
-                      providerIconSize={18}
-                      size={20}
-                    />
-                  ) : undefined
-                }
-                label={selectedModelLabel}
-                onPress={openModelPicker}
+        {(effortGauge) => {
+          const menu = (
+            <ComposerMenu>
+              <ChatInputMenuItems
+                isWebSearchEnabled={isWebSearchEnabled}
+                onMentionPress={handleMentionPress}
+                onWebSearchChange={setWebSearchEnabled}
               />
-              <View className="ml-auto flex-row items-center gap-2">
-                {effortGauge}
-                <Composer.Send />
-              </View>
-            </Composer.Toolbar>
-          </ComposerSurface>
-        )}
+            </ComposerMenu>
+          );
+
+          return (
+            <ComposerSurface
+              dismissKeyboardOnSend={dismissKeyboardOnSend}
+              onSend={handleSendPress}
+              onStop={abort}
+              streaming={isBusy}
+            >
+              <ComposerAttachments />
+              {/* One field and one control row morph between the resting and focused layouts. */}
+              <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
+                <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>
+                  <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
+                    <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
+                  </View>
+                </Animated.View>
+                <Animated.View
+                  className="absolute top-0 right-0 left-0 flex-row items-center gap-2"
+                  pointerEvents="box-none"
+                  style={controlsRowStyle}
+                >
+                  {menu}
+                  <Animated.View
+                    accessibilityElementsHidden={!isInputActive}
+                    className="min-w-0 shrink"
+                    importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                    pointerEvents={isInputActive ? 'auto' : 'none'}
+                    style={modelControlStyle}
+                  >
+                    <ComposerModelPill
+                      icon={
+                        selectedModel ? (
+                          <ModelPickerIcon
+                            model={selectedModel}
+                            provider={selectedModelProvider}
+                            providerIconSize={18}
+                            size={20}
+                          />
+                        ) : undefined
+                      }
+                      label={selectedModelLabel}
+                      onPress={openModelPicker}
+                    />
+                  </Animated.View>
+                  <View className="ml-auto flex-row items-center gap-2" pointerEvents="box-none">
+                    {effortGauge ? (
+                      <Animated.View
+                        accessibilityElementsHidden={!isInputActive}
+                        importantForAccessibility={isInputActive ? 'auto' : 'no-hide-descendants'}
+                        pointerEvents={isInputActive ? 'auto' : 'none'}
+                        style={effortControlStyle}
+                      >
+                        {effortGauge}
+                      </Animated.View>
+                    ) : null}
+                    <Composer.Send />
+                  </View>
+                </Animated.View>
+              </Animated.View>
+            </ComposerSurface>
+          );
+        }}
       </ChatInputEffortOverlay>
       {isModelPickerOpen ? (
         <ModelPickerDrawer

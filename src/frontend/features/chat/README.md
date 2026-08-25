@@ -10,8 +10,8 @@ behavior. Structured message rendering is shared with painting through
 
 ## Organization
 
-- `ChatScreen.tsx` is header + swappable body + docked composer. With a topic the body is the
-  conversation, without one it is the empty-state copy; the composer stays mounted across that
+- `ChatScreen.tsx` is header + swappable body + docked composer session. With a topic the body is
+  the conversation, without one it is the empty-state copy; the session stays mounted across that
   swap so a draft survives the first send creating a topic.
 - `input/` owns what chat wires around the shared composer: its tools, its reasoning effort, and the
   assistant/model bookkeeping behind both. The composer itself is
