@@ -1,6 +1,6 @@
 # Agent Architecture
 
-Status: **Phase 1–3 foundation implemented; Pi-first integration in progress**. Version 1 is
+Status: **Phase 1–4 backend foundation implemented; frontend integration remains**. Version 1 is
 local-only.
 
 Cherry Mobile owns Agents and Sessions. Pi is the sole local conversation and Agent engine. The
@@ -64,17 +64,16 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 - **Tool configuration storage** is not yet settled. Built-in, MCP, and future tool references need
   one application-owned configuration model with per-tool approval policy. Pi must receive only the
   resolved per-turn snapshot and must not read that storage directly.
-- **Provider coverage** for the Pi model layer must be completed before the transitional AI SDK chat
-  path can be removed. Provider coverage is an adapter concern, not a reason to retain a second
-  Agent Runtime.
+- **Provider coverage** for the Pi model layer currently starts with API-key-authenticated OpenAI
+  Responses endpoints. It must expand before the transitional AI SDK chat path can be removed.
+  Provider coverage is an adapter concern, not a reason to retain a second Agent Runtime.
 - **Context compaction** is undesigned. The ownership split is decided: the durable conversation
   record belongs to the Host (it must survive process death and back transcript reads), while
   turning that structured record into the actual model prompt — selection, formatting, and
   eventually compaction — is Pi-owned engine strategy. Compaction needs a contract collaboration
-  point
-  because its artifacts must persist and a Runtime cannot write application storage (for example,
-  a context-artifact event the Host stores and replays into later turns). Design it together with
-  the Pi Runtime.
+  point because its artifacts must persist and a Runtime cannot write application storage (for
+  example, a context-artifact event the Host stores and replays into later turns). Design it
+  together with the Pi Runtime.
 
 ## Documents
 
@@ -86,16 +85,22 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 
 ## Current Implementation
 
-The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Agent Host, and V1
-Router exist as an earlier architecture slice. The Host consumes the message-centric
-`AgentSessionStore` port and owns the Turn projection. The durable `SqliteAgentSessionStore` is
-the production store binding over the `agent`/`agent_session`/`agent_session_message` tables.
-Agent CRUD and static Session/transcript reads are exposed through the Data API, and the Host
-resolves definitions from the `agent` table. The table intentionally starts empty: no assistant
-data is migrated or copied. See
+The Runtime contract, Fake Runtime, Pi Runtime, Protocol contract, and Mobile Agent Host are
+implemented. The Host binds `local` directly to Pi, consumes the message-centric
+`AgentSessionStore` port, owns the Turn projection, and forwards Agent inference settings into each
+execution. The durable `SqliteAgentSessionStore` is the production store binding over the
+`agent`/`agent_session`/`agent_session_message` tables. Agent CRUD and static Session/transcript
+reads are exposed through the Data API, and the Host resolves definitions from the `agent` table.
+The table intentionally starts empty: no assistant data is migrated or copied. See
 [Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
 follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
+
+The production Pi model adapter currently accepts API-key-authenticated OpenAI Responses endpoints.
+Pi maps text, reasoning, cumulative usage, cancellation, native tool loops, and approval decisions
+onto the Runtime contract. Agent tool configuration is still deferred, so the Host deliberately
+supplies `tools: []`; file attachments are rejected before provider execution until the Host-side
+file resolver lands.
 
 No frontend currently consumes the Agent Data API or `Backend.agent`. These additive data slices do
 not replace the current Topic or Chat Runtime surfaces. The current Topic Chat path has a
@@ -103,11 +108,10 @@ transitional Pi adapter selected by `EXPO_PUBLIC_CHAT_RUNTIME`; development defa
 builds default to AI SDK. That adapter currently handles text/reasoning only and rejects
 tool-bearing requests. It is not the final Pi Agent Runtime described here.
 
-The next integration replaces the Host's AI SDK Runtime registration and Router with a directly
-composed Pi Runtime, resolves neutral `RuntimeTool` snapshots for each turn, maps Pi tool events into
-the Agent Protocol, and uses the active durable store as the Session authority. Attachments and
-the avatar workflow, and Agent UI remain separate follow-up work. The transitional AI SDK Chat path
-is removed only after required provider coverage is available through Pi.
+The next integration is the Agent frontend over `Backend.agent`, followed by the application-owned
+tool configuration/resolution model and broader Pi provider coverage. Attachments, the avatar
+workflow, context compaction, and removal of the transitional Chat path remain separate follow-up
+work.
 
 ## Related
 

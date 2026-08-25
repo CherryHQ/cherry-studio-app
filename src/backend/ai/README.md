@@ -7,18 +7,18 @@ the mobile platform and application-service boundaries around that package.
 ## Backend Ownership
 
 - `AiService.ts` is the private backend AI entry point and preserves its existing app contract.
-- `agent/` owns the independent Agent Runtime contract, its FakeRuntime test double, and the
-  transitional AI SDK Runtime implementation (`docs/references/agent/agent-runtime.md`). The target
-  production implementation is Pi only. This boundary must not import application protocol types,
-  persistence, React, or Expo modules (ESLint-enforced).
+- `agent/` owns the independent Agent Runtime contract, its FakeRuntime test double, and the Pi
+  Runtime implementation (`docs/references/agent/agent-runtime.md`). This boundary must not import
+  application protocol types, persistence, React, or Expo modules (ESLint-enforced).
 - `agentHost/` owns the Mobile Agent Host: the only adapter between the Agent Protocol
   (`@/shared/contracts/agent`) and the Runtime contract, plus the Agent definition source and the
-  production `resolveModel` composition. It still contains the earlier AI SDK Runtime Router and
-  registry slice; Pi-first integration replaces those with direct Pi Runtime composition.
+  production Pi provider/model resolution adapter. Version 1 binds `local` directly to Pi without
+  a Runtime registry or implementation router.
 - `provider/` injects Expo environment values and app headers, then builds provider configuration
   from mobile data services.
 - `runtime/pi/` owns the current transitional Topic Chat bridge from Pi events to the existing
-  `UIMessageChunk` stream. It is text/reasoning-only and is not yet the formal Pi Agent Runtime.
+  `UIMessageChunk` stream. It is text/reasoning-only and separate from the Pi Agent Runtime in
+  `agent/pi/`.
 - `runtime/aiSdk/` retains the current fallback Agent construction and request parameter
   orchestration that needs Expo Crypto, preferences, provider services, tools, and logging. It is
   not the target local Agent engine.

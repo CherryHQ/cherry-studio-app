@@ -25,9 +25,9 @@ record for mobile-originated Agent Sessions only.
   deletes delegate to the Host so an active turn is cancelled and drained before rows disappear.
   The `agent` table intentionally starts empty; no assistant data is migrated or copied.
 
-Out of scope: Agent UI, formal Pi Agent Runtime activation, chat-table
-(`assistant`/`topic`/`message`) migration or removal, branching columns, background turns, tool
-configuration storage. Everything here is additive; no existing table changes.
+Out of scope: Agent UI, chat-table (`assistant`/`topic`/`message`) migration or removal, branching
+columns, background turns, and tool configuration storage. Everything here is additive; no
+existing table changes.
 
 ## V0.2 transitional limitations
 
@@ -40,9 +40,6 @@ surfaces:
   or clearing its model can therefore make its existing Sessions unavailable through the public
   Host API even though their rows remain durable. The Data API's static Session and transcript
   reads remain available without resolving an executable Agent definition.
-- Agent inference settings are persisted by CRUD, but the production Host currently sends empty
-  Runtime options. `temperature`, `maxOutputTokens`, and `reasoningEffort` are stored configuration,
-  not effective execution settings, until the definition and Runtime-option mapping is connected.
 - Concurrent partial updates to one Agent's settings are last-writer-wins and can lose independently
   updated fields because the read/merge happens before the serialized write transaction.
 - Batch reorder callers must provide unique Agent ids. Duplicate ids can currently be reported as
@@ -241,8 +238,8 @@ storage boundary moves.
    history through the Data API. Keep these historical reads independent of executable Agent
    lookup, and route Session rename/delete through the Host lifecycle boundary (done).
 6. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
-   (generalizing `userAvatarStorage`); formal Pi Runtime activation and tool configuration; fork
-   columns; the eventual chat-table decision.
+   (generalizing `userAvatarStorage`); tool configuration; fork columns; the eventual chat-table
+   decision.
 
 ## Rejected alternatives
 

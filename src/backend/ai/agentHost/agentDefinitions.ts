@@ -1,15 +1,16 @@
 /**
  * Minimal Agent configuration source.
  *
- * The Agent entity's configuration model is not settled yet
+ * The Agent tool configuration model is not settled yet
  * (docs/references/agent/README.md open questions). Basic chat needs only
- * id/name/model/instructions, so the Host consumes this narrow source. Tools
- * are deliberately absent because V1 executes tool-less turns.
+ * id/name/model/instructions/inference options, so the Host consumes this
+ * narrow source. Tools are deliberately absent because V1 executes tool-less
+ * turns.
  */
 
 import { and, eq, isNull } from 'drizzle-orm';
 
-import type { RuntimeModel } from '@/backend/ai/agent';
+import type { RuntimeModel, RuntimeOptions } from '@/backend/ai/agent';
 import { application } from '@/backend/core/application/Application';
 import { agentTable } from '@/backend/data/db/schemas';
 import { parseUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
@@ -19,6 +20,7 @@ export type AgentDefinition = {
   name: string;
   instructions: string;
   model: RuntimeModel;
+  options: RuntimeOptions;
 };
 
 export interface AgentDefinitionSource {
@@ -46,6 +48,17 @@ export function createAgentTableDefinitionSource(): AgentDefinitionSource {
         name: agent.name,
         instructions: agent.instructions,
         model: { providerId, modelId },
+        options: {
+          ...(agent.settings.maxOutputTokens !== undefined
+            ? { maxOutputTokens: agent.settings.maxOutputTokens }
+            : {}),
+          ...(agent.settings.reasoningEffort !== undefined
+            ? { reasoningEffort: agent.settings.reasoningEffort }
+            : {}),
+          ...(agent.settings.temperature !== undefined
+            ? { temperature: agent.settings.temperature }
+            : {}),
+        },
       };
     },
   };
