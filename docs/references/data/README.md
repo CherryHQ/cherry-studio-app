@@ -133,8 +133,9 @@ and assistant relation tables. `message` stores a parent-linked tree; `topic.act
 the active branch. Message content is `data.parts`, and FTS derives searchable text from text parts.
 
 `MessageService` persists user messages and reserves stable assistant placeholders before
-`ChatRuntime` streams. The runtime publishes an in-memory per-Topic overlay during generation and
-writes the terminal, paused, or error state to the placeholder.
+`ChatRuntime` streams. `AiService` currently normalizes either the transitional Pi path or the AI
+SDK fallback into that runtime. The runtime publishes an in-memory per-Topic overlay during
+generation and writes the terminal, paused, or error state to the placeholder.
 
 ## Service Graph
 
