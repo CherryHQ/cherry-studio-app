@@ -15,6 +15,3 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - Agent model and inference settings are edited on the Agent screen, not inside the composer.
 - Web search, tool mentions, follow-up queues, and steering are not part of the Version 1 Agent
   Session composer.
-
-The older model, reasoning, and assistant-setting helpers remain isolated in this directory while
-the migration is staged. They are not mounted by `ChatInput`.

@@ -1,4 +1,3 @@
-export * from '../mcp/resolveAssistantMcpServers';
 export * from './adapters/aiSdk/context';
 export * from './adapters/aiSdk/exposition/applyDeferExposition';
 export * from './adapters/aiSdk/exposition/shouldDefer';

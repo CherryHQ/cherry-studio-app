@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import type { BackgroundActivitySessionInput } from '@/backend/services/backgroundActivity/BackgroundActivityManager';
 import type { BackgroundReplyActivityProps } from '@/shared/backgroundActivity/chatReply';
+import type { AgentMessagePart } from '@/shared/contracts/agent';
 
 import { BackgroundReplyRuntime } from '../BackgroundReplyRuntime';
 
@@ -172,13 +173,14 @@ describe('BackgroundReplyRuntime', () => {
   test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     const session = mockSessions[0];
 
-    turn.update({ parts: [{ type: 'text', text: 'hello' }] });
+    turn.update({ parts: [textPart('hello')] });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({
         icon: 'bubble-ellipsis',
@@ -190,7 +192,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(session?.update.mock.calls.at(-1)?.[0]).not.toHaveProperty('compactLabel');
 
     turn.update({
-      parts: [{ type: 'text', text: 'hello more' }],
+      parts: [textPart('hello more')],
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
@@ -208,7 +210,7 @@ describe('BackgroundReplyRuntime', () => {
     );
 
     turn.update({
-      parts: [{ type: 'text', text: 'approved and continuing' }],
+      parts: [textPart('approved and continuing')],
     });
     expect(session?.update).toHaveBeenLastCalledWith(
       expect.objectContaining({ phase: 'responding' }),
@@ -237,9 +239,10 @@ describe('BackgroundReplyRuntime', () => {
     async (outcome, label) => {
       const runtime = await createRuntime();
       const turn = runtime.startTurn({
-        assistantName: 'Alpha',
-        topicId: 'topic-1',
-        topicTitle: 'First topic',
+        agentId: 'agent-1',
+        agentName: 'Alpha',
+        sessionId: 'session-1',
+        sessionTitle: 'First session',
       });
       turn.finish(outcome);
       await flushOperations();
@@ -254,17 +257,19 @@ describe('BackgroundReplyRuntime', () => {
   test('does not let an older finish end the session inherited by a newer turn', async () => {
     const runtime = await createRuntime();
     const first = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     const session = mockSessions[0];
 
     first.finish('completed');
     const second = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     await flushOperations();
 
@@ -293,7 +298,7 @@ describe('BackgroundReplyRuntime', () => {
     runtime.clearSession('session-1');
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
-    turn.update({ parts: [{ type: 'text', text: 'late' }] });
+    turn.update({ parts: [textPart('late')] });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
     await runtime._doStop();
   });
@@ -301,9 +306,10 @@ describe('BackgroundReplyRuntime', () => {
   test('cancels sessions when the preference turns off and restores them on re-enable', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     enabled = false;
     preferenceListener?.();
@@ -311,7 +317,7 @@ describe('BackgroundReplyRuntime', () => {
     expect(runtime.isActivated).toBe(false);
     expect(mockSessions[0]?.cancel).toHaveBeenCalledTimes(1);
 
-    turn.update({ parts: [{ type: 'text', text: 'hi' }] });
+    turn.update({ parts: [textPart('hi')] });
     expect(mockStartSession).toHaveBeenCalledTimes(1);
 
     enabled = true;
@@ -326,8 +332,18 @@ describe('BackgroundReplyRuntime', () => {
 
   test('rolls back partially restored sessions when activation fails', async () => {
     const runtime = await createRuntime();
-    runtime.startTurn({ assistantName: 'Alpha', topicId: 'topic-1', topicTitle: 'First topic' });
-    runtime.startTurn({ assistantName: 'Beta', topicId: 'topic-2', topicTitle: 'Second topic' });
+    runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Beta',
+      sessionId: 'session-2',
+      sessionTitle: 'Second session',
+    });
 
     enabled = false;
     preferenceListener?.();
@@ -348,9 +364,10 @@ describe('BackgroundReplyRuntime', () => {
   test('ends sessions when stopped during an active turn and stops idempotently', async () => {
     const runtime = await createRuntime();
     runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     await expect(runtime._doStop()).resolves.toBeUndefined();
     await expect(runtime._doStop()).resolves.toBeUndefined();
@@ -361,9 +378,10 @@ describe('BackgroundReplyRuntime', () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const androidRuntime = await createRuntime();
     androidRuntime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     expect(mockStartSession).not.toHaveBeenCalled();
     await androidRuntime._doStop();
@@ -373,9 +391,10 @@ describe('BackgroundReplyRuntime', () => {
     const disabledRuntime = await createRuntime();
     expect(disabledRuntime.isActivated).toBe(false);
     disabledRuntime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-2',
-      topicTitle: 'Second topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-2',
+      sessionTitle: 'Second session',
     });
     expect(mockStartSession).not.toHaveBeenCalled();
     await disabledRuntime._doStop();
@@ -393,13 +412,14 @@ describe('BackgroundReplyRuntime', () => {
       return key;
     });
     const turn = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     expect(() =>
       turn.update({
-        parts: [{ type: 'text', text: 'hello' }],
+        parts: [textPart('hello')],
       }),
     ).not.toThrow();
     expect(() => turn.awaitApproval()).not.toThrow();
@@ -452,4 +472,8 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
     resolve = settle;
   });
   return { promise, resolve };
+}
+
+function textPart(text: string): AgentMessagePart {
+  return { id: `text-${text}`, state: 'done', text, type: 'text' };
 }

@@ -39,9 +39,8 @@ suffix.
   resource primitives remain independent of persistence, Expo modules, and product domains.
 - `src/backend/data/services` remains reserved for entity persistence and data-specific
   transformations.
-- `src/backend/ai` remains reserved for AI SDK, provider, MCP runtime, message, and tool behavior.
-  The app-owned `ChatRuntime` lives there too, in `streamManager/`, because it mirrors desktop's
-  `src/main/ai/streamManager` rather than anything under `src/main/services`.
+- `src/backend/ai` remains reserved for the Pi Agent Host, non-conversation AI SDK generation,
+  provider adaptation, and MCP connection behavior.
 
 Workflow module factories accept narrow dependency objects. Bootstrap configures host-scoped
 environment inputs, while the application service registry assembles lifecycle services.

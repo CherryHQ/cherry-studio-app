@@ -1,6 +1,5 @@
 import type { BackgroundReplyPhase } from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessageView } from '@/shared/contracts/agent';
-import type { CherryUIMessage } from '@/shared/data/types/message';
 
 // The feature contract lives in shared so the service and activity
 // registration agree on props; these re-exports keep the service-local import
@@ -16,9 +15,7 @@ export type BackgroundReplyOutcome = Extract<
   'cancelled' | 'completed' | 'failed'
 >;
 
-export type BackgroundReplyMessage =
-  | Pick<AgentMessageView, 'parts'>
-  | Pick<CherryUIMessage, 'parts'>;
+export type BackgroundReplyMessage = Pick<AgentMessageView, 'parts'>;
 
 /**
  * Capability handle for one reply generation. Calls never throw, and handles
@@ -31,28 +28,15 @@ export type BackgroundReplyTurn = {
   update: (message: BackgroundReplyMessage) => void;
 };
 
-export type AgentSessionBackgroundReplyTurnInput = {
+export type BackgroundReplyTurnInput = {
   agentId: string;
   agentName: string;
   sessionId: string;
   sessionTitle: string;
 };
 
-/** Transitional input retained only until the old ChatRuntime is deleted in D. */
-export type LegacyChatBackgroundReplyTurnInput = {
-  assistantName: string;
-  topicId: string;
-  topicTitle: string;
-};
-
-export type BackgroundReplyTurnInput =
-  | AgentSessionBackgroundReplyTurnInput
-  | LegacyChatBackgroundReplyTurnInput;
-
 export type BackgroundReplyLifecycle = {
   clearSession: (sessionId: string) => void;
-  /** Transitional compatibility entry retained until D removes ChatRuntime. */
-  clearTopic: (topicId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
   updateSessionTitle: (sessionId: string, title: string) => void;
 };

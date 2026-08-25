@@ -14,7 +14,7 @@ import { hashObject } from './seeding/hashObject';
 
 const databaseName = 'cherry.db';
 // app_state journal key for the custom (FTS) DDL; mirrors SeedRunner's `seed:` journal.
-const customSqlJournalKey = 'custom-sql:message-fts';
+const customSqlJournalKey = 'custom-sql:agent-session-message-fts';
 
 const logger = loggerService.withContext('DbService');
 

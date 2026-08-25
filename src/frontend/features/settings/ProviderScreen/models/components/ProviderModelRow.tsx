@@ -109,7 +109,7 @@ export function ProviderModelRow({
   );
 }
 
-/** The same tick the topic list draws, since both lists select the same way. */
+/** The same tick the session list draws, since both lists select the same way. */
 function ProviderModelRowCheckbox({
   isDisabled,
   isSelected,

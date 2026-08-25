@@ -22,7 +22,7 @@ export function useProviderModelRemove() {
     refresh: ['/models'],
   });
   const deleteModels = removeModelsMutation.trigger;
-  const [defaultModelId] = usePreference('chat.default_model_id');
+  const [defaultModelId] = usePreference('agent.default_model_id');
 
   const removeModels = useCallback(
     async (models: Model[]) => {

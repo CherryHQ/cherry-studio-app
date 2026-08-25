@@ -27,8 +27,8 @@ import type { DatabaseSeeder } from '../types';
 const logger = loggerService.withContext('CherryAiDefaultModelSeeder');
 
 export const DEFAULT_MODEL_PREFERENCE_KEYS = [
-  'chat.default_model_id',
-  'topic.naming.model_id',
+  'agent.default_model_id',
+  'agent.session_naming.model_id',
   'feature.quick_assistant.model_id',
   'feature.translate.model_id',
 ] as const;

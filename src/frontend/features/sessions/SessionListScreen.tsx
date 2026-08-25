@@ -24,8 +24,8 @@ import { sessionSelectionScope } from './hooks/useSessionSelectionSource';
 import { SessionList } from './SessionList';
 
 /**
- * Full session management page (`/sessions`): the Agent Session counterpart of
- * the topic management page, backed by Session-title and Session-message search.
+ * Full Agent Session management page (`/sessions`), backed by session-title and
+ * session-message search.
  */
 function SessionListScreenBody() {
   const { t } = useTranslation();

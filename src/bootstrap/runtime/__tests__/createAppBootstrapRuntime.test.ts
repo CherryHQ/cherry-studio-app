@@ -8,7 +8,6 @@ const mockDataApiHandlers = { kind: 'handlers' };
 const mockAgent = { kind: 'agent' };
 const mockAi = { kind: 'ai' };
 const mockCache = { kind: 'cache' };
-const mockChat = { kind: 'chat' };
 const mockDb = { kind: 'db' };
 const mockJobRuntime = { kind: 'job-runtime' };
 const mockMcpRuntime = { kind: 'mcp-runtime' };
@@ -18,14 +17,12 @@ const mockBackgroundActivityEnvironment = { configure: jest.fn() };
 const mockServices = {
   ai: mockAi,
   cache: mockCache,
-  chat: mockChat,
   jobRuntime: mockJobRuntime,
   mcpRuntime: mockMcpRuntime,
   preference: mockPreference,
   webSearch: mockWebSearch,
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
-const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -40,9 +37,6 @@ jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
 }));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
-}));
-jest.mock('@/bootstrap/runtime/runPostReadyTasks', () => ({
-  runPostReadyTasks: (services: unknown) => mockRunPostReadyTasks(services),
 }));
 jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),
@@ -75,7 +69,6 @@ const createRuntime = () =>
     AiService: mockAi,
     BackgroundActivityEnvironment: mockBackgroundActivityEnvironment,
     CacheService: mockCache,
-    ChatRuntime: mockChat,
     DbService: mockDb,
     JobRuntime: mockJobRuntime,
     McpRuntimeService: mockMcpRuntime,
@@ -104,7 +97,6 @@ describe('createAppBootstrapRuntime', () => {
       agent: mockAgent,
       ai: mockAi,
       cache: mockCache,
-      chat: mockChat,
       jobRuntime: mockJobRuntime,
       mcpRuntime: mockMcpRuntime,
       preference: mockPreference,
@@ -144,9 +136,8 @@ describe('createAppBootstrapRuntime', () => {
     expect(secondDispose).toBe(firstDispose);
     await firstDispose;
 
-    // Nothing is sequenced ahead of the host any more. The chat and job runtimes
-    // used to drain here by hand; they are services now, and reverse-order
-    // teardown stops them before the database they write through.
+    // Nothing is sequenced ahead of the host. Reverse-order teardown stops the
+    // job runtime before the database it writes through.
     expect(application.hasHost).toBe(false);
   });
 
@@ -161,13 +152,5 @@ describe('createAppBootstrapRuntime', () => {
     await outgoing.dispose();
 
     expect(application.hasHost).toBe(true);
-  });
-
-  test('delegates post-ready work with the same service graph', async () => {
-    const runtime = createRuntime();
-
-    await runtime.runPostReadyTasks();
-
-    expect(mockRunPostReadyTasks).toHaveBeenCalledWith(mockServices);
   });
 });

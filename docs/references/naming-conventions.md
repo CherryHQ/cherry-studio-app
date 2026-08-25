@@ -11,7 +11,7 @@ This reference defines names for files, directories, and identifiers. Read
 | Product React component under `src/frontend` | `PascalCase.tsx` | `ChatScreen.tsx` |
 | Expo Router route under `src/app` | `kebab-case.tsx` or a reserved route token | `api-key-settings.tsx`, `_layout.tsx` |
 | Hook | `useXxx.ts` or `useXxx.tsx` when it returns JSX | `useMessages.ts` |
-| Class outside `packages` | `PascalCase.ts` matching the class | `ChatRuntime.ts` |
+| Class outside `packages` | `PascalCase.ts` matching the class | `MobileAgentHost.ts` |
 | Function, constants, or function group outside `packages` | `camelCase.ts` | `messageQueryOptions.ts` |
 | Test | matching base name plus `*.test.ts(x)` | `rowMappers.test.ts` |
 | Config | `*.config.ts`, or JS/MJS when TypeScript is unsupported | `drizzle.config.ts` |
@@ -63,7 +63,7 @@ as `(tabs)` and `[providerId]`.
 
 | Identifier | Convention | Example |
 | --- | --- | --- |
-| Component, class, interface, type alias, enum type | `PascalCase` | `AssistantService`, `UserConfig` |
+| Component, class, interface, type alias, enum type | `PascalCase` | `AgentService`, `UserConfig` |
 | Variable, function, method, parameter | `camelCase` | `fetchUser`, `currentOrder` |
 | Hook | `camelCase` with a `use` prefix | `useMessages` |
 | Constant and enum member | `UPPER_SNAKE_CASE` | `MAX_RETRY_COUNT` |

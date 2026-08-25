@@ -1,8 +1,8 @@
 # Chat Workspace Components
 
-## Topic Switch Behavior
+## Session Switch Behavior
 
-When the active topic changes, `ChatWorkspace` remounts the shared `MessageList` with a new render
+When the active Session changes, `ChatWorkspace` remounts the shared `MessageList` with a new render
 key and shows `ChatInitialRenderCover` with a centered loading indicator over the message list area.
 The cover does not block touches and does not cover the floating input.
 

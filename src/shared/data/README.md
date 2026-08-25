@@ -7,8 +7,8 @@ deliberate omission, not a gap.
 
 ## Scope
 
-- `types`: entity and value types. Most are declared here (`FileEntry`, `Topic`, `Painting`, web
-  search, trace). Seven — model, provider, assistant, message, uiParts, aiUsageRecord, mcpServer —
+- `types`: entity and value types. Most are declared here (`Agent`, `AgentSession`, `FileEntry`,
+  `Painting`, web search, trace). Six — model, provider, message, uiParts, aiUsageRecord, mcpServer —
   are one-line re-exports of declarations that stay in `@cherrystudio/universal/data/types` because
   `packages/ai-runtime` imports them and a workspace package must not import app code. App code
   imports every entity type from here regardless, so dissolving universal means pasting those

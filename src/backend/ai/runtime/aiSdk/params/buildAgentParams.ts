@@ -2,89 +2,60 @@ import type { ProviderOptions } from '@ai-sdk/provider-utils';
 import type { AiPlugin } from '@cherrystudio/ai-core';
 import {
   type ProviderConfig,
-  resolveAiSdkProviderId,
   resolveEffectiveEndpoint,
   resolveProviderOptionsKey,
 } from '@cherrystudio/ai-runtime/provider';
 import {
   buildAgentPlugins,
-  CITATIONS_SYSTEM_PROMPT,
   createToolCallLimitStopCondition,
-  getDeferredToolsSystemPrompt,
-  type NativeFileSupport,
-  resolveCapabilities,
-  resolveNativeFileSupport,
   stopOnTerminalToolFailure,
-  trackSteerYieldStopCondition,
   type AiBaseRequest,
   type CallOverrides,
 } from '@cherrystudio/ai-runtime/runtime';
-import { createAiRepair, TOOL_SEARCH_TOOL_NAME } from '@cherrystudio/ai-runtime/tools';
+import { createAiRepair, type RequestContext } from '@cherrystudio/ai-runtime/tools';
 import {
-  addAnthropicHeaders,
   applyFastModeToProviderOptions,
-  buildCapabilityProviderOptions,
   buildResolvedReasoningProviderOptions,
-  extractAiSdkStandardParams,
   filterStandardParams,
-  getCustomParameters,
-  getMaxTokens,
-  getTemperature,
   getTimeout,
-  getTopP,
-  mergeCustomProviderParameters,
   resolveReasoningInvocation,
-  type ResolvedReasoningInvocation,
 } from '@cherrystudio/ai-runtime/utils';
 import {
   ENDPOINT_TYPE,
   endpointImpliedCapability,
   MODEL_CAPABILITY,
 } from '@cherrystudio/provider-registry';
-import { isAnthropicModel, isFunctionCallingModel } from '@cherrystudio/universal/utils/model';
 import { type ToolCallRepairFunction, type ToolSet } from 'ai';
 import * as Crypto from 'expo-crypto';
 
-import type { PreferenceService } from '@/backend/data/PreferenceService';
 import {
   projectRuntimeReasoning,
   providerRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import type { ProviderService } from '@/backend/data/services/ProviderService';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
-import { type Assistant, DEFAULT_ASSISTANT_SETTINGS } from '@/shared/data/types/assistant';
 import type { Model } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { resolveProviderAiSdkConfig } from '../../../provider/config';
-import type { ToolResolver } from '../../../tools';
-import { reportToolRuntimeDiagnostic } from '../../../tools/toolRuntimeDiagnostics';
-import type { RequestContext } from '../../../tools/types';
-import { replacePromptVariables } from '../../../utils/promptVariables';
 import type { AgentOptions } from '../Agent';
 
 export interface BuildAgentParamsDependencies {
-  preference: PreferenceService;
   provider: Pick<ProviderService, 'getAuthConfig' | 'resolveApiKey'>;
-  tools: Pick<ToolResolver, 'resolveForRequest'>;
 }
 
 export interface BuildAgentParamsInput {
-  request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string; messageId?: string };
+  request: AiBaseRequest & { apiKeyOverride?: string };
   services: BuildAgentParamsDependencies;
   provider: Provider;
   model: Model;
-  assistant?: Assistant;
-  shouldIncludeExternalTools?: boolean;
   /** Late-bound usage middleware for nested tool-repair calls. */
   getRepairUsagePlugins?: () => AiPlugin[];
 }
 
 export interface BuiltAgentParams {
   sdkConfig: ProviderConfig & { modelId: string };
-  nativeFileSupport: NativeFileSupport;
   context: RequestContext;
-  system: string | undefined;
   plugins: AiPlugin[];
   repairToolCall: ToolCallRepairFunction<ToolSet>;
   tools: ToolSet | undefined;
@@ -92,13 +63,12 @@ export interface BuiltAgentParams {
   credentialReceipt: ServingCredentialReceipt;
 }
 
+/** Build the assistant-less AI SDK request used by naming, checks, and paintings. */
 export async function buildAgentParams({
   request,
   services,
   provider,
   model,
-  assistant,
-  shouldIncludeExternalTools = false,
   getRepairUsagePlugins,
 }: BuildAgentParamsInput): Promise<BuiltAgentParams> {
   const resolvedEndpoint = resolveEffectiveEndpoint(provider, model);
@@ -111,6 +81,7 @@ export async function buildAgentParams({
   ) {
     throw new Error(`Mobile AI runtime does not support embedding or rerank models: ${model.id}`);
   }
+
   const { config: sdkConfig, credentialReceipt } = await resolveProviderAiSdkConfig(
     provider,
     model,
@@ -122,8 +93,6 @@ export async function buildAgentParams({
     { apiKeyOverride: request.apiKeyOverride, resolvedEndpoint },
   );
   const endpointType = resolvedEndpoint.endpointType;
-  const aiSdkProviderId = resolveAiSdkProviderId(provider, endpointType);
-  const nativeFileSupport = resolveNativeFileSupport(provider, model, aiSdkProviderId);
   const providerOptionsKey = resolveProviderOptionsKey(sdkConfig.providerId, {
     actualProviderId: provider.id,
     endpointType,
@@ -145,116 +114,41 @@ export async function buildAgentParams({
       }
     : model;
   const reasoning = resolveReasoningInvocation({
-    selection: request.reasoningEffort ?? assistant?.settings.reasoning_effort ?? 'default',
+    selection: request.reasoningEffort ?? 'default',
     model: invocationModel,
     profile: reasoningProfile.wire,
-    maxTokens: resolveReasoningMaxTokens(request.callOverrides?.maxOutputTokens, assistant, model),
+    maxTokens: request.callOverrides?.maxOutputTokens ?? model.maxOutputTokens,
     assistantSummary:
       typeof provider.settings.summaryText === 'string' ? provider.settings.summaryText : undefined,
   });
-  const capabilities = assistant
-    ? resolveCapabilities(model, provider, assistant, aiSdkProviderId, services.preference)
-    : undefined;
-  let providerOptions =
-    assistant && capabilities
-      ? buildCapabilityProviderOptions(assistant, model, provider, capabilities, {
-          aiSdkProviderId,
-          runtimeProviderId: sdkConfig.providerId,
+  const providerOptions =
+    request.reasoningEffort === undefined
+      ? {}
+      : buildResolvedReasoningProviderOptions({
+          aiSdkProviderId: sdkConfig.providerId,
           providerOptionsKey,
           endpointType,
           reasoning,
-        })
-      : request.reasoningEffort !== undefined
-        ? buildResolvedReasoningProviderOptions({
-            aiSdkProviderId: sdkConfig.providerId,
-            providerOptionsKey,
-            endpointType,
-            reasoning,
-          })
-        : {};
-  const standardParams = assistant
-    ? getAssistantStandardParams(assistant, model, provider, reasoning)
-    : {};
-  const customParams = assistant ? getCustomParameters(assistant) : {};
-  const split = extractAiSdkStandardParams(customParams);
-  const filteredStandardParams = filterStandardParams(split.standardParams, model);
-  providerOptions = mergeCustomProviderParameters(
-    providerOptions,
-    split.providerParams,
-    provider.id,
-    sdkConfig.providerId === 'google-vertex-maas' ? 'openai-compatible' : aiSdkProviderId,
-  );
-  const anthropicBetaHeaders =
-    assistant && isAnthropicModel(model) ? addAnthropicHeaders(assistant, model, provider) : [];
-  const headers =
-    request.requestOptions?.headers || anthropicBetaHeaders.length > 0
-      ? {
-          ...request.requestOptions?.headers,
-          ...(anthropicBetaHeaders.length > 0 && {
-            'anthropic-beta': anthropicBetaHeaders.join(','),
-          }),
-        }
-      : undefined;
-  const shouldLoadTools = shouldIncludeExternalTools && assistant && isFunctionCallingModel(model);
-  const resolvedTools = shouldLoadTools
-    ? await services.tools.resolveForRequest({
-        assistant,
-        contextWindow: model.contextWindow,
-        mcpToolIds: request.mcpToolIds,
-      })
-    : { deferredEntries: [], hasMcpTools: false, tools: undefined };
+        });
   const plugins = buildAgentPlugins({
     aiSdkProviderId: sdkConfig.providerId,
-    assistant,
     endpointType,
-    hasMcpTools: resolvedTools.hasMcpTools,
-    hasReasoningSelectionSource: Boolean(assistant) || request.reasoningEffort !== undefined,
+    hasMcpTools: false,
+    hasReasoningSelectionSource: request.reasoningEffort !== undefined,
     model,
     provider,
     reasoning,
-    streamOutput: capabilities?.streamOutput ?? true,
-    webSearchPluginConfig: capabilities?.webSearchPluginConfig,
+    streamOutput: true,
   });
-  const tools = mergeToolSets(resolvedTools.tools, request.callOverrides?.tools);
-  const baseSystem = assistant?.prompt
-    ? await replacePromptVariables(assistant.prompt, model.name, services.preference)
-    : undefined;
-  const deferredSystem =
-    tools && TOOL_SEARCH_TOOL_NAME in tools
-      ? getDeferredToolsSystemPrompt(resolvedTools.deferredEntries)
-      : undefined;
-  const hasCitableTools = Boolean(
-    tools?.web_search ||
-    tools?.web_fetch ||
-    resolvedTools.deferredEntries.some(
-      (entry) => entry.name === 'web_search' || entry.name === 'web_fetch',
-    ),
-  );
-  const system =
-    [baseSystem, deferredSystem, hasCitableTools && CITATIONS_SYSTEM_PROMPT]
-      .filter(Boolean)
-      .join('\n\n') || undefined;
-  const context: RequestContext = {
-    abortSignal: request.requestOptions?.signal,
-    assistant,
-    chatId: request.chatId,
-    requestId:
-      'messageId' in request && typeof request.messageId === 'string'
-        ? request.messageId
-        : Crypto.randomUUID(),
-  };
+  const tools = request.callOverrides?.tools;
   const repairToolCall = createAiRepair({
-    diagnostics: reportToolRuntimeDiagnostic,
     modelId: model.apiModelId ?? model.modelId,
     providerId: sdkConfig.providerId,
     providerSettings: sdkConfig.providerSettings,
     getUsagePlugins: getRepairUsagePlugins,
   });
   const overridden = applyCallOverrides(
-    {
-      providerOptions,
-      standardParams: { ...standardParams, ...filteredStandardParams },
-    },
+    { providerOptions, standardParams: {} },
     request.callOverrides,
     model,
   );
@@ -264,33 +158,21 @@ export async function buildAgentParams({
     overridden.providerOptions,
     request.fastMode === true,
   );
-  const stopWhen = [
-    ...(tools
-      ? [
-          createToolCallLimitStopCondition(
-            assistant?.settings.enableMaxToolCalls ? assistant.settings.maxToolCalls : 20,
-          ),
-          stopOnTerminalToolFailure,
-        ]
-      : []),
-    ...(request.shouldYield
-      ? [trackSteerYieldStopCondition(() => request.shouldYield?.() === true)]
-      : []),
-  ];
 
   return {
     credentialReceipt,
     sdkConfig: { ...sdkConfig, modelId: model.apiModelId ?? model.modelId },
-    nativeFileSupport,
-    context,
-    system,
+    context: {
+      abortSignal: request.requestOptions?.signal,
+      requestId: Crypto.randomUUID(),
+    },
     plugins,
     repairToolCall,
     tools,
     options: {
       maxRetries: request.requestOptions?.maxRetries ?? 0,
       timeout: request.requestOptions?.timeout ?? getTimeout(model),
-      ...(headers && { headers }),
+      ...(request.requestOptions?.headers && { headers: request.requestOptions.headers }),
       ...(request.callOverrides?.toolChoice && {
         toolChoice: request.callOverrides.toolChoice,
       }),
@@ -298,17 +180,11 @@ export async function buildAgentParams({
         providerOptions: effectiveProviderOptions,
       }),
       ...overridden.standardParams,
-      ...(stopWhen.length > 0 && { stopWhen }),
+      ...(tools && {
+        stopWhen: [createToolCallLimitStopCondition(20), stopOnTerminalToolFailure],
+      }),
     },
   };
-}
-
-function mergeToolSets(
-  base: ToolSet | undefined,
-  overrides: ToolSet | undefined,
-): ToolSet | undefined {
-  if (!overrides || Object.keys(overrides).length === 0) return base;
-  return { ...base, ...overrides };
 }
 
 export function applyCallOverrides(
@@ -351,38 +227,4 @@ export function applyCallOverrides(
   }
 
   return { providerOptions, standardParams };
-}
-
-function getAssistantStandardParams(
-  assistant: Assistant,
-  model: Model,
-  provider: Provider,
-  reasoning: ResolvedReasoningInvocation,
-): Record<string, number> {
-  const params: Record<string, number> = {};
-  const temperature = getTemperature(assistant, model, reasoning);
-  const topP = getTopP(assistant, model, reasoning);
-  const maxOutputTokens = getMaxTokens(assistant, model, provider, reasoning);
-
-  if (temperature !== undefined) params.temperature = temperature;
-  if (topP !== undefined) params.topP = topP;
-  if (maxOutputTokens !== undefined) params.maxOutputTokens = maxOutputTokens;
-
-  return params;
-}
-
-export function resolveReasoningMaxTokens(
-  requestMaxOutputTokens: number | undefined,
-  assistant: Assistant | undefined,
-  model: Model,
-): number | undefined {
-  if (requestMaxOutputTokens !== undefined) return requestMaxOutputTokens;
-
-  const enableMaxTokens =
-    assistant?.settings.enableMaxTokens ?? DEFAULT_ASSISTANT_SETTINGS.enableMaxTokens;
-  if (enableMaxTokens) {
-    return assistant?.settings.maxTokens ?? DEFAULT_ASSISTANT_SETTINGS.maxTokens;
-  }
-
-  return model.maxOutputTokens;
 }

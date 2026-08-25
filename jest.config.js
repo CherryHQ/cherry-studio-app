@@ -6,7 +6,7 @@ module.exports = {
   // the same suite is ~3ms. That one-off cost lands inside whichever test runs
   // first, so jest's 5s default left the slowest suites (ChatInputActionSheet at
   // 4.9s, PaintingTemplateRow at 4.5s) overrunning it whenever workers contended
-  // for CPU during a full run: the "DrawingList/TopicList is flaky" failures.
+  // for CPU during a full run: the historical list-flake failures.
   // Raised here rather than warmed up per suite because the cost is
   // environmental — every component suite needs the headroom, not just the ones
   // that have tripped so far.

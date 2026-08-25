@@ -80,7 +80,6 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
   `workspace/` are its public areas.
 - `agents/`: Agent list and editor. Selecting a row enters a new chat; edit/delete remain row
   actions.
-- `assistants/`: assistant list and assistant editing flows.
 - `settings/`: settings home (with the animated profile hero at the top), about/data/model/
   provider/web-search/mcp/permissions settings screens, and settings-specific UI controls.
 - `paintings/`: painting composer (image generation), the painting history screen
@@ -89,7 +88,6 @@ ESLint enforces these (see the boundary blocks in `eslint.config.js`):
   prompt templates (`templates/`), and the painting data hooks (`hooks/usePaintings`).
 - `sessions/`: Agent Session management (`SessionListScreen` at `/sessions`) — recency pagination,
   rename/delete, and selection state. The sidebar reuses its data layer through the feature index.
-- `topics/`: the legacy topic management screen (`TopicListScreen` at `/topics`).
 - `sidebar/`: the drawer sidebar compound (`Sidebar.Header/Body/Footer`) — navigation rows, the
   recent Agent Sessions list, and the bottom dock.
 - `home/`: the home drawer scene (activity calendar) and the header-right avatar button.

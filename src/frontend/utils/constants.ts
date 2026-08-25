@@ -77,7 +77,7 @@ export const appSidebar = {
   headerGapY: 8, // header's breathing room above and below the brand row
   scrollShadowSize: 112, // ScrollShadow's top dissolve depth below the header
   headerBlurSize: 124, // progressive-blur depth behind the fixed header controls
-  recentTopicLimit: 20, // most-recent topics shown before the "view all" row
+  recentSessionLimit: 20, // most-recent sessions shown before the "view all" row
 } as const;
 
 // Providers that exist as rows but must never appear in the provider settings
