@@ -176,6 +176,17 @@ export class BackgroundReplyRuntime
         this.runTurnCallback(record.key, 'update turn', () => {
           this.updateTurn(record.key, generation, message);
         }),
+      updateConversationTitle: (title) =>
+        this.runTurnCallback(record.key, 'update conversation title', () => {
+          if (!this.isCurrent(record.key, generation)) return;
+          const current = this.turns.get(record.key);
+          if (!current) return;
+          current.conversationTitle = title.trim();
+          current.session?.update(this.toActivityProps(current), {
+            keepAlive: isGeneratingPhase(current.content.phase),
+            urgent: true,
+          });
+        }),
     };
   };
 
@@ -353,6 +364,7 @@ const noOpTurn: BackgroundReplyTurn = {
   awaitApproval: () => {},
   finish: () => {},
   update: () => {},
+  updateConversationTitle: () => {},
 };
 
 function isGeneratingPhase(phase: BackgroundReplyPhase): boolean {

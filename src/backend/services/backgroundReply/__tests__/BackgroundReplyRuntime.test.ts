@@ -98,6 +98,24 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
+  test('updates the visible title while an Agent Session turn is active', async () => {
+    const runtime = await createRuntime();
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: '',
+    });
+
+    turn.updateConversationTitle('  Renamed session  ');
+
+    expect(mockSessions[0]?.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ attribution: 'Alpha', title: 'Renamed session' }),
+      { keepAlive: true, urgent: true },
+    );
+    await runtime._doStop();
+  });
+
   test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({

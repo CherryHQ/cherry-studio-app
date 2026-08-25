@@ -2624,6 +2624,7 @@ function createBackgroundReplyTurn(): BackgroundReplyTurn {
     awaitApproval: jest.fn(),
     finish: jest.fn(),
     update: jest.fn(),
+    updateConversationTitle: jest.fn(),
   };
 }
 

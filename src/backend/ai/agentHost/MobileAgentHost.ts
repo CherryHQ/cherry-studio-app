@@ -31,7 +31,7 @@ import type {
   AgentRuntime,
   AgentRuntimeSession,
   RuntimeEvent,
-  RuntimeUsage,
+  RuntimeUsageReport,
 } from '@/backend/ai/agent';
 import { PiRuntime } from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
@@ -104,6 +104,7 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
   awaitApproval: () => {},
   finish: () => {},
   update: () => {},
+  updateConversationTitle: () => {},
 };
 
 type MobileAgentHostOverrides = {
@@ -127,7 +128,7 @@ type ActiveTurnState = {
   autoNameUserParts: AgentInputPart[] | null;
   backgroundReply: BackgroundReplyTurn;
   pendingApprovals: Map<string, AgentApprovalView>;
-  usage: RuntimeUsage | null;
+  usage: RuntimeUsageReport | null;
   runtimeSession: AgentRuntimeSession;
 };
 
@@ -246,6 +247,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (!session) {
       fail('SESSION_NOT_FOUND', `Session does not exist: ${parsed.sessionId}`);
     }
+    this.activeTurns.get(session.id)?.backgroundReply.updateConversationTitle(session.title);
     this.publish(parsed.sessionId, { type: 'session.updated', session });
     return session;
   }
@@ -584,7 +586,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       }
       case 'usage': {
         // Cumulative; the last report before the terminal event is authoritative.
-        state.usage = event.usage;
+        state.usage = {
+          completedAt: event.completedAt,
+          context: event.context,
+          usage: event.usage,
+        };
         return false;
       }
       case 'completed':
@@ -625,7 +631,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       assistantMessageId: state.assistantMessage.id,
       status: messageStatus,
       parts,
-      usage: state.usage ? toAgentUsageView(state.usage) : null,
+      usage: state.usage ? toAgentUsageView(state.usage.usage) : null,
       error,
     });
     const turn: AgentTurnView = {
@@ -643,10 +649,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.usage.record({
         agent: state.agent,
         assistantMessageId: finalized.id,
-        completedAt: Date.parse(finalized.updatedAt),
-        startedAt: Date.parse(state.turn.startedAt),
+        report: state.usage,
         turnId: state.turn.id,
-        usage: state.usage,
       });
     }
     this.publish(sessionId, { type: 'message.finalized', message: finalized });
@@ -751,6 +755,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     void promise
       .then((session) => {
         if (session) {
+          this.activeTurns.get(session.id)?.backgroundReply.updateConversationTitle(session.title);
           this.publish(session.id, { type: 'session.updated', session });
         }
       })

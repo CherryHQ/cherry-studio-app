@@ -25,6 +25,7 @@ import type {
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeUsage,
+  RuntimeUsageContext,
 } from '../types';
 import { toPiConversation } from './modelMessages';
 
@@ -37,6 +38,7 @@ export type PiModelResolution = {
   model: PiModel<'openai-responses'>;
   supportsTools: boolean;
   timeoutMs: number;
+  usageContext: RuntimeUsageContext;
 };
 
 export interface PiRuntimeDependencies {
@@ -109,7 +111,7 @@ type ActiveTurn = {
   terminated: boolean;
   toolParts: Map<string, ToolPartBase>;
   turnId: string;
-  usage: Required<RuntimeUsage>;
+  usage: RuntimeUsage;
 };
 
 async function createDefaultAgent(options: AgentOptions): Promise<PiRuntimeAgent> {
@@ -173,10 +175,29 @@ function sensitiveValues(resolution: PiModelResolution): string[] {
 function toRuntimeUsage(usage: PiUsage): RuntimeUsage {
   const inputTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   return {
+    cacheReadTokens: usage.cacheRead,
+    cacheWriteTokens: usage.cacheWrite,
     inputTokens,
+    noCacheTokens: usage.input,
     outputTokens: usage.output,
+    ...(usage.reasoning !== undefined ? { reasoningTokens: usage.reasoning } : {}),
     totalTokens: usage.totalTokens || inputTokens + usage.output,
   };
+}
+
+function mergeRuntimeUsage(current: RuntimeUsage, next: RuntimeUsage): RuntimeUsage {
+  const merged: RuntimeUsage = {
+    cacheReadTokens: (current.cacheReadTokens ?? 0) + (next.cacheReadTokens ?? 0),
+    cacheWriteTokens: (current.cacheWriteTokens ?? 0) + (next.cacheWriteTokens ?? 0),
+    inputTokens: (current.inputTokens ?? 0) + (next.inputTokens ?? 0),
+    noCacheTokens: (current.noCacheTokens ?? 0) + (next.noCacheTokens ?? 0),
+    outputTokens: (current.outputTokens ?? 0) + (next.outputTokens ?? 0),
+    totalTokens: (current.totalTokens ?? 0) + (next.totalTokens ?? 0),
+  };
+  if (current.reasoningTokens !== undefined || next.reasoningTokens !== undefined) {
+    merged.reasoningTokens = (current.reasoningTokens ?? 0) + (next.reasoningTokens ?? 0);
+  }
+  return merged;
 }
 
 function resolveThinkingLevel(
@@ -235,7 +256,14 @@ class PiRuntimeSession implements AgentRuntimeSession {
       terminated: false,
       toolParts: new Map(),
       turnId: request.turnId,
-      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      usage: {
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        inputTokens: 0,
+        noCacheTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+      },
     };
     this.activeTurn = turn;
     void this.run(request, turn);
@@ -350,7 +378,12 @@ class PiRuntimeSession implements AgentRuntimeSession {
         return;
       }
 
-      this.emit(turn, { type: 'usage', usage: turn.usage });
+      this.emit(turn, {
+        type: 'usage',
+        completedAt: Date.now(),
+        context: resolution.usageContext,
+        usage: turn.usage,
+      });
       switch (terminal.stopReason) {
         case 'stop':
         case 'length':
@@ -409,10 +442,7 @@ class PiRuntimeSession implements AgentRuntimeSession {
       case 'turn_end':
         if (event.message.role === 'assistant') {
           turn.terminalMessage = event.message;
-          const usage = toRuntimeUsage(event.message.usage);
-          turn.usage.inputTokens += usage.inputTokens ?? 0;
-          turn.usage.outputTokens += usage.outputTokens ?? 0;
-          turn.usage.totalTokens += usage.totalTokens ?? 0;
+          turn.usage = mergeRuntimeUsage(turn.usage, toRuntimeUsage(event.message.usage));
         }
         this.settleUnmappedToolResults(turn, event.toolResults);
         break;

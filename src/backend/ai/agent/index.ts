@@ -16,6 +16,8 @@ export type {
   RuntimeOutputPart,
   RuntimeTool,
   RuntimeUsage,
+  RuntimeUsageContext,
+  RuntimeUsageReport,
 } from './types';
 
 export type {

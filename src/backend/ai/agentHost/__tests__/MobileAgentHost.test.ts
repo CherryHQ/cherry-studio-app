@@ -4,7 +4,11 @@
  * conformance suite; durable-adapter behavior is outside this suite.
  */
 
-import { FakeRuntime, type RuntimeExecutionRequest } from '@/backend/ai/agent';
+import {
+  FakeRuntime,
+  type RuntimeExecutionRequest,
+  type RuntimeUsageContext,
+} from '@/backend/ai/agent';
 import type { AiService } from '@/backend/ai/AiService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
 import { AgentEventSchema, AgentProtocolError, type AgentEvent } from '@/shared/contracts/agent';
@@ -14,6 +18,17 @@ import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { MobileAgentHost } from '../MobileAgentHost';
 
 const AGENT_ID = 'agent-under-test';
+
+const USAGE_CONTEXT: RuntimeUsageContext = {
+  credentialReceipt: { attribution: 'unknown' },
+  modelId: 'mock-model',
+  modelName: 'Mock Model',
+  pricingSnapshot: null,
+  providerId: 'mock-provider',
+  providerName: 'Mock Provider',
+  reportedCostCurrency: null,
+  trustProviderReportedCost: false,
+};
 
 const agents: AgentDefinitionSource = {
   async getAgent(agentId) {
@@ -47,6 +62,7 @@ const backgroundReplyTurn = {
   awaitApproval: jest.fn(),
   finish: jest.fn(),
   update: jest.fn(),
+  updateConversationTitle: jest.fn(),
 };
 const backgroundReply = {
   clearSession: jest.fn(),
@@ -92,6 +108,8 @@ function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = [])
       });
       controller.emit({
         type: 'usage',
+        completedAt: 1_500,
+        context: USAGE_CONTEXT,
         usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
       });
       controller.emit({ type: 'completed' });
@@ -204,8 +222,12 @@ describe('MobileAgentHost', () => {
       expect.objectContaining({
         agent: expect.objectContaining({ id: AGENT_ID }),
         assistantMessageId: submitted.assistantMessageId,
+        report: {
+          completedAt: 1_500,
+          context: USAGE_CONTEXT,
+          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+        },
         turnId: submitted.turnId,
-        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
       }),
     );
 
@@ -300,6 +322,31 @@ describe('MobileAgentHost', () => {
     // The session is idle again.
     const observation = await host.observeSession(session.id, () => {});
     expect(observation.snapshot.activeTurn).toBeNull();
+  });
+
+  test('updates an active background reply when its Session is renamed', async () => {
+    const started = createDeferred();
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      started.resolve();
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
+    });
+    const host = createHost(runtime);
+    const session = await host.createSession({
+      agentId: AGENT_ID,
+      executionTarget: { kind: 'local' },
+    });
+    const submitted = await host.submitMessage({
+      sessionId: session.id,
+      parts: [{ type: 'text', text: 'Hello.' }],
+    });
+    await started.promise;
+
+    await host.renameSession({ sessionId: session.id, title: 'Renamed Session' });
+
+    expect(backgroundReplyTurn.updateConversationTitle).toHaveBeenCalledWith('Renamed Session');
+    await host.cancelTurn({ sessionId: session.id, turnId: submitted.turnId });
   });
 
   test('reconciliation marks preloaded unfinished messages interrupted', async () => {

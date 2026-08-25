@@ -28,6 +28,7 @@ export type BackgroundReplyTurn = {
   awaitApproval: (message?: BackgroundReplyMessage) => void;
   finish: (outcome: BackgroundReplyOutcome) => void;
   update: (message: BackgroundReplyMessage) => void;
+  updateConversationTitle: (title: string) => void;
 };
 
 export type AgentSessionBackgroundReplyTurnInput = {
