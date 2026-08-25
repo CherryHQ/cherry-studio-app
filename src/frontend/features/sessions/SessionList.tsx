@@ -241,8 +241,6 @@ const SessionRow = memo(function SessionRow({
     },
     [handleDeletePress, handleRenamePress, isEditing, onToggle, session.id],
   );
-  // The chat surface ignores `sessionId` until it switches to Agent Sessions;
-  // the param is already the post-switch contract.
   const href = useMemo(
     () => ({ pathname: '/' as const, params: { sessionId: session.id } }),
     [session.id],

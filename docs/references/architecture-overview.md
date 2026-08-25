@@ -76,7 +76,8 @@ compatibility adapter or generic frontend selector for persistence services.
 - [Runtime Ownership](./runtime-ownership.md): app bootstrap, runtimes, sessions, cleanup, and startup gates.
 - [Lifecycle](./lifecycle/README.md): service container, hosts, phases, and resource-scope coordination (designed; landing in stages).
 - [AI Provider Integration](./ai/provider-integration.md): provider/model records and AI adapters.
-- [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): `ChatRuntime`, overlay, and persistence.
+- [Chat Streaming And Rendering](./chat/streaming-and-rendering.md): Agent Protocol observation,
+  transcript windows, live projection, and rendering.
 - [Web Search](./web-search.md): external providers versus provider-native web search.
 - [Navigation And Insets](./navigation-and-insets.md): Expo Router, tabs, stacks, sheets, and insets.
 - [UI Components](./ui-components.md): shared controls and feature-local UI.
@@ -93,12 +94,13 @@ compatibility adapter or generic frontend selector for persistence services.
   hooks, and the frontend `CacheService`.
 - `backend/data` owns an independent backend `CacheService` used by the private service graph.
 - `shared/data` owns frontend/backend data vocabulary; database rows remain under `backend/data`.
-- Chat uses one app-owned `ChatRuntime`; route providers only subscribe and project Topic state.
-- `AiService` currently offers transitional Pi and AI SDK streaming paths. Pi is the target sole
-  local conversation engine; the current AI SDK fallback remains until Pi provider and tool coverage
-  is complete.
+- Agent chat uses one app-owned `MobileAgentHost`; the route provider observes Session state through
+  `Backend.agent` and combines it with Data API transcript reads.
+- Pi is the only local Agent Runtime. `AiService` and the legacy `ChatRuntime` remain for non-Agent
+  workflows and the staged removal of the old Topic path.
 - Painting generation uses caller-owned sessions with explicit `cancel()` and `dispose()` behavior.
-- App shutdown aborts and awaits Chat before disposing MCP, web search, cache, and SQLite.
+- App shutdown closes Agent Runtime sessions and awaits tracked Agent turns before disposing lower
+  infrastructure.
 - Navigation, translation, toast, and React Query invalidation stay in frontend owners.
 - `expo-screen-corner-radius` remains the bottom-sheet device adapter; context menus use Expo UI directly.
 

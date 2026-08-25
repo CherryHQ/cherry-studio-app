@@ -5,13 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { HeaderAction } from '../components/HeaderAction';
 import { headerScreenOptions } from '../headerScreenOptions';
 import { useRouteHeaderLeadingAction } from '../RouteHeader/useRouteHeaderLeadingAction';
-import { MainHeaderAssistantButton, useMainHeaderAssistant } from './MainHeaderAssistantButton';
+import { MainHeaderAgentButton, useMainHeaderAgent } from './MainHeaderAgentButton';
 
 export function MainHeader() {
   const isPreview = useIsPreview();
   const { t } = useTranslation();
   const leadingAction = useRouteHeaderLeadingAction();
-  const { assistant, openAssistant, openNewTopic } = useMainHeaderAssistant();
+  const { agent, openAgent, openNewSession } = useMainHeaderAgent();
 
   if (isPreview) {
     return null;
@@ -39,14 +39,14 @@ export function MainHeader() {
               accessibilityLabel: t('navigation.newChat'),
               icon: SquarePenIcon,
               key: 'new-chat',
-              onPress: openNewTopic,
+              onPress: openNewSession,
               type: 'icon',
             }}
           />
         </Stack.Toolbar.View>
-        {assistant ? (
+        {agent ? (
           <Stack.Toolbar.View>
-            <MainHeaderAssistantButton assistant={assistant} onPress={openAssistant} />
+            <MainHeaderAgentButton agent={agent} onPress={openAgent} />
           </Stack.Toolbar.View>
         ) : null}
       </Stack.Toolbar>

@@ -1,6 +1,6 @@
-import { usePathname, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import type { DrawerContentComponentProps } from 'expo-router/drawer';
-import { type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import { View } from 'react-native';
 
 import { SidebarBody } from './components/SidebarBody';
@@ -22,14 +22,6 @@ type SidebarProps = {
  */
 function SidebarRoot({ children, navigation }: SidebarProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  // Actions read the pathname through a ref so their identity — and with it
-  // every slot consuming the actions context — survives route changes.
-  const pathnameRef = useRef(pathname);
-
-  useEffect(() => {
-    pathnameRef.current = pathname;
-  }, [pathname]);
 
   const actions = useMemo<SidebarActions>(
     () => ({
@@ -52,18 +44,12 @@ function SidebarRoot({ children, navigation }: SidebarProps) {
         navigation.closeDrawer();
         router.push('/settings');
       },
-      openTopicList: () => {
+      openSessionList: () => {
         navigation.closeDrawer();
-        router.push('/topics');
+        router.push('/sessions');
       },
       startNewChat: () => {
-        // No topic row is created here: the chat surface with no `topicId` is
-        // the new-chat state, and the backend creates the topic on first send.
-        if (pathnameRef.current === '/') {
-          router.setParams({ assistantId: undefined, topicId: undefined });
-        } else {
-          router.navigate({ params: {}, pathname: '/' });
-        }
+        navigation.navigate('agents');
         navigation.closeDrawer();
       },
     }),

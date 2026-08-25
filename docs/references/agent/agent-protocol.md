@@ -1,6 +1,6 @@
 # Cherry Agent Protocol
 
-Status: **design**. Version 1 is local-only.
+Status: **as built**. Version 1 is local-only.
 
 This document defines the application contract between the Agent Client and the Mobile Agent Host.
 It does not define the independent [Agent Runtime](./agent-runtime.md) behind the Host.

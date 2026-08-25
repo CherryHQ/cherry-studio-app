@@ -3,6 +3,7 @@ import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import type { MessageListProps } from '@/frontend/components/messages';
+import type { AgentMessageView } from '@/shared/contracts/agent';
 import type { Message } from '@/shared/data/types/message';
 
 import { ChatWorkspace } from '../ChatWorkspace';
@@ -13,18 +14,20 @@ const mockInputHeightShared = {
   value: 80,
 } as unknown as SharedValue<number>;
 const mockLoadOlder = jest.fn(async () => undefined);
-const mockRespondToolApproval = jest.fn(async () => undefined);
+const mockRetry = jest.fn(async () => undefined);
+const mockRespondApproval = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockAlertShow = jest.fn();
 let mockCoverVisible: boolean | undefined;
 let mockIsLoadingOlder: boolean | undefined;
 let mockMessageListProps: MessageListProps | undefined;
-let mockChatTopic: {
-  hasHistoryBeforePendingTurn?: boolean;
-  isBusy: boolean;
-  overlayMessage?: Message;
-  pendingUserMessage?: Message;
-  status: string;
+let mockAgentChatSession: {
+  activeTurn: null;
+  enteringUserMessageId?: string;
+  liveMessages: readonly AgentMessageView[];
+  pendingApprovals: readonly [];
+  sessionId: string;
+  status: 'ready';
 };
 
 jest.mock('expo-clipboard', () => ({
@@ -42,6 +45,9 @@ jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
   return {
     Button: (props: object) => createElement('Button', props),
+    ContentState: {
+      Error: (props: object) => createElement('ContentState.Error', props),
+    },
     useAlert: () => ({ alert: { show: mockAlertShow } }),
   };
 });
@@ -80,9 +86,29 @@ jest.mock('../../approval/ToolApprovalSheet', () => ({
   ToolApprovalSheet: () => null,
 }));
 
-jest.mock('../../runtime/ChatProvider', () => ({
-  useChat: () => ({ respondToolApproval: mockRespondToolApproval }),
-  useChatTopic: () => mockChatTopic,
+jest.mock('../../runtime', () => ({
+  mergeAgentMessageViews: (
+    persisted: readonly AgentMessageView[],
+    live: readonly AgentMessageView[],
+  ) => {
+    const liveById = new Map(live.map((message) => [message.id, message]));
+    const persistedIds = new Set(persisted.map((message) => message.id));
+    return [
+      ...persisted.map((message) => liveById.get(message.id) ?? message),
+      ...live.filter((message) => !persistedIds.has(message.id)),
+    ];
+  },
+  toAgentMessageListItems: (messages: readonly AgentMessageView[]) =>
+    messages
+      .filter((message) => message.role === 'user' || message.role === 'assistant')
+      .map((message) => ({
+        data: { parts: message.parts },
+        id: message.id,
+        role: message.role,
+        status: message.status === 'success' ? 'success' : 'pending',
+      })),
+  useAgentChatActions: () => ({ respondApproval: mockRespondApproval }),
+  useAgentChatSession: () => mockAgentChatSession,
 }));
 
 jest.mock('../components/ChatInitialRenderCover', () => ({
@@ -99,20 +125,21 @@ jest.mock('../components/ChatOlderMessagesIndicator', () => ({
   },
 }));
 
-const now = '2026-08-09T00:00:00.000Z';
-
-function createMessage(id: string, role: Message['role']): Message {
+function createMessage(
+  id: string,
+  role: AgentMessageView['role'],
+  status: AgentMessageView['status'] = 'success',
+): AgentMessageView {
   return {
-    createdAt: now,
-    data: { parts: [{ text: id, type: 'text' }] },
+    createdAt: '2026-08-09T00:00:00.000Z',
     id,
-    parentId: null,
+    parts: [{ id: `${id}-text`, state: 'done', text: id, type: 'text' }],
     role,
-    searchableText: id,
-    siblingsGroupId: 0,
-    status: 'success',
-    topicId: 'topic-1',
-    updatedAt: now,
+    sessionId: 'session-1',
+    status,
+    turnId: 'turn-1',
+    updatedAt: '2026-08-09T00:00:00.000Z',
+    usage: null,
   };
 }
 
@@ -124,12 +151,15 @@ function createDeferred<T>() {
   return { promise, reject };
 }
 
-/** 预览态的取值由 ChatScreen 解析后传进来，这里照它传的两组值渲染。 */
-function renderWorkspace(isPreview: boolean, messages: readonly Message[], topicId = 'topic-1') {
+function renderWorkspace(
+  isPreview: boolean,
+  messages: readonly AgentMessageView[],
+  sessionId = 'session-1',
+) {
   let renderer!: ReactTestRenderer;
 
   act(() => {
-    renderer = create(createWorkspaceElement(isPreview, messages, topicId));
+    renderer = create(createWorkspaceElement(isPreview, messages, sessionId));
   });
 
   return renderer;
@@ -137,8 +167,8 @@ function renderWorkspace(isPreview: boolean, messages: readonly Message[], topic
 
 function createWorkspaceElement(
   isPreview: boolean,
-  messages: readonly Message[],
-  topicId = 'topic-1',
+  messages: readonly AgentMessageView[],
+  sessionId = 'session-1',
 ) {
   return (
     <ChatWorkspace
@@ -151,9 +181,10 @@ function createWorkspaceElement(
         isLoadingOlder: true,
         loadOlder: mockLoadOlder,
         messages,
+        retry: mockRetry,
       }}
-      renderGateKey={`${topicId}:history`}
-      topicId={topicId}
+      renderGateKey={`${sessionId}:history`}
+      sessionId={sessionId}
     />
   );
 }
@@ -165,10 +196,12 @@ describe('ChatWorkspace message rendering integration', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockChatTopic = {
-      hasHistoryBeforePendingTurn: true,
-      isBusy: false,
-      status: 'idle',
+    mockAgentChatSession = {
+      activeTurn: null,
+      liveMessages: [],
+      pendingApprovals: [],
+      sessionId: 'session-1',
+      status: 'ready',
     };
     mockCoverVisible = undefined;
     mockIsLoadingOlder = undefined;
@@ -187,14 +220,18 @@ describe('ChatWorkspace message rendering integration', () => {
     requestAnimationFrameSpy.mockRestore();
   });
 
-  test('passes displayable messages, history loading, and dock layout on a normal page', () => {
-    const pendingUserMessage = createMessage('user-pending', 'user');
+  test('merges live rows with displayable history and passes dock layout', () => {
+    const pendingUserMessage = createMessage('user-pending', 'user', 'pending');
     const messages = [
       createMessage('system-1', 'system'),
       createMessage('user-1', 'user'),
       createMessage('assistant-1', 'assistant'),
     ];
-    mockChatTopic.pendingUserMessage = pendingUserMessage;
+    mockAgentChatSession = {
+      ...mockAgentChatSession,
+      enteringUserMessageId: pendingUserMessage.id,
+      liveMessages: [pendingUserMessage],
+    };
 
     renderer = renderWorkspace(false, messages);
 
@@ -211,9 +248,7 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(mockIsLoadingOlder).toBe(true);
 
     const renderMessage = mockMessageListProps?.renderMessage;
-    mockChatTopic = { ...mockChatTopic, isBusy: true };
     act(() => renderer?.update(createWorkspaceElement(false, messages)));
-
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
   });
 
@@ -226,7 +261,7 @@ describe('ChatWorkspace message rendering integration', () => {
     ).toBeGreaterThan(0);
   });
 
-  test('does not show copy failure feedback from the previous topic', async () => {
+  test('does not show copy failure feedback from the previous Session', async () => {
     const clipboardWrite = createDeferred<void>();
     const assistant = createMessage('assistant-1', 'assistant');
     mockSetStringAsync.mockReturnValueOnce(clipboardWrite.promise);
@@ -234,7 +269,7 @@ describe('ChatWorkspace message rendering integration', () => {
 
     const copyButton = renderer.root.findByProps({ testID: 'assistant-message-copy' });
     act(() => copyButton.props.onPress());
-    act(() => renderer?.update(createWorkspaceElement(false, [assistant], 'topic-2')));
+    act(() => renderer?.update(createWorkspaceElement(false, [assistant], 'session-2')));
     await act(async () => clipboardWrite.reject(new Error('copy failed')));
 
     expect(mockAlertShow).not.toHaveBeenCalled();

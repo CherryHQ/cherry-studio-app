@@ -59,9 +59,10 @@ Before enabling it, verify:
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
 - The root Stack hosts the `(drawer)` group (header hidden) plus root-level `onboarding`, `search`,
-  `topics` (topic management), `settings`, and `paintings` screens.
+  `topics` (legacy topic management), `sessions` (Agent Session management), `settings`, and
+  `paintings` screens.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) with four
-  scenes: `(chat)` (the initial route), home, assistants, and drawings. The sidebar is the
+  scenes: `(chat)` (the initial route), home, agents, assistants, and drawings. The sidebar is the
   `features/sidebar` compound; every scene's header leads with a hamburger that opens it.
   `DrawerActions.openDrawer()` only reaches ancestors, so a screen that needs that hamburger has to
   be a drawer scene — which is why the drawings history lives at `/drawings` rather than under the
@@ -74,7 +75,8 @@ Before enabling it, verify:
   entry. Use `modal` and not `formSheet` for this shape — see below.
 - The chat surface is the drawer's initial scene: `(drawer)/(chat)/index` (URL `/`) hosts its own
   nested native Stack (for `Stack.Toolbar` APIs) and wraps `ChatScreen` in `ChatProvider`. The
-  provider subscribes to the app-owned Chat Runtime; route unmount does not dispose it.
+  provider observes the app-owned Mobile Agent Host through `Backend.agent`; route unmount removes
+  the frontend observation but does not cancel the Host's active turn.
 - Route files stay thin and generally re-export feature modules from `src/frontend/features`.
 
 ## Picker Sheets
