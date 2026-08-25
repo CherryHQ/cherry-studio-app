@@ -152,7 +152,7 @@ describe('ModelService', () => {
     } as unknown as DbService;
     const preferenceService = {
       get: jest.fn(async (key: string) => {
-        if (key === 'chat.default_model_id') {
+        if (key === 'agent.default_model_id') {
           return 'openai::default';
         }
         if (key === 'feature.paintings.default_model_id') {

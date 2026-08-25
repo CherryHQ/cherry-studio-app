@@ -20,9 +20,7 @@ jest.mock('@logger', () => ({
   },
 }));
 
-const topic = (id: string): ResourceScope => ({ id, kind: 'topic' });
 const painting = (id: string): ResourceScope => ({ id, kind: 'painting' });
-const assistant = (id: string): ResourceScope => ({ id, kind: 'assistant' });
 
 /**
  * A stand-in for a cancellable turn or job: `settled` resolves only when the
@@ -74,35 +72,35 @@ describe('ResourceScopeCoordinator', () => {
 
   describe('registration', () => {
     it('tracks an operation under every scope it names', () => {
-      const operation = makeOperation('chat.turn', [topic('t1'), assistant('a1')]);
+      const operation = makeOperation('chat.turn', [painting('t1'), painting('a1')]);
       register(operation.registration);
 
-      expect(coordinator.listActive(topic('t1'))).toEqual([
-        { kind: 'chat.turn', scopes: [topic('t1'), assistant('a1')] },
+      expect(coordinator.listActive(painting('t1'))).toEqual([
+        { kind: 'chat.turn', scopes: [painting('t1'), painting('a1')] },
       ]);
-      expect(coordinator.listActive(assistant('a1'))).toHaveLength(1);
-      expect(coordinator.listActive(topic('other'))).toEqual([]);
+      expect(coordinator.listActive(painting('a1'))).toHaveLength(1);
+      expect(coordinator.listActive(painting('other'))).toEqual([]);
     });
 
     it('forgets a released operation, and release is idempotent', () => {
-      const operation = makeOperation('chat.turn', [topic('t1')]);
+      const operation = makeOperation('chat.turn', [painting('t1')]);
       const handle = register(operation.registration);
 
       handle.release();
       handle.release();
 
-      expect(coordinator.listActive(topic('t1'))).toEqual([]);
+      expect(coordinator.listActive(painting('t1'))).toEqual([]);
     });
 
     it('leaves no partial index behind when one of several scopes is fenced', async () => {
       // Seal `painting:p1` so the second scope of the next registration rejects.
       await coordinator.delete([painting('p1')], async () => undefined);
 
-      const operation = makeOperation('job.painting.generate', [topic('t1'), painting('p1')]);
+      const operation = makeOperation('job.painting.generate', [painting('t1'), painting('p1')]);
       expect(() => coordinator.register(operation.registration)).toThrow(ScopeFencedError);
 
       // `topic:t1` was checked first and must not have been indexed anyway.
-      expect(coordinator.listActive(topic('t1'))).toEqual([]);
+      expect(coordinator.listActive(painting('t1'))).toEqual([]);
     });
 
     it('does not report a rejected settled promise as an unhandled rejection', async () => {
@@ -110,7 +108,7 @@ describe('ResourceScopeCoordinator', () => {
       register({
         cancel: () => undefined,
         kind: 'chat.turn',
-        scopes: [topic('t1')],
+        scopes: [painting('t1')],
         settled: rejection,
       });
 
@@ -138,11 +136,11 @@ describe('ResourceScopeCoordinator', () => {
           setTimeout(finish, 0);
         },
         kind: 'chat.turn',
-        scopes: [topic('t1')],
+        scopes: [painting('t1')],
         settled,
       });
 
-      await coordinator.delete([topic('t1')], async () => {
+      await coordinator.delete([painting('t1')], async () => {
         order.push('mutate');
       });
 
@@ -150,17 +148,19 @@ describe('ResourceScopeCoordinator', () => {
     });
 
     it('passes the reason through to cancel, defaulting per entry point', async () => {
-      const deleted = makeOperation('chat.turn', [topic('t1')]);
+      const deleted = makeOperation('chat.turn', [painting('t1')]);
       register(deleted.settleOnCancel());
-      await coordinator.delete([topic('t1')], async () => undefined);
+      await coordinator.delete([painting('t1')], async () => undefined);
 
-      const invalidated = makeOperation('chat.turn', [topic('t2')]);
+      const invalidated = makeOperation('chat.turn', [painting('t2')]);
       register(invalidated.settleOnCancel());
-      await coordinator.invalidate([topic('t2')], async () => undefined);
+      await coordinator.invalidate([painting('t2')], async () => undefined);
 
-      const explicit = makeOperation('chat.turn', [topic('t3')]);
+      const explicit = makeOperation('chat.turn', [painting('t3')]);
       register(explicit.settleOnCancel());
-      await coordinator.invalidate([topic('t3')], async () => undefined, { reason: 'model-swap' });
+      await coordinator.invalidate([painting('t3')], async () => undefined, {
+        reason: 'model-swap',
+      });
 
       expect(deleted.cancelled).toEqual(['resource-deleted']);
       expect(invalidated.cancelled).toEqual(['resource-invalidated']);
@@ -169,15 +169,18 @@ describe('ResourceScopeCoordinator', () => {
 
     it('mutates immediately when the scope holds no operations', async () => {
       const mutate = jest.fn(async () => 'done');
-      await expect(coordinator.delete([topic('empty')], mutate)).resolves.toBe('done');
+      await expect(coordinator.delete([painting('empty')], mutate)).resolves.toBe('done');
       expect(mutate).toHaveBeenCalledTimes(1);
     });
 
     it('cancels an operation once when a batch names several of its scopes', async () => {
-      const operation = makeOperation('chat.turn', [topic('t1'), assistant('a1')]);
+      const operation = makeOperation('chat.turn', [painting('t1'), painting('a1')]);
       register(operation.settleOnCancel());
 
-      await coordinator.delete([assistant('a1'), topic('t1'), topic('t1')], async () => undefined);
+      await coordinator.delete(
+        [painting('a1'), painting('t1'), painting('t1')],
+        async () => undefined,
+      );
 
       expect(operation.cancelled).toEqual(['resource-deleted']);
     });
@@ -185,56 +188,56 @@ describe('ResourceScopeCoordinator', () => {
 
   describe('fencing', () => {
     it('rejects registration while a pass is draining, and after a delete seals', async () => {
-      const operation = makeOperation('chat.turn', [topic('t1')]);
+      const operation = makeOperation('chat.turn', [painting('t1')]);
       register(operation.registration);
 
-      const pass = coordinator.delete([topic('t1')], async () => undefined);
+      const pass = coordinator.delete([painting('t1')], async () => undefined);
       await Promise.resolve();
 
-      const during = makeOperation('chat.turn', [topic('t1')]);
+      const during = makeOperation('chat.turn', [painting('t1')]);
       expect(() => coordinator.register(during.registration)).toThrow(ScopeFencedError);
 
       operation.finish();
       await pass;
 
-      const after = makeOperation('chat.turn', [topic('t1')]);
+      const after = makeOperation('chat.turn', [painting('t1')]);
       expect(() => coordinator.register(after.registration)).toThrow(ScopeFencedError);
     });
 
     it('reopens the scope after invalidate succeeds', async () => {
-      const operation = makeOperation('chat.turn', [topic('t1')]);
+      const operation = makeOperation('chat.turn', [painting('t1')]);
       register(operation.settleOnCancel());
 
-      await coordinator.invalidate([topic('t1')], async () => undefined);
+      await coordinator.invalidate([painting('t1')], async () => undefined);
 
-      const next = makeOperation('chat.turn', [topic('t1')]);
+      const next = makeOperation('chat.turn', [painting('t1')]);
       expect(() => register(next.registration)).not.toThrow();
     });
 
     it('keeps the scope fenced until the outer of two overlapping passes finishes', async () => {
       const outerMutate = deferred<void>();
-      const outer = coordinator.invalidate([topic('t1')], () => outerMutate.promise);
+      const outer = coordinator.invalidate([painting('t1')], () => outerMutate.promise);
       await Promise.resolve();
 
       // Runs to completion entirely inside the outer pass's window.
-      await coordinator.invalidate([topic('t1')], async () => undefined);
+      await coordinator.invalidate([painting('t1')], async () => undefined);
 
-      const during = makeOperation('chat.turn', [topic('t1')]);
+      const during = makeOperation('chat.turn', [painting('t1')]);
       expect(() => coordinator.register(during.registration)).toThrow(ScopeFencedError);
 
       outerMutate.resolve();
       await outer;
 
-      const after = makeOperation('chat.turn', [topic('t1')]);
+      const after = makeOperation('chat.turn', [painting('t1')]);
       expect(() => register(after.registration)).not.toThrow();
     });
 
     it('fences only the scopes it was given', async () => {
       const mutate = deferred<void>();
-      const pass = coordinator.delete([topic('t1')], () => mutate.promise);
+      const pass = coordinator.delete([painting('t1')], () => mutate.promise);
       await Promise.resolve();
 
-      const other = makeOperation('chat.turn', [topic('t2')]);
+      const other = makeOperation('chat.turn', [painting('t2')]);
       expect(() => register(other.registration)).not.toThrow();
 
       mutate.resolve();
@@ -266,14 +269,14 @@ describe('ResourceScopeCoordinator', () => {
     it('names the straggling operations, and only those', async () => {
       jest.useFakeTimers();
       try {
-        const quick = makeOperation('chat.turn', [topic('t1')]);
-        const stubborn = makeOperation('job.painting.generate', [topic('t1')]);
+        const quick = makeOperation('chat.turn', [painting('t1')]);
+        const stubborn = makeOperation('job.painting.generate', [painting('t1')]);
         register(quick.settleOnCancel());
         register(stubborn.registration);
 
-        const pass = coordinator.delete([topic('t1')], async () => undefined);
+        const pass = coordinator.delete([painting('t1')], async () => undefined);
         const assertion = expect(pass).rejects.toMatchObject({
-          stragglers: [{ kind: 'job.painting.generate', scopes: [topic('t1')] }],
+          stragglers: [{ kind: 'job.painting.generate', scopes: [painting('t1')] }],
         });
         await jest.advanceTimersByTimeAsync(DEFAULT_DRAIN_TIMEOUT_MS + 1);
         await assertion;
@@ -285,10 +288,10 @@ describe('ResourceScopeCoordinator', () => {
     it('honours a caller-supplied drain ceiling', async () => {
       jest.useFakeTimers();
       try {
-        const stubborn = makeOperation('chat.turn', [topic('t1')]);
+        const stubborn = makeOperation('chat.turn', [painting('t1')]);
         register(stubborn.registration);
 
-        const pass = coordinator.delete([topic('t1')], async () => undefined, {
+        const pass = coordinator.delete([painting('t1')], async () => undefined, {
           drainTimeoutMs: 50,
         });
         const assertion = expect(pass).rejects.toThrow(ScopeDrainTimeoutError);
@@ -303,13 +306,13 @@ describe('ResourceScopeCoordinator', () => {
       register({
         cancel: () => undefined,
         kind: 'chat.turn',
-        scopes: [topic('t1')],
+        scopes: [painting('t1')],
         settled: Promise.reject(new Error('turn failed')),
       });
 
       // The operation stopped; that it stopped by failing is the owner's problem,
       // not a reason to block the deletion.
-      await expect(coordinator.delete([topic('t1')], async () => 'ok')).resolves.toBe('ok');
+      await expect(coordinator.delete([painting('t1')], async () => 'ok')).resolves.toBe('ok');
     });
 
     it('logs a throwing canceller and completes the pass anyway', async () => {
@@ -319,11 +322,11 @@ describe('ResourceScopeCoordinator', () => {
           throw new Error('canceller exploded');
         },
         kind: 'chat.turn',
-        scopes: [topic('t1')],
+        scopes: [painting('t1')],
         settled,
       });
 
-      await expect(coordinator.delete([topic('t1')], async () => 'ok')).resolves.toBe('ok');
+      await expect(coordinator.delete([painting('t1')], async () => 'ok')).resolves.toBe('ok');
       expect(mockLoggerError).toHaveBeenCalledWith(
         expect.stringContaining('chat.turn'),
         expect.any(Error),
@@ -331,31 +334,31 @@ describe('ResourceScopeCoordinator', () => {
     });
 
     it('reopens the scope when an invalidate mutation throws', async () => {
-      const operation = makeOperation('chat.turn', [topic('t1')]);
+      const operation = makeOperation('chat.turn', [painting('t1')]);
       register(operation.settleOnCancel());
 
       await expect(
-        coordinator.invalidate([topic('t1')], async () => {
+        coordinator.invalidate([painting('t1')], async () => {
           throw new Error('write failed');
         }),
       ).rejects.toThrow('write failed');
 
-      expect(() => register(makeOperation('x', [topic('t1')]).registration)).not.toThrow();
+      expect(() => register(makeOperation('x', [painting('t1')]).registration)).not.toThrow();
     });
 
     it('leaves the scope fenced and reports when a delete mutation throws', async () => {
-      const operation = makeOperation('chat.turn', [topic('t1')]);
+      const operation = makeOperation('chat.turn', [painting('t1')]);
       register(operation.settleOnCancel());
 
       await expect(
-        coordinator.delete([topic('t1')], async () => {
+        coordinator.delete([painting('t1')], async () => {
           throw new Error('write failed');
         }),
       ).rejects.toThrow('write failed');
 
       // A batch delete can fail part-way, so the scope is not reopened over a
       // possibly half-deleted resource.
-      expect(() => coordinator.register(makeOperation('x', [topic('t1')]).registration)).toThrow(
+      expect(() => coordinator.register(makeOperation('x', [painting('t1')]).registration)).toThrow(
         ScopeFencedError,
       );
       expect(mockLoggerError).toHaveBeenCalledWith(
@@ -366,15 +369,15 @@ describe('ResourceScopeCoordinator', () => {
   });
 
   it('drops its registry on stop so a late release finds nothing', async () => {
-    const operation = makeOperation('chat.turn', [topic('t1')]);
+    const operation = makeOperation('chat.turn', [painting('t1')]);
     const handle = register(operation.registration);
 
     await coordinator._doStop();
     handle.release();
 
-    expect(coordinator.listActive(topic('t1'))).toEqual([]);
+    expect(coordinator.listActive(painting('t1'))).toEqual([]);
     expect(() =>
-      coordinator.register(makeOperation('x', [topic('t1')]).registration),
+      coordinator.register(makeOperation('x', [painting('t1')]).registration),
     ).not.toThrow();
   });
 });

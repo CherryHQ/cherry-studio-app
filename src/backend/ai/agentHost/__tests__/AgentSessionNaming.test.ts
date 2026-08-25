@@ -23,9 +23,9 @@ function createNaming(input: {
   const generateText = jest.fn(input.generateText ?? (async () => ({ text: 'Generated summary' })));
   const preference = {
     get: jest.fn(async (key: string) => {
-      if (key === 'topic.naming.enabled') return input.namingEnabled ?? true;
-      if (key === 'topic.naming.model_id') return null;
-      if (key === 'topic.naming_prompt') return '';
+      if (key === 'agent.session_naming.enabled') return input.namingEnabled ?? true;
+      if (key === 'agent.session_naming.model_id') return null;
+      if (key === 'agent.session_naming.prompt') return '';
       if (key === 'app.language') return 'en-us';
       return null;
     }),

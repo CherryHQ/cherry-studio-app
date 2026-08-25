@@ -18,7 +18,6 @@ import type { WebSearchService } from '@/backend/services/webSearch/WebSearchSer
 import { createBackend } from '@/bootstrap/composition/createBackend';
 import { createBackendServices } from '@/bootstrap/composition/createBackendServices';
 import { initializeAppRuntime } from '@/bootstrap/runtime/initializeAppRuntime';
-import { runPostReadyTasks } from '@/bootstrap/runtime/runPostReadyTasks';
 import AssistantActivity from '@/frontend/features/chat/AssistantActivity/AssistantActivity';
 import PaintingActivity from '@/frontend/features/paintings/PaintingActivity/PaintingActivity';
 import i18n from '@/frontend/i18n';
@@ -120,7 +119,6 @@ export function createAppBootstrapRuntime(
       // best-effort and off the first-paint path; the host logs its own
       // failures rather than surfacing them here.
       host.runPostReady();
-      await runPostReadyTasks(services);
     },
   };
 }

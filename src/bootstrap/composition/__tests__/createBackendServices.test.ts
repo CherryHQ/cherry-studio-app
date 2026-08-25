@@ -12,7 +12,6 @@ import { createBackendServices } from '../createBackendServices';
 
 const mockDataServices = {
   aiUsageRecord: { kind: 'ai-usage-record' },
-  assistant: { kind: 'assistant' },
   dataOnly: { kind: 'data-only' },
   fileEntry: { kind: 'file-entry' },
   mcpServer: { kind: 'mcp-server' },

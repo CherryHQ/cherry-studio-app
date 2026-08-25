@@ -25,7 +25,7 @@ describe('PreferenceService', () => {
   test('initializes cache from defaults and database values', async () => {
     const dbService = createFakeDbService([
       {
-        key: 'chat.default_model_id',
+        key: 'agent.default_model_id',
         value: 'provider:model',
       },
     ]);
@@ -33,7 +33,7 @@ describe('PreferenceService', () => {
 
     await service._doInit();
 
-    await expect(service.get('chat.default_model_id')).resolves.toBe('provider:model');
+    await expect(service.get('agent.default_model_id')).resolves.toBe('provider:model');
     await expect(service.get('app.language')).resolves.toBeNull();
   });
 
@@ -114,14 +114,14 @@ describe('PreferenceService', () => {
     const listener = jest.fn();
 
     await service._doInit();
-    service.subscribeChange('chat.default_model_id')(listener);
+    service.subscribeChange('agent.default_model_id')(listener);
 
-    await service.set('chat.default_model_id', 'provider:model');
+    await service.set('agent.default_model_id', 'provider:model');
 
     expect(dbService.writeCount).toBe(1);
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(dbService.rows.get('chat.default_model_id')).toMatchObject({
-      key: 'chat.default_model_id',
+    expect(dbService.rows.get('agent.default_model_id')).toMatchObject({
+      key: 'agent.default_model_id',
       value: 'provider:model',
     });
   });
@@ -134,7 +134,7 @@ describe('PreferenceService', () => {
     };
     const dbService = createFakeDbService([
       {
-        key: 'chat.default_model_id',
+        key: 'agent.default_model_id',
         value: 'provider:model',
       },
       {
@@ -147,10 +147,10 @@ describe('PreferenceService', () => {
     const objectListener = jest.fn();
 
     await service._doInit();
-    service.subscribeChange('chat.default_model_id')(primitiveListener);
+    service.subscribeChange('agent.default_model_id')(primitiveListener);
     service.subscribeChange('chat.web_search.provider_overrides')(objectListener);
 
-    await service.set('chat.default_model_id', 'provider:model');
+    await service.set('agent.default_model_id', 'provider:model');
     await service.set('chat.web_search.provider_overrides', { ...overrides });
 
     expect(dbService.writeCount).toBe(0);
@@ -161,7 +161,7 @@ describe('PreferenceService', () => {
   test('rolls back optimistic updates when persistence fails', async () => {
     const dbService = createFakeDbService([
       {
-        key: 'chat.default_model_id',
+        key: 'agent.default_model_id',
         value: 'old:model',
       },
     ]);
@@ -169,19 +169,21 @@ describe('PreferenceService', () => {
     const listener = jest.fn();
 
     await service._doInit();
-    service.subscribeChange('chat.default_model_id')(listener);
+    service.subscribeChange('agent.default_model_id')(listener);
     dbService.failNextWrite = true;
 
-    await expect(service.set('chat.default_model_id', 'new:model')).rejects.toThrow('write failed');
+    await expect(service.set('agent.default_model_id', 'new:model')).rejects.toThrow(
+      'write failed',
+    );
 
-    expect(service.getCachedValue('chat.default_model_id')).toBe('old:model');
+    expect(service.getCachedValue('agent.default_model_id')).toBe('old:model');
     expect(listener).toHaveBeenCalledTimes(2);
   });
 
   test('serializes optimistic writes', async () => {
     const dbService = createFakeDbService([
       {
-        key: 'chat.default_model_id',
+        key: 'agent.default_model_id',
         value: 'initial:model',
       },
     ]);
@@ -189,18 +191,18 @@ describe('PreferenceService', () => {
 
     await service._doInit();
 
-    const firstWrite = service.set('chat.default_model_id', 'first:model');
+    const firstWrite = service.set('agent.default_model_id', 'first:model');
     await dbService.waitForNextWrite();
-    const secondWrite = service.set('chat.default_model_id', 'second:model');
+    const secondWrite = service.set('agent.default_model_id', 'second:model');
 
-    expect(service.getCachedValue('chat.default_model_id')).toBe('first:model');
+    expect(service.getCachedValue('agent.default_model_id')).toBe('first:model');
 
     await firstWrite;
     await secondWrite;
 
     expect(dbService.writeCount).toBe(2);
-    expect(service.getCachedValue('chat.default_model_id')).toBe('second:model');
-    expect(dbService.rows.get('chat.default_model_id')?.value).toBe('second:model');
+    expect(service.getCachedValue('agent.default_model_id')).toBe('second:model');
+    expect(dbService.rows.get('agent.default_model_id')?.value).toBe('second:model');
   });
 });
 

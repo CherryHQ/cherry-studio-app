@@ -82,7 +82,7 @@ function AgentEditForm({ agent, agentId }: { agent: Agent | undefined; agentId?:
   const modelPickerData = useModelPickerData();
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isReasoningEffortSheetOpen, setIsReasoningEffortSheetOpen] = useState(false);
-  const [defaultModelPreference] = usePreference('chat.default_model_id');
+  const [defaultModelPreference] = usePreference('agent.default_model_id');
   const [form, setForm] = useState<AgentFormState>(() => createAgentFormState(agent));
   const [hasPickedModel, setHasPickedModel] = useState(false);
   const [seededModelId, setSeededModelId] = useState<UniqueModelId | null>(null);

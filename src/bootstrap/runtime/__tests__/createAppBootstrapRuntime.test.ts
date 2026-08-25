@@ -23,7 +23,6 @@ const mockServices = {
   webSearch: mockWebSearch,
 };
 const mockInitializeAppRuntime = jest.fn(async (_services: unknown) => undefined);
-const mockRunPostReadyTasks = jest.fn(async (_services: unknown) => undefined);
 const mockCreateBackendServices = jest.fn((_infrastructure: unknown) => mockServices);
 const mockCreateBackend = jest.fn((_services: unknown, _dependencies: unknown) => ({
   backend: mockBackend,
@@ -38,9 +37,6 @@ jest.mock('@/backend/data/api/handlers/apiHandlers', () => ({
 }));
 jest.mock('@/bootstrap/runtime/initializeAppRuntime', () => ({
   initializeAppRuntime: (services: unknown) => mockInitializeAppRuntime(services),
-}));
-jest.mock('@/bootstrap/runtime/runPostReadyTasks', () => ({
-  runPostReadyTasks: (services: unknown) => mockRunPostReadyTasks(services),
 }));
 jest.mock('@/bootstrap/composition/createBackendServices', () => ({
   createBackendServices: (infrastructure: unknown) => mockCreateBackendServices(infrastructure),
@@ -156,13 +152,5 @@ describe('createAppBootstrapRuntime', () => {
     await outgoing.dispose();
 
     expect(application.hasHost).toBe(true);
-  });
-
-  test('delegates post-ready work with the same service graph', async () => {
-    const runtime = createRuntime();
-
-    await runtime.runPostReadyTasks();
-
-    expect(mockRunPostReadyTasks).toHaveBeenCalledWith(mockServices);
   });
 });

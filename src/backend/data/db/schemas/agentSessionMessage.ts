@@ -55,9 +55,8 @@ export const agentSessionMessageTable = sqliteTable(
     messageSnapshot: text({ mode: 'json' }).$type<MessageSnapshot>(),
     // Searchable text extracted from data.parts (populated by trigger, used for FTS5)
     searchableText: text().notNull().default(''),
-    // Stable integer surrogate for the FTS5 content_rowid (see message.ts for
-    // full rationale): trigger-assigned, local-only, nullable because the
-    // AFTER INSERT trigger fills it.
+    // Stable integer surrogate for the FTS5 content_rowid: trigger-assigned,
+    // local-only, and nullable because the AFTER INSERT trigger fills it.
     ftsRowid: integer(),
     ...createUpdateTimestamps,
   },
@@ -73,7 +72,7 @@ export const agentSessionMessageTable = sqliteTable(
       .on(t.sessionId)
       .where(sql`${t.role} = 'assistant' and ${t.status} in ('pending', 'streaming')`),
     // FTS5 content_rowid key — UNIQUE so its index keeps the per-row
-    // MAX(fts_rowid)+1 assignment O(log N) (see ftsRowid column + message.ts).
+    // MAX(fts_rowid)+1 assignment O(log N) (see ftsRowid and FTS SQL below).
     uniqueIndex('agent_session_message_fts_rowid_uniq').on(t.ftsRowid),
     check('agent_session_message_role_check', sql`${t.role} IN ('user', 'assistant', 'system')`),
     check(
@@ -92,7 +91,7 @@ export type InsertAgentSessionMessageRow = typeof agentSessionMessageTable.$infe
  * Drizzle does not manage virtual tables or triggers, so these run through
  * `customSql.ts` after migrations. The index is keyed on the stable
  * `fts_rowid` column (NOT the implicit rowid, which a table rebuild or VACUUM
- * would reshuffle — see schemas/message.ts for the full architecture).
+ * would reshuffle).
  *
  * Only `text` parts are indexed — NOT `reasoning` (model-internal, the UI does
  * not render it in search) and NOT tool payloads (structured data, not prose).

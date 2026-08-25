@@ -410,7 +410,7 @@ function applyMigrations(database: DatabaseSync) {
 
 /**
  * Positional for drizzle's column mapper, named for raw `db.all` fallbacks —
- * the proxy answers in both shapes at once (see MessageService.integration).
+ * the proxy answers in both shapes at once.
  */
 function hybridRow(row: Record<string, unknown>): unknown[] {
   return Object.assign(Object.values(row), row);

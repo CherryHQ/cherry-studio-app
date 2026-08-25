@@ -109,7 +109,7 @@ export class AgentSessionNaming {
     this.summaryLocks.add(sessionId);
 
     try {
-      const enabled = await this.dependencies.preference.get('topic.naming.enabled');
+      const enabled = await this.dependencies.preference.get('agent.session_naming.enabled');
       if (!enabled) return null;
 
       const userText = extractInputText(input.userParts);
@@ -151,13 +151,13 @@ export class AgentSessionNaming {
   }
 
   private async resolveNamingModelId() {
-    const configured = await this.dependencies.preference.get('topic.naming.model_id');
+    const configured = await this.dependencies.preference.get('agent.session_naming.model_id');
     if (!configured || !isUniqueModelId(configured)) return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
 
     const model = await this.dependencies.model.getById(configured);
     if (!model) {
       logger.warn(
-        'topic.naming.model_id points to a missing model; falling back to managed CherryAI default model',
+        'agent.session_naming.model_id points to a missing model; falling back to managed CherryAI default model',
         { configured },
       );
       return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
@@ -168,14 +168,14 @@ export class AgentSessionNaming {
       const provider = await this.dependencies.provider.getByProviderId(providerId);
       if (provider.authMethods?.includes('external-cli')) {
         logger.warn(
-          'topic.naming.model_id points to an external-CLI provider; falling back to managed CherryAI default model',
+          'agent.session_naming.model_id points to an external-CLI provider; falling back to managed CherryAI default model',
           { configured },
         );
         return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
       }
     } catch (error) {
       logger.warn(
-        'topic.naming.model_id points to a missing provider; falling back to managed CherryAI default model',
+        'agent.session_naming.model_id points to a missing provider; falling back to managed CherryAI default model',
         { configured, error: error as Error },
       );
       return CHERRYAI_DEFAULT_UNIQUE_MODEL_ID;
@@ -185,7 +185,7 @@ export class AgentSessionNaming {
   }
 
   private async resolveNamingPrompt(): Promise<string> {
-    const configuredPrompt = await this.dependencies.preference.get('topic.naming_prompt');
+    const configuredPrompt = await this.dependencies.preference.get('agent.session_naming.prompt');
     const language = (await this.dependencies.preference.get('app.language')) || 'en-us';
     return (configuredPrompt || FALLBACK_PROMPT).replaceAll('{{language}}', language);
   }
