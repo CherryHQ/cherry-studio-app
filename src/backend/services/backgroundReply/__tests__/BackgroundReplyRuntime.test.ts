@@ -116,6 +116,35 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
+  test('keeps terminal content updateable until a finish dependency settles', async () => {
+    const runtime = await createRuntime();
+    const finishDependency = createDeferred();
+    const turn = runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: '',
+    });
+    const session = mockSessions[0];
+
+    turn.finish('completed', { waitFor: finishDependency.promise });
+
+    expect(session?.update).toHaveBeenLastCalledWith(
+      expect.objectContaining({ phase: 'completed' }),
+      { keepAlive: false, urgent: true },
+    );
+    await flushOperations();
+    expect(session?.finish).not.toHaveBeenCalled();
+
+    turn.updateConversationTitle('Summary title');
+    finishDependency.resolve();
+    await flushOperations();
+    expect(session?.finish).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'completed', title: 'Summary title' }),
+    );
+    await runtime._doStop();
+  });
+
   test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
@@ -397,4 +426,12 @@ describe('BackgroundReplyRuntime', () => {
 async function flushOperations() {
   await new Promise((resolve) => setImmediate(resolve));
   await new Promise((resolve) => setImmediate(resolve));
+}
+
+function createDeferred(): { promise: Promise<void>; resolve: () => void } {
+  let resolve!: () => void;
+  const promise = new Promise<void>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
 }

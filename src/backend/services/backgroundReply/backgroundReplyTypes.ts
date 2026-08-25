@@ -26,7 +26,8 @@ export type BackgroundReplyMessage =
  */
 export type BackgroundReplyTurn = {
   awaitApproval: (message?: BackgroundReplyMessage) => void;
-  finish: (outcome: BackgroundReplyOutcome) => void;
+  /** Shows terminal content immediately; `waitFor` delays only final surface dismissal. */
+  finish: (outcome: BackgroundReplyOutcome, options?: { waitFor?: Promise<unknown> }) => void;
   update: (message: BackgroundReplyMessage) => void;
   updateConversationTitle: (title: string) => void;
 };

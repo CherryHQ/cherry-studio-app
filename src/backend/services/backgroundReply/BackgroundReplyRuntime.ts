@@ -168,10 +168,15 @@ export class BackgroundReplyRuntime
             urgent: true,
           });
         }),
-      finish: (outcome) =>
-        this.runTurnCallback(record.key, 'finish turn', () => {
-          this.finishTurn(record.key, generation, outcome);
-        }),
+      finish: (outcome, options) => {
+        void this.finishTurn(record.key, generation, outcome, options?.waitFor).catch(
+          (error: unknown) => {
+            logger.error('Background reply failed to finish turn', error as Error, {
+              key: record.key,
+            });
+          },
+        );
+      },
       update: (message) =>
         this.runTurnCallback(record.key, 'update turn', () => {
           this.updateTurn(record.key, generation, message);
@@ -248,7 +253,12 @@ export class BackgroundReplyRuntime
     });
   }
 
-  private finishTurn(key: string, generation: number, outcome: BackgroundReplyOutcome): void {
+  private async finishTurn(
+    key: string,
+    generation: number,
+    outcome: BackgroundReplyOutcome,
+    waitFor?: Promise<unknown>,
+  ): Promise<void> {
     if (!this.isCurrent(key, generation)) return;
     const record = this.turns.get(key);
     if (!record) return;
@@ -258,10 +268,15 @@ export class BackgroundReplyRuntime
       record.content.preview,
       this.environment.translate,
     );
-    // Deferred so a continuation turn started in the same tick (approval
-    // resume, regenerate) inherits the live session instead of watching it
-    // end and restart.
-    void this.enqueue(async () => {
+    record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
+    if (waitFor) {
+      await waitFor.catch((error: unknown) => {
+        logger.warn('Background reply finish dependency failed', error as Error, { key });
+      });
+    }
+    // Keep terminal content updateable until any final title projection settles.
+    // A continuation that supersedes this generation inherits the live session.
+    await this.enqueue(async () => {
       if (!this.isRecordCurrent(record)) return;
       record.session?.finish(this.toActivityProps(record));
       record.session = undefined;

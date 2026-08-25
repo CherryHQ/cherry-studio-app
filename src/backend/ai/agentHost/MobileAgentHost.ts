@@ -125,6 +125,7 @@ type ActiveTurnState = {
   agent: AgentDefinition;
   turn: AgentTurnView;
   assistantMessage: AgentMessageView;
+  autoNamePromise: Promise<AgentSessionView | null> | null;
   autoNameUserParts: AgentInputPart[] | null;
   backgroundReply: BackgroundReplyTurn;
   pendingApprovals: Map<string, AgentApprovalView>;
@@ -349,6 +350,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         agent,
         turn,
         assistantMessage: reserved.assistantMessage,
+        autoNamePromise: null,
         autoNameUserParts: priorMessages.length === 0 ? parsed.parts : null,
         backgroundReply: this.startBackgroundReply({
           agentId: agent.id,
@@ -366,9 +368,11 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       this.publish(sessionId, { type: 'message.created', message: reserved.assistantMessage });
       this.publish(sessionId, { type: 'turn.updated', turn });
       if (state.autoNameUserParts) {
-        this.publishSessionRename(
-          this.naming.maybeRenameFromFirstUserMessage(sessionId, state.autoNameUserParts),
+        state.autoNamePromise = this.naming.maybeRenameFromFirstUserMessage(
+          sessionId,
+          state.autoNameUserParts,
         );
+        this.publishSessionRename(state.autoNamePromise, state.backgroundReply);
       }
 
       const run = this.runTurn(
@@ -644,7 +648,6 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     if (this.activeTurns.get(sessionId) === state) {
       this.activeTurns.delete(sessionId);
     }
-    state.backgroundReply.finish(outcome);
     if (state.usage) {
       this.usage.record({
         agent: state.agent,
@@ -655,15 +658,20 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
     this.publish(sessionId, { type: 'message.finalized', message: finalized });
     this.publish(sessionId, { type: 'turn.updated', turn });
+    const namingPromises = state.autoNamePromise ? [state.autoNamePromise] : [];
     if (outcome === 'completed' && state.autoNameUserParts) {
-      this.publishSessionRename(
-        this.naming.maybeRenameFromConversationSummary({
-          assistantParts: finalized.parts,
-          sessionId,
-          userParts: state.autoNameUserParts,
-        }),
-      );
+      const summaryNamePromise = this.naming.maybeRenameFromConversationSummary({
+        assistantParts: finalized.parts,
+        sessionId,
+        userParts: state.autoNameUserParts,
+      });
+      namingPromises.push(summaryNamePromise);
+      this.publishSessionRename(summaryNamePromise, state.backgroundReply);
     }
+    state.backgroundReply.finish(
+      outcome,
+      namingPromises.length > 0 ? { waitFor: Promise.allSettled(namingPromises) } : undefined,
+    );
   }
 
   // ── Helpers ──
@@ -751,11 +759,18 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     }
   }
 
-  private publishSessionRename(promise: Promise<AgentSessionView | null>): void {
+  private publishSessionRename(
+    promise: Promise<AgentSessionView | null>,
+    originatingBackgroundReply?: BackgroundReplyTurn,
+  ): void {
     void promise
       .then((session) => {
         if (session) {
-          this.activeTurns.get(session.id)?.backgroundReply.updateConversationTitle(session.title);
+          const activeBackgroundReply = this.activeTurns.get(session.id)?.backgroundReply;
+          activeBackgroundReply?.updateConversationTitle(session.title);
+          if (originatingBackgroundReply !== activeBackgroundReply) {
+            originatingBackgroundReply?.updateConversationTitle(session.title);
+          }
           this.publish(session.id, { type: 'session.updated', session });
         }
       })
