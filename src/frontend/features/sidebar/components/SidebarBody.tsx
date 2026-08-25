@@ -16,7 +16,7 @@ import { SidebarNavRow } from './SidebarNavRow';
 import { SidebarSessionList } from './SidebarSessionList';
 
 /**
- * The sidebar's only scroller: nav rows and the recent topics scroll together
+ * The sidebar's only scroller: nav rows and the recent sessions scroll together
  * under the floating header and footer, which is why the content padding clears
  * both. `ScrollShadow` dissolves rows into the sidebar surface at the top, and
  * the header's blur lives in its `SidebarFade` layer. Children replace the

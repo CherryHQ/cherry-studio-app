@@ -29,7 +29,7 @@ import {
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
-import type { Model } from '@/shared/data/types/model';
+import type { Model, UniqueModelId } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
@@ -46,6 +46,7 @@ export interface AiGenerateRequest extends AiBaseRequest {
   system?: string;
   prompt?: string;
   messages?: ModelMessage[];
+  uniqueModelId: UniqueModelId;
 }
 
 // ── SDK extensions ─────────────────────────────────────────────────
@@ -61,6 +62,12 @@ export interface AiImageRequest extends AiBaseRequest {
   mode: ImageGenerationMode;
   paramValues: ParamValues;
   prompt: string;
+  uniqueModelId: UniqueModelId;
+}
+
+export interface AiCheckModelRequest extends AiBaseRequest {
+  timeout?: number;
+  uniqueModelId: UniqueModelId;
 }
 
 export interface AiImageResult {
@@ -326,9 +333,7 @@ export class AiService extends BaseService {
   // ── API validation ──
 
   /** Validates models supported by the mobile AI runtime with a short text generation. */
-  async checkModel(
-    request: AiBaseRequest & { apiKeyOverride?: string; timeout?: number },
-  ): Promise<{ latency: number }> {
+  async checkModel(request: AiCheckModelRequest): Promise<{ latency: number }> {
     const start = performance.now();
     const timeout = request.timeout ?? 15000;
     const requestSignal = request.requestOptions?.signal;

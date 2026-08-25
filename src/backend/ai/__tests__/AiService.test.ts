@@ -158,7 +158,9 @@ describe('AiService.checkModel', () => {
   });
 
   it('requires an explicit model id', async () => {
-    await expect(new AiService(createServices({})).checkModel({ timeout: 1000 })).rejects.toThrow(
+    const untypedRequest = { timeout: 1000 } as unknown as Parameters<AiService['checkModel']>[0];
+
+    await expect(new AiService(createServices({})).checkModel(untypedRequest)).rejects.toThrow(
       'AiService requires uniqueModelId',
     );
   });

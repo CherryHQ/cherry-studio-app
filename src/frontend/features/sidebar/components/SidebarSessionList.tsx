@@ -27,7 +27,10 @@ function SidebarSessionListView() {
   const { sessions } = useSessionListSessions();
   const { requestDelete, requestRename } = useSessionActionAlerts();
   const { closeDrawer, openSessionList } = useSidebarActions('Sidebar session list');
-  const visibleSessions = useMemo(() => sessions.slice(0, appSidebar.recentTopicLimit), [sessions]);
+  const visibleSessions = useMemo(
+    () => sessions.slice(0, appSidebar.recentSessionLimit),
+    [sessions],
+  );
 
   return (
     <>

@@ -10,7 +10,7 @@
         "source": "src/main/ai/AiService.ts",
         "sourceSha256": "82589115d8eca855da3b258de2b6c521a7ca77e23389f23b77c09cf41554387c",
         "target": "src/backend/ai/AiService.ts",
-        "targetSha256": "5c14ce79112b54b5459d563c68fea61a3e966abcf8e0d2668c6c8777d4ad89ae"
+        "targetSha256": "00930d0269300cc323e2403b8e8b22cb8f15182084abf6eb6b5d9122251f9d6f"
       },
       {
         "classification": "semantic-port",
@@ -19,7 +19,7 @@
         "source": "src/main/ai/__tests__/AiService.test.ts",
         "sourceSha256": "262f5b7d4091f4dd0ebbec61e6ce5030eb184274521ef456dd52c5c324363cab",
         "target": "src/backend/ai/__tests__/AiService.test.ts",
-        "targetSha256": "c46d3c75c02d4e668abb881a30bc4d2b15c3535e246bbdc1dcf1193cba50b6ad"
+        "targetSha256": "d55e0cea1b86e3c0f12ad21b12b0f94c63a05a92e2e9515aeef0ee5185035300"
       },
       {
         "classification": "blocked",
