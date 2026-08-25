@@ -31,28 +31,15 @@ export type BackgroundReplyTurn = {
   update: (message: BackgroundReplyMessage) => void;
 };
 
-export type AgentSessionBackgroundReplyTurnInput = {
+export type BackgroundReplyTurnInput = {
   agentId: string;
   agentName: string;
   sessionId: string;
   sessionTitle: string;
 };
 
-/** Transitional input retained only until the old ChatRuntime is deleted in D. */
-export type LegacyChatBackgroundReplyTurnInput = {
-  assistantName: string;
-  topicId: string;
-  topicTitle: string;
-};
-
-export type BackgroundReplyTurnInput =
-  | AgentSessionBackgroundReplyTurnInput
-  | LegacyChatBackgroundReplyTurnInput;
-
 export type BackgroundReplyLifecycle = {
   clearSession: (sessionId: string) => void;
-  /** Transitional compatibility entry retained until D removes ChatRuntime. */
-  clearTopic: (topicId: string) => void;
   startTurn: (input: BackgroundReplyTurnInput) => BackgroundReplyTurn;
   updateSessionTitle: (sessionId: string, title: string) => void;
 };

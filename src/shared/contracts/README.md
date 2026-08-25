@@ -96,8 +96,7 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 - Name leaf contracts `XxxModule` and caller-owned lifecycle objects `XxxSession`. Keep the aggregate
   name `Backend` and its capability keys unchanged.
 - Prefer one operation that owns a complete workflow over exposing every internal step.
-- Put cancellation on its owner: a Topic-scoped `abort` method for the shared Chat Runtime, or
-  `cancel()` on a caller-owned generation session.
+- Put cancellation on its owner, such as `cancel()` on a caller-owned generation session.
 - Sessions that own resources, subscriptions, or in-flight work must expose `dispose()` and define
   who owns calling it.
 - Return structured results or emit semantic events. Do not perform routing, translation, toast, or
@@ -111,17 +110,10 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 - Do not add serialization schemas unless a real transport is introduced through a separate
   architecture decision.
 
-Chat's public state vocabulary is `ChatTopicStatus`, `ChatTopicSnapshot`, `ChatEvent`, and
-`ChatListener`; the temporary new-Topic projection uses `NEW_TOPIC_SNAPSHOT_KEY`. `ChatModule`
-exposes send, branch selection, regeneration, edit-and-resend, multi-model execution, steering,
-follow-up queuing, approval, cancellation, reconnectable streams, snapshots, and subscriptions
-directly. Do not reintroduce `createSession()` or a public Chat session object.
-
 ## Current Modules
 
 | Module | Why it qualifies |
 | --- | --- |
-| `chat` | Projects the app-owned, multi-Topic Chat Runtime through branching, multi-model sends, queued turns, cancellation, stream recovery, and subscriptions |
 | `file` | Encapsulates managed-file import, Expo URI resolution, and user-triggered deletion |
 | `mcp` | Coordinates MCP runtime state, connection testing, tool discovery, and invalidation |
 | `models` | Coordinates provider model pull, preview, reconcile, timeout, and health-check workflows |

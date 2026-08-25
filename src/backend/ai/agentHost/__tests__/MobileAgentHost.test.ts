@@ -76,7 +76,6 @@ const backgroundReplyTurn = {
 };
 const backgroundReply = {
   clearSession: jest.fn(),
-  clearTopic: jest.fn(),
   startTurn: jest.fn(() => backgroundReplyTurn),
   updateSessionTitle: jest.fn(),
 };

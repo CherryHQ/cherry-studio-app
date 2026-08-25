@@ -10,7 +10,7 @@
         "source": "src/main/ai/AiService.ts",
         "sourceSha256": "82589115d8eca855da3b258de2b6c521a7ca77e23389f23b77c09cf41554387c",
         "target": "src/backend/ai/AiService.ts",
-        "targetSha256": "c38a8394475ec01384516446067bb4c436b2faf4174784f998d2c83d6a35cd61"
+        "targetSha256": "6e8de02837bc9621bf7ca485ae1f8c14253e448511622cdb9a257d7d7dd2a2a6"
       },
       {
         "classification": "semantic-port",
@@ -5967,22 +5967,18 @@
         "sourceSha256": "e0524857542cbb47e2da6ff9b1d3ec562c588836952b2c8b62c23252338bb663"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/ChatRuntime.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/ChatRuntime.ts",
-        "sourceSha256": "f6c471aad449511e493e72875bf1af32a4c03bbb28ce8188855aa943bb182315",
-        "target": "src/backend/ai/streamManager/ChatRuntime.ts",
-        "targetSha256": "db0f95c709d3636020c454c9b6d5f0f762cca2d0b5d6fecbdad39055d06bfd82"
+        "sourceSha256": "f6c471aad449511e493e72875bf1af32a4c03bbb28ce8188855aa943bb182315"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/ChatRuntimeDependencies.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/ChatRuntimeDependencies.ts",
-        "sourceSha256": "eae5cf5bb4083c2e7de4eba7f694c4b994f09034ff8a26214bebe519b5013069",
-        "target": "src/backend/ai/streamManager/ChatRuntimeDependencies.ts",
-        "targetSha256": "eae5cf5bb4083c2e7de4eba7f694c4b994f09034ff8a26214bebe519b5013069"
+        "sourceSha256": "eae5cf5bb4083c2e7de4eba7f694c4b994f09034ff8a26214bebe519b5013069"
       },
       {
         "classification": "mobile-extension",
@@ -6006,13 +6002,11 @@
         "sourceSha256": "381704806e625255bf8b534d2ca9826faf06510e37567cc2c1a433c251c6ff50"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/__tests__/ChatRuntime.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/__tests__/ChatRuntime.test.ts",
-        "sourceSha256": "3ec0473e013b634b255091ad551b02219d533b926938b8ef0b8cbdb9fb531125",
-        "target": "src/backend/ai/streamManager/__tests__/ChatRuntime.test.ts",
-        "targetSha256": "3ec0473e013b634b255091ad551b02219d533b926938b8ef0b8cbdb9fb531125"
+        "sourceSha256": "3ec0473e013b634b255091ad551b02219d533b926938b8ef0b8cbdb9fb531125"
       },
       {
         "classification": "semantic-port",
@@ -6036,13 +6030,11 @@
         "targetSha256": "c36a0371c5d3a88b61698ec6dd4c2159f0bd45fd10993905db68a34db575d771"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/__tests__/topicNaming.test.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/__tests__/topicNaming.test.ts",
-        "sourceSha256": "39724863666a8d6ce14e406e44ee2a0435fc00a2dc680e9881abb92be45c26f0",
-        "target": "src/backend/ai/streamManager/__tests__/topicNaming.test.ts",
-        "targetSha256": "39724863666a8d6ce14e406e44ee2a0435fc00a2dc680e9881abb92be45c26f0"
+        "sourceSha256": "39724863666a8d6ce14e406e44ee2a0435fc00a2dc680e9881abb92be45c26f0"
       },
       {
         "classification": "mobile-extension",
@@ -6077,13 +6069,11 @@
         "targetSha256": "08827dd148529a9a605bedc746ecb55ee6f01d9d4edbcb0066e523b6c2dd3c1c"
       },
       {
-        "classification": "mobile-extension",
+        "classification": "explicit-exclusion",
         "evidence": ["mobile:src/backend/ai/streamManager/topicNaming.ts"],
-        "reason": "Mobile platform, lifecycle, service, or contract behavior remains owned by the backend adapter.",
+        "reason": "Legacy mobile ChatRuntime was retired after Agent Session became the only chat path.",
         "source": "src/backend/ai/streamManager/topicNaming.ts",
-        "sourceSha256": "0b75977bf7b2a915b0403a4faa1057c64ffcfb26397e8e0113e72cfedcbe33ba",
-        "target": "src/backend/ai/streamManager/topicNaming.ts",
-        "targetSha256": "0b75977bf7b2a915b0403a4faa1057c64ffcfb26397e8e0113e72cfedcbe33ba"
+        "sourceSha256": "0b75977bf7b2a915b0403a4faa1057c64ffcfb26397e8e0113e72cfedcbe33ba"
       },
       {
         "classification": "mobile-extension",

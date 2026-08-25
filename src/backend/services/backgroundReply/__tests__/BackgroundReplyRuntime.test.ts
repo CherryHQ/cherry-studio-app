@@ -172,9 +172,10 @@ describe('BackgroundReplyRuntime', () => {
   test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     const session = mockSessions[0];
 
@@ -237,9 +238,10 @@ describe('BackgroundReplyRuntime', () => {
     async (outcome, label) => {
       const runtime = await createRuntime();
       const turn = runtime.startTurn({
-        assistantName: 'Alpha',
-        topicId: 'topic-1',
-        topicTitle: 'First topic',
+        agentId: 'agent-1',
+        agentName: 'Alpha',
+        sessionId: 'session-1',
+        sessionTitle: 'First session',
       });
       turn.finish(outcome);
       await flushOperations();
@@ -254,17 +256,19 @@ describe('BackgroundReplyRuntime', () => {
   test('does not let an older finish end the session inherited by a newer turn', async () => {
     const runtime = await createRuntime();
     const first = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     const session = mockSessions[0];
 
     first.finish('completed');
     const second = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     await flushOperations();
 
@@ -301,9 +305,10 @@ describe('BackgroundReplyRuntime', () => {
   test('cancels sessions when the preference turns off and restores them on re-enable', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     enabled = false;
     preferenceListener?.();
@@ -326,8 +331,18 @@ describe('BackgroundReplyRuntime', () => {
 
   test('rolls back partially restored sessions when activation fails', async () => {
     const runtime = await createRuntime();
-    runtime.startTurn({ assistantName: 'Alpha', topicId: 'topic-1', topicTitle: 'First topic' });
-    runtime.startTurn({ assistantName: 'Beta', topicId: 'topic-2', topicTitle: 'Second topic' });
+    runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
+    });
+    runtime.startTurn({
+      agentId: 'agent-1',
+      agentName: 'Beta',
+      sessionId: 'session-2',
+      sessionTitle: 'Second session',
+    });
 
     enabled = false;
     preferenceListener?.();
@@ -348,9 +363,10 @@ describe('BackgroundReplyRuntime', () => {
   test('ends sessions when stopped during an active turn and stops idempotently', async () => {
     const runtime = await createRuntime();
     runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     await expect(runtime._doStop()).resolves.toBeUndefined();
     await expect(runtime._doStop()).resolves.toBeUndefined();
@@ -361,9 +377,10 @@ describe('BackgroundReplyRuntime', () => {
     Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
     const androidRuntime = await createRuntime();
     androidRuntime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     expect(mockStartSession).not.toHaveBeenCalled();
     await androidRuntime._doStop();
@@ -373,9 +390,10 @@ describe('BackgroundReplyRuntime', () => {
     const disabledRuntime = await createRuntime();
     expect(disabledRuntime.isActivated).toBe(false);
     disabledRuntime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-2',
-      topicTitle: 'Second topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-2',
+      sessionTitle: 'Second session',
     });
     expect(mockStartSession).not.toHaveBeenCalled();
     await disabledRuntime._doStop();
@@ -393,9 +411,10 @@ describe('BackgroundReplyRuntime', () => {
       return key;
     });
     const turn = runtime.startTurn({
-      assistantName: 'Alpha',
-      topicId: 'topic-1',
-      topicTitle: 'First topic',
+      agentId: 'agent-1',
+      agentName: 'Alpha',
+      sessionId: 'session-1',
+      sessionTitle: 'First session',
     });
     expect(() =>
       turn.update({

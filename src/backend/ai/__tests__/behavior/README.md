@@ -12,8 +12,8 @@ interface from `ai/test`. It does not emulate provider HTTP endpoints or SSE wir
 - `AiService.generateText.test.ts` and `AiService.generateImage.test.ts` own the other model-backed
   entry points; `AiService.checkModel.test.ts` owns language health probes and mobile's explicit
   rejection of Embedding/Rerank execution.
-- Provider capabilities, provider-native tools, message rules, tool approval, MCP transport,
-  `ChatRuntime`, and `listModels` remain owned by their existing focused suites.
+- Provider capabilities, provider-native tools, message rules, tool approval, MCP transport, and
+  `listModels` remain owned by their existing focused suites.
 
 The harness temporarily replaces the global `openai-compatible` extension. Run this directory in
 band, never use `test.concurrent`, and always restore the extension after each test. Both

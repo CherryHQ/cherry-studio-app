@@ -5,7 +5,7 @@
  *
  * The Host owns Agent lookup, Session persistence, the local Runtime binding, the
  * streaming overlay, snapshots, and lifecycle recovery. It is an app-owned
- * lifecycle service (one per ApplicationHost generation, like ChatRuntime):
+ * lifecycle service (one per ApplicationHost generation):
  * route unmount only unsubscribes; disposal cancels and awaits active turns.
  *
  * Protocol invariants implemented here (agent-protocol.md):

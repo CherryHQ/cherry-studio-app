@@ -4,10 +4,7 @@ import {
   type RuntimeProviderCallEvent,
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
-import {
-  type AppProviderSettingsMap,
-  resolveEffectiveEndpoint,
-} from '@cherrystudio/ai-runtime/provider';
+import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
 import type {
   AiBaseRequest,
   AiStreamRequest,
@@ -21,11 +18,7 @@ import {
   mergeImageProviderOptions,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/utils';
-import {
-  ENDPOINT_TYPE,
-  type ImageGenerationMode,
-  type ParamValues,
-} from '@cherrystudio/provider-registry';
+import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
 import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
@@ -60,17 +53,7 @@ import { listModels as listProviderModels } from './provider/listModels';
 import { VertexAuthClient } from './provider/VertexAuthClient';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
-import { getChatRuntime } from './runtime/chatRuntime';
-import type { PiChatThinkingLevel } from './runtime/pi/PiChatStreamAdapter';
 import { ToolResolver } from './tools';
-
-const DEFAULT_PI_CONTEXT_WINDOW = 128_000;
-const DEFAULT_PI_MAX_OUTPUT_TOKENS = 8_192;
-const DEFAULT_PI_TIMEOUT_MS = 10 * 60_000;
-type PiChatStreamAdapterModule = typeof import('./runtime/pi/PiChatStreamAdapter');
-const piChatRuntime = {
-  load: (): Promise<PiChatStreamAdapterModule> => import('./runtime/pi/PiChatStreamAdapter'),
-};
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -111,7 +94,6 @@ export interface AiServiceDependencies extends BuildAgentParamsDependencies {
     getUri(id: FileEntryId): Promise<string | undefined>;
   };
   model: Pick<ModelService, 'getById'>;
-  piChatRuntime: { load(): Promise<PiChatStreamAdapterModule> };
   provider: BuildAgentParamsDependencies['provider'] &
     Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
   providerRegistry: Pick<ProviderRegistryService, 'listProviderRegistryModels'>;
@@ -236,7 +218,6 @@ export class AiService extends BaseService {
       assistant: overrides.assistant ?? assistantService,
       fileContent: overrides.fileContent ?? fileContent,
       model: overrides.model ?? modelService,
-      piChatRuntime: overrides.piChatRuntime ?? piChatRuntime,
       preference: overrides.preference ?? application.get('PreferenceService'),
       provider: overrides.provider ?? providerService,
       providerRegistry: overrides.providerRegistry ?? providerRegistryService,
@@ -285,8 +266,6 @@ export class AiService extends BaseService {
         'streamText requires requestOptions.signal — no AbortController was attached by the caller',
       );
     }
-    if (getChatRuntime() === 'pi') return this.streamTextWithPi(request, signal);
-
     const repairUsagePlugins: { current?: AiPlugin[] } = {};
     const [built, preparedMessages] = await Promise.all([
       this.buildAgentParamsFor(request, true, () => repairUsagePlugins.current ?? []),
@@ -345,53 +324,6 @@ export class AiService extends BaseService {
     });
 
     return agent.stream(preparedMessages, signal);
-  }
-
-  private async streamTextWithPi(
-    request: AiStreamRequest,
-    signal: AbortSignal,
-  ): Promise<ReadableStream<UIMessageChunk>> {
-    assertPiRequestSupported(request);
-    const { assistant, credentialReceipt, model, options, provider, sdkConfig, system } =
-      await this.buildAgentParamsFor(request);
-    assertPiBuiltConfigSupported(provider, model, assistant, sdkConfig);
-    const providerSettings = readPiProviderSettings(sdkConfig.providerSettings);
-    const usageContext = createCaptureContext({
-      provider,
-      model,
-      sdkModelId: sdkConfig.modelId,
-      credentialReceipt,
-      assistant,
-      messageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
-    });
-
-    // TODO(pi-runtime-migration): This transitional bridge intentionally reuses AI SDK
-    // message/config shapes. Rework history hydration, per-turn Pi ownership, provider
-    // coverage, tools/attachments, and Message/Assistant persistence together.
-    const { PiChatStreamAdapter } = await this.services.piChatRuntime.load();
-    const adapter = new PiChatStreamAdapter({
-      apiKey: providerSettings.apiKey,
-      baseUrl: providerSettings.baseURL,
-      contextWindow: model.contextWindow ?? DEFAULT_PI_CONTEXT_WINDOW,
-      headers: mergePiHeaders(providerSettings, options.headers),
-      maxOutputTokens:
-        options.maxOutputTokens ?? model.maxOutputTokens ?? DEFAULT_PI_MAX_OUTPUT_TOKENS,
-      maxRetries: options.maxRetries ?? 0,
-      messageId: request.messageId,
-      modelId: sdkConfig.modelId,
-      modelName: model.name,
-      providerId: provider.id,
-      providerName: provider.name,
-      sessionId: request.chatId,
-      supportsReasoning: model.reasoning !== undefined,
-      system,
-      temperature: options.temperature,
-      thinkingLevel: resolvePiThinkingLevel(request, assistant, model),
-      timeoutMs: options.timeout ?? DEFAULT_PI_TIMEOUT_MS,
-      usageCapture: { context: usageContext, recorder: this.services.aiUsageRecord },
-    });
-
-    return adapter.stream(request.messages ?? [], signal);
   }
 
   // ── Non-streaming text generation (agent.generate) ──
@@ -665,135 +597,6 @@ function stripUndefinedHeaders(
   return Object.fromEntries(
     Object.entries(headers).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
-}
-
-type PiProviderSettings = {
-  apiKey: string;
-  baseURL: string;
-  headers?: Record<string, string | undefined>;
-  organization?: string;
-  project?: string;
-};
-
-function assertPiRequestSupported(request: AiStreamRequest): void {
-  if (
-    request.callOverrides?.toolChoice !== undefined ||
-    Object.keys(request.callOverrides?.tools ?? {}).length > 0
-  ) {
-    throw new Error('Pi chat runtime does not support request tools in this transition stage');
-  }
-  if ((request.mcpToolIds?.length ?? 0) > 0) {
-    throw new Error('Pi chat runtime does not support MCP in this transition stage');
-  }
-  if ((request.knowledgeBaseIds?.length ?? 0) > 0) {
-    throw new Error(
-      'Pi chat runtime does not support knowledge-base input in this transition stage',
-    );
-  }
-}
-
-function assertPiBuiltConfigSupported(
-  provider: Provider,
-  model: Model,
-  assistant: Assistant | undefined,
-  sdkConfig: { endpoint?: string; providerSettings: unknown },
-): void {
-  const endpointType = resolveEffectiveEndpoint(provider, model).endpointType;
-  if (endpointType !== ENDPOINT_TYPE.OPENAI_RESPONSES) {
-    throw new Error(
-      `Pi chat runtime only supports the OpenAI Responses endpoint; received ${endpointType ?? 'unknown'}`,
-    );
-  }
-  if (provider.authType !== 'api-key') {
-    throw new Error(
-      `Pi chat runtime does not support provider authentication type: ${provider.authType}`,
-    );
-  }
-  if (provider.authMethods?.length && !provider.authMethods.includes('api-key')) {
-    throw new Error('Pi chat runtime does not support this provider authentication flow');
-  }
-  if (sdkConfig.endpoint) {
-    throw new Error(
-      'Pi chat runtime does not support custom endpoint paths in this transition stage',
-    );
-  }
-  if (isRecord(sdkConfig.providerSettings) && sdkConfig.providerSettings.fetch !== undefined) {
-    throw new Error(
-      'Pi chat runtime does not support custom provider transports in this transition stage',
-    );
-  }
-  if (assistant?.settings.enableWebSearch) {
-    throw new Error('Pi chat runtime does not support web search in this transition stage');
-  }
-  if (assistant && assistant.settings.mcpMode !== 'disabled' && assistant.mcpServerIds.length > 0) {
-    throw new Error('Pi chat runtime does not support MCP in this transition stage');
-  }
-}
-
-function readPiProviderSettings(value: unknown): PiProviderSettings {
-  if (!isRecord(value)) throw new Error('Pi chat runtime requires plain provider settings');
-  if (typeof value.apiKey !== 'string') {
-    throw new Error('Pi chat runtime requires an API key from the selected provider');
-  }
-  if (typeof value.baseURL !== 'string' || value.baseURL.trim().length === 0) {
-    throw new Error('Pi chat runtime requires a base URL from the selected provider');
-  }
-  if (value.headers !== undefined && !isStringRecord(value.headers)) {
-    throw new Error('Pi chat runtime requires plain string provider headers');
-  }
-  if (value.organization !== undefined && typeof value.organization !== 'string') {
-    throw new Error('Pi chat runtime requires a string OpenAI organization');
-  }
-  if (value.project !== undefined && typeof value.project !== 'string') {
-    throw new Error('Pi chat runtime requires a string OpenAI project');
-  }
-
-  return {
-    apiKey: value.apiKey,
-    baseURL: value.baseURL,
-    ...(value.headers ? { headers: value.headers } : {}),
-    ...(value.organization ? { organization: value.organization } : {}),
-    ...(value.project ? { project: value.project } : {}),
-  };
-}
-
-function mergePiHeaders(
-  providerSettings: PiProviderSettings,
-  requestHeaders: Record<string, string | undefined> | undefined,
-): Record<string, string> | undefined {
-  const headers = stripUndefinedHeaders({
-    ...providerSettings.headers,
-    ...(providerSettings.organization
-      ? { 'OpenAI-Organization': providerSettings.organization }
-      : {}),
-    ...(providerSettings.project ? { 'OpenAI-Project': providerSettings.project } : {}),
-    ...requestHeaders,
-  });
-  return Object.keys(headers).length > 0 ? headers : undefined;
-}
-
-function resolvePiThinkingLevel(
-  request: AiStreamRequest,
-  assistant: Assistant | undefined,
-  model: Model,
-): PiChatThinkingLevel {
-  if (!model.reasoning) return 'off';
-  const selection = request.reasoningEffort ?? assistant?.settings.reasoning_effort ?? 'default';
-  const resolved =
-    selection === 'default' || selection === 'auto'
-      ? (model.reasoning.defaultEffort ?? 'medium')
-      : selection;
-  if (resolved === 'none') return 'off';
-  if (resolved === 'auto') return 'medium';
-  return resolved;
-}
-
-function isStringRecord(value: unknown): value is Record<string, string | undefined> {
-  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string');
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function throwIfAiRequestAborted(signal: AbortSignal | undefined) {

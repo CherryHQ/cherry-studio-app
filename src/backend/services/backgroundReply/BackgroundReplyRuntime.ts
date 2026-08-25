@@ -189,11 +189,6 @@ export class BackgroundReplyRuntime
     this.clearTurn(sessionId);
   };
 
-  /** Transitional compatibility entry retained until D removes ChatRuntime. */
-  clearTopic = (topicId: string): void => {
-    this.clearTurn(legacyTopicKey(topicId));
-  };
-
   updateSessionTitle = (sessionId: string, title: string): void => {
     this.runTurnCallback(sessionId, 'update Agent Session title', () => {
       const record = this.turns.get(sessionId);
@@ -377,25 +372,12 @@ function normalizeTurnInput(input: BackgroundReplyTurnInput): {
   deepLinkUrl: string;
   key: string;
 } {
-  if ('sessionId' in input) {
-    return {
-      actorName: input.agentName,
-      conversationTitle: input.sessionTitle,
-      deepLinkUrl: `cherrystudio:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
-      key: input.sessionId,
-    };
-  }
-
   return {
-    actorName: input.assistantName,
-    conversationTitle: input.topicTitle,
-    deepLinkUrl: `cherrystudio://topics?topicId=${encodeURIComponent(input.topicId)}`,
-    key: legacyTopicKey(input.topicId),
+    actorName: input.agentName,
+    conversationTitle: input.sessionTitle,
+    deepLinkUrl: `cherrystudio:///?agentId=${encodeURIComponent(input.agentId)}&sessionId=${encodeURIComponent(input.sessionId)}`,
+    key: input.sessionId,
   };
-}
-
-function legacyTopicKey(topicId: string): string {
-  return `legacy-topic:${topicId}`;
 }
 
 const noOpTurn: BackgroundReplyTurn = {
