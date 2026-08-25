@@ -141,6 +141,7 @@ describe('ModelService', () => {
             { id: 'openai::custom', presetModelId: null },
             { id: 'openai::custom-empty', presetModelId: '' },
             { id: 'openai::default', presetModelId: 'default' },
+            { id: 'openai::painting', presetModelId: 'painting' },
             ...removedRows,
           ]),
         })),
@@ -150,7 +151,15 @@ describe('ModelService', () => {
       withWriteTx: jest.fn(async (callback) => callback(tx)),
     } as unknown as DbService;
     const preferenceService = {
-      get: jest.fn(async () => 'openai::default'),
+      get: jest.fn(async (key: string) => {
+        if (key === 'chat.default_model_id') {
+          return 'openai::default';
+        }
+        if (key === 'feature.paintings.default_model_id') {
+          return 'openai::painting';
+        }
+        return null;
+      }),
     } as unknown as PreferenceService;
     const service = await createService(dbService, preferenceService);
 
@@ -160,6 +169,7 @@ describe('ModelService', () => {
         'openai::custom',
         'openai::custom-empty',
         'openai::default',
+        'openai::painting',
         'openai::replace',
         'openai::stale',
       ],

@@ -38,6 +38,7 @@ describe('preference schema', () => {
     expect(getDefaultValue('chat.web_search.max_results')).toBe(5);
     expect(getDefaultValue('chat.web_search.compression.method')).toBe('none');
     expect(getDefaultValue('chat.web_search.compression.cutoff_limit')).toBe(2000);
+    expect(getDefaultValue('feature.paintings.default_model_id')).toBeNull();
     expect(getDefaultValue('ui.theme_mode')).toBe(ThemeMode.system);
     expect(getDefaultValue('ui.font_size_step')).toBe(0);
   });

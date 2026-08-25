@@ -19,6 +19,7 @@ import {
   ModelPickerIcon,
   type ModelPickerModelItem,
 } from '@/frontend/components/modelPicker';
+import { usePreference } from '@/frontend/data/hooks';
 import { useModelById, useModels, useProviders } from '@/frontend/hooks/chat';
 import { isUniqueModelId, type UniqueModelId } from '@/shared/data/types/model';
 import type { Painting } from '@/shared/data/types/painting';
@@ -62,8 +63,13 @@ export function PaintingInput({
   status,
 }: PaintingInputProps) {
   const { t } = useTranslation();
+  const [defaultPaintingModelId] = usePreference('feature.paintings.default_model_id');
   const initialModelId =
-    painting?.modelId && isUniqueModelId(painting.modelId) ? painting.modelId : null;
+    painting?.modelId && isUniqueModelId(painting.modelId)
+      ? painting.modelId
+      : isUniqueModelId(defaultPaintingModelId)
+        ? defaultPaintingModelId
+        : null;
   const [selectedModelId, setSelectedModelId] = useState<UniqueModelId | null>(initialModelId);
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);

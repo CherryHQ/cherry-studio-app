@@ -336,6 +336,7 @@
   "settings.mcp.tools.title": "Tools",
   "settings.model.default.title": "Default model",
   "settings.model.fast.title": "Fast model",
+  "settings.model.painting.title": "Drawing model",
   "settings.model.title": "Model",
   "settings.model.translate.title": "Translation model",
   "modelPicker.empty": "No available models.",

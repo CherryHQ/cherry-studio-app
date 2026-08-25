@@ -1,4 +1,5 @@
 import ChevronDownIcon from '@cherrystudio/app-icons/icons/chevron-down';
+import { MODEL_CAPABILITY } from '@cherrystudio/provider-registry';
 import { Section } from '@cherrystudio/ui/components';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,8 @@ import {
   useModelPickerData,
   useModelSettingSelections,
 } from '@/frontend/components/modelPicker';
+
+const IMAGE_GENERATION_MODEL_TAGS = [MODEL_CAPABILITY.IMAGE_GENERATION] as const;
 
 export default function ModelSettingsScreen() {
   const { t } = useTranslation();
@@ -73,6 +76,7 @@ export default function ModelSettingsScreen() {
           onClose={closeModelPicker}
           onSelect={handleModelSelect}
           selectedModelId={selectedModelId}
+          selectedTags={activeKind === 'painting' ? IMAGE_GENERATION_MODEL_TAGS : undefined}
           title={t(MODEL_SETTING_KIND_TITLE_KEYS[activeKind])}
         />
       ) : null}

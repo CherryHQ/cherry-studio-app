@@ -335,6 +335,7 @@
   "settings.mcp.tools.title": "工具",
   "settings.model.default.title": "默认模型",
   "settings.model.fast.title": "快速模型",
+  "settings.model.painting.title": "绘图模型",
   "settings.model.title": "模型",
   "settings.model.translate.title": "翻译模型",
   "modelPicker.empty": "暂无可用模型。",
