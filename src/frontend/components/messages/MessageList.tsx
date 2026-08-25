@@ -4,7 +4,7 @@ import { KeyboardAwareLegendList, useKeyboardScrollToEnd } from '@legendapp/list
 import { type LegendListRef, type LegendListRenderItemProps } from '@legendapp/list/react-native';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { type LayoutChangeEvent, useWindowDimensions, View } from 'react-native';
+import { type LayoutChangeEvent, Platform, useWindowDimensions, View } from 'react-native';
 import { runOnJS, useAnimatedReaction, useSharedValue } from 'react-native-reanimated';
 
 import { usePreference } from '@/frontend/data/hooks';
@@ -222,7 +222,7 @@ export function MessageList({
             freeze={freeze}
             getItemType={getMessageRowType}
             keyExtractor={messageKeyExtractor}
-            keyboardDismissMode="interactive"
+            keyboardDismissMode={Platform.OS === 'android' ? 'on-drag' : 'interactive'}
             // 贴底时才让键盘抬起内容——在历史里翻看时点输入框，内容不该跟着动。
             // 别改成 persistent：它的收起分支确实不产生位移（那正是 patches/ 里给
             // whenAtEnd 补上的语义），但它的抬起分支恒抬、且收起时把抬起量保住，

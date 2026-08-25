@@ -43,11 +43,6 @@ export function ProviderFormAvatar({ children }: { children?: ReactNode }) {
   }, [setAvatarUri]);
 
   const selectAvatarFromPhotoLibrary = useCallback(async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-    if (!permission.granted) {
-      return;
-    }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       aspect: [1, 1],

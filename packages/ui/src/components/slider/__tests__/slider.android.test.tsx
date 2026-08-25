@@ -47,15 +47,28 @@ describe('Slider (Android)', () => {
     expect(root.props.minValue).toBe(0);
     expect(root.props.maxValue).toBe(100);
     expect(root.props.step).toBe(1);
+    expect(root.props.accessibilityLabel).toBeUndefined();
     expect(renderer!.root.findByProps({ testID: 'track' })).toBeDefined();
     expect(renderer!.root.findByProps({ testID: 'fill' })).toBeDefined();
-    expect(renderer!.root.findByProps({ testID: 'thumb' })).toBeDefined();
+    const thumb = renderer!.root.findByProps({ testID: 'thumb' });
+    expect(thumb.props.accessibilityLabel).toBe('Volume');
+    expect(thumb.props.accessibilityActions).toEqual([
+      { name: 'decrement' },
+      { name: 'increment' },
+    ]);
 
     act(() => root.props.onChange(45));
     expect(onValueChange).toHaveBeenCalledWith(45);
+
+    act(() => thumb.props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } }));
+    act(() => thumb.props.onAccessibilityAction({ nativeEvent: { actionName: 'decrement' } }));
+    expect(onValueChange).toHaveBeenNthCalledWith(2, 41);
+    expect(onValueChange).toHaveBeenNthCalledWith(3, 39);
   });
 
   test('maps custom bounds and disabled state to HeroUI', () => {
+    const onValueChange = jest.fn();
+
     act(() => {
       renderer = create(
         <Slider
@@ -63,7 +76,7 @@ describe('Slider (Android)', () => {
           disabled
           max={1}
           min={0.1}
-          onValueChange={jest.fn()}
+          onValueChange={onValueChange}
           step={0.1}
           value={0.5}
         />,
@@ -76,6 +89,11 @@ describe('Slider (Android)', () => {
     expect(root.props.minValue).toBe(0.1);
     expect(root.props.maxValue).toBe(1);
     expect(root.props.step).toBe(0.1);
+
+    const thumb = renderer!.root.findByProps({ testID: 'thumb' });
+    expect(thumb.props.accessibilityActions).toBeUndefined();
+    expect(thumb.props.onAccessibilityAction).toBeUndefined();
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 
   test('renders endpoint labels around a flexible slider', () => {
