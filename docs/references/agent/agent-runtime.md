@@ -1,6 +1,6 @@
 # Cherry Agent Runtime
 
-Status: **Pi-first target design; integration not yet complete**. Version 1 is local-only.
+Status: **Pi Runtime active behind the Mobile Agent Host**. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-Agent services, but
@@ -34,6 +34,20 @@ availability never select another local engine.
 
 The Agent's application-owned instructions, model, and tools are resolved afresh for every turn.
 The injected Pi Runtime remains stable for the Host lifetime.
+
+## Production Pi binding
+
+The production Host binds `local` directly to Pi and injects provider/model resolution through an
+application adapter. The Runtime itself imports neither Expo transport nor application data
+services. Current provider coverage is intentionally narrow: API-key-authenticated OpenAI Responses
+endpoints. Unsupported endpoint or authentication types fail before partial execution; expanding
+that adapter is follow-up work.
+
+Pi receives the complete structured transcript and Agent inference options on each execution. It
+maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
+multi-call usage onto this contract. The Runtime tool loop is implemented, but the Host currently
+supplies `tools: []` until the application-owned tool configuration model lands. Attachments remain
+disabled pending Host-side file resolution.
 
 ## Descriptor and lifecycle
 
@@ -70,8 +84,8 @@ interface AgentRuntimeSession {
 
 Capabilities describe what the engine contract can represent. In particular, `tools: true` means
 Pi can run a tool loop; it does not mean the current Agent has any tools configured. The Host derives
-the effective tools for each turn and separately checks whether the selected model supports native
-tool calling.
+the effective tools for each turn, and the Pi model adapter separately checks whether the selected
+model supports native tool calling.
 
 The Host owns one `AgentRuntimeSession` for each active application Session. The Runtime session may
 hold provider clients and execution-local state, but every `execute` request contains the complete
@@ -187,8 +201,8 @@ tool result; a Runtime never looks up and executes an arbitrary application tool
 
 Tool configuration, OS permission, and execution approval are separate gates. A configured tool is
 not automatically approved. If the snapshot is non-empty but the selected model cannot call tools,
-the Host rejects the turn with `CAPABILITY_UNSUPPORTED` before partial execution instead of silently
-degrading to prompt-encoded pseudo calls.
+the Pi Runtime rejects the turn with a normalized unsupported-tools failure before partial execution
+instead of silently degrading to prompt-encoded pseudo calls.
 
 When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
 Runtime never invokes `execute`. It reports the tool part as `denied` and returns

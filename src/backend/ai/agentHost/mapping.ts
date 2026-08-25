@@ -127,7 +127,11 @@ export function toRuntimeHistory(messages: AgentMessageView[]): RuntimeMessage[]
             toolName: part.toolName,
             input: part.input ?? null,
           });
-          if (part.state === 'output-available' || part.state === 'error') {
+          if (
+            part.state === 'output-available' ||
+            part.state === 'denied' ||
+            part.state === 'error'
+          ) {
             parts.push({
               type: 'tool-result',
               toolCallId: part.toolCallId,

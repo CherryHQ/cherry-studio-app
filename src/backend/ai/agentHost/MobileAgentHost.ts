@@ -3,7 +3,7 @@
  * (`@/shared/contracts/agent`) and the Agent Runtime contract
  * (`@/backend/ai/agent`), per docs/references/agent/.
  *
- * The Host owns Agent lookup, Session persistence, runtime routing, the
+ * The Host owns Agent lookup, Session persistence, the local Runtime binding, the
  * streaming overlay, snapshots, and lifecycle recovery. It is an app-owned
  * lifecycle service (one per ApplicationHost generation, like ChatRuntime):
  * route unmount only unsubscribes; disposal cancels and awaits active turns.
@@ -23,8 +23,8 @@
  *     section, so no event falls into a gap;
  * 9.  operation inputs are schema-parsed, snapshots re-validate, and every
  *     published event is JSON-cloned (a non-JSON-safe value cannot survive);
- * 10. clients supply an execution target and Agent id; runtime ids stay inside
- *     the Host-owned Router.
+ * 10. clients supply an execution target and Agent id; the local Pi binding
+ *     stays private to the Host.
  */
 
 import type {
@@ -33,7 +33,7 @@ import type {
   RuntimeEvent,
   RuntimeUsage,
 } from '@/backend/ai/agent';
-import { AiSdkRuntime } from '@/backend/ai/agent';
+import { PiRuntime } from '@/backend/ai/agent';
 import {
   AppStatePolicy,
   BaseService,
@@ -72,7 +72,6 @@ import {
   type AgentDefinitionSource,
 } from './agentDefinitions';
 import type { AgentSessionStore } from './AgentSessionStore';
-import { createAiSdkModelResolver } from './aiSdkModelResolver';
 import {
   toAgentApprovalView,
   toAgentErrorView,
@@ -81,11 +80,7 @@ import {
   toRuntimeHistory,
   toRuntimeInputParts,
 } from './mapping';
-import {
-  AgentRuntimeRegistry,
-  createAgentRuntimeRouter,
-  type AgentRuntimeRouter,
-} from './runtimeRouting';
+import { createPiModelResolver } from './piModelResolver';
 
 const logger = loggerService.withContext('MobileAgentHost');
 
@@ -97,7 +92,6 @@ const INTERRUPTED_ERROR: AgentErrorView = {
 
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
-  router: AgentRuntimeRouter;
 };
 
 /**
@@ -145,14 +139,14 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     { runtimeId: string; session: AgentRuntimeSession }
   >();
   private readonly runningTurns = new Set<Promise<void>>();
-  private lazyRouter: AgentRuntimeRouter | undefined;
 
   /**
-   * Lifecycle composition supplies the selected store adapter. Tests may
-   * replace only the Agent and Router ports.
+   * Lifecycle composition supplies the selected store adapter. Production
+   * binds `local` directly to Pi; tests may replace the Runtime and Agent ports.
    */
   constructor(
     private readonly store: AgentSessionStore,
+    private readonly runtime: AgentRuntime = new PiRuntime(createPiModelResolver()),
     private readonly overrides: Partial<MobileAgentHostOverrides> = {},
   ) {
     super();
@@ -162,21 +156,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
     const { overrides } = this;
     return {
       agents: overrides.agents ?? (this.lazyAgents ??= createAgentTableDefinitionSource()),
-      router: overrides.router ?? this.getDefaultRouter(),
     };
   }
 
   private lazyAgents: AgentDefinitionSource | undefined;
-
-  private getDefaultRouter(): AgentRuntimeRouter {
-    if (!this.lazyRouter) {
-      const registry = new AgentRuntimeRegistry().register(
-        new AiSdkRuntime(createAiSdkModelResolver()),
-      );
-      this.lazyRouter = createAgentRuntimeRouter(registry);
-    }
-    return this.lazyRouter;
-  }
 
   /** Reconcile any unfinished state available from the selected store. */
   protected override async onInit(): Promise<void> {
@@ -449,7 +432,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         input: toRuntimeInputParts(inputParts),
         // V1 executes tool-less turns; Agent tools await the deferred definition.
         tools: [],
-        options: {},
+        options: agent.options,
       });
       for await (const event of events) {
         const isTerminal = await this.handleRuntimeEvent(sessionId, state, event);
@@ -621,12 +604,10 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   private routeExecutionTarget(target: AgentExecutionTarget): AgentRuntime {
-    try {
-      return this.services.router.resolve({ target });
-    } catch (error) {
-      logger.warn('Runtime route failed closed', error as Error);
+    if (target.kind !== 'local') {
       fail('EXECUTION_UNAVAILABLE', 'No runtime can execute this Agent configuration.');
     }
+    return this.runtime;
   }
 
   private projectCapabilities(target: AgentExecutionTarget): AgentCapabilities {
@@ -635,9 +616,8 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   }
 
   /**
-   * One Runtime session per active application Session. If a configuration
-   * change re-routes to a different Runtime, the old session closes before the
-   * new one opens (the route stays fixed for an already-admitted turn).
+   * One Pi Runtime session per active application Session. The descriptor check
+   * keeps the cache safe for tests that replace the injected Runtime.
    */
   private async getRuntimeSession(
     sessionId: string,

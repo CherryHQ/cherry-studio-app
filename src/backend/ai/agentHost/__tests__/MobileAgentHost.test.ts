@@ -1,19 +1,15 @@
 /**
  * End-to-end behavior of the Mobile Agent Host against the process-local
- * reference store, real Router and registry, and real AiSdkRuntime driven by a
- * mock language model. Durable-adapter behavior is outside this suite.
+ * reference store and the Runtime contract. Pi-native mapping has its own
+ * conformance suite; durable-adapter behavior is outside this suite.
  */
 
-import type { LanguageModelV3StreamPart, LanguageModelV3Usage } from '@ai-sdk/provider';
-import { convertArrayToReadableStream, MockLanguageModelV3 } from 'ai/test';
-
-import { AiSdkRuntime, FakeRuntime } from '@/backend/ai/agent';
+import { FakeRuntime, type RuntimeExecutionRequest } from '@/backend/ai/agent';
 import { AgentEventSchema, AgentProtocolError, type AgentEvent } from '@/shared/contracts/agent';
 
 import type { AgentDefinitionSource } from '../agentDefinitions';
 import { InMemoryAgentSessionStore } from '../InMemoryAgentSessionStore';
 import { MobileAgentHost } from '../MobileAgentHost';
-import { AgentRuntimeRegistry, createAgentRuntimeRouter } from '../runtimeRouting';
 
 const AGENT_ID = 'agent-under-test';
 
@@ -27,38 +23,42 @@ const agents: AgentDefinitionSource = {
       name: 'Test Agent',
       instructions: 'Be brief.',
       model: { providerId: 'mock-provider', modelId: 'mock-model' },
+      options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
     };
   },
 };
 
-function v3Usage(inputTokens: number, outputTokens: number): LanguageModelV3Usage {
-  return {
-    inputTokens: {
-      total: inputTokens,
-      noCache: undefined,
-      cacheRead: undefined,
-      cacheWrite: undefined,
-    },
-    outputTokens: { total: outputTokens, text: undefined, reasoning: undefined },
-  };
-}
+const FAKE_DESCRIPTOR = {
+  id: 'fake',
+  name: 'Scripted Runtime',
+  capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
+} as const;
 
-function textStreamParts(text: string): LanguageModelV3StreamPart[] {
-  return [
-    { type: 'stream-start', warnings: [] },
-    { type: 'text-start', id: 't1' },
-    ...[...text].map(
-      (char): LanguageModelV3StreamPart => ({ type: 'text-delta', id: 't1', delta: char }),
-    ),
-    { type: 'text-end', id: 't1' },
-    { type: 'finish', finishReason: { unified: 'stop', raw: undefined }, usage: v3Usage(3, 2) },
-  ];
-}
-
-function hostWithModel(model: MockLanguageModelV3): MobileAgentHost {
-  const runtime = new AiSdkRuntime({ resolveModel: () => ({ model }) });
-  const registry = new AgentRuntimeRegistry().register(runtime);
-  return new MobileAgentHost(store, { agents, router: createAgentRuntimeRouter(registry) });
+function hostWithText(texts: string[], requests: RuntimeExecutionRequest[] = []): MobileAgentHost {
+  const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
+  for (const text of texts) {
+    runtime.script((controller) => {
+      requests.push(controller.request);
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: '', state: 'streaming' },
+      });
+      for (const character of text) {
+        controller.emit({ type: 'text.delta', partId: 'text-1', text: character });
+      }
+      controller.emit({
+        type: 'part.replace',
+        part: { id: 'text-1', type: 'text', text, state: 'done' },
+      });
+      controller.emit({
+        type: 'usage',
+        usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      });
+      controller.emit({ type: 'completed' });
+    });
+  }
+  return new MobileAgentHost(store, runtime, { agents });
 }
 
 function createDeferred(): { promise: Promise<void>; resolve: () => void } {
@@ -104,13 +104,8 @@ describe('MobileAgentHost', () => {
   });
 
   test('runs basic chat end to end: create, observe, submit, stream, record', async () => {
-    let call = 0;
-    const model = new MockLanguageModelV3({
-      doStream: async () => ({
-        stream: convertArrayToReadableStream(textStreamParts(call++ === 0 ? 'Hi' : 'Ok')),
-      }),
-    });
-    const host = hostWithModel(model);
+    const requests: RuntimeExecutionRequest[] = [];
+    const host = hostWithText(['Hi', 'Ok'], requests);
 
     const session = await host.createSession({
       agentId: AGENT_ID,
@@ -154,7 +149,7 @@ describe('MobileAgentHost', () => {
     expect(finalized.message.id).toBe(submitted.assistantMessageId);
     expect(finalized.message.status).toBe('success');
     expect(finalized.message.parts).toEqual([
-      { id: 'text-t1', type: 'text', text: 'Hi', state: 'done' },
+      { id: 'text-1', type: 'text', text: 'Hi', state: 'done' },
     ]);
     expect(finalized.message.usage).toEqual({ inputTokens: 3, outputTokens: 2, totalTokens: 5 });
 
@@ -172,11 +167,14 @@ describe('MobileAgentHost', () => {
     expect(transcript[1]?.parts).toEqual(finalized.message.parts);
     expect(transcript[1]?.usage).toEqual(finalized.message.usage);
 
-    // The model saw instructions + the turn input.
-    expect(model.doStreamCalls[0]?.prompt.map((message) => message.role)).toEqual([
-      'system',
-      'user',
-    ]);
+    // The Runtime saw the current Agent definition and the turn input.
+    expect(requests[0]).toMatchObject({
+      instructions: 'Be brief.',
+      history: [],
+      input: [{ type: 'text', text: 'Hello.' }],
+      model: { providerId: 'mock-provider', modelId: 'mock-model' },
+      options: { maxOutputTokens: 512, reasoningEffort: 'low', temperature: 0.2 },
+    });
 
     // A second turn feeds the stored transcript back as history.
     const secondEvents: AgentEvent[] = [];
@@ -184,28 +182,22 @@ describe('MobileAgentHost', () => {
     expect(second.snapshot.activeTurn).toBeNull();
     await host.submitMessage({ sessionId: session.id, parts: [{ type: 'text', text: 'More.' }] });
     await waitFor(() => terminalTurnEvent(secondEvents) !== undefined, 'the second turn');
-    expect(model.doStreamCalls[1]?.prompt.map((message) => message.role)).toEqual([
-      'system',
-      'user',
-      'assistant',
-      'user',
-    ]);
+    expect(requests[1]?.history.map((message) => message.role)).toEqual(['user', 'assistant']);
   });
 
   test('cancel settles the turn as cancelled and is idempotent', async () => {
-    const model = new MockLanguageModelV3({
-      doStream: async () => ({
-        stream: new ReadableStream<LanguageModelV3StreamPart>({
-          start(controller) {
-            controller.enqueue({ type: 'stream-start', warnings: [] });
-            controller.enqueue({ type: 'text-start', id: 't1' });
-            controller.enqueue({ type: 'text-delta', id: 't1', delta: 'Working' });
-            // Never closes; only cancellation settles the turn.
-          },
-        }),
-      }),
+    const runtime = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
+      controller.emit({
+        type: 'part.add',
+        index: 0,
+        part: { id: 'text-1', type: 'text', text: '', state: 'streaming' },
+      });
+      controller.emit({ type: 'text.delta', partId: 'text-1', text: 'Working' });
+      await new Promise<void>((resolve) => {
+        controller.signal.addEventListener('abort', () => resolve(), { once: true });
+      });
     });
-    const host = hostWithModel(model);
+    const host = new MobileAgentHost(store, runtime, { agents });
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -241,7 +233,7 @@ describe('MobileAgentHost', () => {
     expect(transcript[1]?.status).toBe('cancelled');
     // Streaming parts settle as done in the stored transcript.
     expect(transcript[1]?.parts).toEqual([
-      { id: 'text-t1', type: 'text', text: 'Working', state: 'done' },
+      { id: 'text-1', type: 'text', text: 'Working', state: 'done' },
     ]);
 
     // Idempotent: cancelling a settled turn is a no-op, not an error.
@@ -265,7 +257,7 @@ describe('MobileAgentHost', () => {
     expect(reserved.assistantMessage.turnId).toBe(reserved.turnId);
     expect(reserved.userMessage.turnId).toBe(reserved.turnId);
 
-    const host = hostWithModel(new MockLanguageModelV3());
+    const host = hostWithText(['unused']);
     const count = await host.reconcileInterruptedTurns();
     expect(count).toBe(1);
 
@@ -283,23 +275,13 @@ describe('MobileAgentHost', () => {
     const started = new Promise<void>((resolve) => {
       executionStarted = resolve;
     });
-    const fake = new FakeRuntime({
-      descriptor: {
-        id: 'ai-sdk',
-        name: 'Scripted Runtime',
-        capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
-      },
-    }).script(async (controller) => {
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).script(async (controller) => {
       executionStarted?.();
       await new Promise<void>((resolve) => {
         controller.signal.addEventListener('abort', () => resolve(), { once: true });
       });
     });
-    const registry = new AgentRuntimeRegistry().register(fake);
-    const host = new MobileAgentHost(store, {
-      agents,
-      router: createAgentRuntimeRouter(registry),
-    });
+    const host = new MobileAgentHost(store, fake, { agents });
     const finalize = jest.spyOn(store, 'finalizeAssistantMessage');
     const remove = jest.spyOn(store, 'deleteSession');
     const session = await host.createSession({
@@ -324,18 +306,10 @@ describe('MobileAgentHost', () => {
     const admissionStarted = createDeferred();
     const releaseAdmission = createDeferred();
     const sequence: string[] = [];
-    const fake = new FakeRuntime({
-      descriptor: {
-        id: 'ai-sdk',
-        name: 'Scripted Runtime',
-        capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
-      },
-    }).scriptEvents([{ type: 'completed' }]);
-    const registry = new AgentRuntimeRegistry().register(fake);
-    const host = new MobileAgentHost(store, {
-      agents,
-      router: createAgentRuntimeRouter(registry),
-    });
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR }).scriptEvents([
+      { type: 'completed' },
+    ]);
+    const host = new MobileAgentHost(store, fake, { agents });
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -377,13 +351,7 @@ describe('MobileAgentHost', () => {
     const deleteRowsStarted = createDeferred();
     const releaseDeleteRows = createDeferred();
     let executionCount = 0;
-    const fake = new FakeRuntime({
-      descriptor: {
-        id: 'ai-sdk',
-        name: 'Scripted Runtime',
-        capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
-      },
-    })
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR })
       .script(async (controller) => {
         executionCount += 1;
         firstExecutionStarted.resolve();
@@ -395,11 +363,7 @@ describe('MobileAgentHost', () => {
         executionCount += 1;
         controller.emit({ type: 'completed' });
       });
-    const registry = new AgentRuntimeRegistry().register(fake);
-    const host = new MobileAgentHost(store, {
-      agents,
-      router: createAgentRuntimeRouter(registry),
-    });
+    const host = new MobileAgentHost(store, fake, { agents });
     const session = await host.createSession({
       agentId: AGENT_ID,
       executionTarget: { kind: 'local' },
@@ -439,14 +403,7 @@ describe('MobileAgentHost', () => {
   });
 
   test('maps runtime approvals onto protocol approvals and correlates responses', async () => {
-    const fake = new FakeRuntime({
-      descriptor: {
-        // Registered under the ai-sdk route: the Router resolves by id only.
-        id: 'ai-sdk',
-        name: 'Scripted Runtime',
-        capabilities: { reasoning: true, tools: true, approvals: true, attachments: false },
-      },
-    });
+    const fake = new FakeRuntime({ descriptor: FAKE_DESCRIPTOR });
     fake.script(async (controller) => {
       const approvalId = 'approval-1';
       controller.emit({
@@ -499,11 +456,7 @@ describe('MobileAgentHost', () => {
       });
       controller.emit({ type: 'completed' });
     });
-    const registry = new AgentRuntimeRegistry().register(fake);
-    const host = new MobileAgentHost(store, {
-      agents,
-      router: createAgentRuntimeRouter(registry),
-    });
+    const host = new MobileAgentHost(store, fake, { agents });
 
     const session = await host.createSession({
       agentId: AGENT_ID,
@@ -561,7 +514,7 @@ describe('MobileAgentHost', () => {
   });
 
   test('fails closed on unknown sessions, agents, and unsupported input', async () => {
-    const host = hostWithModel(new MockLanguageModelV3());
+    const host = hostWithText(['unused']);
 
     await expect(
       host.createSession({ agentId: 'missing', executionTarget: { kind: 'local' } }),
