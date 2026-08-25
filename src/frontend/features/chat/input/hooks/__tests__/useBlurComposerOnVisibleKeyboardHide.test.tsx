@@ -23,7 +23,7 @@ describe('useBlurComposerOnVisibleKeyboardHide', () => {
         handleKeyboardWillHide = () => listener(KeyboardController.state());
       }
 
-      return { remove: mockRemove } as ReturnType<typeof KeyboardEvents.addListener>;
+      return { remove: mockRemove } as unknown as ReturnType<typeof KeyboardEvents.addListener>;
     });
 
     act(() => {
@@ -61,7 +61,7 @@ describe('useBlurComposerOnVisibleKeyboardHide', () => {
 });
 
 function Harness() {
-  const inputRef = { current: { blur: mockBlur } } as Parameters<
+  const inputRef = { current: { blur: mockBlur } } as unknown as Parameters<
     typeof useBlurComposerOnVisibleKeyboardHide
   >[0];
 
