@@ -1,5 +1,8 @@
 # Topic Rendering Benchmark
 
+> Retired after the Agent Session migration removed the legacy Assistant/Topic/Message development
+> seeders. The measurements below are historical reference only.
+
 > Note (2026-07): The flows recorded below predate the migration from the navigation drawer to
 > `react-native-bottom-tabs`. Topic entry now goes through the bottom-tab messages/topics list, so
 > keep the recorded numbers as historical reference only and re-measure with the tab-based flow

@@ -1,5 +1,9 @@
 # Chat Layout Bench
 
+> Retired after the Agent Session migration removed the legacy Assistant/Topic/Message development
+> seeders. Keep this document and its tooling as historical reference until an Agent Session-native
+> benchmark replaces it.
+
 聊天布局基准是一套本地设备回归工具，用固定回复、固定交互和应用内探针验证消息列表的定位、
 流式布局、按钮显隐与用户手势。它用于复现和量化真机上的跳动，不是 CI 门禁。
 

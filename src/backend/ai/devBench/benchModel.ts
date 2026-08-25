@@ -155,9 +155,8 @@ function buildStreamParts(prompt: LanguageModelV3Prompt): PacedStreamPart[] {
 }
 
 export function createBenchLanguageModel(modelId: string): LanguageModelV3 {
-  // 兜底 arm：正常路径由聊天屏在 harness 的入口深链接上 arm（早得多），这里只覆盖「手动选了
-  // 基准模型、没走那个深链接」的情形。**不能**只靠这里——模型直到 streamText 才被构造，而
-  // 入场动画的装填与开火在那之前，首轮会一条都记不到。
+  // 旧基准现在只为已有开发数据保留兼容：模型创建时才 arm，因此不会捕获首轮 streamText
+  // 之前的入场动画。Agent Session 原生基准应恢复更早的显式 arm 入口。
   armLayoutBenchProbe();
 
   return new MockLanguageModelV3({

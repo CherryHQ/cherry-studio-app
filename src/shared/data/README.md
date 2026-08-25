@@ -22,7 +22,7 @@ deliberate omission, not a gap.
   interface. The preference schema is hand-maintained and holds only the keys mobile reads.
 - `cache`: cache schemas and pure cache-key helpers; concrete cache implementations remain with
   their runtime owner.
-- `presets`: seed catalog data (default assistant, managed CherryAI provider, web search providers).
+- `presets`: seed catalog data (managed CherryAI provider and web search providers).
 
 Database tables, Drizzle row types, and migrations are not shared contracts; they stay under
 `src/backend/data/db`. Workflow-only contracts live in `src/shared/contracts`.
