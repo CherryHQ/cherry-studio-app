@@ -1,8 +1,10 @@
 import { startTransition, useCallback, useMemo, useState } from 'react';
 
-import type { Message } from '@/shared/data/types/message';
-
 import { messageWindowPolicy } from './utils/messageWindowPolicy';
+
+type MessageWindowItem = {
+  id: string;
+};
 
 type MessageWindowSignature = {
   firstId: string | undefined;
@@ -15,7 +17,7 @@ type MessageRenderWindowState = {
   visibleCount: number;
 };
 
-function getMessageWindowSignature(messages: readonly Message[]): MessageWindowSignature {
+function getMessageWindowSignature(messages: readonly MessageWindowItem[]): MessageWindowSignature {
   return {
     firstId: messages[0]?.id,
     lastId: messages[messages.length - 1]?.id,
@@ -53,7 +55,9 @@ export function getVisibleCountForWindow(
   return Math.min(messageWindowPolicy.initialRenderCount, current.length);
 }
 
-export function useMessageRenderWindow(messages: readonly Message[]) {
+export function useMessageRenderWindow<TMessage extends MessageWindowItem>(
+  messages: readonly TMessage[],
+) {
   const signature = useMemo(() => getMessageWindowSignature(messages), [messages]);
   const [renderWindow, setRenderWindow] = useState<MessageRenderWindowState>(() => ({
     signature,

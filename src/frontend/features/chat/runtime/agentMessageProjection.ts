@@ -1,0 +1,131 @@
+import type { MessageListItem } from '@/frontend/components/messages';
+import type { AgentErrorView, AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
+import type { CherryMessagePart, MessageStatus } from '@/shared/data/types/message';
+
+function toDisplayStatus(status: AgentMessageView['status']): MessageStatus {
+  switch (status) {
+    case 'pending':
+    case 'streaming':
+      return 'pending';
+    case 'error':
+      return 'error';
+    case 'cancelled':
+    case 'interrupted':
+      return 'paused';
+    case 'success':
+      return 'success';
+  }
+}
+
+function toErrorPart(error: AgentErrorView): CherryMessagePart {
+  return {
+    type: 'data-error',
+    data: {
+      code: error.code,
+      message: error.message,
+      name: error.code,
+    },
+  } as CherryMessagePart;
+}
+
+function toToolPart(part: Extract<AgentMessagePart, { type: 'tool' }>): CherryMessagePart {
+  const base = {
+    input: part.input,
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    type: 'dynamic-tool',
+  } as const;
+
+  switch (part.state) {
+    case 'input-available':
+    case 'running':
+      return { ...base, state: 'input-available' } as CherryMessagePart;
+    case 'awaiting-approval':
+      return part.approvalId
+        ? ({
+            ...base,
+            approval: { id: part.approvalId },
+            state: 'approval-requested',
+          } as CherryMessagePart)
+        : ({ ...base, state: 'input-available' } as CherryMessagePart);
+    case 'output-available':
+      return {
+        ...base,
+        output: part.output,
+        state: 'output-available',
+      } as CherryMessagePart;
+    case 'denied':
+      return {
+        ...base,
+        state: 'output-denied',
+      } as CherryMessagePart;
+    case 'error':
+      return {
+        ...base,
+        errorText: part.error?.message ?? 'Tool execution failed.',
+        state: 'output-error',
+      } as CherryMessagePart;
+  }
+}
+
+function toDisplayPart(part: AgentMessagePart): CherryMessagePart {
+  switch (part.type) {
+    case 'text':
+    case 'reasoning':
+      return { type: part.type, text: part.text, state: part.state } as CherryMessagePart;
+    case 'file':
+      return {
+        type: 'file',
+        filename: part.name ?? part.uri.split('/').at(-1) ?? 'File',
+        mediaType: part.mediaType,
+        url: part.uri,
+      } as CherryMessagePart;
+    case 'tool':
+      return toToolPart(part);
+    case 'error':
+      return toErrorPart(part.error);
+  }
+}
+
+export function toAgentMessageListItem(message: AgentMessageView): MessageListItem | undefined {
+  if (message.role !== 'user' && message.role !== 'assistant') {
+    return undefined;
+  }
+
+  return {
+    data: { parts: message.parts.map(toDisplayPart) },
+    id: message.id,
+    role: message.role,
+    status: toDisplayStatus(message.status),
+  };
+}
+
+export function mergeAgentMessageViews(
+  persisted: readonly AgentMessageView[],
+  live: readonly AgentMessageView[],
+): readonly AgentMessageView[] {
+  if (live.length === 0) {
+    return persisted;
+  }
+
+  const liveById = new Map(live.map((message) => [message.id, message]));
+  const merged = persisted.map((message) => liveById.get(message.id) ?? message);
+  const persistedIds = new Set(persisted.map((message) => message.id));
+
+  for (const message of live) {
+    if (!persistedIds.has(message.id)) {
+      merged.push(message);
+    }
+  }
+
+  return merged;
+}
+
+export function toAgentMessageListItems(
+  messages: readonly AgentMessageView[],
+): readonly MessageListItem[] {
+  return messages.flatMap((message) => {
+    const item = toAgentMessageListItem(message);
+    return item ? [item] : [];
+  });
+}
