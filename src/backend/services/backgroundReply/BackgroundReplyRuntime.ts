@@ -36,6 +36,7 @@ import {
 
 const PREFERENCE_KEY = 'chat.background_reply.enabled';
 const SESSION_TAG = 'chat.backgroundReply';
+const FINISH_TITLE_GRACE_MS = 5_000;
 const logger = loggerService.withContext('BackgroundReply');
 
 type ChatActivitySession = BackgroundActivitySession<BackgroundReplyActivityProps>;
@@ -271,9 +272,7 @@ export class BackgroundReplyRuntime
     );
     record.session?.update(this.toActivityProps(record), { keepAlive: false, urgent: true });
     if (waitFor) {
-      await waitFor.catch((error: unknown) => {
-        logger.warn('Background reply finish dependency failed', error as Error, { key });
-      });
+      await this.waitForFinishDependency(key, waitFor);
     }
     // Keep terminal content updateable until any final title projection settles.
     // A continuation that supersedes this generation inherits the live session.
@@ -283,6 +282,29 @@ export class BackgroundReplyRuntime
       record.session = undefined;
       if (this.turns.get(key) === record) this.turns.delete(key);
     });
+  }
+
+  private async waitForFinishDependency(key: string, dependency: Promise<unknown>): Promise<void> {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const settled = dependency.then(
+      () => undefined,
+      (error: unknown) => {
+        logger.warn('Background reply finish dependency failed', error as Error, { key });
+      },
+    );
+    const graceExpired = new Promise<void>((resolve) => {
+      timeout = setTimeout(() => {
+        timeout = undefined;
+        logger.warn('Background reply finish dependency timed out', {
+          graceMs: FINISH_TITLE_GRACE_MS,
+          key,
+        });
+        resolve();
+      }, FINISH_TITLE_GRACE_MS);
+    });
+
+    await Promise.race([settled, graceExpired]);
+    if (timeout !== undefined) clearTimeout(timeout);
   }
 
   /** Starts the conversation's activity, or re-syncs an inherited one, when enabled. */

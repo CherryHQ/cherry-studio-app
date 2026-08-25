@@ -145,6 +145,30 @@ describe('BackgroundReplyRuntime', () => {
     await runtime._doStop();
   });
 
+  test('bounds the final-title grace period when its dependency does not settle', async () => {
+    const runtime = await createRuntime();
+    jest.useFakeTimers();
+    try {
+      const turn = runtime.startTurn({
+        agentId: 'agent-1',
+        agentName: 'Alpha',
+        sessionId: 'session-1',
+        sessionTitle: '',
+      });
+      const session = mockSessions[0];
+
+      turn.finish('completed', { waitFor: new Promise(() => {}) });
+      await jest.advanceTimersByTimeAsync(4_999);
+      expect(session?.finish).not.toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(1);
+      expect(session?.finish).toHaveBeenCalledWith(expect.objectContaining({ phase: 'completed' }));
+    } finally {
+      jest.useRealTimers();
+      await runtime._doStop();
+    }
+  });
+
   test('marks phase changes urgent and drops keep-alive while approval is pending', async () => {
     const runtime = await createRuntime();
     const turn = runtime.startTurn({
