@@ -8,8 +8,6 @@ export type PreferenceUpdateOptions = {
   optimistic: boolean;
 };
 
-export type PermissionMode = 'never' | 'ask' | 'always';
-
 export enum ThemeMode {
   light = 'light',
   dark = 'dark',

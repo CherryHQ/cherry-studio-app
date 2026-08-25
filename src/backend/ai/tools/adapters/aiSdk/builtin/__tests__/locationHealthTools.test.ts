@@ -83,8 +83,7 @@ describe('location and health adapters', () => {
 
 function deps() {
   return {
-    devicePermissions: { getStatusForPreference: jest.fn(async () => 'granted') },
-    preference: { get: jest.fn(async () => 'always') },
+    devicePermissions: { getStatusForScope: jest.fn(async () => 'granted') },
   } as never;
 }
 

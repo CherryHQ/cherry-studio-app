@@ -1,66 +1,51 @@
-import type { DevicePermission } from '@/shared/contracts';
-import type { PermissionMode, PermissionPreferenceKey } from '@/shared/data/preference';
+import type {
+  DevicePermission,
+  DevicePermissionScope,
+  PermissionStatuses,
+  SystemPermissionState,
+} from '@/shared/contracts';
 
 export const permissionKinds = ['location', 'calendar', 'reminders', 'health'] as const;
 export type PermissionKind = (typeof permissionKinds)[number];
-
-export type PermissionPolicySnapshot = Record<PermissionPreferenceKey, PermissionMode>;
 
 export const permissionConfig: Record<
   PermissionKind,
   {
     permission: DevicePermission;
-    readKey: PermissionPreferenceKey;
-    writeKey?: PermissionPreferenceKey;
+    requestScope: DevicePermissionScope;
+    scopes: readonly DevicePermissionScope[];
   }
 > = {
   calendar: {
     permission: 'calendar',
-    readKey: 'permissions.calendar_read',
-    writeKey: 'permissions.calendar_write',
+    requestScope: 'calendar.read',
+    scopes: ['calendar.read', 'calendar.write'],
   },
   health: {
     permission: 'health',
-    readKey: 'permissions.health_read',
+    requestScope: 'health.read',
+    scopes: ['health.read'],
   },
   location: {
     permission: 'location',
-    readKey: 'permissions.location_read',
+    requestScope: 'location.read',
+    scopes: ['location.read'],
   },
   reminders: {
     permission: 'reminders',
-    readKey: 'permissions.reminders_read',
-    writeKey: 'permissions.reminders_write',
+    requestScope: 'reminders.read',
+    scopes: ['reminders.read', 'reminders.write'],
   },
 };
 
-export function isPermissionKind(value: string | undefined): value is PermissionKind {
-  return permissionKinds.includes(value as PermissionKind);
-}
-
-export function getPermissionSummaryKey(
+export function getPermissionStatus(
   kind: PermissionKind,
-  policies: PermissionPolicySnapshot,
-): string {
-  const config = permissionConfig[kind];
-  const readMode = policies[config.readKey];
-
-  if (!config.writeKey) {
-    if (readMode === 'never') {
-      return 'settings.permissions.summary.never';
-    }
-    return readMode === 'ask'
-      ? 'settings.permissions.summary.ask'
-      : 'settings.permissions.summary.allowed';
-  }
-
-  const hasRead = readMode !== 'never';
-  const hasWrite = policies[config.writeKey] !== 'never';
-  if (hasRead && hasWrite) {
-    return 'settings.permissions.summary.readWrite';
-  }
-  if (hasRead) {
-    return 'settings.permissions.summary.readOnly';
-  }
-  return hasWrite ? 'settings.permissions.summary.writeOnly' : 'settings.permissions.summary.never';
+  statuses: PermissionStatuses,
+): SystemPermissionState | undefined {
+  const scopeStatuses = permissionConfig[kind].scopes.map((scope) => statuses[scope]);
+  if (scopeStatuses.some((status) => status === undefined)) return undefined;
+  if (scopeStatuses.every((status) => status === 'granted')) return 'granted';
+  if (scopeStatuses.some((status) => status === 'denied')) return 'denied';
+  if (scopeStatuses.some((status) => status === 'undetermined')) return 'undetermined';
+  return 'unavailable';
 }

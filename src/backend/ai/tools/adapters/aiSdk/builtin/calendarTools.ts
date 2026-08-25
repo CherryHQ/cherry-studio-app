@@ -70,7 +70,7 @@ export function createCalendarToolEntries(deps: DeviceToolDependencies) {
       description: 'List device event calendar collections without attendees.',
       name: DEVICE_TOOL_NAMES.calendarListCollections,
       namespace: 'calendar',
-      preferenceKeys: ['permissions.calendar_read'],
+      permissionScopes: ['calendar.read'],
       tool: tool({
         description: 'List device event calendar collections without attendees.',
         inputSchema: emptyInput,
@@ -85,7 +85,7 @@ export function createCalendarToolEntries(deps: DeviceToolDependencies) {
       description: 'List calendar events in an ISO 8601 range of at most 90 days.',
       name: DEVICE_TOOL_NAMES.calendarListEvents,
       namespace: 'calendar',
-      preferenceKeys: ['permissions.calendar_read'],
+      permissionScopes: ['calendar.read'],
       tool: tool({
         description: 'List calendar events in an ISO 8601 range of at most 90 days.',
         inputSchema: z
@@ -117,7 +117,8 @@ export function createCalendarToolEntries(deps: DeviceToolDependencies) {
       description: 'Create an event in a writable device calendar without attendees.',
       name: DEVICE_TOOL_NAMES.calendarCreateEvent,
       namespace: 'calendar',
-      preferenceKeys: ['permissions.calendar_write'],
+      permissionScopes: ['calendar.write'],
+      requiresApproval: true,
       tool: tool({
         description: 'Create an event in a writable device calendar without attendees.',
         inputSchema: z
@@ -157,7 +158,8 @@ export function createCalendarToolEntries(deps: DeviceToolDependencies) {
       description: 'Update selected fields of an existing device calendar event.',
       name: DEVICE_TOOL_NAMES.calendarUpdateEvent,
       namespace: 'calendar',
-      preferenceKeys: ['permissions.calendar_read', 'permissions.calendar_write'],
+      permissionScopes: ['calendar.read', 'calendar.write'],
+      requiresApproval: true,
       tool: tool({
         description: 'Update selected fields of an existing device calendar event.',
         inputSchema: z
@@ -185,7 +187,8 @@ export function createCalendarToolEntries(deps: DeviceToolDependencies) {
       description: 'Delete an existing device calendar event.',
       name: DEVICE_TOOL_NAMES.calendarDeleteEvent,
       namespace: 'calendar',
-      preferenceKeys: ['permissions.calendar_read', 'permissions.calendar_write'],
+      permissionScopes: ['calendar.read', 'calendar.write'],
+      requiresApproval: true,
       tool: tool({
         description: 'Delete an existing device calendar event.',
         inputSchema: z.object({ id }).strict(),
@@ -205,7 +208,7 @@ export function createReminderToolEntries(deps: DeviceToolDependencies) {
       ...common,
       description: 'List iOS reminder collections.',
       name: DEVICE_TOOL_NAMES.reminderListCollections,
-      preferenceKeys: ['permissions.reminders_read'],
+      permissionScopes: ['reminders.read'],
       tool: tool({
         description: 'List iOS reminder collections.',
         inputSchema: emptyInput,
@@ -219,7 +222,7 @@ export function createReminderToolEntries(deps: DeviceToolDependencies) {
       ...common,
       description: 'List iOS reminders in an ISO 8601 range of at most 90 days.',
       name: DEVICE_TOOL_NAMES.reminderListItems,
-      preferenceKeys: ['permissions.reminders_read'],
+      permissionScopes: ['reminders.read'],
       tool: tool({
         description: 'List iOS reminders in an ISO 8601 range of at most 90 days.',
         inputSchema: z
@@ -250,7 +253,8 @@ export function createReminderToolEntries(deps: DeviceToolDependencies) {
       ...common,
       description: 'Create an item in a writable iOS reminder collection.',
       name: DEVICE_TOOL_NAMES.reminderCreateItem,
-      preferenceKeys: ['permissions.reminders_write'],
+      permissionScopes: ['reminders.write'],
+      requiresApproval: true,
       tool: tool({
         description: 'Create an item in a writable iOS reminder collection.',
         inputSchema: z
@@ -289,7 +293,8 @@ export function createReminderToolEntries(deps: DeviceToolDependencies) {
       ...common,
       description: 'Update selected fields of an existing iOS reminder.',
       name: DEVICE_TOOL_NAMES.reminderUpdateItem,
-      preferenceKeys: ['permissions.reminders_read', 'permissions.reminders_write'],
+      permissionScopes: ['reminders.read', 'reminders.write'],
+      requiresApproval: true,
       tool: tool({
         description: 'Update selected fields of an existing iOS reminder.',
         inputSchema: z
@@ -316,7 +321,8 @@ export function createReminderToolEntries(deps: DeviceToolDependencies) {
       ...common,
       description: 'Delete an existing iOS reminder.',
       name: DEVICE_TOOL_NAMES.reminderDeleteItem,
-      preferenceKeys: ['permissions.reminders_read', 'permissions.reminders_write'],
+      permissionScopes: ['reminders.read', 'reminders.write'],
+      requiresApproval: true,
       tool: tool({
         description: 'Delete an existing iOS reminder.',
         inputSchema: z.object({ id }).strict(),

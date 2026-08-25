@@ -86,13 +86,9 @@ export function createBackend(
   });
   const permissions = createPermissionsModule({
     device: {
-      getStatus: (key) => services.devicePermissions.getStatusForPreference(key),
+      getStatus: (scope) => services.devicePermissions.getStatusForScope(scope),
       openSystemSettings: (permission) => services.devicePermissions.openSystemSettings(permission),
-      request: (key) => services.devicePermissions.requestForPreference(key),
-    },
-    preferences: {
-      readCached: (key) => services.preference.readCached(key),
-      set: (key, value) => services.preference.set(key, value),
+      request: (scope) => services.devicePermissions.requestForScope(scope),
     },
   });
   const userContentImages = createUserContentImageStorage();

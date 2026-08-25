@@ -72,10 +72,9 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
   const webSearch = { fetchUrls, searchKeywords };
   const tools = new ToolResolver({
     devicePermissions: {
-      getStatusForPreference: jest.fn(async () => 'unavailable' as const),
+      getStatusForScope: jest.fn(async () => 'unavailable' as const),
     },
     mcpRuntime: { getToolEntriesForAssistant },
-    preference: preference as never,
     webSearch: webSearch as never,
   });
   const resolveApiKey = jest.fn(async (_providerId: string, override?: string) => ({

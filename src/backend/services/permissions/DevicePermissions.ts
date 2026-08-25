@@ -6,9 +6,9 @@ import type { HealthKit } from 'react-native-nitro-healthkit';
 import type {
   DevicePermission,
   DevicePermissionAccess,
+  DevicePermissionScope,
   SystemPermissionState,
 } from '@/shared/contracts';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
 
 const HEALTH_AUTHORIZATION_TYPES = [
   'HKQuantityTypeIdentifierStepCount',
@@ -23,16 +23,16 @@ const HEALTH_AUTHORIZATION_TYPES = [
 const ANDROID_HEALTH_RETURN_TIMEOUT_MS = 2 * 60 * 1000;
 type HealthKitLoader = () => Promise<HealthKit>;
 
-const permissionByPreference: Record<
-  PermissionPreferenceKey,
+const permissionByScope: Record<
+  DevicePermissionScope,
   { access: DevicePermissionAccess; permission: DevicePermission }
 > = {
-  'permissions.calendar_read': { access: 'read', permission: 'calendar' },
-  'permissions.calendar_write': { access: 'write', permission: 'calendar' },
-  'permissions.health_read': { access: 'read', permission: 'health' },
-  'permissions.location_read': { access: 'read', permission: 'location' },
-  'permissions.reminders_read': { access: 'read', permission: 'reminders' },
-  'permissions.reminders_write': { access: 'write', permission: 'reminders' },
+  'calendar.read': { access: 'read', permission: 'calendar' },
+  'calendar.write': { access: 'write', permission: 'calendar' },
+  'health.read': { access: 'read', permission: 'health' },
+  'location.read': { access: 'read', permission: 'location' },
+  'reminders.read': { access: 'read', permission: 'reminders' },
+  'reminders.write': { access: 'write', permission: 'reminders' },
 };
 
 export class DevicePermissions {
@@ -63,8 +63,8 @@ export class DevicePermissions {
     }
   }
 
-  async getStatusForPreference(key: PermissionPreferenceKey): Promise<SystemPermissionState> {
-    const target = permissionByPreference[key];
+  async getStatusForScope(scope: DevicePermissionScope): Promise<SystemPermissionState> {
+    const target = permissionByScope[scope];
     return this.getStatus(target.permission, target.access);
   }
 
@@ -95,8 +95,8 @@ export class DevicePermissions {
     }
   }
 
-  async requestForPreference(key: PermissionPreferenceKey): Promise<SystemPermissionState> {
-    const target = permissionByPreference[key];
+  async requestForScope(scope: DevicePermissionScope): Promise<SystemPermissionState> {
+    const target = permissionByScope[scope];
     return this.request(target.permission, target.access);
   }
 

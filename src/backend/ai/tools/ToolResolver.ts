@@ -2,11 +2,10 @@ import { applyDeferExposition, ToolRegistry } from '@cherrystudio/ai-runtime/too
 import type { ToolSet } from 'ai';
 import { Platform } from 'react-native';
 
-import type { PreferenceService } from '@/backend/data/PreferenceService';
 import type { DevicePermissions } from '@/backend/services/permissions';
 import type { WebSearchService } from '@/backend/services/webSearch/WebSearchService';
+import type { DevicePermissionScope } from '@/shared/contracts';
 import { loggerService } from '@/shared/core/logger/LoggerService';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
 import type { Assistant } from '@/shared/data/types/assistant';
 
 import type { McpRuntimeService } from '../mcp';
@@ -15,19 +14,18 @@ import { reportToolRuntimeDiagnostic } from './toolRuntimeDiagnostics';
 import type { DeviceToolAccess, ToolApplyScope, ToolEntry } from './types';
 
 const logger = loggerService.withContext('ToolResolver');
-const DEVICE_PREFERENCE_KEYS = [
-  'permissions.calendar_read',
-  'permissions.calendar_write',
-  'permissions.health_read',
-  'permissions.location_read',
-  'permissions.reminders_read',
-  'permissions.reminders_write',
-] as const satisfies readonly PermissionPreferenceKey[];
+const DEVICE_PERMISSION_SCOPES = [
+  'calendar.read',
+  'calendar.write',
+  'health.read',
+  'location.read',
+  'reminders.read',
+  'reminders.write',
+] as const satisfies readonly DevicePermissionScope[];
 
 export type ToolResolverDependencies = {
-  devicePermissions: Pick<DevicePermissions, 'getStatusForPreference'>;
+  devicePermissions: Pick<DevicePermissions, 'getStatusForScope'>;
   mcpRuntime: Pick<McpRuntimeService, 'getToolEntriesForAssistant'>;
-  preference: Pick<PreferenceService, 'get'>;
   webSearch: WebSearchService;
 };
 
@@ -66,17 +64,16 @@ export class ToolResolver {
 
   private async getDeviceAccess(): Promise<DeviceToolAccess> {
     const entries = await Promise.all(
-      DEVICE_PREFERENCE_KEYS.map(async (key) => {
+      DEVICE_PERMISSION_SCOPES.map(async (scope) => {
         try {
-          const mode = await this.deps.preference.get(key);
-          if (mode === 'never') {
-            return [key, { mode, status: 'unavailable' as const }] as const;
-          }
-          const status = await this.deps.devicePermissions.getStatusForPreference(key);
-          return [key, { mode, status }] as const;
+          const status = await this.deps.devicePermissions.getStatusForScope(scope);
+          return [scope, status] as const;
         } catch (error) {
-          logger.warn('Device access lookup failed; disabling the affected scope', { error, key });
-          return [key, { mode: 'never' as const, status: 'unavailable' as const }] as const;
+          logger.warn('Device access lookup failed; disabling the affected scope', {
+            error,
+            scope,
+          });
+          return [scope, 'unavailable' as const] as const;
         }
       }),
     );
