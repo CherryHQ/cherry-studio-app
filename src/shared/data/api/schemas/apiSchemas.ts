@@ -1,3 +1,4 @@
+import type { AgentSchemas } from './agents';
 import type { AiUsageRecordSchemas } from './aiUsageRecords';
 import type { AssistantSchemas } from './assistants';
 import type { FileSchemas } from './files';
@@ -10,7 +11,8 @@ import type { ProviderSchemas } from './providers';
 import type { SearchSchemas } from './search';
 import type { TopicSchemas } from './topics';
 
-export type ApiSchemas = AiUsageRecordSchemas &
+export type ApiSchemas = AgentSchemas &
+  AiUsageRecordSchemas &
   AssistantSchemas &
   FileSchemas &
   JobSchemas &

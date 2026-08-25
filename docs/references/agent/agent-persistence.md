@@ -1,6 +1,6 @@
 # Agent Persistence
 
-Status: **schema and durable store active in production** (`serviceRegistry` binds
+Status: **schema, durable store, and Agent CRUD active in production** (`serviceRegistry` binds
 `SqliteAgentSessionStore`; step 5 follow-ups remain). Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
@@ -16,13 +16,12 @@ record for mobile-originated Agent Sessions only.
   message search.
 - A message-centric reshape of the `AgentSessionStore` port: the protocol's Turn becomes a Host
   projection over the assistant message plus Host-held live state. The Agent Protocol itself does
-  not change. Nothing consumes `Backend.agent` yet, so this reshape is contained in
-  `src/backend/ai/agentHost` and its tests.
+  not change.
 - A `SqliteAgentSessionStore` adapter that is the production `AgentSessionStore` binding;
   `InMemoryAgentSessionStore` remains as the conformance-suite reference adapter.
-- An Agent-table-backed `AgentDefinitionSource` ready for later integration. The `agent` table
-  intentionally starts empty; this phase does not migrate or copy assistant data, and the
-  production Host deliberately remains assistant-backed for now.
+- Agent CRUD through the Data API and an Agent-table-backed `AgentDefinitionSource` used by the
+  production Host. The `agent` table intentionally starts empty; no assistant data is migrated or
+  copied.
 
 Out of scope: Agent UI, the Pi Runtime, chat-table (`assistant`/`topic`/`message`) migration or
 removal, branching columns, background turns, and remote execution targets. Everything here is
@@ -213,10 +212,10 @@ storage boundary moves.
 3. **`SqliteAgentSessionStore`.** Implement against the port, pass the shared conformance suite,
    and bind it as the production `AgentSessionStore` in `serviceRegistry` (done — the in-memory
    adapter remains the conformance reference).
-4. **Agent rows.** Add an `agent`-table-backed `AgentDefinitionSource`, but leave `agent` empty in
-   this foundation phase. Agent/Pi business integration owns the later Agent creation or import
-   rules. Keep the production Host on the assistant-backed source until then; assistants remain
-   untouched and authoritative for Chat.
+4. **Agent rows.** Expose Agent CRUD through the Data API and use the `agent`-table-backed
+   `AgentDefinitionSource` in the production Host (done). The table starts empty and assistant data
+   is not copied; assistants remain authoritative only for the current Chat surface until its
+   replacement lands.
 5. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
    (generalizing `userAvatarStorage`); Pi Runtime; fork columns; the eventual chat-table
    decision.

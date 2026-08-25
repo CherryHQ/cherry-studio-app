@@ -1,5 +1,6 @@
 import type { CacheService } from '@/backend/data/CacheService';
 import type { PreferenceService } from '@/backend/data/PreferenceService';
+import { agentService } from '@/backend/data/services/AgentService';
 import { aiUsageRecordService } from '@/backend/data/services/AiUsageRecordService';
 import { assistantService } from '@/backend/data/services/AssistantService';
 import { contentSearchService } from '@/backend/data/services/ContentSearchService';
@@ -31,6 +32,9 @@ export function createDataServices({
   preference: PreferenceService;
 }) {
   return {
+    // `agent` names the MobileAgentHost in the merged services object; the
+    // CRUD data service gets the suffixed key.
+    agentData: agentService,
     aiUsageRecord: aiUsageRecordService,
     assistant: assistantService,
     cache,

@@ -88,16 +88,16 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 The Runtime contract, Fake Runtime, AI SDK Runtime, Protocol contract, Mobile Agent Host, and V1
 Router are implemented as an architecture slice. The Host consumes the message-centric
 `AgentSessionStore` port and owns the Turn projection. The durable `SqliteAgentSessionStore` is
-the production store binding over the `agent`/`agent_session`/`agent_session_message` tables. The
-`agent` table intentionally starts empty: no assistant data is migrated or copied. Production
-composition deliberately keeps the assistant-backed definition source until Agent business
-integration lands Agent CRUD. See [Agent Persistence](./agent-persistence.md) for the schema,
-delete semantics, and remaining follow-ups, per the authority direction of
+the production store binding over the `agent`/`agent_session`/`agent_session_message` tables.
+Agent CRUD is exposed through the Data API, and the Host resolves definitions from the `agent`
+table. The table intentionally starts empty: no assistant data is migrated or copied. See
+[Agent Persistence](./agent-persistence.md) for the schema, delete semantics, and remaining
+follow-ups, per the authority direction of
 [#568](https://github.com/CherryHQ/cherry-studio-app/issues/568).
 
-No frontend currently consumes `Backend.agent`. This slice does not replace the current Topic,
-Chat Runtime, or desktop-aligned `agent_*` surfaces. Pi, attachments, production activation of
-durable Agent persistence, and UI integration remain follow-up work.
+No frontend currently consumes the Agent Data API or `Backend.agent`. This slice does not replace
+the current Topic or Chat Runtime surfaces. Pi, attachments, the avatar workflow, and UI integration
+remain follow-up work.
 
 ## Related
 
