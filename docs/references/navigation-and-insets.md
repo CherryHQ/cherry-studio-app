@@ -59,10 +59,9 @@ Before enabling it, verify:
   provider, `QueryProvider`, `AppBootstrapProvider`, `AppBootstrapGate`, navigation theme, bottom
   sheet provider, and the root Stack.
 - The root Stack hosts the `(drawer)` group (header hidden) plus root-level `onboarding`, `search`,
-  `topics` (legacy topic management), `sessions` (Agent Session management), `settings`, and
-  `paintings` screens.
+  `sessions` (Agent Session management), `settings`, and `paintings` screens.
 - `src/app/(drawer)/_layout.tsx` owns the global drawer navigator (`expo-router/drawer`) with four
-  scenes: `(chat)` (the initial route), home, agents, assistants, and drawings. The sidebar is the
+  scenes: `(chat)` (the initial route), home, agents, and drawings. The sidebar is the
   `features/sidebar` compound; every scene's header leads with a hamburger that opens it.
   `DrawerActions.openDrawer()` only reaches ancestors, so a screen that needs that hamburger has to
   be a drawer scene — which is why the drawings history lives at `/drawings` rather than under the
@@ -96,19 +95,19 @@ Multi-level component sheets keep their current page in the owning feature and r
 inside the same physical sheet. They pass `backAction` only while a nested page is visible; the
 shared shell owns the consistent header placement but does not expose a navigation stack.
 
-Model selection and model search are separate interactions. Chat input, painting input, provider
-connectivity checks, model settings, and assistant editing all open `ModelPickerDrawer`, the one
+Model selection and model search are separate interactions. Agent editing, painting input, provider
+connectivity checks, and model settings all open `ModelPickerDrawer`, the one
 model-selection view. Its compact trailing search action opens `/search`; the drawer temporarily
 hides while that route is active so its portal and Android back handler cannot compete with the root
 route.
 
-Single-selection model search, model-service search, assistant search, and provider model search use
+Single-selection model search, model-service search, Agent search, and provider model search use
 the root `/search` route. It is one fixed view: callers adapt data, matching, optional filters, and
 result content rather than supplying business-specific search screens. Native back or an interactive
 pop cancels without calling business logic; selection resolves only after the route's exit transition
 completes. The route title is always Search, and it does not query or render a full result set until
-the user enters non-whitespace text. Topic management and provider model pull keep persistent local
-search because their matching rows retain management or multi-selection actions.
+the user enters non-whitespace text. Provider model pull keeps persistent local search because its
+matching rows retain management or multi-selection actions.
 
 Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
 
@@ -154,7 +153,7 @@ Android edge-to-edge should not be avoided by pinning a system navigation bar ba
 - If a page must use an edge horizontal gesture, validate on Android that system back remains intact.
 - iOS interactive pop and Android system back are not the same product contract; do not flatten them into one JavaScript gesture.
 
-Current horizontal gestures, such as topic-row swipe actions, start inside content areas. The global drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); on Android this coexists with system edge back and must be re-validated whenever predictive back is enabled.
+Current horizontal gestures, such as Session-row swipe actions, start inside content areas. The global drawer accepts a full-width open swipe (`swipeEdgeWidth` spans the screen); on Android this coexists with system edge back and must be re-validated whenever predictive back is enabled.
 
 ## Acceptance
 

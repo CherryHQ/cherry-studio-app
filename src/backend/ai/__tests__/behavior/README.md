@@ -6,9 +6,6 @@ interface from `ai/test`. It does not emulate provider HTTP endpoints or SSE wir
 
 ## Ownership
 
-- `AiService.streamText.test.ts` owns baseline stream input, UI chunks, final messages, and usage.
-- `AiService.tools.test.ts` owns local tools, MCP tool entries, and agentic web search loops.
-- `AiService.termination.test.ts` owns rejection, stream error, abort, limit, and yield semantics.
 - `AiService.generateText.test.ts` and `AiService.generateImage.test.ts` own the other model-backed
   entry points; `AiService.checkModel.test.ts` owns language health probes and mobile's explicit
   rejection of Embedding/Rerank execution.

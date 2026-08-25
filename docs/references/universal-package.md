@@ -19,8 +19,8 @@ The package is dissolving. The mobile data layer is independent of desktop, so n
   `src/types/aiSdk.ts` stay temporarily: `packages/ai-runtime` imports them, and workspace packages
   must not import app code. They move in a later round together with a decision on the AI-runtime
   vocabulary's final home (candidate: `packages/ai-runtime`).
-- `src/ai/transport/toolApprovals.ts` is a mobile extension with no desktop counterpart; it stays
-  only because `packages/ai-runtime` consumes it.
+- The old Chat stream/approval transport has been removed. Remaining `src/ai` files are admitted
+  only when a current package consumer exists.
 - `src/utils/model.ts` has forked in both directions (mobile-only detection helpers, desktop-only
   registry queries) and is no longer a candidate for verbatim alignment.
 
@@ -33,7 +33,7 @@ Desktop's `src/shared` means "shared between the Electron main and renderer proc
 
 | Directory | Contents |
 |---|---|
-| `src/ai` | Cross-layer AI tool and transport rules |
+| `src/ai` | Remaining portable AI vocabulary with current package consumers |
 | `src/types` | Portable value types (`aiSdk`, `error`, `serializable`) |
 | `src/utils` | Portable pure helpers (`conversationTitle`, `keywordSearch`, `model`, `text`, `url`, plus the mobile-only `fnv1a` used by `mcpToolName`) |
 

@@ -43,7 +43,7 @@ optional CherryUI scroll-to-bottom button. Callers provide stable message item r
 only the layout insets and callbacks they own.
 
 The latest user message is anchored below the content header. Text anchors use a two-line height
-cap; messages containing files use their full measured height. Initial topic entry and sending a
+cap; messages containing files use their full measured height. Initial Session entry and sending a
 message may position the list once. Streaming content and item-size changes never scroll it; after
 reserved anchor space is exhausted, `isAtEnd` reveals the scroll-to-bottom button. Clicking that
 button scrolls once and does not enable any ongoing follow behavior.

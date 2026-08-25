@@ -1,8 +1,7 @@
 # Agent Persistence
 
-Status: **schema, durable store, Agent CRUD, and static Session reads active in production**
-(`serviceRegistry` binds `SqliteAgentSessionStore`; step 6 follow-ups remain). Version 1 is
-local-only.
+Status: **schema, durable store, Agent CRUD, Session reads, and frontend integration active in
+production**. Version 1 is local-only.
 
 This document defines the durable SQLite schema behind the Host-owned
 [`AgentSessionStore`](../../../src/backend/ai/agentHost/AgentSessionStore.ts) port and the rollout
@@ -23,18 +22,16 @@ record for mobile-originated Agent Sessions only.
 - Agent CRUD plus cursor-paginated Session and transcript reads through the Data API, and an
   Agent-table-backed `AgentDefinitionSource` used by the production Host. Session renames and
   deletes delegate to the Host so an active turn is cancelled and drained before rows disappear.
-  The `agent` table intentionally starts empty; no assistant data is migrated or copied.
+  The `agent` table intentionally starts empty; retired Assistant data is discarded rather than
+  migrated.
 
-Out of scope: Agent UI, chat-table (`assistant`/`topic`/`message`) migration or removal, branching
-columns, background turns, and tool configuration storage. Everything here is additive; no
-existing table changes.
+Out of scope: branching columns, background turns, tool configuration storage, and broader Pi
+provider coverage. The retired `assistant`/`topic`/`message` tables were removed separately after
+Agent surfaces became authoritative.
 
-## V0.2 transitional limitations
+## Current limitations
 
-V0.2 is an intentional integration transition. The Agent Data API and `Backend.agent` establish
-the storage and Host boundaries, but no frontend consumes them yet. The following limitations are
-accepted for V0.2 and must be resolved before an Agent UI or the Chat frontend switches to these
-surfaces:
+The Agent Data API, `Backend.agent`, and frontend surfaces share these current constraints:
 
 - Session observation currently resolves the live Agent definition first. Soft-deleting an Agent
   or clearing its model can therefore make its existing Sessions unavailable through the public
@@ -47,10 +44,10 @@ surfaces:
 
 ## Decisions
 
-**Parallel tables, not a rename.** Chat's `message` is a parent-linked tree with sibling groups
-and an active branch; an Agent Session transcript is linear ([Branching](./agent-protocol.md#branching)
-forks into a new Session instead). The models are not one-to-one, so chat tables stay untouched
-until Agent surfaces replace them and a migration is designed separately.
+**Agent tables were parallel first, then the old schema was dropped.** The retired `message` table
+was a parent-linked tree while an Agent Session transcript is linear
+([Branching](./agent-protocol.md#branching) forks into a new Session instead). Old data was
+deliberately discarded rather than converted between incompatible models.
 
 **No persisted Runtime identity.** There is no `runtime_binding` column. Runtime ids never appear in
 protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
@@ -231,15 +228,15 @@ storage boundary moves.
    and bind it as the production `AgentSessionStore` in `serviceRegistry` (done — the in-memory
    adapter remains the conformance reference).
 4. **Agent rows.** Expose Agent CRUD through the Data API and use the `agent`-table-backed
-   `AgentDefinitionSource` in the production Host (done). The table starts empty and assistant data
-   is not copied; assistants remain authoritative only for the current Chat surface until its
-   replacement lands.
+   `AgentDefinitionSource` in the production Host (done). The table starts empty and retired
+   Assistant data is not copied.
 5. **Session reads.** Expose recency-ordered Session lists and cursor-paginated linear transcript
    history through the Data API. Keep these historical reads independent of executable Agent
    lookup, and route Session rename/delete through the Host lifecycle boundary (done).
-6. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
-   (generalizing `userAvatarStorage`); tool configuration; fork columns; the eventual chat-table
-   decision.
+6. **Frontend and retirement.** Agent UI consumes `Backend.agent`; the incompatible legacy Chat
+   tables/runtime are removed without data conversion (done).
+7. **Follow-ups (separate designs).** Avatar workflow, tool configuration, fork columns, context
+   compaction, and broader Pi provider coverage.
 
 ## Rejected alternatives
 

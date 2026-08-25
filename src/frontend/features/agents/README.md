@@ -1,8 +1,8 @@
 # Agent Screens
 
 This module owns the agent list and editor screens for durable Agents backed by the `/agents`
-Data API. It is the agent-table successor to the assistant screens, which remain available for the
-legacy management flow while the primary chat surface uses Agent Sessions.
+Data API. Agents and Agent Sessions are the only active conversation configuration and persistence
+surfaces.
 
 ## Public Interface
 
@@ -11,7 +11,7 @@ legacy management flow while the primary chat surface uses Agent Sessions.
 - Tapping a list row opens a new chat for that Agent; the session is created on first send.
 - The row context menu opens the editor or deletes the Agent — agents have no detail screen.
 - The editor's model row opens the shared model-picker bottom sheet. New agents seed the global
-  default chat model; an agent saved without a model cannot start a session until one is assigned.
+  default Agent model; an agent saved without a model cannot start a session until one is assigned.
 - Inference settings (`temperature`, `maxOutputTokens`, `reasoningEffort`) follow the sparse
   `AgentSettings` contract: a disabled control saves as an explicit-undefined key so the
   shallow-merging update endpoint clears the stored value (`agentForm.ts`).

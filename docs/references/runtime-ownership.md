@@ -15,8 +15,8 @@ Use these roles for mobile-owned code:
 
 | Role | Use when the type is | Example |
 | --- | --- | --- |
-| `Module` | A frontend-visible workflow capability exposed through `Backend` | `ChatModule` |
-| `Runtime` | One app- or bootstrap-owned executor whose state spans calls or routes | `ChatRuntime` |
+| `Module` | A frontend-visible workflow capability exposed through `Backend` | `PaintingsModule` |
+| `Runtime` | One app- or bootstrap-owned executor whose state spans calls or routes | `JobRuntime` |
 | `Session` | One caller-owned isolated unit with explicit cancellation or disposal | `PaintingGenerationSession` |
 | `Client` | A boundary to one external account, protocol, or remote API | `VertexAuthClient` |
 | `Adapter` | A translation boundary for a platform or SDK; a precise capability noun may stand alone | `DevicePermissions` |
@@ -100,9 +100,6 @@ tracked turns before lower-level infrastructure closes. OS suspension or termina
 guarantee continued execution or resumable streaming; the next process start marks unfinished local
 turns interrupted.
 
-The legacy `ChatRuntime` and `Backend.chat` remain registered until the migration's schema/runtime
-removal stage, but the primary chat route no longer consumes them.
-
 ## Painting Generation
 
 `PaintingsModule.startGeneration()` atomically creates the receipt and enqueues a
@@ -131,10 +128,10 @@ painting through any Data API caller first fences its scope and drains the job.
 then applies the frontend theme and initializes i18n. It must not refresh catalogs, prefetch history,
 repair data, or run diagnostics.
 
-`runPostReadyTasks()` starts after status becomes `ready`. It repairs crash-orphaned pending
-assistant messages while the host's PostReady phase prewarms MCP and starts the job cold-start pump.
-Both are off the first-paint path. Host-owned PostReady initialization is retained and awaited if
-that generation is disposed before it finishes.
+The bootstrap runtime's `runPostReadyTasks()` starts the host PostReady phase after status becomes
+`ready`. Agent reconciliation, MCP initialization, and the job cold-start pump stay off the
+first-paint path. Host-owned PostReady initialization is retained and awaited if that generation is
+disposed before it finishes.
 
 Current Agent Session, transcript history windows, provider queries, and feature state load at route
 level after the bootstrap gate.

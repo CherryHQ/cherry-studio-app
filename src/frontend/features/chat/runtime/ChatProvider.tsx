@@ -109,9 +109,7 @@ function createChatNavigation(input: { pathname: string; router: ReturnType<type
     openSession: (sessionId: string, agentId: string) => {
       const params = {
         agentId,
-        assistantId: undefined,
         sessionId,
-        topicId: undefined,
       };
       if (navigation.pathname === '/') {
         navigation.router.setParams(params);

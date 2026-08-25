@@ -56,21 +56,12 @@ If content does not report readiness within three seconds after bootstrap become
 coordinator records a warning and treats content as ready. The layout and minimum-duration guards
 still apply, so this fallback cannot hide the cover before React has replaced the native surface.
 
-## Initial Content Signals
+## Initial Content Signal
 
-The default Messages route has a stronger signal than other routes because its navigation chrome
-can render before its virtualized conversation list:
-
-- topics and assistants start concurrently;
-- loading, successful empty results, and errors are distinct settled outcomes;
-- `LegendList` is not mounted until both initial queries settle;
-- `LegendList.onLoad` schedules two animation frames before reporting content ready; and
-- an empty or failed initial query renders a stable empty or error state instead of holding startup
-  indefinitely.
-
-For a non-Messages cold-start deep link, `StartupRouteReadyReporter` waits for the target navigation
-root to lay out, then waits two animation frames and reports readiness. It does not start or wait for
-Messages queries.
+`StartupRouteReadyReporter` waits for the active navigation root to lay out, then waits two animation
+frames before reporting content ready. Route data such as Agents, Sessions, transcript history, and
+providers loads independently and cannot extend the startup gate. The three-second coordinator
+timeout remains a fallback for navigation trees that never report layout.
 
 ## Motion And Accessibility
 
@@ -110,7 +101,7 @@ the native-to-React handoff in preview or production builds on both platforms.[^
 - [`app.json`](../../app.json)
 - [`src/app/_layout.tsx`](../../src/app/_layout.tsx)
 - [`src/frontend/components/startup`](../../src/frontend/components/startup)
-- [`src/frontend/features/topics/TopicList.tsx`](../../src/frontend/features/topics/TopicList.tsx)
+- [`src/frontend/features/chat/ChatScreen.tsx`](../../src/frontend/features/chat/ChatScreen.tsx)
 - [`src/bootstrap/runtime/AppBootstrapProvider.tsx`](../../src/bootstrap/runtime/AppBootstrapProvider.tsx)
 - [`src/bootstrap/runtime/startupCoverHandoff.ts`](../../src/bootstrap/runtime/startupCoverHandoff.ts)
 - [`src/frontend/features/onboarding/logoDraw`](../../src/frontend/features/onboarding/logoDraw)

@@ -57,7 +57,7 @@ Contracts may contain:
 
 Contracts must not contain:
 
-- assistant, topic, message, file, model, provider, painting, or MCP persistence CRUD;
+- Agent, Agent Session, message, file, model, provider, painting, or MCP persistence CRUD;
 - endpoint paths, query keys, pagination infrastructure, or React Query options;
 - preference keys, defaults, schemas, clients, or subscription implementations;
 - Drizzle schemas, database rows, migrations, SQL, repositories, or persistence classes;
@@ -89,7 +89,7 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
 
 ## Interface Design Rules
 
-- Name aggregate members by capability (`chat`, `models`, `permissions`), not by storage table or
+- Name aggregate members by capability (`agent`, `models`, `permissions`), not by storage table or
   implementation class.
 - Use one leaf file per capability. Define the aggregate and module-key helpers only in
   `backend.ts`; re-export the public surface from `index.ts`.
@@ -101,7 +101,7 @@ semantic rules that import restrictions cannot detect, especially shallow pass-t
   who owns calling it.
 - Return structured results or emit semantic events. Do not perform routing, translation, toast, or
   React Query cache updates in backend implementations.
-- Events may request a frontend-owned effect such as opening a topic or invalidating resource data,
+- Events may request a frontend-owned effect such as opening a Session or invalidating resource data,
   but must not carry Router, QueryClient, React, or component references.
 - Expose only errors that require distinct frontend handling. Error messages must not be localized
   UI copy.

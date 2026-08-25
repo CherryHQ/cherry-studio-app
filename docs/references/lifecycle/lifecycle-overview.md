@@ -51,7 +51,7 @@ seeding), `PreferenceService`. Boot theme and i18n remain app-level steps perfor
 `AppBootstrapProvider` after `host.start()` resolves — they are frontend concerns and do not become
 backend services.
 
-`PostReady` holds crash-orphan message repair, MCP prewarm, and the job runtime's cold-start pump.
+`PostReady` holds Agent reconciliation, MCP initialization, and the job runtime's cold-start pump.
 
 ## Service states and hooks
 
@@ -144,7 +144,7 @@ export const services = {
   ResourceScopeCoordinator, CacheService, DbService, PreferenceService,
   BackgroundActivityEnvironment, KeepAliveCoordinator, BackgroundActivityManager,
   BackgroundReplyRuntime, WebSearchService, McpRuntimeService,
-  AiService, ChatRuntime, JobRuntime,
+  AiService, AgentSessionStore, MobileAgentHost, JobHandlerRegistry, JobRuntime,
 } as const
 
 export type ServiceRegistry = { [K in keyof typeof services]: InstanceType<(typeof services)[K]> }
@@ -220,9 +220,8 @@ desktop, and correctness for late callbacks comes from scope fencing plus write-
 
 ### Undeclared dependencies
 
-Resolving a service that is not in `@DependsOn` is legal at **runtime** — desktop relies on it to
-break the `AiStreamManager` ↔ `AiService` cycle. It is a bug during **initialization**, because it
-silently escapes the ordering graph.
+Resolving a service that is not in `@DependsOn` is legal at **runtime**, but it is a bug during
+**initialization** because it silently escapes the ordering graph.
 
 The container therefore records resolutions made while a service's `onInit`/`onReady` is executing
 and warns when one was not declared. Dev and test only; zero production cost; a warning rather than
@@ -317,7 +316,7 @@ application.uninstall()  (provider unmount, or install() of a replacement)
 ```
 
 Reverse-order teardown means consumers stop before the infrastructure they use: `JobRuntime` and
-`ChatRuntime` drain before `DbService` closes, because they declared it as a dependency.
+`MobileAgentHost` drain before `DbService` closes because they declared it as a dependency.
 
 ## Failure, timeout, and concurrency semantics
 

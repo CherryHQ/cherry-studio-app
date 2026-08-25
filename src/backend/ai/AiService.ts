@@ -5,55 +5,39 @@ import {
   type RuntimeProviderCallHandler,
 } from '@cherrystudio/ai-core';
 import type { AppProviderSettingsMap } from '@cherrystudio/ai-runtime/provider';
-import type {
-  AiBaseRequest,
-  AiStreamRequest,
-  ListModelsRequest,
-} from '@cherrystudio/ai-runtime/runtime';
+import type { AiBaseRequest, ListModelsRequest } from '@cherrystudio/ai-runtime/runtime';
 import {
   buildImageProviderOptions,
   createAiUsageCaptureContext,
-  extractAiSdkStandardParams,
-  getCustomParameters,
   mergeImageProviderOptions,
   splitImageParamValues,
 } from '@cherrystudio/ai-runtime/utils';
 import type { ImageGenerationMode, ParamValues } from '@cherrystudio/provider-registry';
-import { type LanguageModelUsage, type ModelMessage, type UIMessageChunk } from 'ai';
+import type { LanguageModelUsage, ModelMessage } from 'ai';
 import { fetch as expoFetch } from 'expo/fetch';
 
-import { application } from '@/backend/core/application/Application';
 import { BaseService, Injectable, Phase, ServicePhase } from '@/backend/core/lifecycle';
 import {
   aiUsageRecordService,
   type AiUsageCaptureContext,
   type AiUsageRecordService,
-  type MessageRef,
 } from '@/backend/data/services/AiUsageRecordService';
-import { assistantService, type AssistantService } from '@/backend/data/services/AssistantService';
 import { modelService, type ModelService } from '@/backend/data/services/ModelService';
 import {
   providerRegistryService,
   type ProviderRegistryService,
 } from '@/backend/data/services/ProviderRegistryService';
 import { providerService, type ProviderService } from '@/backend/data/services/ProviderService';
-import { fileContent } from '@/backend/services/file/fileContent';
-import { paintingFileStorage } from '@/backend/services/paintings/paintingFileStorage';
-import { devicePermissions } from '@/backend/services/permissions';
 import type { ServingCredentialReceipt } from '@/shared/data/types/aiUsageRecord';
-import type { Assistant } from '@/shared/data/types/assistant';
-import type { FileEntryId } from '@/shared/data/types/file';
 import type { Model } from '@/shared/data/types/model';
 import { parseUniqueModelId } from '@/shared/data/types/model';
 import type { Provider } from '@/shared/data/types/provider';
 
 import { createAiUsagePlugin } from './hooks/billingHook';
-import { resolveUIMessageFileUrls } from './messages/attachmentRouting';
 import { listModels as listProviderModels } from './provider/listModels';
 import { VertexAuthClient } from './provider/VertexAuthClient';
 import { Agent, buildAgentParams } from './runtime/aiSdk';
 import type { BuildAgentParamsDependencies } from './runtime/aiSdk/params/buildAgentParams';
-import { ToolResolver } from './tools';
 
 // ── Request types ──────────────────────────────────────────────────
 
@@ -89,10 +73,6 @@ export interface AiImageResult {
 
 export interface AiServiceDependencies extends BuildAgentParamsDependencies {
   aiUsageRecord: Pick<AiUsageRecordService, 'recordInvocation'>;
-  assistant: Pick<AssistantService, 'getById'>;
-  fileContent: {
-    getUri(id: FileEntryId): Promise<string | undefined>;
-  };
   model: Pick<ModelService, 'getById'>;
   provider: BuildAgentParamsDependencies['provider'] &
     Pick<ProviderService, 'getByProviderId' | 'getRotatedApiKey'>;
@@ -125,8 +105,6 @@ function createCaptureContext(input: {
   model: Model;
   sdkModelId: string;
   credentialReceipt: ServingCredentialReceipt;
-  assistant?: Assistant;
-  messageRef: MessageRef | null;
 }): AiUsageCaptureContext {
   return createAiUsageCaptureContext({
     providerId: input.provider.id,
@@ -137,15 +115,8 @@ function createCaptureContext(input: {
     trustProviderReportedCost: input.provider.apiFeatures.reportsActualCost,
     reportedCostCurrency: input.provider.reportedCostCurrency,
     credentialReceipt: input.credentialReceipt,
-    source: input.assistant
-      ? {
-          type: 'assistant',
-          id: input.assistant.id,
-          name: input.assistant.name,
-          icon: input.assistant.emoji,
-        }
-      : null,
-    messageRef: input.messageRef,
+    source: null,
+    messageRef: null,
   });
 }
 
@@ -186,19 +157,12 @@ function createProviderCallHandler(
  * Mobile keeps the desktop service name but does not register IPC handlers
  * or depend on Electron main-process lifecycle services.
  *
- * It declares no `@DependsOn`. Its container-owned collaborators —
- * `PreferenceService`, `WebSearchService`, `McpRuntimeService` — are resolved
- * inside methods
- * instead, because the single optional dependencies object is what every AI test
- * injects through and positional injection would take that argument slot. The
- * cost is that those edges do not appear in the graph; it is affordable because
- * this service initializes nothing and stops nothing, so no ordering depends on
- * them.
+ * It declares no `@DependsOn`: its data collaborators are module singletons,
+ * and this service initializes and stops no runtime of its own.
  */
 @Injectable('AiService')
 @ServicePhase(Phase.PostReady)
 export class AiService extends BaseService {
-  private toolResolver: ToolResolver | undefined;
   private vertexAuthClient: VertexAuthClient | undefined;
 
   /** Every entry is optional so the container can construct this with no arguments. */
@@ -215,115 +179,17 @@ export class AiService extends BaseService {
     const { overrides } = this;
     return {
       aiUsageRecord: overrides.aiUsageRecord ?? aiUsageRecordService,
-      assistant: overrides.assistant ?? assistantService,
-      fileContent: overrides.fileContent ?? fileContent,
       model: overrides.model ?? modelService,
-      preference: overrides.preference ?? application.get('PreferenceService'),
       provider: overrides.provider ?? providerService,
       providerRegistry: overrides.providerRegistry ?? providerRegistryService,
-      tools: overrides.tools ?? this.getToolResolver(),
       vertexAuth: overrides.vertexAuth ?? this.getVertexAuth(),
     };
-  }
-
-  /** Owns a built tool registry, so it is created once per service instance. */
-  private getToolResolver(): ToolResolver {
-    this.toolResolver ??= new ToolResolver({
-      ai: { generateImage: (request) => this.generateImage(request) },
-      devicePermissions,
-      files: {
-        createInternalEntry: paintingFileStorage.createInternalEntry,
-        discard: paintingFileStorage.discard,
-        readDataUrl: paintingFileStorage.readDataUrl,
-        resolve: fileContent.resolve,
-      },
-      mcpRuntime: application.get('McpRuntimeService'),
-      preference: application.get('PreferenceService'),
-      providerRegistry: providerRegistryService,
-      webSearch: application.get('WebSearchService'),
-    });
-    return this.toolResolver;
   }
 
   /** Caches minted service-account tokens, so it outlives a single request. */
   private getVertexAuth(): VertexAuthClient {
     this.vertexAuthClient ??= new VertexAuthClient({ fetch: expoFetch as typeof globalThis.fetch });
     return this.vertexAuthClient;
-  }
-
-  // ── Streaming chat (agent.stream) ──
-
-  /**
-   * Raw `UIMessageChunk` stream from `Agent.stream`. Caller owns
-   * read/multicast/accumulation/terminal dispatch.
-   * Pre-stream errors reject the Promise; mid-stream errors come through
-   * the stream itself.
-   */
-  async streamText(request: AiStreamRequest): Promise<ReadableStream<UIMessageChunk>> {
-    const signal = request.requestOptions?.signal;
-    if (!signal) {
-      throw new Error(
-        'streamText requires requestOptions.signal — no AbortController was attached by the caller',
-      );
-    }
-    const repairUsagePlugins: { current?: AiPlugin[] } = {};
-    const [built, preparedMessages] = await Promise.all([
-      this.buildAgentParamsFor(request, true, () => repairUsagePlugins.current ?? []),
-      resolveUIMessageFileUrls(request.messages ?? [], (fileEntryId) =>
-        this.services.fileContent.getUri(fileEntryId),
-      ),
-    ]);
-    const {
-      assistant,
-      context,
-      credentialReceipt,
-      model,
-      nativeFileSupport,
-      options,
-      plugins,
-      provider,
-      repairToolCall,
-      sdkConfig,
-      system,
-      tools,
-    } = built;
-    const usagePlugin = createAiUsagePlugin(
-      createCaptureContext({
-        provider,
-        model,
-        sdkModelId: sdkConfig.modelId,
-        credentialReceipt,
-        assistant,
-        messageRef: request.messageId ? { kind: 'chat', id: request.messageId } : null,
-      }),
-      this.services.aiUsageRecord,
-    );
-    repairUsagePlugins.current = [usagePlugin];
-
-    const agent = new Agent({
-      providerId: sdkConfig.providerId,
-      providerSettings: sdkConfig.providerSettings,
-      modelId: sdkConfig.modelId,
-      messageId: request.messageId,
-      mediaCapabilities: nativeFileSupport,
-      plugins: [...plugins, usagePlugin],
-      context,
-      repairToolCall,
-      system,
-      tools,
-      ...(request.runtimeTimingSink
-        ? {
-            toolExecutionHooks: {
-              onToolExecutionStart: (event) =>
-                request.runtimeTimingSink?.onToolExecutionStart(event),
-              onToolExecutionEnd: (event) => request.runtimeTimingSink?.onToolExecutionEnd(event),
-            },
-          }
-        : {}),
-      options,
-    });
-
-    return agent.stream(preparedMessages, signal);
   }
 
   // ── Non-streaming text generation (agent.generate) ──
@@ -333,7 +199,6 @@ export class AiService extends BaseService {
 
     const repairUsagePlugins: { current?: AiPlugin[] } = {};
     const {
-      assistant,
       context,
       credentialReceipt,
       model,
@@ -342,16 +207,14 @@ export class AiService extends BaseService {
       provider,
       repairToolCall,
       sdkConfig,
-      system,
-    } = await this.buildAgentParamsFor(request, false, () => repairUsagePlugins.current ?? []);
+      tools,
+    } = await this.buildAgentParamsFor(request, () => repairUsagePlugins.current ?? []);
     const usagePlugin = createAiUsagePlugin(
       createCaptureContext({
         provider,
         model,
         sdkModelId: sdkConfig.modelId,
         credentialReceipt,
-        assistant,
-        messageRef: null,
       }),
       this.services.aiUsageRecord,
     );
@@ -364,7 +227,8 @@ export class AiService extends BaseService {
       plugins: [...plugins, usagePlugin],
       context,
       repairToolCall,
-      system: request.system ?? system,
+      system: request.system,
+      tools,
       options,
     });
 
@@ -405,10 +269,8 @@ export class AiService extends BaseService {
 
   async generateImage(request: AiImageRequest): Promise<AiImageResult> {
     const signal = request.requestOptions?.signal;
-    const { sdkConfig, credentialReceipt, model, assistant, options, provider } =
+    const { sdkConfig, credentialReceipt, model, options, provider } =
       await this.buildAgentParamsFor(request);
-    const customParams = assistant ? getCustomParameters(assistant) : {};
-    const split = extractAiSdkStandardParams(customParams);
     const { structured, vendorBag } = splitImageParamValues(request.paramValues);
     const imageProviderOptions = buildImageProviderOptions({
       aiSdkProviderId: sdkConfig.providerId,
@@ -430,8 +292,6 @@ export class AiService extends BaseService {
       model,
       sdkModelId: sdkConfig.modelId,
       credentialReceipt,
-      assistant,
-      messageRef: null,
     });
 
     const result = await aiCoreGenerateImage<AppProviderSettingsMap>(
@@ -451,7 +311,6 @@ export class AiService extends BaseService {
           headers: stripUndefinedHeaders(request.requestOptions.headers),
         }),
         onProviderCall: createProviderCallHandler(usageCaptureContext, this.services.aiUsageRecord),
-        ...split.standardParams,
       },
     );
 
@@ -525,58 +384,30 @@ export class AiService extends BaseService {
   }
 
   private async getProviderForListModels(request: ListModelsRequest): Promise<Provider> {
-    if (request.providerId) {
-      return this.services.provider.getByProviderId(request.providerId);
-    }
-
-    if (!request.assistantId) {
-      throw new Error('listModels requires providerId or assistantId');
-    }
-
-    const assistant = await this.services.assistant.getById(request.assistantId);
-    if (!assistant.modelId) {
-      throw new Error('Cannot resolve providerId: assistant has no model');
-    }
-
-    const { providerId } = parseUniqueModelId(assistant.modelId);
-    return this.services.provider.getByProviderId(providerId);
+    if (!request.providerId) throw new Error('listModels requires providerId');
+    return this.services.provider.getByProviderId(request.providerId);
   }
 
   private async buildAgentParamsFor(
-    request: AiBaseRequest & { apiKeyOverride?: string; chatId?: string; messageId?: string },
-    shouldIncludeExternalTools = false,
+    request: AiBaseRequest,
     getRepairUsagePlugins?: () => AiPlugin[],
   ) {
-    const { provider, model, assistant } = await this.getProviderAndModel(request);
+    const { provider, model } = await this.getProviderAndModel(request);
     const built = await buildAgentParams({
       request,
       services: this.services,
       provider,
       model,
-      assistant,
-      shouldIncludeExternalTools,
       getRepairUsagePlugins,
     });
-    return { ...built, provider, model, assistant };
+    return { ...built, provider, model };
   }
 
-  /** Priority: explicit `uniqueModelId` > `assistant.modelId`. */
   private async getProviderAndModel(
-    request: AiBaseRequest & { chatId?: string },
-  ): Promise<{ provider: Provider; model: Model; assistant: Assistant | undefined }> {
-    let assistant: Assistant | undefined;
-    if (request.assistantId) {
-      try {
-        assistant = await this.services.assistant.getById(request.assistantId);
-      } catch {
-        assistant = undefined;
-      }
-    }
-
-    const uniqueModelId = request.uniqueModelId ?? assistant?.modelId;
-    if (!uniqueModelId) {
-      throw new Error('Cannot resolve providerId: not in request and assistant has no model');
-    }
+    request: AiBaseRequest,
+  ): Promise<{ provider: Provider; model: Model }> {
+    const { uniqueModelId } = request;
+    if (!uniqueModelId) throw new Error('AiService requires uniqueModelId');
 
     const { providerId, modelId } = parseUniqueModelId(uniqueModelId);
     const [provider, model] = await Promise.all([
@@ -587,7 +418,7 @@ export class AiService extends BaseService {
       throw new Error(`Cannot resolve model: ${providerId}::${modelId}`);
     }
 
-    return { provider, model, assistant };
+    return { provider, model };
   }
 }
 

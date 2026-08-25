@@ -1,6 +1,5 @@
 import type { BackgroundReplyPhase } from '@/shared/backgroundActivity/chatReply';
 import type { AgentMessageView } from '@/shared/contracts/agent';
-import type { CherryUIMessage } from '@/shared/data/types/message';
 
 // The feature contract lives in shared so the service and activity
 // registration agree on props; these re-exports keep the service-local import
@@ -16,9 +15,7 @@ export type BackgroundReplyOutcome = Extract<
   'cancelled' | 'completed' | 'failed'
 >;
 
-export type BackgroundReplyMessage =
-  | Pick<AgentMessageView, 'parts'>
-  | Pick<CherryUIMessage, 'parts'>;
+export type BackgroundReplyMessage = Pick<AgentMessageView, 'parts'>;
 
 /**
  * Capability handle for one reply generation. Calls never throw, and handles

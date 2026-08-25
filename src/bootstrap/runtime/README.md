@@ -10,7 +10,6 @@ feature UI may render.
 | `createAppBootstrapRuntime.ts` | Creates the stable `Backend`, `ApiClient`, and `PreferenceClient`; defines initialize and dispose ordering |
 | `initializeAppRuntime.ts` | Applies cached boot theme and initializes i18n after the native handoff |
 | `startupCoverHandoff.ts` | Holds native-appearance mutations until the system-themed RN cover owns the surface |
-| `runPostReadyTasks.ts` | Repairs crash-orphaned messages and prewarms MCP after the gate opens |
 | `AppBootstrapProvider.tsx` | Owns one runtime, injects its interfaces, tracks startup status, and disposes it |
 | `AppBootstrapGate.tsx` | Renders nothing while loading and surfaces initialization failure |
 
@@ -25,10 +24,10 @@ Required initialization runs in this order:
 5. apply the boot theme and initialize i18n behind that cover;
 6. set status to `ready` and open the gate.
 
-Only work required for a correct first render may block the gate. `runPostReadyTasks()` is
-fire-and-forget, best-effort, and must handle its own failures. Route data, provider catalogs, chat
-history, repairs, diagnostics, and other feature work stay outside the critical path unless a
-separate startup decision proves otherwise.
+Only work required for a correct first render may block the gate. The runtime's
+`runPostReadyTasks()` method delegates to the host's fire-and-forget PostReady phase. Route data,
+provider catalogs, transcript history, diagnostics, and other feature work stay outside the
+critical path unless a separate startup decision proves otherwise.
 
 ## Ownership Rules
 
@@ -37,8 +36,7 @@ separate startup decision proves otherwise.
 - Runtime may coordinate frontend and backend startup, but it must not implement feature behavior.
 - Navigation, toast, translation decisions, and React Query invalidation remain frontend-owned.
 - Every app-lifetime resource added here must identify its initialization order and disposal point.
-- Disposal is idempotent and asynchronous. It first waits for `ChatRuntime` to abort and settle all
-  tracked work, then closes `McpRuntimeService`, `WebSearchService`, backend `CacheService`, and
-  `DbService` in that order.
+- Disposal is idempotent and asynchronous. Host dependency order first drains Agent turns and jobs,
+  then closes MCP, web search, cache, and SQLite infrastructure.
 - Runtime must not import app route modules or trigger preboot side effects.
 - Mobile uses one startup gate, not Desktop lifecycle phases.

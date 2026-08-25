@@ -1,5 +1,4 @@
-import type { AgentMessagePart } from '@/shared/contracts/agent';
-import type { CherryMessagePart, CherryUIMessage } from '@/shared/data/types/message';
+import type { AgentMessagePart, AgentMessageView } from '@/shared/contracts/agent';
 
 import {
   deriveBackgroundReplyContent,
@@ -53,11 +52,12 @@ describe('deriveBackgroundReplyContent', () => {
     const content = deriveBackgroundReplyContent(
       message([
         {
+          id: 'tool-1',
           input: {},
-          state: 'input-available',
+          state: 'running',
           toolCallId: 'call-1',
           toolName,
-          type: 'dynamic-tool',
+          type: 'tool',
         },
       ]),
       t,
@@ -71,12 +71,13 @@ describe('deriveBackgroundReplyContent', () => {
       message([
         { type: 'text', text: 'Partial **answer**' },
         {
-          approval: { id: 'approval-1' },
+          approvalId: 'approval-1',
+          id: 'tool-1',
           input: { secret: 'not rendered' },
-          state: 'approval-requested',
+          state: 'awaiting-approval',
           toolCallId: 'call-1',
           toolName: 'private_tool',
-          type: 'dynamic-tool',
+          type: 'tool',
         },
       ]),
       t,
@@ -112,7 +113,12 @@ describe('deriveBackgroundReplyContent', () => {
 
   test('truncates from the end without splitting unicode characters', () => {
     const preview = extractReplyPreview([
-      { type: 'text', text: `${'a'.repeat(170)}😀末尾` } as CherryMessagePart,
+      {
+        id: 'text-1',
+        state: 'done',
+        type: 'text',
+        text: `${'a'.repeat(170)}😀末尾`,
+      },
     ]);
 
     expect(Array.from(preview ?? '')).toHaveLength(160);
@@ -123,9 +129,11 @@ describe('deriveBackgroundReplyContent', () => {
   test('starts a long preview at the latest complete sentence when possible', () => {
     const preview = extractReplyPreview([
       {
+        id: 'text-1',
+        state: 'done',
         type: 'text',
         text: `${'较早内容'.repeat(50)}。最近的完整句子保留用于实时活动预览。最后的结论也应该保持完整。`,
-      } as CherryMessagePart,
+      },
     ]);
 
     expect(preview).toBe('最近的完整句子保留用于实时活动预览。最后的结论也应该保持完整。');
@@ -148,6 +156,6 @@ describe('deriveBackgroundReplyContent', () => {
   });
 });
 
-function message(parts: unknown[]): CherryUIMessage {
-  return { id: 'assistant-1', parts, role: 'assistant' } as CherryUIMessage;
+function message(parts: unknown[]): Pick<AgentMessageView, 'parts'> {
+  return { parts } as Pick<AgentMessageView, 'parts'>;
 }

@@ -6,45 +6,49 @@ data, navigation, rendering, and resource ownership patterns.
 
 ## Language
 
-### Chat
+### Agent Conversation
 
 **Cherry Mobile**:
 The mobile Cherry Studio client built on Expo and React Native.
-_Avoid_: mobile clone, assistant clone
+_Avoid_: mobile clone
 
-**Assistant**:
-A reusable Cherry configuration that defines prompt and selected/default model behavior.
-_Avoid_: bot, character
+**Agent**:
+A reusable Cherry configuration that defines its name, prompt, selected model, and inference
+settings.
+_Avoid_: Assistant entity, bot, character
 
-**Topic**:
-A chat thread or conversation owned by an assistant context.
-_Avoid_: chat table, room
+**Agent Session**:
+A linear conversation owned by one Agent configuration.
+_Avoid_: Topic, room
 
 **Message**:
-A persisted chat item in a topic with role, status, model snapshot, metadata, and structured content parts.
+A persisted Agent Session transcript item with a protocol id, role, status, and structured content
+parts.
 _Avoid_: row, text item
 
 **Message Part**:
 A typed unit of message content, such as text, reasoning, tool output, source, file, translation, video, code, compacted content, or error.
 _Avoid_: flat message text, legacy block
 
-**Message History Window**:
-The database-backed active-branch message window for a Topic. It owns history pagination, older-message prefetch, reveal policy, and the static persisted Messages handed to the chat list.
-_Avoid_: stream state, live message buffer
+**Transcript History Window**:
+The database-backed, linear Agent Session window. It owns cursor pagination, older-message prefetch,
+reveal policy, and persisted Messages handed to the chat list.
+_Avoid_: active branch, stream state, live message buffer
 
 **Streaming Message Overlay**:
-The in-memory active assistant Message layer composed on top of the Message History Window while the Chat Runtime is generating for a Topic.
+The in-memory active assistant Message layer composed on top of transcript history while the Agent
+Runtime is generating for a Session.
 _Avoid_: persisted history page, query page
 
-**Chat Runtime**:
-The app-owned backend executor for active LLM streams across Topics. It owns per-Topic turn state,
-AbortControllers, snapshots, tool approval, and terminal assistant Message persistence.
-_Avoid_: Chat Session, route state, screen state
+**Mobile Agent Host**:
+The app-owned backend adapter between Agent Protocol and Pi Runtime. It owns per-Session turn state,
+Runtime sessions, cancellation, snapshots, and terminal Message persistence.
+_Avoid_: Chat Runtime, route state, screen state
 
-**Chat Module**:
-The frontend-visible workflow interface to the Chat Runtime. It sends or aborts Topic turns and
-exposes snapshots and events without transferring runtime ownership to React.
-_Avoid_: Chat Service, Chat Backend, route-owned session
+**Agent Protocol**:
+The frontend-visible workflow interface to the Mobile Agent Host. It observes Sessions, submits or
+cancels turns, and exposes snapshots/events without transferring Host ownership to React.
+_Avoid_: Chat Module, persistence API, route-owned runtime
 
 ### Backend And Data
 
@@ -112,11 +116,6 @@ The sole local conversation engine. It owns model turns and tool-loop progressio
 Agent Host, but it does not own Agent configuration, application persistence, permissions, or UI.
 _Avoid_: AI SDK Runtime, Tool Service
 
-**Tool Resolver**:
-The request-scoped backend capability that selects and combines active built-in, MCP, and external
-web-search tools for one AI request.
-_Avoid_: Tool Service, tool persistence registry
-
 **Provider-Native Web Search**:
 Model-native web search enabled through AI provider options during an AI request.
 _Avoid_: Web Search Provider
@@ -137,13 +136,8 @@ cleanup, abort, pause, or resume behavior when those behaviors apply.
 _Avoid_: service registry, desktop lifecycle service
 
 **Startup Gate**:
-A named performance boundary that controls what can block first chat paint.
-_Avoid_: lifecycle phase, OS background phase
-
-**Chat Stream Transport**:
-The runtime fetch capability used by the current Pi and AI SDK provider paths to receive streaming
-chat responses.
-_Avoid_: provider parser, message renderer
+A named performance boundary that controls what can block first app paint.
+_Avoid_: OS background phase
 
 **Markdown Renderer**:
 The message rendering boundary for Markdown-capable assistant Message Parts, regardless of whether the Message is currently streaming or already persisted.

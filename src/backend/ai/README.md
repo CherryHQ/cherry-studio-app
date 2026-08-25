@@ -1,12 +1,12 @@
 # Mobile AI Adapters
 
-Portable AI behavior lives in the private source package `@cherrystudio/ai-runtime`. App code may
-use only its `messages`, `provider`, `runtime`, `tools`, and `utils` subpaths. This directory owns
-the mobile platform and application-service boundaries around that package.
+Portable AI behavior lives in the private source package `@cherrystudio/ai-runtime`. This directory
+owns the mobile platform and application-service boundaries around that package.
 
 ## Backend Ownership
 
-- `AiService.ts` is the private backend AI entry point and preserves its existing app contract.
+- `AiService.ts` owns non-conversation generation, model listing, model checks, and image generation.
+  Callers supply an explicit `uniqueModelId`; it does not resolve Agent state or stream chat turns.
 - `agent/` owns the independent Agent Runtime contract, its FakeRuntime test double, and the Pi
   Runtime implementation (`docs/references/agent/agent-runtime.md`). This boundary must not import
   application protocol types, persistence, React, or Expo modules (ESLint-enforced).
@@ -16,30 +16,22 @@ the mobile platform and application-service boundaries around that package.
   a Runtime registry or implementation router.
 - `provider/` injects Expo environment values and app headers, then builds provider configuration
   from mobile data services.
-- `runtime/pi/` owns the current transitional Topic Chat bridge from Pi events to the existing
-  `UIMessageChunk` stream. It is text/reasoning-only and separate from the Pi Agent Runtime in
-  `agent/pi/`.
-- `runtime/aiSdk/` retains the current fallback Agent construction and request parameter
-  orchestration that needs Expo Crypto, preferences, provider services, tools, and logging. It is
-  not the target local Agent engine.
-- `streamManager/` owns chat lifecycle, persistence, topic naming, approval state, and snapshots.
-- `messages/` resolves managed and device-local attachments through Expo FileSystem.
-- `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, and runtime projection.
-- `tools/` owns the device scope, diagnostics adapter, ToolResolver, Web tools, and Calendar,
-  Health, Location, and Reminder implementations.
+- `runtime/aiSdk/` builds the AI SDK request parameters used by `AiService`; it is not a conversation
+  runtime and owns no persisted turn state.
+- `mcp/` owns the mobile Streamable HTTP transport, connection lifecycle, server status, and tool
+  discovery used by MCP settings.
 - `hooks/` connects portable usage semantics to the mobile billing record service.
 - `utils/` contains only the Expo UUID and mobile prompt-environment adapters.
 
-Pure message rules, provider implementations, request types, parameter policies, tool registry and
-meta-tools, loop plugins and observers, prompts, and stream helpers must not be duplicated here.
+Pure provider implementations, request types, and parameter policies must not be duplicated here.
 
 ## Pi-First Direction
 
-Pi is the sole target owner of local conversation state and the model/tool loop. The Mobile Agent
-Host owns Agent configuration, structured transcript persistence, permissions, approval policy, and
-the immutable tool snapshot injected for each turn. `tools: []` is ordinary conversation;
-configured tools are adapted from an application-owned contract into Pi tools. AI SDK may continue
-to serve non-Agent generation and provider utilities, but it must not become a parallel Chat Runtime.
+Pi is the sole owner of local conversation execution. The Mobile Agent Host owns Agent
+configuration, structured transcript persistence, cancellation, and protocol projection. Version 1
+uses no application tools; adding them requires an Agent-owned contract and Pi adapter. AI SDK may
+continue to serve non-Agent generation and provider utilities, but it must not become a parallel
+conversation runtime.
 
 ## Sync Trust
 

@@ -11,12 +11,6 @@
       "import": "./src/data/types/index.ts",
       "default": "./src/data/types/index.ts"
     },
-    "./ai/transport": {
-      "types": "./src/ai/transport/index.ts",
-      "react-native": "./src/ai/transport/index.ts",
-      "import": "./src/ai/transport/index.ts",
-      "default": "./src/ai/transport/index.ts"
-    },
     "./*": {
       "types": "./src/*.ts",
       "react-native": "./src/*.ts",

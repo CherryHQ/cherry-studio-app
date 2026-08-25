@@ -44,18 +44,18 @@ workflow interface and observable results.
 - Keep resource-specific composition in the owning frontend hook or feature, not in shared or
   backend code.
 
-New Message Part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts` (the
-transitional home of the entity types `packages/ai-runtime` imports); render
+New Agent message-part vocabulary belongs in `packages/universal/src/data/types/uiParts.ts` (the
+transitional home of types `packages/ai-runtime` imports); render
 dispatch belongs in `src/frontend/components/messages/parts/MessagePartRenderer.tsx`. A new JSON
-part does not require a table migration, but FTS indexes only text parts.
+part does not require a table migration; Agent Session FTS indexes only searchable text parts.
 
 ## Add AI Or Backend Service Behavior
 
 Pi conversation adaptation and AI SDK provider/service adapters live under `src/backend/ai`. Device
 and third-party capabilities live in their owning domain under `src/backend/services`, such as
 `permissions`, `models`, and `webSearch`.
-Cross-layer AI tool and transport rules belong in `packages/universal/src/ai`
-(`@cherrystudio/universal/ai`). General pure helpers used by both sides belong in `src/shared/utils`
+Portable provider/runtime rules belong in `packages/ai-runtime`. General pure helpers used by both
+sides belong in `src/shared/utils`
 when they are mobile-native, or in `packages/universal/src/utils` when they mirror a desktop helper,
 including model capability checks.
 
@@ -64,17 +64,15 @@ mobile-only owners by role: `Module`, `Runtime`, `Session`, `Client`, `Adapter`,
 add an `Impl` suffix or a forwarding `Service` wrapper. See
 [Runtime Ownership](../references/runtime-ownership.md#role-names).
 
-The current Chat path resolves app-level tools through `ToolResolver` and attaches them in
-`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`; this is migration state, not the target
-extension point. New Agent tools use an application-owned JSON-Schema tool contract, are filtered by
-configuration, platform availability, permission, and approval policy for each turn, and are then
-adapted into Pi tools. Do not expose AI SDK `ToolSet` as the Agent Host contract. Provider-native
-plugins remain provider adapter concerns. Add a registry only when the existing explicit assembly
-becomes measurably hard to maintain.
+Version 1 Agent turns are tool-less. New Agent tools require an application-owned JSON-Schema
+contract, configuration and permission policy, plus a Pi adapter. Do not expose AI SDK `ToolSet` as
+the Agent Host contract or restore the retired Chat `ToolResolver`. Provider-native plugins remain
+provider adapter concerns. Add a registry only when explicit assembly becomes measurably hard to
+maintain.
 
-The external web-search stack is the full workflow precedent: desktop-aligned provider drivers and
-`WebSearchService` under `backend/services`, AI tool integration under `backend/ai`, a narrow
-`WebSearchModule` for provider checks, frontend settings, and thin Expo Router routes.
+The external web-search stack is a workflow precedent: desktop-aligned provider drivers and
+`WebSearchService` under `backend/services`, a narrow `WebSearchModule` for provider checks,
+frontend settings, and thin Expo Router routes. It is not currently attached to Agent turns.
 
 ## Add UI
 

@@ -5,8 +5,8 @@ setting helpers.
 
 ## Public Interface
 
-- `ModelPickerDrawer` is the only model-selection view. Chat, painting, provider connectivity
-  checks, model settings, and assistant editing all open this bottom sheet. Its header search button
+- `ModelPickerDrawer` is the only model-selection view. Agent editing, painting, provider
+  connectivity checks, and model settings all open this bottom sheet. Its header search button
   opens app search; the sheet itself remains a model catalog, not a search page.
 - `ModelPickerList` renders the grouped selectable model rows inside that sheet. A long visible
   model list adds a right-side fast scroller with one distinct marker per provider. Provider markers
