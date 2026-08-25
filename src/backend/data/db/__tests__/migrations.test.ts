@@ -45,6 +45,9 @@ describe('bundled SQLite migrations', () => {
             .all() as { name: string }[]
         ).map((table) => table.name),
       ).toEqual([
+        'agent',
+        'agent_session',
+        'agent_session_message',
         'ai_usage_record',
         'app_state',
         'assistant',
@@ -97,6 +100,48 @@ describe('bundled SQLite migrations', () => {
       expect(columnNames(database, 'topic')).toContain('trace_id');
       expect(columnNames(database, 'message')).not.toContain('trace_id');
       expect(columnNames(database, 'user_model')).not.toContain('owned_by');
+
+      // Agent persistence (docs/references/agent/agent-persistence.md): three
+      // tables, no turn table, no approval table, no workspace or runtime id.
+      expect(columnNames(database, 'agent')).toEqual([
+        'id',
+        'name',
+        'description',
+        'instructions',
+        'avatar',
+        'model_id',
+        'settings',
+        'order_key',
+        'created_at',
+        'updated_at',
+        'deleted_at',
+      ]);
+      expect(columnNames(database, 'agent_session')).toEqual([
+        'id',
+        'agent_id',
+        'title',
+        'title_is_manual',
+        'execution_target',
+        'last_activity_at',
+        'created_at',
+        'updated_at',
+      ]);
+      expect(columnNames(database, 'agent_session_message')).toEqual([
+        'id',
+        'session_id',
+        'turn_id',
+        'role',
+        'data',
+        'status',
+        'usage',
+        'error',
+        'model_id',
+        'message_snapshot',
+        'searchable_text',
+        'fts_rowid',
+        'created_at',
+        'updated_at',
+      ]);
 
       expect(indexNames(database, 'mcp_server')).toEqual(['mcp_server_is_enabled_idx']);
       expect(indexList(database, 'message')).toEqual(
@@ -155,6 +200,75 @@ describe('bundled SQLite migrations', () => {
       // No association table remains: a painting owns its file ids in `files`,
       // so deleting a file cannot rewrite the receipt that points at it.
       expect(getForeignKeys(database, 'painting')).toEqual([]);
+
+      // Agent delete semantics: agents soft-delete first (RESTRICT guards hard
+      // cleanup); sessions hard-delete and cascade their messages.
+      expect(getForeignKeys(database, 'agent_session')).toEqual([
+        expect.objectContaining({ from: 'agent_id', on_delete: 'RESTRICT', table: 'agent' }),
+      ]);
+      expect(getForeignKeys(database, 'agent_session_message')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            from: 'session_id',
+            on_delete: 'CASCADE',
+            table: 'agent_session',
+          }),
+          expect.objectContaining({ from: 'model_id', on_delete: 'SET NULL', table: 'user_model' }),
+        ]),
+      );
+      // Invariant 1 (agent-protocol.md) is a database constraint: at most one
+      // unsettled assistant message per session.
+      expect(indexList(database, 'agent_session_message')).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ name: 'agent_session_message_active_turn_uniq', unique: 1 }),
+        ]),
+      );
+      expect(getSchemaSql(database, 'index', 'agent_session_message_active_turn_uniq')).toContain(
+        "'pending', 'streaming'",
+      );
+
+      database.exec(`
+        INSERT INTO agent (id, name, settings, order_key, created_at, updated_at)
+        VALUES ('agent-1', 'Agent', '{}', 'a0', 1, 1);
+        INSERT INTO agent_session (id, agent_id, last_activity_at, created_at, updated_at)
+        VALUES ('session-1', 'agent-1', 1, 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-user', 'session-1', 'turn-1', 'user', '{"version":1,"parts":[]}', 'success', 1, 1);
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-assistant', 'session-1', 'turn-1', 'assistant', '{"version":1,"parts":[]}', 'pending', 1, 1);
+      `);
+      // A second unsettled assistant row in the same session is the reservation
+      // race the partial unique index exists to reject.
+      expect(() =>
+        database.exec(`
+          INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+          VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'pending', 2, 2);
+        `),
+      ).toThrow(/UNIQUE/);
+      // Settling the first frees the slot for the next reservation.
+      database.exec(`
+        UPDATE agent_session_message SET status = 'success' WHERE id = 'm-assistant';
+        INSERT INTO agent_session_message (id, session_id, turn_id, role, data, status, created_at, updated_at)
+        VALUES ('m-second', 'session-1', 'turn-2', 'assistant', '{"version":1,"parts":[]}', 'streaming', 2, 2);
+      `);
+      expect(() =>
+        database.exec(
+          "INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at) VALUES ('m-bad', 'session-1', 'root', '{}', 'success', 3, 3)",
+        ),
+      ).toThrow(/agent_session_message_role_check/);
+      expect(() =>
+        database.exec(
+          "INSERT INTO agent_session_message (id, session_id, role, data, status, created_at, updated_at) VALUES ('m-bad', 'session-1', 'assistant', '{}', 'paused', 3, 3)",
+        ),
+      ).toThrow(/agent_session_message_status_check/);
+      // RESTRICT: an agent with sessions refuses hard deletion...
+      expect(() => database.exec("DELETE FROM agent WHERE id = 'agent-1'")).toThrow();
+      // ...while deleting the session cascades its messages.
+      database.exec("DELETE FROM agent_session WHERE id = 'session-1'");
+      expect(database.prepare('SELECT count(*) AS count FROM agent_session_message').get()).toEqual(
+        { count: 0 },
+      );
+      database.exec("DELETE FROM agent WHERE id = 'agent-1'");
 
       database.exec(`
         INSERT INTO assistant (id, name, emoji, settings, order_key, created_at, updated_at)

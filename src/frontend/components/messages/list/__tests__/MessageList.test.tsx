@@ -1,6 +1,6 @@
 import type { LegendListRef } from '@legendapp/list/react-native';
 import type { ReactNode, Ref } from 'react';
-import type { LayoutChangeEvent } from 'react-native';
+import { Platform, type LayoutChangeEvent } from 'react-native';
 import type { SharedValue } from 'react-native-reanimated';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -30,6 +30,7 @@ type MockLegendListProps = {
   extraData?: unknown;
   freeze?: unknown;
   getItemType?: (item: MessageListItem) => string;
+  keyboardDismissMode?: string;
   keyboardLiftBehavior?: string;
   keyboardOffset?: number;
   maintainVisibleContentPosition?: unknown;
@@ -465,6 +466,21 @@ describe('MessageList anchoring and manual scrolling', () => {
       paddingBottom: 80,
       paddingTop: 12,
     });
+  });
+
+  test('uses a keyboard dismissal mode supported by Android', () => {
+    const originalPlatformOS = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'android' });
+
+    try {
+      act(() => {
+        renderer = create(<MessageList {...listProps([createMessage('user-1', 'user')])} />);
+      });
+
+      expect(mockLatestListProps?.keyboardDismissMode).toBe('on-drag');
+    } finally {
+      Object.defineProperty(Platform, 'OS', { configurable: true, value: originalPlatformOS });
+    }
   });
 
   test('never lets the reveal gate scroll away from a finger on the list', () => {

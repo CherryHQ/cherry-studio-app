@@ -64,15 +64,6 @@ export function ComposerMenu({ children }: PropsWithChildren) {
   }, [addAttachments, dismissField]);
   const openPhotoLibrary = useCallback(async () => {
     await dismissField();
-    // `false` means "don't ask for write access". Limited access needs no
-    // special handling here: the picker runs out of process and returns what
-    // was chosen in it, whether or not the app can see the rest of the library.
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync(false);
-
-    if (!permission.granted) {
-      return;
-    }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsMultipleSelection: true,
       mediaTypes: ['images'],

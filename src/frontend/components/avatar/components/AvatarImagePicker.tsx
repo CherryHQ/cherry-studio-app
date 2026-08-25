@@ -38,13 +38,12 @@ export function AvatarImagePicker({
 
       isSelectingRef.current = true;
       try {
-        const permission =
-          source === 'camera'
-            ? await ImagePicker.requestCameraPermissionsAsync()
-            : await ImagePicker.requestMediaLibraryPermissionsAsync(false);
+        if (source === 'camera') {
+          const permission = await ImagePicker.requestCameraPermissionsAsync();
 
-        if (!permission.granted) {
-          return;
+          if (!permission.granted) {
+            return;
+          }
         }
 
         const commonOptions = {

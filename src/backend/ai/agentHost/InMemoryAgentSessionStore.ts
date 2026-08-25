@@ -8,21 +8,18 @@ import {
   ServicePhase,
 } from '@/backend/core/lifecycle';
 import type {
-  AgentApprovalView,
   AgentErrorView,
   AgentMessagePart,
   AgentMessageView,
   AgentSessionView,
-  AgentTurnView,
 } from '@/shared/contracts/agent';
 
-import type { AgentSessionStore, FinalizeTurnInput, ReserveTurnResult } from './AgentSessionStore';
+import type {
+  AgentSessionStore,
+  FinalizeAssistantMessageInput,
+  ReserveSubmissionResult,
+} from './AgentSessionStore';
 
-const NON_TERMINAL_TURN_STATUSES = new Set<AgentTurnView['status']>([
-  'running',
-  'awaiting-approval',
-  'cancelling',
-]);
 const UNSETTLED_MESSAGE_STATUSES = new Set<AgentMessageView['status']>(['pending', 'streaming']);
 
 function nowIso(): string {
@@ -34,14 +31,19 @@ function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
+/** One stored message: the view plus the turn-level error column. */
+type StoredMessage = {
+  view: AgentMessageView;
+  error: AgentErrorView | null;
+};
+
 /**
  * Process-local reference adapter for {@link AgentSessionStore}.
  *
  * Its state belongs to one `ApplicationHost` generation and is not durable
  * across app restarts. It remains useful as the Host's architecture-test
  * adapter after durable Mobile Agent persistence lands. Production composition
- * selects it only while that persistence design is pending under
- * https://github.com/CherryHQ/cherry-studio-app/issues/568.
+ * selects it only while that persistence (agent-persistence.md) is pending.
  *
  * @experimental Do not infer restart recovery from this adapter.
  */
@@ -50,16 +52,12 @@ function cloneJson<T>(value: T): T {
 @AppStatePolicy('not-applicable')
 export class InMemoryAgentSessionStore extends BaseService implements AgentSessionStore {
   private readonly sessions = new Map<string, AgentSessionView>();
-  private readonly turns = new Map<string, AgentTurnView>();
   /** Insertion-ordered per Session, which is the transcript order. */
-  private readonly messages = new Map<string, AgentMessageView[]>();
-  private readonly approvals = new Map<string, AgentApprovalView>();
+  private readonly messages = new Map<string, StoredMessage[]>();
 
   protected override onDestroy(): void {
     this.sessions.clear();
-    this.turns.clear();
     this.messages.clear();
-    this.approvals.clear();
   }
 
   async createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView> {
@@ -103,24 +101,18 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       return false;
     }
     this.messages.delete(sessionId);
-    for (const [turnId, turn] of this.turns) {
-      if (turn.sessionId === sessionId) {
-        this.turns.delete(turnId);
-      }
-    }
-    for (const [approvalId, approval] of this.approvals) {
-      if (approval.sessionId === sessionId) {
-        this.approvals.delete(approvalId);
-      }
-    }
     return true;
   }
 
-  async reserveTurn(input: {
+  async reserveSubmission(input: {
     sessionId: string;
     userParts: AgentMessagePart[];
-  }): Promise<ReserveTurnResult> {
-    // Synchronous section: the three writes commit together or not at all.
+  }): Promise<ReserveSubmissionResult> {
+    const transcript = this.messages.get(input.sessionId);
+    if (!transcript) {
+      throw new Error(`Cannot reserve a submission for an unknown session: ${input.sessionId}`);
+    }
+    // Synchronous section: both message writes commit together or not at all.
     const timestamp = nowIso();
     const turnId = uuidv7();
     const userMessage: AgentMessageView = {
@@ -145,99 +137,46 @@ export class InMemoryAgentSessionStore extends BaseService implements AgentSessi
       createdAt: timestamp,
       updatedAt: timestamp,
     };
-    const turn: AgentTurnView = {
-      id: turnId,
-      sessionId: input.sessionId,
-      status: 'running',
-      assistantMessageId: assistantMessage.id,
-      error: null,
-      startedAt: timestamp,
-      endedAt: null,
-    };
-    const transcript = this.messages.get(input.sessionId);
-    if (!transcript) {
-      throw new Error(`Cannot reserve a turn for an unknown session: ${input.sessionId}`);
-    }
-    transcript.push(userMessage, assistantMessage);
-    this.turns.set(turnId, turn);
-    return cloneJson({ turn, userMessage, assistantMessage });
-  }
-
-  async getTurn(turnId: string): Promise<AgentTurnView | null> {
-    const turn = this.turns.get(turnId);
-    return turn ? cloneJson(turn) : null;
+    transcript.push({ view: userMessage, error: null }, { view: assistantMessage, error: null });
+    return cloneJson({ turnId, userMessage, assistantMessage });
   }
 
   async listMessages(sessionId: string): Promise<AgentMessageView[]> {
-    return cloneJson(this.messages.get(sessionId) ?? []);
+    return cloneJson((this.messages.get(sessionId) ?? []).map((stored) => stored.view));
   }
 
-  async setTurnStatus(
-    turnId: string,
-    status: 'running' | 'awaiting-approval' | 'cancelling',
-  ): Promise<AgentTurnView | null> {
-    const turn = this.turns.get(turnId);
-    if (!turn) {
-      return null;
+  async finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView> {
+    for (const transcript of this.messages.values()) {
+      const stored = transcript.find((entry) => entry.view.id === input.assistantMessageId);
+      if (!stored) {
+        continue;
+      }
+      // Synchronous section: message terminal state settles atomically
+      // (invariant 5).
+      stored.view = {
+        ...stored.view,
+        status: input.status,
+        parts: cloneJson(input.parts),
+        usage: input.usage === null ? null : cloneJson(input.usage),
+        updatedAt: nowIso(),
+      };
+      stored.error = input.error === null ? null : cloneJson(input.error);
+      return cloneJson(stored.view);
     }
-    const updated: AgentTurnView = { ...turn, status };
-    this.turns.set(turnId, updated);
-    return cloneJson(updated);
-  }
-
-  async finalizeTurn(input: FinalizeTurnInput): Promise<{
-    turn: AgentTurnView;
-    assistantMessage: AgentMessageView;
-  }> {
-    const turn = this.turns.get(input.turnId);
-    if (!turn) {
-      throw new Error(`Cannot finalize an unknown turn: ${input.turnId}`);
-    }
-    const transcript = this.messages.get(turn.sessionId) ?? [];
-    const messageIndex = transcript.findIndex((message) => message.id === input.assistantMessageId);
-    if (messageIndex < 0) {
-      throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
-    }
-    // Synchronous section: message and turn settle together (invariant 5).
-    const assistantMessage: AgentMessageView = {
-      ...transcript[messageIndex],
-      status: input.messageStatus,
-      parts: cloneJson(input.parts),
-      usage: input.usage === null ? null : cloneJson(input.usage),
-      updatedAt: nowIso(),
-    };
-    const finalTurn: AgentTurnView = {
-      ...turn,
-      status: input.turnStatus,
-      error: input.turnError === null ? null : cloneJson(input.turnError),
-      endedAt: nowIso(),
-    };
-    transcript[messageIndex] = assistantMessage;
-    this.turns.set(finalTurn.id, finalTurn);
-    return cloneJson({ turn: finalTurn, assistantMessage });
-  }
-
-  async upsertApproval(approval: AgentApprovalView): Promise<void> {
-    this.approvals.set(approval.id, cloneJson(approval));
+    throw new Error(`Cannot finalize an unknown message: ${input.assistantMessageId}`);
   }
 
   async reconcileInterrupted(error: AgentErrorView): Promise<number> {
     let count = 0;
-    for (const [turnId, turn] of this.turns) {
-      if (NON_TERMINAL_TURN_STATUSES.has(turn.status)) {
-        this.turns.set(turnId, {
-          ...turn,
-          status: 'interrupted',
-          error: cloneJson(error),
-          endedAt: nowIso(),
-        });
-        count += 1;
-      }
-    }
     for (const transcript of this.messages.values()) {
-      for (const [index, message] of transcript.entries()) {
-        if (UNSETTLED_MESSAGE_STATUSES.has(message.status)) {
-          transcript[index] = { ...message, status: 'interrupted', updatedAt: nowIso() };
+      for (const stored of transcript) {
+        if (!UNSETTLED_MESSAGE_STATUSES.has(stored.view.status)) {
+          continue;
+        }
+        stored.view = { ...stored.view, status: 'interrupted', updatedAt: nowIso() };
+        if (stored.view.role === 'assistant') {
+          stored.error = cloneJson(error);
+          count += 1;
         }
       }
     }

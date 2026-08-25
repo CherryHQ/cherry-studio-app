@@ -45,7 +45,8 @@ export const services = {
   McpRuntimeService,
   AiService,
   ChatRuntime,
-  // Architecture-slice adapter; durable Mobile Agent persistence is tracked by #568.
+  // Keep Agent persistence inactive until the Agent/Pi business integration.
+  // The SQLite adapter and schema remain available as foundation code.
   AgentSessionStore: InMemoryAgentSessionStore,
   MobileAgentHost,
   JobHandlerRegistry,

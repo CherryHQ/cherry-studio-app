@@ -113,18 +113,25 @@ export function BottomSheet(props: BottomSheetProps) {
     setIndex(CLOSED_INDEX);
   }, [dismissible]);
 
+  const handleHardwareBackPress = useCallback(() => {
+    if (backAction) {
+      backAction.onPress();
+    } else {
+      requestClose();
+    }
+
+    return true;
+  }, [backAction, requestClose]);
+
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      requestClose();
-      return true;
-    });
+    const subscription = BackHandler.addEventListener('hardwareBackPress', handleHardwareBackPress);
 
     return () => subscription.remove();
-  }, [open, requestClose]);
+  }, [handleHardwareBackPress, open]);
 
   const handleIndexChange = useCallback(
     (nextIndex: number) => {

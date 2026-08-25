@@ -1,73 +1,66 @@
 import type {
-  AgentApprovalView,
   AgentErrorView,
   AgentMessagePart,
   AgentMessageView,
   AgentSessionView,
-  AgentTurnView,
   AgentUsageView,
 } from '@/shared/contracts/agent';
 
-export type ReserveTurnResult = {
-  turn: AgentTurnView;
+export type ReserveSubmissionResult = {
+  /** Fresh correlation id shared by the reserved user/assistant pair. */
+  turnId: string;
   userMessage: AgentMessageView;
   assistantMessage: AgentMessageView;
 };
 
-export type FinalizeTurnInput = {
-  turnId: string;
-  turnStatus: 'completed' | 'failed' | 'cancelled' | 'interrupted';
-  turnError: AgentErrorView | null;
+export type FinalizeAssistantMessageInput = {
   assistantMessageId: string;
-  messageStatus: 'success' | 'error' | 'cancelled' | 'interrupted';
+  status: 'success' | 'error' | 'cancelled' | 'interrupted';
   parts: AgentMessagePart[];
   usage: AgentUsageView | null;
+  /**
+   * Turn-level error, persisted beside the message for the Turn projection
+   * (agent-persistence.md). It is not part of the message view.
+   */
+  error: AgentErrorView | null;
 };
 
 /**
- * Host-owned storage port for Agent Sessions, turns, messages, and approvals.
+ * Host-owned storage port for Agent Sessions and their linear transcripts
+ * (docs/references/agent/agent-persistence.md).
  *
- * Multi-record operations are atomic at this boundary. The Host depends only
- * on these guarantees; lifecycle composition selects the concrete adapter.
+ * The store persists messages only. The Turn is a Host projection: live turn
+ * state (`running`/`awaiting-approval`/`cancelling`) and pending approvals are
+ * process-local Host state by design, and terminal turn facts live on the
+ * assistant message row. Multi-record operations are atomic at this boundary.
  */
 export interface AgentSessionStore {
   createSession(input: { agentId: string; title?: string }): Promise<AgentSessionView>;
   getSession(sessionId: string): Promise<AgentSessionView | null>;
   renameSession(sessionId: string, title: string): Promise<AgentSessionView | null>;
-  /** Deletes the Session's turns, messages, and approvals with it. */
+  /** Deletes the Session's messages with it. */
   deleteSession(sessionId: string): Promise<boolean>;
 
   /**
-   * Atomically reserves the user message, assistant placeholder, and running
-   * turn before execution starts (protocol invariant 2).
+   * Atomically reserves the user message and assistant placeholder under a
+   * fresh shared turnId before execution starts (protocol invariant 2).
    */
-  reserveTurn(input: {
+  reserveSubmission(input: {
     sessionId: string;
     userParts: AgentMessagePart[];
-  }): Promise<ReserveTurnResult>;
+  }): Promise<ReserveSubmissionResult>;
 
-  getTurn(turnId: string): Promise<AgentTurnView | null>;
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 
-  setTurnStatus(
-    turnId: string,
-    status: 'running' | 'awaiting-approval' | 'cancelling',
-  ): Promise<AgentTurnView | null>;
-
   /**
-   * Atomically settles the assistant message and turn before terminal events
-   * publish (protocol invariant 5).
+   * Atomically settles the assistant message's terminal state before terminal
+   * events publish (protocol invariant 5).
    */
-  finalizeTurn(input: FinalizeTurnInput): Promise<{
-    turn: AgentTurnView;
-    assistantMessage: AgentMessageView;
-  }>;
-
-  upsertApproval(approval: AgentApprovalView): Promise<void>;
+  finalizeAssistantMessage(input: FinalizeAssistantMessageInput): Promise<AgentMessageView>;
 
   /**
-   * Marks every available unfinished turn and unsettled message interrupted.
-   * Returns the number of reconciled turns.
+   * Marks every unsettled message interrupted and stamps the turn-level error.
+   * Returns the number of reconciled assistant placeholders.
    */
   reconcileInterrupted(error: AgentErrorView): Promise<number>;
 }

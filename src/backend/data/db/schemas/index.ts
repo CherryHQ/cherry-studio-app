@@ -1,3 +1,6 @@
+import { agentTable } from './agent';
+import { agentSessionTable } from './agentSession';
+import { agentSessionMessageTable } from './agentSessionMessage';
 import { aiUsageRecordTable } from './aiUsageRecord';
 import { appStateTable } from './appState';
 import { assistantTable } from './assistant';
@@ -12,6 +15,9 @@ import { topicTable } from './topic';
 import { userModelTable } from './userModel';
 import { userProviderTable } from './userProvider';
 
+export * from './agent';
+export * from './agentSession';
+export * from './agentSessionMessage';
 export * from './aiUsageRecord';
 export * from './assistant';
 export * from './assistantRelations';
@@ -37,6 +43,9 @@ export type TopicRow = typeof topicTable.$inferSelect;
 export type InsertTopicRow = typeof topicTable.$inferInsert;
 
 export const schema = {
+  agentTable,
+  agentSessionTable,
+  agentSessionMessageTable,
   aiUsageRecordTable,
   appStateTable,
   assistantMcpServerTable,

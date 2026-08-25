@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { BackHandler, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '..';
 
 let mockBottomSheetProps: Record<string, unknown> = {};
+let mockHardwareBackPress: (() => boolean | null | undefined) | undefined;
 
 jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
@@ -31,15 +32,24 @@ jest.mock('uniwind', () => ({
 }));
 
 describe('BottomSheet', () => {
+  let backHandlerSpy: jest.SpyInstance;
   let renderer: ReactTestRenderer | undefined;
 
   beforeEach(() => {
     mockBottomSheetProps = {};
+    mockHardwareBackPress = undefined;
+    backHandlerSpy = jest
+      .spyOn(BackHandler, 'addEventListener')
+      .mockImplementation((_event, handler) => {
+        mockHardwareBackPress = () => handler({ type: 'hardwareBackPress', timeStamp: Date.now() });
+        return { remove: jest.fn() };
+      });
   });
 
   afterEach(() => {
     act(() => renderer?.unmount());
     renderer = undefined;
+    backHandlerSpy.mockRestore();
   });
 
   test('reports one user dismissal after the close motion settles', () => {
@@ -130,6 +140,31 @@ describe('BottomSheet', () => {
 
     act(() => renderer?.root.findByProps({ accessibilityLabel: 'Back' }).props.onPress());
     expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  test('routes Android hardware back through the optional second-level action', () => {
+    const onBack = jest.fn();
+
+    act(() => {
+      renderer = create(
+        <BottomSheet
+          backAction={{ accessibilityLabel: 'Back', onPress: onBack }}
+          onClose={jest.fn()}
+          open
+          size="medium"
+          title="Size"
+        >
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    act(() => {
+      expect(mockHardwareBackPress?.()).toBe(true);
+    });
+
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(mockBottomSheetProps.index).toBe(1);
   });
 
   test('updates the native height when the semantic size changes', () => {

@@ -22,7 +22,6 @@ const mockLaunchCamera = jest.fn();
 const mockLaunchImageLibrary = jest.fn();
 const mockPickDocument = jest.fn();
 const mockRequestCameraPermission = jest.fn();
-const mockRequestMediaLibraryPermission = jest.fn();
 const mockKeyboardDismiss = KeyboardController.dismiss as jest.MockedFunction<
   typeof KeyboardController.dismiss
 >;
@@ -55,8 +54,6 @@ jest.mock('expo-image-picker', () => ({
   launchCameraAsync: (...args: unknown[]) => mockLaunchCamera(...args),
   launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
   requestCameraPermissionsAsync: (...args: unknown[]) => mockRequestCameraPermission(...args),
-  requestMediaLibraryPermissionsAsync: (...args: unknown[]) =>
-    mockRequestMediaLibraryPermission(...args),
 }));
 
 jest.mock('expo-document-picker', () => ({
@@ -81,7 +78,6 @@ describe('ComposerMenu', () => {
     mockComposerState = undefined;
     mockKeyboardDismiss.mockResolvedValue(undefined);
     mockRequestCameraPermission.mockResolvedValue({ granted: true });
-    mockRequestMediaLibraryPermission.mockResolvedValue({ granted: true });
     mockLaunchCamera.mockResolvedValue({ canceled: true });
     mockLaunchImageLibrary.mockResolvedValue({ canceled: true });
     mockPickDocument.mockResolvedValue({ canceled: true });
@@ -101,7 +97,6 @@ describe('ComposerMenu', () => {
 
     expect(mockKeyboardDismiss).toHaveBeenCalledTimes(1);
     expect(mockBlur).toHaveBeenCalledTimes(1);
-    expect(mockRequestMediaLibraryPermission).not.toHaveBeenCalled();
     expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -110,7 +105,6 @@ describe('ComposerMenu', () => {
       await flushPromises();
     });
 
-    expect(mockRequestMediaLibraryPermission).toHaveBeenCalledWith(false);
     expect(mockLaunchImageLibrary).toHaveBeenCalledTimes(1);
     expect(mockComposerState?.attachments).toEqual([]);
     expect(mockFocus).not.toHaveBeenCalled();
