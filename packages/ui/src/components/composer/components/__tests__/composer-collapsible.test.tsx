@@ -74,6 +74,8 @@ describe('Composer.Collapsible', () => {
     // The caller has already stopped passing it; without the held frame this
     // would be an empty box animating down to nothing.
     expect(tree.root.findAllByType(Text)).toHaveLength(1);
+    expect(row(tree).props.accessibilityElementsHidden).toBe(true);
+    expect(row(tree).props.importantForAccessibility).toBe('no-hide-descendants');
     expect(row(tree).props.pointerEvents).toBe('none');
   });
 

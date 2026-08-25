@@ -1,7 +1,16 @@
 import { Composer } from '@cherrystudio/ui/components';
+import { duration, easing } from '@cherrystudio/ui/motion';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 
 import {
   ComposerAttachments,
@@ -60,7 +69,14 @@ type ChatInputProps = {
 // This is a visual constraint, not an editor-mode switch. Android's enriched
 // input measures multiline content independently from its native `isSingleLine`
 // flag, so changing that flag on focus can leave its selectable frame stale.
-const restingInputStyle = { height: 32 } as const;
+const restingInputHeight = 32;
+const restingActionSlotWidth = restingInputHeight + 8;
+const restingInputStyle = { height: restingInputHeight } as const;
+const focusTransitionMotion = {
+  duration: duration.base,
+  easing: easing.settle,
+  reduceMotion: ReduceMotion.System,
+} as const;
 
 // 诊断埋点：量化输入框「真实 model 名」解析耗时（pref 段 + model DB 段）。`[PERF]` 前缀。
 const perfLog = loggerService.withContext('ChatPerf');
@@ -106,12 +122,34 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
 
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isInputActive, setIsInputActive] = useState(false);
+  const focusProgress = useSharedValue(0);
+  const restingActionSlotStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(focusProgress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
+    transform: [
+      {
+        scale: interpolate(focusProgress.value, [0, 1], [1, 0.88], Extrapolation.CLAMP),
+      },
+      {
+        translateY: interpolate(focusProgress.value, [0, 1], [0, 4], Extrapolation.CLAMP),
+      },
+    ],
+    width: interpolate(
+      focusProgress.value,
+      [0, 1],
+      [restingActionSlotWidth, 0],
+      Extrapolation.CLAMP,
+    ),
+  }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
   const handleInputBlur = useCallback(() => setIsInputActive(false), []);
   const handleInputFocus = useCallback(() => setIsInputActive(true), []);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
   const { inputRef } = useComposerMeta();
+
+  useEffect(() => {
+    focusProgress.set(withTiming(isInputActive ? 1 : 0, focusTransitionMotion));
+  }, [focusProgress, isInputActive]);
 
   const persistWebSearch = useCallback(
     (targetAssistantId: string, enabled: boolean) =>
@@ -249,8 +287,16 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
             >
               <ComposerAttachments />
               {/* Keep one native field in one slot; only the controls change around it. */}
-              <View className="flex-row items-center gap-2">
-                {isInputActive ? null : menu}
+              <View className="flex-row items-center">
+                <Animated.View
+                  accessibilityElementsHidden={isInputActive}
+                  className="items-start"
+                  importantForAccessibility={isInputActive ? 'no-hide-descendants' : 'auto'}
+                  pointerEvents={isInputActive ? 'none' : 'auto'}
+                  style={restingActionSlotStyle}
+                >
+                  {menu}
+                </Animated.View>
                 <View className="min-w-0 flex-1">
                   <ComposerField
                     onBlur={handleInputBlur}
@@ -258,31 +304,41 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
                     style={isInputActive ? undefined : restingInputStyle}
                   />
                 </View>
-                {isInputActive ? null : <Composer.Send />}
+                <Animated.View
+                  accessibilityElementsHidden={isInputActive}
+                  className="items-end"
+                  importantForAccessibility={isInputActive ? 'no-hide-descendants' : 'auto'}
+                  pointerEvents={isInputActive ? 'none' : 'auto'}
+                  style={restingActionSlotStyle}
+                >
+                  <Composer.Send />
+                </Animated.View>
               </View>
-              {isInputActive ? (
-                <Composer.Toolbar>
-                  {menu}
-                  <ComposerModelPill
-                    icon={
-                      selectedModel ? (
-                        <ModelPickerIcon
-                          model={selectedModel}
-                          provider={selectedModelProvider}
-                          providerIconSize={18}
-                          size={20}
-                        />
-                      ) : undefined
-                    }
-                    label={selectedModelLabel}
-                    onPress={openModelPicker}
-                  />
-                  <View className="ml-auto flex-row items-center gap-2">
-                    {effortGauge}
-                    <Composer.Send />
-                  </View>
-                </Composer.Toolbar>
-              ) : null}
+              <Composer.Collapsible>
+                {isInputActive ? (
+                  <Composer.Toolbar>
+                    {menu}
+                    <ComposerModelPill
+                      icon={
+                        selectedModel ? (
+                          <ModelPickerIcon
+                            model={selectedModel}
+                            provider={selectedModelProvider}
+                            providerIconSize={18}
+                            size={20}
+                          />
+                        ) : undefined
+                      }
+                      label={selectedModelLabel}
+                      onPress={openModelPicker}
+                    />
+                    <View className="ml-auto flex-row items-center gap-2">
+                      {effortGauge}
+                      <Composer.Send />
+                    </View>
+                  </Composer.Toolbar>
+                ) : null}
+              </Composer.Collapsible>
             </ComposerSurface>
           );
         }}

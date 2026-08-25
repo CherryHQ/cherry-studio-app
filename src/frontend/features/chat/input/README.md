@@ -41,6 +41,9 @@ Two consequences to take seriously:
 - [ ] The native field remains multiline in both states. Resting constrains its real frame to one
       line; focus removes that constraint and reveals the existing toolbar below it. Blurring returns
       to the resting row without clearing the draft.
+- [ ] The state change uses the shared 250ms settle curve: the resting actions fade, shrink, and
+      release their width while the toolbar fades in and grows the surface. It reverses on blur and
+      lands immediately when the system requests reduced motion.
 - [ ] Attachments remain visible above either state. Collapsing the controls must never hide staged
       content that will be sent.
 - [ ] The field is `EnrichedMarkdownTextInput`, not RN's `TextInput`, and it is **uncontrolled**: it
@@ -233,7 +236,8 @@ Do not restore these; their absence is the design, not a regression.
 
 - **The width morph.** Both states use the same full-width surface. The old version rested 28px
   narrower and needed a three-layer stack, a frozen content width, and send-button compensation to
-  animate that width. Focus now changes only the field's height constraint and the controls shown.
+  animate that width. Focus now animates only the field's available space and the controls shown;
+  the surface itself does not move or change width.
 - **The focus-me placeholder.** An empty send button stays disabled. The active state is entered by
   focusing the field, not by giving a disabled primary action a second meaning.
 - **The bottom sheet.** The ＋ menu is inline now, growing out of the button. There is no sheet, so
