@@ -7,7 +7,6 @@ and message rendering live in `@/frontend/components/messages`.
 ## Public Interface
 
 - `ChatWorkspace` is exported from `index.ts` for normal topic screens.
-- `ChatComposer` is exported for the new-topic workspace, which has no message list.
 - Internal workspace pieces should be imported through relative paths inside this module.
 - The docking itself (`Composer.Dock`, `useComposerDockLayout`) is not here — CherryUI owns the
   reusable keyboard, safe-area, and measurement behavior. This module only connects those values
@@ -15,8 +14,9 @@ and message rendering live in `@/frontend/components/messages`.
 
 ## Organization
 
-- `components/` contains Chat-only composer, loading, cover, and the assistant action toolbar
-  composed through `AssistantMessage`.
+- `components/` contains loading, cover, and the assistant action toolbar composed through
+  `AssistantMessage`. `ChatScreen` mounts the composer session directly because it owns whether the
+  input exists and must keep that session outside its topic/empty-state branch.
 - `context/` owns assistant action state and actions. Dynamic copied/busy/enabled state is consumed
   only by toolbar leaves; the virtualized list and expensive message body do not subscribe.
 - `hooks/` owns initial-render coordination.

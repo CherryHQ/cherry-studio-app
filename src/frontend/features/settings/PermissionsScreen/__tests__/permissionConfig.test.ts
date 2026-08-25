@@ -1,41 +1,36 @@
-import type { PermissionPolicySnapshot } from '../permissionConfig';
-import { getPermissionSummaryKey } from '../permissionConfig';
+import type { PermissionStatuses } from '@/shared/contracts';
 
-const neverPolicies: PermissionPolicySnapshot = {
-  'permissions.calendar_read': 'never',
-  'permissions.calendar_write': 'never',
-  'permissions.health_read': 'never',
-  'permissions.location_read': 'never',
-  'permissions.reminders_read': 'never',
-  'permissions.reminders_write': 'never',
+import { getPermissionStatus } from '../permissionConfig';
+
+const grantedStatuses: PermissionStatuses = {
+  'calendar.read': 'granted',
+  'calendar.write': 'granted',
+  'health.read': 'granted',
+  'location.read': 'granted',
+  'reminders.read': 'granted',
+  'reminders.write': 'granted',
 };
 
-describe('getPermissionSummaryKey', () => {
-  test.each([
-    ['never', 'settings.permissions.summary.never'],
-    ['ask', 'settings.permissions.summary.ask'],
-    ['always', 'settings.permissions.summary.allowed'],
-  ] as const)('summarizes single-scope mode %s', (mode, expected) => {
+describe('getPermissionStatus', () => {
+  it('returns the system state for a single-scope permission', () => {
     expect(
-      getPermissionSummaryKey('location', {
-        ...neverPolicies,
-        'permissions.location_read': mode,
+      getPermissionStatus('location', {
+        ...grantedStatuses,
+        'location.read': 'undetermined',
       }),
-    ).toBe(expected);
+    ).toBe('undetermined');
   });
 
-  test.each([
-    ['never', 'never', 'settings.permissions.summary.never'],
-    ['ask', 'never', 'settings.permissions.summary.readOnly'],
-    ['never', 'always', 'settings.permissions.summary.writeOnly'],
-    ['always', 'ask', 'settings.permissions.summary.readWrite'],
-  ] as const)('summarizes calendar read=%s write=%s', (read, write, expected) => {
+  it('requires every scope of a grouped system permission', () => {
     expect(
-      getPermissionSummaryKey('calendar', {
-        ...neverPolicies,
-        'permissions.calendar_read': read,
-        'permissions.calendar_write': write,
+      getPermissionStatus('calendar', {
+        ...grantedStatuses,
+        'calendar.read': 'denied',
       }),
-    ).toBe(expected);
+    ).toBe('denied');
+  });
+
+  it('keeps the initial state loading until every scope has been checked', () => {
+    expect(getPermissionStatus('calendar', { 'calendar.read': 'granted' })).toBeUndefined();
   });
 });

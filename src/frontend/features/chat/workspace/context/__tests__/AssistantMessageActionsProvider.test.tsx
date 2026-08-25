@@ -51,21 +51,9 @@ function ContextProbe({ ref }: { ref: Ref<ContextProbeHandle> }) {
   return null;
 }
 
-function ProviderHarness({
-  isRegenerateDisabled = false,
-  onRegenerate,
-  probeRef,
-}: {
-  isRegenerateDisabled?: boolean;
-  onRegenerate: (input: { messageId: string }) => Promise<unknown>;
-  probeRef: Ref<ContextProbeHandle>;
-}) {
+function ProviderHarness({ probeRef }: { probeRef: Ref<ContextProbeHandle> }) {
   return (
-    <AssistantMessageActionsProvider
-      isAssistantToolbarEnabled
-      isRegenerateDisabled={isRegenerateDisabled}
-      onRegenerate={onRegenerate}
-    >
+    <AssistantMessageActionsProvider isAssistantToolbarEnabled>
       <ContextProbe ref={probeRef} />
     </AssistantMessageActionsProvider>
   );
@@ -74,9 +62,6 @@ function ProviderHarness({
 describe('AssistantMessageActionsProvider', () => {
   let renderer: ReactTestRenderer | undefined;
   let probeRef = createRef<ContextProbeHandle>();
-  const onRegenerate = jest.fn(
-    async (_input: { messageId: string }): Promise<unknown> => undefined,
-  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -89,27 +74,9 @@ describe('AssistantMessageActionsProvider', () => {
     jest.useRealTimers();
   });
 
-  function renderProvider(isRegenerateDisabled = false) {
+  function renderProvider() {
     act(() => {
-      renderer = create(
-        <ProviderHarness
-          isRegenerateDisabled={isRegenerateDisabled}
-          onRegenerate={onRegenerate}
-          probeRef={probeRef}
-        />,
-      );
-    });
-  }
-
-  function updateProvider(isRegenerateDisabled: boolean) {
-    act(() => {
-      renderer?.update(
-        <ProviderHarness
-          isRegenerateDisabled={isRegenerateDisabled}
-          onRegenerate={onRegenerate}
-          probeRef={probeRef}
-        />,
-      );
+      renderer = create(<ProviderHarness probeRef={probeRef} />);
     });
   }
 
@@ -140,14 +107,6 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => jest.advanceTimersByTime(1_200));
 
     expect(probeRef.current?.state.copiedMessageId).toBeUndefined();
-  });
-
-  test('updates busy state', () => {
-    renderProvider();
-
-    updateProvider(true);
-
-    expect(probeRef.current?.state.isRegenerateDisabled).toBe(true);
   });
 
   test('routes copy failures to logging and user feedback', async () => {
@@ -215,37 +174,5 @@ describe('AssistantMessageActionsProvider', () => {
     act(() => jest.advanceTimersByTime(1_200));
 
     expect(probeRef.current?.state.copiedMessageId).toBeUndefined();
-  });
-
-  test('routes regenerate failures to logging and user feedback', async () => {
-    const error = new Error('regenerate failed');
-    onRegenerate.mockRejectedValueOnce(error);
-    renderProvider();
-
-    await act(async () => {
-      probeRef.current?.actions.regenerateAssistantMessage('assistant-1');
-      await Promise.resolve();
-    });
-
-    expect(onRegenerate).toHaveBeenCalledWith({ messageId: 'assistant-1' });
-    expect(mockAlertShow).toHaveBeenCalledWith({
-      title: 'chat.messageActions.regenerateFailed',
-    });
-  });
-
-  test('logs a pending regenerate failure after unmount without showing outdated feedback', async () => {
-    const regeneration = createDeferred<unknown>();
-    const error = new Error('regenerate failed');
-    onRegenerate.mockReturnValueOnce(regeneration.promise);
-    renderProvider();
-
-    act(() => {
-      probeRef.current?.actions.regenerateAssistantMessage('assistant-1');
-    });
-    unmountProvider();
-    await act(async () => regeneration.reject(error));
-
-    expect(mockAlertShow).not.toHaveBeenCalled();
-    expect(mockLoggerError).toHaveBeenCalledWith('Regenerate assistant message failed', error);
   });
 });

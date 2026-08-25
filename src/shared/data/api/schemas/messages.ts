@@ -1,44 +1,19 @@
 /**
  * Message API Schema definitions
  *
- * Contains all message-related endpoints for tree operations and message management.
- * Includes endpoints for tree visualization and conversation view.
+ * Contains the message endpoints for the conversation view and message management.
  */
 
 import * as z from 'zod';
 
 import type { CursorPaginationParams, CursorPaginationResponse } from '@/shared/data/api/types';
-import type { Message, MessageData, MessageRole, MessageStatus } from '@/shared/data/types/message';
+import type { Message } from '@/shared/data/types/message';
 import {
   ContentMessageRoleSchema,
   MessageDataSchema,
   MessageSnapshotSchema,
   MessageStatusSchema,
 } from '@/shared/data/types/message';
-
-export interface TreeNode {
-  createdAt: string;
-  hasChildren: boolean;
-  id: string;
-  modelId?: string | null;
-  parentId?: string | null;
-  preview: string;
-  role: MessageRole;
-  status: MessageStatus;
-}
-
-export interface SiblingsGroup {
-  nodes: Omit<TreeNode, 'parentId'>[];
-  parentId: string;
-  siblingsGroupId: number;
-}
-
-export interface TreeResponse {
-  activeNodeId: string | null;
-  nodes: TreeNode[];
-  rootId: null | string;
-  siblingsGroups: SiblingsGroup[];
-}
 
 export interface BranchMessage {
   message: Message;
@@ -140,19 +115,6 @@ export interface ClearTopicMessagesResponse {
 // ============================================================================
 
 /**
- * Query parameters for GET /topics/:id/tree
- */
-export const TreeQuerySchema = z.strictObject({
-  /** Root node ID (defaults to tree root) */
-  rootId: z.string().optional(),
-  /** End node ID (defaults to topic.activeNodeId) */
-  nodeId: z.string().optional(),
-  /** Depth to expand beyond active path (-1 = all, 0 = path only, 1+ = layers) */
-  depth: z.number().int().optional(),
-});
-export type TreeQueryParams = z.infer<typeof TreeQuerySchema>;
-
-/**
  * Query parameters for GET /topics/:id/messages
  *
  * Uses "before cursor" semantics for loading historical messages:
@@ -174,24 +136,6 @@ export const BranchMessagesQuerySchema = z.strictObject({
 export type BranchMessagesQueryParams = z.infer<typeof BranchMessagesQuerySchema> &
   CursorPaginationParams;
 
-/**
- * Query parameters for DELETE /messages/:id
- */
-export const DeleteMessageQuerySchema = z.strictObject({
-  cascade: z.boolean().optional(),
-  activeNodeStrategy: ActiveNodeStrategySchema.optional(),
-});
-export type DeleteMessageQuery = z.infer<typeof DeleteMessageQuerySchema>;
-
-/**
- * Query parameters for GET /topics/:topicId/path
- */
-export const PathThroughQuerySchema = z.strictObject({
-  /** Node the returned path must pass through. */
-  nodeId: z.string().min(1),
-});
-export type PathThroughQueryParams = z.infer<typeof PathThroughQuerySchema>;
-
 // ============================================================================
 // API Schema Definitions
 // ============================================================================
@@ -200,24 +144,10 @@ export type PathThroughQueryParams = z.infer<typeof PathThroughQuerySchema>;
  * Message API Schema definitions
  *
  * Organized by domain responsibility:
- * - /topics/:id/tree - Tree visualization
  * - /topics/:id/messages - Branch messages for conversation
  * - /messages/:id - Individual message operations
  */
 export type MessageSchemas = {
-  /**
-   * Tree query endpoint for visualization
-   * @example GET /topics/abc123/tree?depth=1
-   */
-  '/topics/:topicId/tree': {
-    /** Get tree structure for visualization */
-    GET: {
-      params: { topicId: string };
-      query?: TreeQueryParams;
-      response: TreeResponse;
-    };
-  };
-
   /**
    * Branch messages endpoint for conversation view
    * @example GET /topics/abc123/messages?limit=20
@@ -244,28 +174,9 @@ export type MessageSchemas = {
   };
 
   /**
-   * Read-only path query passing through a given node.
-   *
-   * Returns root → leaf where leaf is the most recently created live
-   * descendant of `nodeId` (or `nodeId` itself if it has no live children).
-   * Does not modify topic state — use PUT /topics/:id/active-node to
-   * persist a chosen path.
-   *
-   * @example GET /topics/abc123/path?nodeId=msg42
-   */
-  '/topics/:topicId/path': {
-    GET: {
-      params: { topicId: string };
-      query: PathThroughQueryParams;
-      response: Message[];
-    };
-  };
-
-  /**
    * Individual message endpoint
    * @example GET /messages/msg123
    * @example PATCH /messages/msg123 { "data": {...} }
-   * @example DELETE /messages/msg123?cascade=true
    */
   '/messages/:id': {
     /** Get a single message by ID */
@@ -273,43 +184,10 @@ export type MessageSchemas = {
       params: { id: string };
       response: Message;
     };
-    /** Update a message (content, move to new parent, etc.) */
+    /** Update a message's content or status */
     PATCH: {
       params: { id: string };
       body: UpdateMessageDto;
-      response: Message;
-    };
-    /**
-     * Delete a message
-     * - cascade=true: deletes message and all descendants
-     * - cascade=false: reparents children to grandparent
-     * - activeNodeStrategy='parent' (default): sets activeNodeId to parent if affected
-     * - activeNodeStrategy='clear': sets activeNodeId to null if affected
-     */
-    DELETE: {
-      params: { id: string };
-      query?: DeleteMessageQuery;
-      response: DeleteMessageResponse;
-    };
-  };
-
-  /**
-   * Siblings sub-resource of a message — POST creates a new sibling under the
-   * same parent (edit-and-resend branching flow).
-   *
-   * Atomically (single DB transaction):
-   * 1. If the source has `siblingsGroupId = 0`, allocate a new group id and
-   *    backfill the source so it and the new sibling belong to the same group.
-   * 2. Insert the new message with `parentId = source.parentId`, the shared
-   *    `siblingsGroupId`, and `role = source.role`.
-   * 3. Set the topic's `activeNodeId` to the new message.
-   *
-   * @example POST /messages/msg123/siblings { "data": { "parts": [...] } }
-   */
-  '/messages/:id/siblings': {
-    POST: {
-      params: { id: string };
-      body: MessageData;
       response: Message;
     };
   };

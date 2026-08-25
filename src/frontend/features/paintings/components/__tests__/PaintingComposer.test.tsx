@@ -128,7 +128,7 @@ jest.mock('@cherrystudio/ui/components', () => ({
 }));
 
 jest.mock('@/frontend/components/composer', () => ({
-  ManagedComposerProvider: ({ children, ...props }: { children: React.ReactNode }) => {
+  ComposerSessionProvider: ({ children, ...props }: { children: React.ReactNode }) => {
     mockProviderProps = props;
     return children;
   },

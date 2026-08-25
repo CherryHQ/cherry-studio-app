@@ -13,10 +13,11 @@ a snapshot.
 
 Version 1 uses an in-process interface. Operation inputs, results, snapshots, and events are
 JSON-safe values validated at the boundary. Subscription callbacks and unsubscribe handles are
-process-local transport mechanics, not protocol data.
+process-local transport mechanics, not protocol data. JSON safety keeps application values portable;
+this document does not define a network wire protocol.
 
 The protocol does not expose provider SDK objects, Runtime-native events, SQLite rows,
-`AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/AI SDK state.
+`AbortSignal`, streams, callbacks inside values, or implementation-specific Pi/provider-SDK state.
 
 ## Values
 
@@ -47,17 +48,16 @@ type AgentSessionView = {
 }
 ```
 
-`executionTarget` expresses application intent, not implementation choice. Version 1 accepts only
-`local`; LAN and cloud may add target variants after their authority and transport contracts are
-designed. Runtime ids and Pi/AI SDK implementation details never appear in protocol values.
+`executionTarget` expresses application intent, not implementation choice. Version 1 defines and
+accepts only `local`. Runtime ids and Pi/provider-SDK implementation details never appear in
+protocol values.
 
 `agentId` identifies the application-owned Agent configuration — the assistant/agent settings the
 user edits in the application (instructions, model, tools). That configuration is live: before
 each turn, the Host resolves its current state and builds the Runtime execution request from it,
-so an application-level edit applies from the next turn. What a configuration change can never do
-is re-route: the Runtime Router is consulted once at Session creation, and the Session stays
-pinned to that Runtime for its lifetime. The client does not duplicate configuration or select a
-Runtime. Whether any Agent field participates in future routing is deliberately undecided.
+so an application-level edit applies from the next turn. Configuration never selects a different
+local engine: `local` always means Pi. The client does not duplicate configuration or select an
+implementation.
 
 ### Turn
 
@@ -144,8 +144,9 @@ type AgentUsageView = {
 }
 ```
 
-Part ids are stable within a message. The protocol owns these normalized parts; neither Pi nor the
-AI SDK shape leaks through the boundary.
+Part ids are stable within a message. The protocol owns these normalized parts; neither Pi nor a
+provider SDK shape leaks through the boundary. Text parts may contain Markdown, but tool calls and
+results remain structured protocol parts and are not flattened into display Markdown.
 
 `usage` is populated only on assistant messages. The Host accumulates Runtime usage reports during
 the turn and commits the final value together with the terminal message state, so
@@ -180,11 +181,11 @@ type AgentCapabilities = {
 `assistant` remains the standard message role; the configurable product entity is always `Agent`.
 
 Cancellation is required by the Runtime contract and is therefore not a capability flag.
-A Session is pinned at creation to one Runtime for its whole lifetime, so capabilities are a
-stable projection of that pinned Runtime's descriptor: a fresh Session's snapshot already carries
-correct values, they never change afterward, and configuration changes never re-route or push a
-capabilities event. A different Runtime requires a new Session (or a fork).
-The Agent Client may branch on these protocol capabilities, never on Runtime identity.
+Capabilities are a stable projection of what the Session's execution target and engine contract can
+represent. `tools: true` means Pi supports tool-loop protocol parts; it does not mean the Agent has a
+tool configured, that OS permission is granted, or that execution is approved. The Host resolves
+those effective gates for every turn. The Agent Client may branch on protocol capabilities, never on
+Runtime identity.
 
 ## Operations
 
@@ -332,6 +333,12 @@ Rules for the eventual implementation:
 3. Copied history keeps past tool calls and results verbatim. A fork opens a new future; it does
    not claim to undo executed side effects, and results in the copied transcript reflect the
    world at fork time.
+
+Message editing follows the same model. An edit-and-continue operation creates a new Session, copies
+the clean transcript before the edited user message, inserts the replacement input, and starts a new
+turn. It does not mutate an already-executed Agent history in place, copy later assistant output, or
+claim to undo tool side effects. A display-only annotation, if ever added, must be named separately
+and must not change model context.
 
 This is an additive protocol extension: no existing operation, event, snapshot, or invariant
 changes.

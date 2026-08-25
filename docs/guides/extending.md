@@ -51,8 +51,9 @@ part does not require a table migration, but FTS indexes only text parts.
 
 ## Add AI Or Backend Service Behavior
 
-AI SDK adapters live under `src/backend/ai`. Device and third-party capabilities live in their
-owning domain under `src/backend/services`, such as `permissions`, `models`, and `webSearch`.
+Pi conversation adaptation and AI SDK provider/service adapters live under `src/backend/ai`. Device
+and third-party capabilities live in their owning domain under `src/backend/services`, such as
+`permissions`, `models`, and `webSearch`.
 Cross-layer AI tool and transport rules belong in `packages/universal/src/ai`
 (`@cherrystudio/universal/ai`). General pure helpers used by both sides belong in `src/shared/utils`
 when they are mobile-native, or in `packages/universal/src/utils` when they mirror a desktop helper,
@@ -63,10 +64,13 @@ mobile-only owners by role: `Module`, `Runtime`, `Session`, `Client`, `Adapter`,
 add an `Impl` suffix or a forwarding `Service` wrapper. See
 [Runtime Ownership](../references/runtime-ownership.md#role-names).
 
-App-level tools are resolved by `ToolResolver` and attached in
-`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`. Provider plugins are
-assembled in `buildAgentPlugins.ts`. Add a registry only when the existing explicit assembly becomes
-measurably hard to maintain.
+The current Chat path resolves app-level tools through `ToolResolver` and attaches them in
+`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`; this is migration state, not the target
+extension point. New Agent tools use an application-owned JSON-Schema tool contract, are filtered by
+configuration, platform availability, permission, and approval policy for each turn, and are then
+adapted into Pi tools. Do not expose AI SDK `ToolSet` as the Agent Host contract. Provider-native
+plugins remain provider adapter concerns. Add a registry only when the existing explicit assembly
+becomes measurably hard to maintain.
 
 The external web-search stack is the full workflow precedent: desktop-aligned provider drivers and
 `WebSearchService` under `backend/services`, AI tool integration under `backend/ai`, a narrow

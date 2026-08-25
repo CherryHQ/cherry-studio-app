@@ -1,14 +1,18 @@
 # Chat Streaming And Rendering
 
-This reference defines Cherry Studio Mobile's AI SDK stream, app-owned `ChatRuntime` overlay, Message
-History Window, and Markdown/LaTeX rendering boundaries. Terms follow
+Status: **as-built transitional chat path**.
+
+This reference defines Cherry Studio Mobile's normalized chat stream, app-owned `ChatRuntime`
+overlay, Message History Window, and Markdown/LaTeX rendering boundaries. Terms follow
 [Domain Language](../domain-language.md).
 
 ## Principles
 
-- AI SDK continues to own provider requests and provider-specific stream parsing.
-- `ChatRuntime` consumes AI SDK UI message chunks and converts them into Cherry Message overlay
-  snapshots.
+- `ChatRuntime` owns chat lifecycle independently of the selected stream implementation.
+- `AiService` currently selects a transitional Pi path or the established AI SDK path. Both expose
+  `UIMessageChunk` only as the current internal stream-normalization shape.
+- The AI SDK path owns its provider requests and provider-specific stream parsing. The Pi path owns
+  its request through Pi's model layer and adapts Pi events into the same temporary chunk shape.
 - Message History Window remains database-backed and static: it exposes persisted active-branch Messages from SQLite through React Query pagination.
 - Active assistant output is composed through an in-memory Streaming Message Overlay instead of mutating the Message History Window for every token.
 - Render components do not write SQLite directly. Terminal persistence belongs to the runtime owner.
@@ -16,8 +20,16 @@ History Window, and Markdown/LaTeX rendering boundaries. Terms follow
 ## Current Stream Boundary
 
 - `AiService.streamText()` requires `requestOptions.signal`.
-- `AiService` resolves provider/model/assistant parameters and constructs an AI SDK `Agent`.
-- `Agent.stream()` calls the AI SDK stream API and returns a `ReadableStream<UIMessageChunk>`.
+- `AiService` resolves provider/model/assistant parameters and reads `EXPO_PUBLIC_CHAT_RUNTIME`.
+  Explicit `pi` and `ai-sdk` values are accepted; without one, development uses Pi and other builds
+  use AI SDK.
+- The AI SDK path constructs its existing `Agent`; `Agent.stream()` returns a
+  `ReadableStream<UIMessageChunk>`.
+- The Pi path lazily constructs `PiChatStreamAdapter`, runs `@earendil-works/pi-agent-core`, and
+  converts supported Pi text/reasoning/usage events into `UIMessageChunk`.
+- The transitional Pi path supports only API-key OpenAI Responses endpoints. It rejects request
+  tools, MCP, knowledge-base input, web search, custom endpoint paths, and custom transports, and it
+  intentionally stops after one assistant turn.
 - `ChatRuntime` reads that stream with `readUIMessageStream<CherryUIMessage>()`.
 - Cherry Mobile does not parse provider-specific SSE in the chat runtime.
 - Provider configs rely on the Expo/React Native runtime fetch behavior used by AI SDK provider packages.
@@ -70,11 +82,12 @@ Current flow:
 1. Persist the user Message and a stable assistant placeholder before streaming starts.
 2. Set the assistant placeholder as the active overlay Message.
 3. Build the active history path and call the injected AI dependency's `streamText()`.
-4. Read AI SDK UI message chunks with `readUIMessageStream()`.
-5. Apply each UI message to the assistant placeholder and publish a new overlay snapshot.
-6. Persist terminal `data.parts` and `status` when the stream succeeds.
-7. Persist partial parts with status `paused` on user abort, or append `data-error` and mark status `error` on failure.
-8. Invalidate the relevant messages query so the persisted Message takes over from the overlay.
+4. `AiService` selects the transitional Pi or AI SDK path and returns normalized UI message chunks.
+5. Read those chunks with `readUIMessageStream()`.
+6. Apply each UI message to the assistant placeholder and publish a new overlay snapshot.
+7. Persist terminal `data.parts` and `status` when the stream succeeds.
+8. Persist partial parts with status `paused` on user abort, or append `data-error` and mark status `error` on failure.
+9. Invalidate the relevant messages query so the persisted Message takes over from the overlay.
 
 The assistant placeholder id must remain stable for the whole run so the list does not treat each stream delta as a new item.
 
@@ -127,13 +140,15 @@ FTS state.
 
 ## Reopen When
 
+- Pi becomes the sole Chat engine and tool events replace the transitional UI-message adapter.
 - Mobile adds `MessageStats` persistence.
 - Mobile adds stream checkpointing.
 - Measurements justify a rendering-cadence optimization.
 
 ## Acceptance
 
-- AI SDK `streamText` produces incremental output on real iOS and Android devices instead of returning once at request completion.
+- Both currently selectable chat paths produce incremental output on their supported real-device
+  configurations instead of returning once at request completion.
 - Abort stops the active stream and persists a paused assistant Message when partial parts exist.
 - Different Topics can stream concurrently; the same Topic cannot start a second turn.
 - Route unmount does not terminate a turn, and a new subscriber can recover its current snapshot.

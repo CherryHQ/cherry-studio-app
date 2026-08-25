@@ -40,20 +40,16 @@ describe('DevicePermissions', () => {
   });
 
   test('uses full calendar access for read and write-only access for write', async () => {
-    await expect(service.getStatusForPreference('permissions.calendar_read')).resolves.toBe(
-      'granted',
-    );
-    await expect(service.getStatusForPreference('permissions.calendar_write')).resolves.toBe(
-      'granted',
-    );
+    await expect(service.getStatusForScope('calendar.read')).resolves.toBe('granted');
+    await expect(service.getStatusForScope('calendar.write')).resolves.toBe('granted');
 
     expect(Calendar.getCalendarPermissions).toHaveBeenNthCalledWith(1, false);
     expect(Calendar.getCalendarPermissions).toHaveBeenNthCalledWith(2, true);
   });
 
   test('requests only the calendar access represented by the app scope', async () => {
-    await service.requestForPreference('permissions.calendar_read');
-    await service.requestForPreference('permissions.calendar_write');
+    await service.requestForScope('calendar.read');
+    await service.requestForScope('calendar.write');
 
     expect(Calendar.requestCalendarPermissions).toHaveBeenNthCalledWith(1, false);
     expect(Calendar.requestCalendarPermissions).toHaveBeenNthCalledWith(2, true);

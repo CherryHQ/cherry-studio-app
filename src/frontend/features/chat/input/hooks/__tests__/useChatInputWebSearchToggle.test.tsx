@@ -145,6 +145,49 @@ describe('useChatInputWebSearchToggle', () => {
     expect(snapshot?.enabled).toBe(false);
   });
 
+  test("does not let an old assistant's worker clear the new assistant's write", async () => {
+    let snapshot: Snapshot | undefined;
+    let renderer: ReactTestRenderer | undefined;
+    const writes: { assistantId: string; resolve: () => void }[] = [];
+    const persist = jest.fn(
+      (assistantId: string) =>
+        new Promise<void>((resolve) => {
+          writes.push({ assistantId, resolve });
+        }),
+    );
+    const renderHarness = (assistantId: string) => (
+      <Harness
+        assistantId={assistantId}
+        onSnapshot={(value) => {
+          snapshot = value;
+        }}
+        persist={persist}
+        persistedEnabled={false}
+      />
+    );
+
+    await act(async () => {
+      renderer = create(renderHarness('assistant-a'));
+    });
+    await act(async () => snapshot?.setEnabled(true));
+    await act(async () => renderer?.update(renderHarness('assistant-b')));
+    await act(async () => snapshot?.setEnabled(true));
+
+    expect(writes.map(({ assistantId }) => assistantId)).toEqual(['assistant-a', 'assistant-b']);
+
+    await act(async () => writes[0]?.resolve());
+    await act(async () => snapshot?.setEnabled(false));
+
+    // B is still in flight, so the new target folds into B instead of starting
+    // a competing worker immediately.
+    expect(persist).toHaveBeenCalledTimes(2);
+
+    await act(async () => writes[1]?.resolve());
+
+    expect(persist).toHaveBeenCalledTimes(3);
+    expect(persist).toHaveBeenLastCalledWith('assistant-b', false);
+  });
+
   // A burst of taps must settle on the last one, not replay every one of them.
   test('folds flips made during a write into a single follow-up', async () => {
     let snapshot: Snapshot | undefined;

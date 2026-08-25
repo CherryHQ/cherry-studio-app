@@ -1,2 +1,2 @@
-export { ChatProvider, useChat, useChatTopic } from './ChatProvider';
+export { ChatProvider, useChat, useChatTopic, useChatTopicControls } from './ChatProvider';
 export { mergeMessagesWithOverlay } from './chatRuntimeProjection';

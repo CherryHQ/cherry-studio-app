@@ -14,7 +14,6 @@ const mockInputHeightShared = {
 } as unknown as SharedValue<number>;
 const mockLoadOlder = jest.fn(async () => undefined);
 const mockRespondToolApproval = jest.fn(async () => undefined);
-const mockRegenerate = jest.fn(async () => undefined);
 const mockSetStringAsync = jest.fn(async (_text: string): Promise<void> => undefined);
 const mockAlertShow = jest.fn();
 let mockCoverVisible: boolean | undefined;
@@ -25,7 +24,6 @@ let mockChatTopic: {
   isBusy: boolean;
   overlayMessage?: Message;
   pendingUserMessage?: Message;
-  regenerate: typeof mockRegenerate;
   status: string;
 };
 
@@ -39,7 +37,6 @@ jest.mock('expo-router/react-navigation', () => ({
 
 jest.mock('@cherrystudio/app-icons/icons/check', () => () => null);
 jest.mock('@cherrystudio/app-icons/icons/copy', () => () => null);
-jest.mock('@cherrystudio/app-icons/icons/refresh-cw', () => () => null);
 
 jest.mock('@cherrystudio/ui/components', () => {
   const { createElement } = jest.requireActual('react');
@@ -171,7 +168,6 @@ describe('ChatWorkspace message rendering integration', () => {
     mockChatTopic = {
       hasHistoryBeforePendingTurn: true,
       isBusy: false,
-      regenerate: mockRegenerate,
       status: 'idle',
     };
     mockCoverVisible = undefined;
@@ -221,22 +217,13 @@ describe('ChatWorkspace message rendering integration', () => {
     expect(mockMessageListProps?.renderMessage).toBe(renderMessage);
   });
 
-  test('composes assistant actions with topic busy and regenerate behavior', () => {
-    mockChatTopic.isBusy = true;
+  test('composes the assistant toolbar for settled assistant messages', () => {
     renderer = renderWorkspace(false, [createMessage('assistant-1', 'assistant')]);
 
     const assistantMessage = renderer.root.findByType('AssistantMessage');
     expect(
       assistantMessage.findAllByProps({ testID: 'assistant-message-toolbar' }).length,
     ).toBeGreaterThan(0);
-
-    const regenerateButton = assistantMessage.findByProps({
-      testID: 'assistant-message-regenerate',
-    });
-    expect(regenerateButton.props.disabled).toBe(true);
-
-    act(() => regenerateButton.props.onPress());
-    expect(mockRegenerate).toHaveBeenCalledWith({ messageId: 'assistant-1' });
   });
 
   test('does not show copy failure feedback from the previous topic', async () => {

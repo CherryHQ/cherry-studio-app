@@ -73,7 +73,7 @@ export function createContractFixture(options: ContractFixtureOptions = {}) {
   const tools = new ToolResolver({
     ai: { generateImage: jest.fn(async () => ({ images: [] })) },
     devicePermissions: {
-      getStatusForPreference: jest.fn(async () => 'unavailable' as const),
+      getStatusForScope: jest.fn(async () => 'unavailable' as const),
     },
     files: {
       createInternalEntry: jest.fn(),

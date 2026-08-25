@@ -95,9 +95,7 @@ export type ChatRuntimeServices = {
       query?: BranchMessagesQueryParams,
     ): Promise<BranchMessagesResponse>;
     getById(id: string): Promise<Message>;
-    getChildrenByParentId(parentId: string): Promise<Message[]>;
     getPathToNode(id: string): Promise<Message[]>;
-    getPathThrough(topicId: string, nodeId: string): Promise<Message[]>;
     newMessageId(): string;
     finalizeAssistantMessage(
       id: string,
@@ -107,7 +105,6 @@ export type ChatRuntimeServices = {
         runtimeStats?: MessageRuntimeStatsInput;
       },
     ): Promise<Message>;
-    updateSiblingsGroupId(id: string, siblingsGroupId: number): Promise<void>;
   };
   model: {
     getById(id: string): Promise<Model | null>;
@@ -125,7 +122,6 @@ export type ChatRuntimeServices = {
   topic: {
     create(input: CreateTopicDto): Promise<Topic>;
     getById(id: string): Promise<Topic>;
-    setActiveNode(topicId: string, nodeId: string): Promise<{ activeNodeId: string }>;
     update(id: string, input: UpdateTopicDto): Promise<Topic>;
   };
 };

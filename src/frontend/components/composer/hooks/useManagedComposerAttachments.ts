@@ -37,6 +37,7 @@ export function useManagedComposerAttachments(
   const isMountedRef = useRef(true);
   const importTokensRef = useRef(new Map<string, symbol>());
   const cancelledImportTokensRef = useRef(new Set<symbol>());
+  const ownedEntryIdsRef = useRef(new Set<ComposerAttachmentReady['fileEntryId']>());
   const [attachments, setAttachmentState] = useState<ComposerAttachmentDraft[]>(() =>
     initialAttachmentState.accepted.map((attachment) =>
       isComposerAttachmentReady(attachment)
@@ -91,6 +92,7 @@ export function useManagedComposerAttachments(
           return finishImport('ignored');
         }
         if (!isMountedRef.current) {
+          await deleteEntry(resolved.entry.id);
           return finishImport('ignored');
         }
         if (importTokensRef.current.get(source.id) !== token) {
@@ -99,6 +101,7 @@ export function useManagedComposerAttachments(
         }
 
         importTokensRef.current.delete(source.id);
+        ownedEntryIdsRef.current.add(resolved.entry.id);
         commitAttachments(
           attachmentsRef.current.map((attachment) =>
             attachment.id === source.id && attachment.status === 'importing'
@@ -192,7 +195,12 @@ export function useManagedComposerAttachments(
         cancelledImportTokensRef.current.add(importToken);
       }
       commitAttachments(removeComposerAttachment(attachmentsRef.current, attachmentId));
-      if (isComposerAttachmentReady(attachment)) void deleteEntry(attachment.fileEntryId);
+      if (
+        isComposerAttachmentReady(attachment) &&
+        ownedEntryIdsRef.current.delete(attachment.fileEntryId)
+      ) {
+        void deleteEntry(attachment.fileEntryId);
+      }
     },
     [commitAttachments, deleteEntry],
   );

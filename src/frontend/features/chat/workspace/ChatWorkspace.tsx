@@ -59,7 +59,6 @@ export function ChatWorkspace({
 }: ChatWorkspaceProps) {
   const { isLoadingInitial, isLoadingOlder, loadOlder, messages } = messageWindow;
   const chatTopic = useChatTopic(topicId);
-  const regenerateAssistantMessage = chatTopic.regenerate;
   const headerHeight = useHeaderHeight();
   const { t } = useTranslation();
   const { alert } = useAlert();
@@ -115,8 +114,6 @@ export function ChatWorkspace({
       <AssistantMessageActionsProvider
         key={topicId}
         isAssistantToolbarEnabled={isAssistantToolbarEnabled}
-        isRegenerateDisabled={chatTopic.isBusy}
-        onRegenerate={regenerateAssistantMessage}
       >
         <MessageList
           key={listRenderKey}

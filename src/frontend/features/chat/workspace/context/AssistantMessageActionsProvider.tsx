@@ -20,12 +20,10 @@ const logger = loggerService.withContext('AssistantMessageActions');
 type AssistantMessageActionsState = {
   copiedMessageId?: string;
   isAssistantToolbarEnabled: boolean;
-  isRegenerateDisabled: boolean;
 };
 
 type AssistantMessageActions = {
   copyAssistantMessage: (input: { messageId: string; text: string }) => void;
-  regenerateAssistantMessage: (messageId: string) => void;
 };
 
 const AssistantMessageActionsStateContext = createContext<AssistantMessageActionsState | null>(
@@ -35,15 +33,11 @@ const AssistantMessageActionsContext = createContext<AssistantMessageActions | n
 
 type AssistantMessageActionsProviderProps = PropsWithChildren<{
   isAssistantToolbarEnabled: boolean;
-  isRegenerateDisabled: boolean;
-  onRegenerate: (input: { messageId: string }) => Promise<unknown>;
 }>;
 
 export function AssistantMessageActionsProvider({
   children,
   isAssistantToolbarEnabled,
-  isRegenerateDisabled,
-  onRegenerate,
 }: AssistantMessageActionsProviderProps) {
   const { t } = useTranslation();
   const { alert } = useAlert();
@@ -88,29 +82,11 @@ export function AssistantMessageActionsProvider({
     [alert, t],
   );
 
-  const regenerateAssistantMessage = useCallback(
-    (messageId: string) => {
-      void onRegenerate({ messageId }).catch((error) => {
-        logger.error('Regenerate assistant message failed', error as Error);
-
-        if (!isMountedRef.current) {
-          return;
-        }
-
-        alert.show({ title: t('chat.messageActions.regenerateFailed') });
-      });
-    },
-    [alert, onRegenerate, t],
-  );
-
   const stateValue = useMemo(
-    () => ({ copiedMessageId, isAssistantToolbarEnabled, isRegenerateDisabled }),
-    [copiedMessageId, isAssistantToolbarEnabled, isRegenerateDisabled],
+    () => ({ copiedMessageId, isAssistantToolbarEnabled }),
+    [copiedMessageId, isAssistantToolbarEnabled],
   );
-  const actionsValue = useMemo(
-    () => ({ copyAssistantMessage, regenerateAssistantMessage }),
-    [copyAssistantMessage, regenerateAssistantMessage],
-  );
+  const actionsValue = useMemo(() => ({ copyAssistantMessage }), [copyAssistantMessage]);
 
   useEffect(() => {
     isMountedRef.current = true;

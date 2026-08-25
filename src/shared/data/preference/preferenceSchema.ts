@@ -17,7 +17,7 @@ import type {
   WebSearchProviderOverrides,
 } from '@/shared/data/types/webSearch';
 
-import type { LanguageVarious, PermissionMode } from './preferenceTypes';
+import type { LanguageVarious } from './preferenceTypes';
 import { ThemeMode } from './preferenceTypes';
 
 export const FONT_SIZE_STEPS = [0, 1, 2] as const;
@@ -41,13 +41,6 @@ export interface PreferenceSchema {
   'feature.paintings.default_model_id': string | null;
   'feature.quick_assistant.model_id': string | null;
   'feature.translate.model_id': string | null;
-
-  'permissions.calendar_read': PermissionMode;
-  'permissions.calendar_write': PermissionMode;
-  'permissions.health_read': PermissionMode;
-  'permissions.location_read': PermissionMode;
-  'permissions.reminders_read': PermissionMode;
-  'permissions.reminders_write': PermissionMode;
 
   'topic.naming.enabled': boolean;
   'topic.naming.model_id': string | null;
@@ -75,13 +68,6 @@ export const PreferenceDefaults = {
   'feature.quick_assistant.model_id': null,
   'feature.translate.model_id': null,
 
-  'permissions.calendar_read': 'never',
-  'permissions.calendar_write': 'never',
-  'permissions.health_read': 'never',
-  'permissions.location_read': 'never',
-  'permissions.reminders_read': 'never',
-  'permissions.reminders_write': 'never',
-
   'topic.naming.enabled': true,
   'topic.naming.model_id': null,
   'topic.naming_prompt': '',
@@ -91,4 +77,3 @@ export const PreferenceDefaults = {
 } satisfies PreferenceSchema;
 
 export type PreferenceKeyType = keyof PreferenceSchema;
-export type PermissionPreferenceKey = Extract<PreferenceKeyType, `permissions.${string}`>;

@@ -1,14 +1,16 @@
-import { useComposerDockLayout } from '@cherrystudio/ui/components';
+import { Composer, useComposerDockLayout } from '@cherrystudio/ui/components';
 import { useIsPreview, useLocalSearchParams } from 'expo-router';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 
+import { ComposerSessionProvider } from '@/frontend/components/composer';
 import { MainHeader } from '@/frontend/components/headers';
 import { useMessages, useTopic } from '@/frontend/hooks/chat';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 import { armLayoutBenchProbe, LAYOUT_BENCH_ASSISTANT_ID } from '@/shared/devBench/layoutBenchProbe';
 
-import { ChatComposer, ChatEmptyState, ChatWorkspace } from './workspace';
+import { ChatInput } from './input';
+import { ChatEmptyState, ChatWorkspace } from './workspace';
 
 // 诊断埋点：量化「点击 topic → 进入界面 → 渲染」链路耗时。`[PERF]` 前缀。
 const perfLog = loggerService.withContext('ChatPerf');
@@ -84,12 +86,15 @@ export function ChatScreen() {
           <ChatEmptyState contentBottomInset={contentBottomInset} />
         )}
         {isPreview ? null : (
-          <ChatComposer
-            assistantId={assistantId}
-            dismissKeyboardOnSend={false}
-            onHeightChange={composerDockLayout.handleInputHeightChange}
-            topicId={isTopicAvailable ? topicId : undefined}
-          />
+          <ComposerSessionProvider>
+            <Composer.Dock onHeightChange={composerDockLayout.handleInputHeightChange}>
+              <ChatInput
+                assistantId={assistantId}
+                dismissKeyboardOnSend={false}
+                topicId={isTopicAvailable ? topicId : undefined}
+              />
+            </Composer.Dock>
+          </ComposerSessionProvider>
         )}
       </View>
     </>

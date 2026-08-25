@@ -146,18 +146,9 @@ describe('Data API deletion scopes', () => {
     function handlers() {
       return createMessageHandlers({
         clearTopicMessages: jest.fn(mutation('clearTopicMessages')),
-        delete: jest.fn(mutation('delete')),
         getById: jest.fn(async () => ({ id: 'message-1', topicId: 'topic-1' })),
       } as unknown as MessageService);
     }
-
-    it("drains the message's topic before deleting the row", async () => {
-      registerWork({ id: 'topic-1', kind: 'topic' });
-
-      await handlers()['/messages/:id'].DELETE({ params: { id: 'message-1' }, query: {} });
-
-      expect(trace).toEqual(['cancel', 'settled', 'delete']);
-    });
 
     it('drains before clearing a topic, then leaves the topic usable', async () => {
       registerWork({ id: 'topic-1', kind: 'topic' });

@@ -4,16 +4,17 @@ import { ComposerProvider } from '../context/ComposerProvider';
 import { useManagedComposerAttachments } from '../hooks/useManagedComposerAttachments';
 import type { ComposerInitialAttachment } from '../utils/composerAttachments';
 
-type ManagedComposerProviderProps = PropsWithChildren<{
+type ComposerSessionProviderProps = PropsWithChildren<{
   initialAttachments?: readonly ComposerInitialAttachment[];
   initialDraft?: string;
 }>;
 
-export function ManagedComposerProvider({
+/** Owns one draft and imports its transient attachments into managed storage. */
+export function ComposerSessionProvider({
   children,
   initialAttachments,
   initialDraft,
-}: ManagedComposerProviderProps) {
+}: ComposerSessionProviderProps) {
   const attachmentStore = useManagedComposerAttachments(initialAttachments);
 
   return (

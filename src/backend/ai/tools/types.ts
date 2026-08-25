@@ -3,23 +3,14 @@ import type {
   ToolEntry as RuntimeToolEntry,
 } from '@cherrystudio/ai-runtime/tools';
 
-import type { SystemPermissionState } from '@/backend/services/permissions';
-import type { PermissionPreferenceKey } from '@/shared/data/preference';
+import type { DevicePermissionScope, SystemPermissionState } from '@/shared/contracts';
 import type { Assistant } from '@/shared/data/types/assistant';
 
 import type { ConfiguredPaintingModel } from './painting';
 
 export type { ToolDefer } from '@cherrystudio/ai-runtime/tools';
 
-export type DeviceToolAccess = Readonly<
-  Record<
-    PermissionPreferenceKey,
-    {
-      mode: 'never' | 'ask' | 'always';
-      status: SystemPermissionState;
-    }
-  >
->;
+export type DeviceToolAccess = Readonly<Record<DevicePermissionScope, SystemPermissionState>>;
 
 export interface ToolApplyScope {
   readonly assistant?: Assistant;

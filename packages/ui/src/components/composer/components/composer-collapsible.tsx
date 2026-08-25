@@ -77,7 +77,9 @@ export function ComposerCollapsible({ children, style, testID }: ComposerCollaps
 
   return (
     <Animated.View
+      accessibilityElementsHidden={!isOpen}
       className="overflow-hidden"
+      importantForAccessibility={isOpen ? 'auto' : 'no-hide-descendants'}
       pointerEvents={isOpen ? 'auto' : 'none'}
       style={clipStyle}
       testID={testID}

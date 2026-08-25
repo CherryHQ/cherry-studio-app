@@ -1,10 +1,4 @@
-import {
-  getDefaultValue,
-  getPreferenceKeys,
-  isPreferenceKey,
-  PreferenceDefaults,
-  ThemeMode,
-} from '..';
+import { getDefaultValue, getPreferenceKeys, isPreferenceKey, ThemeMode } from '..';
 
 describe('preference schema', () => {
   // The schema used to be generated from desktop's classification.json, which
@@ -18,18 +12,10 @@ describe('preference schema', () => {
 
   test('narrows known preference keys and rejects everything else', () => {
     expect(isPreferenceKey('chat.web_search.max_results')).toBe(true);
-    expect(isPreferenceKey('permissions.location_read')).toBe(true);
+    expect(isPreferenceKey('permissions.location_read')).toBe(false);
     // A desktop key the mobile schema deliberately does not carry.
     expect(isPreferenceKey('app.proxy.mode')).toBe(false);
     expect(isPreferenceKey('BootConfig.example')).toBe(false);
-  });
-
-  test('keeps permission preferences safe by default', () => {
-    for (const key of getPreferenceKeys()) {
-      if (key.startsWith('permissions.')) {
-        expect(PreferenceDefaults[key]).toBe('never');
-      }
-    }
   });
 
   test('defaults the web search and theme values the rest of the app reads', () => {

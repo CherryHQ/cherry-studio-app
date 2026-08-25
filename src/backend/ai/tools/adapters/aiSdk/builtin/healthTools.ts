@@ -30,7 +30,7 @@ export function createHealthToolEntries(
       description: 'Read selected health metrics as a range summary or daily aggregates.',
       name: DEVICE_TOOL_NAMES.healthGetSummary,
       namespace: 'health',
-      preferenceKeys: ['permissions.health_read'],
+      permissionScopes: ['health.read'],
       tool: tool({
         description: 'Read selected health metrics as a range summary or daily aggregates.',
         inputSchema: z
@@ -65,7 +65,7 @@ export function createHealthToolEntries(
       description: 'List workouts from a date range of at most 90 days.',
       name: DEVICE_TOOL_NAMES.healthListWorkouts,
       namespace: 'health',
-      preferenceKeys: ['permissions.health_read'],
+      permissionScopes: ['health.read'],
       tool: tool({
         description: 'List workouts from a date range of at most 90 days.',
         inputSchema: z
