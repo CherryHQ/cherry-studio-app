@@ -1,8 +1,8 @@
 import { Composer } from '@cherrystudio/ui/components';
 import { duration, easing } from '@cherrystudio/ui/motion';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { type LayoutChangeEvent, View } from 'react-native';
 import Animated, {
   Extrapolation,
   interpolate,
@@ -66,12 +66,12 @@ type ChatInputProps = {
   topicId?: string;
 };
 
-// This is a visual constraint, not an editor-mode switch. Android's enriched
-// input measures multiline content independently from its native `isSingleLine`
-// flag, so changing that flag on focus can leave its selectable frame stale.
+// This constrains the clip around the editor, never the native editor itself.
+// Android's enriched input owns its multiline measurement and intentionally
+// suppresses an internal requestLayout pass; changing its own height on focus
+// can therefore leave the cursor drawable and selectable frame stale.
 const restingInputHeight = 32;
 const restingActionSlotWidth = restingInputHeight + 8;
-const restingInputStyle = { height: restingInputHeight } as const;
 const focusTransitionMotion = {
   duration: duration.base,
   easing: easing.settle,
@@ -123,6 +123,9 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
   const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const [isInputActive, setIsInputActive] = useState(false);
   const focusProgress = useSharedValue(0);
+  const fieldFrameHeight = useSharedValue(restingInputHeight);
+  const naturalFieldHeight = useRef(restingInputHeight);
+  const fieldFrameStyle = useAnimatedStyle(() => ({ height: fieldFrameHeight.value }));
   const restingActionSlotStyle = useAnimatedStyle(() => ({
     opacity: interpolate(focusProgress.value, [0, 1], [1, 0], Extrapolation.CLAMP),
     transform: [
@@ -141,8 +144,31 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
     ),
   }));
   const closeModelPicker = useCallback(() => setIsModelPickerOpen(false), []);
-  const handleInputBlur = useCallback(() => setIsInputActive(false), []);
-  const handleInputFocus = useCallback(() => setIsInputActive(true), []);
+  const handleFieldLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const nextHeight = Math.max(restingInputHeight, Math.ceil(event.nativeEvent.layout.height));
+
+      if (naturalFieldHeight.current === nextHeight) {
+        return;
+      }
+
+      naturalFieldHeight.current = nextHeight;
+      if (isInputActive) {
+        // Content growth while editing must expose the caret immediately. The
+        // focus transition is animated; typing-induced measurement is not.
+        fieldFrameHeight.set(nextHeight);
+      }
+    },
+    [fieldFrameHeight, isInputActive],
+  );
+  const handleInputBlur = useCallback(() => {
+    setIsInputActive(false);
+    fieldFrameHeight.set(withTiming(restingInputHeight, focusTransitionMotion));
+  }, [fieldFrameHeight]);
+  const handleInputFocus = useCallback(() => {
+    setIsInputActive(true);
+    fieldFrameHeight.set(withTiming(naturalFieldHeight.current, focusTransitionMotion));
+  }, [fieldFrameHeight]);
   const openModelPicker = useCallback(() => setIsModelPickerOpen(true), []);
   const { updateAssistant } = useAssistantMutations();
   const { inputRef } = useComposerMeta();
@@ -297,13 +323,11 @@ export function ChatInput({ assistantId, dismissKeyboardOnSend, topicId }: ChatI
                 >
                   {menu}
                 </Animated.View>
-                <View className="min-w-0 flex-1">
-                  <ComposerField
-                    onBlur={handleInputBlur}
-                    onFocus={handleInputFocus}
-                    style={isInputActive ? undefined : restingInputStyle}
-                  />
-                </View>
+                <Animated.View className="min-w-0 flex-1 overflow-hidden" style={fieldFrameStyle}>
+                  <View className="absolute top-0 right-0 left-0" onLayout={handleFieldLayout}>
+                    <ComposerField onBlur={handleInputBlur} onFocus={handleInputFocus} />
+                  </View>
+                </Animated.View>
                 <Animated.View
                   accessibilityElementsHidden={isInputActive}
                   className="items-end"

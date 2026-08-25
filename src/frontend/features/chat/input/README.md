@@ -38,9 +38,11 @@ Two consequences to take seriously:
 
 - [ ] The resting composer is one restrained row: ＋, a single-line field, and send/stop. The model
       and reasoning controls are not duplicated into this state.
-- [ ] The native field remains multiline in both states. Resting constrains its real frame to one
-      line; focus removes that constraint and reveals the existing toolbar below it. Blurring returns
-      to the resting row without clearing the draft.
+- [ ] The native field remains multiline and at its natural measured height in both states. Resting
+      constrains a surrounding clip to one line; focus expands that clip and reveals the existing
+      toolbar below it. Blurring returns to the resting row without clearing the draft. Do not put
+      the resting height on the Android native editor itself: its suppressed internal relayout can
+      leave the caret and selectable frame using stale geometry.
 - [ ] The state change uses the shared 250ms settle curve: the resting actions fade, shrink, and
       release their width while the toolbar fades in and grows the surface. It reverses on blur and
       lands immediately when the system requests reduced motion.
