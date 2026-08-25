@@ -1,13 +1,25 @@
 # AI Provider Integration
 
+Status: **as-built transitional chat routing**.
+
 This reference defines the mobile AI provider/model request architecture. Terms follow
 [Domain Language](../domain-language.md).
 
 ## Runtime Path
 
-The request path is:
+The current streaming request path is:
 
-`ChatRuntime -> AiService -> providerToAiSdkConfig() -> Agent -> @cherrystudio/ai-core / AI SDK`
+```text
+ChatRuntime -> AiService -> providerToAiSdkConfig()
+  ├─ pi     -> PiChatStreamAdapter -> Pi model layer
+  └─ ai-sdk -> Agent -> @cherrystudio/ai-core / AI SDK
+```
+
+`EXPO_PUBLIC_CHAT_RUNTIME` selects the transitional path. Development defaults to Pi; other builds
+default to AI SDK. The Pi bridge temporarily reuses AI SDK provider-configuration shapes, but that
+does not make AI SDK an Agent Runtime. The target Agent architecture has Pi as the sole local
+conversation engine; AI SDK remains only where a non-Agent service or provider capability still
+needs it.
 
 `AiService` is a private, desktop-aligned backend AI implementation composed into workflow modules,
 runtimes, and Data API handlers by bootstrap. It is not exposed through `Backend` or frontend
@@ -83,6 +95,18 @@ Current exclusions:
 
 These exclusions are mobile runtime scope limits, not a new Provider/Model domain model. If desktop Provider/Model schema or service semantics change, mobile should mirror the shared business behavior and then adapt it to the mobile request path.
 
+## Transitional Pi Chat Adapter
+
+`src/backend/ai/runtime/pi/PiChatStreamAdapter.ts` is the current migration bridge, not the final Pi
+Agent Runtime. It accepts the resolved API key, base URL, model metadata, prompt, and generation
+options; executes Pi; and maps Pi text, reasoning, usage, and terminal state into the existing
+`UIMessageChunk` stream consumed by `ChatRuntime`.
+
+The bridge currently supports API-key OpenAI Responses endpoints only. It rejects tools, MCP,
+knowledge-base input, web search, custom endpoint paths, custom transports, and multi-step tool
+loops. Final integration belongs behind the Host-private Agent Runtime contract and receives
+structured history plus a neutral per-turn tool snapshot.
+
 ## Provider Options
 
 `AiService` merges:
@@ -98,7 +122,7 @@ These exclusions are mobile runtime scope limits, not a new Provider/Model domai
 
 Provider-native web search is an AI request option. It is separate from `WebSearchService`.
 
-Beyond provider options, `buildAgentParams`
+On the current AI SDK chat path, `buildAgentParams`
 (`src/backend/ai/runtime/aiSdk/params/buildAgentParams.ts`) may also attach a tool set,
 resolved per request by `ToolResolver.resolveForRequest`
 (`src/backend/ai/tools/ToolResolver.ts`). The resolved tool set can contain the
@@ -110,6 +134,10 @@ carries the `web_search` tool; whenever tools are attached the request also sets
 `stopWhen: stepCountIs(...)` (bounded by the assistant's max tool calls, default 20). External web
 search and provider-native web search are mutually exclusive within one request; a request never
 carries both.
+
+This AI SDK tool attachment is transitional. New Agent tool behavior must resolve through an
+application-owned `RuntimeTool` contract and a Pi adapter rather than making AI SDK `ToolSet` the
+canonical tool model.
 
 ## Special Providers
 
@@ -142,16 +170,19 @@ Azure:
 
 ## Fetch Transport
 
-AI SDK chat streaming relies on the Expo/React Native runtime fetch behavior.
+Both chat paths rely on Expo/React Native fetch behavior. The AI SDK path uses its provider
+packages; the current Pi bridge supplies Expo fetch to Pi's stream function.
 
 Current state:
 
 - Generic provider configs do not inject a shared `fetch`.
 - CherryAI has a provider-specific signing fetch wrapper.
 - AI SDK requests otherwise rely on the fetch behavior provided by the runtime and provider packages.
+- The Pi bridge uses Expo fetch and currently rejects provider configs with custom transports.
 - Current device testing confirms this path streams incrementally.
 
 ## Reopen When
 
 - Desktop Provider/Model semantics change.
 - Mobile adds currently excluded agent-session or desktop-only stream-manager behavior.
+- Pi provider coverage replaces the transitional AI SDK chat fallback.

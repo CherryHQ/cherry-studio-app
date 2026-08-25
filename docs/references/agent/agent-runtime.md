@@ -1,17 +1,17 @@
 # Cherry Agent Runtime
 
-Status: **design**. Version 1 is local-only.
+Status: **Pi-first target design; integration not yet complete**. Version 1 is local-only.
 
-The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi and the AI
-SDK are separate implementations of this contract.
+The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
+only local implementation. AI SDK may remain an implementation detail of non-Agent services, but
+it is not an Agent Runtime and does not own conversation or tool-loop state.
 
 ## Dependency rule
 
 ```text
 Mobile Agent Host
-    ↓ Agent Runtime Router
     ↕ Agent Runtime contract
-Pi Runtime | AI SDK Runtime
+Pi Runtime
 ```
 
 The Runtime knows prepared prompts, models, history, tools, input, and normalized execution events.
@@ -19,49 +19,21 @@ It does not know Cherry Agent or Session entities, application commands or snaps
 Data API, React, Expo, navigation, or UI state.
 
 The Host is the only adapter between the [Agent Protocol](./agent-protocol.md) and the Runtime. It
-loads application data, invokes the Router, constructs the request, maps events, and persists the
-result. The Router is Host-owned orchestration, not part of the Agent Runtime contract.
+loads application data, validates the local execution target, constructs the request, maps events,
+and persists the result.
 
 Runtime independence is enforced by imports and conformance, not by checking the directory name.
 Promotion to a workspace package happens only when a real independent consumer exists.
 
-## Runtime routing
+## Local execution binding
 
-The Agent Runtime Router is the single implementation-selection point:
+Version 1 accepts only the `local` execution target. Application composition injects one Pi Runtime
+directly into the Host. There is no Runtime registry, no implementation-selection Router, and no
+persisted Runtime binding. Agent configuration, Session configuration, model selection, and tool
+availability never select another local engine.
 
-```ts
-type RuntimeRouteInput = {
-  target: { kind: 'local' }
-}
-
-interface AgentRuntimeRouter {
-  resolve(input: RuntimeRouteInput): AgentRuntime
-}
-```
-
-Version 1 routing is deliberately small:
-
-| Execution target | Runtime |
-| --- | --- |
-| `local` | AI SDK Runtime |
-
-The Router is the only component that branches on `pi` or `ai-sdk`. It resolves the selected
-implementation through the Runtime registry and fails closed when no registered Runtime satisfies
-the route. The eventual routing basis and ownership are **undecided**: routing may depend on Agent
-configuration, Session configuration, execution target, connection state, or broader application
-policy. Version 1 does not reserve Router inputs for any of those possibilities.
-
-The selected result is **fixed for the Session's lifetime** (decision 2026-08-20): once the Router
-resolves a Runtime for a Session, the Host records that binding as Host-private state. A different
-Runtime requires a new Session (or a fork). The Agent's application-owned instructions, model, and
-tools may still be resolved afresh for every turn; no current Agent field is assumed to participate
-in routing.
-
-LAN and cloud may add execution-target variants and corresponding adapters later. They use this
-same routing boundary, but Version 1 does not decide how a remote adapter is selected or where its
-policy lives. The application layer remains unaware of implementation identity; the protocol
-carries only normalized results. Remote markers, connections, authority, and fallback behavior
-require a separate design.
+The Agent's application-owned instructions, model, and tools are resolved afresh for every turn.
+The injected Pi Runtime remains stable for the Host lifetime.
 
 ## Descriptor and lifecycle
 
@@ -95,6 +67,11 @@ interface AgentRuntimeSession {
   close(): Promise<void>
 }
 ```
+
+Capabilities describe what the engine contract can represent. In particular, `tools: true` means
+Pi can run a tool loop; it does not mean the current Agent has any tools configured. The Host derives
+the effective tools for each turn and separately checks whether the selected model supports native
+tool calling.
 
 The Host owns one `AgentRuntimeSession` for each active application Session. The Runtime session may
 hold provider clients and execution-local state, but every `execute` request contains the complete
@@ -177,6 +154,10 @@ type RuntimeMessagePart =
 The Host converts persisted Cherry messages into this normalized history. Runtime-native messages
 never become the application source of truth.
 
+Text parts may contain Markdown, but the history is never flattened into one Markdown document.
+Tool calls and results remain structured and paired by `toolCallId`; Pi needs those records to
+continue a tool loop and to reconstruct later turns correctly.
+
 ### Tools
 
 ```ts
@@ -194,8 +175,20 @@ type RuntimeTool = {
 
 `inputSchema` is portable JSON Schema, not a provider-native schema object.
 
-The Host supplies tool implementations after applying Agent policy. A Runtime validates tool input,
-enforces the approval mode, and invokes `execute` only after approval when the mode is `ask`.
+The Host supplies an immutable tool snapshot after applying current Agent configuration, platform
+availability, system permissions, and Agent policy. Configuration changes during execution apply to
+the next turn, not the active one. A Runtime validates tool input, enforces the approval mode, and
+invokes `execute` only after approval when the mode is `ask`.
+
+`tools: []` is a complete and valid request: Pi performs ordinary conversation and the Host must not
+leave stale tool instructions in the prompt. A non-empty snapshot enables Pi's model → tool → result
+→ model loop. A call to a name absent from the snapshot fails closed with a normalized unavailable
+tool result; a Runtime never looks up and executes an arbitrary application tool dynamically.
+
+Tool configuration, OS permission, and execution approval are separate gates. A configured tool is
+not automatically approved. If the snapshot is non-empty but the selected model cannot call tools,
+the Host rejects the turn with `CAPABILITY_UNSUPPORTED` before partial execution instead of silently
+degrading to prompt-encoded pseudo calls.
 
 When a tool call is denied — approval mode `deny`, or an `ask` approval resolved as deny — the
 Runtime never invokes `execute`. It reports the tool part as `denied` and returns
@@ -284,32 +277,16 @@ message's protocol `usage` stays `null`.
 
 1. The Host validates that the Session is idle.
 2. It persists the user message and assistant placeholder.
-3. It loads the Session's execution target and resolves the current Agent configuration.
-4. The Host uses the Runtime bound to the Session; Version 1 routing resolves `local` to `ai-sdk`.
-5. The Host normalizes instructions, model, history, tools, input, and options.
+3. It validates that the Session target is `local` and resolves the current Agent configuration.
+4. The Host uses its injected Pi Runtime.
+5. The Host normalizes instructions, model, structured history, the immutable tool snapshot, input,
+   and options.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
 8. Terminal message and turn state commit before the Host publishes terminal protocol events.
 
-The Runtime never writes application storage. The Host never interprets Pi- or AI-SDK-native events
-outside the corresponding implementation.
-
-## Runtime registry
-
-Application composition registers implementations by descriptor id. The Router resolves its
-decision through this registry. Application-owned Agent configuration does not carry a
-`runtimeId` and the client never supplies one; the Host persists the route resolved at Session
-creation as Host-private state so the pin survives restarts. Neither Runtime ids nor the registry
-are exposed through the Agent Protocol.
-
-```text
-pi      -> Pi AgentRuntime
-ai-sdk  -> AI SDK AgentRuntime
-```
-
-Adding an implementation means registering another conforming Runtime and, when needed, adding one
-Router policy. Shared Host workflow, protocol, persistence, and frontend code do not add a
-Runtime-name branch.
+The Runtime never writes application storage. The Host never interprets Pi-native events outside
+the Pi implementation.
 
 ## Execution lifetime
 
@@ -336,5 +313,5 @@ Every Runtime implementation passes the same suite:
 10. Native errors are normalized without secrets or stack traces.
 11. The implementation imports no application protocol, persistence, React, or Expo module.
 
-The first conformance targets are the AI SDK Runtime and the Pi Runtime. A fake Runtime exercises
-Host behavior without either implementation.
+The production conformance target is the Pi Runtime. A fake Runtime exercises Host behavior without
+Pi or a provider connection.

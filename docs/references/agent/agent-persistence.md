@@ -23,9 +23,9 @@ record for mobile-originated Agent Sessions only.
   production Host. The `agent` table intentionally starts empty; no assistant data is migrated or
   copied.
 
-Out of scope: Agent UI, the Pi Runtime, chat-table (`assistant`/`topic`/`message`) migration or
-removal, branching columns, background turns, and remote execution targets. Everything here is
-additive; no existing table changes.
+Out of scope: Agent UI, formal Pi Agent Runtime activation, chat-table
+(`assistant`/`topic`/`message`) migration or removal, branching columns, background turns, tool
+configuration storage. Everything here is additive; no existing table changes.
 
 ## V0.2 transitional limitations
 
@@ -53,12 +53,10 @@ and an active branch; an Agent Session transcript is linear ([Branching](./agent
 forks into a new Session instead). The models are not one-to-one, so chat tables stay untouched
 until Agent surfaces replace them and a migration is designed separately.
 
-**No persisted Runtime identity.** There is no `runtime_binding` column. The Router is the only
-implementation-selection point and Runtime ids never appear in protocol values or application data
-([Agent Runtime](./agent-runtime.md), protocol invariant 10). Version 1 registers a single local
-Runtime, so Session pinning is satisfied without persisting anything. If a second local Runtime
-ever registers, pinning needs a Host-private persisted binding — that is a deliberate future
-migration, matching the README's decision not to reserve routing fields.
+**No persisted Runtime identity.** There is no `runtime_binding` column. Runtime ids never appear in
+protocol values or application data ([Agent Runtime](./agent-runtime.md), protocol invariant 10).
+Version 1 has one execution target and one local engine: `local → Pi`. Application composition
+injects Pi directly into the Host, so there is no local implementation choice to persist.
 
 **No workspace, no resource scope yet.** A workspace concept encodes a working directory and a
 filesystem/shell execution environment; mobile has neither, so Sessions carry no workspace
@@ -104,10 +102,11 @@ an Agent is refused while Sessions exist (`RESTRICT`). `agent_session` hard-dele
 messages — matching the store port's `deleteSession` contract. Messages are never deleted
 individually in V1.
 
-**Deferred `agent` columns.** `toolPolicy` and `skillRefs` are not in V1: Agent tools are an
-explicitly undecided open question (see [README](./README.md#open-questions)) and V1 executes
-tool-less turns. Locking a policy shape now would prejudge the Pi tool design. They arrive as
-additive columns with the tool model.
+**Deferred tool configuration.** The current foundation schema has no tool configuration and must
+not be described as tool-capable persistence. The direction is settled: tool references and
+per-tool approval policy are application-owned, and the Host resolves them into an immutable
+`RuntimeTool[]` snapshot for each turn. The exact storage shape lands with the tool model; Pi never
+owns or reads it directly.
 
 **Naming and types.** DB columns use the protocol vocabulary (`title`, `titleIsManual`), not a
 second synonym set. Timestamps are integer epoch millis via `createUpdateDeleteTimestamps`; the
@@ -154,8 +153,7 @@ Indexes: `agent_session_agent_id_idx`, `agent_session_last_activity_idx` (list o
 recency; no `orderKey`).
 
 Future additive columns (not created now): `forkedFromSessionId`, `forkedFromMessageId`
-([Branching](./agent-protocol.md#branching)); a Host-private runtime binding if a second local
-Runtime registers.
+([Branching](./agent-protocol.md#branching)).
 
 ### `agent_session_message`
 
@@ -236,12 +234,12 @@ storage boundary moves.
    is not copied; assistants remain authoritative only for the current Chat surface until its
    replacement lands.
 5. **Follow-ups (separate designs).** Agent UI consuming `Backend.agent`; avatar workflow
-   (generalizing `userAvatarStorage`); Pi Runtime; fork columns; the eventual chat-table
-   decision.
+   (generalizing `userAvatarStorage`); formal Pi Runtime activation and tool configuration; fork
+   columns; the eventual chat-table decision.
 
 ## Rejected alternatives
 
-- `runtime_binding` column — Runtime identity is Router-private; V1 has one local Runtime.
+- `runtime_binding` column — Version 1 has one local engine and no local implementation choice.
 - `resource_scope` column — nothing consumes it; add with the first scoped tool.
 - `agent_turn` table — kept in an earlier draft to avoid reshaping the already-implemented store
   port, i.e. fitting the schema to the code. By requirement, every durable turn fact lives on the

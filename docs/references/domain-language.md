@@ -107,6 +107,11 @@ _Avoid_: global variable, config constant
 The mobile adapter that converts Provider and Model records into AI SDK provider settings, endpoint variants, headers, signing, and model ids.
 _Avoid_: raw SDK client, provider service
 
+**Pi Agent Engine**:
+The sole local conversation engine. It owns model turns and tool-loop progression behind the Mobile
+Agent Host, but it does not own Agent configuration, application persistence, permissions, or UI.
+_Avoid_: AI SDK Runtime, Tool Service
+
 **Tool Resolver**:
 The request-scoped backend capability that selects and combines active built-in, MCP, and external
 web-search tools for one AI request.
@@ -136,7 +141,8 @@ A named performance boundary that controls what can block first chat paint.
 _Avoid_: lifecycle phase, OS background phase
 
 **Chat Stream Transport**:
-The runtime fetch capability used by AI SDK provider requests to receive streaming chat responses.
+The runtime fetch capability used by the current Pi and AI SDK provider paths to receive streaming
+chat responses.
 _Avoid_: provider parser, message renderer
 
 **Markdown Renderer**:
