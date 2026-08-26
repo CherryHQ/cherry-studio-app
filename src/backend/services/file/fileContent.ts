@@ -15,6 +15,7 @@ import {
   resolveCachedFilePreviewUris,
 } from './filePreviewStorage';
 import {
+  createInternalEntry,
   deleteInternalEntry,
   discardInternalEntries,
   getFileUri,
@@ -25,6 +26,12 @@ const createInternalEntryInputSchema = z.strictObject({
   mediaType: MediaTypeSchema.optional(),
   name: SafeNameSchema.optional(),
   uri: z.string().min(1),
+});
+
+const createTextEntryInputSchema = z.strictObject({
+  data: z.string(),
+  mediaType: MediaTypeSchema,
+  name: SafeNameSchema,
 });
 
 /**
@@ -49,6 +56,15 @@ export const fileContent = {
       throw new Error(`Created internal file cannot be resolved: ${entry.id}`);
     }
     return resolved;
+  },
+  /**
+   * Store UTF-8 text as a new managed entry. Unlike an imported attachment it
+   * has no preview to derive, so it skips the preview decorator, and the caller
+   * keeps the entry rather than a resolved URI (agent tools return ids).
+   */
+  createTextEntry: async (input: { data: string; mediaType: string; name: string }) => {
+    const validated = createTextEntryInputSchema.parse(input);
+    return createInternalEntry(fileEntryService, { ...validated, source: 'text' });
   },
   delete: (id: FileEntryId) => deleteInternalEntry(fileEntryService, FileEntryIdSchema.parse(id)),
   generatePreviewUri: generateFilePreviewUri,
