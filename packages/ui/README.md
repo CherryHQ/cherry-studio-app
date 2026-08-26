@@ -22,10 +22,9 @@ import PlusIcon from '@cherrystudio/app-icons/icons/plus';
 API.
 
 `FilePreview` renders and opens a business-neutral file descriptor. The caller supplies display
-metadata, whether the file is an image or document, localized unavailable/opening labels, and an
-error callback; the component owns platform rendering, unavailable states, system opening, and
-iOS Quick Look thumbnail caching. Loading placeholders belong to the caller because it owns the
-loading lifecycle:
+metadata, the file's kind, localized unavailable/opening labels, and an error callback; the
+component owns the frame, the press target, unavailable states, system opening, and iOS Quick Look
+thumbnail caching. Loading placeholders belong to the caller because it owns the loading lifecycle:
 
 ```tsx
 <FilePreview
@@ -33,7 +32,7 @@ loading lifecycle:
     displayName: 'brief.pdf',
     extensionLabel: 'PDF',
     id: 'file-1',
-    kind: 'document',
+    kind: 'pdf',
     revision: 4,
     uri: 'file:///documents/brief.pdf',
   }}
@@ -41,6 +40,30 @@ loading lifecycle:
   onError={(error, operation) => reportPreviewError(error, operation)}
 />;
 ```
+
+Rendering is plugin-based and `kind` is an open set. CherryUI ships an `image` renderer and falls
+back to the platform preview — an iOS Quick Look thumbnail, an Android extension card — for every
+kind no plugin claims, so a caller may classify files more finely than any renderer handles.
+`FilePreviewPluginProvider` registers renderers for the previews beneath it:
+
+```tsx
+// A module constant, because `plugins` is a memo dependency.
+const previewPlugins = [{ component: PdfPreview, kind: 'pdf' }];
+
+<FilePreviewPluginProvider plugins={previewPlugins}>
+  <AttachmentGrid />
+</FilePreviewPluginProvider>;
+```
+
+A plugin receives `FilePreviewComponentProps` — the file, the resolved size, and the same `onError`
+— and draws the preview only. The frame, press target, and system opening stay with `FilePreview`,
+so a plugin cannot diverge on interaction. Providers nest: an inner one overrides the kinds it
+names and inherits the rest, including the platform fallback.
+
+The built-in table stays deliberately small. A renderer ships here only when it needs nothing
+beyond `file.uri` and a platform API, as `image` and the iOS Quick Look thumbnail do. Anything that
+parses a format or calls a service is product code and registers through the provider; see
+`src/frontend/components/FileEntryPreview/README.md` for that path.
 
 `onError` distinguishes `open` from `thumbnail`, allowing product code to alert for a failed open
 while treating thumbnail generation as a recoverable fallback. CherryUI carries no file database,

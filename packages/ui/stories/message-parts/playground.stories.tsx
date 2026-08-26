@@ -30,7 +30,8 @@ const documentFile = {
   displayName: 'project-brief.pdf',
   extensionLabel: 'PDF',
   id: 'playground-document',
-  kind: 'document' as const,
+  // No plugin claims `pdf`, so this renders through the platform fallback.
+  kind: 'pdf' as const,
   revision: 1,
   uri: 'file:///storybook/project-brief.pdf',
 };
