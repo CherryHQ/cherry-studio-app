@@ -91,6 +91,11 @@ import type { AgentSessionStore } from './AgentSessionStore';
 import { AgentSessionUsageRecorder } from './AgentSessionUsageRecorder';
 import { findImageAttachmentLimit, type ImageAttachmentLimit } from './imageAttachments';
 import {
+  createAgentInferenceSnapshot,
+  type AgentInferenceModelResolver,
+  resolveAgentInferenceModel,
+} from './inferenceSnapshot';
+import {
   createTurnResourceLedger,
   managedFileResolver,
   type ManagedFileResolver,
@@ -126,6 +131,7 @@ const NOOP_BACKGROUND_REPLY_TURN: BackgroundReplyTurn = {
 type MobileAgentHostOverrides = {
   agents: AgentDefinitionSource;
   files: ManagedFileResolver;
+  inferenceModel: AgentInferenceModelResolver;
   naming: Pick<
     AgentSessionNaming,
     'drain' | 'maybeRenameFromConversationSummary' | 'maybeRenameFromFirstUserMessage'
@@ -188,6 +194,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
   private readonly files: ManagedFileResolver;
   private readonly naming: MobileAgentHostOverrides['naming'];
   private readonly usage: MobileAgentHostOverrides['usage'];
+  private readonly inferenceModel: MobileAgentHostOverrides['inferenceModel'];
 
   /**
    * Lifecycle composition supplies the selected store adapter. Production
@@ -213,6 +220,7 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         store,
       });
     this.usage = overrides.usage ?? new AgentSessionUsageRecorder();
+    this.inferenceModel = overrides.inferenceModel ?? resolveAgentInferenceModel;
   }
 
   private get agents(): AgentDefinitionSource {
@@ -354,6 +362,15 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
         }
       }
 
+      const inferenceModel = await this.inferenceModel(agent.model).catch(() =>
+        fail('EXECUTION_UNAVAILABLE', 'The selected model is unavailable.'),
+      );
+      const inferenceSnapshot = createAgentInferenceSnapshot({
+        model: inferenceModel,
+        options: agent.options,
+        tools,
+      });
+
       // History is everything stored before this turn.
       const priorMessages = await this.store.listMessages(sessionId);
       const { availableFiles, inputFiles, parts } = await this.resolveManagedInput(
@@ -378,7 +395,12 @@ export class MobileAgentHost extends BaseService implements AgentProtocol {
       );
 
       // Invariant 2: reservation commits before execution starts.
-      const reserved = await this.store.reserveSubmission({ sessionId, userParts });
+      const reserved = await this.store.reserveSubmission({
+        sessionId,
+        userParts,
+        modelId: inferenceSnapshot.model.uniqueModelId,
+        inferenceSnapshot,
+      });
       const runtimeSession = await this.getRuntimeSession(sessionId, runtime);
 
       // The Turn projection starts here: reservation time is the turn start.

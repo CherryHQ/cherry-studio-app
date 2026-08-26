@@ -397,11 +397,14 @@ Runtime that cannot report usage emits no `usage` event, and the assistant messa
 ## Host execution flow
 
 1. The Host validates that the Session is idle.
-2. It persists the user message and assistant placeholder.
-3. It validates that the Session target is `local` and resolves the current Agent configuration.
-4. The Host uses its injected Pi Runtime.
-5. The Host resolves enabled Mobile Skills, creates the turn resource ledger, and normalizes
-   instructions, model, structured history, the immutable tool snapshot, input, and options.
+2. It validates that the Session target is `local` and resolves the current Agent, public model
+   facts, input, and immutable tool catalog.
+3. It builds the versioned, credential-free inference snapshot from the same model, options, and
+   tools that will be sent to the Runtime.
+4. It atomically persists the user message and assistant placeholder with the selected model id and
+   inference snapshot.
+5. The Host uses its injected Pi Runtime and normalizes instructions, structured history, input,
+   and the already-frozen execution request.
 6. The selected Runtime executes the prepared request.
 7. The Host maps Runtime parts, approvals, usage, and terminal events into Agent Protocol state.
 8. Terminal message and turn state commit before the Host publishes terminal protocol events.

@@ -1,5 +1,6 @@
 import type {
   AgentErrorView,
+  AgentInferenceSnapshotV1,
   AgentMessagePart,
   AgentMessageView,
   AgentSessionView,
@@ -11,6 +12,13 @@ export type ReserveSubmissionResult = {
   turnId: string;
   userMessage: AgentMessageView;
   assistantMessage: AgentMessageView;
+};
+
+export type ReserveSubmissionInput = {
+  sessionId: string;
+  userParts: AgentMessagePart[];
+  modelId: AgentInferenceSnapshotV1['model']['uniqueModelId'];
+  inferenceSnapshot: AgentInferenceSnapshotV1;
 };
 
 export type FinalizeAssistantMessageInput = {
@@ -51,10 +59,7 @@ export interface AgentSessionStore {
    * Atomically reserves the user message and assistant placeholder under a
    * fresh shared turnId before execution starts (protocol invariant 2).
    */
-  reserveSubmission(input: {
-    sessionId: string;
-    userParts: AgentMessagePart[];
-  }): Promise<ReserveSubmissionResult>;
+  reserveSubmission(input: ReserveSubmissionInput): Promise<ReserveSubmissionResult>;
 
   listMessages(sessionId: string): Promise<AgentMessageView[]>;
 

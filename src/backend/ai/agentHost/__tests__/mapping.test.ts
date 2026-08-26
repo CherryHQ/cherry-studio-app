@@ -116,6 +116,8 @@ describe('Agent Host mappings', () => {
         },
       ],
       usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -165,6 +167,8 @@ describe('Agent Host mappings', () => {
         },
       ],
       usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
@@ -210,6 +214,8 @@ describe('Agent Host mappings', () => {
         },
       ],
       usage: null,
+      modelId: null,
+      inferenceSnapshot: null,
       createdAt: TIMESTAMP,
       updatedAt: TIMESTAMP,
     };
