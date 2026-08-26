@@ -1,8 +1,8 @@
 # Cherry Agent Runtime
 
-Status: **Pi Runtime, settled tool contracts, and bounded managed image input active behind the
-Mobile Agent Host**; persisted per-Agent binding projection and text attachment resolution remain
-follow-up work. Version 1 is local-only.
+Status: **Pi Runtime, settled tool contracts, HTTP MCP Runtime adaptation, and bounded managed image
+input active behind the Mobile Agent Host**; persisted per-Agent binding projection and text
+attachment resolution remain follow-up work. Version 1 is local-only.
 
 The Agent Runtime is the independent execution boundary behind the Mobile Agent Host. Pi is the
 only local implementation. AI SDK may remain an implementation detail of non-conversation
@@ -52,11 +52,11 @@ non-standard adapter family, or authentication types fail before partial executi
 
 Pi receives the complete structured transcript and Agent inference options on each execution. It
 maps text, reasoning, tool parts, approvals, cancellation, normalized failures, and cumulative
-multi-call usage onto this contract. The Host currently supplies one fixed application-owned
-`write_file` tool to function-calling models; persisted per-Agent bindings are not yet projected
-into the Runtime snapshot. The Host resolves bounded managed images for registry-declared
-image-capable models supported by the selected Pi endpoint adapter; text attachments remain
-deferred.
+multi-call usage onto this contract. The Runtime tool loop and HTTP MCP capability adapter are
+implemented. The Host currently supplies one fixed application-owned `write_file` tool to
+function-calling models; persisted per-Agent bindings are not yet projected into the Runtime
+snapshot. The Host resolves bounded managed images for registry-declared image-capable models
+supported by the selected Pi endpoint adapter; text attachments remain deferred.
 
 ## Descriptor and lifecycle
 
