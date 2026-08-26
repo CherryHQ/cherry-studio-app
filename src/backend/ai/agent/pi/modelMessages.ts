@@ -61,7 +61,7 @@ export function toPiConversation(
 }
 
 function collectUserContent(parts: readonly RuntimeMessagePart[]): UserMessage['content'] {
-  const content: (TextContent | ImageContent)[] = parts.flatMap((part) => {
+  const content = parts.flatMap<TextContent | ImageContent>((part) => {
     if (part.type === 'text') {
       return [{ type: 'text' as const, text: part.text }];
     }
