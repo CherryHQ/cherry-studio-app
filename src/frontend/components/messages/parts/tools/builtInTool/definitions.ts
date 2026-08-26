@@ -1,4 +1,11 @@
-export type BuiltInToolIconName = 'calendar' | 'file' | 'health' | 'location' | 'reminders';
+export type BuiltInToolIconName =
+  | 'calendar'
+  | 'file'
+  | 'health'
+  | 'image'
+  | 'location'
+  | 'reminders'
+  | 'web';
 
 type BuiltInToolDefinition = {
   iconName: BuiltInToolIconName;
@@ -61,5 +68,17 @@ export const builtInToolDefinitions: Record<string, BuiltInToolDefinition> = {
   write_file: {
     iconName: 'file',
     titleKey: 'chat.builtinTool.file.write',
+  },
+  generate_image: {
+    iconName: 'image',
+    titleKey: 'chat.builtinTool.media.generateImage',
+  },
+  web_search: {
+    iconName: 'web',
+    titleKey: 'chat.builtinTool.web.search',
+  },
+  web_fetch: {
+    iconName: 'web',
+    titleKey: 'chat.builtinTool.web.fetch',
   },
 };

@@ -5,23 +5,32 @@ import { cn } from '@cherrystudio/ui/utils';
 import { useQueries } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 
+import { getBuiltInToolDisplay } from '@/frontend/components/messages';
 import { queryKeys, useBackendModule } from '@/frontend/data';
+import { usePreference } from '@/frontend/data/hooks';
+import { useDevicePermissionStatuses } from '@/frontend/hooks/useDevicePermissionStatuses';
+import type { DevicePermissionScope } from '@/shared/contracts';
 import type { WriteAgentToolBinding } from '@/shared/data/api/schemas/agentToolBindings';
 import type { AgentToolBinding } from '@/shared/data/types/agentToolBinding';
+import { BUILT_IN_TOOL_DESCRIPTORS, type BuiltInToolGroup } from '@/shared/data/types/builtInTool';
 import type { McpServer } from '@/shared/data/types/mcpServer';
 
 import {
+  type AgentBuiltInToolOption,
   type AgentMcpServerOption,
   type AgentMcpServerOptionStatus,
   type AgentMcpToolBindingStatus,
+  buildAgentBuiltInToolOptions,
   buildAgentMcpServerOptions,
   getAgentMcpToolBindingStatus,
+  isBuiltInToolEnabled,
   isStreamableHttpServer,
   type McpToolBindingDraft,
   type McpToolCatalog,
   removeAgentToolBinding,
+  setAgentBuiltInToolEnabled,
   setAgentMcpServerEnabled,
 } from './agentToolSettings';
 
@@ -97,6 +106,10 @@ export function AgentToolsSection({
       <Text className="text-muted-foreground text-sm" selectable>
         {t('agent.tools.description')}
       </Text>
+      <AgentBuiltInTools bindings={bindings} onChange={onChange} />
+      <Text className="font-medium text-foreground text-sm" selectable>
+        {t('agent.tools.mcpSection')}
+      </Text>
       {serverOptions.length === 0 ? (
         <Text className="py-2 text-muted-foreground text-sm" selectable>
           {t('agent.tools.empty')}
@@ -164,6 +177,128 @@ export function AgentToolsSection({
       <Text className="text-foreground-tertiary text-xs" selectable>
         {t('agent.tools.nextTurn')}
       </Text>
+    </View>
+  );
+}
+
+/** Every permission scope the built-in catalog can ask for, watched as one set. */
+const BUILT_IN_TOOL_PERMISSION_SCOPES: readonly DevicePermissionScope[] = [
+  ...new Set(BUILT_IN_TOOL_DESCRIPTORS.flatMap((descriptor) => descriptor.permissionScopes)),
+];
+
+const BUILT_IN_TOOL_GROUP_ORDER: readonly BuiltInToolGroup[] = [
+  'web',
+  'media',
+  'files',
+  'calendar',
+  'reminders',
+  'health',
+  'location',
+];
+
+function AgentBuiltInTools({
+  bindings,
+  onChange,
+}: {
+  bindings: readonly WriteAgentToolBinding[];
+  onChange: (bindings: WriteAgentToolBinding[]) => void;
+}) {
+  const { t } = useTranslation();
+  const { statuses } = useDevicePermissionStatuses(BUILT_IN_TOOL_PERMISSION_SCOPES);
+  const [paintingModelId] = usePreference('feature.paintings.default_model_id');
+  const options = useMemo(
+    () =>
+      buildAgentBuiltInToolOptions({
+        bindings,
+        hasPaintingModel: Boolean(paintingModelId),
+        permissionStatuses: statuses,
+        platform: Platform.OS,
+      }),
+    [bindings, paintingModelId, statuses],
+  );
+  const groups = useMemo(
+    () =>
+      BUILT_IN_TOOL_GROUP_ORDER.flatMap((group) => {
+        const groupOptions = options.filter((option) => option.descriptor.group === group);
+        return groupOptions.length > 0 ? [{ group, options: groupOptions }] : [];
+      }),
+    [options],
+  );
+
+  return (
+    <View className="gap-4">
+      <Text className="font-medium text-foreground text-sm" selectable>
+        {t('agent.tools.builtInSection')}
+      </Text>
+      {groups.map(({ group, options: groupOptions }) => (
+        <View className="gap-3" key={group}>
+          <Text className="text-foreground-tertiary text-xs uppercase" selectable>
+            {t(`agent.tools.builtInGroup.${group}`)}
+          </Text>
+          {groupOptions.map((option) => (
+            <AgentBuiltInToolRow
+              bindings={bindings}
+              key={option.descriptor.capabilityId}
+              onChange={onChange}
+              option={option}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+function AgentBuiltInToolRow({
+  bindings,
+  onChange,
+  option,
+}: {
+  bindings: readonly WriteAgentToolBinding[];
+  onChange: (bindings: WriteAgentToolBinding[]) => void;
+  option: AgentBuiltInToolOption;
+}) {
+  const { t } = useTranslation();
+  const { capabilityId } = option.descriptor;
+  // The transcript already names and illustrates every built-in tool; reusing
+  // that display keeps the switch and the tool call recognisably the same thing.
+  const display = getBuiltInToolDisplay(capabilityId);
+  const displayName = display ? t(display.titleKey) : capabilityId;
+  const handleValueChange = useCallback(
+    (enabled: boolean) => onChange(setAgentBuiltInToolEnabled(bindings, option, enabled)),
+    [bindings, onChange, option],
+  );
+
+  return (
+    <View className="min-h-12 flex-row items-center gap-3">
+      <View className="min-w-0 flex-1 gap-0.5">
+        <Text className="font-medium text-base text-foreground" numberOfLines={1}>
+          {displayName}
+        </Text>
+        <Text
+          className={cn(
+            'text-xs',
+            option.status === 'available'
+              ? 'text-success-subtle-foreground'
+              : option.status === 'binding-disabled'
+                ? 'text-muted-foreground'
+                : 'text-destructive',
+          )}
+          selectable
+        >
+          {t(`agent.tools.builtInStatus.${option.status}`)}
+        </Text>
+      </View>
+      {option.isSupported ? (
+        <Switch
+          accessibilityLabel={t('agent.tools.builtInAccessibilityLabel', {
+            status: t(`agent.tools.builtInStatus.${option.status}`),
+            tool: displayName,
+          })}
+          onValueChange={handleValueChange}
+          value={isBuiltInToolEnabled(option)}
+        />
+      ) : null}
     </View>
   );
 }
