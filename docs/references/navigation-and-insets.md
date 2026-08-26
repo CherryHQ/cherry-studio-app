@@ -87,27 +87,30 @@ scrim, card geometry, safe areas, swipe/scrim dismissal, Android back, and acces
 Feature-level picker components pass their content into this shell, while screen callers only pass
 open/close and selection state.
 
-Component sheets use the shared `compact`, `medium`, and `large` height specs (40%, 60%, and 80%
-of available height). Features choose or dynamically switch the semantic size; they do not calculate
-screen height or pass native detents.
+The card keeps a four-point inset from both screen edges and the bottom edge. Its bottom corners use
+the larger of the 28-point card radius or the display radius minus that inset, keeping rounded-screen
+geometry concentric without exposing device geometry to feature code.
+
+Component sheets use the shared `compact`, `medium`, `large`, and `full` height specs (40%, 60%,
+80%, and 100% of available height). Features choose or dynamically switch the semantic size; they
+do not calculate screen height or pass native detents.
 
 Multi-level component sheets keep their current page in the owning feature and replace their content
 inside the same physical sheet. They pass `backAction` only while a nested page is visible; the
 shared shell owns the consistent header placement but does not expose a navigation stack.
 
-Model selection and model search are separate interactions. Agent editing, painting input, provider
-connectivity checks, and model settings all open `ModelPickerDrawer`, the one
-model-selection view. Its compact trailing search action opens `/search`; the drawer temporarily
-hides while that route is active so its portal and Android back handler cannot compete with the root
-route.
+Agent editing, painting input, provider connectivity checks, and model settings all open
+`ModelPickerDrawer`, the one model-selection view. Its search field filters the grouped catalog in
+place. Focusing search expands the sheet from `large` to `full`; a non-empty query keeps it expanded
+after the keyboard is dismissed, and clearing an unfocused search restores `large`.
 
-Single-selection model search, model-service search, Agent search, and provider model search use
-the root `/search` route. It is one fixed view: callers adapt data, matching, optional filters, and
-result content rather than supplying business-specific search screens. Native back or an interactive
-pop cancels without calling business logic; selection resolves only after the route's exit transition
-completes. The route title is always Search, and it does not query or render a full result set until
-the user enters non-whitespace text. Provider model pull keeps persistent local search because its
-matching rows retain management or multi-selection actions.
+Model-service search, Agent search, and provider model search use the root `/search` route. It is one
+fixed view: callers adapt data, matching, optional filters, and result content rather than supplying
+business-specific search screens. Native back or an interactive pop cancels without calling business
+logic; selection resolves only after the route's exit transition completes. The route title is always
+Search, and it does not query or render a full result set until the user enters non-whitespace text.
+Provider model pull keeps persistent local search because its matching rows retain management or
+multi-selection actions.
 
 Route-level sheets remain appropriate for page-like flows that need navigation history, deep linking, or system-back dismissal semantics. Settings is the one route shaped that way (`/settings`), because it is a whole nested stack rather than a single picker.
 

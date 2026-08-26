@@ -100,6 +100,28 @@ tracked turns before lower-level infrastructure closes. OS suspension or termina
 guarantee continued execution or resumable streaming; the next process start marks unfinished local
 turns interrupted.
 
+## Agent Tool Capabilities
+
+When application tools land, the Agent Host additionally owns current Agent Skill resolution, the
+monotonic turn resource ledger, immutable per-turn tool snapshots, tool terminalization, and
+artifact projection. Skill loading details remain deferred; the ownership split below is settled
+design, and Version 1 still resolves an empty tool snapshot.
+
+Pi owns model context construction and the model → tool → result loop. It does not own system
+permissions, provider credentials, managed files, MCP clients, or side-effect policy. Each
+application capability adapter owns one narrow operation and its validation, timeout, cancellation,
+cleanup, and error redaction:
+
+- `McpRuntimeService` owns Streamable HTTP clients and discovery caches;
+- device adapters own calendar permission and native calls;
+- Office and file adapters own temporary bytes and copy-on-write `file_entry` creation; and
+- the image capability owns `AiService`/AI SDK execution, usage, downloads, and managed output
+  import.
+
+An Agent tool may delegate to `JobRuntime`, but Version 1 still waits for terminal job state inside
+the active turn. The durable job ledger does not make the Agent turn resumable after process death.
+See [Agent Tools And Controlled Resources](./agent/agent-tools-and-resources.md).
+
 ## Painting Generation
 
 `PaintingsModule.startGeneration()` atomically creates the receipt and enqueues a
@@ -141,7 +163,8 @@ level after the bootstrap gate.
 - App bootstrap unmount closes SQLite and disposes long-lived backend resources.
 - Route unmount only unsubscribes from Agent Session observations; it does not cancel active turns.
 - App disposal closes Agent Runtime sessions and awaits tracked Agent turns before closing
-  infrastructure.
+  infrastructure, including the MCP, device, provider, and file capability dependencies tools rely
+  on.
 - Painting route unmount does not stop generation; explicit cancel or resource deletion reaches the
   host-owned job runtime.
 - Cold start does not wait for non-current history, provider/model refresh, or diagnostics.

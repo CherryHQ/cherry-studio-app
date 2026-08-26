@@ -29,9 +29,14 @@ Pure provider implementations, request types, and parameter policies must not be
 
 Pi is the sole owner of local conversation execution. The Mobile Agent Host owns Agent
 configuration, structured transcript persistence, cancellation, and protocol projection. Version 1
-uses no application tools; adding them requires an Agent-owned contract and Pi adapter. AI SDK may
-continue to serve non-Agent generation and provider utilities, but it must not become a parallel
-conversation runtime.
+resolves an empty tool snapshot for every turn; `tools: []` is ordinary conversation, and
+configured tools are adapted from the application-owned contract into Pi tools when tool bindings
+land. AI SDK may continue to serve non-conversation model capabilities behind those
+application-owned tools, but it must not become a parallel conversation runtime. Pi never imports
+AI SDK or application services directly: a `RuntimeTool` callback closes over the narrow capability
+adapter, and generated output returns as a managed artifact. See
+`docs/references/agent/agent-tools-and-resources.md` and
+`docs/references/agent/agent-skills.md`.
 
 ## Sync Trust
 

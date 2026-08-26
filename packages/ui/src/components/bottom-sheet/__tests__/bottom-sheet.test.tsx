@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { BackHandler, StyleSheet, Text } from 'react-native';
+import { BackHandler, Dimensions, StyleSheet, Text } from 'react-native';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 import { BottomSheet } from '..';
 
 let mockBottomSheetProps: Record<string, unknown> = {};
 let mockHardwareBackPress: (() => boolean | null | undefined) | undefined;
+let mockScreenCornerRadius = 0;
 
 jest.mock('@cherrystudio/app-icons/icons/arrow-left', () => {
   const { View } = jest.requireActual('react-native');
@@ -23,6 +24,10 @@ jest.mock('@swmansion/react-native-bottom-sheet', () => {
   };
 });
 
+jest.mock('expo-screen-corner-radius', () => ({
+  getCornerRadiusSync: () => mockScreenCornerRadius,
+}));
+
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ bottom: 34, left: 0, right: 0, top: 59 }),
 }));
@@ -38,6 +43,7 @@ describe('BottomSheet', () => {
   beforeEach(() => {
     mockBottomSheetProps = {};
     mockHardwareBackPress = undefined;
+    mockScreenCornerRadius = 0;
     backHandlerSpy = jest
       .spyOn(BackHandler, 'addEventListener')
       .mockImplementation((_event, handler) => {
@@ -188,10 +194,20 @@ describe('BottomSheet', () => {
     });
     const largeHeight = (mockBottomSheetProps.detents as number[])[1];
 
+    act(() => {
+      renderer?.update(
+        <BottomSheet onClose={onClose} open size="full" title="Options">
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+    const fullHeight = (mockBottomSheetProps.detents as number[])[1];
+
     expect(largeHeight).toBeGreaterThan(compactHeight);
+    expect(fullHeight).toBeGreaterThan(largeHeight);
   });
 
-  test('uses a caller-provided fixed height on a full-width bottom-anchored card', () => {
+  test('uses a caller-provided fixed height on an inset rounded card', () => {
     act(() => {
       renderer = create(
         <BottomSheet height={420} onClose={jest.fn()} open testID="fixed-height" title="Approval">
@@ -203,14 +219,36 @@ describe('BottomSheet', () => {
     const card = renderer?.root
       .findAllByProps({ testID: 'fixed-height' })
       .find((node) => typeof node.type === 'string');
-    expect(mockBottomSheetProps.detents).toEqual([0, 420]);
+    expect(mockBottomSheetProps.detents).toEqual([0, 424]);
     expect(StyleSheet.flatten(card?.props.style)).toMatchObject({
-      borderBottomLeftRadius: 0,
-      borderBottomRightRadius: 0,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
       borderTopLeftRadius: 32,
       borderTopRightRadius: 32,
       height: 420,
-      width: '100%',
+      width: Dimensions.get('window').width - 8,
+    });
+  });
+
+  test('keeps the bottom corners concentric with a rounded display', () => {
+    mockScreenCornerRadius = 62;
+
+    act(() => {
+      renderer = create(
+        <BottomSheet onClose={jest.fn()} open size="medium" testID="rounded" title="Options">
+          <Text>Content</Text>
+        </BottomSheet>,
+      );
+    });
+
+    const card = renderer?.root
+      .findAllByProps({ testID: 'rounded' })
+      .find((node) => typeof node.type === 'string');
+    expect(StyleSheet.flatten(card?.props.style)).toMatchObject({
+      borderBottomLeftRadius: 58,
+      borderBottomRightRadius: 58,
+      borderTopLeftRadius: 32,
+      borderTopRightRadius: 32,
     });
   });
 });
