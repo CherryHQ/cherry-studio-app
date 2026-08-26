@@ -202,6 +202,8 @@ interface AgentProtocol {
   submitMessage(input: {
     sessionId: string
     parts: AgentInputPart[]
+    modelId?: UniqueModelId
+    reasoningEffort?: ReasoningEffortOption
   }): Promise<{ turnId: string; userMessageId: string; assistantMessageId: string }>
 
   cancelTurn(input: { sessionId: string; turnId: string }): Promise<void>
@@ -224,6 +226,12 @@ type AgentSessionObservation = {
   unsubscribe(): void
 }
 ```
+
+`modelId` and `reasoningEffort` are immutable snapshots of the composer state for that submission.
+The model snapshot closes the gap while the same selection is persisted to the Agent. The reasoning
+snapshot is turn-local and is never written to Agent configuration. Omitting either field inherits
+the Agent definition loaded for that turn; an explicit reasoning `default` uses the selected model's
+default instead of the Agent's configured effort.
 
 `observeSession` registers the listener and captures the snapshot as one Host operation, so an
 event cannot fall into a snapshot/subscription gap. Calling it again replaces stale frontend state;

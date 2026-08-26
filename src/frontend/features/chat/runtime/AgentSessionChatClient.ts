@@ -8,6 +8,7 @@ import type {
   AgentSessionObservation,
   AgentSessionSnapshot,
   AgentSessionView,
+  AgentSubmitMessageInput,
   AgentTurnView,
 } from '@/shared/contracts/agent';
 
@@ -195,9 +196,13 @@ export class AgentSessionChatClient {
     return this.protocol.createSession({ agentId, executionTarget: { kind: 'local' } });
   }
 
-  async submitMessage(sessionId: string, parts: AgentInputPart[]) {
+  async submitMessage(
+    sessionId: string,
+    parts: AgentInputPart[],
+    overrides: Pick<AgentSubmitMessageInput, 'modelId' | 'reasoningEffort'> = {},
+  ) {
     await this.observe(sessionId);
-    return this.protocol.submitMessage({ parts, sessionId });
+    return this.protocol.submitMessage({ parts, sessionId, ...overrides });
   }
 
   async cancelTurn(sessionId: string): Promise<void> {

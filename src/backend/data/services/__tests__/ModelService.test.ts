@@ -101,6 +101,7 @@ describe('ModelService', () => {
           where: jest.fn(async () => [{ id: 'openai::old-model', presetModelId: 'old-model' }]),
         })),
       })),
+      update: createUpdateMock(),
     };
     const dbService = {
       withWriteTx: jest.fn(async (callback) => callback(tx)),
@@ -113,7 +114,11 @@ describe('ModelService', () => {
     });
 
     expect(dbService.withWriteTx).toHaveBeenCalledTimes(1);
+    expect(tx.update).toHaveBeenCalledTimes(1);
     expect(tx.delete).toHaveBeenCalledWith(userModelTable);
+    expect(tx.update.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.delete.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
     expect(deletedWhereClauses).toHaveLength(1);
     expect(result.added).toEqual([
       expect.objectContaining({
@@ -146,6 +151,7 @@ describe('ModelService', () => {
           ]),
         })),
       })),
+      update: createUpdateMock(),
     };
     const dbService = {
       withWriteTx: jest.fn(async (callback) => callback(tx)),
@@ -176,6 +182,7 @@ describe('ModelService', () => {
     });
 
     expect(result.removedIds).toEqual(['openai::replace', 'openai::stale']);
+    expect(tx.update).toHaveBeenCalledTimes(1);
     expect(tx.delete.mock.invocationCallOrder[0]).toBeLessThan(
       jest.mocked(insertManyWithOrderKey).mock.invocationCallOrder.at(-1) ??
         Number.POSITIVE_INFINITY,
@@ -202,6 +209,7 @@ describe('ModelService', () => {
       select: jest.fn(() => ({
         from: jest.fn(() => ({ where: selectWhere })),
       })),
+      update: createUpdateMock(),
     };
     const service = await createService({
       withWriteTx: jest.fn(async (callback) => callback(tx)),
@@ -216,6 +224,7 @@ describe('ModelService', () => {
     });
 
     expect(selectWhere).toHaveBeenCalledTimes(3);
+    expect(tx.update).toHaveBeenCalledTimes(3);
     expect(returning).toHaveBeenCalledTimes(3);
     const insertCalls = jest.mocked(insertManyWithOrderKey).mock.calls;
     expect(insertCalls.length).toBeGreaterThan(3);
@@ -303,12 +312,14 @@ describe('ModelService', () => {
       delete: jest.fn(() => ({
         where: jest.fn(() => ({ returning: jest.fn(async () => [{ id: 'openai::custom' }]) })),
       })),
+      update: createUpdateMock(),
     };
     const service = await createService({
       withWriteTx: jest.fn(async (callback) => callback(tx)),
     } as unknown as DbService);
 
     await expect(service.delete('openai::custom')).resolves.toBe(true);
+    expect(tx.update).toHaveBeenCalledTimes(1);
   });
 
   test('refuses to delete the chat default and never opens a transaction for it', async () => {
@@ -326,6 +337,7 @@ describe('ModelService', () => {
       delete: jest.fn(() => ({
         where: jest.fn(() => ({ returning: jest.fn(async () => []) })),
       })),
+      update: createUpdateMock(),
     };
     const service = await createService({
       withWriteTx: jest.fn(async (callback) => callback(tx)),
@@ -343,4 +355,10 @@ async function createService(
 ): Promise<ModelService> {
   await installTestHost({ DbService: dbService, PreferenceService: preferenceService });
   return new ModelService();
+}
+
+function createUpdateMock() {
+  return jest.fn(() => ({
+    set: jest.fn(() => ({ where: jest.fn(async () => undefined) })),
+  }));
 }

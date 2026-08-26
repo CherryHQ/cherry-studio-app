@@ -12,6 +12,14 @@ exported through `index.ts` and receives the current `agentId` and optional `ses
 - The Agent Host currently reports `attachments: false`. Chat exposes no attachment picker; pasted
   attachments remain removable but sending them fails with an explicit unsupported message.
 - While a turn is active, the send control becomes stop and calls `cancelTurn` for that Session.
-- Agent model and inference settings are edited on the Agent screen, not inside the composer.
+- The resting composer is one row. Focusing it reveals the model pill and reasoning-effort gauge on
+  the toolbar below without remounting the field, draft, or send control.
+- Picking a model updates the current Agent's `modelId`. Submission also snapshots the visible
+  model so an immediate send cannot race the Agent mutation or query refresh. Rapid picks are
+  persisted serially and coalesced to the latest visible selection.
+- The reasoning gauge inherits the Agent setting until the user picks a value. A pick is local to
+  the current Agent composer and is snapshotted into each submission; it never updates Agent
+  configuration. An explicit `default` selection bypasses the Agent effort for that turn and uses
+  the selected model's default.
 - Web search, tool mentions, follow-up queues, and steering are not part of the Version 1 Agent
   Session composer.

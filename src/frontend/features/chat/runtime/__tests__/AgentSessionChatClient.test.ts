@@ -64,6 +64,26 @@ function protocolWithObservation(
 }
 
 describe('AgentSessionChatClient', () => {
+  test('forwards composer model and reasoning snapshots with the submitted message', async () => {
+    const protocol = protocolWithObservation(async () => ({
+      snapshot: snapshot(),
+      unsubscribe: jest.fn(),
+    }));
+    const client = new AgentSessionChatClient(protocol);
+
+    await client.submitMessage('session-1', [{ text: 'Hello', type: 'text' }], {
+      modelId: 'provider::model-b',
+      reasoningEffort: 'high',
+    });
+
+    expect(protocol.submitMessage).toHaveBeenCalledWith({
+      modelId: 'provider::model-b',
+      parts: [{ text: 'Hello', type: 'text' }],
+      reasoningEffort: 'high',
+      sessionId: 'session-1',
+    });
+  });
+
   test('applies events emitted after subscription but before the snapshot promise resolves', async () => {
     const observation = deferred<AgentSessionObservation>();
     let listener: ((event: AgentEvent) => void) | undefined;

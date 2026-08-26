@@ -12,6 +12,8 @@ import {
 } from '@/frontend/data/utils/optimisticQueryUpdate';
 import type { Provider } from '@/shared/data/types/provider';
 
+import { refreshProviderModelQueries } from '../models/utils/refreshProviderModelQueries';
+
 /**
  * Deleting the provider, from wherever the action is offered — currently the
  * provider settings screen, which is two pushes deep, hence `dismissTo` rather
@@ -38,9 +40,10 @@ export function useProviderDeletion() {
     onError: (_error, _variables, context) => {
       restoreQuerySnapshot(queryClient, context?.providers);
     },
-    onSuccess: (_result, variables) => {
+    onSuccess: async (_result, variables) => {
       if (variables) {
         queryClient.removeQueries({ queryKey: [`/providers/${variables.params.id}`] });
+        await refreshProviderModelQueries(queryClient, variables.params.id);
       }
     },
     refresh: ['/providers'],

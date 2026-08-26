@@ -120,6 +120,17 @@ describe('AgentService persistence', () => {
     });
   });
 
+  it('advances the Agent version when updates share one wall-clock millisecond', async () => {
+    jest.spyOn(Date, 'now').mockReturnValue(1_000);
+    const agent = await agentService.create({ name: 'Researcher' });
+
+    const firstUpdate = await agentService.update(agent.id, { description: 'First' });
+    const secondUpdate = await agentService.update(agent.id, { description: 'Second' });
+
+    expect(Date.parse(firstUpdate.updatedAt)).toBeGreaterThan(Date.parse(agent.updatedAt));
+    expect(Date.parse(secondUpdate.updatedAt)).toBeGreaterThan(Date.parse(firstUpdate.updatedAt));
+  });
+
   it('clears a stored setting when the patch carries the key as explicit undefined', async () => {
     const agent = await agentService.create({
       name: 'Researcher',
