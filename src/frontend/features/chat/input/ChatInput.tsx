@@ -27,6 +27,7 @@ import {
   useModelPickerData,
 } from '@/frontend/components/modelPicker';
 import { useAgentApiById, useAgentMutations } from '@/frontend/hooks/agent';
+import { AgentProtocolError } from '@/shared/contracts/agent';
 import { loggerService } from '@/shared/core/logger/LoggerService';
 
 import { useAgentChatControls } from '../runtime';
@@ -43,8 +44,6 @@ type ChatInputProps = {
   dismissKeyboardOnSend?: boolean;
   sessionId?: string;
 };
-
-class AgentAttachmentsUnsupportedError extends Error {}
 
 const logger = loggerService.withContext('ChatInput');
 const restingInputHeight = 32;
@@ -177,10 +176,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
   const handleSendPress = useCallback(
     ({ attachments, text }: ComposerSendPayload) => {
       const parts = toAgentInputParts({ attachments, text });
-      if (attachments.length > 0) {
-        throw new AgentAttachmentsUnsupportedError();
-      }
-
       return sendMessage({
         parts,
         ...(selectedModelId ? { modelId: selectedModelId } : {}),
@@ -206,10 +201,21 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
     ],
   );
   const getSendErrorLabel = useCallback(
-    (error: unknown) =>
-      error instanceof AgentAttachmentsUnsupportedError
-        ? t('chat.input.attachmentsUnsupported')
-        : undefined,
+    (error: unknown) => {
+      if (!(error instanceof AgentProtocolError)) {
+        return undefined;
+      }
+      if (error.view.code === 'CAPABILITY_UNSUPPORTED') {
+        return t('chat.input.attachmentsRejected');
+      }
+      if (
+        error.view.code === 'ATTACHMENT_UNAVAILABLE' ||
+        error.view.code === 'ATTACHMENT_METADATA_MISMATCH'
+      ) {
+        return t('chat.input.attachmentUnavailable');
+      }
+      return undefined;
+    },
     [t],
   );
 
@@ -229,8 +235,6 @@ export function ChatInput({ agentId, dismissKeyboardOnSend, sessionId }: ChatInp
             onStop={() => void cancel()}
             streaming={isBusy}
           >
-            {/* Pasted attachments remain visible and removable, but sending fails closed until
-                the image Runtime-input slice enables the protocol capability. */}
             <ComposerAttachments />
             <Animated.View className="relative overflow-hidden" style={morphFrameStyle}>
               <Animated.View className="absolute top-0 overflow-hidden" style={fieldFrameStyle}>

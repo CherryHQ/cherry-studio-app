@@ -15,6 +15,9 @@ export const AI_SUPPORTED_IMAGE_MEDIA_TYPES = [
   'image/webp',
 ] as const;
 
+/** Shared picker and Agent Host ceiling for one model request. */
+export const AI_IMAGE_INPUT_MAX_COUNT = 9;
+
 type ImageFileType = (typeof imageFileTypes)[number];
 
 const imageFileTypeByExtension = new Map<string, ImageFileType>(

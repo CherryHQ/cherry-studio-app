@@ -8,7 +8,7 @@ import type { PiRuntimeDependencies } from '@/backend/ai/agent';
 import type { Model } from '@/shared/data/types/model';
 import { DEFAULT_API_FEATURES, type Provider } from '@/shared/data/types/provider';
 
-import { createPiModelResolver } from '../piModelResolver';
+import { createPiModelResolver, toPiModelPreflight } from '../piModelResolver';
 
 type BindPiStream = typeof import('../piApiAdapters').bindPiStream;
 
@@ -102,6 +102,7 @@ describe('Pi model resolver', () => {
       baseUrl: testCase.expectedBaseUrl,
       contextWindow: 128_000,
       id: testCase.expectedModelId,
+      input: ['text'],
       maxTokens: 4096,
       provider: 'test-provider',
       reasoning: true,
@@ -130,6 +131,41 @@ describe('Pi model resolver', () => {
         timeoutMs: 600_000,
       }),
     );
+  });
+
+  test('preflights image input from the model registry without selecting credentials', async () => {
+    mockGetProviderById.mockResolvedValue(
+      makeProvider(ENDPOINT_TYPE.OPENAI_RESPONSES, 'https://responses.test', 'openai'),
+    );
+    mockGetModelById.mockResolvedValue(
+      makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, {
+        capabilities: [MODEL_CAPABILITY.IMAGE_RECOGNITION, MODEL_CAPABILITY.FUNCTION_CALL],
+      }),
+    );
+
+    await expect(
+      resolver.preflightModel({ modelId: 'test-model', providerId: 'test-provider' }),
+    ).resolves.toMatchObject({
+      contextWindow: 128_000,
+      inputModalities: ['text', 'image'],
+      maxInputTokens: 123_904,
+      maxOutputTokens: 4_096,
+      supportsTools: true,
+    });
+    expect(mockResolveApiKey).not.toHaveBeenCalled();
+    expect(mockBindPiStream).not.toHaveBeenCalled();
+  });
+
+  test('bounds input capacity by both the model limit and reserved output', () => {
+    expect(
+      toPiModelPreflight(
+        makeModel(ENDPOINT_TYPE.OPENAI_RESPONSES, {
+          contextWindow: 16_000,
+          maxInputTokens: 20_000,
+          maxOutputTokens: 4_000,
+        }),
+      ),
+    ).toMatchObject({ contextWindow: 16_000, maxInputTokens: 12_000, maxOutputTokens: 4_000 });
   });
 
   test('uses the existing per-model gateway route', async () => {
