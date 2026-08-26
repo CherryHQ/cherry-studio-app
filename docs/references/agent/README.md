@@ -95,15 +95,21 @@ clean cut. See [Branching](./agent-protocol.md#branching) for the rules.
 - **Provider coverage** for the Pi model layer currently starts with API-key-authenticated OpenAI
   Responses endpoints. Expanding it is separate provider work and is not a reason to retain a
   second conversation runtime.
-- **Background turn continuation** is undesigned, but its platform direction is settled: only
-  OS-sanctioned mechanisms may keep a turn running when the app leaves the foreground —
-  `BGContinuedProcessingTask` with its system progress UI on iOS 26+, and typed foreground services
-  with a persistent notification on Android (`shortService` to finish a streaming reply;
-  `dataSync`/`mediaProcessing` within their 6-hour budgets for longer tool work). Keep-alive hacks
-  (silent audio, overlay-based revival, mutual process wakeup, 1-pixel activities) are excluded.
-  Both platforms can still terminate continued work, and older iOS versions offer no equivalent, so
-  today's interrupted-turn reconciliation remains the contract floor; continuation additionally
-  needs a protocol design for re-attaching an observed Session to a still-running turn.
+- **Background turn continuation** is undesigned. The primary path is settled: OS-sanctioned
+  mechanisms — `BGContinuedProcessingTask` with its system progress UI on iOS 26+, and typed
+  foreground services with a persistent notification on Android (`shortService` to finish a
+  streaming reply; `dataSync`/`mediaProcessing` within their 6-hour budgets for longer tool work).
+  Purposeless keep-alive hacks (bare silent-audio loops, overlay-based revival, mutual process
+  wakeup, 1-pixel activities) are excluded. One fallback stays open and is deliberately
+  **risk-annotated** for older iOS versions: an OpenMinis-style audio leg — a real, opt-in
+  background TTS narration feature whose active audio session keeps the turn alive, padded with
+  silence between utterances. The audible narration itself is a legitimate `audio` background-mode
+  use, but the silent padding conflicts with the mode's documented "plays audible content" purpose
+  and App Review guideline 2.5.4, iOS interrupts sessions that stay silent too long, and update
+  review or reports can remove a shipped app. Adopting it is a product risk decision, not a
+  technical one, and is not decided. Both platforms can still terminate continued work, so today's
+  interrupted-turn reconciliation remains the contract floor; continuation additionally needs a
+  protocol design for re-attaching an observed Session to a still-running turn.
 - **Context compaction** is undesigned. The ownership split is decided: the durable conversation
   record belongs to the Host (it must survive process death and back transcript reads), while
   turning that structured record into the actual model prompt — selection, formatting, and
